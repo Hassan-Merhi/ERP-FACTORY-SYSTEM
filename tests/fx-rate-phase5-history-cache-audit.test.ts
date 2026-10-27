@@ -11,7 +11,7 @@ const rateReader = source("server/services/accounting/monetaryFxRates.ts");
 const history = source("server/services/accounting/monetaryFxHistoricalRatePreview.ts");
 const route = source("server/routes/stats/statsMultiCurrencyRoutes.ts");
 const netPosition = source("server/routes/stats/statsNetProfitRoutes.ts");
-const factory = source("server/routes/factory/employee-pos/employeeNetPositionRoutes.ts");
+const factory = source("server/routes/factory/employee-pos/netPositionMonetaryFxProjection.ts");
 const accounts = source("server/routes/accounts/all.ts");
 const rateSave = source("server/services/accounting/exchangeRateWrites.ts");
 const rateRoutes = source("server/routes/exchangeRateRoutes.ts");
@@ -42,7 +42,7 @@ describe("Phase 5 effective-date, historical-lock, company and cache safety", ()
   it("leaves dated ERP Accounts, ERP Net Position and Factory reconstruction locked", () => {
     expect(route).toContain('req.path !== "/api/stats/net-profit" || req.query.toDate');
     expect(accounts).toContain("!balStartDate && !effectiveEndDate");
-    expect(factory).toContain("!asOfContext.isHistorical");
+    expect(factory).toContain("if (scope.isHistorical || Number(scope.sessionCompanyId) !== scope.companyId) return finished;");
     expect(overlay).toContain("historical_usd_mismatch");
     expect(overlay).toContain("missing_in_report");
     expect(overlay).toContain("duplicate_report_row");

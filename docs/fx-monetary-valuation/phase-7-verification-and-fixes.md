@@ -55,8 +55,8 @@ CI prepares its database).
 
 ## Test results on this branch (local run, PostgreSQL 16, Node 22)
 
-See the final report in the pull request / session summary for exact counts. Suites executed: the seven FX
-suites, the new DB suite, `multi-currency-integration`, `money-exact-batch-18`, `wave9-ledger-safety-routes`,
+See the final report in the pull request / session summary for exact counts. Suites executed: the FX
+suites (two pure source-contract suites were retired after the database suite covered them behaviourally), the new DB suite, `multi-currency-integration`, `money-exact-batch-18`, `wave9-ledger-safety-routes`,
 `exchange-rate-daily-popup`, `realtime-invalidation-contract`, `wave10-net-position-banks`,
 `wave10-engine-consolidation`, `accounting-integrity-trial-balance`, `balance-sheet-from-trial-balance`,
 `group-net-position`, `net-position-helper`, `wave17d-fx-rate-required`,

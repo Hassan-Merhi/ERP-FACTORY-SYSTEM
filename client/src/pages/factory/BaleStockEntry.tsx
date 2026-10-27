@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ScanLine, CalendarDays, Factory, Target } from "lucide-react";
+import { ScanLine, CalendarDays, Factory, Target, Cog } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FactoryMobileHeader, FactoryMobileHeaderActions, FactoryMobilePage } from "@/components/ui/factory-mobile";
 import { LabelPrintSettings } from "@/components/LabelPrintSettings";
@@ -8,6 +8,7 @@ import { LabelPrintSettings } from "@/components/LabelPrintSettings";
 import StockEntryHistory from "../StockEntryHistory";
 import GroundScan from "./GroundScan";
 import DailyScan from "./DailyScan";
+import PressingMachineManagement from "./PressingMachineManagement";
 import FactoryProductionTargets from "./FactoryProductionTargets";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translateFactoryStaffTrackingText } from "@/i18n/factoryStaffTrackingTranslations";
@@ -47,6 +48,7 @@ export default function BaleStockEntry() {
     settings?.stockEntryTabHistoryEnabled !== false && !hiddenTabs.includes("hide_tab_stockentry_history");
   const showGroundScan = !hiddenTabs.includes("hide_tab_stockentry_ground_scan");
   const showDailyScan = !hiddenTabs.includes("hide_tab_stockentry_daily_scan");
+  const showPressingMachines = !hiddenTabs.includes("hide_tab_stockentry_pressing_machines");
   const showProductionTargets = !hiddenTabs.includes("hide_tab_stockentry_production_targets");
   const canReadProductionSession = canUseFactorySurface(myAccess, "factory/stock-entry", [
     "hide_tab_stockentry_production_targets",
@@ -60,6 +62,8 @@ export default function BaleStockEntry() {
         ? "ground-scan"
         : showDailyScan
           ? "daily-scan"
+          : showPressingMachines
+            ? "pressing-machines"
           : showProductionTargets
             ? "production-targets"
             : "entry";
@@ -69,6 +73,7 @@ export default function BaleStockEntry() {
     (activeTab === "history" && showHistory) ||
     (activeTab === "ground-scan" && showGroundScan) ||
     (activeTab === "daily-scan" && showDailyScan) ||
+    (activeTab === "pressing-machines" && showPressingMachines) ||
     (activeTab === "production-targets" && showProductionTargets);
 
   useEffect(() => {
@@ -145,6 +150,12 @@ export default function BaleStockEntry() {
                 Daily Scan
               </TabsTrigger>
             )}
+            {showPressingMachines && (
+              <TabsTrigger value="pressing-machines" data-testid="tab-pressing-machines">
+                <Cog className="mr-1 h-4 w-4" />
+                Pressing Machines
+              </TabsTrigger>
+            )}
             {showProductionTargets && (
               <TabsTrigger value="production-targets" data-testid="tab-production-targets">
                 <Target className="mr-1 h-4 w-4" />
@@ -177,6 +188,11 @@ export default function BaleStockEntry() {
         {showDailyScan && (
           <TabsContent value="daily-scan" className="mt-0 min-w-0 p-0">
             {mountedTabs.has("daily-scan") && <DailyScan />}
+          </TabsContent>
+        )}
+        {showPressingMachines && (
+          <TabsContent value="pressing-machines" className="mt-4 min-w-0">
+            {mountedTabs.has("pressing-machines") && <PressingMachineManagement active={activeTab === "pressing-machines"} />}
           </TabsContent>
         )}
         {showProductionTargets && (

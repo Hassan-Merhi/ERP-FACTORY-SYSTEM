@@ -56,6 +56,14 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [factory-flow.md](factory-flow.md) | Bales, production, payroll, raw materials |
 | [factory-container-planner.md](factory-container-planner.md) | Stock Allocation V5 container planning, saved drafts, and live reconciliation |
 | [factory-net-position-historical.md](factory-net-position-historical.md) | Factory Net Position as-of dates: known-at-cutoff rules, verification and history limits |
+| [pressing-machine-tracking-phase1.md](pressing-machine-tracking-phase1.md) | Pressing Machines tracking Phase 1: schema, lifetime one-active-confirmation-per-bale index, tenant FKs, immutable triggers |
+| [pressing-machine-tracking-phase2.md](pressing-machine-tracking-phase2.md) | Pressing Machines Phase 2: supervisor machine catalog, one active assignment per operator, sessions |
+| [pressing-machine-tracking-phase3.md](pressing-machine-tracking-phase3.md) | Pressing Machines Phase 3: continuous phone-camera scanner, native and bundled ZXing decoders, manual fallback |
+| [pressing-machine-tracking-phase4.md](pressing-machine-tracking-phase4.md) | Pressing Machines Phase 4: server confirmation engine, idempotent request IDs, duplicate and eligibility rejections |
+| [pressing-machine-tracking-phase5.md](pressing-machine-tracking-phase5.md) | Pressing Machines Phase 5: IndexedDB offline queue, ordered retry with immutable request IDs, Pending/Sending/Confirmed/Rejected states |
+| [pressing-machine-tracking-phase6.md](pressing-machine-tracking-phase6.md) | Pressing Machines Phase 6: permanent history, filters, saved views, Excel export limits |
+| [pressing-machine-tracking-phase7.md](pressing-machine-tracking-phase7.md) | Pressing Machines Phase 7: configured shifts, overnight rollover, recorded downtime, observed analytics |
+| [pressing-machine-tracking-phase8.md](pressing-machine-tracking-phase8.md) | Pressing Machines Phase 8: supervisor voids, append-only corrections, audited rescans and the executed verification record |
 | [erp-test-company.md](erp-test-company.md) | Provisioning an isolated ERP test company and its limited tester account |
 | [automatic-priority-print-loading.md](automatic-priority-print-loading.md) | Automatic Priority Printing & Loading: company switch, automatic loading allocation, priority-colored labels, physical bale deletion and Priority #1 recovery |
 | [priority-scan-fixed-palette-color-block.md](priority-scan-fixed-palette-color-block.md) | Priority Scan fixed 11-color palette, solid color-box priority labels, legacy-color moves and saved-color print/reprint checks |

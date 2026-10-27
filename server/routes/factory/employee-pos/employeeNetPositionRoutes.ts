@@ -11,11 +11,7 @@ import { computeHistoricalFactoryAssetLiabilityOperations } from "../../../servi
 import { loadFactoryHistoricalCoverage } from "../../../services/factory/netPositionHistoryCoverage";
 import { loadFxWalletHistoryGaps } from "../../../services/factory/netPositionFxWalletCoverage";
 import { finishFactoryNetPosition } from "./netPositionHistoricalResponse";
-import { getMonetaryFxValuation } from "../../../services/accounting/monetaryFxValuationService";
-import {
-  applyVerifiedMonetaryFxOverlay,
-  type MonetaryNetPositionPayload,
-} from "../../../services/accounting/monetaryFxReportOverlay";
+import { projectFactoryNetPositionMonetaryFx } from "./netPositionMonetaryFxProjection";
 import { computeLiveFactoryPrepaidRent } from "./netPositionLiveRent";
 import {
   fxAgentTablesExist,
@@ -847,41 +843,16 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         assetWarnings: historicalAssets?.warnings ?? [],
       });
 
-      // Factory has substantial nonmonetary stock/WIP/order cost valuations
-      // and historical replay safeguards. Apply only *today's* verified
-      // monetary ledger/customer rows, never its inventory/supplier/operational
-      // memo rows. Pinned secondary companies need a separate authorized
-      // reporting scope; never borrow the ERP session's exchange rate.
-      if (!asOfContext.isHistorical && Number(req.session?.currentCompanyId) === companyId) {
-        try {
-          const valuation = await getMonetaryFxValuation(companyId);
-          const projected = applyVerifiedMonetaryFxOverlay(
-            finished as unknown as MonetaryNetPositionPayload,
-            valuation
-          );
-          const report = projected.payload;
-          if (projected.appliedKeys.length) {
-            report.ledgerAssets = round2(Number(finished.ledgerAssets) + projected.ledgerForUsDelta);
-            report.ledgerLiabilities = round2(Number(finished.ledgerLiabilities) + projected.ledgerOnUsDelta);
-          }
-          report.currencyRevaluation = {
-            valuationMode: "CURRENT",
-            currentMonetaryTranslationApplied: projected.appliedKeys.length > 0,
-            appliedAccountKeys: projected.appliedKeys,
-            skippedAccountKeys: projected.skipped,
-            unresolvedAccountCount: valuation.unresolvedAccountCount,
-            needsReviewCount: valuation.needsReviewCount,
-            rateErrorsByCurrency: valuation.rateErrorsByCurrency,
-            currentMonetaryTranslationDifferenceUsd: projected.currentMonetaryTranslationDifferenceUsd,
-          };
-          return res.json(report);
-        } catch (error) {
-          logger.error("Factory current monetary FX projection unavailable; keeping original USD book", {
-            companyId, error,
-          });
-        }
-      }
-      return res.json(finished);
+      // Today's verified monetary ledger/customer rows at the current company
+      // rate (netPositionMonetaryFxProjection.ts); historical reports and
+      // pinned secondary companies keep the booked USD.
+      return res.json(
+        await projectFactoryNetPositionMonetaryFx(finished, {
+          companyId,
+          isHistorical: asOfContext.isHistorical,
+          sessionCompanyId: req.session?.currentCompanyId,
+        })
+      );
     } catch (error: unknown) {
       if (error instanceof FactoryNetPositionDateError) {
         return res.status(error.status).json({ code: error.code, message: error.message });

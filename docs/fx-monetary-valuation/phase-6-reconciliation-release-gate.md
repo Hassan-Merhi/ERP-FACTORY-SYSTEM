@@ -18,7 +18,7 @@
    - mismatched book history, unresolved native entry, and missing account ownership skipped;
    - no repeated revaluation of an already-translated report object;
    - Factory customer with non-posted memo excluded, and customer-ledger account display uses customer ownership.
-6. Added `tests/monetary-fx-phase6-integration-safety.test.ts` for company scoping, repeatable-read read-only transaction, original currency evidence, no voucher writes, live-vs-dated guards and error metadata.
+6. Added `tests/monetary-fx-phase6-integration-safety.test.ts` for company scoping, repeatable-read read-only transaction, original currency evidence, no voucher writes, live-vs-dated guards and error metadata (retired in Phase 7: the same guarantees are asserted behaviourally in `tests/monetary-fx-valuation.database.test.ts`).
 7. Prepared `phase-6-read-only-reconciliation.sql` to inspect, within an **approved selected company scope**, native opening provenance, historical base discrepancies, foreign voucher fields, forward-effective postings and shared customer ledger links. It has **not** been executed; it fails closed without a selected tenant.
 8. Performed a GitHub source-level presence/contract review on the branch: **13/13 inspected source invariants present** (this is NOT equivalent to running the tests).
 
@@ -27,7 +27,7 @@
 | Gate | Status | Next step |
 | --- | --- | --- |
 | TypeScript `npm run check` | NOT RUN | Execute in actual project checkout and fix errors |
-| New focused Vitest suite | NOT RUN | `node node_modules/vitest/vitest.mjs run tests/monetary-fx-valuation-phase2.test.ts tests/monetary-fx-valuation-source-contract.test.ts tests/fx-rate-phase3-refresh.test.ts tests/fx-phase3-save-refresh-contract.test.ts tests/fx-rate-phase5-history-cache-audit.test.ts tests/monetary-fx-phase6-reconciliation.test.ts tests/monetary-fx-phase6-integration-safety.test.ts` |
+| New focused Vitest suite | NOT RUN | `node node_modules/vitest/vitest.mjs run tests/monetary-fx-valuation-phase2.test.ts tests/fx-rate-phase3-refresh.test.ts tests/fx-phase3-save-refresh-contract.test.ts tests/fx-rate-phase5-history-cache-audit.test.ts tests/monetary-fx-phase6-reconciliation.test.ts` |
 | Legacy multi-currency and no-FX-journal tests | NOT RUN | Run `tests/multi-currency-integration.test.ts`, `tests/money-exact-batch-18.test.ts`, `tests/wave9-ledger-safety-routes.test.ts`, and `tests/exchange-rate-daily-popup.test.ts` |
 | Full integration, typecheck, build | NOT RUN | `npm run test:backend`, `npm run check`, `npm run build` in an isolated runner |
 | Company Mali CFA live original vs current USD reconciliation | NOT RUN | Read-only DB, verify customer/cash/loan native buckets, rates and book values |

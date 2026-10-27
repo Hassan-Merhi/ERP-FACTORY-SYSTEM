@@ -19,6 +19,11 @@ import { registerFactoryStockAllocationV2Routes } from "./factory/factoryStockAl
 import { registerFactoryStockAllocationV5Routes } from "./factory/stock-allocation-v5";
 import { registerFactoryShippingContainerRoutes } from "./factory/shipping-containers";
 import { registerFactoryDailyScanRoutes } from "./factory/factoryDailyScanRoutes";
+import { registerFactoryPressingMachineManagementRoutes } from "./factory/factoryPressingMachineManagementRoutes";
+import { registerFactoryPressingConfirmRoutes } from "./factory/factoryPressingConfirmationRoutes";
+import { registerFactoryPressingReportRoutes } from "./factory/factoryPressingReportRoutes";
+import { registerFactoryPressingOperationsRoutes } from "./factory/factoryPressingOperationsRoutes";
+import { registerFactoryPressingCorrectionRoutes } from "./factory/factoryPressingCorrectionRoutes";
 import { registerFactoryGroundScanRoutes } from "./factory/factoryGroundScanRoutes";
 import { registerFactoryContainerTrackingRoutes } from "./factory/factoryContainerTrackingRoutes";
 import { registerEndProductionRoutes } from "./factory/endProductionRoutes";
@@ -216,6 +221,11 @@ export function registerFactoryRoutes(app: Express, requireAuth: RequestHandler,
   registerFactoryStockAllocationV5Routes(app);
   registerFactoryShippingContainerRoutes(app);
   registerFactoryDailyScanRoutes(app);
+  registerFactoryPressingMachineManagementRoutes(app);
+  registerFactoryPressingConfirmRoutes(app);
+  registerFactoryPressingReportRoutes(app);
+  registerFactoryPressingOperationsRoutes(app);
+  registerFactoryPressingCorrectionRoutes(app);
   registerFactoryGroundScanRoutes(app);
   registerEndProductionRoutes(app, requireAuth);
   registerProductionPlannerRoutes(app);
