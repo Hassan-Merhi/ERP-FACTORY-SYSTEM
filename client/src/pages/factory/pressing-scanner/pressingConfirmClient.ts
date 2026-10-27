@@ -1,79 +1,76 @@
 /**
- * Phase 4: submitted camera reads are server-confirmed physical pressing events.
- * No local optimistic increment and no automatic stock finalization.
+ * HTTP transport for persisted pressing requests.
+ * NEVER manufactures a new request ID or changes the original payload.
+ * All receipts are authoritative server responses.
  */
 import { apiRequest } from "@/lib/queryClient";
-import type { PressingScanCapture, PressingScanOutcome } from "../ContinuousPressingScanner";
+import type { PressingQueuedScan, PressingServerReceipt } from "./pressingOfflineQueue";
 
-type ServerPressingReceipt = {
-  id: number;
-  status: "PRESSING_COMPLETED";
-  referenceNumber: string;
-  weightKg: string;
-  machineName: string;
-  confirmedAt: string;
-  productionDate: string;
-  timezoneName: string;
-  replayed: boolean;
-  inventoryFinalized: false;
-};
+export type PressingTransportResult =
+  | { kind: "confirmed"; receipt: PressingServerReceipt; message: string }
+  | { kind: "rejected"; code: string; message: string }
+  | { kind: "retry"; code: string; message: string; needsAuth?: boolean };
 
 type ApiFailure = Error & { code?: string; status?: number };
 
 export function isPressingDuplicate(code: string | undefined): boolean {
   return code === "PRESSING_ALREADY_CONFIRMED";
 }
-
-export async function submitPressingConfirmation(capture: PressingScanCapture): Promise<PressingScanOutcome> {
-  // The request ID is generated once for this submission. Phase 5 will
-  // persist the request ID and payload when implementing durable offline retry.
-  const requestId = crypto.randomUUID();
+function validReceipt(value: unknown): value is PressingServerReceipt {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Partial<PressingServerReceipt>;
+  return item.status === "PRESSING_COMPLETED" &&
+    Number.isSafeInteger(item.id) && (item.id ?? 0) > 0 &&
+    item.inventoryFinalized === false &&
+    typeof item.referenceNumber === "string" &&
+    typeof item.confirmedAt === "string" &&
+    Number.isFinite(Date.parse(item.confirmedAt)) &&
+    typeof item.productionDate === "string" &&
+    typeof item.timezoneName === "string" &&
+    typeof item.weightKg === "string" &&
+    typeof item.machineName === "string";
+}
+export async function sendQueuedPressingScan(row: PressingQueuedScan): Promise<PressingTransportResult> {
   try {
-    const response = await apiRequest("POST", "/api/factory/pressing-machines/confirm", {
-      barcode: capture.barcode,
-      deviceCapturedAt: capture.deviceCapturedAt,
-      assignmentId: capture.assignmentId,
-      machineId: capture.machineId,
-      requestId,
-    });
-    const receipt = await response.json() as ServerPressingReceipt;
-    if (receipt.status !== "PRESSING_COMPLETED" || !receipt.id || receipt.inventoryFinalized !== false) {
-      return { kind: "rejected", message: "Unexpected confirmation response. Please check scan history." };
+    const response = await apiRequest(
+      "POST", "/api/factory/pressing-machines/confirm", row.payload, false, 12000
+    );
+    const receipt: unknown = await response.json();
+    if (!validReceipt(receipt) || receipt.referenceNumber !== row.barcode) {
+      return {
+        kind: "retry", code: "PRESSING_BAD_RECEIPT",
+        message: "Server response could not be verified. Retrying with the same scan ID.",
+      };
     }
     return {
-      kind: "confirmed",
-      message: receipt.replayed ? "Already received — confirmed original pressing record" : "Pressing completed and saved",
-      confirmedAt: receipt.confirmedAt,
-      productionDate: receipt.productionDate,
-      timezoneName: receipt.timezoneName,
-      referenceNumber: receipt.referenceNumber,
-      weightKg: receipt.weightKg,
-      machineName: receipt.machineName,
-      confirmationId: receipt.id,
+      kind: "confirmed", receipt,
+      message: receipt.replayed
+        ? "Original pressing confirmation recovered — not counted twice"
+        : "Pressing completed and saved",
     };
   } catch (cause) {
     const error = cause as ApiFailure;
-    const code = error.code;
-    if (isPressingDuplicate(code)) {
+    const status = typeof error.status === "number" ? error.status : 0;
+    const code = error.code || "PRESSING_CONNECTION_UNCERTAIN";
+    const message = error.message || "Unable to verify pressing scan";
+    if (status === 401 || code === "SESSION_EXPIRED" || code === "CSRF_TOKEN_MISMATCH") {
       return {
-        kind: "duplicate",
-        message: error.message || "This bale has already been confirmed on another machine.",
+        kind: "retry", code: "PRESSING_AUTH_REQUIRED",
+        message: "Session expired. Reconnect as the original operator before syncing.",
+        needsAuth: true,
       };
     }
-    if (code === "PRESSING_ASSIGNMENT_CHANGED" || code === "PRESSING_MACHINE_INACTIVE" ||
-        code === "PRESSING_USER_INACTIVE" || code === "PRESSING_WRITE_DENIED") {
-      return { kind: "rejected", message: error.message || "Machine assignment is no longer valid. Refresh your page." };
+    if (status === 0 || status === 408 || status === 429 || status >= 500 || code === "OfflineQueued") {
+      return {
+        kind: "retry", code,
+        message: "Connection or server unavailable. Scan remains saved locally for safe retry.",
+      };
     }
-    if (code === "PRESSING_BALE_NOT_FOUND" || code === "PRESSING_BALE_NOT_PENDING" ||
-        code === "PRESSING_NON_BALE_ITEM" || code === "INVALID_PRESSING_SCAN") {
-      return { kind: "rejected", message: error.message || "This barcode is not eligible for pressing confirmation." };
+    if (isPressingDuplicate(code)) {
+      return { kind: "rejected", code, message };
     }
-    // Unknown network/proxy failures are AMBIGUOUS: a transaction might have
-    // committed before the response was lost. Never show success or a green
-    // completed status. Durable retry with the SAME request ID is Phase 5.
-    return {
-      kind: "rejected",
-      message: "Confirmation not verified. Check connection and scan history before scanning again.",
-    };
+    // 4xx errors (assignment revoked, bale invalid, voided, permission denied)
+    // are terminal until supervisor review: never replay them indefinitely.
+    return { kind: "rejected", code, message };
   }
 }
