@@ -21,7 +21,7 @@ type MyMachine = {
   companyId: number;
   userId: string;
   canManage: boolean;
-  assignment: null | { assignmentId: number; machineCode: string; machineName: string; machineActive: boolean; assignedAt: string };
+  assignment: null | { assignmentId: number; machineId: number; machineCode: string; machineName: string; machineActive: boolean; assignedAt: string };
 };
 type HistoricalAssignment = Assignment & {
   machineCode: string; machineName: string; assignedBy: string;
