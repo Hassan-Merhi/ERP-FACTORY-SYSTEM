@@ -197,7 +197,7 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
             isNull(factoryPressingConfirmations.voidedAt))).limit(1);
         if (alreadyPressed) {
           throw new ConfirmationError(409, "PRESSING_ALREADY_CONFIRMED",
-            "This bale has already been confirmed on another scan",
+            "Already confirmed on " + alreadyPressed.machineNameSnapshot + " at " + alreadyPressed.confirmedAt.toISOString(),
             { previous: {
               confirmedAt: alreadyPressed.confirmedAt.toISOString(),
               machineName: alreadyPressed.machineNameSnapshot,
@@ -261,7 +261,7 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
               isNull(factoryPressingConfirmations.voidedAt))).limit(1);
           if (other) {
             throw new ConfirmationError(409, "PRESSING_ALREADY_CONFIRMED",
-              "This bale was already confirmed on a pressing machine", { previous: {
+              "Already confirmed on " + other.machineNameSnapshot + " at " + other.confirmedAt.toISOString(), { previous: {
                 confirmedAt: other.confirmedAt.toISOString(),
                 machineName: other.machineNameSnapshot,
                 operatorUserId: other.userId,
