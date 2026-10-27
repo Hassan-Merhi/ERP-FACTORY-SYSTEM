@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/PageHeader";
@@ -152,9 +153,8 @@ export default function WasteDispatch() {
     }
   };
 
-  const handleScan = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key !== "Enter") return;
-    const ref = scanInput.trim().toUpperCase();
+  const scanReference = (code: string) => {
+    const ref = code.trim().toUpperCase();
     if (!ref) return;
     const match = bales.find((b) => b.referenceNumber.toUpperCase() === ref);
     if (match) {
