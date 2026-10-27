@@ -16,6 +16,13 @@ export type PressingScanCapture = {
 export type PressingScanOutcome = {
   kind: "confirmed" | "duplicate" | "rejected" | "queued" | "preview";
   message: string;
+  confirmedAt?: string;
+  confirmationId?: number;
+  referenceNumber?: string;
+  productionDate?: string;
+  timezoneName?: string;
+  weightKg?: string;
+  machineName?: string;
 };
 export type PressingScannerAssignment = {
   assignmentId: number;
@@ -35,8 +42,17 @@ type ScreenWakeLockNavigator = Navigator & { wakeLock?: { request(type: "screen"
 type TorchCapabilities = MediaTrackCapabilities & { torch?: boolean; focusMode?: string[] };
 
 const SCAN_POLL_MS = 220;
-function capturedTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+function capturedTime(iso: string, timeZone?: string): string {
+  try {
+    return new Date(iso).toLocaleTimeString(undefined, {
+      hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit",
+      ...(timeZone ? { timeZone } : {}),
+    });
+  } catch {
+    return new Date(iso).toLocaleTimeString(undefined, {
+      hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit",
+    });
+  }
 }
 function cameraErrorMessage(error: unknown): string {
   const name = error instanceof DOMException ? error.name : "";
@@ -66,6 +82,8 @@ export function ContinuousPressingScanner({
   const [error, setError] = useState<string | null>(null);
   const [last, setLast] = useState<{
     barcode: string; at: string; outcome: ScanFeedback; message: string; intervalSeconds: number | null;
+    confirmedAt?: string; timezoneName?: string; weightKg?: string; machineName?: string;
+    confirmationId?: number; productionDate?: string;
   } | null>(null);
   const [manualCode, setManualCode] = useState("");
   const [sound, setSound] = useState(true);
@@ -152,7 +170,12 @@ export function ContinuousPressingScanner({
       const result = await onBarcodeRef.current({
         barcode, deviceCapturedAt, assignmentId: machine.assignmentId, machineId: machine.machineId,
       });
-      setLast({ barcode, at: deviceCapturedAt, outcome: result.kind, message: result.message, intervalSeconds });
+      setLast({
+        barcode, at: deviceCapturedAt, outcome: result.kind, message: result.message, intervalSeconds,
+        confirmedAt: result.confirmedAt, timezoneName: result.timezoneName, weightKg: result.weightKg,
+        machineName: result.machineName, confirmationId: result.confirmationId,
+        productionDate: result.productionDate,
+      });
       feedback(result.kind);
     } catch {
       setLast({
@@ -381,9 +404,22 @@ export function ContinuousPressingScanner({
           <div role="status" aria-live="polite" className={`rounded-lg border p-3 ${badgeColor}`}>
             <div className="flex flex-wrap justify-between gap-1">
               <strong className="break-all">{last.barcode}</strong>
-              <span className="font-mono text-sm">{capturedTime(last.at)}</span>
+              <span className="font-mono text-sm">
+                {last.confirmedAt
+                  ? capturedTime(last.confirmedAt, last.timezoneName)
+                  : capturedTime(last.at)}
+              </span>
             </div>
             <p className="text-sm">{last.message}</p>
+            {last.confirmedAt && (
+              <p className="text-xs">
+                Server confirmed: {last.productionDate} {capturedTime(last.confirmedAt, last.timezoneName)}
+                {last.timezoneName ? " (" + last.timezoneName + ")" : ""}
+                {last.weightKg ? " · " + last.weightKg + " KG" : ""}
+                {last.machineName ? " · " + last.machineName : ""}
+                {last.confirmationId ? " · Record #" + last.confirmationId : ""}
+              </p>
+            )}
             {last.intervalSeconds !== null && (
               <p className="text-xs">Time since previous read: {last.intervalSeconds} seconds</p>
             )}
@@ -394,9 +430,10 @@ export function ContinuousPressingScanner({
           repeated frames will not submit the same code again. Leaving this tab,
           locking the phone, or stopping the scanner releases camera access.
         </p>
-        <p className="text-xs text-amber-700 dark:text-amber-300">
-          Scanner preview only (Phase 3): barcode reads are not yet saved or marked as pressing completed.
-          Permanent validation, cross-machine duplicate checks and server timestamps arrive in Phase 4.
+        <p className="text-xs text-muted-foreground">
+          A green confirmation means the server has saved physical pressing completion with the
+          machine, operator, and exact timestamp. Stock finalization is a separate workflow.
+          Daily filters and offline retry are added in Phases 5–6.
         </p>
         {!hasNativeBarcodeDetector() && (
           <p className="text-xs text-muted-foreground">
