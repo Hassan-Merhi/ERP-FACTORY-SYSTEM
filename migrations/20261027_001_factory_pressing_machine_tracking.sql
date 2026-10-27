@@ -191,3 +191,55 @@ DO $$ BEGIN
     FOR EACH ROW EXECUTE FUNCTION factory_pressing_corrections_append_only();
   END IF;
 END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS factory_pressing_assignments_identity_uk ON factory_pressing_assignments (company_id, id, machine_id, user_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS factory_pressing_sessions_identity_uk ON factory_pressing_sessions (company_id, id, machine_id, assignment_id, user_id);
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'factory_pressing_sessions_assignment_identity_fk' AND conrelid = 'factory_pressing_sessions'::regclass) THEN
+    ALTER TABLE factory_pressing_sessions ADD CONSTRAINT factory_pressing_sessions_assignment_identity_fk
+    FOREIGN KEY (company_id, assignment_id, machine_id, user_id)
+    REFERENCES factory_pressing_assignments (company_id, id, machine_id, user_id) ON DELETE RESTRICT;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'factory_pressing_confirmations_session_identity_fk' AND conrelid = 'factory_pressing_confirmations'::regclass) THEN
+    ALTER TABLE factory_pressing_confirmations ADD CONSTRAINT factory_pressing_confirmations_session_identity_fk
+    FOREIGN KEY (company_id, session_id, machine_id, assignment_id, user_id)
+    REFERENCES factory_pressing_sessions (company_id, id, machine_id, assignment_id, user_id) ON DELETE RESTRICT;
+  END IF;
+END $$;
+
+CREATE OR REPLACE FUNCTION factory_pressing_confirmations_protect() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'Pressing confirmations cannot be deleted';
+  END IF;
+  IF OLD.voided_at IS NOT NULL
+     OR NEW.voided_at IS NULL
+     OR NEW.voided_by IS NULL
+     OR (to_jsonb(NEW) - 'voided_at' - 'voided_by') IS DISTINCT FROM (to_jsonb(OLD) - 'voided_at' - 'voided_by')
+  THEN
+    RAISE EXCEPTION 'Only a single audited void may update a pressing confirmation';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM factory_pressing_corrections c
+    WHERE c.company_id = OLD.company_id
+      AND c.confirmation_id = OLD.id
+      AND c.action = 'VOID'
+      AND c.supervisor_user_id = NEW.voided_by
+  ) THEN
+    RAISE EXCEPTION 'A supervisor correction event must be recorded before voiding a pressing confirmation';
+  END IF;
+  RETURN NEW;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'factory_pressing_confirmations_protect_trg' AND tgrelid = 'factory_pressing_confirmations'::regclass) THEN
+    CREATE TRIGGER factory_pressing_confirmations_protect_trg
+    BEFORE UPDATE OR DELETE ON factory_pressing_confirmations
+    FOR EACH ROW EXECUTE FUNCTION factory_pressing_confirmations_protect();
+  END IF;
+END $$;
