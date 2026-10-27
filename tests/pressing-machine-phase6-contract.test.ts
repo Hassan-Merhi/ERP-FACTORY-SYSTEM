@@ -83,13 +83,12 @@ describe("pressing machine Phase 6 reporting contracts", () => {
   });
   it("has a company-scoped history UI, saved filters, paginated rows and export", () => {
     expect(parent).toContain("<PressingHistoryReport");
-    expect(parent).toContain('key={myQuery.data.companyId + ":" + myQuery.data.userId}');
+    expect(parent).toContain('key={companyId + ":" + userId}');
     expect(page).toContain("This Month");
     expect(page).toContain("All Time");
-    expect(page).toContain("Condensed");
-    expect(page).toContain("Detailed");
-    expect(page).toContain("Save View");
-    expect(page).toContain("Delete View");
+    expect(page).toContain('aria-label="Pressing user filter"');
+    expect(page).toContain("All users");
+    expect(page).toContain("Scanned Bales");
     expect(page).toContain("Export Excel");
     expect(page).toContain("queryClient.invalidateQueries");
     expect(client).toContain("XLSX.writeFile");
