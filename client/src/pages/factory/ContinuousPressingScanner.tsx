@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { createCameraDecoder, hasCameraAccess, hasNativeBarcodeDetector } from "./pressing-scanner/cameraDecoder";
+import { createCameraDecoder, hasCameraAccess, type CameraBarcodeDecoder, type CameraDecoderEngine } from "./pressing-scanner/cameraDecoder";
 import { ContinuousScanGate } from "./pressing-scanner/continuousScanGate";
 
 export type PressingScanCapture = {
@@ -90,19 +90,22 @@ export function ContinuousPressingScanner({
   const [vibration, setVibration] = useState(true);
   const [torchAvailable, setTorchAvailable] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
+  const [engine, setEngine] = useState<CameraDecoderEngine | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const trackRef = useRef<MediaStreamTrack | null>(null);
   const audioRef = useRef<AudioContextLike | null>(null);
   const gateRef = useRef(new ContinuousScanGate());
   // The camera must keep decoding DIFFERENT barcodes during slow HTTP.
-  // All captures are persisted individually before submission by Phase 5.
+  // All captures are persisted individually in IndexedDB before submission.
   const inFlightRef = useRef(0);
   const latestCaptureRef = useRef(0);
   const lastCapturedMsRef = useRef<number | null>(null);
   const onBarcodeRef = useRef(onBarcode);
+  const assignmentRef = useRef(assignment);
   const soundRef = useRef(sound);
   const vibrationRef = useRef(vibration);
   onBarcodeRef.current = onBarcode;
+  assignmentRef.current = assignment;
   soundRef.current = sound;
   vibrationRef.current = vibration;
 
@@ -203,11 +206,15 @@ export function ContinuousPressingScanner({
   }, [feedback]);
 
   useEffect(() => {
-    if (!running || !assignment) {
+    // The assignment is read through a ref: the effect re-runs only when the
+    // assignment ID changes (dependency below), not on every object identity.
+    const currentAssignment = assignmentRef.current;
+    const video = videoRef.current;
+    const gate = gateRef.current;
+    if (!running || !currentAssignment) {
       trackRef.current = null;
       return;
     }
-    const currentAssignment = assignment;
     let canceled = false;
     let stream: MediaStream | null = null;
     let screenLock: ScreenWakeLock | null = null;
@@ -219,8 +226,9 @@ export function ContinuousPressingScanner({
     setTorchOn(false);
     lastCapturedMsRef.current = null;
 
-    const tick = async (detector: Awaited<ReturnType<typeof createCameraDecoder>>) => {
-      if (canceled || !detector) return;
+    let decoder: CameraBarcodeDecoder | null = null;
+    const tick = async (detector: CameraBarcodeDecoder) => {
+      if (canceled) return;
       const video = videoRef.current;
       if (video && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
         try {
@@ -235,18 +243,21 @@ export function ContinuousPressingScanner({
     };
 
     const start = async () => {
-      const decoder = await createCameraDecoder();
-      if (canceled) return;
-      if (!decoder) {
-        setStatus("manual");
-        setError("This browser does not support automatic barcode decoding. Use manual entry or an Android browser with BarcodeDetector support.");
-        return;
-      }
       if (!hasCameraAccess()) {
         setStatus("manual");
-        setError("Camera access requires a supported browser and a secure (HTTPS) connection.");
+        setError("Camera access requires a supported browser and a secure (HTTPS) connection. Manual entry stays available.");
         return;
       }
+      // Native BarcodeDetector where it works; otherwise the bundled ZXing
+      // decoder (iPhone Safari and other browsers without native support).
+      decoder = await createCameraDecoder();
+      if (canceled) { decoder?.dispose(); return; }
+      if (!decoder) {
+        setStatus("manual");
+        setError("Automatic barcode decoding could not start in this browser. Use manual entry below.");
+        return;
+      }
+      setEngine(decoder.engine);
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -297,9 +308,12 @@ export function ContinuousPressingScanner({
       if (timer !== undefined) clearTimeout(timer);
       stream?.getTracks().forEach(track => track.stop());
       void screenLock?.release().catch(() => {});
+      decoder?.dispose();
+      decoder = null;
       trackRef.current = null;
-      if (videoRef.current) videoRef.current.srcObject = null;
-      gateRef.current.reset();
+      if (video) video.srcObject = null;
+      gate.reset();
+      setEngine(null);
     };
   // Restart only on assignment, explicit start/stop, tab or browser visibility.
   // Callback is read through a ref so status updates never restart the stream.
@@ -447,12 +461,11 @@ export function ContinuousPressingScanner({
         <p className="text-xs text-muted-foreground">
           A green confirmation means the server has saved physical pressing completion with the
           machine, operator, and exact timestamp. Stock finalization is a separate workflow.
-          Offline scans stay amber until they receive server confirmation. Historical filters arrive in Phase 6.
+          Offline scans stay amber until they receive server confirmation. Permanent history and filters are below.
         </p>
-        {!hasNativeBarcodeDetector() && (
-          <p className="text-xs text-muted-foreground">
-            Native barcode decoding is unavailable in this browser. Manual entry works;
-            automatic scanning requires a supported decoder, which must be bundled and verified before deployment on unsupported phones.
+        {running && engine && (
+          <p className="text-xs text-muted-foreground" data-testid="pressing-decoder-engine">
+            Decoder: {engine === "native" ? "browser native BarcodeDetector" : "bundled ZXing (cross-platform)"}.
           </p>
         )}
       </CardContent>
