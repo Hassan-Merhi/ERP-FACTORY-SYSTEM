@@ -47,15 +47,21 @@ export function resolveProductionBalanceWeight({
  * This is separate from the cumulative as-of WIP / Net Position valuation and
  * NEVER changes the existing produced-bale Weight Cost or Profit calculation.
  */
-export function calculatePeriodTableBalance(args: {
+type PeriodTableBalanceArgs = {
   remainingPeriodKg: Decimal.Value;
   mixedPeriodWeightKg: Decimal.Value;
   mixedPeriodCost: Decimal.Value;
-}) {
-  const remainingKg = BatchRateDecimal.max(0, new BatchRateDecimal(args.remainingPeriodKg));
+};
+
+export function calculatePeriodTableBalance({
+  remainingPeriodKg,
+  mixedPeriodWeightKg,
+  mixedPeriodCost,
+}: PeriodTableBalanceArgs) {
+  const remainingKg = BatchRateDecimal.max(0, new BatchRateDecimal(remainingPeriodKg));
   const periodRate = calculateCumulativeBatchRate({
-    cumulativeMixWeightKg: args.mixedPeriodWeightKg,
-    cumulativeMixCost: args.mixedPeriodCost,
+    cumulativeMixWeightKg: mixedPeriodWeightKg,
+    cumulativeMixCost: mixedPeriodCost,
   });
   return {
     weightKg: remainingKg.toNumber(),
