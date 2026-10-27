@@ -28,13 +28,6 @@ export async function createCameraDecoder(): Promise<BrowserBarcodeDetector | nu
   if (!hasNativeBarcodeDetector()) return null;
   const Detector = (window as unknown as { BarcodeDetector: DetectorConstructor }).BarcodeDetector;
   try {
-    const formats = Detector.getSupportedFormats
-      ? PRESSING_FORMATS.filter(format => supportedHas(format))
-      : [...PRESSING_FORMATS];
-
-    function supportedHas(format: string): boolean {
-      return supportedFormats.includes(format);
-    }
     // Runtime support can be narrower than the global interface advertises.
     const supportedFormats = Detector.getSupportedFormats
       ? await Detector.getSupportedFormats()
