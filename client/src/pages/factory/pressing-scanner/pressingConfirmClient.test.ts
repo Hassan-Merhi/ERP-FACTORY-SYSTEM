@@ -22,6 +22,8 @@ const receipt = {
   referenceNumber: "REF300208", weightKg: "45.000", machineName: "Press 01",
   confirmedAt: "2026-10-27T09:26:15.000Z", productionDate: "2026-10-27",
   timezoneName: "Africa/Lubumbashi", replayed: false, inventoryFinalized: false,
+  machineId: 1, assignmentId: 2, operatorUserId: "employee-1",
+  requestId: "c72872fc-3403-48dc-b915-bca0b82d0d68",
 };
 
 afterEach(() => vi.clearAllMocks());
