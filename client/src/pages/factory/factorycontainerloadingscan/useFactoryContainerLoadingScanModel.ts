@@ -494,10 +494,9 @@ export function useFactoryContainerLoadingScanModel() {
 
   const downloadTemplate = useCallback((mode: "ref" | "articleCode") => downloadBaleImportTemplate(mode), []);
 
-  const handleScan = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
-      if (e.key !== "Enter" || !scanCode.trim() || !orderId || !selectedLocationId) return;
-      e.preventDefault();
+  const submitScannedCode = useCallback(
+    (code: string) => {
+      if (!code.trim() || !orderId || !selectedLocationId) return;
 
       // Hardware scanners can emit duplicate Enter events before React renders
       // mutation.isPending=true. Lock synchronously so one scan yields one POST.
@@ -518,7 +517,7 @@ export function useFactoryContainerLoadingScanModel() {
         return;
       }
 
-      const trimmed = scanCode.trim();
+      const trimmed = code.trim();
       const isBypassProforma = pendingBypassBaleRef !== null && pendingBypassBaleRef === trimmed;
       const isBypassOverload = pendingBypassOverloadRef !== null && pendingBypassOverloadRef === trimmed;
       if (pendingBypassBaleRef !== null && !isBypassProforma) setPendingBypassBaleRef(null);
@@ -535,7 +534,6 @@ export function useFactoryContainerLoadingScanModel() {
       });
     },
     [
-      scanCode,
       orderId,
       selectedLocationId,
       orderDetail,
@@ -545,6 +543,12 @@ export function useFactoryContainerLoadingScanModel() {
       toast,
     ]
   );
+
+  const handleScan = useCallback((event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    submitScannedCode(scanCode);
+  }, [scanCode, submitScannedCode]);
 
   const handleImportFile = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
@@ -663,6 +667,7 @@ export function useFactoryContainerLoadingScanModel() {
     scanCode,
     setScanCode,
     handleScan,
+    submitScannedCode,
     scanFlash,
     scanInputClass,
     showScanSuccessPopup,
