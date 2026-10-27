@@ -11,7 +11,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 const ROOT = "/api/factory/pressing-machines";
 type Shift = { id: number; shiftCode: string; name: string; startLocal: string; endLocal: string;
   timezoneName: string; active: boolean };
-type Machine = { id: number; code: string; name: string; targetBalesPerHour?: string | null };
+type Machine = { id: number; machineCode: string; name: string; targetBalesPerHour?: string | null };
 type Downtime = { id: number; machineId: number; reasonCode: string; startedAt: string;
   endedAt: string | null; reasonNotes?: string | null };
 type AnalyticsGroup = { productionDate: string; machineId: number; machineName: string;
@@ -230,7 +230,7 @@ export default function PressingShiftAnalytics({
                 <select className="h-10 w-full rounded-md border bg-background px-2" value={downtimeMachine}
                   onChange={e=>setDowntimeMachine(e.target.value)}>
                   <option value="">Select machine</option>
-                  {list.map(m=><option key={m.id} value={m.id}>{m.code} — {m.name}</option>)}
+                  {list.map(m=><option key={m.id} value={m.id}>{m.machineCode} — {m.name}</option>)}
                 </select>
               </label>
               <label className="text-xs space-y-1">Reason
@@ -281,7 +281,7 @@ export default function PressingShiftAnalytics({
                 <select className="h-10 w-full rounded-md border bg-background px-2" value={machineFilter}
                   onChange={e=>setMachineFilter(e.target.value)}>
                   <option value="">All machines</option>
-                  {list.map(m=><option key={m.id} value={m.id}>{m.code}</option>)}
+                  {list.map(m=><option key={m.id} value={m.id}>{m.machineCode}</option>)}
                 </select>
               </label>
               <label className="text-xs space-y-1">Shift
@@ -356,7 +356,7 @@ export default function PressingShiftAnalytics({
                 <select className="h-10 min-w-[140px] rounded-md border bg-background px-2 text-sm"
                   value={targetMachine} onChange={e=>setTargetMachine(e.target.value)}>
                   <option value="">Choose machine</option>
-                  {list.map(m=><option key={m.id} value={m.id}>{m.code}</option>)}
+                  {list.map(m=><option key={m.id} value={m.id}>{m.machineCode}</option>)}
                 </select>
                 <Input type="number" min="0.001" step="0.001" max="100000"
                   placeholder="Target bales/hour" value={targetRate}
