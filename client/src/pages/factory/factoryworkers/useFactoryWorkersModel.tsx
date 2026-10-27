@@ -672,14 +672,9 @@ export function useFactoryWorkersModel() {
     .reduce((s, w) => s + parseFloat(w.transportAllowance || "0"), 0);
   const totalAdvances = (workers ?? []).reduce((s, w) => s + parseFloat(w.pendingAdvanceBalance || "0"), 0);
   const totalDueToday = Object.values(amountDue).reduce((s, d) => s + (d.net > 0 ? d.net : 0), 0);
-  // Total Remaining = sum of the "DUE − ADV" column: Due Today minus pending advance for each active worker
-  const totalRemainingToBePaid = (workers ?? [])
-    .filter((w) => w.active)
-    .reduce((s, w) => {
-      const dueNet = amountDue[w.id]?.net ?? 0;
-      const advance = parseFloat(w.pendingAdvanceBalance || "0");
-      return s + (dueNet - advance);
-    }, 0);
+  // The amount-due API returns net payable for active workers AFTER eligible advance deductions.
+  // Do not deduct their outstanding advances a second time, or include manual-repayment advances.
+  const totalRemainingToBePaid = totalDueToday;
 
   return {
     showWorkersList,
