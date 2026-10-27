@@ -423,12 +423,28 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       const balanceCostPerKg = balanceSnapshot.costPerKg;
       const balanceValue = balanceSnapshot.value;
 
-      // Preserve the original cumulative Balance on Table snapshot in full.
-      // Separately value only the ACTIVE original batches selected by the report's
-      // from/to filter. All Time naturally includes all original batch dates.
-      // These are two DIFFERENT read-only KPIs; neither changes production costs.
+      // Preserve the overall as-of Balance on Table snapshot without changing
+      // Production Weight Cost. Closed mix batches are normally fully used at
+      // creation, so their current "ACTIVE" status is NOT a historical month
+      // balance. For the filtered KPI, compare the physical balances at the
+      // selected period's boundaries. This is period net movement (up/down),
+      // valued at the period's correct original-batch weighted-average rate.
+      const priorDate = from
+        ? (() => {
+            const firstDay = new Date(`${from}T00:00:00Z`);
+            if (!Number.isFinite(firstDay.getTime()) || firstDay.toISOString().slice(0, 10) !== from) {
+              throw new Error("Invalid report start date");
+            }
+            firstDay.setUTCDate(firstDay.getUTCDate() - 1);
+            return firstDay.toISOString().slice(0, 10);
+          })()
+        : null;
+      const beforePeriodSnapshot = priorDate
+        ? await getFactoryBalanceOnTableSnapshot(companyId, priorDate)
+        : null;
       const filteredTable = calculatePeriodTableBalance({
-        remainingPeriodKg: periodOnTableKg,
+        weightAtEndKg: balanceWeightKg,
+        weightBeforePeriodKg: beforePeriodSnapshot?.weightKg ?? 0,
         mixedPeriodWeightKg: totalMixWeightDecimal,
         mixedPeriodCost: totalMixCostDecimal,
       });
@@ -646,9 +662,12 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           costPerKg: hideReportCosts ? 0 : balanceCostPerKg,
           value: hideReportCosts ? 0 : balanceValue,
         },
-        // NEW, additional filtered balance: only original batches in [from, to].
+        // Selected period's net physical movement, not today's ACTIVE-only
+        // original batches. A drawdown is identified explicitly on the card.
         filteredBalanceOnTable: {
           weightKg: filteredTable.weightKg,
+          netChangeKg: filteredTable.netChangeKg,
+          direction: filteredTable.direction,
           costPerKg: hideReportCosts ? 0 : filteredTable.costPerKg,
           value: hideReportCosts ? 0 : filteredTable.value,
         },
