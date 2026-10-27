@@ -4,7 +4,7 @@ import { z } from "zod";
 export const PRESSING_REPORT_COLUMNS = [
   "referenceNumber", "articleCode", "productName", "weightKg",
   "machineName", "operatorName", "shiftId", "productionDate",
-  "confirmedAt", "deviceCapturedAt", "secondsSincePrevious", "status",
+  "confirmedAt", "deviceCapturedAt", "secondsSincePrevious", "status", "bales", "firstScanAt", "lastScanAt",
 ] as const;
 export type PressingReportColumn = (typeof PRESSING_REPORT_COLUMNS)[number];
 export const PRESSING_COLUMN_LABELS: Record<PressingReportColumn, string> = {
@@ -13,6 +13,7 @@ export const PRESSING_COLUMN_LABELS: Record<PressingReportColumn, string> = {
   operatorName: "Operator", shiftId: "Shift ID", productionDate: "Production Date",
   confirmedAt: "Server Scan Time", deviceCapturedAt: "Device Capture Time",
   secondsSincePrevious: "Seconds Since Previous", status: "Status",
+  bales: "Bales", firstScanAt: "First Scan", lastScanAt: "Last Scan",
 };
 export const PRESSING_DEFAULT_COLUMNS: PressingReportColumn[] = [
   "referenceNumber", "articleCode", "weightKg", "machineName",
