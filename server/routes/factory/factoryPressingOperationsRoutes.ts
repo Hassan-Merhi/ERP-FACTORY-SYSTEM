@@ -39,9 +39,13 @@ const downtimeStart = z.object({
   reasonCode: z.enum(["MAINTENANCE","MACHINE_FAULT","MATERIAL_SHORTAGE","POWER_OUTAGE","BREAK","OTHER"]),
   reasonNotes: z.string().trim().max(500).nullable().optional(),
 }).strict();
+const validReportDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine(s => !Number.isNaN(Date.parse(s + "T00:00:00Z")) &&
+    new Date(s + "T00:00:00Z").toISOString().slice(0,10) === s,
+    "Invalid calendar date");
 const analyticsFilters = z.object({
-  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  from: validReportDate,
+  to: validReportDate,
   machineId: z.coerce.number().int().positive().optional(),
   userId: z.string().min(1).max(255).optional(),
   shiftId: z.coerce.number().int().positive().optional(),
@@ -263,9 +267,12 @@ export function registerFactoryPressingOperationsRoutes(app: Express): void {
         'COUNT(DISTINCT user_id)::integer AS "operators"' +
         ' FROM factory_pressing_confirmations WHERE '+clauses.join(" AND ")+
         ' GROUP BY production_date,machine_id,shift_id' +
-        ' ORDER BY production_date DESC,machine_id,shift_id NULLS LAST LIMIT 3000',
+        ' ORDER BY production_date DESC,machine_id,shift_id NULLS LAST LIMIT 3001',
         params,
       );
+      if (data.rows.length > 3000)
+        throw new PressingOperationsError(422, "ANALYTICS_TOO_LARGE",
+          "Narrow the date, machine or shift filters; more than 3,000 groups match.");
       const summary = data.rows.reduce((acc,row)=>{
         acc.bales+=Number(row.bales);acc.kg+=Number(row.kg);return acc;
       },{bales:0,kg:0});
@@ -297,8 +304,11 @@ export function registerFactoryPressingOperationsRoutes(app: Express): void {
         ' ON m.id=d.machine_id AND m.company_id=d.company_id' +
         " WHERE d.company_id=$1 AND d.started_at < (($3::date+INTERVAL '1 day') AT TIME ZONE $4)" +
         ' AND COALESCE(d.ended_at,NOW()) >= ($2::date::timestamp AT TIME ZONE $4)'+machineParam+
-        ' ORDER BY d.started_at DESC LIMIT 3000',downtimeParams
+        ' ORDER BY d.started_at DESC LIMIT 3001',downtimeParams
       );
+      if (downtime.rows.length > 3000)
+        throw new PressingOperationsError(422, "DOWNTIME_TOO_LARGE",
+          "Narrow the date or machine filter; more than 3,000 downtime records match.");
       const targets = await db.select({
         id:factoryPressingMachines.id,code:factoryPressingMachines.machineCode,
         targetBalesPerHour:factoryPressingMachines.targetBalesPerHour,
