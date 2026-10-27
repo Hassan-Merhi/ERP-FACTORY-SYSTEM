@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation, useRoute } from "wouter";
 import { Button } from "@/components/ui/button";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
