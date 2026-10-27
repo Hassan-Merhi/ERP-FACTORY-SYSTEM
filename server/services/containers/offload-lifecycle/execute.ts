@@ -1,10 +1,11 @@
 import type Decimal from "decimal.js";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "../../../db";
 import * as schema from "@shared/schema";
 
 import { postChargeVouchers } from "./charge-vouchers";
 import { reverseExistingOffload } from "./reverse";
+import { offloadEconomicBasisChanged } from "./offloadCostBasisGuard";
 import { nextCanonicalSourceRevision } from "../../inventory/canonicalSourceRevision";
 import { createDatabaseStockMovementAdapter } from "../../inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../inventory/stockMovementIntegrityService";
@@ -342,11 +343,6 @@ export async function executeContainerOffloadLifecycle(
       throw new ContainerOffloadLifecycleError(OFFLOAD_BEFORE_CUTOVER_MESSAGE, 409, OFFLOAD_BEFORE_CUTOVER_CODE);
     }
 
-    let reversalDelta: Decimal = new MoneyDecimal(0);
-    if (existingOffload) {
-      reversalDelta = await reverseExistingOffload(tx, container, existingOffload, lineItems);
-    }
-
     const itemMap = buildItemMap(lineItems);
     const zero = new MoneyDecimal(0);
     const totalBales = [...itemMap.values()].reduce((sum, item) => sum.plus(item.totalQuantity), zero);
@@ -391,12 +387,113 @@ export async function executeContainerOffloadLifecycle(
     const requestsCorrection = (input.inventoryCostCorrections ?? []).some(
       (correction) => correction.correctRate > 0 && validCorrectionIds.has(correction.stockItemId)
     );
+
+    // A legacy offload edit can reverse and re-receive the goods after they were
+    // already sold, mixed, returned, or transferred. The new source value must
+    // not silently diverge from historical relief and destination stock values.
+    // All checks are performed BEFORE reverseExistingOffload mutates inventory.
+    if (existingOffload) {
+      const previousItems = await tx
+        .select({
+          stockItemId: schema.containerOffloadItems.stockItemId,
+          quantity: schema.containerOffloadItems.quantity,
+          totalValue: schema.containerOffloadItems.totalValue,
+        })
+        .from(schema.containerOffloadItems)
+        .where(eq(schema.containerOffloadItems.offloadId, existingOffload.id));
+
+      const proposedItems = entries.map(([stockItemId, item], index) => {
+        let newValue = item.weightedRateSum.plus(item.totalQuantity.times(additionalCostPerBale)).toDecimalPlaces(2);
+        if (index === entries.length - 1 && !roundingDifference.isZero()) {
+          newValue = newValue.plus(roundingDifference);
+        }
+        return {
+          stockItemId,
+          quantity: item.totalQuantity.toFixed(3),
+          totalValue: newValue.toFixed(2),
+        };
+      });
+      const basisChanged =
+        requestsCorrection ||
+        previousItems.length === 0 ||
+        offloadEconomicBasisChanged(previousItems, proposedItems, existingOffload.locationId, input.locationId);
+
+      // Reversing/reposting a receipt can alter stock relief even when total
+      // posted value appears unchanged. Never replay after downstream usage.
+      const affectedItemIds = positiveIds([...previousItems, ...proposedItems].map((item) => item.stockItemId));
+      if (affectedItemIds.length > 0) {
+        const [salesAfterReceipt, transfersAfterReceipt, canonicalAfterReceipt] = await Promise.all([
+          tx
+            .select({ id: schema.salesItems.id })
+            .from(schema.salesItems)
+            .innerJoin(schema.vouchers, eq(schema.vouchers.id, schema.salesItems.voucherId))
+            .where(
+              and(
+                eq(schema.vouchers.companyId, input.companyId),
+                eq(schema.vouchers.optional, false),
+                isNull(schema.vouchers.deletedAt),
+                inArray(schema.salesItems.stockItemId, affectedItemIds)
+              )
+            )
+            .limit(1),
+          tx
+            .select({ id: schema.stockTransferItems.id })
+            .from(schema.stockTransferItems)
+            .innerJoin(
+              schema.stockTransferVouchers,
+              eq(schema.stockTransferVouchers.id, schema.stockTransferItems.transferId)
+            )
+            .innerJoin(schema.vouchers, eq(schema.vouchers.id, schema.stockTransferVouchers.voucherId))
+            .where(
+              and(
+                eq(schema.vouchers.companyId, input.companyId),
+                eq(schema.vouchers.optional, false),
+                isNull(schema.vouchers.deletedAt),
+                eq(schema.stockTransferVouchers.inventoryApplied, true),
+                inArray(schema.stockTransferItems.stockItemId, affectedItemIds)
+              )
+            )
+            .limit(1),
+          tx
+            .select({ id: schema.canonicalStockMovements.id })
+            .from(schema.canonicalStockMovements)
+            .where(
+              and(
+                eq(schema.canonicalStockMovements.companyId, input.companyId),
+                inArray(schema.canonicalStockMovements.stockItemId, affectedItemIds),
+                notInArray(schema.canonicalStockMovements.sourceType, [
+                  "container-offload",
+                  "container-reverse-offload",
+                  "container_offload_reverse",
+                  "container_offload_reverse_legacy",
+                ])
+              )
+            )
+            .limit(1),
+        ]);
+        if (salesAfterReceipt.length || transfersAfterReceipt.length || canonicalAfterReceipt.length) {
+          throw new ContainerOffloadLifecycleError(
+            basisChanged
+              ? "Stock from this container has sale, transfer, or adjustment history. Offload costs cannot be rewritten without an audited inventory-and-COGS correction."
+              : "Stock from this container has downstream transactions. The receipt cannot be reversed and replayed; use an audited correction workflow.",
+            409,
+            "CONTAINER_OFFLOAD_DOWNSTREAM_COST_LOCKED"
+          );
+        }
+      }
+    }
+
     if (requestsCorrection && !OFFLOAD_COST_CORRECTION_ROLES.has(String(input.actorRole ?? ""))) {
       throw new ContainerOffloadLifecycleError(
         OFFLOAD_COST_CORRECTION_FORBIDDEN_MESSAGE,
         403,
         OFFLOAD_COST_CORRECTION_FORBIDDEN_CODE
       );
+    }
+
+    let reversalDelta: Decimal = new MoneyDecimal(0);
+    if (existingOffload) {
+      reversalDelta = await reverseExistingOffload(tx, container, existingOffload, lineItems);
     }
     for (const correction of input.inventoryCostCorrections ?? []) {
       if (!(correction.correctRate > 0) || !validCorrectionIds.has(correction.stockItemId)) continue;

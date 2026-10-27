@@ -31,6 +31,7 @@ import {
 } from "./_helpers";
 import { toMoney } from "../../lib/money";
 import { loadHeldChargeSnapshot } from "../factory/customers-core/heldUnfinalizedCustomerCharges";
+import { enrichCustomerLedgerDestinations } from "../../services/accounting/balances/customerStatementDestination";
 
 export async function runCustomerBalanceStatement(options: {
   customerId: number;
@@ -166,7 +167,7 @@ export async function runCustomerBalanceStatement(options: {
 
     const hasMore = chunkResult.rows.length > continuous.limit;
     const visibleRaw = chunkResult.rows.slice(0, continuous.limit);
-    const rows = visibleRaw.map(({ sort_date: _date, sort_id: _id, ...row }) => row);
+    const rows = await enrichCustomerLedgerDestinations(companyId, customerId, visibleRaw.map(({ sort_date: _date, sort_id: _id, ...row }) => row));
     const previousChunkNet = cursor?.net ?? 0;
     const chunkNet = rows.reduce((sum, row) => sum + statementRowNet(row), 0);
     const last = visibleRaw.at(-1);
@@ -193,7 +194,13 @@ export async function runCustomerBalanceStatement(options: {
       hasMore,
       nextCursor,
     });
-    return cursor ? response : { ...response, notInLedger: await loadNotInLedger() };
+    if (cursor) return { ...response, customerId };
+    const notInLedger = await loadNotInLedger();
+    return {
+      ...response,
+      customerId,
+      notInLedger: { ...notInLedger, rows: await enrichCustomerLedgerDestinations(companyId, customerId, notInLedger.rows) },
+    };
   }
 
   const pageQuery = `WITH ${cte}
@@ -223,7 +230,7 @@ export async function runCustomerBalanceStatement(options: {
     loadPrePeriodNet(),
     loadNotInLedger(),
   ]);
-  const rows = pageResult.rows.map(({ sort_date: _date, sort_id: _id, ...row }) => row);
+  const rows = await enrichCustomerLedgerDestinations(companyId, customerId, pageResult.rows.map(({ sort_date: _date, sort_id: _id, ...row }) => row));
   return {
     ...buildPageResponse(
       rows,
@@ -233,6 +240,7 @@ export async function runCustomerBalanceStatement(options: {
       pagination,
       dates
     ),
-    notInLedger,
+    notInLedger: { ...notInLedger, rows: await enrichCustomerLedgerDestinations(companyId, customerId, notInLedger.rows) },
+    customerId,
   };
 }

@@ -166,8 +166,8 @@ export function UserManagementForm({
         <CardContent className="space-y-3">
           {isPrivileged ? (
             <p className="text-xs text-muted-foreground rounded-md bg-muted/40 px-3 py-2.5">
-              <strong>{user.role}</strong> accounts always have full access to both ERP and Factory — this cannot be
-              restricted.
+              <strong>{user.role}</strong> access is unrestricted in the current company and cannot be reduced
+              with these app toggles. A different company can have its own role, including View Only.
             </p>
           ) : isViewOnly ? (
             <>

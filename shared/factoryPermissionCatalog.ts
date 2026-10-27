@@ -48,6 +48,7 @@ export const FACTORY_TAB_REGISTRY: readonly FactoryTabDefinition[] = [
   { key: "hide_tab_stockentry_history", label: "History", group: "Stock Entry" },
   { key: "hide_tab_stockentry_ground_scan", label: "Ground Scan", group: "Stock Entry" },
   { key: "hide_tab_stockentry_daily_scan", label: "Daily Scan", group: "Stock Entry" },
+  { key: "hide_tab_stockentry_pressing_machines", label: "Pressing Machines", group: "Stock Entry" },
   { key: "hide_tab_stockentry_production_targets", label: "Production Targets", group: "Stock Entry" },
 
   { key: "hide_tab_parties_customers", label: "Customers", group: "Parties Hub" },

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +22,7 @@ interface RolePreset {
 
 const ROLE_PRESETS: Record<string, RolePreset[]> = {
   Manager: [
-    { label: "Read-only", values: { daybookEditDays: 0, canSellNegativeStock: false, canDeleteRecords: false } },
+    { label: "No backdating", values: { daybookEditDays: 0, canSellNegativeStock: false, canDeleteRecords: false } },
     { label: "Standard", values: { daybookEditDays: 3, canSellNegativeStock: false, canDeleteRecords: true } },
     { label: "Power", values: { daybookEditDays: 30, canSellNegativeStock: true, canDeleteRecords: true } },
   ],
@@ -30,7 +31,7 @@ const ROLE_PRESETS: Record<string, RolePreset[]> = {
     { label: "Unrestricted", values: { daybookEditDays: 365 } },
   ],
   "Normal User": [
-    { label: "View only", values: { daybookEditDays: 0 } },
+    { label: "Today only", values: { daybookEditDays: 0 } },
     { label: "Standard", values: { daybookEditDays: 3 } },
   ],
   POS: [
@@ -49,9 +50,16 @@ interface InlineRoleEditorProps {
 
 export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSaved }: InlineRoleEditorProps) {
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
+  const { data: currentUser } = useQuery<{ role?: string; currentRole?: string }>({
+    queryKey: ["/api/auth/me"],
+  });
   const isEditing = !!editingRole;
+  const activeCompanyId = Number(selectedCompany?.id ?? 0);
+  const isDeveloper = (currentUser?.currentRole ?? currentUser?.role) === "Developer";
 
-  const [companyId, setCompanyId] = useState<number>(companies[0]?.id ?? 0);
+  const [companyId, setCompanyId] = useState<number>(activeCompanyId || companies[0]?.id || 0);
+  const outsideActiveCompany = activeCompanyId > 0 && companyId !== activeCompanyId && !isDeveloper;
   const [role, setRole] = useState("Manager");
   const [assignedLocationId, setAssignedLocationId] = useState<number | undefined>();
   const [selectedLocationIds, setSelectedLocationIds] = useState<number[]>([]);
@@ -66,7 +74,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
   const isPOS = role === "POS";
   const isTester = role === "ERP Tester";
   // Determine if the current save action needs password re-confirmation
-  const isDangerousSave = role === "Admin" || canDeleteRecords;
+  const isDangerousSave = role === "Admin" || ((role === "Manager" || isTester) && canDeleteRecords);
 
   const handleSave = () => {
     if (isDangerousSave) {
@@ -128,7 +136,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
         setLocationCashAccounts({});
       }
     } else {
-      setCompanyId(companies[0]?.id ?? 0);
+      setCompanyId(activeCompanyId || companies[0]?.id || 0);
       setRole("Manager");
       setAssignedLocationId(undefined);
       setSelectedLocationIds([]);
@@ -139,7 +147,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
       setPosViewOnly(false);
       setCanDeleteRecords(false);
     }
-  }, [companies, editingRole, editingRole?.id]);
+  }, [activeCompanyId, companies, editingRole, editingRole?.id]);
 
   const { data: locations = [] } = useQuery<Location[]>({
     queryKey: ["/api/locations", { companyId }],
@@ -254,6 +262,11 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
             value={role}
             onValueChange={(v) => {
               setRole(v);
+              if (v === "View Only") {
+                setCanDeleteRecords(false);
+                setCanSellNegativeStock(false);
+                setDaybookEditDays(0);
+              }
               setSelectedLocationIds([]);
               setLocationCashAccounts({});
             }}
@@ -264,13 +277,27 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
             <SelectContent>
               {ROLE_OPTIONS.map((r) => (
                 <SelectItem key={r} value={r}>
-                  {r}
+                  {r === "View Only" ? "View Only (ERP + Factory)" : r}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
       </div>
+
+      {role === "View Only" && (
+        <p className="text-xs text-muted-foreground" data-testid="view-only-erp-factory-description">
+          Read-only access for this company in both ERP and Factory (when app access is enabled).
+          The user can browse assigned pages but cannot create, edit, import, delete, or post transactions.
+        </p>
+      )}
+
+      {outsideActiveCompany && (
+        <p className="text-xs text-destructive" role="alert" data-testid="role-company-scope-warning">
+          Switch to this company before assigning its role. Only Developer accounts can manage
+          another company from the current workspace.
+        </p>
+      )}
 
       {isTester && (
         <p className="text-xs text-muted-foreground">
@@ -441,7 +468,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
           type="button"
           size="sm"
           onClick={handleSave}
-          disabled={saveMutation.isPending || (isPOS && selectedLocationIds.length === 0 && !posViewOnly)}
+          disabled={saveMutation.isPending || outsideActiveCompany || (isPOS && selectedLocationIds.length === 0 && !posViewOnly)}
           data-testid="button-save-role"
         >
           <Check className="h-3.5 w-3.5 mr-1" />

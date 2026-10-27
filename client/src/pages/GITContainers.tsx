@@ -112,10 +112,12 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
   }
   const otwHiddenCount = OTW_COLS.filter((c) => !colVis[c.id]).length;
 
-  const allowedRoles = ["Admin", "Developer", "Owner", "ERP Tester"];
+  const allowedRoles = ["Admin", "Developer", "Owner", "ERP Tester", "View Only"];
   const effectiveRole = user?.currentRole ?? user?.role ?? "";
   const isAllowed = allowedRoles.includes(effectiveRole);
   const isTester = effectiveRole === "ERP Tester";
+  const isViewOnly = effectiveRole === "View Only";
+  const restrictedToCurrentCompany = isTester || isViewOnly;
 
   const { data, isLoading, isError, error, refetch, loadContainerDetail } = usePaginatedGITContainers({
     companyIdentity: allCompanies ? `all:${user?.id ?? "unknown"}` : (selectedCompany?.id ?? "no-company"),
@@ -322,7 +324,7 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
             <Building2 className="h-3.5 w-3.5" />
             My Company
           </button>
-          {!isTester && (
+          {!restrictedToCurrentCompany && (
         <button
             onClick={() => {
               setAllCompanies(true);
@@ -490,7 +492,7 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
           </Popover>
 
           <ContainerBulkActions
-            allowPrivilegedActions={effectiveRole !== "ERP Tester"}
+            allowPrivilegedActions={!restrictedToCurrentCompany}
             className="max-sm:col-span-2 max-sm:*:flex-1"
             waSending={waSending}
             onImportClick={() => fileInputRef.current?.click()}
@@ -605,6 +607,7 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
             containers={filteredContainers}
             colVis={colVis}
             sessionCompanyId={sessionCompanyId}
+            readOnly={isViewOnly}
             onOpenDrawer={openDrawer}
             printRef={printRef}
           />
@@ -616,6 +619,7 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
         onClose={() => setDrawerOpen(false)}
         container={drawerContainer}
         sessionCompanyId={sessionCompanyId}
+        readOnly={isViewOnly}
       />
     </div>
   );

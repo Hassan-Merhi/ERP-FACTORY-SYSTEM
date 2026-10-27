@@ -15,6 +15,7 @@ import {
   FlaskConical,
   PackageCheck,
   Scale,
+  Filter,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -328,7 +329,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
 
         <SalaryOverviewSection report={report} />
 
-        {/* ── Four colored boxes ── */}
+        {/* Four matching KPI cards. The fourth contains both table balances. */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {/* 1 — Original Batches */}
           <Card
@@ -513,36 +514,69 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
             </CardContent>
           </Card>
 
-          {/* 4 — Balance on Table */}
+          {/* 4 — One KPI, internally split into overall and filtered balance. */}
           <Card
-            className="border-violet-200 dark:border-violet-800/50 bg-violet-50/60 dark:bg-violet-950/20"
+            className="min-w-0 border-violet-200 dark:border-violet-800/50 bg-violet-50/60 dark:bg-violet-950/20"
             data-testid="card-balance-on-table"
           >
             <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
               <CardTitle className="text-xs font-bold uppercase tracking-wide text-violet-700 dark:text-violet-400 flex items-center gap-1.5">
                 <Scale className="h-3.5 w-3.5" />
-                Balance on Table
+                Overall Balance on Table
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-0 space-y-0.5">
+            <CardContent className="pt-0 space-y-2">
               {isLoading ? (
                 <SkeletonBox />
               ) : (
                 <>
-                  <StatRow label="Weight" value={fmtKg(data?.balanceOnTable.weightKg ?? 0)} />
-                  {!costsHidden && (
-                    <>
-                      <StatRow label="Batch Rate" value={fmtRate(data?.balanceOnTable.costPerKg ?? 0)} sub="per kg" />
-                      <StatRow label="Value" value={fmtMoney(data?.balanceOnTable.value ?? 0)} />
-                    </>
-                  )}
+                  <div className="space-y-0.5" data-testid="section-overall-balance-on-table">
+                    <StatRow label="Weight" value={fmtKg(data?.balanceOnTable.weightKg ?? 0)} />
+                    {!costsHidden && (
+                      <>
+                        <StatRow label="Cumulative Rate" value={fmtRate(data?.balanceOnTable.costPerKg ?? 0)} />
+                        <StatRow label="Value" value={fmtMoney(data?.balanceOnTable.value ?? 0)} />
+                      </>
+                    )}
+                  </div>
+                  <div
+                    className="space-y-0.5 border-t border-violet-200 dark:border-violet-800/50 pt-2"
+                    data-testid="card-filtered-balance-on-table"
+                  >
+                    <div className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-teal-700 dark:text-teal-400">
+                      <Filter className="h-3 w-3 shrink-0" />
+                      Filtered Balance on Table
+                      <span className="ml-auto text-muted-foreground" title={data?.filteredBalanceOnTable?.direction}>
+                        {data?.filteredBalanceOnTable?.direction === "decrease" ? (
+                          <TrendingDown className="h-3.5 w-3.5 text-red-500" />
+                        ) : data?.filteredBalanceOnTable?.direction === "increase" ? (
+                          <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
+                        ) : (
+                          <Minus className="h-3.5 w-3.5" />
+                        )}
+                      </span>
+                    </div>
+                    <StatRow label="Weight" value={fmtKg(data?.filteredBalanceOnTable?.weightKg ?? 0)} />
+                    {!costsHidden && (
+                      <>
+                        <StatRow
+                          label="Period Batch Rate"
+                          value={fmtRate(data?.filteredBalanceOnTable?.costPerKg ?? 0)}
+                        />
+                        <StatRow label="Value" value={fmtMoney(data?.filteredBalanceOnTable?.value ?? 0)} />
+                      </>
+                    )}
+                    <div className="truncate text-[10px] text-muted-foreground">
+                      {data?.from && data?.to ? `${data.from} – ${data.to}` : "All Time"}
+                    </div>
+                  </div>
                 </>
               )}
             </CardContent>
           </Card>
         </div>
 
-        {/* ── Expandable detail rows ── */}
+                {/* ── Expandable detail rows ── */}
 
         {/* Production by Category (each category expands to show its products) */}
         {(() => {

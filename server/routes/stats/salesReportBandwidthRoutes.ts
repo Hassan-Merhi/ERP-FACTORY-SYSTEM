@@ -6,7 +6,10 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
 import { storage } from "../../storage";
-import { createTenantDatabaseScope, runWithDatabaseScopeRuntimeContext } from "../../services/security/databaseScopeRuntimeContext";
+import {
+  createTenantDatabaseScope,
+  runWithDatabaseScopeRuntimeContext,
+} from "../../services/security/databaseScopeRuntimeContext";
 
 type Grouping = "daily" | "monthly" | "yearly";
 type ProfitFilter = "all" | "positive" | "negative";
@@ -144,7 +147,7 @@ async function buildSalesSummary(companyIds: number[], params: SummaryParams): P
         COALESCE(SUM(COALESCE(sales.quantity, 0)::numeric), 0)::float8 AS "totalQty",
         COALESCE(SUM(COALESCE(sales.total_sales, 0)::numeric), 0)::float8 AS "totalSales",
         COALESCE(SUM(COALESCE(sales.total_cost, 0)::numeric), 0)::float8 AS "totalCost",
-        COALESCE(SUM(COALESCE(sales.profit, 0)::numeric), 0)::float8 AS "costProfit",
+        COALESCE(SUM(COALESCE(sales.total_sales, 0)::numeric - COALESCE(sales.total_cost, 0)::numeric), 0)::float8 AS "costProfit",
         COALESCE(
           SUM(
             (
@@ -305,7 +308,7 @@ async function buildComparisonRows(companies: CompanyOption[], req: Request) {
         COALESCE(sg.name, '') AS "stockGroupName",
         COALESCE(SUM(COALESCE(sales.quantity, 0)::numeric), 0)::text AS quantity,
         COALESCE(SUM(COALESCE(sales.total_sales, 0)::numeric), 0)::text AS "totalSales",
-        COALESCE(SUM(COALESCE(sales.profit, 0)::numeric), 0)::text AS "costProfit"
+        COALESCE(SUM(COALESCE(sales.total_sales, 0)::numeric - COALESCE(sales.total_cost, 0)::numeric), 0)::text AS "costProfit"
       FROM sales_items sales
       INNER JOIN vouchers v ON sales.voucher_id = v.id
       INNER JOIN stock_items si ON sales.stock_item_id = si.id
@@ -363,7 +366,11 @@ export function registerSalesReportBandwidthRoutes(app: Express): void {
       const groups = primaryCompanyId
         ? await runWithDatabaseScopeRuntimeContext(
             createTenantDatabaseScope(primaryCompanyId, authorizedIds, "authorized-companies"),
-            () => buildSalesSummary(selectedCompanies.map((company) => company.id), readSummaryParams(req))
+            () =>
+              buildSalesSummary(
+                selectedCompanies.map((company) => company.id),
+                readSummaryParams(req)
+              )
           )
         : [];
       return res.json({

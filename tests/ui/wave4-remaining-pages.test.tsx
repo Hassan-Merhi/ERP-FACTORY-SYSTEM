@@ -43,7 +43,7 @@ const PAGES: PageCase[] = [
     name: "AccountingCreate",
     load: () => import("@/pages/AccountingCreate"),
     landmark: "select-entity-mobile",
-    showsRows: true,
+    // Create forms derive the active company (#2465); no seeded rows are listed.
     sweep: true,
   },
   { name: "Accounts", load: () => import("@/pages/Accounts"), landmark: "button-account-groups", sweep: true },
@@ -285,7 +285,7 @@ const PAGES: PageCase[] = [
     name: "PropertiesCreate",
     load: () => import("@/pages/properties/PropertiesCreate"),
     landmark: "select-entity-mobile",
-    showsRows: true,
+    // Create forms derive the active company (#2465); no seeded rows are listed.
     sweep: true,
   },
   {

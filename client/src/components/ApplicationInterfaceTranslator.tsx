@@ -34,6 +34,10 @@ import { isRetailFinancialText, translateRetailFinancialText } from "@/i18n/reta
 import { isRetailFashionText, translateRetailFashionText } from "@/i18n/retailFashionTranslations";
 import { isWave8ReleaseText, translateWave8ReleaseText } from "@/i18n/wave8ReleaseTranslations";
 import { isPayrollUiText, translatePayrollUiText } from "@/i18n/payrollUiTranslations";
+import {
+  isSupplierProfitReconciliationText,
+  translateSupplierProfitReconciliationText,
+} from "@/i18n/supplierProfitReconciliationTranslations";
 
 const HARD_EXCLUDED_SELECTOR = [
   "code",
@@ -123,7 +127,8 @@ function isApprovedNonVisualText(value: string): boolean {
     isRetailFinancialText(value) ||
     isRetailFashionText(value) ||
     isWave8ReleaseText(value) ||
-    isPayrollUiText(value)
+    isPayrollUiText(value) ||
+    isSupplierProfitReconciliationText(value)
   );
 }
 
@@ -138,6 +143,7 @@ export function translateApprovedInterfaceText(value: string, language: Applicat
     translateRetailFashionText(value, language) ??
     translateWave8ReleaseText(value, language) ??
     translatePayrollUiText(value, language) ??
+    translateSupplierProfitReconciliationText(value, language) ??
     translateTabsFiltersText(value, language) ??
     translateVoucherKpiText(value, language) ??
     translatePhase7BackendMessageText(value, language) ??

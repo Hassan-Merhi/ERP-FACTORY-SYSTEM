@@ -8,7 +8,7 @@ import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { parseId } from "../../../lib/parseId";
-import { db } from "../../../db";
+import { db, pool } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { factoryMixBatches } from "@shared/schema";
 import { eq, and, desc, isNull } from "drizzle-orm";
@@ -75,6 +75,53 @@ export function registerFactoryMixBatchReadRoutes(app: Express) {
       res.json(enriched);
     } catch (error: unknown) {
       logger.error("Error fetching mix batches:", { error: error });
+      res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  // Batch source valuation as historically recorded, scoped to the selected
+  // company. Used by the Raw Materials per-supplier daily cost Excel export.
+  // One joined query avoids a per-batch request and never reprices inventory.
+  app.get("/api/factory/mix-batches/cost-sources", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      const result = await pool.query(
+        `SELECT s.id,
+                s.mix_batch_id AS "mixBatchId",
+                COALESCE(sup_direct.id, sup_via_c.id) AS "supplierId",
+                COALESCE(NULLIF(sup_direct.name, ''), NULLIF(sup_via_c.name, ''),
+                  CASE WHEN s.source_batch_id IS NOT NULL THEN 'Source batch: ' || prior.batch_code END,
+                  'Unassigned supplier') AS "supplierName",
+                COALESCE(category.name, 'Uncategorized') AS "categoryName",
+                c.container_number AS "containerNumber",
+                s.source_batch_id AS "sourceBatchId",
+                s.weight_kg AS "weightKg",
+                s.total_cost AS "totalCost",
+                s.cost_per_kg AS "costPerKg"
+         FROM factory_mix_batch_sources s
+         JOIN factory_mix_batches b ON b.id = s.mix_batch_id
+         LEFT JOIN factory_containers c
+           ON c.id = s.container_id AND c.company_id = b.company_id
+         LEFT JOIN factory_suppliers sup_direct
+           ON sup_direct.id = s.supplier_id AND sup_direct.company_id = b.company_id
+         LEFT JOIN factory_suppliers sup_via_c
+           ON sup_via_c.id = c.supplier_id AND sup_via_c.company_id = b.company_id
+         LEFT JOIN factory_mix_batches prior
+           ON prior.id = s.source_batch_id AND prior.company_id = b.company_id
+         LEFT JOIN factory_supplier_categories category
+           ON category.id = COALESCE(sup_direct.supplier_category_id, sup_via_c.supplier_category_id)
+          AND category.company_id = b.company_id
+         WHERE b.company_id = $1 AND b.deleted_at IS NULL
+           AND b.carry_forward_from_id IS NULL
+         ORDER BY b.id DESC, s.id`,
+        [companyId],
+      );
+      res.set("Cache-Control", "private, no-store");
+      res.json(result.rows);
+    } catch (error: unknown) {
+      logger.error("Error fetching historical mix batch cost sources:", { error });
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });

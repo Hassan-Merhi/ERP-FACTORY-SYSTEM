@@ -5,6 +5,7 @@ import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { containerSales, containers, customers } from "@shared/schema";
 import { parsePositiveInt } from "../../lib/listPagination";
+import { enrichContainerListOffloadingCost } from "../../services/containers/enrichContainerListOffloadingCost";
 
 const DEFAULT_PAGE_SIZE = 250;
 const MAX_PAGE_SIZE = 250;
@@ -104,7 +105,7 @@ export function registerContainerListPaginationRoutes(app: Express): void {
           .limit(limit)
           .offset(offset),
       ]);
-      return sendPage(res, items, countRows[0]?.total ?? 0, page, limit);
+      return sendPage(res, await enrichContainerListOffloadingCost(items, companyId), countRows[0]?.total ?? 0, page, limit);
     }),
   );
 

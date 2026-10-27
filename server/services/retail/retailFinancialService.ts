@@ -1,7 +1,14 @@
 import { createHash } from "node:crypto";
 import type Decimal from "decimal.js";
 import { and, asc, eq } from "drizzle-orm";
-import { companies, posShifts, retailInventoryOpenings, retailPosPayments, retailPosSales, voucherEntries } from "@shared/schema";
+import {
+  companies,
+  posShifts,
+  retailInventoryOpenings,
+  retailPosPayments,
+  retailPosSales,
+  voucherEntries,
+} from "@shared/schema";
 import type { RetailPaymentMethod } from "@shared/schema/retailPos";
 import type { DbTransaction } from "../../db";
 import { allocateCents, MoneyDecimal, toMoney, type MoneyInput } from "../../lib/money";
@@ -176,8 +183,14 @@ function normalizePayments(total: Decimal, requested?: RetailPaymentInput[]): No
       }
     }
     sum = sum.plus(amount);
-    normalized.push({ method: payment.method, amount, tenderedAmount: tendered, reference: payment.reference,
-      ledgerAccountId: payment.ledgerAccountId, bankAccountId: payment.bankAccountId });
+    normalized.push({
+      method: payment.method,
+      amount,
+      tenderedAmount: tendered,
+      reference: payment.reference,
+      ledgerAccountId: payment.ledgerAccountId,
+      bankAccountId: payment.bankAccountId,
+    });
   }
   if (sum.minus(total).abs().greaterThan(EPSILON)) {
     throw new Error(`Retail payments (${sum.toFixed(2)}) must equal sale total (${total.toFixed(2)})`);
@@ -263,12 +276,11 @@ export async function settleRetailSaleTx(
     if (payment.method === "credit" && explicitAccount) {
       throw new Error("Customer credit must post to the selected customer's ledger");
     }
-    const target = explicitAccount
-      ? await resolveRetailPaymentAccountTx(tx, input.companyId, payment)
-      : paymentTarget(settings, payment.method, shift?.cashAccountId ?? null);
-    if (explicitAccount && payment.method !== (target as { method: string }).method) {
+    const explicitTarget = explicitAccount ? await resolveRetailPaymentAccountTx(tx, input.companyId, payment) : null;
+    if (explicitTarget && payment.method !== explicitTarget.method) {
       throw new Error("Selected Retail account does not match the payment type");
     }
+    const target = explicitTarget ?? paymentTarget(settings, payment.method, shift?.cashAccountId ?? null);
     const amount = payment.amount;
     const tendered = payment.tenderedAmount;
     const change =
@@ -425,11 +437,11 @@ export async function refundRetailPaymentsTx(
 ): Promise<RetailResolvedPayment[]> {
   let remaining = exactMoney(input.refundAmount, "Retail refund amount");
   if (remaining.lessThanOrEqualTo(0)) return [];
-  const refundTarget = input.destination === "account"
-    ? await resolveRetailPaymentAccountTx(tx, input.companyId, input.refundAccount ?? {})
-    : null;
-  if (input.destination !== "account" &&
-      (input.refundAccount?.ledgerAccountId || input.refundAccount?.bankAccountId)) {
+  const refundTarget =
+    input.destination === "account"
+      ? await resolveRetailPaymentAccountTx(tx, input.companyId, input.refundAccount ?? {})
+      : null;
+  if (input.destination !== "account" && (input.refundAccount?.ledgerAccountId || input.refundAccount?.bankAccountId)) {
     throw new Error("Manual refund account requires account refund destination");
   }
   if (input.destination === "customer_credit") {
@@ -556,10 +568,18 @@ export async function refundRetailPaymentsTx(
           refundMethod === "store_credit"
             ? `Customer credit from payment #${original.id}`
             : `Refund for payment #${original.id}`,
-        ledgerAccountId: refundMethod === "store_credit"
-          ? null : original.method === "credit" ? null : refundTarget?.ledgerAccountId ?? original.ledgerAccountId,
-        bankAccountId: refundMethod === "store_credit"
-          ? null : original.method === "credit" ? null : refundTarget?.bankAccountId ?? original.bankAccountId,
+        ledgerAccountId:
+          refundMethod === "store_credit"
+            ? null
+            : original.method === "credit"
+              ? null
+              : (refundTarget?.ledgerAccountId ?? original.ledgerAccountId),
+        bankAccountId:
+          refundMethod === "store_credit"
+            ? null
+            : original.method === "credit"
+              ? null
+              : (refundTarget?.bankAccountId ?? original.bankAccountId),
         relatedPaymentId: original.id,
         idempotencyKey: key,
         createdBy: input.userId,
@@ -601,12 +621,16 @@ async function originalSaleCostAccountsTx(tx: DbTransaction, voucherId: number, 
     .from(voucherEntries)
     .where(eq(voucherEntries.voucherId, voucherId));
   const inventory = lines.find(
-    (line) => line.narration === `Retail sale #${saleId} · inventory` &&
-      line.ledgerAccountId != null && toMoney(line.creditAmount).isPositive()
+    (line) =>
+      line.narration === `Retail sale #${saleId} · inventory` &&
+      line.ledgerAccountId != null &&
+      toMoney(line.creditAmount).isPositive()
   );
   const cogs = lines.find(
-    (line) => line.narration === `Retail sale #${saleId} · COGS` &&
-      line.ledgerAccountId != null && toMoney(line.debitAmount).isPositive()
+    (line) =>
+      line.narration === `Retail sale #${saleId} · COGS` &&
+      line.ledgerAccountId != null &&
+      toMoney(line.debitAmount).isPositive()
   );
   if (!inventory?.ledgerAccountId || !cogs?.ledgerAccountId) return null;
   return { inventoryLedgerAccountId: inventory.ledgerAccountId, cogsLedgerAccountId: cogs.ledgerAccountId };
@@ -651,9 +675,7 @@ export async function postRetailRefundAccountingTx(
 
   const refundTotal = exactMoney(input.refundAmount, "Retail refund amount");
   const restoredCost = exactMoney(input.restoredCost, "Retail restored cost");
-  const originalCostAccounts = await originalSaleCostAccountsTx(
-    tx, originalSale.accountingVoucherId, input.saleId
-  );
+  const originalCostAccounts = await originalSaleCostAccountsTx(tx, originalSale.accountingVoucherId, input.saleId);
   if (refundTotal.isZero() && (!originalCostAccounts || restoredCost.isZero())) {
     return { voucherId: null, costReversed: false };
   }

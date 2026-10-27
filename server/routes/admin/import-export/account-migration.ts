@@ -11,7 +11,7 @@ import { db } from "../../../db";
 import { storage } from "../../../storage";
 import { requireAuth, requireRole } from "../../../auth";
 import { vouchers, voucherEntries, ledgerAccounts } from "@shared/schema";
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { eq, and, inArray, sql, isNull, asc } from "drizzle-orm";
 import {
   assertCompaniesAccess,
   CompanyAccessError,
@@ -44,12 +44,33 @@ export function registerAccountMigrationRoutes(app: Express) {
     requireRole("Admin", "Developer"),
     async (req: Request, res: Response) => {
       try {
-        const companyId = parseInt(req.params.companyId);
-        if (isNaN(companyId)) return res.status(400).json({ message: "Invalid companyId" });
-        const accounts = await storage.getAllLedgerAccounts(companyId, true);
+        const companyId = Number(req.params.companyId);
+        if (!Number.isSafeInteger(companyId) || companyId <= 0) {
+          return res.status(400).json({ message: "Invalid companyId" });
+        }
+        // Unlike ordinary ledger reads, migration deliberately lets an Admin
+        // inspect another company they are assigned to. Never use maintenance
+        // bypass: restrict PostgreSQL RLS to this explicitly checked company.
+        const context = getCompanyAccessContext(req);
+        await assertCompaniesAccess(context.userId, [companyId]);
+        const accounts = await db.transaction(async (tx) => {
+          await tx.execute(sql`SELECT
+            set_config('app.company_scope_maintenance', 'off', true),
+            set_config('app.current_company_id', ${String(context.activeCompanyId)}, true),
+            set_config('app.authorized_company_ids', ${String(companyId)}, true)`);
+          return tx
+            .select()
+            .from(ledgerAccounts)
+            .where(and(eq(ledgerAccounts.companyId, companyId), isNull(ledgerAccounts.deletedAt)))
+            .orderBy(asc(ledgerAccounts.code));
+        });
         res.json(accounts);
       } catch (error: unknown) {
-        res.status(500).json({ message: getErrorMessage(error) });
+        if (error instanceof CompanyAccessError) {
+          return res.status(error.status).json({ message: error.message, code: error.code });
+        }
+        logger.error("[AccountMigration] Account picker failed", { error });
+        res.status(500).json({ message: "Could not load accounts for migration." });
       }
     }
   );

@@ -197,6 +197,11 @@ jobs:
         continue-on-error: true
         run: |
           set -euo pipefail
+          # Production boots through server/startupPreload.mjs, whose scan-audit
+          # bridge skips itself under NODE_ENV=test. Install the same schema the
+          # PR CI backend job installs so historical Net Position tests can read
+          # customer_order_bales.scanned_at.
+          node --input-type=module -e "const { ensureCustomerOrderBaleScanAudit } = await import('./server/customerOrderBaleScanAuditBridge.mjs'); await ensureCustomerOrderBaleScanAudit();"
           npm run test:backend:verify
 
       - name: Frontend verification and coverage

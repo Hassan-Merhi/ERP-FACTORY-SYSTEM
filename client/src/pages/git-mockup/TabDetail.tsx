@@ -14,7 +14,10 @@ import type { GitContainersResponse, EnrichedContainerApi, CompanyViewMode } fro
 
 export function TabDetail() {
   const { data: viewer } = useQuery(authenticatedUserQueryOptions());
-  const isTester = (viewer?.currentRole ?? viewer?.role) === "ERP Tester";
+  const role = viewer?.currentRole ?? viewer?.role;
+  const isTester = role === "ERP Tester";
+  const isViewer = role === "View Only";
+  const restrictedViewer = isTester || isViewer;
   const [companyMode, setCompanyMode] = useState<CompanyViewMode>("session");
   const [view, setView] = useState<"workbook" | "flat">("workbook");
   const [search, setSearch] = useState("");
@@ -70,7 +73,7 @@ export function TabDetail() {
       >
         My Company
       </Button>
-      {!isTester && (
+      {!restrictedViewer && (
         <Button
         size="sm"
         variant={companyMode === "all" ? "default" : "outline"}

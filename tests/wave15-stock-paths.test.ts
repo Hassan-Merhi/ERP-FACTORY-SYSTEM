@@ -486,6 +486,51 @@ describe("M10: offload cost corrections", () => {
   }, 60_000);
 });
 
+describe("offload cost corrections with downstream sales", () => {
+  it("refuses offload recost after stock was sold and keeps both inventory and recorded COGS unchanged", async () => {
+    const item = await newItem();
+    const containerId = await usdContainer(item.id);
+    const input = {
+      companyId: ctx.companyId,
+      containerId,
+      mode: "create-or-replace" as const,
+      locationId: ctx.locationId,
+      offloadDate: today,
+      duties: "0",
+      officeCharges: "0",
+      transferCharges: "0",
+      transportFees: "0",
+      actorRole: "Admin",
+    };
+    await executeContainerOffloadLifecycle(input);
+    const voucherId = await sell(item.id, 1);
+    const beforeStock = await stockRow(ctx.locationId, item.id);
+    const beforeSale = await pool.query<{ total_cost: string }>(
+      "SELECT total_cost FROM sales_items WHERE voucher_id = $1 AND stock_item_id = $2",
+      [voucherId, item.id]
+    );
+
+    await expect(
+      executeContainerOffloadLifecycle({ ...input, mode: "replace-only", duties: "4" })
+    ).rejects.toMatchObject({
+      status: 409,
+      code: "CONTAINER_OFFLOAD_DOWNSTREAM_COST_LOCKED",
+    });
+    // A nominally unchanged replay can still disturb average-cost inventory.
+    await expect(executeContainerOffloadLifecycle({ ...input, mode: "replace-only" })).rejects.toMatchObject({
+      status: 409,
+      code: "CONTAINER_OFFLOAD_DOWNSTREAM_COST_LOCKED",
+    });
+
+    expect(await stockRow(ctx.locationId, item.id)).toEqual(beforeStock);
+    const afterSale = await pool.query<{ total_cost: string }>(
+      "SELECT total_cost FROM sales_items WHERE voucher_id = $1 AND stock_item_id = $2",
+      [voucherId, item.id]
+    );
+    expect(afterSale.rows).toEqual(beforeSale.rows);
+  }, 60_000);
+});
+
 describe("wave 11 leftovers", () => {
   it("a production into short stock posts its settlement variance to COGS", async () => {
     await setCutover("2026-01-01");

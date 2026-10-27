@@ -50,7 +50,13 @@ export function registerPermissionBoundaryRoutes(app: Express): void {
     app.use(path, requireModuleAccess("mod_inventory"));
   }
 
-  for (const path of ["/api/reports", "/api/stats", "/api/dashboard", "/api/sales-report"]) {
+  for (const path of [
+    "/api/reports",
+    "/api/stats",
+    "/api/dashboard",
+    "/api/sales-report",
+    "/api/supplier-profit-reconciliation",
+  ]) {
     app.use(path, requireModuleAccess("mod_analytics"));
   }
 

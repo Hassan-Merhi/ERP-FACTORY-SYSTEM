@@ -349,6 +349,7 @@ export default function Accounts() {
                     periodFilter={model.periodFilter}
                     setPeriodFilter={model.setPeriodFilter}
                     vouchersWithBalance={presentedStatement.vouchersWithBalance}
+                    statementCustomerId={model.statementCustomerId}
                     closingBalance={presentedStatement.closingBalance}
                     openingBalance={presentedStatement.openingBalance}
                     transactionsLoading={model.transactionsLoading}
