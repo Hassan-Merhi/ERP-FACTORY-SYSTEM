@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { ContinuousPressingScanner, type PressingScanCapture, type PressingScanOutcome } from "./ContinuousPressingScanner";
+import { ContinuousPressingScanner } from "./ContinuousPressingScanner";
+import { submitPressingConfirmation } from "./pressing-scanner/pressingConfirmClient";
 
 const ROOT = "/api/factory/pressing-machines";
 type Assignment = { id: number; machineId: number; userId: string; username: string | null; assignedAt: string };
@@ -147,11 +148,11 @@ export default function PressingMachineManagement({ active }: { active: boolean 
       <div className="flex flex-wrap items-center gap-2">
         <Factory className="h-6 w-6 text-emerald-500" />
         <h2 className="text-xl font-bold">Pressing Machines</h2>
-        <Badge variant="outline">Scanner preview · Phase 3</Badge>
+        <Badge variant="outline">Pressing confirmation · Phase 4</Badge>
       </div>
       <p className="text-sm text-muted-foreground">
         Assign employees to a press and preserve their assignment history.
-        Continuous scanning is available in preview mode. Pressing completion and permanent history will be enabled in Phase 4.
+        Every accepted barcode confirms physical pressing and saves the machine, operator and server timestamp. Stock finalization stays separate.
       </p>
       {myQuery.isLoading && <p className="text-sm">Loading your machine...</p>}
       {myQuery.isError && <p role="alert" className="text-sm text-destructive">{errorText(myQuery.error)}</p>}
@@ -164,7 +165,7 @@ export default function PressingMachineManagement({ active }: { active: boolean 
                 <p className="font-semibold">{myQuery.data.assignment.machineCode} — {myQuery.data.assignment.machineName}</p>
                 <p className="text-sm text-muted-foreground">Assigned {formatted(myQuery.data.assignment.assignedAt)}</p>
                 <Badge variant={myQuery.data.assignment.machineActive ? "default" : "destructive"}>
-                  {myQuery.data.assignment.machineActive ? "Ready for scanner setup" : "Inactive"}
+                  {myQuery.data.assignment.machineActive ? "Ready for pressing confirmation" : "Inactive"}
                 </Badge>
               </div>
             ) : <p className="text-sm text-muted-foreground">No machine assigned. Ask your supervisor for an assignment.</p>}
@@ -174,10 +175,7 @@ export default function PressingMachineManagement({ active }: { active: boolean 
       <ContinuousPressingScanner
         active={active}
         assignment={myQuery.data?.assignment ?? null}
-        onBarcode={async (_capture: PressingScanCapture): Promise<PressingScanOutcome> => ({
-          kind: "preview",
-          message: "Barcode read locally. NOT yet confirmed or saved in production (Phase 4).",
-        })}
+        onBarcode={submitPressingConfirmation}
       />
       {canManage && (
         <>
