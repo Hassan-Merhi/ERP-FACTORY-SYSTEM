@@ -26,7 +26,7 @@ describe("Pressing Machine Phase 3 integration contract", () => {
     expect(scanner).toContain("navigator.vibrate");
     expect(scanner).toContain("applyConstraints");
     expect(scanner).toContain("deviceCapturedAt");
-    expect(scanner).toContain("second: \\"2-digit\\"");
+    expect(scanner).toContain('second: "2-digit"');
   });
   it("does not falsely claim pressing was completed without a backend confirmation", () => {
     expect(manager).toContain('kind: "preview"');
