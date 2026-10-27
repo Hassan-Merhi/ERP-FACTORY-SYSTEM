@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { ContinuousPressingScanner, type PressingScanCapture, type PressingScanOutcome } from "./ContinuousPressingScanner";
 
 const ROOT = "/api/factory/pressing-machines";
 type Assignment = { id: number; machineId: number; userId: string; username: string | null; assignedAt: string };
@@ -88,7 +89,7 @@ function MachineManagerCard({
   );
 }
 
-export default function PressingMachineManagement() {
+export default function PressingMachineManagement({ active }: { active: boolean }) {
   const { toast } = useToast();
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -146,11 +147,11 @@ export default function PressingMachineManagement() {
       <div className="flex flex-wrap items-center gap-2">
         <Factory className="h-6 w-6 text-emerald-500" />
         <h2 className="text-xl font-bold">Pressing Machines</h2>
-        <Badge variant="outline">Machine setup · Phase 2</Badge>
+        <Badge variant="outline">Scanner preview · Phase 3</Badge>
       </div>
       <p className="text-sm text-muted-foreground">
         Assign employees to a press and preserve their assignment history.
-        Continuous camera scanning and pressing confirmations will be added in the next phases.
+        Continuous scanning is available in preview mode. Pressing completion and permanent history will be enabled in Phase 4.
       </p>
       {myQuery.isLoading && <p className="text-sm">Loading your machine...</p>}
       {myQuery.isError && <p role="alert" className="text-sm text-destructive">{errorText(myQuery.error)}</p>}
@@ -170,6 +171,14 @@ export default function PressingMachineManagement() {
           </CardContent>
         </Card>
       )}
+      <ContinuousPressingScanner
+        active={active}
+        assignment={myQuery.data?.assignment ?? null}
+        onBarcode={async (_capture: PressingScanCapture): Promise<PressingScanOutcome> => ({
+          kind: "preview",
+          message: "Barcode read locally. NOT yet confirmed or saved in production (Phase 4).",
+        })}
+      />
       {canManage && (
         <>
           <Card>
