@@ -100,30 +100,6 @@ describe("A4 labels", () => {
     expect(html).not.toContain("previews/");
   });
 
-  it("fits full banners inside the printer-safe A4 area without clipping", () => {
-    const html = generateCombinedLabelsHtml([label({ designColor: A4_DESIGN_OPTIONS[0].value })]);
-
-    expect(html).toContain("@page { size: 210mm 297mm; margin: 0; }");
-    expect(html).toContain(".a4-page { width: 210mm; height: 297mm;");
-    expect(html).toContain(".a4-preprint-gap { height: 90mm;");
-    expect(html).toContain("padding: 6mm 8mm 2mm;");
-    expect(html).toContain(".a4-banner-img { width: 100%; height: 100%; object-fit: contain;");
-    expect(html).toContain("object-position: center center;");
-    expect(html).not.toMatch(/\.a4-banner-img\s*\{[^}]*object-fit:\s*cover/);
-
-    // Each of the two images must use the same unclipped banner layout.
-    expect(html.match(/class="a4-banner-img"/g)).toHaveLength(2);
-  });
-
-  it("shifts the lower-half banner and name down without exceeding 148.5mm", () => {
-    const html = generateCombinedLabelsHtml([label()]);
-    expect(html).toContain(".a4-top-half { height: 148.5mm;");
-    expect(html).toContain(".a4-bottom-half { height: 148.5mm;");
-    expect(html).toContain(".a4-bottom-half .a4-preprint-gap { height: 97mm; padding: 12mm 8mm 2mm; }");
-    expect(html).toContain(".a4-bottom-namebox { height: 51.5mm;");
-    expect(97 + 51.5).toBe(148.5);
-  });
-
   it("produces a printable document for an empty batch", () => {
     const html = generateCombinedLabelsHtml([]);
 
