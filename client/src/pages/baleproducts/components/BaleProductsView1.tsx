@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Pencil, X, EyeOff, Eye, AlertCircle, Palette, Search } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Pencil, X, EyeOff, Eye, AlertCircle, Palette, Search } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,9 +17,81 @@ import { EmptyState } from "../components/EmptyState";
 import type { useBaleProductsModel } from "../useBaleProductsModel";
 
 type Model = ReturnType<typeof useBaleProductsModel>;
+type BaleProduct = NonNullable<Model["activeProducts"]>[number];
+
+function ProductColorPicker({
+  product,
+  designColors,
+  colorUpdateMutation,
+}: {
+  product: BaleProduct;
+  designColors: Model["designColors"];
+  colorUpdateMutation: Model["colorUpdateMutation"];
+}) {
+  const selectedColor = designColors.find((color) => color.value === product.labelDesignColor);
+  const isUpdating = colorUpdateMutation.isPending && colorUpdateMutation.variables?.id === product.id;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 max-w-40 gap-1.5 px-2 text-xs"
+          disabled={colorUpdateMutation.isPending}
+          aria-label={`Change label color for ${product.name}`}
+          data-testid={`button-quick-label-color-${product.id}`}
+        >
+          <span
+            className="h-3.5 w-3.5 shrink-0 rounded-sm border border-foreground/20"
+            style={selectedColor ? { backgroundColor: selectedColor.color } : undefined}
+          >
+            {!selectedColor && <Palette className="h-3 w-3 text-muted-foreground" />}
+          </span>
+          <span className="max-w-24 truncate">{isUpdating ? "Saving..." : selectedColor?.label ?? (product.labelDesignColor || "No Design")}</span>
+          <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="max-h-80 w-48 overflow-y-auto">
+        <DropdownMenuLabel>Label Design Color</DropdownMenuLabel>
+        <DropdownMenuItem
+          disabled={colorUpdateMutation.isPending}
+          onSelect={() => {
+            if (product.labelDesignColor) colorUpdateMutation.mutate({ id: product.id, labelDesignColor: null });
+          }}
+          data-testid={`quick-label-color-none-${product.id}`}
+        >
+          <Palette className="mr-2 h-4 w-4 text-muted-foreground" />
+          No Design
+          {!product.labelDesignColor && <Check className="ml-auto h-4 w-4" />}
+        </DropdownMenuItem>
+        {designColors.map((color) => (
+          <DropdownMenuItem
+            key={color.value}
+            disabled={colorUpdateMutation.isPending}
+            onSelect={() => {
+              if (product.labelDesignColor !== color.value) {
+                colorUpdateMutation.mutate({ id: product.id, labelDesignColor: color.value });
+              }
+            }}
+            data-testid={`quick-label-color-${product.id}-${color.value}`}
+          >
+            <span className="mr-2 h-4 w-4 shrink-0 rounded-sm border border-foreground/20" style={{ backgroundColor: color.color }} />
+            <span className="truncate">{color.label}</span>
+            {product.labelDesignColor === color.value && <Check className="ml-auto h-4 w-4" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export function BaleProductsView1({ model }: { model: Model }) {
   const {
     setCreateDialogOpen,
+    designColors,
+    colorUpdateMutation,
     condensedView,
     expandedGroups,
     setEditingProduct,
@@ -412,6 +484,9 @@ export function BaleProductsView1({ model }: { model: Model }) {
                 <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   Category
                 </TableHead>
+                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Label Color
+                </TableHead>
                 <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   Wt/Bale (kg)
                 </TableHead>
@@ -449,6 +524,15 @@ export function BaleProductsView1({ model }: { model: Model }) {
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {product.categoryId ? categoryMap.get(product.categoryId) || "Uncategorized" : "Uncategorized"}
+                  </TableCell>
+                  <TableCell>
+                    {isAdmin ? (
+                      <ProductColorPicker product={product} designColors={designColors} colorUpdateMutation={colorUpdateMutation} />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        {designColors.find((color) => color.value === product.labelDesignColor)?.label ?? product.labelDesignColor ?? "No Design"}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right font-mono">{product.weightPerBaleKg || "-"}</TableCell>
                   {!hideAvgRate && (
