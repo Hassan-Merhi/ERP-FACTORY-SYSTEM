@@ -94,7 +94,10 @@ export function ContinuousPressingScanner({
   const trackRef = useRef<MediaStreamTrack | null>(null);
   const audioRef = useRef<AudioContextLike | null>(null);
   const gateRef = useRef(new ContinuousScanGate());
-  const submittingRef = useRef(false);
+  // The camera must keep decoding DIFFERENT barcodes during slow HTTP.
+  // All captures are persisted individually before submission by Phase 5.
+  const inFlightRef = useRef(0);
+  const latestCaptureRef = useRef(0);
   const lastCapturedMsRef = useRef<number | null>(null);
   const onBarcodeRef = useRef(onBarcode);
   const soundRef = useRef(sound);
@@ -158,8 +161,19 @@ export function ContinuousPressingScanner({
   }, []);
 
   const handleRead = useCallback(async (barcode: string, machine: PressingScannerAssignment) => {
-    if (submittingRef.current) return;
-    submittingRef.current = true;
+    // Cap work in progress to avoid unlimited promise growth on a damaged network.
+    // A rejected capacity warning is never presented as a saved or queued scan.
+    if (inFlightRef.current >= 32) {
+      setLast({
+        barcode, at: new Date().toISOString(), outcome: "rejected",
+        message: "Too many reads in progress. Re-present this barcode after pending captures settle.",
+        intervalSeconds: null,
+      });
+      feedback("rejected");
+      return;
+    }
+    inFlightRef.current += 1;
+    const sequence = ++latestCaptureRef.current;
     const deviceCapturedAt = new Date().toISOString();
     const now = Date.parse(deviceCapturedAt);
     const intervalSeconds = lastCapturedMsRef.current === null ? null
@@ -170,7 +184,7 @@ export function ContinuousPressingScanner({
       const result = await onBarcodeRef.current({
         barcode, deviceCapturedAt, assignmentId: machine.assignmentId, machineId: machine.machineId,
       });
-      setLast({
+      if (sequence === latestCaptureRef.current) setLast({
         barcode, at: deviceCapturedAt, outcome: result.kind, message: result.message, intervalSeconds,
         confirmedAt: result.confirmedAt, timezoneName: result.timezoneName, weightKg: result.weightKg,
         machineName: result.machineName, confirmationId: result.confirmationId,
@@ -178,13 +192,13 @@ export function ContinuousPressingScanner({
       });
       feedback(result.kind);
     } catch {
-      setLast({
+      if (sequence === latestCaptureRef.current) setLast({
         barcode, at: deviceCapturedAt, outcome: "rejected",
         message: "Unable to validate barcode. This bale has NOT been confirmed.", intervalSeconds,
       });
       feedback("rejected");
     } finally {
-      submittingRef.current = false;
+      inFlightRef.current -= 1;
     }
   }, [feedback]);
 
@@ -208,7 +222,7 @@ export function ContinuousPressingScanner({
     const tick = async (detector: Awaited<ReturnType<typeof createCameraDecoder>>) => {
       if (canceled || !detector) return;
       const video = videoRef.current;
-      if (video && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && !submittingRef.current) {
+      if (video && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
         try {
           const matches = await detector.detect(video);
           if (canceled) return;
@@ -305,7 +319,7 @@ export function ContinuousPressingScanner({
   };
   const submitManual = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!assignment || !running || submittingRef.current) return;
+    if (!assignment || !running) return;
     const barcode = gateRef.current.manual(manualCode, Date.now());
     if (!barcode) return;
     setManualCode("");
@@ -363,7 +377,7 @@ export function ContinuousPressingScanner({
             <Input aria-label="Manual bale barcode" placeholder="Manual barcode entry" autoComplete="off"
               className="min-w-[150px] flex-1" maxLength={120}
               value={manualCode} onChange={event => setManualCode(event.target.value)} />
-            <Button type="submit" variant="secondary" disabled={submittingRef.current || !manualCode.trim()}>
+            <Button type="submit" variant="secondary" disabled={!manualCode.trim()}>
               Read barcode
             </Button>
           </form>
@@ -433,7 +447,7 @@ export function ContinuousPressingScanner({
         <p className="text-xs text-muted-foreground">
           A green confirmation means the server has saved physical pressing completion with the
           machine, operator, and exact timestamp. Stock finalization is a separate workflow.
-          Daily filters and offline retry are added in Phases 5–6.
+          Offline scans stay amber until they receive server confirmation. Historical filters arrive in Phase 6.
         </p>
         {!hasNativeBarcodeDetector() && (
           <p className="text-xs text-muted-foreground">
