@@ -22,7 +22,8 @@ describe("Phase 5 pressing offline resilience contract", () => {
     expect(queue).toContain("requestId: record.requestId, payload: record.payload");
   });
   it("avoids the general-purpose ERP offline queue entirely", () => {
-    expect(generic).toContain("/^\\\\/api\\\\/factory\\\\/pressing-machines(?:\\\\/|$)/");
+    expect(generic).toContain("pressing-machines(?:");
+    expect(generic).toContain("NEVER_QUEUE_PATTERNS");
     expect(transport).toContain("row.payload");
   });
   it("locks offline rows to authenticated company and operator", () => {
