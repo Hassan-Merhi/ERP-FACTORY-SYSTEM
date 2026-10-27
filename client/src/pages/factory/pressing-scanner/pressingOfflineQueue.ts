@@ -27,6 +27,10 @@ export interface PressingServerReceipt {
   timezoneName: string;
   replayed: boolean;
   inventoryFinalized: false;
+  machineId: number;
+  assignmentId: number;
+  requestId: string;
+  operatorUserId: string;
 }
 export interface PressingQueuedScan extends PressingActor {
   requestId: string;
