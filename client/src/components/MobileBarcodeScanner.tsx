@@ -39,6 +39,8 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className }: Mo
     let canceled = false;
     let timeout: ReturnType<typeof setTimeout> | undefined;
     let stream: MediaStream | undefined;
+    // The element the stream was attached to; cleared on cleanup even if the ref moved.
+    let attachedVideo: HTMLVideoElement | null = null;
     let decoder: CameraBarcodeDecoder | null = null;
     // Re-presenting the same retail item should count again after a brief removal;
     // suppress duplicate frames while leaving different barcodes immediately scannable.
@@ -94,6 +96,7 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className }: Mo
         const video = videoRef.current;
         if (!video) throw new Error("Camera preview could not open.");
         video.srcObject = acquired;
+        attachedVideo = video;
         await video.play();
         if (canceled) return;
         const track = acquired.getVideoTracks?.()[0];
@@ -102,13 +105,17 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className }: Mo
           try {
             const capabilities = track.getCapabilities?.() as MediaTrackCapabilities & { torch?: boolean };
             setTorchAvailable(capabilities?.torch === true);
-          } catch { /* Flashlight capability is not available on all mobile browsers. */ }
+          } catch {
+            /* Flashlight capability is not available on all mobile browsers. */
+          }
           if (typeof track.applyConstraints === "function") {
             // Unsupported advanced focus hints are harmless; let the browser
             // retain its current camera settings instead of delaying reads.
-            void track.applyConstraints({
-              advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet],
-            }).catch(() => {});
+            void track
+              .applyConstraints({
+                advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet],
+              })
+              .catch(() => {});
           }
         }
         decoder = await createCameraDecoder();
@@ -127,7 +134,9 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className }: Mo
             ? "Camera permission denied. Allow access in your browser settings or enter the code manually."
             : name === "NotFoundError"
               ? "No camera was found on this device. Use manual entry."
-              : cause instanceof Error ? cause.message : "Unable to open camera. Use manual entry.",
+              : cause instanceof Error
+                ? cause.message
+                : "Unable to open camera. Use manual entry."
         );
       }
     };
@@ -142,7 +151,7 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className }: Mo
       document.removeEventListener("visibilitychange", onVisibilityChange);
       stream?.getTracks().forEach((track) => track.stop());
       trackRef.current = null;
-      if (videoRef.current) videoRef.current.srcObject = null;
+      if (attachedVideo) attachedVideo.srcObject = null;
       decoder?.dispose();
       gate.reset();
     };
@@ -187,7 +196,9 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className }: Mo
         <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md">
           <DialogHeader>
             <DialogTitle>Scan with camera</DialogTitle>
-            <DialogDescription>Point the rear camera at a barcode. The camera stays open for the next item.</DialogDescription>
+            <DialogDescription>
+              Point the rear camera at a barcode. The camera stays open for the next item.
+            </DialogDescription>
           </DialogHeader>
           <div className="relative overflow-hidden rounded-lg bg-black">
             <video
@@ -206,9 +217,19 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className }: Mo
               {torchOn ? "Turn off light" : "Turn on light"}
             </Button>
           )}
-          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-          {lastDetected && <p role="status" className="break-all text-sm">Last detected: {lastDetected}</p>}
-          <p className="text-xs text-muted-foreground">Close this window to stop the camera. Manual and hardware scanners still work.</p>
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+          {lastDetected && (
+            <p role="status" className="break-all text-sm">
+              Last detected: {lastDetected}
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Close this window to stop the camera. Manual and hardware scanners still work.
+          </p>
         </DialogContent>
       </Dialog>
     </>
