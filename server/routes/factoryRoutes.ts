@@ -20,6 +20,7 @@ import { registerFactoryStockAllocationV5Routes } from "./factory/stock-allocati
 import { registerFactoryShippingContainerRoutes } from "./factory/shipping-containers";
 import { registerFactoryDailyScanRoutes } from "./factory/factoryDailyScanRoutes";
 import { registerFactoryPressingMachineManagementRoutes } from "./factory/factoryPressingMachineManagementRoutes";
+import { registerFactoryPressingConfirmRoutes } from "./factory/factoryPressingConfirmationRoutes";
 import { registerFactoryGroundScanRoutes } from "./factory/factoryGroundScanRoutes";
 import { registerFactoryContainerTrackingRoutes } from "./factory/factoryContainerTrackingRoutes";
 import { registerEndProductionRoutes } from "./factory/endProductionRoutes";
@@ -218,6 +219,7 @@ export function registerFactoryRoutes(app: Express, requireAuth: RequestHandler,
   registerFactoryShippingContainerRoutes(app);
   registerFactoryDailyScanRoutes(app);
   registerFactoryPressingMachineManagementRoutes(app);
+  registerFactoryPressingConfirmRoutes(app);
   registerFactoryGroundScanRoutes(app);
   registerEndProductionRoutes(app, requireAuth);
   registerProductionPlannerRoutes(app);
