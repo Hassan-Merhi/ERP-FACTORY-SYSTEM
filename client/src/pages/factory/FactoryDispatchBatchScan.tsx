@@ -354,7 +354,8 @@ export default function FactoryDispatchBatchScan() {
             </div>
 
             {canScan && (
-              <div className="relative min-w-0">
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="relative min-w-0 flex-1">
                 <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
                   ref={scanRef}
@@ -372,6 +373,8 @@ export default function FactoryDispatchBatchScan() {
                     Scanning...
                   </span>
                 )}
+                </div>
+                <MobileBarcodeScanner onScan={(code) => scanMutation.mutate(code)} disabled={scanMutation.isPending} className="h-12 w-12 shrink-0" />
               </div>
             )}
 
