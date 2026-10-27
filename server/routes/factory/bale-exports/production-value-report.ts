@@ -433,7 +433,7 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         ? (() => {
             const firstDay = new Date(`${from}T00:00:00Z`);
             if (!Number.isFinite(firstDay.getTime()) || firstDay.toISOString().slice(0, 10) !== from) {
-              throw new Error("Invalid report start date");
+              throw new RangeError();
             }
             firstDay.setUTCDate(firstDay.getUTCDate() - 1);
             return firstDay.toISOString().slice(0, 10);
