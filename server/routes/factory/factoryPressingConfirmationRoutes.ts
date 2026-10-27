@@ -11,6 +11,7 @@ import { requireAuth } from "../../auth";
 import {
   factoryBales, factoryPressingMachines, factoryPressingAssignments,
   factoryPressingSessions, factoryPressingConfirmations, factorySettings,
+  factoryPressingShifts, factoryPressingDowntime,
   users,
 } from "@shared/schema";
 import {
@@ -18,6 +19,7 @@ import {
 } from "../../services/security/activeCompanyPermissionContext";
 import { logAudit } from "../helpers/auditHelpers";
 import { logger } from "../../lib/logger";
+import { matchingShift, type PressingShiftDefinition } from "../../services/factory/pressingShiftTime";
 
 const confirmSchema = z.object({
   barcode: z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9][A-Za-z0-9._/-]*$/),
@@ -146,6 +148,16 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
         if (!machine?.active) {
           throw new ConfirmationError(422, "PRESSING_MACHINE_INACTIVE", "Machine is inactive or no longer assigned");
         }
+        const [machineDowntime] = await tx.select({ id: factoryPressingDowntime.id })
+          .from(factoryPressingDowntime).where(and(
+            eq(factoryPressingDowntime.companyId, companyId),
+            eq(factoryPressingDowntime.machineId, machine.id),
+            isNull(factoryPressingDowntime.endedAt),
+          )).limit(1);
+        if (machineDowntime) {
+          throw new ConfirmationError(422, "PRESSING_MACHINE_DOWN",
+            "Supervisor has marked this machine down. Scan after downtime ends.");
+        }
         const [assignment] = await tx.select().from(factoryPressingAssignments)
           .where(and(eq(factoryPressingAssignments.companyId, companyId),
             eq(factoryPressingAssignments.id, parsed.assignmentId),
@@ -209,8 +221,18 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
           throw new ConfirmationError(422, "PRESSING_BALE_NOT_PENDING", "Only pending-pressing bales can be confirmed");
         }
 
-        // Sessions are opened lazily on the first accepted barcode for this
-        // operator/machine. Phase 7 will configure shift and session breaks.
+        // Assign the shift using the SERVER confirmation time, not an
+        // untrusted phone clock. Overnight times and IANA zones are supported.
+        const now = new Date();
+        const activeShifts = await tx.select().from(factoryPressingShifts)
+          .where(and(eq(factoryPressingShifts.companyId, companyId),
+            eq(factoryPressingShifts.active, true)));
+        const activeShift = matchingShift(activeShifts as PressingShiftDefinition[], now);
+        const shiftId = activeShift?.id ?? null;
+        const timezoneName = activeShift?.timezoneName ??
+          companyProductionTimezone(settings?.extraSettings);
+        const productionDate = companyDate(now, timezoneName);
+        const deviceCapturedAt = safeDeviceTimestamp(parsed.deviceCapturedAt);
         let [session] = await tx.select().from(factoryPressingSessions)
           .where(and(eq(factoryPressingSessions.companyId, companyId),
             eq(factoryPressingSessions.userId, userId),
@@ -218,15 +240,20 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
         if (session && (session.machineId !== machine.id || session.assignmentId !== assignment.id)) {
           throw new ConfirmationError(409, "PRESSING_SESSION_STALE", "Operator session is for another machine");
         }
+        // A shift boundary ends the old session, preserving every previously
+        // confirmed scan's original shift attribution, and opens a new one.
+        if (session && session.shiftId !== shiftId) {
+          await tx.update(factoryPressingSessions).set({ endedAt: now })
+            .where(and(eq(factoryPressingSessions.id, session.id),
+              eq(factoryPressingSessions.companyId, companyId)));
+          session = undefined;
+        }
         if (!session) {
           [session] = await tx.insert(factoryPressingSessions)
-            .values({ companyId, userId, machineId: machine.id, assignmentId: assignment.id, shiftId: null })
+            .values({ companyId, userId, machineId: machine.id, assignmentId: assignment.id,
+              shiftId, startedAt: now })
             .returning();
         }
-        const now = new Date();
-        const timezoneName = companyProductionTimezone(settings?.extraSettings);
-        const productionDate = companyDate(now, timezoneName);
-        const deviceCapturedAt = safeDeviceTimestamp(parsed.deviceCapturedAt);
 
         // The database's partial unique company+bale index is the final
         // concurrency boundary across every machine, operator and calendar day.
@@ -235,7 +262,7 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
         const [created] = await tx.insert(factoryPressingConfirmations)
           .values({
             companyId, baleId: bale.id, machineId: machine.id,
-            assignmentId: assignment.id, sessionId: session.id, shiftId: null,
+            assignmentId: assignment.id, sessionId: session.id, shiftId,
             userId, userNameSnapshot: operator.username, machineNameSnapshot: machine.name,
             referenceNumber: bale.referenceNumber, articleCode: bale.articleCode,
             productName: bale.productName, weightKg: bale.weightKg,
