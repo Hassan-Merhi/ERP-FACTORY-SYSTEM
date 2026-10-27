@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Search } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { InventoryItem } from "./posTypes";
 import { getPosPickerInventory } from "../utils/posCalculations";
 
@@ -53,6 +54,11 @@ export function InventoryPicker({
             onChange={(e) => setLocalSearch(e.target.value)}
             data-testid="input-product-search"
           />
+          <MobileBarcodeScanner onScan={(code) => {
+            const match = inventory.find((item) => item.code?.trim().toUpperCase() === code.trim().toUpperCase());
+            if (match) { selectItem(match); setLocalSearch(""); }
+            else setLocalSearch(code);
+          }} />
           {localSearch && (
             <button className="text-muted-foreground" onClick={() => setLocalSearch("")} aria-label="Clear search">
               ×
