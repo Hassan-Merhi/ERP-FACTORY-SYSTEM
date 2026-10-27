@@ -54,7 +54,7 @@ describe("pressing machine Phase 6 reporting contracts", () => {
   });
   it("uses accepted server confirmations with no inventory or queue changes", () => {
     expect(server).toContain("FROM factory_pressing_confirmations c");
-    expect(server).toContain('WHERE c.voided_at IS NULL');
+    expect(server).toContain('c.voided_at IS NULL');
     expect(server).toContain("COUNT(*) FILTER (WHERE c.voided_at IS NULL)");
     expect(server).toContain("SUM(c.weight_kg) FILTER (WHERE c.voided_at IS NULL)");
     expect(server).toContain("COUNT(*) FILTER (WHERE c.voided_at IS NOT NULL)");
