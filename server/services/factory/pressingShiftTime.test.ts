@@ -48,3 +48,19 @@ describe("Pressing Shift Phase 7 time resolution", () => {
     expect(() => matchingShift([day,overlap],new Date("2026-10-27T09:00:00Z"))).toThrow();
   });
 });
+
+describe("factory timezone resolution", () => {
+  it("uses the active shifts' timezone for every scan, inside or outside shift hours", async () => {
+    const { factoryTimezone, factoryLocalDate, settingsTimezone } = await import("./pressingShiftTime");
+    const shifts = [{ timezoneName: "Africa/Lubumbashi", active: true }];
+    expect(factoryTimezone(shifts, { pressingTimezone: "UTC" })).toBe("Africa/Lubumbashi");
+    expect(factoryTimezone([{ timezoneName: "Africa/Lubumbashi", active: false }], { pressingTimezone: "Europe/Paris" })).toBe("Europe/Paris");
+    expect(factoryTimezone([], { companyTimezone: "Asia/Beirut" })).toBe("Asia/Beirut");
+    expect(factoryTimezone([], { timezone: "Mars/Olympus" })).toBe("UTC");
+    expect(factoryTimezone([], null)).toBe("UTC");
+    expect(settingsTimezone(["Africa/Lubumbashi"])).toBe("UTC");
+    // 23:30 UTC on the 26th is already the 27th in Lubumbashi (UTC+2).
+    expect(factoryLocalDate(new Date("2026-10-26T23:30:00Z"), "Africa/Lubumbashi")).toBe("2026-10-27");
+    expect(factoryLocalDate(new Date("2026-10-26T23:30:00Z"), "UTC")).toBe("2026-10-26");
+  });
+});

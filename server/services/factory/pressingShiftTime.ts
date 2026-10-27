@@ -11,6 +11,29 @@ export interface PressingShiftDefinition {
   timezoneName: string;
   active: boolean;
 }
+/**
+ * The company's factory-local timezone for production dates and "today":
+ * the configured active shifts' common timezone when any exist, otherwise the
+ * Factory settings (pressingTimezone, companyTimezone, timezone), otherwise
+ * UTC. Every pressing route must derive dates from this ONE answer so a scan
+ * outside shift hours never lands on a different calendar date basis than a
+ * scan inside them.
+ */
+export function settingsTimezone(extraSettings: unknown): string {
+  const settings = extraSettings && typeof extraSettings === "object" && !Array.isArray(extraSettings)
+    ? extraSettings as Record<string, unknown> : {};
+  const requested = settings.pressingTimezone ?? settings.companyTimezone ?? settings.timezone ?? "UTC";
+  return typeof requested === "string" && isValidTimezone(requested) ? requested : "UTC";
+}
+export function factoryTimezone(
+  shifts: ReadonlyArray<{ timezoneName: string; active: boolean }>, extraSettings: unknown,
+): string {
+  const configured = shifts.find(shift => shift.active && isValidTimezone(shift.timezoneName));
+  return configured?.timezoneName ?? settingsTimezone(extraSettings);
+}
+export function factoryLocalDate(instant: Date, timezone: string): string {
+  return wallTimeParts(instant, timezone).date;
+}
 export function isValidTimezone(timezone: string): boolean {
   if (timezone.length > 100 || !timezone.trim()) return false;
   try { new Intl.DateTimeFormat("en-US", { timeZone: timezone }); return true; }

@@ -7,10 +7,11 @@ import { and, asc, eq } from "drizzle-orm";
 import { ZodError } from "zod";
 import { db, pool } from "../../db";
 import { requireAuth } from "../../auth";
-import { factoryPressingSavedViews, factoryPressingMachines, factorySettings } from "@shared/schema";
+import { factoryPressingSavedViews, factoryPressingMachines, factoryPressingShifts, factorySettings } from "@shared/schema";
 import { getActiveCompanyPermissionContext, ActiveCompanyPermissionContextError } from "../../services/security/activeCompanyPermissionContext";
 import { logger } from "../../lib/logger";
 import { pressingReportFiltersSchema, pressingSavedViewSchema, type PressingReportFilters } from "@shared/pressingReportContracts";
+import { factoryLocalDate, factoryTimezone } from "../../services/factory/pressingShiftTime";
 
 const MANAGER_ROLES = new Set(["Developer", "Admin", "Owner", "Manager"]);
 type QueryCtx = { companyId: number; userId: string; supervisor: boolean };
@@ -174,18 +175,12 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
         : [];
       const [settings] = await db.select({ extraSettings: factorySettings.extraSettings })
         .from(factorySettings).where(eq(factorySettings.companyId, ctx.companyId)).limit(1);
-      const extra = settings?.extraSettings && typeof settings.extraSettings === "object" &&
-        !Array.isArray(settings.extraSettings)
-        ? settings.extraSettings as Record<string, unknown> : {};
-      const requested = extra.pressingTimezone ?? extra.companyTimezone ?? extra.timezone ?? "UTC";
-      let timeZone = typeof requested === "string" ? requested : "UTC";
-      try { new Intl.DateTimeFormat("en-US", { timeZone }).format(new Date()); }
-      catch { timeZone = "UTC"; }
-      const parts = new Intl.DateTimeFormat("en-US", {
-        timeZone, year: "numeric", month: "2-digit", day: "2-digit",
-      }).formatToParts(new Date());
-      const part = (type: string) => parts.find(p => p.type === type)?.value ?? "00";
-      const serverToday = [part("year"), part("month"), part("day")].join("-");
+      const activeShifts = await db.select({ timezoneName: factoryPressingShifts.timezoneName, active: factoryPressingShifts.active })
+        .from(factoryPressingShifts).where(and(eq(factoryPressingShifts.companyId, ctx.companyId),
+          eq(factoryPressingShifts.active, true)));
+      // Same calendar basis the confirmation engine stamps on production_date.
+      const timeZone = factoryTimezone(activeShifts, settings?.extraSettings);
+      const serverToday = factoryLocalDate(new Date(), timeZone);
       return res.json({ machines, operators, canViewAll: ctx.supervisor, serverToday, timeZone });
     } catch (error) { return handleError(res, error); }
   });

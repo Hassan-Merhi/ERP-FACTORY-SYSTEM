@@ -19,7 +19,9 @@ import {
 } from "../../services/security/activeCompanyPermissionContext";
 import { logAudit } from "../helpers/auditHelpers";
 import { logger } from "../../lib/logger";
-import { matchingShift, type PressingShiftDefinition } from "../../services/factory/pressingShiftTime";
+import {
+  factoryLocalDate, factoryTimezone, matchingShift, type PressingShiftDefinition,
+} from "../../services/factory/pressingShiftTime";
 
 const confirmSchema = z.object({
   barcode: z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9][A-Za-z0-9._/-]*$/),
@@ -39,26 +41,6 @@ class ConfirmationError extends Error {
 
 function normalizeReference(value: string): string {
   return value.trim().toUpperCase();
-}
-function companyProductionTimezone(raw: unknown): string {
-  const settings = raw && typeof raw === "object" && !Array.isArray(raw)
-    ? raw as Record<string, unknown> : {};
-  const requested = settings.pressingTimezone ?? settings.companyTimezone ?? settings.timezone ?? "UTC";
-  if (typeof requested !== "string" || !requested.trim() || requested.length > 100) return "UTC";
-  try {
-    new Intl.DateTimeFormat("en-CA", { timeZone: requested }).format(new Date());
-    return requested;
-  } catch {
-    return "UTC";
-  }
-}
-function companyDate(now: Date, timeZone: string): string {
-  // en-CA format works on Node's installed ICU, with a stable numeric fallback.
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone, year: "numeric", month: "2-digit", day: "2-digit",
-  }).formatToParts(now);
-  const value = (name: "year" | "month" | "day") => parts.find(p => p.type === name)?.value;
-  return [value("year"), value("month"), value("day")].join("-");
 }
 function safeDeviceTimestamp(value: string | undefined): Date | null {
   if (!value) return null;
@@ -229,9 +211,10 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
             eq(factoryPressingShifts.active, true)));
         const activeShift = matchingShift(activeShifts as PressingShiftDefinition[], now);
         const shiftId = activeShift?.id ?? null;
-        const timezoneName = activeShift?.timezoneName ??
-          companyProductionTimezone(settings?.extraSettings);
-        const productionDate = companyDate(now, timezoneName);
+        // One calendar basis per company: the configured shifts' timezone even
+        // when this scan falls outside every shift, else Factory settings.
+        const timezoneName = factoryTimezone(activeShifts, settings?.extraSettings);
+        const productionDate = factoryLocalDate(now, timezoneName);
         const deviceCapturedAt = safeDeviceTimestamp(parsed.deviceCapturedAt);
         let session: typeof factoryPressingSessions.$inferSelect | undefined;
         [session] = await tx.select().from(factoryPressingSessions)

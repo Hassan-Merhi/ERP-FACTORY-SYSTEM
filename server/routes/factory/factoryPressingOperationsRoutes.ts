@@ -18,7 +18,7 @@ import {
 import { logger } from "../../lib/logger";
 import { logAudit } from "../helpers/auditHelpers";
 import {
-  intervalsOverlap, isValidTimezone, matchingShift,
+  factoryTimezone, intervalsOverlap, isValidTimezone, matchingShift,
   type PressingShiftDefinition,
 } from "../../services/factory/pressingShiftTime";
 
@@ -282,16 +282,10 @@ export function registerFactoryPressingOperationsRoutes(app: Express): void {
       },{bales:0,kg:0});
       const activeShifts = await db.select().from(factoryPressingShifts)
         .where(and(eq(factoryPressingShifts.companyId, ctx.companyId),
-          eq(factoryPressingShifts.active, true))).limit(1);
+          eq(factoryPressingShifts.active, true)));
       const [settings] = await db.select({ extraSettings: factorySettings.extraSettings })
         .from(factorySettings).where(eq(factorySettings.companyId, ctx.companyId)).limit(1);
-      const extra = settings?.extraSettings && typeof settings.extraSettings === "object" &&
-        !Array.isArray(settings.extraSettings)
-        ? settings.extraSettings as Record<string, unknown> : {};
-      const preferred = activeShifts[0]?.timezoneName ??
-        extra.pressingTimezone ?? extra.companyTimezone ?? extra.timezone ?? "UTC";
-      const timezoneName = typeof preferred === "string" && isValidTimezone(preferred)
-        ? preferred : "UTC";
+      const timezoneName = factoryTimezone(activeShifts, settings?.extraSettings);
       // Filter downtime by overlapping real timestamps; report actual manually
       // logged machine stops separately from observational scan intervals.
       const machineParam = filter.machineId ? " AND d.machine_id=$5" : "";
