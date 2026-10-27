@@ -78,15 +78,15 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
   async function fixtureUser(key:string,companyId:number,role:string,options:{posViewOnly?:boolean;active?:boolean}={}){
     const id="pressing-"+key+"-"+suffix;
     await db.execute(sql`INSERT INTO users(id,username,password,active)
-      VALUES(`${id}`,`${key+suffix}`,'x',`${options.active??true}`)`);
+      VALUES(${id},${key+suffix},'x',${options.active??true})`);
     await db.execute(sql`INSERT INTO user_company_roles(user_id,company_id,role,pos_view_only)
-      VALUES(`${id}`,`${companyId}`,`${role}`,`${options.posViewOnly??false}`)`);
+      VALUES(${id},${companyId},${role},${options.posViewOnly??false})`);
     actors[key]={userId:id,companyId,username:key+suffix};
   }
   async function fixtureBale(key:string,companyId:number,status="PENDING_PRESSING",deleted=false){
     const ref="PRS-"+key.toUpperCase()+"-"+suffix;
     const id=await one(sql`INSERT INTO factory_bales(company_id,bale_code,reference_number,article_code,product_name,weight_kg,status,deleted_at)
-      VALUES(`${companyId}`,`${ref}`,`${ref}`,`${"ART-"+key}`,`${"Bale "+key}`,45.5,`${status}`,`${deleted?sql`now()`:null}`) RETURNING id`);
+      VALUES(${companyId},${ref},${ref},${"ART-"+key},${"Bale "+key},45.5,${status},${deleted?sql`now()`:null}) RETURNING id`);
     bales[key]={id,ref};
   }
   async function activate(user:Actor){
@@ -102,7 +102,7 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
   }
   async function baleUnchanged(key:string){
     const [bale]=await rows(sql`SELECT status,weight_kg::text AS weight,pressed_at,finalized_at
-      FROM factory_bales WHERE id=`${bales[key].id}``);
+      FROM factory_bales WHERE id=${bales[key].id}`);
     expect(bale).toMatchObject({
       status:"PENDING_PRESSING",weight:"45.500",pressed_at:null,finalized_at:null,
     });
@@ -112,11 +112,11 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
 
   beforeAll(async()=>{
     companies.a=await one(sql`INSERT INTO companies(code,name,company_type)
-      VALUES(`${"PRA"+suffix}`,'Pressing A','factory') RETURNING id`);
+      VALUES(${"PRA"+suffix},'Pressing A','factory') RETURNING id`);
     companies.b=await one(sql`INSERT INTO companies(code,name,company_type)
-      VALUES(`${"PRB"+suffix}`,'Pressing B','factory') RETURNING id`);
+      VALUES(${"PRB"+suffix},'Pressing B','factory') RETURNING id`);
     await db.execute(sql`INSERT INTO factory_settings(company_id,extra_settings)
-      VALUES(`${companies.a}`,`${JSON.stringify({pressingTimezone:"Africa/Lubumbashi"})}`::jsonb)`);
+      VALUES(${companies.a},${JSON.stringify({pressingTimezone:"Africa/Lubumbashi"})}::jsonb)`);
     await fixtureUser("supA",companies.a,"Manager");
     await fixtureUser("opA1",companies.a,"Worker");
     await fixtureUser("opA2",companies.a,"Worker");
@@ -195,7 +195,7 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
       const me=await call("GET /api/factory/pressing-machines/me",actors[name]);
       expect(me.body.assignment.assignmentId).toBe(result.body.assignment.assignmentId);
       const [count]=await rows(sql`SELECT COUNT(*)::int AS total FROM factory_pressing_assignments
-        WHERE company_id=`${actors[name].companyId}` AND user_id=`${actors[name].userId}` AND unassigned_at IS NULL`);
+        WHERE company_id=${actors[name].companyId} AND user_id=${actors[name].userId} AND unassigned_at IS NULL`);
       expect(count.total).toBe(1);
     }
     expect(assignments[actors.opA1.userId].machineId)
@@ -217,7 +217,7 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
     expect(response.body.productionDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(response.body.timezoneName).toBe("Africa/Lubumbashi");
     const [record]=await rows(sql`SELECT * FROM factory_pressing_confirmations
-      WHERE company_id=`${companies.a}` AND bale_id=`${bales.one.id}``);
+      WHERE company_id=${companies.a} AND bale_id=${bales.one.id}`);
     expect(record.shift_id).toBeNull();
     expect(record.voided_at).toBeNull();
     const replay=await scan(actors.opA1,"one",requestId);
@@ -253,7 +253,7 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
     expect(raced.filter(x=>x.statusCode===201)).toHaveLength(1);
     expect(raced.filter(x=>x.statusCode===409)).toHaveLength(1);
     const stored=await rows(sql`SELECT id FROM factory_pressing_confirmations
-      WHERE bale_id=`${bales.race.id}` AND voided_at IS NULL`);
+      WHERE bale_id=${bales.race.id} AND voided_at IS NULL`);
     expect(stored).toHaveLength(1);
     await baleUnchanged("race");
   });
@@ -299,7 +299,7 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
     expect(corrected.statusCode).toBe(200);
     expect(corrected.body).toMatchObject({confirmationId:first.body.id,needsRescan:true,stockFinalized:false});
     expect((await call(route,actors.supA,options)).statusCode).toBe(409);
-    const [original]=await rows(sql`SELECT * FROM factory_pressing_confirmations WHERE id=`${first.body.id}``);
+    const [original]=await rows(sql`SELECT * FROM factory_pressing_confirmations WHERE id=${first.body.id}`);
     expect(original.voided_by).toBe(actors.supA.userId);
     expect(original.voided_at).not.toBeNull();
     expect((await scan(actors.opA1,"void",first.body.requestId)).body.code)
@@ -308,17 +308,17 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
     expect(replacement.statusCode).toBe(201);
     expect(replacement.body.id).not.toBe(first.body.id);
     const correctedRecords=await rows(sql`SELECT action,confirmation_id,replacement_confirmation_id
-      FROM factory_pressing_corrections WHERE confirmation_id=`${first.body.id}``);
+      FROM factory_pressing_corrections WHERE confirmation_id=${first.body.id}`);
     expect(correctedRecords.map(x=>x.action).sort()).toEqual(["RECONFIRM","VOID"]);
     expect(correctedRecords.find(x=>x.action==="RECONFIRM")?.replacement_confirmation_id)
       .toBe(replacement.body.id);
     const active=await rows(sql`SELECT id FROM factory_pressing_confirmations
-      WHERE bale_id=`${bales.void.id}` AND voided_at IS NULL`);
+      WHERE bale_id=${bales.void.id} AND voided_at IS NULL`);
     expect(active).toHaveLength(1);
     await expect(db.execute(sql`DELETE FROM factory_pressing_confirmations
-      WHERE id=`${first.body.id}``)).rejects.toThrow();
+      WHERE id=${first.body.id}`)).rejects.toThrow();
     await expect(db.execute(sql`DELETE FROM factory_pressing_corrections
-      WHERE confirmation_id=`${first.body.id}``)).rejects.toThrow();
+      WHERE confirmation_id=${first.body.id}`)).rejects.toThrow();
     await baleUnchanged("void");
   });
 });
