@@ -99,23 +99,18 @@ export default function WipersReEntry() {
     queryKey: ["/api/factory/bales"],
     enabled: cleanupOpen,
   });
-
   const activeLocations = locations?.filter((l) => l.active) ?? [];
   const wiperProducts = baleProducts?.filter((p) => p.active && isWipers(p, categories)) ?? [];
-
   const currentWipersBales = allBalesData
     .filter((row) => isWipersBale(row))
     .map((row) => ({ ...row.bale, _product: row.product }));
-
   const filteredProducts =
     searchInput.trim().length > 0
       ? wiperProducts.filter((p) => productMatchesSearch(p, searchInput)).slice(0, 20)
       : wiperProducts.slice(0, 20);
-
   const totalQty = cart.reduce((s, i) => s + i.qty, 0);
   const totalKg = cart.reduce((s, i) => s + i.qty * i.weightPerBaleKg, 0);
   const cleanupTotalKg = currentWipersBales.reduce((s, b) => s + parseFloat(b.weightKg || "0"), 0);
-
   const addToCart = (product: FactoryBaleProduct) => {
     const defaultWeight = product.weightPerBaleKg ? parseFloat(product.weightPerBaleKg) : 25;
     setCart((prev) => {
@@ -128,18 +123,15 @@ export default function WipersReEntry() {
     setSearchError("");
     setTimeout(() => scanRef.current?.focus(), 50);
   };
-
   const updateQty = (productId: number, delta: number) => {
     setCart((prev) => prev.map((i) => (i.productId === productId ? { ...i, qty: Math.max(1, i.qty + delta) } : i)));
   };
-
   const setQtyDirect = (productId: number, val: string) => {
     const n = parseInt(val);
     if (!isNaN(n) && n >= 1) {
       setCart((prev) => prev.map((i) => (i.productId === productId ? { ...i, qty: n } : i)));
     }
   };
-
   const updateWeight = (productId: number, val: string) => {
     const n = parseFloat(val);
     if (!isNaN(n) && n > 0) {
