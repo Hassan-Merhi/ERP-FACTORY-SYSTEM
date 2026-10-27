@@ -7,7 +7,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { z, ZodError } from "zod";
 import { db, pool } from "../../db";
 import { requireAuth } from "../../auth";
-import { factoryPressingSavedViews, factoryPressingMachines } from "@shared/schema";
+import { factoryPressingSavedViews, factoryPressingMachines, factorySettings } from "@shared/schema";
 import { getActiveCompanyPermissionContext, ActiveCompanyPermissionContextError } from "../../services/security/activeCompanyPermissionContext";
 import { logger } from "../../lib/logger";
 import { pressingReportFiltersSchema, pressingSavedViewSchema, type PressingReportFilters } from "@shared/pressingReportContracts";
@@ -106,7 +106,8 @@ async function report(ctx: QueryCtx, filters: PressingReportFilters) {
     'c.production_date::text AS "productionDate"', 'c.machine_id AS "machineId"',
     'MAX(c.machine_name_snapshot) AS "machineName"', 'c.user_id AS "operatorUserId"',
     'MAX(c.user_name_snapshot) AS "operatorName"', 'c.shift_id AS "shiftId"',
-    'c.article_code AS "articleCode"', '(c.voided_at IS NOT NULL) AS "voided"',
+    'c.article_code AS "articleCode"', 'MAX(c.timezone_name) AS "timezoneName"',
+    '(c.voided_at IS NOT NULL) AS "voided"',
     'COUNT(*)::integer AS "bales"', 'COALESCE(SUM(c.weight_kg),0)::numeric(18,3) AS "weightKg"',
     'MIN(c.confirmed_at) AS "firstScanAt"', 'MAX(c.confirmed_at) AS "lastScanAt"',
   ].join(", ");
@@ -169,7 +170,21 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
           'GROUP BY c.user_id ORDER BY name LIMIT 1500', [ctx.companyId]
         )).rows
         : [];
-      return res.json({ machines, operators, canViewAll: ctx.supervisor });
+      const [settings] = await db.select({ extraSettings: factorySettings.extraSettings })
+        .from(factorySettings).where(eq(factorySettings.companyId, ctx.companyId)).limit(1);
+      const extra = settings?.extraSettings && typeof settings.extraSettings === "object" &&
+        !Array.isArray(settings.extraSettings)
+        ? settings.extraSettings as Record<string, unknown> : {};
+      const requested = extra.pressingTimezone ?? extra.companyTimezone ?? extra.timezone ?? "UTC";
+      let timeZone = typeof requested === "string" ? requested : "UTC";
+      try { new Intl.DateTimeFormat("en-US", { timeZone }).format(new Date()); }
+      catch { timeZone = "UTC"; }
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+      }).formatToParts(new Date());
+      const part = (type: string) => parts.find(p => p.type === type)?.value ?? "00";
+      const serverToday = [part("year"), part("month"), part("day")].join("-");
+      return res.json({ machines, operators, canViewAll: ctx.supervisor, serverToday, timeZone });
     } catch (error) { return handleError(res, error); }
   });
 
