@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ContinuousPressingScanner } from "./ContinuousPressingScanner";
 import { usePressingOfflineSync } from "./pressing-scanner/usePressingOfflineSync";
 import PressingOfflineQueueStatus from "./PressingOfflineQueueStatus";
+import { useCompany } from "@/contexts/CompanyContext";
 
 const ROOT = "/api/factory/pressing-machines";
 type Assignment = { id: number; machineId: number; userId: string; username: string | null; assignedAt: string };
@@ -95,17 +96,19 @@ function MachineManagerCard({
 
 export default function PressingMachineManagement({ active }: { active: boolean }) {
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [showHistory, setShowHistory] = useState(false);
   const myQuery = useQuery<MyMachine>({
-    queryKey: [ROOT, "me"],
+    queryKey: [ROOT, "me", selectedCompany?.id ?? null],
     queryFn: async () => {
       const response = await fetch(`${ROOT}/me`, { credentials: "include" });
       if (!response.ok) throw new Error("Could not load assigned pressing machine");
       return response.json();
     },
-    staleTime: 0, refetchOnMount: "always", refetchOnWindowFocus: true,
+    staleTime: 0, gcTime: 0, enabled: selectedCompany !== null,
+    refetchOnMount: "always", refetchOnWindowFocus: true,
   });
   const pressingQueue = usePressingOfflineSync(
     myQuery.data ? { companyId: myQuery.data.companyId, userId: myQuery.data.userId } : null,
