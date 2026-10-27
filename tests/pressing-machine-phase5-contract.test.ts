@@ -17,7 +17,7 @@ describe("Phase 5 pressing offline resilience contract", () => {
     expect(queue).toContain('store.createIndex("actor", ["companyId", "userId"]');
     expect(queue).toContain("await savePressingScan(record)");
     expect(hook.indexOf("await enqueuePressingScan(identity, payload)"))
-      .toBeLessThan(hook.indexOf("return deliver(identity, record)"));
+      .toBeLessThan(hook.indexOf("return deliver(identity, current)"));
     expect(transport).toContain('"/api/factory/pressing-machines/confirm", row.payload');
     expect(queue).toContain("requestId: record.requestId, payload: record.payload");
   });
