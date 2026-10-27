@@ -139,7 +139,7 @@ export function registerFactoryPressingMachineManagementRoutes(app: Express): vo
           eq(factoryPressingAssignments.userId, ctx.userId),
           isNull(factoryPressingAssignments.unassignedAt),
         )).limit(1);
-      res.json({ assignment: assigned ?? null, canManage: canManage(ctx) });
+      res.json({ companyId: ctx.companyId, userId: ctx.userId, assignment: assigned ?? null, canManage: canManage(ctx) });
     } catch (error) { respondError(res, error); }
   });
 
