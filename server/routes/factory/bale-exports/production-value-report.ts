@@ -439,9 +439,7 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
             return firstDay.toISOString().slice(0, 10);
           })()
         : null;
-      const beforePeriodSnapshot = priorDate
-        ? await getFactoryBalanceOnTableSnapshot(companyId, priorDate)
-        : null;
+      const beforePeriodSnapshot = priorDate ? await getFactoryBalanceOnTableSnapshot(companyId, priorDate) : null;
       const filteredTable = calculatePeriodTableBalance({
         weightAtEndKg: balanceWeightKg,
         weightBeforePeriodKg: beforePeriodSnapshot?.weightKg ?? 0,
