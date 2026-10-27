@@ -9,7 +9,7 @@ import { db, pool } from "../../db";
 import { requireAuth } from "../../auth";
 import {
   factoryPressingMachines, factoryPressingShifts, factoryPressingDowntime,
-  factoryPressingSessions,
+  factoryPressingSessions, factorySettings,
 } from "@shared/schema";
 import {
   ActiveCompanyPermissionContextError, getActiveCompanyPermissionContext,
@@ -269,20 +269,34 @@ export function registerFactoryPressingOperationsRoutes(app: Express): void {
       const summary = data.rows.reduce((acc,row)=>{
         acc.bales+=Number(row.bales);acc.kg+=Number(row.kg);return acc;
       },{bales:0,kg:0});
+      const activeShifts = await db.select().from(factoryPressingShifts)
+        .where(and(eq(factoryPressingShifts.companyId, ctx.companyId),
+          eq(factoryPressingShifts.active, true))).limit(1);
+      const [settings] = await db.select({ extraSettings: factorySettings.extraSettings })
+        .from(factorySettings).where(eq(factorySettings.companyId, ctx.companyId)).limit(1);
+      const extra = settings?.extraSettings && typeof settings.extraSettings === "object" &&
+        !Array.isArray(settings.extraSettings)
+        ? settings.extraSettings as Record<string, unknown> : {};
+      const preferred = activeShifts[0]?.timezoneName ??
+        extra.pressingTimezone ?? extra.companyTimezone ?? extra.timezone ?? "UTC";
+      const timezoneName = typeof preferred === "string" && isValidTimezone(preferred)
+        ? preferred : "UTC";
       // Filter downtime by overlapping real timestamps; report actual manually
       // logged machine stops separately from observational scan intervals.
-      const machineParam = filter.machineId ? " AND d.machine_id=$4" : "";
-      const downtimeParams = filter.machineId ? [ctx.companyId,filter.from,filter.to,filter.machineId] :
-        [ctx.companyId,filter.from,filter.to];
+      const machineParam = filter.machineId ? " AND d.machine_id=$5" : "";
+      const downtimeParams = filter.machineId
+        ? [ctx.companyId,filter.from,filter.to,timezoneName,filter.machineId]
+        : [ctx.companyId,filter.from,filter.to,timezoneName];
       const downtime = await pool.query(
         'SELECT d.id,d.machine_id AS "machineId",m.name AS "machineName",' +
         'd.reason_code AS "reasonCode",d.started_at AS "startedAt",d.ended_at AS "endedAt",' +
         'GREATEST(0,EXTRACT(EPOCH FROM (LEAST(COALESCE(d.ended_at,NOW()),' +
-        "($3::date+INTERVAL '1 day')) - GREATEST(d.started_at,$2::date))))::integer AS \"seconds\"" +
+        "(($3::date+INTERVAL '1 day') AT TIME ZONE $4)) - " +
+        "GREATEST(d.started_at,($2::date::timestamp AT TIME ZONE $4)))))::integer AS \"seconds\"" +
         ' FROM factory_pressing_downtime d JOIN factory_pressing_machines m' +
         ' ON m.id=d.machine_id AND m.company_id=d.company_id' +
-        " WHERE d.company_id=$1 AND d.started_at < ($3::date+INTERVAL '1 day')" +
-        ' AND COALESCE(d.ended_at,NOW()) >= $2::date'+machineParam+
+        " WHERE d.company_id=$1 AND d.started_at < (($3::date+INTERVAL '1 day') AT TIME ZONE $4)" +
+        ' AND COALESCE(d.ended_at,NOW()) >= ($2::date::timestamp AT TIME ZONE $4)'+machineParam+
         ' ORDER BY d.started_at DESC LIMIT 3000',downtimeParams
       );
       const targets = await db.select({
