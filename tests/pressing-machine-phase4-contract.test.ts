@@ -28,11 +28,12 @@ describe("Pressing machine Phase 4 transaction safety", () => {
     expect(route).toContain("PRESSING_ASSIGNMENT_CHANGED");
   });
 
-  it("resolves every bale authoritatively, rejecting excluded and finalized references", () => {
+  it("resolves company-owned bales, allowing all non-deleted inventory statuses", () => {
     expect(route).toContain("eq(factoryBales.companyId, companyId)");
     expect(route).toContain("eq(factoryBales.referenceNumber, reference)");
     expect(route).toContain("isNull(factoryBales.deletedAt)");
-    expect(route).toContain('bale.status !== "PENDING_PRESSING"');
+    expect(route).toContain('bale.status === "DELETED"');
+    expect(route).not.toContain("PRESSING_BALE_NOT_PENDING");
     expect(route).toContain("nonBalePriorityProductIds");
     expect(route).toContain("PRESSING_BALE_NOT_FOUND");
     expect(route).toContain("PRESSING_NON_BALE_ITEM");
