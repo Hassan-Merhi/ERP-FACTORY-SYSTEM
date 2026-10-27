@@ -115,7 +115,9 @@ async function report(ctx: QueryCtx, filters: PressingReportFilters) {
   const detailed = filters.mode === "detailed";
   const selectSql = detailed
     ? 'SELECT ' + detail + from + ' ORDER BY c.confirmed_at DESC,c.id DESC'
-    : 'SELECT ' + condensed + from + group + ' ORDER BY c.production_date DESC,c.machine_id,c.user_id,c.article_code';
+    : 'SELECT ' + condensed + from + group +
+      ' ORDER BY c.production_date DESC,c.machine_id,c.user_id,c.article_code NULLS LAST,' +
+      'c.shift_id NULLS LAST,(c.voided_at IS NOT NULL) ASC';
   const countSql = detailed
     ? 'SELECT COUNT(*)::integer AS total' + from
     : 'SELECT COUNT(*)::integer AS total FROM (SELECT 1' + from + group + ') t';
