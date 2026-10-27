@@ -14,7 +14,13 @@ vi.mock("./pressing-scanner/cameraDecoder", () => ({
 
 import { ContinuousPressingScanner, type PressingScanOutcome } from "./ContinuousPressingScanner";
 
-const assignment = { assignmentId: 4, machineId: 2, machineCode: "PRESS-02", machineName: "Press 02", machineActive: true };
+const assignment = {
+  assignmentId: 4,
+  machineId: 2,
+  machineCode: "PRESS-02",
+  machineName: "Press 02",
+  machineActive: true,
+};
 let stopTrack: ReturnType<typeof vi.fn>;
 let getUserMedia: ReturnType<typeof vi.fn>;
 
@@ -39,7 +45,14 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
-async function startScanner(onBarcode = vi.fn(async (): Promise<PressingScanOutcome> => ({ kind: "confirmed", message: "Pressing completed and saved", confirmedAt: "2026-10-27T09:26:15.000Z", timezoneName: "UTC" }))) {
+async function startScanner(
+  onBarcode = vi.fn(async (): Promise<PressingScanOutcome> => ({
+    kind: "confirmed",
+    message: "Pressing completed and saved",
+    confirmedAt: "2026-10-27T09:26:15.000Z",
+    timezoneName: "UTC",
+  }))
+) {
   const view = render(<ContinuousPressingScanner assignment={assignment} active onBarcode={onBarcode} />);
   fireEvent.click(screen.getByRole("button", { name: /start scanner/i }));
   await waitFor(() => expect(screen.getByText("Camera live")).toBeInTheDocument());
@@ -84,7 +97,10 @@ describe("ContinuousPressingScanner camera lifecycle", () => {
   });
 
   it("stops the camera when the tab is no longer active and when the scanner is stopped", async () => {
-    const onBarcode = vi.fn(async (): Promise<PressingScanOutcome> => ({ kind: "queued", message: "Saved on this device" }));
+    const onBarcode = vi.fn(async (): Promise<PressingScanOutcome> => ({
+      kind: "queued",
+      message: "Saved on this device",
+    }));
     const { rerender } = render(<ContinuousPressingScanner assignment={assignment} active onBarcode={onBarcode} />);
     fireEvent.click(screen.getByRole("button", { name: /start scanner/i }));
     await waitFor(() => expect(screen.getByText("Camera live")).toBeInTheDocument());
@@ -99,7 +115,10 @@ describe("ContinuousPressingScanner camera lifecycle", () => {
 
   it("falls back to manual entry when no decoder can start, and manual reads still submit", async () => {
     camera.decoder = null;
-    const onBarcode = vi.fn(async (): Promise<PressingScanOutcome> => ({ kind: "rejected", message: "This reference is not an active factory bale" }));
+    const onBarcode = vi.fn(async (): Promise<PressingScanOutcome> => ({
+      kind: "rejected",
+      message: "This reference is not an active factory bale",
+    }));
     render(<ContinuousPressingScanner assignment={assignment} active onBarcode={onBarcode} />);
     fireEvent.click(screen.getByRole("button", { name: /start scanner/i }));
     await waitFor(() => expect(screen.getByText("Manual mode")).toBeInTheDocument());
@@ -112,7 +131,10 @@ describe("ContinuousPressingScanner camera lifecycle", () => {
   });
 
   it("does not show a confirmation for a queued or rejected outcome", async () => {
-    const onBarcode = vi.fn(async (): Promise<PressingScanOutcome> => ({ kind: "queued", message: "Saved on this device. Waiting for server confirmation — NOT yet counted." }));
+    const onBarcode = vi.fn(async (): Promise<PressingScanOutcome> => ({
+      kind: "queued",
+      message: "Saved on this device. Waiting for server confirmation — NOT yet counted.",
+    }));
     await startScanner(onBarcode);
     camera.frames.push("REF300300");
     await waitFor(() => expect(screen.getByText(/NOT yet counted/)).toBeInTheDocument(), { timeout: 3000 });

@@ -10,13 +10,13 @@
  * When neither engine can run, the scanner shows an explicit manual-entry
  * fallback; it never pretends automatic decoding is active.
  */
-export const PRESSING_FORMATS = [
-  "code_128", "code_39", "ean_13", "ean_8", "upc_a", "upc_e", "qr_code",
-] as const;
+export const PRESSING_FORMATS = ["code_128", "code_39", "ean_13", "ean_8", "upc_a", "upc_e", "qr_code"] as const;
 export type PressingBarcodeFormat = (typeof PRESSING_FORMATS)[number];
 export type CameraDecoderEngine = "native" | "zxing";
 
-export interface DetectedBarcode { rawValue: string }
+export interface DetectedBarcode {
+  rawValue: string;
+}
 export interface CameraBarcodeDecoder {
   readonly engine: CameraDecoderEngine;
   detect(source: HTMLVideoElement): Promise<DetectedBarcode[]>;
@@ -27,7 +27,7 @@ interface BrowserBarcodeDetector {
   detect(source: CanvasImageSource): Promise<DetectedBarcode[]>;
 }
 type DetectorConstructor = {
-  new(options?: { formats?: string[] }): BrowserBarcodeDetector;
+  new (options?: { formats?: string[] }): BrowserBarcodeDetector;
   getSupportedFormats?: () => Promise<string[]>;
 };
 
@@ -35,8 +35,7 @@ type DetectorConstructor = {
 const ZXING_MAX_EDGE = 1280;
 
 export function hasCameraAccess(): boolean {
-  return typeof navigator !== "undefined" &&
-    typeof navigator.mediaDevices?.getUserMedia === "function";
+  return typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getUserMedia === "function";
 }
 export function hasNativeBarcodeDetector(): boolean {
   if (typeof window === "undefined") return false;
@@ -52,7 +51,7 @@ export async function createNativeCameraDecoder(): Promise<CameraBarcodeDecoder 
     const supportedFormats = Detector.getSupportedFormats
       ? await Detector.getSupportedFormats()
       : [...PRESSING_FORMATS];
-    const selected = PRESSING_FORMATS.filter(format => supportedFormats.includes(format));
+    const selected = PRESSING_FORMATS.filter((format) => supportedFormats.includes(format));
     if (!selected.length) return null;
     const detector = new Detector({ formats: selected });
     return {
@@ -77,8 +76,13 @@ export async function createBundledCameraDecoder(): Promise<CameraBarcodeDecoder
       import("@zxing/library"),
     ]);
     const formats = [
-      BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.EAN_13, BarcodeFormat.EAN_8,
-      BarcodeFormat.UPC_A, BarcodeFormat.UPC_E, BarcodeFormat.QR_CODE,
+      BarcodeFormat.CODE_128,
+      BarcodeFormat.CODE_39,
+      BarcodeFormat.EAN_13,
+      BarcodeFormat.EAN_8,
+      BarcodeFormat.UPC_A,
+      BarcodeFormat.UPC_E,
+      BarcodeFormat.QR_CODE,
     ];
     const hints = new Map<unknown, unknown>();
     hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
@@ -93,7 +97,8 @@ export async function createBundledCameraDecoder(): Promise<CameraBarcodeDecoder
       engine: "zxing",
       async detect(video) {
         if (!canvas) return [];
-        const width = video.videoWidth, height = video.videoHeight;
+        const width = video.videoWidth,
+          height = video.videoHeight;
         if (!width || !height) return [];
         const scale = Math.min(1, ZXING_MAX_EDGE / Math.max(width, height));
         const targetWidth = Math.max(1, Math.round(width * scale));

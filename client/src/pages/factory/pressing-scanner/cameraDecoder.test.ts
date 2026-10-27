@@ -6,8 +6,12 @@ const zxingBrowser = vi.hoisted(() => ({
 }));
 vi.mock("@zxing/browser", () => {
   class BrowserMultiFormatReader {
-    constructor(hints?: Map<unknown, unknown>) { zxingBrowser.constructed(hints); }
-    decodeFromCanvas(canvas: HTMLCanvasElement) { return zxingBrowser.decodeFromCanvas(canvas); }
+    constructor(hints?: Map<unknown, unknown>) {
+      zxingBrowser.constructed(hints);
+    }
+    decodeFromCanvas(canvas: HTMLCanvasElement) {
+      return zxingBrowser.decodeFromCanvas(canvas);
+    }
   }
   return { BrowserMultiFormatReader };
 });
@@ -17,8 +21,12 @@ vi.mock("@zxing/library", () => ({
 }));
 
 import {
-  createBundledCameraDecoder, createCameraDecoder, createNativeCameraDecoder,
-  hasCameraAccess, hasNativeBarcodeDetector, PRESSING_FORMATS,
+  createBundledCameraDecoder,
+  createCameraDecoder,
+  createNativeCameraDecoder,
+  hasCameraAccess,
+  hasNativeBarcodeDetector,
+  PRESSING_FORMATS,
 } from "./cameraDecoder";
 
 function fakeVideo(width = 640, height = 480): HTMLVideoElement {
@@ -60,7 +68,9 @@ describe("factory camera decoder", () => {
 
   it("downscales large frames for the bundled decoder and treats NotFound as no barcode", async () => {
     vi.stubGlobal("BarcodeDetector", undefined);
-    zxingBrowser.decodeFromCanvas.mockImplementation(() => { throw new Error("NotFoundException"); });
+    zxingBrowser.decodeFromCanvas.mockImplementation(() => {
+      throw new Error("NotFoundException");
+    });
     const decoder = await createBundledCameraDecoder();
     expect(await decoder!.detect(fakeVideo(2560, 1440))).toEqual([]);
     const canvas = zxingBrowser.decodeFromCanvas.mock.calls[0][0] as HTMLCanvasElement;
@@ -75,7 +85,9 @@ describe("factory camera decoder", () => {
 
   it("reports manual-only when neither engine can start", async () => {
     vi.stubGlobal("BarcodeDetector", undefined);
-    zxingBrowser.constructed.mockImplementation(() => { throw new Error("decoder bundle unavailable"); });
+    zxingBrowser.constructed.mockImplementation(() => {
+      throw new Error("decoder bundle unavailable");
+    });
     expect(await createCameraDecoder()).toBeNull();
   });
 
@@ -83,8 +95,12 @@ describe("factory camera decoder", () => {
     const constructor = vi.fn();
     class MockDetector {
       static getSupportedFormats = vi.fn(async () => ["code_128", "qr_code"]);
-      constructor(options: { formats?: string[] }) { constructor(options); }
-      async detect() { return [{ rawValue: "REF300208" }]; }
+      constructor(options: { formats?: string[] }) {
+        constructor(options);
+      }
+      async detect() {
+        return [{ rawValue: "REF300208" }];
+      }
     }
     vi.stubGlobal("BarcodeDetector", MockDetector);
     expect(hasNativeBarcodeDetector()).toBe(true);
@@ -98,7 +114,9 @@ describe("factory camera decoder", () => {
   it("skips a native detector that exposes no usable formats (desktop Linux Chrome)", async () => {
     class MockDetector {
       static getSupportedFormats = async () => ["invalid-format"];
-      constructor() { throw new Error("No supported formats"); }
+      constructor() {
+        throw new Error("No supported formats");
+      }
     }
     vi.stubGlobal("BarcodeDetector", MockDetector);
     zxingBrowser.decodeFromCanvas.mockReturnValue(null);
