@@ -442,8 +442,8 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
 
       // Weight Cost includes all material converted during the selected period:
       // regular bales plus wipers and garbage. Those groups are mutually exclusive
-      // in baleRows, so each kilogram is charged once at the historical batch rate
-      // through the selected period's end (matching Balance on Table).
+      // in baleRows, so each kilogram is charged once at the historical cumulative
+      // batch rate. This stays separate from the period-only Balance on Table rate.
       const weightCostDecimal = calculateProductionWeightCost({
         producedWeightKg: new BatchRateDecimal(totalBaleWeightKg).plus(totalWgWeightKg),
         batchRateCost: balanceBatchRateDecimal,
