@@ -17,7 +17,7 @@ describe("Phase 5 pressing offline resilience contract", () => {
     expect(queue).toContain('store.createIndex("actor", ["companyId", "userId"]');
     expect(queue).toContain("await savePressingScan(record)");
     expect(hook.indexOf("await enqueuePressingScan(identity, payload)"))
-      .toBeLessThan(hook.indexOf("const settled = await deliver(identity, record)"));
+      .toBeLessThan(hook.indexOf("return deliver(identity, record)"));
     expect(transport).toContain('"/api/factory/pressing-machines/confirm", row.payload');
     expect(queue).toContain("requestId: record.requestId, payload: record.payload");
   });
@@ -52,7 +52,7 @@ describe("Phase 5 pressing offline resilience contract", () => {
   it("shows queued scans in amber and never increases accounting/stock", () => {
     expect(manager).toContain("onBarcode={pressingQueue.submit}");
     expect(manager).toContain("<PressingOfflineQueueStatus");
-    expect(panel).toContain("Only server-confirmed scans count toward production");
+    expect(panel).toContain("Pending scans are not counted");
     expect(panel).toContain("Retry pending");
     expect(scanner).toContain('last?.outcome === "confirmed"');
     expect(scanner).toContain("inFlightRef.current += 1");

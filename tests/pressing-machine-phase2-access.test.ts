@@ -23,7 +23,7 @@ describe("Pressing Machine Management Phase 2 contracts", () => {
     expect(hub).toContain('value="pressing-machines"');
     expect(hub).toContain('data-testid="tab-pressing-machines"');
     expect(hub.indexOf('data-testid="tab-daily-scan"')).toBeLessThan(hub.indexOf('data-testid="tab-pressing-machines"'));
-    expect(hub).toContain('mountedTabs.has("pressing-machines") && <PressingMachineManagement />');
+    expect(hub).toContain('mountedTabs.has("pressing-machines") && <PressingMachineManagement active={activeTab === "pressing-machines"} />');
     expect(page).toContain('data-testid="pressing-machine-management"');
   });
 

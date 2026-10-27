@@ -8,6 +8,14 @@ import { factoryBales } from "./raw-stock-mix";
 
 // Physical pressing completion is independent of Factory stock finalization.
 // In particular, none of these tables posts inventory, costing or accounting.
+//
+// Composite (company_id, id) uniqueness is declared as a table CONSTRAINT, not a
+// uniqueIndex: drizzle-kit creates foreign keys before standalone indexes, so a
+// composite FK that references a bare unique index fails on a fresh database
+// ("there is no unique constraint matching given keys"). The versioned SQL and
+// startup stage 037 create the equivalent unique indexes under the same names,
+// which PostgreSQL also accepts as FK targets; IF NOT EXISTS keeps both paths
+// idempotent.
 export const factoryPressingMachines = pgTable("factory_pressing_machines", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "restrict" }),
@@ -20,7 +28,7 @@ export const factoryPressingMachines = pgTable("factory_pressing_machines", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
   codeUnique: unique("factory_pressing_machines_code_uk").on(t.companyId, t.machineCode),
-  tenantIdUnique: uniqueIndex("factory_pressing_machines_tenant_id_uk").on(t.companyId, t.id),
+  tenantIdUnique: unique("factory_pressing_machines_tenant_id_uk").on(t.companyId, t.id),
   activeIdx: index("factory_pressing_machines_company_active_idx").on(t.companyId, t.active),
   targetCheck: check("factory_pressing_machines_target_ck", sql`${t.targetBalesPerHour} IS NULL OR ${t.targetBalesPerHour} > 0`),
 }));
@@ -36,8 +44,8 @@ export const factoryPressingAssignments = pgTable("factory_pressing_assignments"
   unassignedAt: timestamp("unassigned_at", { withTimezone: true }),
   unassignedBy: varchar("unassigned_by", { length: 255 }),
 }, (t) => ({
-  tenantIdUnique: uniqueIndex("factory_pressing_assignments_tenant_id_uk").on(t.companyId, t.id),
-  identityUnique: uniqueIndex("factory_pressing_assignments_identity_uk").on(t.companyId, t.id, t.machineId, t.userId),
+  tenantIdUnique: unique("factory_pressing_assignments_tenant_id_uk").on(t.companyId, t.id),
+  identityUnique: unique("factory_pressing_assignments_identity_uk").on(t.companyId, t.id, t.machineId, t.userId),
   activeUserUnique: uniqueIndex("factory_pressing_assignments_active_user_uk").on(t.companyId, t.userId).where(sql`${t.unassignedAt} IS NULL`),
   machineDateIdx: index("factory_pressing_assignments_machine_date_idx").on(t.companyId, t.machineId, t.assignedAt.desc()),
   machineFk: foreignKey({ name: "factory_pressing_assignments_machine_fk", columns: [t.companyId, t.machineId], foreignColumns: [factoryPressingMachines.companyId, factoryPressingMachines.id] }).onDelete("restrict"),
@@ -60,7 +68,7 @@ export const factoryPressingShifts = pgTable("factory_pressing_shifts", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
   codeUnique: unique("factory_pressing_shifts_code_uk").on(t.companyId, t.shiftCode),
-  tenantIdUnique: uniqueIndex("factory_pressing_shifts_tenant_id_uk").on(t.companyId, t.id),
+  tenantIdUnique: unique("factory_pressing_shifts_tenant_id_uk").on(t.companyId, t.id),
   hoursCheck: check("factory_pressing_shifts_hours_ck", sql`${t.startLocal} <> ${t.endLocal}`),
 }));
 
@@ -74,8 +82,8 @@ export const factoryPressingSessions = pgTable("factory_pressing_sessions", {
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   endedAt: timestamp("ended_at", { withTimezone: true }),
 }, (t) => ({
-  tenantIdUnique: uniqueIndex("factory_pressing_sessions_tenant_id_uk").on(t.companyId, t.id),
-  identityUnique: uniqueIndex("factory_pressing_sessions_identity_uk").on(t.companyId, t.id, t.machineId, t.assignmentId, t.userId),
+  tenantIdUnique: unique("factory_pressing_sessions_tenant_id_uk").on(t.companyId, t.id),
+  identityUnique: unique("factory_pressing_sessions_identity_uk").on(t.companyId, t.id, t.machineId, t.assignmentId, t.userId),
   activeUserUnique: uniqueIndex("factory_pressing_sessions_active_user_uk").on(t.companyId, t.userId).where(sql`${t.endedAt} IS NULL`),
   machineDateIdx: index("factory_pressing_sessions_machine_date_idx").on(t.companyId, t.machineId, t.startedAt.desc()),
   machineFk: foreignKey({ name: "factory_pressing_sessions_machine_fk", columns: [t.companyId, t.machineId], foreignColumns: [factoryPressingMachines.companyId, factoryPressingMachines.id] }).onDelete("restrict"),
@@ -111,7 +119,7 @@ export const factoryPressingConfirmations = pgTable("factory_pressing_confirmati
   voidedAt: timestamp("voided_at", { withTimezone: true }),
   voidedBy: varchar("voided_by", { length: 255 }),
 }, (t) => ({
-  tenantIdUnique: uniqueIndex("factory_pressing_confirmations_tenant_id_uk").on(t.companyId, t.id),
+  tenantIdUnique: unique("factory_pressing_confirmations_tenant_id_uk").on(t.companyId, t.id),
   requestUnique: uniqueIndex("factory_pressing_confirmations_request_uk").on(t.companyId, t.requestId),
   activeBaleUnique: uniqueIndex("factory_pressing_confirmations_one_active_bale_uk").on(t.companyId, t.baleId).where(sql`${t.voidedAt} IS NULL`),
   dateIdx: index("factory_pressing_confirmations_date_idx").on(t.companyId, t.productionDate, t.confirmedAt.desc()),

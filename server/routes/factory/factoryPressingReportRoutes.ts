@@ -4,7 +4,7 @@
  */
 import type { Express, Request, Response } from "express";
 import { and, asc, eq } from "drizzle-orm";
-import { z, ZodError } from "zod";
+import { ZodError } from "zod";
 import { db, pool } from "../../db";
 import { requireAuth } from "../../auth";
 import { factoryPressingSavedViews, factoryPressingMachines, factorySettings } from "@shared/schema";

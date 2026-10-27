@@ -233,7 +233,8 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
           companyProductionTimezone(settings?.extraSettings);
         const productionDate = companyDate(now, timezoneName);
         const deviceCapturedAt = safeDeviceTimestamp(parsed.deviceCapturedAt);
-        let [session] = await tx.select().from(factoryPressingSessions)
+        let session: typeof factoryPressingSessions.$inferSelect | undefined;
+        [session] = await tx.select().from(factoryPressingSessions)
           .where(and(eq(factoryPressingSessions.companyId, companyId),
             eq(factoryPressingSessions.userId, userId),
             isNull(factoryPressingSessions.endedAt))).for("update");
