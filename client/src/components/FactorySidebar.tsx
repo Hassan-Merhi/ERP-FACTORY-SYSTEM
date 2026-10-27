@@ -276,7 +276,14 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
         // Relocate lower-traffic specialty pages into their owning workflow.
         // Keep the standalone link if the user cannot open any parent page.
         const relatedParentVisible = (url: string) => isPinnedVisible({ url });
-        if (item.accessKey === "factory/contacts" && relatedParentVisible("/factory/parties")) return false;
+        // Contacts must remain directly reachable when the Parties hub has no
+        // visible tabs; otherwise the hub returns before rendering related links.
+        const partiesHasVisibleTab =
+          !myAccess?.hiddenCostFields?.includes("hide_tab_parties_customers") ||
+          !myAccess?.hiddenCostFields?.includes("hide_tab_parties_suppliers");
+        if (item.accessKey === "factory/contacts" && partiesHasVisibleTab && relatedParentVisible("/factory/parties")) {
+          return false;
+        }
         if (item.accessKey === "factory/cost-centers" && relatedParentVisible("/factory/accounts")) return false;
         if (item.accessKey === "factory/sheets-sacks" && relatedParentVisible("/factory/location-inventory")) {
           return false;
