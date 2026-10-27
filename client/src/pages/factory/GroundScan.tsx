@@ -14,6 +14,7 @@ import {
   ServerCrash,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -122,8 +123,8 @@ export default function GroundScan() {
     },
   });
 
-  async function handleScan() {
-    const value = scanInput.trim().toUpperCase();
+  async function handleScan(code = scanInput) {
+    const value = code.trim().toUpperCase();
     if (!value) return;
 
     const duplicate = serverItems.find((b) => b.reference_number === value);
@@ -712,8 +713,9 @@ export default function GroundScan() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          <MobileBarcodeScanner onScan={(code) => void handleScan(code)} disabled={scanning} />
           <Button
-            onClick={handleScan}
+            onClick={() => void handleScan()}
             disabled={scanning || !scanInput.trim()}
             data-testid="button-ground-scan-confirm"
           >

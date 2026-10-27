@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -98,23 +99,18 @@ export default function WipersReEntry() {
     queryKey: ["/api/factory/bales"],
     enabled: cleanupOpen,
   });
-
   const activeLocations = locations?.filter((l) => l.active) ?? [];
   const wiperProducts = baleProducts?.filter((p) => p.active && isWipers(p, categories)) ?? [];
-
   const currentWipersBales = allBalesData
     .filter((row) => isWipersBale(row))
     .map((row) => ({ ...row.bale, _product: row.product }));
-
   const filteredProducts =
     searchInput.trim().length > 0
       ? wiperProducts.filter((p) => productMatchesSearch(p, searchInput)).slice(0, 20)
       : wiperProducts.slice(0, 20);
-
   const totalQty = cart.reduce((s, i) => s + i.qty, 0);
   const totalKg = cart.reduce((s, i) => s + i.qty * i.weightPerBaleKg, 0);
   const cleanupTotalKg = currentWipersBales.reduce((s, b) => s + parseFloat(b.weightKg || "0"), 0);
-
   const addToCart = (product: FactoryBaleProduct) => {
     const defaultWeight = product.weightPerBaleKg ? parseFloat(product.weightPerBaleKg) : 25;
     setCart((prev) => {
@@ -127,18 +123,15 @@ export default function WipersReEntry() {
     setSearchError("");
     setTimeout(() => scanRef.current?.focus(), 50);
   };
-
   const updateQty = (productId: number, delta: number) => {
     setCart((prev) => prev.map((i) => (i.productId === productId ? { ...i, qty: Math.max(1, i.qty + delta) } : i)));
   };
-
   const setQtyDirect = (productId: number, val: string) => {
     const n = parseInt(val);
     if (!isNaN(n) && n >= 1) {
       setCart((prev) => prev.map((i) => (i.productId === productId ? { ...i, qty: n } : i)));
     }
   };
-
   const updateWeight = (productId: number, val: string) => {
     const n = parseFloat(val);
     if (!isNaN(n) && n > 0) {
@@ -420,6 +413,11 @@ export default function WipersReEntry() {
                 onKeyDown={handleKeyDown}
                 data-testid="input-product-search"
               />
+              <MobileBarcodeScanner onScan={(code) => {
+                const match = wiperProducts.find((product) => productMatchesSearch(product, code));
+                if (match) addToCart(match);
+                else { setSearchInput(code); setSearchError(`Unknown product: ${code}`); }
+              }} className="mt-2" />
               {searchError && <p className="text-xs text-destructive mt-1">{searchError}</p>}
               {showDropdown && filteredProducts.length > 0 && (
                 <div className="absolute z-50 left-0 right-0 mt-1 bg-popover border rounded-md shadow-md max-h-60 overflow-y-auto">

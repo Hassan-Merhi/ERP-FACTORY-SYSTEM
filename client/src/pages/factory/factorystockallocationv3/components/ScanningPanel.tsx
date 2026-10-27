@@ -8,6 +8,7 @@ import { useState, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -118,8 +119,8 @@ export function ScanningPanel({ load, onClose }: { load: V3Load; onClose: () => 
     onError: (err) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
-  const handleScan = useCallback(() => {
-    const code = scanCode.trim();
+  const handleScan = useCallback((value = scanCode) => {
+    const code = value.trim();
     if (!code) return;
     scanMutation.mutate({ code });
   }, [scanCode, scanMutation]);
@@ -216,8 +217,9 @@ export function ScanningPanel({ load, onClose }: { load: V3Load; onClose: () => 
                 className="font-mono text-sm"
                 data-testid="input-v3-scan"
               />
+              <MobileBarcodeScanner onScan={(code) => handleScan(code)} disabled={scanMutation.isPending} />
               <Button
-                onClick={handleScan}
+                onClick={() => handleScan()}
                 disabled={scanMutation.isPending || !scanCode.trim()}
                 data-testid="button-v3-scan-submit"
               >

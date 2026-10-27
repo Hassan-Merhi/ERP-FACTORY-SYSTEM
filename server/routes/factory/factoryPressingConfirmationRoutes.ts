@@ -11,7 +11,7 @@ import { requireAuth } from "../../auth";
 import {
   factoryBales, factoryPressingMachines, factoryPressingAssignments,
   factoryPressingSessions, factoryPressingConfirmations, factorySettings,
-  factoryPressingShifts, factoryPressingDowntime, factoryPressingCorrections,
+  factoryPressingCorrections,
   users,
 } from "@shared/schema";
 import {
@@ -19,9 +19,7 @@ import {
 } from "../../services/security/activeCompanyPermissionContext";
 import { logAudit } from "../helpers/auditHelpers";
 import { logger } from "../../lib/logger";
-import {
-  factoryLocalDate, factoryTimezone, matchingShift, type PressingShiftDefinition,
-} from "../../services/factory/pressingShiftTime";
+import { factoryLocalDate, settingsTimezone } from "../../services/factory/pressingShiftTime";
 
 const confirmSchema = z.object({
   barcode: z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9][A-Za-z0-9._/-]*$/),
@@ -130,16 +128,6 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
         if (!machine?.active) {
           throw new ConfirmationError(422, "PRESSING_MACHINE_INACTIVE", "Machine is inactive or no longer assigned");
         }
-        const [machineDowntime] = await tx.select({ id: factoryPressingDowntime.id })
-          .from(factoryPressingDowntime).where(and(
-            eq(factoryPressingDowntime.companyId, companyId),
-            eq(factoryPressingDowntime.machineId, machine.id),
-            isNull(factoryPressingDowntime.endedAt),
-          )).limit(1);
-        if (machineDowntime) {
-          throw new ConfirmationError(422, "PRESSING_MACHINE_DOWN",
-            "Supervisor has marked this machine down. Scan after downtime ends.");
-        }
         const [assignment] = await tx.select().from(factoryPressingAssignments)
           .where(and(eq(factoryPressingAssignments.companyId, companyId),
             eq(factoryPressingAssignments.id, parsed.assignmentId),
@@ -203,17 +191,11 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
           throw new ConfirmationError(422, "PRESSING_BALE_NOT_PENDING", "Only pending-pressing bales can be confirmed");
         }
 
-        // Assign the shift using the SERVER confirmation time, not an
-        // untrusted phone clock. Overnight times and IANA zones are supported.
+        // The logged-in user is the production operator. No configured
+        // shifts, machine downtime or performance targets participate.
         const now = new Date();
-        const activeShifts = await tx.select().from(factoryPressingShifts)
-          .where(and(eq(factoryPressingShifts.companyId, companyId),
-            eq(factoryPressingShifts.active, true)));
-        const activeShift = matchingShift(activeShifts as PressingShiftDefinition[], now);
-        const shiftId = activeShift?.id ?? null;
-        // One calendar basis per company: the configured shifts' timezone even
-        // when this scan falls outside every shift, else Factory settings.
-        const timezoneName = factoryTimezone(activeShifts, settings?.extraSettings);
+        const shiftId = null;
+        const timezoneName = settingsTimezone(settings?.extraSettings);
         const productionDate = factoryLocalDate(now, timezoneName);
         const deviceCapturedAt = safeDeviceTimestamp(parsed.deviceCapturedAt);
         let session: typeof factoryPressingSessions.$inferSelect | undefined;
@@ -224,8 +206,8 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
         if (session && (session.machineId !== machine.id || session.assignmentId !== assignment.id)) {
           throw new ConfirmationError(409, "PRESSING_SESSION_STALE", "Operator session is for another machine");
         }
-        // A shift boundary ends the old session, preserving every previously
-        // confirmed scan's original shift attribution, and opens a new one.
+        // Convert any legacy shift-based session to the simplified user-only
+        // recording mode without altering its historical confirmations.
         if (session && session.shiftId !== shiftId) {
           await tx.update(factoryPressingSessions).set({ endedAt: now })
             .where(and(eq(factoryPressingSessions.id, session.id),

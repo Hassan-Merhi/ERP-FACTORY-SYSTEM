@@ -4,6 +4,7 @@ import { AlertCircle, CheckCircle2, ScanLine } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { visibleTabInterval } from "@/lib/queryPolicies";
@@ -254,8 +255,8 @@ export default function FactoryPriorityScan() {
     throw new Error(tr("noDestination"));
   };
 
-  const handleScan = async () => {
-    const referenceNumber = scanInput.trim().toUpperCase();
+  const handleScan = async (code = scanInput) => {
+    const referenceNumber = code.trim().toUpperCase();
     if (!referenceNumber || scanning || scanSubmissionInFlightRef.current) return;
 
     setScanInput("");
@@ -379,6 +380,7 @@ export default function FactoryPriorityScan() {
               disabled={scanning}
               data-testid="input-priority-scan"
             />
+            <MobileBarcodeScanner onScan={(code) => void handleScan(code)} disabled={scanning} className="h-12 w-12 shrink-0" />
             <Button
               type="button"
               className="h-12 px-5"

@@ -1,82 +1,51 @@
 import fs from "node:fs";
 import { describe, expect, it } from "vitest";
-const read=(path:string)=>fs.readFileSync(path,"utf8");
-const ops=read("server/routes/factory/factoryPressingOperationsRoutes.ts");
-const confirm=read("server/routes/factory/factoryPressingConfirmationRoutes.ts");
-const helper=read("server/services/factory/pressingShiftTime.ts");
-const ui=read("client/src/pages/factory/PressingShiftAnalytics.tsx");
-const parent=read("client/src/pages/factory/PressingMachineManagement.tsx");
-const registration=read("server/routes/factoryRoutes.ts");
-const schema=read("shared/schema/factory/pressing-machine-tracking.ts");
-describe("Pressing Machines Phase 7 integration and safety",()=>{
-  it("registers authenticated shift/downtime/analytics routes under Factory access boundary",()=>{
-    expect(registration).toContain("registerFactoryPressingOperationsRoutes(app)");
-    expect(registration.indexOf('app.use("/api/factory", enforceFactoryBackendAccess)'))
-      .toBeLessThan(registration.indexOf("registerFactoryPressingOperationsRoutes(app)"));
-    for(const uri of ["/shifts/current","/shifts","/downtime","/downtime/start","/analytics"]){
-      expect(ops).toContain('"/api/factory/pressing-machines'+uri+'"');
-    }
+const read = (path:string) => fs.readFileSync(path,"utf8");
+const routes = read("server/routes/factoryRoutes.ts");
+const page = read("client/src/pages/factory/PressingMachineManagement.tsx");
+const access = read("server/routes/factory/factoryPressingMachineManagementRoutes.ts");
+const confirm = read("server/routes/factory/factoryPressingConfirmationRoutes.ts");
+const report = read("server/routes/factory/factoryPressingReportRoutes.ts");
+const history = read("client/src/pages/factory/PressingHistoryReport.tsx");
+
+describe("Simplified pressing workflow replaces Phase 7 operational configuration",()=>{
+  it("does not register shift/downtime/productivity APIs",()=>{
+    expect(routes).not.toContain("registerFactoryPressingOperationsRoutes(app)");
+    for(const uri of ["/shifts","/downtime","/analytics"])
+      expect(routes).not.toContain("registerFactoryPressingOperationsRoutes");
+    // File and legacy records may remain for history/migration integrity,
+    // but dead API routes must not be registered in the Express app.
   });
-  it("enforces supervisor roles, company scope and immutable audit actions for writes",()=>{
-    expect(ops).toContain("MANAGERS.has(ctx.role)");
-    expect(ops).toContain("getActiveCompanyPermissionContext(req)");
-    expect(ops).toContain("PRESSING_SUPERVISOR_REQUIRED");
-    expect(ops).toContain("eq(factoryPressingShifts.companyId, ctx.companyId)");
-    expect(ops).toContain("eq(factoryPressingDowntime.companyId,ctx.companyId)");
-    expect(ops).toContain("await logAudit");
-    expect(ops).toContain("}, tx)");
+  it("does not expose shift, machine downtime or targets on the page",()=>{
+    expect(page).not.toContain("PressingShiftAnalytics");
+    expect(page).not.toContain("MachineManagerCard");
+    expect(page).not.toContain("targetBalesPerHour");
+    expect(page).not.toContain("Save Target");
+    expect(page).not.toContain("Start Downtime");
+    expect(page).not.toContain("Add Shift");
+    expect(history).toContain('aria-label="Pressing user filter"');
+    expect(history).not.toContain('Shift ID');
   });
-  it("prevents overlapping shifts, inconsistent company timezones and concurrent conflicting writes",()=>{
-    expect(ops).toContain("validateSchedule(tx, ctx.companyId");
-    expect(ops).toContain("PRESSING_SHIFT_TIMEZONE_CONFLICT");
-    expect(ops).toContain("PRESSING_SHIFT_OVERLAP");
-    expect(ops).toContain("pg_advisory_xact_lock");
-    expect(helper).toContain("intervalsOverlap");
-    expect(helper).toContain("start < end ? minute >= start");
+  it("pressing confirmation is attributed to authenticated user with no shift dependency",()=>{
+    expect(confirm).toContain("const shiftId = null");
+    expect(confirm).toContain("userId, userNameSnapshot: operator.username");
+    expect(confirm).not.toContain("matchingShift(");
+    expect(confirm).not.toContain("factoryPressingDowntime");
+    expect(confirm).not.toContain("PRESSING_MACHINE_DOWN");
   });
-  it("applies server-confirmed shifts and breaks sessions across shift boundaries",()=>{
-    expect(confirm).toContain("matchingShift(activeShifts as PressingShiftDefinition[], now)");
-    expect(confirm).toContain("const shiftId = activeShift?.id ?? null");
-    expect(confirm).toContain("session.shiftId !== shiftId");
-    expect(confirm).toContain("tx.update(factoryPressingSessions)");
-    expect(confirm).toContain("shiftId, startedAt: now");
-    expect(confirm).toContain("assignmentId: assignment.id, sessionId: session.id, shiftId,");
-    expect(confirm).toContain("confirmedAt: now");
+  it("newly granted users can activate scanning without an admin machine assignment",()=>{
+    expect(access).toContain('"/api/factory/pressing-machines/activate"');
+    expect(access).toContain('machineCode: "PRESSING-SCAN"');
+    expect(access).toContain('eq(factoryPressingAssignments.userId, userId)');
+    expect(access).toContain("pg_advisory_xact_lock");
+    expect(page).toContain("activate()");
+    expect(page).toContain('Scan bale reference / barcode...');
   });
-  it("does not count activity on a machine with explicit active downtime",()=>{
-    expect(confirm).toContain("isNull(factoryPressingDowntime.endedAt)");
-    expect(confirm).toContain("PRESSING_MACHINE_DOWN");
-    expect(ops).toContain("DOWNTIME_ALREADY_OPEN");
-    expect(ops).toContain("isNull(factoryPressingDowntime.endedAt)");
-    expect(schema).toContain("factory_pressing_downtime_open_machine_uk");
-  });
-  it("reports only accepted unvoided scans; log downtime instead of guessing stop times",()=>{
-    expect(ops).toContain("FROM factory_pressing_confirmations WHERE ");
-    expect(ops).toContain('"voided_at IS NULL"');
-    expect(ops).toContain('COUNT(*)::integer AS "bales"');
-    expect(ops).toContain('SUM(weight_kg)');
-    expect(ops).toContain("factory_pressing_downtime d");
-    expect(ops).toContain('rateMethod:"OBSERVED_FIRST_TO_LAST_SCAN"');
-    expect(ops).toContain("observedSeconds");
-    expect(ops).toContain("balesPerHour");
-    expect(ops).toContain("kgPerHour");
-    expect(ops).toContain("ANALYTICS_TOO_LARGE");
-  });
-  it("provides a supervisor workflow without giving operators write controls",()=>{
-    expect(parent).toContain("<PressingShiftAnalytics");
-    expect(parent).toContain("canManage={canManage}");
-    expect(ui).toContain("{canManage && <>");
-    expect(ui).toContain("Start Downtime");
-    expect(ui).toContain("End Downtime");
-    expect(ui).toContain("Save schedule");
-    expect(ui).toContain("Save Target");
-    expect(ui).toContain("Observed h");
-    expect(ui).toContain("not a measured mechanical cycle time");
-  });
-  it("keeps stock valuation, bale finalization and ERP voucher writes untouched",()=>{
-    expect(ops).not.toContain("adjustInventory");
-    expect(ops).not.toContain("writeDaybookEntry");
-    expect(confirm).not.toMatch(/tx\.(?:update|insert|delete)\(factoryBales\)/);
-    expect(ops).not.toMatch(/(?:UPDATE|INSERT INTO) (?:factory_bales|voucher_entries|stock_movements)/);
+  it("historical pressing rows remain queryable and no Factory financial writes are introduced",()=>{
+    expect(report).toContain("FROM factory_pressing_confirmations c");
+    expect(report).toContain("c.voided_at IS NULL");
+    expect(confirm).not.toContain("adjustInventory");
+    expect(access).not.toContain("writeDaybookEntry");
+    expect(page).toContain("<PressingHistoryReport");
   });
 });

@@ -7,11 +7,11 @@ import { and, asc, eq } from "drizzle-orm";
 import { ZodError } from "zod";
 import { db, pool } from "../../db";
 import { requireAuth } from "../../auth";
-import { factoryPressingSavedViews, factoryPressingMachines, factoryPressingShifts, factorySettings } from "@shared/schema";
+import { factoryPressingSavedViews, factorySettings } from "@shared/schema";
 import { getActiveCompanyPermissionContext, ActiveCompanyPermissionContextError } from "../../services/security/activeCompanyPermissionContext";
 import { logger } from "../../lib/logger";
 import { pressingReportFiltersSchema, pressingSavedViewSchema, type PressingReportFilters } from "@shared/pressingReportContracts";
-import { factoryLocalDate, factoryTimezone } from "../../services/factory/pressingShiftTime";
+import { factoryLocalDate, settingsTimezone } from "../../services/factory/pressingShiftTime";
 
 const MANAGER_ROLES = new Set(["Developer", "Admin", "Owner", "Manager"]);
 type QueryCtx = { companyId: number; userId: string; supervisor: boolean };
@@ -160,12 +160,6 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
   app.get("/api/factory/pressing-machines/report/options", requireAuth, async (req: Request, res: Response) => {
     try {
       const ctx = await context(req);
-      const machines = ctx.supervisor
-        ? await db.select({ id: factoryPressingMachines.id, code: factoryPressingMachines.machineCode,
-          name: factoryPressingMachines.name, active: factoryPressingMachines.active })
-          .from(factoryPressingMachines).where(eq(factoryPressingMachines.companyId, ctx.companyId))
-          .orderBy(asc(factoryPressingMachines.machineCode))
-        : [];
       const operators = ctx.supervisor
         ? (await pool.query(
           'SELECT c.user_id AS "userId",COALESCE(MAX(c.user_name_snapshot),c.user_id) AS name ' +
@@ -175,13 +169,10 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
         : [];
       const [settings] = await db.select({ extraSettings: factorySettings.extraSettings })
         .from(factorySettings).where(eq(factorySettings.companyId, ctx.companyId)).limit(1);
-      const activeShifts = await db.select({ timezoneName: factoryPressingShifts.timezoneName, active: factoryPressingShifts.active })
-        .from(factoryPressingShifts).where(and(eq(factoryPressingShifts.companyId, ctx.companyId),
-          eq(factoryPressingShifts.active, true)));
-      // Same calendar basis the confirmation engine stamps on production_date.
-      const timeZone = factoryTimezone(activeShifts, settings?.extraSettings);
+      // One production date basis: company settings only; no shifts.
+      const timeZone = settingsTimezone(settings?.extraSettings);
       const serverToday = factoryLocalDate(new Date(), timeZone);
-      return res.json({ machines, operators, canViewAll: ctx.supervisor, serverToday, timeZone });
+      return res.json({ operators, canViewAll: ctx.supervisor, serverToday, timeZone });
     } catch (error) { return handleError(res, error); }
   });
 

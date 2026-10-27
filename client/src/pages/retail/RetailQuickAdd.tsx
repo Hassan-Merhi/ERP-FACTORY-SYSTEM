@@ -5,6 +5,7 @@ import { Camera, CheckCircle2, Copy, ImagePlus, Loader2, Minus, Palette, Plus, P
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -679,6 +680,7 @@ export default function RetailQuickAdd() {
                     value={variant.barcode}
                     onChange={(event) => updateVariant(variant.key, { barcode: event.target.value })}
                   />
+                  <MobileBarcodeScanner onScan={(code) => updateVariant(variant.key, { barcode: code })} className="mt-2" />
                 </div>
                 <div className="space-y-1">
                   <Label>SKU</Label>

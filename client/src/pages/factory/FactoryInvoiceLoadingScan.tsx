@@ -1,6 +1,7 @@
 import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { FACTORY_MOBILE_ACTION_BAR_CLEARANCE, FactoryMobileActionBar } from "@/components/ui/factory-mobile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -557,6 +558,7 @@ export default function FactoryInvoiceLoadingScan() {
                 disabled={scanBaleMutation.isPending}
                 data-testid="input-scanner"
               />
+              <MobileBarcodeScanner onScan={(code) => scanBaleMutation.mutate(code)} disabled={!activeSessionId || scanBaleMutation.isPending} className="h-12 w-12 shrink-0" />
               <Button
                 type="submit"
                 size="default"
