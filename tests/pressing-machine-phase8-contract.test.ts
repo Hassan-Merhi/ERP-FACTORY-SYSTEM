@@ -5,7 +5,6 @@ const read = (path: string) => readFileSync(path, "utf8");
 const correction = read("server/routes/factory/factoryPressingCorrectionRoutes.ts");
 const confirm = read("server/routes/factory/factoryPressingConfirmationRoutes.ts");
 const report = read("server/routes/factory/factoryPressingReportRoutes.ts");
-const ops = read("server/routes/factory/factoryPressingOperationsRoutes.ts");
 const ui = read("client/src/pages/factory/PressingCorrectionReview.tsx");
 const history = read("client/src/pages/factory/PressingHistoryReport.tsx");
 const queue = read("client/src/pages/factory/PressingOfflineQueueStatus.tsx");
