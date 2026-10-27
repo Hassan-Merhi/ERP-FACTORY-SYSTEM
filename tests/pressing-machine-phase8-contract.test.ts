@@ -38,7 +38,7 @@ describe("Pressing Machines Phase 8 correction and audit controls", () => {
     expect(correction).toContain("eq(factoryPressingMachines.companyId, ctx.companyId)");
     expect(correction).toContain("eq(factoryBales.companyId, ctx.companyId)");
     expect(correction).toContain("eq(factoryBales.id, target.baleId)");
-    expect(correction).toContain("eq(factoryPressingConfirmations.id, confirmationId))).for(\\"update\\")");
+    expect(correction).toContain('eq(factoryPressingConfirmations.id, confirmationId))).for("update")');
     expect(correction).toContain("db.transaction(async tx =>");
   });
 
@@ -75,7 +75,7 @@ describe("Pressing Machines Phase 8 correction and audit controls", () => {
     expect(report).toContain("SUM(c.weight_kg) FILTER (WHERE c.voided_at IS NULL)");
     expect(ops).toContain('"voided_at IS NULL"');
     expect(report).toContain('"c.voided_at IS NOT NULL"');
-    expect(report).toContain("c.voided_at AS \\"voidedAt\\"");
+    expect(report).toContain('c.voided_at AS "voidedAt"');
     expect(queue).toContain("supervisors may subsequently void them");
   });
 
