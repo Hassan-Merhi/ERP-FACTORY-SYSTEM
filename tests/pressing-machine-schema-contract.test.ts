@@ -28,12 +28,12 @@ describe("pressing machine Phase 1 schema contracts", () => {
     ]) {
       expect(ddl).toContain("CREATE TABLE IF NOT EXISTS " + name);
     }
-    expect(ddl).not.toMatch(/(?:INSERT INTO|UPDATE|DELETE FROM)\\s+(?:factory_bales|stock_movements|voucher_entries|factory_mix_batches)\\b/i);
+    expect(ddl).not.toMatch(/(?:INSERT INTO|UPDATE|DELETE FROM)\s+(?:factory_bales|stock_movements|voucher_entries|factory_mix_batches)\b/i);
   });
 
   it("prevents two active pressing confirmations for one bale across all machines and days", () => {
     expect(ddl).toMatch(
-      /CREATE UNIQUE INDEX IF NOT EXISTS factory_pressing_confirmations_one_active_bale_uk ON factory_pressing_confirmations \\(company_id, bale_id\\) WHERE voided_at IS NULL/
+      /CREATE UNIQUE INDEX IF NOT EXISTS factory_pressing_confirmations_one_active_bale_uk ON factory_pressing_confirmations \(company_id, bale_id\) WHERE voided_at IS NULL/
     );
     expect(ddl).toContain("factory_pressing_confirmations_request_uk");
     expect(ddl).toContain("factory_pressing_confirmations_bale_fk");
