@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { CalendarDays, Download, Filter, RefreshCw, Save, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,31 @@ function initialFilters(): PressingReportFilters {
 function errText(error: unknown): string {
   return error instanceof Error ? error.message : "Could not complete report request";
 }
+/**
+ * Free-text filters hit PostgreSQL on every change; with large histories a
+ * request per keystroke is wasteful. The input stays responsive locally and
+ * the filter is committed 350ms after typing pauses. External filter changes
+ * (saved views, presets) flow back into the input.
+ */
+function useDebouncedFilterText(committed: string, commit: (value: string | undefined) => void) {
+  const [text, setText] = useState(committed);
+  const lastCommitted = useRef(committed);
+  useEffect(() => {
+    if (committed !== lastCommitted.current) {
+      lastCommitted.current = committed;
+      setText(committed);
+    }
+  }, [committed]);
+  useEffect(() => {
+    if (text === lastCommitted.current) return;
+    const timer = window.setTimeout(() => {
+      lastCommitted.current = text;
+      commit(text.trim() || undefined);
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [text, commit]);
+  return [text, setText] as const;
+}
 type HistoryReportProps = {
   active: boolean;
   companyId: number;
@@ -60,6 +85,10 @@ export default function PressingHistoryReport({ active, companyId, userId }: His
     asOfRef.current = null;
     setFilters(old => ({ ...old, ...values, page: 1, asOf: undefined }));
   }
+  const commitArticle = useCallback((articleCode: string | undefined) => change({ articleCode }), []);
+  const commitSearch = useCallback((search: string | undefined) => change({ search }), []);
+  const [articleText, setArticleText] = useDebouncedFilterText(filters.articleCode ?? "", commitArticle);
+  const [searchText, setSearchText] = useDebouncedFilterText(filters.search ?? "", commitSearch);
   const viewsQuery = useQuery<PressingSavedView[]>({
     queryKey: [ROOT, "views", companyId, userId],
     queryFn: async () => {
@@ -229,12 +258,12 @@ export default function PressingHistoryReport({ active, companyId, userId }: His
             </select>
           </label>
           <label className="space-y-1 text-xs">Article code
-            <Input placeholder="Article" value={filters.articleCode || ""}
-              onChange={e => change({ articleCode: e.target.value || undefined })} />
+            <Input placeholder="Article" value={articleText} maxLength={50}
+              onChange={e => setArticleText(e.target.value)} />
           </label>
           <label className="space-y-1 text-xs">Reference / bale search
-            <Input placeholder="Search reference or name" value={filters.search || ""}
-              onChange={e => change({ search: e.target.value || undefined })} />
+            <Input placeholder="Search reference or name" value={searchText} maxLength={100}
+              onChange={e => setSearchText(e.target.value)} />
           </label>
           {canFilterAll && (
             <>
