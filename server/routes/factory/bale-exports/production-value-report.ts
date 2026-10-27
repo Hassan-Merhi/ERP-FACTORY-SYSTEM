@@ -423,22 +423,15 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       const balanceCostPerKg = balanceSnapshot.costPerKg;
       const balanceValue = balanceSnapshot.value;
 
-      // Balance on Table is scoped to the selected report period, NOT the whole
-      // factory history. The period original batches already carry their own
-      // weighted rate and the remaining active-batch kg above. Keep the all-time
-      // snapshot as the fallback when no date range was requested.
-      //
-      // Do not substitute the period rate into production Weight Cost/Profit:
-      // that existing calculation uses balanceBatchRateDecimal independently.
-      const periodBalanceSelected = Boolean(from && to);
-      const periodTable = calculatePeriodTableBalance({
+      // Preserve the original cumulative Balance on Table snapshot in full.
+      // Separately value only the ACTIVE original batches selected by the report's
+      // from/to filter. All Time naturally includes all original batch dates.
+      // These are two DIFFERENT read-only KPIs; neither changes production costs.
+      const filteredTable = calculatePeriodTableBalance({
         remainingPeriodKg: periodOnTableKg,
         mixedPeriodWeightKg: totalMixWeightDecimal,
         mixedPeriodCost: totalMixCostDecimal,
       });
-      const shownTableWeightKg = periodBalanceSelected ? periodTable.weightKg : balanceWeightKg;
-      const shownTableRate = periodBalanceSelected ? periodTable.costPerKg : balanceCostPerKg;
-      const shownTableValue = periodBalanceSelected ? periodTable.value : balanceValue;
 
       // Weight Cost includes all material converted during the selected period:
       // regular bales plus wipers and garbage. Those groups are mutually exclusive
@@ -647,12 +640,17 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           blendedCostPerKg: hideReportCosts ? 0 : blendedCostPerKg,
           batches: safeBatchRows,
         },
+        // Original overall as-of balance: unchanged and independent of the start filter.
         balanceOnTable: {
-          // Monthly/weekly/custom selections show ONLY that selected period's
-          // unused original-batch material. All Time retains its legacy snapshot.
-          weightKg: shownTableWeightKg,
-          costPerKg: hideReportCosts ? 0 : shownTableRate,
-          value: hideReportCosts ? 0 : shownTableValue,
+          weightKg: balanceWeightKg,
+          costPerKg: hideReportCosts ? 0 : balanceCostPerKg,
+          value: hideReportCosts ? 0 : balanceValue,
+        },
+        // NEW, additional filtered balance: only original batches in [from, to].
+        filteredBalanceOnTable: {
+          weightKg: filteredTable.weightKg,
+          costPerKg: hideReportCosts ? 0 : filteredTable.costPerKg,
+          value: hideReportCosts ? 0 : filteredTable.value,
         },
         summary: {
           // Keep batchCost as a compatibility alias for older clients. It now carries the
@@ -663,7 +661,7 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           statusValue: hideReportCosts ? 0 : statusValue,
           costValue: hideReportCosts ? 0 : totalProductionCostValue,
           sellingValue: hideReportCosts ? 0 : totalSellingValue,
-          remainingMaterialValue: hideReportCosts ? 0 : shownTableValue,
+          remainingMaterialValue: hideReportCosts ? 0 : balanceValue,
           consumedMaterialCost: hideReportCosts ? 0 : weightCost,
           profitValue: hideReportCosts ? 0 : profitValue,
           profitMarginPct: hideReportCosts ? 0 : profitMarginPct,
