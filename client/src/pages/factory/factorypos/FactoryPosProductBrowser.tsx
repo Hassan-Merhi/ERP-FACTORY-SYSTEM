@@ -9,6 +9,7 @@ import { Check, Package, Plus, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { formatNum } from "./utils";
 import type { FactoryPosModel } from "./useFactoryPosModel";
 
@@ -19,7 +20,8 @@ export function FactoryPosProductBrowser({ model }: { model: FactoryPosModel }) 
       <div className="p-4 border-b">
         <h3 className="text-sm font-medium mb-2">Products</h3>
         <p className="text-xs text-muted-foreground mb-3">Type or scan a barcode — ↑↓ to navigate, Enter to add</p>
-        <div className="relative">
+        <div className="flex items-center gap-2">
+        <div className="relative min-w-0 flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             ref={model.searchRef}
@@ -34,6 +36,8 @@ export function FactoryPosProductBrowser({ model }: { model: FactoryPosModel }) 
             autoFocus
             data-testid="input-product-search"
           />
+        </div>
+        <MobileBarcodeScanner onScan={(code) => model.scanProductFromCamera(code)} disabled={!model.locationId} />
         </div>
       </div>
       <div className="flex-1 overflow-y-auto p-3">
