@@ -4,14 +4,14 @@
  * inside the transaction. No stock, mix cost, voucher or bale state is mutated.
  */
 import type { Express, Request, Response } from "express";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, isNotNull, sql } from "drizzle-orm";
 import { z, ZodError } from "zod";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
 import {
   factoryBales, factoryPressingMachines, factoryPressingAssignments,
   factoryPressingSessions, factoryPressingConfirmations, factorySettings,
-  factoryPressingShifts, factoryPressingDowntime,
+  factoryPressingShifts, factoryPressingDowntime, factoryPressingCorrections,
   users,
 } from "@shared/schema";
 import {
@@ -292,6 +292,30 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
               } });
           }
           throw new ConfirmationError(409, "PRESSING_REQUEST_ID_REUSED", "Request ID was already used");
+        }
+        // If a supervisor voided a previous scan, link the replacement to the
+        // previous immutable event. This link is append-only, committed in
+        // the SAME transaction as this new confirmation. A normal first scan
+        // creates no correction record.
+        const [voidedPrior] = await tx.select().from(factoryPressingConfirmations)
+          .where(and(eq(factoryPressingConfirmations.companyId, companyId),
+            eq(factoryPressingConfirmations.baleId, bale.id),
+            isNotNull(factoryPressingConfirmations.voidedAt)))
+          .orderBy(desc(factoryPressingConfirmations.voidedAt),
+            desc(factoryPressingConfirmations.id)).limit(1);
+        if (voidedPrior?.voidedBy) {
+          const [originalCorrection] = await tx.select({ id: factoryPressingCorrections.id })
+            .from(factoryPressingCorrections).where(and(
+              eq(factoryPressingCorrections.companyId, companyId),
+              eq(factoryPressingCorrections.confirmationId, voidedPrior.id),
+              eq(factoryPressingCorrections.action, "VOID"),
+            )).orderBy(desc(factoryPressingCorrections.id)).limit(1);
+          await tx.insert(factoryPressingCorrections).values({
+            companyId, confirmationId: voidedPrior.id,
+            replacementConfirmationId: created.id, action: "RECONFIRM",
+            reason: "Replacement pressing scan after supervisor void #" + (originalCorrection?.id ?? voidedPrior.id),
+            supervisorUserId: voidedPrior.voidedBy,
+          });
         }
         await logAudit({
           userId, username: operator.username, companyId,
