@@ -584,6 +584,22 @@ export function useFactoryWorkersModel() {
   const inactiveCount = workers?.filter((w) => !w.active).length ?? 0;
 
   const handleExportSalaries = async () => {
+    // Fetch the same net payable figures shown in the roster, fresh at export time.
+    // Never silently write zeroes if the due-today endpoint is unavailable.
+    let exportAmountDue: typeof amountDue;
+    try {
+      const res = await fetch("/api/factory/workers/amount-due", { credentials: "include" });
+      if (!res.ok) throw new Error("Could not load the current Due Today amounts");
+      const data: unknown = await res.json();
+      if (!data || typeof data !== "object" || Array.isArray(data)) {
+        throw new Error("Invalid Due Today amounts received");
+      }
+      exportAmountDue = data as typeof amountDue;
+    } catch (error: unknown) {
+      toast({ title: "Export failed", description: getErrorMessage(error), variant: "destructive" });
+      return;
+    }
+
     const wb = new ExcelJS.Workbook();
     wb.creator = "Factory System";
     const ws = wb.addWorksheet("Workers Salaries");
@@ -596,9 +612,10 @@ export function useFactoryWorkersModel() {
       { key: "department", width: 18 },
       { key: "salaryType", width: 14 },
       { key: "salary", width: 16 },
+      { key: "dueToday", width: 16 },
     ];
 
-    const headerRow = ws.addRow(["#", "Code", "Name", "Position", "Department", "Salary Type", "Base Salary"]);
+    const headerRow = ws.addRow(["#", "Code", "Name", "Position", "Department", "Salary Type", "Base Salary", "Due Today"]);
     headerRow.eachCell((cell) => {
       cell.font = { bold: true, size: 11 };
       cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E40AF" } };
@@ -614,9 +631,14 @@ export function useFactoryWorkersModel() {
     headerRow.height = 22;
 
     let totalSalary = 0;
+    let totalDueToday = 0;
     filteredWorkers.forEach((w, idx) => {
       const salary = parseFloat(w.baseSalary || "0") || 0;
+      // Absent records (e.g., inactive workers) are blank, not misleading zeroes.
+      const net = exportAmountDue[w.id]?.net;
+      const dueToday = typeof net === "number" && Number.isFinite(net) ? Math.max(0, net) : null;
       totalSalary += salary;
+      totalDueToday += dueToday ?? 0;
       const row = ws.addRow([
         idx + 1,
         w.employeeCode || "",
@@ -625,9 +647,12 @@ export function useFactoryWorkersModel() {
         w.department || "",
         w.salaryType || "Monthly",
         salary,
+        dueToday,
       ]);
-      row.getCell(7).numFmt = "#,##0.00";
-      row.getCell(7).alignment = { horizontal: "right" };
+      for (const column of [7, 8]) {
+        row.getCell(column).numFmt = "#,##0.00";
+        row.getCell(column).alignment = { horizontal: "right" };
+      }
       row.eachCell((cell) => {
         cell.border = {
           top: { style: "thin", color: { argb: "FFE5E7EB" } },
@@ -643,10 +668,12 @@ export function useFactoryWorkersModel() {
       }
     });
 
-    const totalRow = ws.addRow(["", "", `Total Workers: ${filteredWorkers.length}`, "", "", "TOTAL", totalSalary]);
+    const totalRow = ws.addRow(["", "", `Total Workers: ${filteredWorkers.length}`, "", "", "TOTAL", totalSalary, totalDueToday]);
     totalRow.getCell(6).alignment = { horizontal: "right" };
-    totalRow.getCell(7).numFmt = "#,##0.00";
-    totalRow.getCell(7).alignment = { horizontal: "right" };
+    for (const column of [7, 8]) {
+      totalRow.getCell(column).numFmt = "#,##0.00";
+      totalRow.getCell(column).alignment = { horizontal: "right" };
+    }
     totalRow.eachCell((cell) => {
       cell.font = { bold: true, size: 11 };
       cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A5F" } };
