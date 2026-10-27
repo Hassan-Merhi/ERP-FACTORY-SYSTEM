@@ -57,7 +57,7 @@ export default function PressingOfflineQueueStatus({
           </div>
           <div className="rounded-md border p-2 text-center">
             <p className="font-semibold text-emerald-700 dark:text-emerald-300">{snapshot.confirmed}</p>
-            <p className="text-xs text-muted-foreground">Confirmed locally</p>
+            <p className="text-xs text-muted-foreground">Server confirmed</p>
           </div>
           <div className="rounded-md border p-2 text-center">
             <p className="font-semibold text-red-700 dark:text-red-300">{snapshot.rejected}</p>
