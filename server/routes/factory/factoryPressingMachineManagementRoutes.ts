@@ -143,6 +143,73 @@ export function registerFactoryPressingMachineManagementRoutes(app: Express): vo
     } catch (error) { respondError(res, error); }
   });
 
+  /**
+   * Ground-Scan-style access: enabling the Pressing Machines page for a user
+   * is all the setup required. This endpoint creates an internal shared
+   * pressing station and user assignment; there is no machine selector,
+   * shift configuration or manual assignment workflow in the UI.
+   * Existing assignments are preserved to keep historical identity stable.
+   */
+  app.post("/api/factory/pressing-machines/activate", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const ctx = await authorize(req, false);
+      if (ctx.posViewOnly || NON_OPERATORS.has(ctx.role)) {
+        throw new PressingManagementError(403, "PRESSING_WRITE_DENIED",
+          "This user cannot record pressing scans");
+      }
+      const result = await db.transaction(async tx => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(`${ctx.companyId}`::integer, hashtext(`${ctx.userId}`))`);
+        const [existing] = await tx.select({
+          assignmentId: factoryPressingAssignments.id,
+          machineId: factoryPressingMachines.id,
+          machineCode: factoryPressingMachines.machineCode,
+          machineName: factoryPressingMachines.name,
+          machineActive: factoryPressingMachines.active,
+          assignedAt: factoryPressingAssignments.assignedAt,
+        }).from(factoryPressingAssignments).innerJoin(factoryPressingMachines, and(
+          eq(factoryPressingMachines.companyId, factoryPressingAssignments.companyId),
+          eq(factoryPressingMachines.id, factoryPressingAssignments.machineId),
+        )).where(and(
+          eq(factoryPressingAssignments.companyId, ctx.companyId),
+          eq(factoryPressingAssignments.userId, ctx.userId),
+          isNull(factoryPressingAssignments.unassignedAt),
+        )).limit(1);
+        if (existing) return existing;
+        // Shared station is an internal foreign-key anchor. User identity,
+        // NOT a chosen shift or machine, controls all worker reports.
+        await tx.insert(factoryPressingMachines).values({
+          companyId: ctx.companyId, machineCode: "PRESSING-SCAN",
+          name: "Pressing Scan", active: true, createdBy: ctx.userId,
+        }).onConflictDoNothing();
+        const [machine] = await tx.select().from(factoryPressingMachines)
+          .where(and(eq(factoryPressingMachines.companyId, ctx.companyId),
+            eq(factoryPressingMachines.machineCode, "PRESSING-SCAN"))).limit(1);
+        if (!machine?.active) {
+          throw new PressingManagementError(409, "PRESSING_STATION_INACTIVE",
+            "The internal pressing scan station is inactive");
+        }
+        const [assignment] = await tx.insert(factoryPressingAssignments).values({
+          companyId: ctx.companyId, userId: ctx.userId, machineId: machine.id,
+          assignedBy: ctx.userId,
+        }).onConflictDoNothing().returning();
+        const [current] = assignment ? [assignment] :
+          await tx.select().from(factoryPressingAssignments).where(and(
+            eq(factoryPressingAssignments.companyId, ctx.companyId),
+            eq(factoryPressingAssignments.userId, ctx.userId),
+            isNull(factoryPressingAssignments.unassignedAt),
+          )).limit(1);
+        if (!current) throw new PressingManagementError(409, "PRESSING_ASSIGNMENT_FAILED",
+          "Unable to activate pressing access");
+        return {
+          assignmentId: current.id, machineId: machine.id,
+          machineCode: machine.machineCode, machineName: machine.name,
+          machineActive: machine.active, assignedAt: current.assignedAt,
+        };
+      });
+      res.json({ companyId: ctx.companyId, userId: ctx.userId, assignment: result });
+    } catch (error) { respondError(res, error); }
+  });
+
   app.get("/api/factory/pressing-machines", requireAuth, async (req: Request, res: Response) => {
     try { const ctx = await authorize(req, true); res.json(await dashboard(ctx.companyId)); }
     catch (error) { respondError(res, error); }
