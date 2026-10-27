@@ -422,6 +422,20 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       const balanceCostPerKg = balanceSnapshot.costPerKg;
       const balanceValue = balanceSnapshot.value;
 
+      // Balance on Table is scoped to the selected report period, NOT the whole
+      // factory history. The period original batches already carry their own
+      // weighted rate and the remaining active-batch kg above. Keep the all-time
+      // snapshot as the fallback when no date range was requested.
+      //
+      // Do not substitute the period rate into production Weight Cost/Profit:
+      // that existing calculation uses balanceBatchRateDecimal independently.
+      const periodBalanceSelected = Boolean(from && to);
+      const shownTableWeightKg = periodBalanceSelected ? periodOnTableKg : balanceWeightKg;
+      const shownTableRate = periodBalanceSelected ? blendedCostPerKg : balanceCostPerKg;
+      const shownTableValue = periodBalanceSelected
+        ? new BatchRateDecimal(periodOnTableKg).times(blendedCostPerKgDecimal).toDecimalPlaces(2).toNumber()
+        : balanceValue;
+
       // Weight Cost includes all material converted during the selected period:
       // regular bales plus wipers and garbage. Those groups are mutually exclusive
       // in baleRows, so each kilogram is charged once at the historical batch rate
@@ -630,11 +644,11 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           batches: safeBatchRows,
         },
         balanceOnTable: {
-          weightKg: balanceWeightKg,
-          // Historical as-of snapshot through the selected end date. The Selling / Cost
-          // toggle only changes finished-production valuation; table material stays at cost.
-          costPerKg: hideReportCosts ? 0 : balanceCostPerKg,
-          value: hideReportCosts ? 0 : balanceValue,
+          // Monthly/weekly/custom selections show ONLY that selected period's
+          // unused original-batch material. All Time retains its legacy snapshot.
+          weightKg: shownTableWeightKg,
+          costPerKg: hideReportCosts ? 0 : shownTableRate,
+          value: hideReportCosts ? 0 : shownTableValue,
         },
         summary: {
           // Keep batchCost as a compatibility alias for older clients. It now carries the
@@ -645,7 +659,7 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           statusValue: hideReportCosts ? 0 : statusValue,
           costValue: hideReportCosts ? 0 : totalProductionCostValue,
           sellingValue: hideReportCosts ? 0 : totalSellingValue,
-          remainingMaterialValue: hideReportCosts ? 0 : balanceValue,
+          remainingMaterialValue: hideReportCosts ? 0 : shownTableValue,
           consumedMaterialCost: hideReportCosts ? 0 : weightCost,
           profitValue: hideReportCosts ? 0 : profitValue,
           profitMarginPct: hideReportCosts ? 0 : profitMarginPct,
