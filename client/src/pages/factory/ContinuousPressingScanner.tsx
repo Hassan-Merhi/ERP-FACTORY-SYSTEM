@@ -359,14 +359,14 @@ export function ContinuousPressingScanner({
           </Badge>
         </div>
         <p className="text-xs text-muted-foreground">
-          {assignment ? `${assignment.machineCode} · ${assignment.machineName}` : "No machine assigned"}
+          {assignment ? "Scans are recorded under your logged-in user" : "Pressing access not initialized"}
         </p>
       </CardHeader>
       <CardContent className="space-y-3">
         {!usable && (
           <p className="rounded-md border border-amber-400/50 bg-amber-500/10 p-3 text-sm" role="status">
-            {assignment?.machineActive === false ? "This pressing machine is inactive." :
-              "An active machine assignment is required before opening the scanner."}
+            {assignment?.machineActive === false ? "Pressing access is inactive." :
+              "Open Pressing Scan with an authorized Factory account."}
           </p>
         )}
         {running && activeStatus !== "manual" && activeStatus !== "error" && (
@@ -444,7 +444,7 @@ export function ContinuousPressingScanner({
                 Server confirmed: {last.productionDate} {capturedTime(last.confirmedAt, last.timezoneName)}
                 {last.timezoneName ? " (" + last.timezoneName + ")" : ""}
                 {last.weightKg ? " · " + last.weightKg + " KG" : ""}
-                {last.machineName ? " · " + last.machineName : ""}
+                
                 {last.confirmationId ? " · Record #" + last.confirmationId : ""}
               </p>
             )}
