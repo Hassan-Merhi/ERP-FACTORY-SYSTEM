@@ -72,7 +72,7 @@ describe("pressing history client", () => {
   });
 
   it("fetches only authenticated server history, not device-local queued scans", async () => {
-    const fake = vi.fn(async () => ({ ok: true, json: async () => ({
+    const fake = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => ({ ok: true, json: async () => ({
       rows: [detailed], total: 1, summary: { totalBales: 1, totalKg: "45.125", voidedBales: 0 },
       page: 1, limit: 100, mode: "detailed", asOf: "2026-10-27T09:00:00.000Z",
     }) }));
