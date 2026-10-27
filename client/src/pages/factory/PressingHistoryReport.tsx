@@ -12,9 +12,11 @@ import {
   pressingReportFiltersSchema,
   type PressingReportFilters, type PressingReportColumn,
 } from "@shared/pressingReportContracts";
+import PressingCorrectionReview from "./PressingCorrectionReview";
 import {
   fetchPressingReport, exportPressingReport, pressingCell,
   type PressingReportResponse, type PressingSavedView, type PressingReportOptions,
+  type PressingDetailRow,
 } from "./pressing-scanner/pressingReportClient";
 
 const ROOT = "/api/factory/pressing-machines/report";
@@ -360,6 +362,12 @@ export default function PressingHistoryReport({ active, companyId, userId }: His
                 </tbody>
               </table>
             </div>
+            {canFilterAll && !isCondensed && (
+              <PressingCorrectionReview
+                companyId={companyId} userId={userId}
+                rows={report.rows.filter((row): row is PressingDetailRow => "id" in row)}
+              />
+            )}
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
               <span>{report.total.toLocaleString()} {isCondensed ? "groups" : "records"} · Page {report.page} of {totalPages}</span>
               <div className="flex items-center gap-2">
