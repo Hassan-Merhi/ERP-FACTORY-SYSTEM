@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -420,6 +421,11 @@ export default function WipersReEntry() {
                 onKeyDown={handleKeyDown}
                 data-testid="input-product-search"
               />
+              <MobileBarcodeScanner onScan={(code) => {
+                const match = wiperProducts.find((product) => productMatchesSearch(product, code));
+                if (match) addToCart(match);
+                else { setSearchInput(code); setSearchError(`Unknown product: ${code}`); }
+              }} className="mt-2" />
               {searchError && <p className="text-xs text-destructive mt-1">{searchError}</p>}
               {showDropdown && filteredProducts.length > 0 && (
                 <div className="absolute z-50 left-0 right-0 mt-1 bg-popover border rounded-md shadow-md max-h-60 overflow-y-auto">
