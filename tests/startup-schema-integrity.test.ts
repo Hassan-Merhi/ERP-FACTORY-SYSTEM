@@ -343,8 +343,8 @@ describe("startup schema integrity", () => {
     ]);
     expect(
       startupMigrations.slice(
-        -1 - zambiaHistoricalPurchaseCostSchema.length - factoryPressingMachineTrackingSchema.length + factoryPressingHistoryReportIndexes.length,
-        -zambiaHistoricalPurchaseCostSchema.length - factoryPressingMachineTrackingSchema.length + factoryPressingHistoryReportIndexes.length
+        -1 - zambiaHistoricalPurchaseCostSchema.length - factoryPressingMachineTrackingSchema.length - factoryPressingHistoryReportIndexes.length,
+        -zambiaHistoricalPurchaseCostSchema.length - factoryPressingMachineTrackingSchema.length - factoryPressingHistoryReportIndexes.length
       )
     ).toEqual(posPortDepartureDateSchema);
   });
@@ -352,7 +352,7 @@ describe("startup schema integrity", () => {
   it("preserves the Zambia native-Kwacha purchase columns before stage 037, additive and idempotent", () => {
     expect(zambiaHistoricalPurchaseCostSchema).toHaveLength(13);
     expect(startupMigrations.slice(
-      -zambiaHistoricalPurchaseCostSchema.length - factoryPressingMachineTrackingSchema.length + factoryPressingHistoryReportIndexes.length,
+      -zambiaHistoricalPurchaseCostSchema.length - factoryPressingMachineTrackingSchema.length - factoryPressingHistoryReportIndexes.length,
       -factoryPressingMachineTrackingSchema.length + factoryPressingHistoryReportIndexes.length
     )).toEqual(
       zambiaHistoricalPurchaseCostSchema
