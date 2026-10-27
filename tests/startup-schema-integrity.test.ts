@@ -185,7 +185,7 @@ import { factoryPressingMachineTrackingSchema } from "../server/startup-schema/0
  * constraint behind the existing 034/035 stages, taking the count from 1429 to
  * 1442. The pre-034 baseline hash is unchanged; nothing moved.
  */
-const EXPECTED_STATEMENT_COUNT = 1473; // 1442 existing + 31 Phase 1 pressing-machine statements
+const EXPECTED_STATEMENT_COUNT = 1479; // 1442 existing + 37 Phase 1 pressing-machine statements
 const EXPECTED_CONTENT_HASH = "29546605193be3d475c6e26253b6667ad850dbc706bb4815be71b1e383a0bf2d";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
@@ -373,7 +373,7 @@ describe("startup schema integrity", () => {
   });
 
   it("appends the pressing-machine stage 037 after all prior stages", () => {
-    expect(factoryPressingMachineTrackingSchema).toHaveLength(31);
+    expect(factoryPressingMachineTrackingSchema).toHaveLength(37);
     expect(startupMigrations.slice(-factoryPressingMachineTrackingSchema.length)).toEqual(
       factoryPressingMachineTrackingSchema
     );
@@ -382,6 +382,8 @@ describe("startup schema integrity", () => {
     expect(ddl).toContain("WHERE voided_at IS NULL");
     expect(ddl).toContain("factory_pressing_assignments_active_user_uk");
     expect(ddl).toContain("factory_pressing_corrections_immutable_trg");
+    expect(ddl).toContain("factory_pressing_confirmations_protect_trg");
+    expect(ddl).toContain("factory_pressing_confirmations_session_identity_fk");
     expect(ddl).not.toMatch(/UPDATE\\s+factory_bales\\s+SET/i);
     expect(ddl).not.toMatch(/INSERT\\s+INTO\\s+(?:stock_movements|voucher_entries)/i);
   });
