@@ -37,6 +37,7 @@ export const factoryPressingAssignments = pgTable("factory_pressing_assignments"
   unassignedBy: varchar("unassigned_by", { length: 255 }),
 }, (t) => ({
   tenantIdUnique: uniqueIndex("factory_pressing_assignments_tenant_id_uk").on(t.companyId, t.id),
+  identityUnique: uniqueIndex("factory_pressing_assignments_identity_uk").on(t.companyId, t.id, t.machineId, t.userId),
   activeUserUnique: uniqueIndex("factory_pressing_assignments_active_user_uk").on(t.companyId, t.userId).where(sql`${t.unassignedAt} IS NULL`),
   machineDateIdx: index("factory_pressing_assignments_machine_date_idx").on(t.companyId, t.machineId, t.assignedAt.desc()),
   machineFk: foreignKey({ name: "factory_pressing_assignments_machine_fk", columns: [t.companyId, t.machineId], foreignColumns: [factoryPressingMachines.companyId, factoryPressingMachines.id] }).onDelete("restrict"),
@@ -74,10 +75,12 @@ export const factoryPressingSessions = pgTable("factory_pressing_sessions", {
   endedAt: timestamp("ended_at", { withTimezone: true }),
 }, (t) => ({
   tenantIdUnique: uniqueIndex("factory_pressing_sessions_tenant_id_uk").on(t.companyId, t.id),
+  identityUnique: uniqueIndex("factory_pressing_sessions_identity_uk").on(t.companyId, t.id, t.machineId, t.assignmentId, t.userId),
   activeUserUnique: uniqueIndex("factory_pressing_sessions_active_user_uk").on(t.companyId, t.userId).where(sql`${t.endedAt} IS NULL`),
   machineDateIdx: index("factory_pressing_sessions_machine_date_idx").on(t.companyId, t.machineId, t.startedAt.desc()),
   machineFk: foreignKey({ name: "factory_pressing_sessions_machine_fk", columns: [t.companyId, t.machineId], foreignColumns: [factoryPressingMachines.companyId, factoryPressingMachines.id] }).onDelete("restrict"),
   assignmentFk: foreignKey({ name: "factory_pressing_sessions_assignment_fk", columns: [t.companyId, t.assignmentId], foreignColumns: [factoryPressingAssignments.companyId, factoryPressingAssignments.id] }).onDelete("restrict"),
+  assignmentIdentityFk: foreignKey({ name: "factory_pressing_sessions_assignment_identity_fk", columns: [t.companyId, t.assignmentId, t.machineId, t.userId], foreignColumns: [factoryPressingAssignments.companyId, factoryPressingAssignments.id, factoryPressingAssignments.machineId, factoryPressingAssignments.userId] }).onDelete("restrict"),
   shiftFk: foreignKey({ name: "factory_pressing_sessions_shift_fk", columns: [t.companyId, t.shiftId], foreignColumns: [factoryPressingShifts.companyId, factoryPressingShifts.id] }).onDelete("restrict"),
   intervalCheck: check("factory_pressing_sessions_interval_ck", sql`${t.endedAt} IS NULL OR ${t.endedAt} >= ${t.startedAt}`),
 }));
@@ -118,6 +121,7 @@ export const factoryPressingConfirmations = pgTable("factory_pressing_confirmati
   machineFk: foreignKey({ name: "factory_pressing_confirmations_machine_fk", columns: [t.companyId, t.machineId], foreignColumns: [factoryPressingMachines.companyId, factoryPressingMachines.id] }).onDelete("restrict"),
   assignmentFk: foreignKey({ name: "factory_pressing_confirmations_assignment_fk", columns: [t.companyId, t.assignmentId], foreignColumns: [factoryPressingAssignments.companyId, factoryPressingAssignments.id] }).onDelete("restrict"),
   sessionFk: foreignKey({ name: "factory_pressing_confirmations_session_fk", columns: [t.companyId, t.sessionId], foreignColumns: [factoryPressingSessions.companyId, factoryPressingSessions.id] }).onDelete("restrict"),
+  sessionIdentityFk: foreignKey({ name: "factory_pressing_confirmations_session_identity_fk", columns: [t.companyId, t.sessionId, t.machineId, t.assignmentId, t.userId], foreignColumns: [factoryPressingSessions.companyId, factoryPressingSessions.id, factoryPressingSessions.machineId, factoryPressingSessions.assignmentId, factoryPressingSessions.userId] }).onDelete("restrict"),
   shiftFk: foreignKey({ name: "factory_pressing_confirmations_shift_fk", columns: [t.companyId, t.shiftId], foreignColumns: [factoryPressingShifts.companyId, factoryPressingShifts.id] }).onDelete("restrict"),
   weightCheck: check("factory_pressing_confirmations_weight_ck", sql`${t.weightKg} >= 0`),
   voidCheck: check("factory_pressing_confirmations_void_ck", sql`(${t.voidedAt} IS NULL AND ${t.voidedBy} IS NULL) OR (${t.voidedAt} IS NOT NULL AND ${t.voidedBy} IS NOT NULL)`),
