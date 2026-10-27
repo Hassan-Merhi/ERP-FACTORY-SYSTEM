@@ -52,7 +52,10 @@ export async function createNativeCameraDecoder(): Promise<CameraBarcodeDecoder 
       ? await Detector.getSupportedFormats()
       : [...PRESSING_FORMATS];
     const selected = PRESSING_FORMATS.filter((format) => supportedFormats.includes(format));
-    if (!selected.length) return null;
+    // Some browsers report a native detector that only understands QR codes.
+    // Factory labels are Code 128, so using that QR-only detector would make
+    // every bale scan appear to hang forever rather than trying ZXing.
+    if (!selected.includes("code_128")) return null;
     const detector = new Detector({ formats: selected });
     return {
       engine: "native",
@@ -91,6 +94,7 @@ export async function createBundledCameraDecoder(): Promise<CameraBarcodeDecoder
     hints.set(DecodeHintType.TRY_HARDER, false);
     const reader = new BrowserMultiFormatReader(hints as Map<never, never>);
     let canvas: HTMLCanvasElement | null = document.createElement("canvas");
+    let attempts = 0;
     const context = canvas.getContext("2d", { willReadFrequently: true });
     if (!context) return null;
     return {
@@ -100,12 +104,18 @@ export async function createBundledCameraDecoder(): Promise<CameraBarcodeDecoder
         const width = video.videoWidth,
           height = video.videoHeight;
         if (!width || !height) return [];
-        const scale = Math.min(1, ZXING_MAX_EDGE / Math.max(width, height));
+        // Barcode labels are normally held inside the visible targeting box.
+        // Decode its middle band on most frames (far fewer pixels to process),
+        // but periodically scan the full image so off-centre codes still work.
+        const fullFrame = ++attempts % 5 === 0;
+        const top = fullFrame ? 0 : Math.floor(height * 0.22);
+        const captureHeight = fullFrame ? height : Math.max(1, Math.floor(height * 0.56));
+        const scale = Math.min(1, ZXING_MAX_EDGE / Math.max(width, captureHeight));
         const targetWidth = Math.max(1, Math.round(width * scale));
-        const targetHeight = Math.max(1, Math.round(height * scale));
+        const targetHeight = Math.max(1, Math.round(captureHeight * scale));
         if (canvas.width !== targetWidth) canvas.width = targetWidth;
         if (canvas.height !== targetHeight) canvas.height = targetHeight;
-        context.drawImage(video, 0, 0, targetWidth, targetHeight);
+        context.drawImage(video, 0, top, width, captureHeight, 0, 0, targetWidth, targetHeight);
         try {
           const result = reader.decodeFromCanvas(canvas);
           const text = result?.getText?.();
