@@ -11,6 +11,7 @@ import { computeHistoricalFactoryAssetLiabilityOperations } from "../../../servi
 import { loadFactoryHistoricalCoverage } from "../../../services/factory/netPositionHistoryCoverage";
 import { loadFxWalletHistoryGaps } from "../../../services/factory/netPositionFxWalletCoverage";
 import { finishFactoryNetPosition } from "./netPositionHistoricalResponse";
+import { projectFactoryNetPositionMonetaryFx } from "./netPositionMonetaryFxProjection";
 import { computeLiveFactoryPrepaidRent } from "./netPositionLiveRent";
 import {
   fxAgentTablesExist,
@@ -408,7 +409,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       });
       const ledgerOnUsTotal = round2(ledgerOnUs.reduce((s: number, a) => s + a.value, 0));
 
-      const customerItems: { name: string; balanceUsd: number; ledgerAccountId?: number }[] = [];
+      const customerItems: { customerId: number; name: string; balanceUsd: number; ledgerAccountId?: number }[] = [];
 
       if (allCustomersForNP.length > 0) {
         // Match the Parties page's combined ledger + operational balance exactly.
@@ -423,6 +424,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
           const balance = (f?.ledger ?? new MoneyDecimal(0)).plus(f?.memoTotal ?? 0);
           if (balance.abs().gte(0.01))
             customerItems.push({
+              customerId: c.id,
               name: c.legalName || `Customer #${c.id}`,
               balanceUsd: round2(balance.toNumber()),
               ledgerAccountId: c.ledgerAccountId || undefined,
@@ -692,6 +694,8 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
             ...(c.ledgerAccountId ? { id: c.ledgerAccountId } : {}),
             name: c.name,
             code: "CUSTOMER_DR",
+            partyKind: "customer",
+            partyId: c.customerId,
             value: round2(c.balanceUsd),
             category: "Customer",
           })),
@@ -767,6 +771,8 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
             ...(c.ledgerAccountId ? { id: c.ledgerAccountId } : {}),
             name: c.name,
             code: "CUSTOMER_CR",
+            partyKind: "customer",
+            partyId: c.customerId,
             value: round2(Math.abs(c.balanceUsd)),
             category: "Customer",
           })),
@@ -827,15 +833,24 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         payrollPayable: employeeSalariesPayable,
       };
 
-      res.json(
-        await finishFactoryNetPosition({
+      const finished = await finishFactoryNetPosition({
+        companyId,
+        scope: asOfContext,
+        body: responseBody,
+        valuationMode,
+        historyCoverage,
+        pipelineWarnings: historicalPipeline?.warnings ?? [],
+        assetWarnings: historicalAssets?.warnings ?? [],
+      });
+
+      // Today's verified monetary ledger/customer rows at the current company
+      // rate (netPositionMonetaryFxProjection.ts); historical reports and
+      // pinned secondary companies keep the booked USD.
+      return res.json(
+        await projectFactoryNetPositionMonetaryFx(finished, {
           companyId,
-          scope: asOfContext,
-          body: responseBody,
-          valuationMode,
-          historyCoverage,
-          pipelineWarnings: historicalPipeline?.warnings ?? [],
-          assetWarnings: historicalAssets?.warnings ?? [],
+          isHistorical: asOfContext.isHistorical,
+          sessionCompanyId: req.session?.currentCompanyId,
         })
       );
     } catch (error: unknown) {

@@ -745,6 +745,50 @@
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
+    "/api/factory/pressing-machines": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/pressing-machines/analytics": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/pressing-machines/corrections": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/pressing-machines/downtime": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/pressing-machines/history": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/pressing-machines/me": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/pressing-machines/report": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/pressing-machines/report/options": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/pressing-machines/report/views": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/pressing-machines/shifts": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/pressing-machines/shifts/current": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
     "/api/factory/production-positions": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
@@ -1447,7 +1491,7 @@
     },
     "/api/reports/balance-sheet": {
       "status": 200,
-      "shape": "{asOfDate:scalar,assets:{lines:[],total:scalar},balanced:scalar,difference:scalar,equity:{currentEarnings:scalar,lines:[],total:scalar},liabilities:{lines:[],total:scalar},unclassified:{lines:[],total:scalar}}"
+      "shape": "{asOfDate:scalar,assets:{lines:[],total:scalar},balanced:scalar,currencyRevaluation:{appliedAccountKeys:[],bookBalancesModified:scalar,currentMonetaryTranslationApplied:scalar,fxVouchersPosted:scalar,needsReviewCount:scalar,rateErrorsByCurrency:{},skippedAccountKeys:[{…}],translationDifferenceUsd:scalar,unresolvedAccountCount:scalar,valuationMode:scalar},difference:scalar,equity:{currentEarnings:scalar,lines:[],total:scalar},liabilities:{lines:[],total:scalar},unclassified:{lines:[],total:scalar}}"
     },
     "/api/reports/closing-stock-summary": {
       "status": 200,
@@ -1603,7 +1647,7 @@
     },
     "/api/sales-report/cogs-reconciliation": {
       "status": 200,
-      "shape": "{adjustedCostProfit:scalar,closingStock:scalar,formula:scalar,noteInventoryNet:scalar,openingStock:scalar,reconciledCogs:scalar,reconciliation:scalar,stockAdjustmentNet:scalar,stockReceived:scalar,storedCogs:scalar,storedCostProfit:scalar,totalSales:scalar}"
+      "shape": "{accountingBasis:scalar,adjustedCostProfit:scalar,closingStock:scalar,formula:scalar,inventoryBridgeIsJournalReconciliation:scalar,noteInventoryNet:scalar,openingStock:scalar,reconciledCogs:scalar,reconciliation:scalar,reconciliationInterpretation:scalar,stockAdjustmentNet:scalar,stockReceived:scalar,storedCogs:scalar,storedCostProfit:scalar,totalSales:scalar}"
     },
     "/api/sales-report/summary": {
       "status": 200,
@@ -1819,7 +1863,7 @@
     },
     "/api/stats/net-profit": {
       "status": 200,
-      "shape": "{currency:{currentCashBankTranslationApplied:scalar,historicalBaseCreditTotal:scalar,historicalBaseDebitTotal:scalar,historicalValuesLocked:scalar,nativeCreditByCurrency:{},nativeDebitByCurrency:{},provisionalReason:scalar,rateConvention:scalar,totalsProvisional:scalar,unresolvedLegacyEntryCount:scalar,unresolvedLegacyRawNet:scalar},currencyRevaluation:{appliedToCurrentSnapshotOnly:scalar,currentCashBankTranslationDifference:scalar,currentCfaPerUsd:scalar,currentTranslatedBankAccountIds:[],currentTranslatedLedgerAccountIds:[scalar],currentZmwPerUsd:scalar,reportTotalsProvisional:scalar,unresolvedAccountCount:scalar,unresolvedAccounts:[]},equity:{accounts:[],includedInNetPosition:scalar,total:scalar},expenses:{accounts:[],breakdown:[],total:scalar},expensesTotal:scalar,forUs:{accounts:[{…}],breakdown:[{…}],total:scalar},forUsTotal:scalar,income:{accounts:[],breakdown:[],total:scalar},incomeTotal:scalar,netPosition:scalar,netPositionBreakdown:{assets:{breakdown:[…],total:scalar},equity:{accounts:[],includedInNetPosition:scalar,total:scalar},expenses:{breakdown:[],total:scalar},income:{breakdown:[],total:scalar},liabilities:{breakdown:[],total:scalar},netPosition:scalar},netPositionLabel:scalar,netProfit:scalar,netWorth:scalar,notInLedger:{label:scalar,lines:[],total:scalar},onUs:{accounts:[],breakdown:[],total:scalar},onUsTotal:scalar,ownersCapital:scalar,spPosProfit:scalar,totalExpenses:scalar,totalIncome:scalar}"
+      "shape": "{currency:{currentCashBankTranslationApplied:scalar,currentMonetaryTranslationApplied:scalar,historicalBaseCreditTotal:scalar,historicalBaseDebitTotal:scalar,historicalValuesLocked:scalar,nativeCreditByCurrency:{},nativeDebitByCurrency:{},provisionalReason:scalar,rateConvention:scalar,totalsProvisional:scalar,unresolvedLegacyEntryCount:scalar,unresolvedLegacyRawNet:scalar},currencyRevaluation:{appliedAccountKeys:[],appliedToCurrentSnapshotOnly:scalar,currentCashBankTranslationDifference:scalar,currentCfaPerUsd:scalar,currentMonetaryTranslationApplied:scalar,currentMonetaryTranslationDifferenceUsd:scalar,currentTranslatedBankAccountIds:[],currentTranslatedLedgerAccountIds:[],currentZmwPerUsd:scalar,needsReviewCount:scalar,rateErrorsByCurrency:{},reportTotalsProvisional:scalar,skippedAccountKeys:[{…}],unresolvedAccountCount:scalar,unresolvedAccounts:[],valuationMode:scalar},equity:{accounts:[],includedInNetPosition:scalar,total:scalar},expenses:{accounts:[],breakdown:[],total:scalar},expensesTotal:scalar,forUs:{accounts:[{…}],breakdown:[{…}],total:scalar},forUsTotal:scalar,income:{accounts:[],breakdown:[],total:scalar},incomeTotal:scalar,netPosition:scalar,netPositionBreakdown:{assets:{breakdown:[…],total:scalar},equity:{accounts:[],includedInNetPosition:scalar,total:scalar},expenses:{breakdown:[],total:scalar},income:{breakdown:[],total:scalar},liabilities:{breakdown:[],total:scalar},netPosition:scalar},netPositionLabel:scalar,netProfit:scalar,netWorth:scalar,notInLedger:{label:scalar,lines:[],total:scalar},onUs:{accounts:[],breakdown:[],total:scalar},onUsTotal:scalar,ownersCapital:scalar,spPosProfit:scalar,totalExpenses:scalar,totalIncome:scalar}"
     },
     "/api/stats/stock-summary": {
       "status": 200,

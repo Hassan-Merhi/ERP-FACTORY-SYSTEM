@@ -477,6 +477,10 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   }
 
   // Stock Entry operational child tabs.
+  // Physical pressing tracking is a separate tab from stock entry pressing/finalization.
+  if (hasPrefix(path, "/pressing-machines")) {
+    return requirement("factory/stock-entry", ["hide_tab_stockentry_pressing_machines"]);
+  }
   if (hasPrefix(path, "/daily-bale-scans")) {
     return requirement("factory/stock-entry", ["hide_tab_stockentry_daily_scan"]);
   }

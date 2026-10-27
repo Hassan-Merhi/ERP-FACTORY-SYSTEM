@@ -56,6 +56,14 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [factory-flow.md](factory-flow.md) | Bales, production, payroll, raw materials |
 | [factory-container-planner.md](factory-container-planner.md) | Stock Allocation V5 container planning, saved drafts, and live reconciliation |
 | [factory-net-position-historical.md](factory-net-position-historical.md) | Factory Net Position as-of dates: known-at-cutoff rules, verification and history limits |
+| [pressing-machine-tracking-phase1.md](pressing-machine-tracking-phase1.md) | Pressing Machines tracking Phase 1: schema, lifetime one-active-confirmation-per-bale index, tenant FKs, immutable triggers |
+| [pressing-machine-tracking-phase2.md](pressing-machine-tracking-phase2.md) | Pressing Machines Phase 2: supervisor machine catalog, one active assignment per operator, sessions |
+| [pressing-machine-tracking-phase3.md](pressing-machine-tracking-phase3.md) | Pressing Machines Phase 3: continuous phone-camera scanner, native and bundled ZXing decoders, manual fallback |
+| [pressing-machine-tracking-phase4.md](pressing-machine-tracking-phase4.md) | Pressing Machines Phase 4: server confirmation engine, idempotent request IDs, duplicate and eligibility rejections |
+| [pressing-machine-tracking-phase5.md](pressing-machine-tracking-phase5.md) | Pressing Machines Phase 5: IndexedDB offline queue, ordered retry with immutable request IDs, Pending/Sending/Confirmed/Rejected states |
+| [pressing-machine-tracking-phase6.md](pressing-machine-tracking-phase6.md) | Pressing Machines Phase 6: permanent history, filters, saved views, Excel export limits |
+| [pressing-machine-tracking-phase7.md](pressing-machine-tracking-phase7.md) | Pressing Machines Phase 7: configured shifts, overnight rollover, recorded downtime, observed analytics |
+| [pressing-machine-tracking-phase8.md](pressing-machine-tracking-phase8.md) | Pressing Machines Phase 8: supervisor voids, append-only corrections, audited rescans and the executed verification record |
 | [erp-test-company.md](erp-test-company.md) | Provisioning an isolated ERP test company and its limited tester account |
 | [automatic-priority-print-loading.md](automatic-priority-print-loading.md) | Automatic Priority Printing & Loading: company switch, automatic loading allocation, priority-colored labels, physical bale deletion and Priority #1 recovery |
 | [priority-scan-fixed-palette-color-block.md](priority-scan-fixed-palette-color-block.md) | Priority Scan fixed 11-color palette, solid color-box priority labels, legacy-color moves and saved-color print/reprint checks |
@@ -64,6 +72,12 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [golden-coast-phase16-audit.md](golden-coast-phase16-audit.md) | Golden Coast payable/equity separation invariants and the unmerged phase branches |
 | [group-net-position.md](group-net-position.md) | Combined What We Have, What We Owe and Net Position across active ERP companies |
 | [multi-currency-phase8-account-api.md](multi-currency-phase8-account-api.md) | Account statement currency contract and safety boundaries |
+| [fx-monetary-valuation/phase-1-source-audit.md](fx-monetary-valuation/phase-1-source-audit.md) | FX monetary valuation: four eligible categories (cash/bank, customers, loans, approved monetary assets), ownership and double-count rules, acceptance matrix |
+| [fx-monetary-valuation/phase-2-implementation.md](fx-monetary-valuation/phase-2-implementation.md) | FX monetary valuation: read-only valuation engine and `/api/accounts/multi-currency/monetary-valuation` |
+| [fx-monetary-valuation/phase-3-rate-save-refresh.md](fx-monetary-valuation/phase-3-rate-save-refresh.md) | FX monetary valuation: Settings and daily-popup rate save, cache and realtime refresh |
+| [fx-monetary-valuation/phase-5-historical-cache-audit.md](fx-monetary-valuation/phase-5-historical-cache-audit.md) | FX monetary valuation: dated rate preview, historical lock, rate-save idempotency and audit |
+| [fx-monetary-valuation/phase-6-reconciliation-release-gate.md](fx-monetary-valuation/phase-6-reconciliation-release-gate.md) | FX monetary valuation: reconciliation gates and release checklist |
+| [fx-monetary-valuation/phase-7-verification-and-fixes.md](fx-monetary-valuation/phase-7-verification-and-fixes.md) | FX monetary valuation: defects found in Phases 1–6, their fixes, executed verification and remaining release blockers |
 
 ## Operating it
 

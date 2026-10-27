@@ -19,6 +19,7 @@ import { SummaryCards } from "./containerverification/SummaryCards";
 import type { LoadedItem, LoadedItemDraft, VerificationResult } from "./containerverification/types";
 import type { ContainerDetailData } from "./containers/types";
 import type { Supplier, SupplierProforma } from "@shared/schema";
+import type { AuthMe } from "@shared/apiTypes";
 
 type SupplierIdentity = {
   id?: number;
@@ -48,6 +49,10 @@ export default function ContainerVerification() {
   useEscapeToParent();
   const containerId = parseInt(params.containerId);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Keep barcode-conflict diagnostics visible only to the Developer role.
+  const { data: currentUser } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
+  const isDeveloper = currentUser?.role === "Developer";
 
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>("");
   const [selectedProformaId, setSelectedProformaId] = useState<string>("");
@@ -482,7 +487,7 @@ export default function ContainerVerification() {
 
       {verificationResult && (
         <>
-          <AliasConflictAlert conflicts={verificationResult.aliasConflicts ?? []} />
+          {isDeveloper && <AliasConflictAlert conflicts={verificationResult.aliasConflicts ?? []} />}
           <div className="flex items-center gap-2 mb-4">
             <Button
               variant={viewMode === "summary" ? "default" : "outline"}

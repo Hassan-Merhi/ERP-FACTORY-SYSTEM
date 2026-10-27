@@ -28,6 +28,8 @@ import { isSystemOnlyLedgerAccount } from "../../lib/systemOnlyLedgerAccounts";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 import { getCustomerLedgerAndMemo, splitBalanceFields } from "../factory/customers-core/customerLedgerSplit";
+import { getMonetaryFxValuation } from "../../services/accounting/monetaryFxValuationService";
+import { applyCurrentAccountsFxOverlay } from "../../services/accounting/monetaryFxReportOverlay";
 
 export async function serveAccountListForCompany(req: Request, res: Response, companyId: number, attempt = 0): Promise<unknown> {
   try {
@@ -372,9 +374,25 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
             ).filter((s): s is NonNullable<typeof s> => s !== null);
           })();
 
+    // Phase 4: current USD presentation only. Never restate the accounting
+    // opening, historical book movement, date-filtered closing, or memo.
+    // A Factory-pinned secondary tenant is a separate authorized scope, so
+    // this overlay runs only when it matches the active session company.
+    let currentUsdAccounts = accounts;
+    if (!balStartDate && !effectiveEndDate && Number(req.session?.currentCompanyId) === companyId) {
+      try {
+        const valuation = await getMonetaryFxValuation(companyId);
+        currentUsdAccounts = applyCurrentAccountsFxOverlay(accounts, valuation);
+      } catch (error) {
+        // Preserve book balances when original currency evidence, company
+        // permissions, or the rate resolver are not safe to revalue.
+        logger.error("[accounts/list] Current monetary FX view unavailable; preserving book USD", { companyId, error });
+      }
+    }
+
     if (analyticsProfile) {
       return res.json({
-        accounts: accounts
+        accounts: currentUsdAccounts
           .filter((account) => account.type === "ledger" || account.type === "bank" || account.type === "fixedAsset")
           .map((account) => ({
             id: account.id,
@@ -395,7 +413,7 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
 
     // asOfDate stays a date for display; allPosted marks a balance of everything posted.
     res.json({
-      accounts: [...accounts, ...supplierAccountsList],
+      accounts: [...currentUsdAccounts, ...supplierAccountsList],
       asOfDate: effectiveEndDate ?? asOfDate,
       allPosted: !effectiveEndDate,
     });
