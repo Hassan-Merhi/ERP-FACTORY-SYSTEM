@@ -30,6 +30,7 @@ export interface PressingCondensedRow {
   shiftId: number | null;
   articleCode: string | null;
   voided: boolean;
+  timezoneName: string;
   bales: number;
   weightKg: string;
   firstScanAt: string;
@@ -54,6 +55,8 @@ export interface PressingSavedView {
 }
 export interface PressingReportOptions {
   canViewAll: boolean;
+  serverToday: string;
+  timeZone: string;
   machines: Array<{ id: number; code: string; name: string; active: boolean }>;
   operators: Array<{ userId: string; name: string }>;
 }
@@ -108,8 +111,8 @@ export function pressingCell(
       ? Number(row.secondsSincePrevious) : "";
     case "status": return (detailed ? row.voidedAt !== null : row.voided) ? "Voided" : "Confirmed";
     case "bales": return detailed ? 1 : row.bales;
-    case "firstScanAt": return detailed ? "" : pressingDisplayDateTime(row.firstScanAt);
-    case "lastScanAt": return detailed ? "" : pressingDisplayDateTime(row.lastScanAt);
+    case "firstScanAt": return detailed ? "" : pressingDisplayDateTime(row.firstScanAt, row.timezoneName);
+    case "lastScanAt": return detailed ? "" : pressingDisplayDateTime(row.lastScanAt, row.timezoneName);
   }
 }
 // Excel formula injection protection for product and operator names.
