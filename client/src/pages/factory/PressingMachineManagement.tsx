@@ -1,280 +1,208 @@
-import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { Factory, History, Plus, UserRound, Wrench, ShieldCheck } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Camera, ChevronDown, ChevronUp, ScanLine, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { ContinuousPressingScanner } from "./ContinuousPressingScanner";
+import { useCompany } from "@/contexts/CompanyContext";
+import { ContinuousPressingScanner, type PressingScanOutcome } from "./ContinuousPressingScanner";
 import { usePressingOfflineSync } from "./pressing-scanner/usePressingOfflineSync";
 import PressingOfflineQueueStatus from "./PressingOfflineQueueStatus";
 import PressingHistoryReport from "./PressingHistoryReport";
-import PressingShiftAnalytics from "./PressingShiftAnalytics";
-import { useCompany } from "@/contexts/CompanyContext";
 
 const ROOT = "/api/factory/pressing-machines";
-type Assignment = { id: number; machineId: number; userId: string; username: string | null; assignedAt: string };
-type Machine = { id: number; machineCode: string; name: string; active: boolean; targetBalesPerHour: string | null };
-type Operator = { id: string; username: string; role: string };
-type Dashboard = { machines: Machine[]; assignments: Assignment[]; operators: Operator[] };
-type MyMachine = {
-  companyId: number;
-  userId: string;
-  canManage: boolean;
-  assignment: null | { assignmentId: number; machineId: number; machineCode: string; machineName: string; machineActive: boolean; assignedAt: string };
+type Assignment = {
+  assignmentId: number; machineId: number; machineCode: string;
+  machineName: string; machineActive: boolean; assignedAt: string;
 };
-type HistoricalAssignment = Assignment & {
-  machineCode: string; machineName: string; assignedBy: string;
-  unassignedAt: string | null; unassignedBy: string | null;
+type MyAccess = {
+  companyId: number; userId: string; canManage: boolean; assignment: Assignment | null;
 };
-const formatted = (time: string) => new Date(time).toLocaleString();
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : "Request failed";
-}
-
-function MachineManagerCard({
-  machine, operators, assigned, busy, change,
-}: {
-  machine: Machine;
-  operators: Operator[];
-  assigned: Assignment[];
-  busy: boolean;
-  change: (url: string, payload: Record<string, unknown>) => void;
-}) {
-  const [name, setName] = useState(machine.name);
-  const [operatorId, setOperatorId] = useState("");
-  return (
-    <Card data-testid={`pressing-machine-${machine.id}`}>
-      <CardHeader className="space-y-1 pb-2">
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-base">{machine.machineCode}</CardTitle>
-          <Badge variant={machine.active ? "default" : "secondary"}>
-            {machine.active ? "Active" : "Inactive"}
-          </Badge>
-        </div>
-        <p className="text-xs text-muted-foreground">Machine ID {machine.id}</p>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="flex gap-2">
-          <Input aria-label={`Machine ${machine.machineCode} name`} value={name}
-            onChange={event => setName(event.target.value)} maxLength={160} disabled={busy} />
-          <Button size="sm" variant="outline" disabled={busy || !name.trim() || name.trim() === machine.name}
-            onClick={() => change(`${ROOT}/${machine.id}/update`, { name: name.trim() })}>Save</Button>
-        </div>
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-sm text-muted-foreground">Assigned operators: {assigned.length}</span>
-          <Button size="sm" variant="outline" disabled={busy}
-            onClick={() => change(`${ROOT}/${machine.id}/update`, { active: !machine.active })}>
-            {machine.active ? "Deactivate" : "Activate"}
-          </Button>
-        </div>
-        {assigned.map(a => (
-          <div key={a.id} className="flex items-center justify-between rounded-md border p-2 gap-2">
-            <span className="min-w-0 truncate text-sm"><UserRound className="mr-1 inline h-4 w-4" />{a.username || a.userId}</span>
-            <Button size="sm" variant="outline" disabled={busy}
-              onClick={() => change(`${ROOT}/assignments/${a.id}/end`, {})}>Unassign</Button>
-          </div>
-        ))}
-        {machine.active && (
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <select aria-label={`Assign operator to ${machine.machineCode}`} value={operatorId}
-              onChange={event => setOperatorId(event.target.value)} disabled={busy}
-              className="min-h-10 w-full rounded-md border bg-background px-3 text-sm">
-              <option value="">Select an employee...</option>
-              {operators.map(op => <option key={op.id} value={op.id}>{op.username} ({op.role})</option>)}
-            </select>
-            <Button disabled={busy || !operatorId} onClick={() => {
-              change(`${ROOT}/assignments`, { machineId: machine.id, userId: operatorId });
-              setOperatorId("");
-            }}>Assign</Button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
+const problem = (error: unknown) => error instanceof Error ? error.message : "Unable to open pressing scan";
 
 export default function PressingMachineManagement({ active }: { active: boolean }) {
-  const { toast } = useToast();
   const { selectedCompany } = useCompany();
-  const [code, setCode] = useState("");
-  const [name, setName] = useState("");
-  const [showHistory, setShowHistory] = useState(false);
-  const myQuery = useQuery<MyMachine>({
+  const { toast } = useToast();
+  const [barcode, setBarcode] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [last, setLast] = useState<{ barcode: string; outcome: PressingScanOutcome } | null>(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const [showSync, setShowSync] = useState(false);
+  const [activationError, setActivationError] = useState("");
+  const activating = useRef<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const access = useQuery<MyAccess>({
     queryKey: [ROOT, "me", selectedCompany?.id ?? null],
     queryFn: async () => {
-      const response = await fetch(`${ROOT}/me`, { credentials: "include" });
-      if (!response.ok) throw new Error("Could not load assigned pressing machine");
-      return response.json();
+      const response = await fetch(ROOT + "/me", { credentials: "include", cache: "no-store" });
+      if (!response.ok) throw new Error("Pressing access is not available for this user");
+      return response.json() as Promise<MyAccess>;
     },
-    staleTime: 0, gcTime: 0, enabled: selectedCompany !== null,
-    refetchOnMount: "always", refetchOnWindowFocus: true,
+    enabled: active && selectedCompany !== null,
+    staleTime: 0, gcTime: 0, refetchOnMount: "always",
+    refetchOnWindowFocus: false,
   });
-  const pressingQueue = usePressingOfflineSync(
-    myQuery.data ? { companyId: myQuery.data.companyId, userId: myQuery.data.userId } : null,
-    active,
+  const companyId = access.data?.companyId;
+  const userId = access.data?.userId;
+  const validCompany = companyId === selectedCompany?.id;
+  const assignment = validCompany ? access.data?.assignment ?? null : null;
+  const scanner = usePressingOfflineSync(
+    active && validCompany && companyId !== undefined && userId
+      ? { companyId, userId } : null, active,
   );
-  const canManage = myQuery.data?.canManage === true;
-  // Supervisor data is keyed by the authenticated company so switching
-  // companies never paints another tenant's cached machines or employees.
-  const scopedCompanyId = myQuery.data?.companyId ?? null;
-  const dashboardQuery = useQuery<Dashboard>({
-    queryKey: [ROOT, "dashboard", scopedCompanyId],
-    enabled: canManage && scopedCompanyId !== null,
-    queryFn: async () => {
-      const response = await fetch(ROOT, { credentials: "include" });
-      if (!response.ok) throw new Error("Could not load machine management");
-      return response.json();
-    },
-    staleTime: 30_000, refetchOnWindowFocus: false,
-  });
-  const historyQuery = useQuery<HistoricalAssignment[]>({
-    queryKey: [ROOT, "history", scopedCompanyId],
-    enabled: canManage && showHistory && scopedCompanyId !== null,
-    queryFn: async () => {
-      const response = await fetch(`${ROOT}/history?limit=200`, { credentials: "include" });
-      if (!response.ok) throw new Error("Could not load assignment history");
-      return response.json();
-    },
-    staleTime: 30_000, refetchOnWindowFocus: false,
-  });
-  const mutation = useMutation({
-    mutationFn: async ({ url, payload }: { url: string; payload: Record<string, unknown> }) => {
-      const response = await apiRequest("POST", url, payload);
-      if (!response.ok) throw new Error("Machine change failed");
-      return response.json();
-    },
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: [ROOT, "me"] }),
-        queryClient.invalidateQueries({ queryKey: [ROOT, "dashboard"] }),
-        queryClient.invalidateQueries({ queryKey: [ROOT, "history"] }),
-      ]);
-      toast({ title: "Pressing machine settings saved" });
-    },
-    onError: error => toast({ title: "Could not save", description: errorText(error), variant: "destructive" }),
-  });
-  const change = (url: string, payload: Record<string, unknown>) => mutation.mutate({ url, payload });
-  const dashboard = scopedCompanyId === selectedCompany?.id ? dashboardQuery.data : undefined;
+
+  const activate = useCallback(async () => {
+    if (!active || !validCompany || !access.data || assignment) return;
+    const key = String(companyId) + ":" + String(userId);
+    if (activating.current === key) return;
+    activating.current = key;
+    setActivationError("");
+    try {
+      // The page/tab permission is checked by Factory middleware. This
+      // creates an internal station and assignment, not a user-facing machine.
+      await apiRequest("POST", ROOT + "/activate", {});
+      await queryClient.invalidateQueries({ queryKey: [ROOT, "me", selectedCompany?.id ?? null] });
+    } catch (error) {
+      setActivationError(problem(error));
+    }
+  }, [active, validCompany, access.data, assignment, companyId, userId, selectedCompany?.id]);
+
+  useEffect(() => {
+    if (active && access.data && validCompany && !assignment) void activate();
+  }, [active, access.data, validCompany, assignment, activate]);
+
+  useEffect(() => {
+    activating.current = null;
+    setBarcode("");
+    setLast(null);
+    setActivationError("");
+  }, [selectedCompany?.id]);
+
+  useEffect(() => {
+    if (active && assignment && !showCamera) inputRef.current?.focus();
+  }, [active, assignment, showCamera]);
+
+  const scanOne = async (code: string) => {
+    const value = code.trim().toUpperCase();
+    if (!value || !assignment || submitting || !active) return;
+    setSubmitting(true);
+    setBarcode("");
+    try {
+      const outcome = await scanner.submit({
+        barcode: value,
+        deviceCapturedAt: new Date().toISOString(),
+        machineId: assignment.machineId,
+        assignmentId: assignment.assignmentId,
+      });
+      setLast({ barcode: value, outcome });
+      if (outcome.kind === "confirmed") {
+        void queryClient.invalidateQueries({ queryKey: [ROOT + "/report"] });
+        toast({ title: "Bale scanned", description: value + " — pressing recorded" });
+      } else if (outcome.kind === "duplicate" || outcome.kind === "rejected") {
+        toast({ title: "Scan not accepted", description: outcome.message, variant: "destructive" });
+      }
+    } finally {
+      setSubmitting(false);
+      inputRef.current?.focus();
+    }
+  };
+  const cameraRead = async (capture: Parameters<typeof scanner.submit>[0]) => {
+    const result = await scanner.submit(capture);
+    setLast({ barcode: capture.barcode, outcome: result });
+    if (result.kind === "confirmed") {
+      void queryClient.invalidateQueries({ queryKey: [ROOT + "/report"] });
+    }
+    return result;
+  };
+  const outstanding = scanner.snapshot.pending + scanner.snapshot.syncing;
+
   return (
-    <div className="space-y-5" data-testid="pressing-machine-management">
+    <div className="min-w-0 space-y-4" data-testid="pressing-machine-management">
       <div className="flex flex-wrap items-center gap-2">
-        <Factory className="h-6 w-6 text-emerald-500" />
-        <h2 className="text-xl font-bold">Pressing Machines</h2>
-        <Badge variant="outline">Physical pressing only</Badge>
+        <ScanLine className="h-5 w-5 text-emerald-500" />
+        <h2 className="text-lg font-semibold">Pressing Scan</h2>
+        <Badge variant="secondary">Recorded by logged-in user</Badge>
       </div>
       <p className="text-sm text-muted-foreground">
-        Assign employees to a press and preserve their assignment history.
-        Every accepted barcode confirms physical pressing and saves the machine, operator and server timestamp. Stock finalization stays separate.
+        Scan a bale like Ground Scan. Each accepted bale is recorded under your user automatically.
+        No shifts or machine assignments to set up. Scanning does not finalize stock.
       </p>
-      {myQuery.isLoading && <p className="text-sm">Loading your machine...</p>}
-      {myQuery.isError && <p role="alert" className="text-sm text-destructive">{errorText(myQuery.error)}</p>}
-      {myQuery.data && (
-        <Card>
-          <CardHeader><CardTitle className="text-base">My assigned machine</CardTitle></CardHeader>
-          <CardContent>
-            {myQuery.data.assignment ? (
-              <div className="space-y-1">
-                <p className="font-semibold">{myQuery.data.assignment.machineCode} — {myQuery.data.assignment.machineName}</p>
-                <p className="text-sm text-muted-foreground">Assigned {formatted(myQuery.data.assignment.assignedAt)}</p>
-                <Badge variant={myQuery.data.assignment.machineActive ? "default" : "destructive"}>
-                  {myQuery.data.assignment.machineActive ? "Ready for pressing confirmation" : "Inactive"}
-                </Badge>
-              </div>
-            ) : <p className="text-sm text-muted-foreground">No machine assigned. Ask your supervisor for an assignment.</p>}
-          </CardContent>
-        </Card>
+
+      {access.isLoading && <p className="text-sm">Checking pressing access…</p>}
+      {access.isError && <p className="text-sm text-destructive" role="alert">{problem(access.error)}</p>}
+      {!assignment && !access.isLoading && !access.isError && (
+        <div className="rounded-md border p-3 text-sm">
+          {activationError ? (
+            <>
+              <p role="alert" className="text-destructive">{activationError}</p>
+              <Button size="sm" className="mt-2" variant="outline" onClick={() => {
+                activating.current = null;
+                void activate();
+              }}>Retry access setup</Button>
+            </>
+          ) : "Preparing your pressing scanner…"}
+        </div>
       )}
-      <ContinuousPressingScanner
-        active={active}
-        assignment={myQuery.data?.assignment ?? null}
-        onBarcode={pressingQueue.submit}
-      />
-      {myQuery.data && (
-        <PressingOfflineQueueStatus snapshot={pressingQueue.snapshot} retryNow={pressingQueue.retryNow} />
-      )}
-      {myQuery.data && myQuery.data.companyId === selectedCompany?.id && (
-        <PressingShiftAnalytics
-          key={"shift:" + myQuery.data.companyId + ":" + myQuery.data.userId}
-          active={active} companyId={myQuery.data.companyId}
-          userId={myQuery.data.userId} canManage={canManage}
-        />
-      )}
-      {myQuery.data && myQuery.data.companyId === selectedCompany?.id && (
-        <PressingHistoryReport
-          key={myQuery.data.companyId + ":" + myQuery.data.userId}
-          active={active}
-          companyId={myQuery.data.companyId}
-          userId={myQuery.data.userId}
-        />
-      )}
-      {canManage && (
-        <>
-          <Card>
-            <CardHeader><CardTitle className="text-base"><ShieldCheck className="mr-2 inline h-5 w-5" />Supervisor controls</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Input aria-label="New machine code" placeholder="Machine code (PRESS-01)" value={code}
-                  maxLength={60} disabled={mutation.isPending} onChange={e => setCode(e.target.value)} />
-                <Input aria-label="New machine name" placeholder="Machine name" value={name}
-                  maxLength={160} disabled={mutation.isPending} onChange={e => setName(e.target.value)} />
-              </div>
-              <Button disabled={mutation.isPending || !code.trim() || !name.trim()}
-                onClick={() => {
-                  change(ROOT, { machineCode: code.trim(), name: name.trim() });
-                  setCode(""); setName("");
-                }}>
-                <Plus className="mr-2 h-4 w-4" /> Add pressing machine
-              </Button>
-            </CardContent>
-          </Card>
-          {dashboardQuery.isError && <p role="alert" className="text-sm text-destructive">{errorText(dashboardQuery.error)}</p>}
-          {dashboardQuery.isLoading && <p className="text-sm">Loading machines and employees...</p>}
-          {dashboard && (
-            <div className="grid gap-3 lg:grid-cols-2">
-              {dashboard.machines.map(machine => (
-                <MachineManagerCard key={machine.id} machine={machine} operators={dashboard.operators}
-                  assigned={dashboard.assignments.filter(a => a.machineId === machine.id)}
-                  change={change} busy={mutation.isPending} />
-              ))}
-              {dashboard.machines.length === 0 && <p className="text-sm text-muted-foreground">No machines created yet.</p>}
-            </div>
-          )}
-          <div className="space-y-3">
-            <Button variant="outline" onClick={() => setShowHistory(x => !x)}>
-              <History className="mr-2 h-4 w-4" />{showHistory ? "Hide assignment history" : "View assignment history"}
-            </Button>
-            {showHistory && (
-              <div className="overflow-x-auto rounded-lg border">
-                {historyQuery.isLoading && <p className="p-3 text-sm">Loading history...</p>}
-                {historyQuery.isError && <p className="p-3 text-sm text-destructive">{errorText(historyQuery.error)}</p>}
-                {historyQuery.data && (
-                  <table className="w-full min-w-[650px] text-left text-sm">
-                    <thead className="bg-muted">
-                      <tr><th className="p-2">Machine</th><th className="p-2">Employee</th>
-                        <th className="p-2">Assigned</th><th className="p-2">Ended</th><th className="p-2">Status</th></tr>
-                    </thead>
-                    <tbody>
-                      {historyQuery.data.map(row => (
-                        <tr key={row.id} className="border-t">
-                          <td className="p-2">{row.machineCode} — {row.machineName}</td>
-                          <td className="p-2">{row.username || row.userId}</td>
-                          <td className="p-2">{formatted(row.assignedAt)}</td>
-                          <td className="p-2">{row.unassignedAt ? formatted(row.unassignedAt) : "—"}</td>
-                          <td className="p-2">{row.unassignedAt ? "Ended" : "Active"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            )}
+
+      <div className="rounded-lg border bg-card p-3 space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="relative min-w-0 flex-1">
+            <ScanLine className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input ref={inputRef} autoComplete="off" data-testid="input-pressing-scan"
+              className="h-11 pl-10 font-mono" placeholder="Scan bale reference / barcode..."
+              value={barcode} onChange={e => setBarcode(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); void scanOne(barcode); } }}
+              disabled={!assignment || !active || submitting} />
           </div>
-        </>
+          <Button data-testid="button-pressing-scan" className="h-11" disabled={!barcode.trim() || !assignment || submitting}
+            onClick={() => void scanOne(barcode)}>
+            <ScanLine className="mr-2 h-4 w-4" />
+            {submitting ? "Saving…" : "Scan"}
+          </Button>
+          <Button className="h-11" variant="outline" onClick={() => setShowCamera(v => !v)}
+            disabled={!assignment}>
+            <Camera className="mr-2 h-4 w-4" />{showCamera ? "Hide Camera" : "Phone Camera"}
+          </Button>
+        </div>
+        {last && (
+          <div className={"rounded-md border p-3 text-sm " +
+            (last.outcome.kind === "confirmed" ? "border-emerald-500/50 bg-emerald-500/10" :
+              last.outcome.kind === "queued" ? "border-amber-500/50 bg-amber-500/10" :
+              "border-red-500/50 bg-red-500/10")} role="status">
+            {last.outcome.kind === "confirmed"
+              ? <CheckCircle2 className="mr-2 inline h-4 w-4 text-emerald-600" />
+              : <AlertCircle className="mr-2 inline h-4 w-4" />}
+            <strong>{last.barcode}</strong> — {last.outcome.message}
+          </div>
+        )}
+        {outstanding > 0 && (
+          <p className="text-sm text-amber-700 dark:text-amber-300" role="status">
+            {outstanding} scan{outstanding === 1 ? "" : "s"} saved locally, waiting for server verification.
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant="ghost" onClick={() => setShowSync(v => !v)}>
+            {showSync ? <ChevronUp className="mr-1 h-4 w-4" /> : <ChevronDown className="mr-1 h-4 w-4" />}
+            Scan sync {outstanding ? "(" + outstanding + " pending)" : ""}
+          </Button>
+          {outstanding > 0 && <Button size="sm" variant="outline"
+            onClick={() => void scanner.retryNow()}>
+            <RefreshCw className="mr-1 h-4 w-4" />Retry
+          </Button>}
+        </div>
+      </div>
+      {showCamera && assignment && (
+        <ContinuousPressingScanner active={active} assignment={assignment} onBarcode={cameraRead} />
       )}
-      <p className="text-xs text-muted-foreground"><Wrench className="mr-1 inline h-3 w-3" />Physical pressing scans do not automatically finalize stock.</p>
+      {showSync && <PressingOfflineQueueStatus snapshot={scanner.snapshot}
+        retryNow={scanner.retryNow} />}
+
+      {active && validCompany && companyId !== undefined && userId && (
+        <PressingHistoryReport key={companyId + ":" + userId}
+          active={active} companyId={companyId} userId={userId} />
+      )}
     </div>
   );
 }
