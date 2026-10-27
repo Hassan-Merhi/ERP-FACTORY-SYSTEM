@@ -143,7 +143,7 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
         // Same lock ordering as the supervisor assignment endpoint: lock user
         // first, machine next, assignment last. Reassignments cannot race a
         // pressing confirmation into the wrong machine's production.
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(`${companyId}`::integer, hashtext(`${userId}`))`);
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${companyId}::integer, hashtext(${userId}))`);
         const [machine] = await tx.select().from(factoryPressingMachines)
           .where(and(eq(factoryPressingMachines.companyId, companyId),
             eq(factoryPressingMachines.id, parsed.machineId))).for("update");
