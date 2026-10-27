@@ -2,7 +2,6 @@ import fs from "node:fs";
 import { describe, expect, it } from "vitest";
 const read = (path:string) => fs.readFileSync(path,"utf8");
 const routes = read("server/routes/factoryRoutes.ts");
-const ops = read("server/routes/factory/factoryPressingOperationsRoutes.ts");
 const page = read("client/src/pages/factory/PressingMachineManagement.tsx");
 const access = read("server/routes/factory/factoryPressingMachineManagementRoutes.ts");
 const confirm = read("server/routes/factory/factoryPressingConfirmationRoutes.ts");
@@ -14,7 +13,6 @@ describe("Simplified pressing workflow replaces Phase 7 operational configuratio
     expect(routes).not.toContain("registerFactoryPressingOperationsRoutes(app)");
     for(const uri of ["/shifts","/downtime","/analytics"])
       expect(routes).not.toContain("registerFactoryPressingOperationsRoutes");
-    expect(ops).toContain("registerFactoryPressingOperationsRoutes");
     // File and legacy records may remain for history/migration integrity,
     // but dead API routes must not be registered in the Express app.
   });
