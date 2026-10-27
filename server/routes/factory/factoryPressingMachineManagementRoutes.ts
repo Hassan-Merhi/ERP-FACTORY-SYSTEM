@@ -9,7 +9,7 @@ import { db } from "../../db";
 import { requireAuth } from "../../auth";
 import {
   factoryPressingMachines, factoryPressingAssignments, factoryPressingSessions,
-  factoryUserProfiles, users, userCompanyRoles,
+  factoryUserProfiles, factoryUserPageAccess, users, userCompanyRoles,
 } from "@shared/schema";
 import {
   ActiveCompanyPermissionContextError, getActiveCompanyPermissionContext,
@@ -17,9 +17,12 @@ import {
 } from "../../services/security/activeCompanyPermissionContext";
 import { logAudit } from "../helpers/auditHelpers";
 import { logger } from "../../lib/logger";
+import { normalizePersistedFactoryPageKeysFailClosed } from "@shared/factoryPermissionCatalog";
 
 const MANAGERS = new Set(["Developer", "Admin", "Owner", "Manager"]);
 const NON_OPERATORS = new Set(["View Only", "ERP Tester"]);
+const PRESSING_TAB_HIDDEN = "hide_tab_stockentry_pressing_machines";
+const PRESSING_PAGE = "factory/stock-entry";
 const machineCreate = z.object({
   machineCode: z.string().trim().min(1).max(60).regex(/^[A-Za-z0-9][A-Za-z0-9_.-]*$/),
   name: z.string().trim().min(1).max(160),
@@ -81,12 +84,22 @@ async function eligibleOperators(companyId: number) {
   const candidates = await db.select({
     id: users.id, username: users.username, role: userCompanyRoles.role,
     posViewOnly: userCompanyRoles.posViewOnly, factoryAccess: factoryUserProfiles.hasFactoryAccess,
+    hiddenFields: factoryUserProfiles.hiddenCostFields,
   }).from(users)
     .innerJoin(userCompanyRoles, and(eq(userCompanyRoles.userId, users.id), eq(userCompanyRoles.companyId, companyId)))
     .leftJoin(factoryUserProfiles, and(eq(factoryUserProfiles.userId, users.id), eq(factoryUserProfiles.companyId, companyId)))
     .where(eq(users.active, true)).orderBy(asc(users.username));
-  return candidates.filter(u => !NON_OPERATORS.has(u.role) && !u.posViewOnly && u.factoryAccess !== false)
-    .map(({ id, username, role }) => ({ id, username, role }));
+  const grants = await db.select({ userId: factoryUserPageAccess.userId, pageKey: factoryUserPageAccess.pageKey })
+    .from(factoryUserPageAccess).where(eq(factoryUserPageAccess.companyId, companyId));
+  const byUser = new Map<string, string[]>();
+  for (const row of grants) byUser.set(row.userId, [...(byUser.get(row.userId) || []), row.pageKey]);
+  return candidates.filter(u => {
+    if (NON_OPERATORS.has(u.role) || u.posViewOnly || u.factoryAccess === false) return false;
+    if (["Admin", "Owner", "Developer"].includes(u.role)) return true;
+    if ((u.hiddenFields || []).includes(PRESSING_TAB_HIDDEN)) return false;
+    const pages = normalizePersistedFactoryPageKeysFailClosed(byUser.get(u.id) || []);
+    return pages.length === 0 || pages.includes(PRESSING_PAGE);
+  }).map(({ id, username, role }) => ({ id, username, role }));
 }
 async function dashboard(companyId: number) {
   const [machines, assignments, operators] = await Promise.all([
@@ -242,6 +255,7 @@ export function registerFactoryPressingMachineManagementRoutes(app: Express): vo
         const [operator] = await tx.select({
           id: users.id, active: users.active, role: userCompanyRoles.role,
           posViewOnly: userCompanyRoles.posViewOnly, hasFactoryAccess: factoryUserProfiles.hasFactoryAccess,
+          hiddenFields: factoryUserProfiles.hiddenCostFields,
         }).from(users)
           .innerJoin(userCompanyRoles, and(eq(userCompanyRoles.userId, users.id),
             eq(userCompanyRoles.companyId, ctx.companyId)))
@@ -251,6 +265,15 @@ export function registerFactoryPressingMachineManagementRoutes(app: Express): vo
         if (!operator || !operator.active || operator.posViewOnly ||
             NON_OPERATORS.has(operator.role) || operator.hasFactoryAccess === false)
           throw new PressingManagementError(422, "OPERATOR_NOT_ELIGIBLE", "Operator must be an active Factory user with edit access");
+        if (!["Admin", "Owner", "Developer"].includes(operator.role)) {
+          if ((operator.hiddenFields || []).includes(PRESSING_TAB_HIDDEN))
+            throw new PressingManagementError(422, "OPERATOR_TAB_HIDDEN", "Operator cannot access Pressing Machines tab");
+          const rows = await tx.select({ pageKey: factoryUserPageAccess.pageKey }).from(factoryUserPageAccess)
+            .where(and(eq(factoryUserPageAccess.companyId, ctx.companyId), eq(factoryUserPageAccess.userId, body.userId)));
+          const pages = normalizePersistedFactoryPageKeysFailClosed(rows.map(r => r.pageKey));
+          if (pages.length && !pages.includes(PRESSING_PAGE))
+            throw new PressingManagementError(422, "OPERATOR_PAGE_HIDDEN", "Operator cannot access Stock Entry");
+        }
         const [existing] = await tx.select().from(factoryPressingAssignments)
           .where(and(eq(factoryPressingAssignments.companyId, ctx.companyId),
             eq(factoryPressingAssignments.userId, body.userId),
