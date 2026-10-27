@@ -203,6 +203,9 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
     try {
       const ctx = await context(req);
       const body = pressingSavedViewSchema.parse(req.body);
+      if (body.filters.from && body.filters.to && body.filters.from > body.filters.to) {
+        return res.status(400).json({ code: "PRESSING_INVALID_DATES", message: "Saved view has an invalid date range" });
+      }
       if (!ctx.supervisor && body.filters.userId && body.filters.userId !== ctx.userId) {
         throw new ReportPermissionError(403, "PRESSING_REPORT_FORBIDDEN", "Cannot save filters for another operator");
       }
