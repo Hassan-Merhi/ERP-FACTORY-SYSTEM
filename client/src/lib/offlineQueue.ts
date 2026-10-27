@@ -120,6 +120,8 @@ export function setLastSynced(): void {
  * replay later from localStorage.
  */
 const NEVER_QUEUE_PATTERNS: RegExp[] = [
+  // Pressing scans have their own IndexedDB queue with immutable request IDs.
+  /^\/api\/factory\/pressing-machines(?:\/|$)/,
   /^\/api\/factory\/raw-stock\/recalc(?:\/|$)/,
   /^\/api\/factory\/raw-stock\/\d+\/assign-to-bales$/,
   // Credential-bearing endpoints. A manager approval or a password change must be typed
