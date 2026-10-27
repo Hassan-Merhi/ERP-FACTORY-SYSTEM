@@ -546,10 +546,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                     <div className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-teal-700 dark:text-teal-400">
                       <Filter className="h-3 w-3 shrink-0" />
                       Filtered Balance on Table
-                      <span
-                        className="ml-auto text-muted-foreground"
-                        title={data?.filteredBalanceOnTable?.direction}
-                      >
+                      <span className="ml-auto text-muted-foreground" title={data?.filteredBalanceOnTable?.direction}>
                         {data?.filteredBalanceOnTable?.direction === "decrease" ? (
                           <TrendingDown className="h-3.5 w-3.5 text-red-500" />
                         ) : data?.filteredBalanceOnTable?.direction === "increase" ? (
