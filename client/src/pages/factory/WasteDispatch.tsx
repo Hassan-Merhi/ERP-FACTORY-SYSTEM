@@ -175,6 +175,13 @@ export default function WasteDispatch() {
     }
   };
 
+  const handleScan = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      scanReference(scanInput);
+    }
+  };
+
   const selectedBales = bales.filter((b) => selected.has(b.id));
   const totalWeight = selectedBales.reduce((s, b) => s + b.weightKg, 0);
   const totalCost = selectedBales.reduce((s, b) => s + b.totalCost, 0);
@@ -351,6 +358,7 @@ export default function WasteDispatch() {
                   data-testid="input-scan-ref"
                   autoComplete="off"
                 />
+                <MobileBarcodeScanner onScan={scanReference} className="mt-2" />
               </div>
               <p className="text-xs text-muted-foreground mt-1">Press Enter to select a bale</p>
             </CardContent>
