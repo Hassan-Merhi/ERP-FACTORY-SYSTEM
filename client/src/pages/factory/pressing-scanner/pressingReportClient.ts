@@ -41,6 +41,7 @@ export interface PressingReportResponse {
   total: number;
   summary: { totalBales: number; totalKg: string; voidedBales: number;
     byOperator: Array<{ userId: string; name: string | null; totalBales: number; totalKg: string }> };
+  overview: PressingReportResponse["summary"];
   page: number;
   limit: number;
   mode: "detailed" | "condensed";
