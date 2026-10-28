@@ -180,11 +180,33 @@ async function report(ctx: QueryCtx, filters: PressingReportFilters) {
     overview = { ...(allSummary.rows[0] ?? { totalBales: 0, totalKg: "0", voidedBales: 0 }),
       byOperator: allOperators.rows };
   }
+  // Resolve current company-scoped display names for every historical row and
+  // summary, so renamed workers are shown correctly without rewriting evidence.
+  const operatorIds = [...new Set([
+    ...rows.rows.map(row => row.operatorUserId),
+    ...filteredSummary.byOperator.map(row => row.userId),
+    ...overview.byOperator.map(row => row.userId),
+  ].filter((value): value is string => typeof value === "string" && value.length > 0))];
+  const profiles = operatorIds.length
+    ? await pool.query(
+      'SELECT user_id AS "userId", NULLIF(BTRIM(display_name), \'\') AS "displayName" ' +
+        'FROM factory_user_profiles WHERE company_id = $1 AND user_id = ANY($2::varchar[])',
+      [ctx.companyId, operatorIds],
+    )
+    : { rows: [] };
+  const names = new Map<string, string>(
+    profiles.rows.map(row => [row.userId, String(row.displayName || "").trim()]),
+  );
+  const displayName = (id: string) => names.get(id) || "Display name not set";
   return {
-    rows: rows.rows,
+    rows: rows.rows.map(row => ({ ...row, operatorName: displayName(row.operatorUserId) })),
     total: Number(count.rows[0]?.total || 0),
-    summary: filteredSummary,
-    overview,
+    summary: { ...filteredSummary, byOperator: filteredSummary.byOperator.map(row => ({
+      ...row, name: displayName(row.userId),
+    })) },
+    overview: { ...overview, byOperator: overview.byOperator.map(row => ({
+      ...row, name: displayName(row.userId),
+    })) },
     page: filters.page, limit: filters.limit, mode: filters.mode,
     asOf,
   };
@@ -201,7 +223,7 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
       // Membership is checked in the active company; no cross-company rows.
       const result = await pool.query(
         `SELECT u.id AS "userId",
-          COALESCE(NULLIF(MAX(p.display_name), ''), u.username) AS "name",
+          COALESCE(NULLIF(BTRIM(MAX(p.display_name)), ''), 'Display name not set') AS "name",
           COUNT(c.id)::integer AS "totalBales",
           COALESCE(SUM(c.weight_kg), 0)::numeric(18,3) AS "totalKg"
         FROM users u
@@ -250,8 +272,7 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
           'NULLIF(BTRIM(MAX(p.display_name)), \'\') AS "displayName", ' +
           "EXISTS (SELECT 1 FROM user_company_roles r WHERE r.company_id = $1 " +
           "AND r.user_id = o.user_id AND r.role IN ('User', 'Normal User')) AS \"isPressingWorker\", " +
-          "COALESCE(NULLIF(MAX(p.display_name), ''), NULLIF(MAX(u.username), ''), " +
-          "NULLIF(MAX(c.user_name_snapshot), ''), o.user_id) AS name " +
+          "COALESCE(NULLIF(BTRIM(MAX(p.display_name)), ''), 'Display name not set') AS name " +
           'FROM operator_ids o LEFT JOIN users u ON u.id = o.user_id ' +
           'LEFT JOIN factory_user_profiles p ON p.company_id = $1 AND p.user_id = o.user_id ' +
           'LEFT JOIN factory_pressing_confirmations c ON c.company_id = $1 AND c.user_id = o.user_id ' +
