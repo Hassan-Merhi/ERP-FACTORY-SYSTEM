@@ -99,7 +99,7 @@ describe("pressing machine Phase 6 reporting contracts", () => {
     expect(page).toContain('pressing-kpi-');
     expect(page).toContain('mode: "condensed"');
     expect(page).toContain('const allWorkerBales = workers.reduce');
-    expect(page).toContain('username?.trim().toUpperCase() === slot');
+    expect(page).toContain('item.isPressingWorker === true && item.username?.trim().toUpperCase() === slot');
     expect(server).toContain('overview');
     expect(server).toContain('byOperatorSqlFor');
     expect(page).toContain("Export Excel");
