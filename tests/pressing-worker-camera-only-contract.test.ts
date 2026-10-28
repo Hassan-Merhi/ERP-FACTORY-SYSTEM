@@ -5,6 +5,7 @@ const read = (file: string) => readFileSync(file, "utf8");
 const manager = read("client/src/pages/factory/PressingMachineManagement.tsx");
 const camera = read("client/src/pages/factory/ContinuousPressingScanner.tsx");
 const history = read("client/src/pages/factory/PressingHistoryReport.tsx");
+const workerTotals = read("client/src/pages/factory/PressingWorkerTotals.tsx");
 const stockEntry = read("client/src/pages/factory/BaleStockEntry.tsx");
 const access = read("server/routes/factory/factoryPressingMachineManagementRoutes.ts");
 const report = read("server/routes/factory/factoryPressingReportRoutes.ts");
@@ -30,18 +31,27 @@ describe("Pressing worker camera-only access", () => {
     expect(camera).not.toContain("Permanent history and filters are below.");
   });
 
-  it("shows only the worker's list, without history filtering or Excel controls", () => {
-    expect(manager).toContain("simpleMode={!fullControls}");
-    expect(history).toContain("from: simpleMode ? undefined : today()");
-    expect(history).toContain("{!simpleMode && <Button");
-    expect(history).toContain('{!simpleMode && <div className="grid grid-cols-2');
+  it("shows company worker totals without barcode detail or Excel controls", () => {
+    expect(manager).toContain("fullControls");
+    expect(manager).toContain("<PressingWorkerTotals");
+    expect(manager).toContain("<PressingHistoryReport");
+    expect(workerTotals).toContain('data-testid="pressing-worker-totals"');
+    expect(workerTotals).toContain("Total Bales");
+    expect(workerTotals).toContain("Total KG");
+    expect(workerTotals).toContain('"worker-totals", companyId, userId');
+    expect(workerTotals).not.toContain("referenceNumber");
+    expect(workerTotals).not.toContain("Export Excel");
+    expect(history).toContain("Export Excel");
     expect(stockEntry).toContain("isPressingOnlyWorker");
     expect(stockEntry).toContain("<PressingMachineManagement active />");
   });
 
-  it("prevents all non-Admin/Owner roles from accessing other workers' report or correction data", () => {
+  it("allows shared aggregates while restricting other workers' detailed records and corrections", () => {
     expect(report).toContain('const MANAGER_ROLES = new Set(["Admin", "Owner"])');
     expect(report).toContain('push("c.user_id = ?", ctx.userId)');
+    expect(report).toContain('app.get("/api/factory/pressing-machines/report/worker-totals", requireAuth');
+    expect(report).toContain('WHERE company_id = $1');
+    expect(report).toContain('c.voided_at IS NULL');
     expect(corrections).toContain('const SUPERVISORS = new Set(["Admin", "Owner"])');
   });
 });
