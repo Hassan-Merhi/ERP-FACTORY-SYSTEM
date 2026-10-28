@@ -52,16 +52,16 @@ describe("Phase 5 pressing scan transport", () => {
     });
   });
 
-  it("returns the original P1/P2/P3 username from the server on a duplicate", async () => {
+  it("returns the original worker display name from the server on a duplicate", async () => {
     const error = Object.assign(new Error("Already pressed"), {
       code: "PRESSING_ALREADY_CONFIRMED", status: 409,
-      previous: { operatorName: "P2", operatorUserId: "user-p2", confirmedAt: "2026-10-28T06:39:35.000Z" },
+      previous: { operatorName: "Samir Haddad", operatorUserId: "user-p2", confirmedAt: "2026-10-28T06:39:35.000Z" },
     });
     vi.mocked(apiRequest).mockRejectedValue(error);
     const outcome = await sendQueuedPressingScan(row);
     expect(outcome).toMatchObject({
       kind: "rejected", code: "PRESSING_ALREADY_CONFIRMED",
-      message: "Already scanned by P2", previousScan: { operatorName: "P2" },
+      message: "Already scanned by Samir Haddad", previousScan: { operatorName: "Samir Haddad" },
     });
   });
 
