@@ -189,7 +189,7 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
             <span className="rounded-lg bg-emerald-500/15 px-2.5 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-400">ALL WORKERS</span>
             <PackageCheck className="h-4 w-4 text-emerald-500" />
           </div>
-          <div className="mt-3 text-2xl font-bold leading-none tabular-nums sm:text-3xl">{countText(summary?.totalBales)}</div>
+          <div className="mt-3 text-2xl font-bold leading-none tabular-nums sm:text-3xl">{countText(kpiSummary?.totalBales)}</div>
           <div className="mt-1 text-xs text-muted-foreground">Total bales</div>
           <div className="mt-3 flex items-center gap-1.5 border-t pt-2.5">
             <Weight className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
