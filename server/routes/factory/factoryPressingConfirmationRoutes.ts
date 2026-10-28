@@ -19,7 +19,8 @@ import {
 } from "../../services/security/activeCompanyPermissionContext";
 import { logAudit } from "../helpers/auditHelpers";
 import { logger } from "../../lib/logger";
-import { factoryLocalDate, settingsTimezone } from "../../services/factory/pressingShiftTime";
+import { factoryLocalDate } from "../../services/factory/pressingShiftTime";
+import { PRESSING_TIME_ZONE } from "@shared/pressingTimeZone";
 
 const confirmSchema = z.object({
   barcode: z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9][A-Za-z0-9._/-]*$/),
@@ -194,7 +195,7 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
         // shifts, machine downtime or performance targets participate.
         const now = new Date();
         const shiftId = null;
-        const timezoneName = settingsTimezone(settings?.extraSettings);
+        const timezoneName = PRESSING_TIME_ZONE;
         const productionDate = factoryLocalDate(now, timezoneName);
         const deviceCapturedAt = safeDeviceTimestamp(parsed.deviceCapturedAt);
         let session: typeof factoryPressingSessions.$inferSelect | undefined;
