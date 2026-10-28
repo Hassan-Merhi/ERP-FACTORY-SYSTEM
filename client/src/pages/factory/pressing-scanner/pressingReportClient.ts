@@ -63,10 +63,34 @@ export interface PressingReportOptions {
   serverToday: string;
   timeZone: string;
   machines: Array<{ id: number; code: string; name: string; active: boolean }>;
-  operators: Array<{ userId: string; name: string; username?: string; isPressingWorker?: boolean }>;
+  operators: Array<{ userId: string; name: string; displayName?: string | null; username?: string; isPressingWorker?: boolean }>;
   weightsKg: string[];
   canCorrect: boolean;
 }
+/**
+ * P1/P2/P3 are account identifiers, never the KPI labels. Show the current
+ * company-scoped Factory display name and attach totals by stable user ID.
+ * Operators with no confirmations still appear with zero bales and KG.
+ */
+export function pressingKpiWorkers(
+  operators: PressingReportOptions["operators"],
+  byOperator: PressingReportResponse["summary"]["byOperator"],
+) {
+  return (["P1", "P2", "P3"] as const).map((slot, index) => {
+    const operator = operators.find(item =>
+      item.isPressingWorker === true && item.username?.trim().toUpperCase() === slot
+    );
+    const workerTotals = byOperator.find(item => item.userId === operator?.userId);
+    return {
+      slot,
+      label: operator?.displayName?.trim() || `Worker ${index + 1} (display name not set)`,
+      userId: operator?.userId,
+      bales: Number(workerTotals?.totalBales || 0),
+      kg: Number(workerTotals?.totalKg || 0),
+    };
+  });
+}
+
 export function pressingParams(filters: PressingReportFilters): URLSearchParams {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) {
