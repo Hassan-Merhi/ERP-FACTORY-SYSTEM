@@ -73,7 +73,7 @@ export default function PressingWorkerTotals({ active, companyId, userId }: {
               {workers.map(worker => (
                 <tr key={worker.userId} className="border-t">
                   <td className="p-3 font-medium">
-                    {worker.name || worker.userId}
+                    {worker.name?.trim() || "Display name not set"}
                     {worker.userId === userId && <span className="ml-2 text-xs text-muted-foreground">(You)</span>}
                   </td>
                   <td className="p-3 text-right tabular-nums">{formatCount(Number(worker.totalBales || 0))}</td>
