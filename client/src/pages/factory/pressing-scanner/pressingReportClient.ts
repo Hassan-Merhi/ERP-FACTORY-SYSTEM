@@ -127,7 +127,7 @@ export function pressingCell(
     case "productName": return row.productName || "";
     case "weightKg": return Number(row.weightKg);
     case "machineName": return row.machineName;
-    case "operatorName": return row.operatorName || row.operatorUserId;
+    case "operatorName": return row.operatorName?.trim() || "Display name not set";
     case "shiftId": return row.shiftId ?? "—";
     case "productionDate": return row.productionDate.split("-").reverse().join("/");
     case "confirmedAt": return detailed ? pressingDisplayDateTime(row.confirmedAt, row.timezoneName) : "—";
