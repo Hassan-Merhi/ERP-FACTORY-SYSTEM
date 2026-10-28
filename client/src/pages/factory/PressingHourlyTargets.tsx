@@ -44,7 +44,8 @@ export default function PressingHourlyTargets({ active, companyId, serverToday }
   active: boolean; companyId: number; serverToday?: string;
 }) {
   const { toast } = useToast();
-  // When mounted on the worker-only page, the API supplies the server\'s\n  // current Beirut day without needing the admin report options request.\n  const [day, setDay] = useState(serverToday || "");
+  // Worker-only screens obtain today's Beirut date from the endpoint itself.
+  const [day, setDay] = useState(serverToday || "");
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
