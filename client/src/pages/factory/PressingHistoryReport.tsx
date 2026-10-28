@@ -14,6 +14,7 @@ import {
   type PressingCondensedRow, type PressingDetailRow, type PressingReportOptions,
 } from "./pressing-scanner/pressingReportClient";
 import PressingCorrectionReview from "./PressingCorrectionReview";
+import { approx40KgText } from "./pressing-scanner/pressingKpiFormatting";
 import PressingHourlyTargets from "./PressingHourlyTargets";
 
 const ROOT = "/api/factory/pressing-machines/report";
@@ -34,8 +35,6 @@ const countText = (value: number | string | null | undefined) =>
   Number(value || 0).toLocaleString();
 const kgText = (value: number | string | null | undefined) =>
   Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 3 });
-const approx40KgText = (kg: number) =>
-  (Math.round(kg / 40 / 10) * 10).toLocaleString(undefined, { maximumFractionDigits: 0 });
 const workerName = (name: string | null | undefined) =>
   name?.trim() || "Display name not set";
 
