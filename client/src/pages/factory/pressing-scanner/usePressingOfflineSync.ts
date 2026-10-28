@@ -46,6 +46,7 @@ function outcomeFromRow(row: PressingQueuedScan): PressingScanOutcome {
     return {
       kind: row.errorCode === "PRESSING_ALREADY_CONFIRMED" ? "duplicate" : "rejected",
       message: row.lastError || "Pressing confirmation was rejected by the server",
+      scannedBy: row.previousScan?.operatorName || row.previousScan?.operatorUserId,
     };
   }
   return {
@@ -127,7 +128,8 @@ export function usePressingOfflineSync(actor: PressingActor | null, active: bool
     }
     if (outcome.kind === "rejected") {
       const stored = await transitionPressingScan(actorValue, row.requestId, "rejected", {
-        lastError: outcome.message, errorCode: outcome.code, nextAttemptAt: 0,
+        lastError: outcome.message, errorCode: outcome.code,
+        previousScan: outcome.previousScan, nextAttemptAt: 0,
       });
       return stored || changed;
     }
