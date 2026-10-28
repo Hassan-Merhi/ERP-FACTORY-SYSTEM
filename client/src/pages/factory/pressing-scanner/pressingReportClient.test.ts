@@ -62,7 +62,13 @@ describe("pressing history client", () => {
     expect(pressingCell(detailed, "weightKg")).toBe(45.125);
     expect(pressingCell(detailed, "productionDate")).toBe("27/10/2026");
     expect(pressingCell(detailed, "status")).toBe("Confirmed");
-    expect(pressingDisplayDateTime(detailed.confirmedAt, "UTC")).toContain("08:20:13");
+    // A stored UTC timestamp must display as Beirut's winter UTC+2.
+    expect(pressingDisplayDateTime(detailed.confirmedAt, "UTC")).toContain("10:20:13");
+    // IANA timezone automatically observes Beirut's summer UTC+3.
+    expect(pressingDisplayDateTime("2026-07-28T08:20:13.000Z", "UTC")).toContain("11:20:13");
+    // History created under older UTC settings still belongs to Beirut's next day.
+    expect(pressingDisplayDateTime("2026-10-27T22:30:00.000Z", "UTC"))
+      .toMatch(/28\/10\/2026.*00:30:00/);
   });
 
   it("keeps condensed totals numeric and distinguishes voided records", () => {
