@@ -21,7 +21,7 @@ import {
   customerOrderBales,
   factorySettings,
 } from "@shared/schema";
-import { eq, and, or, sql, inArray } from "drizzle-orm";
+import { eq, and, or, sql, inArray, isNull } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 
@@ -59,6 +59,7 @@ export function registerFactoryLocationInventoryRoutes(app: Express) {
               WHERE cob.bale_id = ${factoryBales.id}
                 AND co.status IN ('LOADING','PENDING_VERIFICATION','VERIFIED','FINALIZED','DISPATCHED','SOLD')
                 AND co.company_id = ${companyId}
+                AND co.deleted_at IS NULL
             )`
           )
         );
@@ -80,7 +81,8 @@ export function registerFactoryLocationInventoryRoutes(app: Express) {
                 eq(customerOrders.status, "PENDING_VERIFICATION"),
                 eq(customerOrders.status, "VERIFIED")
               ),
-              inArray(customerOrderBales.baleId, baleIds)
+              inArray(customerOrderBales.baleId, baleIds),
+              isNull(customerOrders.deletedAt)
             )
           );
         for (const r of loadingRows) loadingBaleIds.add(r.baleId);
@@ -212,6 +214,7 @@ export function registerFactoryLocationInventoryRoutes(app: Express) {
               WHERE cob.bale_id = ${factoryBales.id}
                 AND co.status IN ('LOADING','PENDING_VERIFICATION','VERIFIED','FINALIZED','DISPATCHED','SOLD')
                 AND co.company_id = ${companyId}
+                AND co.deleted_at IS NULL
             )`
           )
         );
@@ -355,7 +358,8 @@ export function registerFactoryLocationInventoryRoutes(app: Express) {
                   eq(customerOrders.status, "PENDING_VERIFICATION"),
                   eq(customerOrders.status, "VERIFIED")
                 ),
-                inArray(customerOrderBales.baleId, allLocationBaleIds)
+                inArray(customerOrderBales.baleId, allLocationBaleIds),
+                isNull(customerOrders.deletedAt)
               )
             );
           for (const r of loadingRows) loadingBaleIdsExport.add(r.baleId);
