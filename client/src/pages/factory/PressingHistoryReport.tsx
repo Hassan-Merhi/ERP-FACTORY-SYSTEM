@@ -96,7 +96,7 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
   // Resolve the named pressing operators from company users, not a page of
   // results. A worker with no scans still has a visible zero-valued card.
   const workers = WORKER_SLOTS.map(slot => {
-    const operator = operators.find(item => item.username?.trim().toUpperCase() === slot);
+    const operator = operators.find(item => item.isPressingWorker === true && item.username?.trim().toUpperCase() === slot);
     const id = operator?.userId;
     const matching = byOperator.filter(item => !!id && item.userId === id);
     return {
