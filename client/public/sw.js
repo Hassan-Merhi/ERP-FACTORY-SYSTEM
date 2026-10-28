@@ -1,8 +1,13 @@
-const CACHE_VERSION = "erp-v12";
+// One-time refresh campaign: changing the worker script installs a new
+// controller and lets existing desktop/Android/PWA clients reload themselves.
+// Do not bump this again for routine application releases.
+const CACHE_VERSION = "erp-v13";
 const CACHE_PREFIX = "erp-";
 // One-time campaign marker kept outside CACHE_PREFIX so normal ERP cache cleanup
 // cannot erase it and accidentally trigger this migration again later.
-const IOS_FORCE_UPDATE_CAMPAIGN = "ios-pwa-2026-09-30-v1";
+// iOS home-screen PWAs sometimes miss controllerchange. Keep their fallback
+// one-shot, marked in a separate cache that regular ERP cleanup never deletes.
+const IOS_FORCE_UPDATE_CAMPAIGN = "ios-pwa-2026-10-28-v2";
 const IOS_FORCE_UPDATE_MARKER_CACHE = `hmd-force-update-${IOS_FORCE_UPDATE_CAMPAIGN}`;
 const IOS_FORCE_UPDATE_MARKER_URL = "/__pwa_force_update_applied__";
 const APP_SHELL = ["/", "/manifest.json"];
