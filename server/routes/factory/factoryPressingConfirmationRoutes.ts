@@ -180,6 +180,7 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
               confirmedAt: alreadyPressed.confirmedAt.toISOString(),
               machineName: alreadyPressed.machineNameSnapshot,
               operatorUserId: alreadyPressed.userId,
+              operatorName: alreadyPressed.userNameSnapshot,
               referenceNumber: alreadyPressed.referenceNumber,
             } });
         }
@@ -252,6 +253,7 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
                 confirmedAt: other.confirmedAt.toISOString(),
                 machineName: other.machineNameSnapshot,
                 operatorUserId: other.userId,
+                operatorName: other.userNameSnapshot,
                 referenceNumber: other.referenceNumber,
               } });
           }
