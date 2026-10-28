@@ -39,6 +39,11 @@ describe("Pressing worker camera-only access", () => {
     expect(workerTotals).toContain('data-testid="pressing-worker-totals"');
     expect(workerTotals).toContain("Total Bales");
     expect(workerTotals).toContain("Total KG");
+    expect(workerTotals).not.toContain("percentOfLeader");
+    expect(workerTotals).not.toContain("progressbar");
+    expect(workerTotals).not.toContain("Worker / progress");
+    expect(workerTotals).toContain("Worker");
+    expect(workerTotals).toContain("style.badge");
     expect(workerTotals).toContain('"worker-totals", companyId, userId');
     expect(workerTotals).not.toContain("referenceNumber");
     expect(workerTotals).not.toContain("Export Excel");
