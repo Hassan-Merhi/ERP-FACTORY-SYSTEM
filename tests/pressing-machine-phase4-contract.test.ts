@@ -41,6 +41,10 @@ describe("Pressing machine Phase 4 transaction safety", () => {
 
   it("enforces one active confirmation across all machines and a unique request ID", () => {
     expect(route).toContain("PRESSING_ALREADY_CONFIRMED");
+    expect(route).toContain("operatorName: alreadyPressed.userNameSnapshot");
+    expect(route).toContain("operatorName: other.userNameSnapshot");
+    expect(scanner).toContain('data-testid="pressing-duplicate-user"');
+    expect(scanner).toContain("ALREADY SCANNED");
     expect(route).toContain("PRESSING_REQUEST_ID_REUSED");
     expect(route).toContain("PRESSING_CONFIRMATION_VOIDED");
     expect(route).toContain('.onConflictDoNothing().returning()');
