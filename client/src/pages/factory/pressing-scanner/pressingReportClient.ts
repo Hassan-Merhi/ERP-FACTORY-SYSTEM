@@ -60,7 +60,7 @@ export interface PressingReportOptions {
   serverToday: string;
   timeZone: string;
   machines: Array<{ id: number; code: string; name: string; active: boolean }>;
-  operators: Array<{ userId: string; name: string }>;
+  operators: Array<{ userId: string; name: string; username?: string }>;
   weightsKg: string[];
   canCorrect: boolean;
 }
