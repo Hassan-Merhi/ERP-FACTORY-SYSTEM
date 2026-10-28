@@ -1,20 +1,48 @@
 import { useQuery } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { rankPressingWorkers, type PressingStanding, type PressingWorkerTotal } from "./pressingWorkerRanking";
 
 const ROOT = "/api/factory/pressing-machines/report";
 
-interface WorkerTotal {
-  userId: string;
-  name: string;
-  totalBales: number;
-  totalKg: string;
-}
 interface WorkerTotalsResponse {
-  workers: WorkerTotal[];
+  workers: PressingWorkerTotal[];
 }
 const formatCount = (value: number) => value.toLocaleString();
 const formatKg = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 3 });
+
+const standingStyles: Record<PressingStanding, {
+  row: string; name: string; kg: string; badge: string; bar: string; label: string;
+}> = {
+  leading: {
+    row: "bg-emerald-500/5",
+    name: "text-base font-extrabold text-emerald-700 dark:text-emerald-400",
+    kg: "text-xl font-extrabold text-emerald-700 dark:text-emerald-400",
+    badge: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+    bar: "bg-emerald-500", label: "Leading",
+  },
+  middle: {
+    row: "bg-amber-500/5",
+    name: "text-base font-bold text-amber-700 dark:text-amber-400",
+    kg: "text-lg font-bold text-amber-700 dark:text-amber-400",
+    badge: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+    bar: "bg-amber-500", label: "Middle",
+  },
+  lowest: {
+    row: "bg-rose-500/5",
+    name: "text-lg font-extrabold text-rose-700 dark:text-rose-400",
+    kg: "text-xl font-extrabold text-rose-700 dark:text-rose-400",
+    badge: "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400",
+    bar: "bg-rose-500", label: "Lowest",
+  },
+  unranked: {
+    row: "",
+    name: "text-base font-semibold",
+    kg: "text-lg font-bold",
+    badge: "border-border bg-muted text-muted-foreground",
+    bar: "bg-muted-foreground/40", label: "No scans",
+  },
+};
 
 /** Workers see colleague totals, never another worker's individual bale history. */
 export default function PressingWorkerTotals({ active, companyId, userId }: {
@@ -36,15 +64,16 @@ export default function PressingWorkerTotals({ active, companyId, userId }: {
     refetchOnWindowFocus: false,
   });
   const workers = totals.data?.workers ?? [];
+  const rankedWorkers = rankPressingWorkers(workers);
   const totalBales = workers.reduce((sum, worker) => sum + Number(worker.totalBales || 0), 0);
   const totalKg = workers.reduce((sum, worker) => sum + Number(worker.totalKg || 0), 0);
 
   return (
     <section className="min-w-0 space-y-3" data-testid="pressing-worker-totals">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-base font-semibold">Scanned Bales by Worker</h3>
-          <p className="text-xs text-muted-foreground">All-time confirmed scans</p>
+          <p className="text-xs text-muted-foreground">All-time confirmed scans · ranked by KG · progress relative to leader</p>
         </div>
         <Button type="button" size="sm" variant="outline"
           data-testid="button-refresh-pressing-totals"
@@ -60,26 +89,47 @@ export default function PressingWorkerTotals({ active, companyId, userId }: {
         </p>
       )}
       {!totals.isLoading && !totals.isError && (
-        <div className="overflow-hidden rounded-lg border">
-          <table className="w-full text-left text-sm">
+        <div className="overflow-x-auto rounded-lg border">
+          <table className="w-full min-w-[550px] text-left text-sm">
             <thead className="bg-muted">
               <tr>
-                <th scope="col" className="p-3 font-medium">Worker</th>
+                <th scope="col" className="p-3 font-medium">Worker / progress</th>
                 <th scope="col" className="p-3 text-right font-medium">Total Bales</th>
                 <th scope="col" className="p-3 text-right font-medium">Total KG</th>
               </tr>
             </thead>
             <tbody>
-              {workers.map(worker => (
-                <tr key={worker.userId} className="border-t">
-                  <td className="p-3 font-medium">
-                    {worker.name?.trim() || "Display name not set"}
-                    {worker.userId === userId && <span className="ml-2 text-xs text-muted-foreground">(You)</span>}
-                  </td>
-                  <td className="p-3 text-right tabular-nums">{formatCount(Number(worker.totalBales || 0))}</td>
-                  <td className="p-3 text-right tabular-nums">{formatKg(Number(worker.totalKg || 0))}</td>
-                </tr>
-              ))}
+              {rankedWorkers.map(worker => {
+                const style = standingStyles[worker.standing];
+                return (
+                  <tr key={worker.userId} data-testid={"pressing-worker-row-" + worker.userId}
+                    className={"border-t " + style.row}>
+                    <td className="min-w-[210px] p-3">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className={style.name}>{worker.name?.trim() || "Display name not set"}</span>
+                        {worker.userId === userId && <span className="text-xs font-normal text-muted-foreground">(You)</span>}
+                        <span className={"rounded-full border px-2 py-0.5 text-xs font-semibold " + style.badge}>
+                          {style.label}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex max-w-sm items-center gap-2">
+                        <div role="progressbar"
+                          aria-label={"KG progress for " + (worker.name?.trim() || "worker") + " compared with leading worker"}
+                          aria-valuemin={0} aria-valuemax={100} aria-valuenow={worker.percentOfLeader}
+                          className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+                          <div className={"h-full rounded-full transition-[width] " + style.bar}
+                            style={{ width: worker.percentOfLeader + "%" }} />
+                        </div>
+                        <span className="w-11 shrink-0 text-right text-xs font-semibold tabular-nums text-muted-foreground">
+                          {worker.percentOfLeader}%
+                        </span>
+                      </div>
+                    </td>
+                    <td className="p-3 text-right font-semibold tabular-nums">{formatCount(Number(worker.totalBales || 0))}</td>
+                    <td className={"p-3 text-right tabular-nums " + style.kg}>{formatKg(Number(worker.totalKg || 0))}</td>
+                  </tr>
+                );
+              })}
               {!workers.length && (
                 <tr><td colSpan={3} className="p-4 text-center text-muted-foreground">No pressing workers yet.</td></tr>
               )}
