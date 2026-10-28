@@ -57,7 +57,7 @@ export default function BaleStockEntry() {
   // With pressing as the only granted Stock Entry section, workers should
   // enter directly into the two-button scanner instead of stock KPI/print UI.
   const role = session?.currentRole ?? session?.role;
-  const isPressingOnlyWorker = !!session && role !== "Admin" && role !== "Owner" &&
+  const isPressingOnlyWorker = !!session && !["Admin", "Owner", "Developer"].includes(role || "") &&
     showPressingMachines && !showEntry && !showHistory && !showGroundScan &&
     !showDailyScan && !showProductionTargets;
 
