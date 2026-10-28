@@ -7,16 +7,20 @@ import { and, asc, eq } from "drizzle-orm";
 import { ZodError } from "zod";
 import { db, pool } from "../../db";
 import { requireAuth } from "../../auth";
-import { factoryPressingSavedViews, factorySettings } from "@shared/schema";
+import { factoryPressingSavedViews } from "@shared/schema";
 import { getActiveCompanyPermissionContext, ActiveCompanyPermissionContextError } from "../../services/security/activeCompanyPermissionContext";
 import { logger } from "../../lib/logger";
 import { pressingReportFiltersSchema, pressingSavedViewSchema, type PressingReportFilters } from "@shared/pressingReportContracts";
-import { factoryLocalDate, settingsTimezone } from "../../services/factory/pressingShiftTime";
+import { factoryLocalDate } from "../../services/factory/pressingShiftTime";
+import { PRESSING_TIME_ZONE } from "@shared/pressingTimeZone";
 
 // Individual worker history stays scoped; Admin, Owner and Developer can view company reports.
 const MANAGER_ROLES = new Set(["Admin", "Owner", "Developer"]);
 type QueryCtx = { companyId: number; userId: string; supervisor: boolean; canCorrect: boolean };
 type Param = string | number;
+// All report dates are Beirut wall-clock dates derived from the immutable UTC
+// confirmed_at instant, including historical rows recorded with UTC snapshots.
+const PRESSING_LOCAL_DATE_SQL = "(c.confirmed_at AT TIME ZONE '" + PRESSING_TIME_ZONE + "')::date";
 class ReportPermissionError extends Error {
   constructor(readonly status: number, readonly code: string, message: string) { super(message); }
 }
@@ -61,8 +65,11 @@ function conditions(ctx: QueryCtx, filters: PressingReportFilters) {
   } else if (filters.userId) {
     push("c.user_id = ?", filters.userId);
   }
-  if (filters.from) push("c.production_date >= ?::date", filters.from);
-  if (filters.to) push("c.production_date <= ?::date", filters.to);
+  // Calculate inclusive Beirut dates with timezone-aware boundaries. These
+  // remain correct across the winter UTC+2 / summer UTC+3 DST transition
+  // and preserve use of the confirmed_at index for large histories.
+  if (filters.from) push("c.confirmed_at >= (?::date::timestamp AT TIME ZONE '" + PRESSING_TIME_ZONE + "')", filters.from);
+  if (filters.to) push("c.confirmed_at < ((?::date + 1)::timestamp AT TIME ZONE '" + PRESSING_TIME_ZONE + "')", filters.to);
   if (filters.asOf) push("c.confirmed_at <= ?::timestamptz", filters.asOf);
   if (filters.machineId) push("c.machine_id = ?", filters.machineId);
   if (filters.weightKg !== undefined) push("c.weight_kg = ?::numeric", filters.weightKg);
@@ -95,9 +102,9 @@ async function report(ctx: QueryCtx, filters: PressingReportFilters) {
     'c.product_name AS "productName"', 'c.weight_kg AS "weightKg"',
     'c.machine_id AS "machineId"', 'c.machine_name_snapshot AS "machineName"',
     'c.user_id AS "operatorUserId"', 'c.user_name_snapshot AS "operatorName"',
-    'c.shift_id AS "shiftId"', 'c.production_date::text AS "productionDate"',
+    'c.shift_id AS "shiftId"', PRESSING_LOCAL_DATE_SQL + '::text AS "productionDate"',
     'c.confirmed_at AS "confirmedAt"', 'c.device_captured_at AS "deviceCapturedAt"',
-    'c.voided_at AS "voidedAt"', 'c.timezone_name AS "timezoneName"',
+    'c.voided_at AS "voidedAt"', "'" + PRESSING_TIME_ZONE + "' AS \"timezoneName\"",
     '(c.voided_at IS NOT NULL AND NOT EXISTS (SELECT 1 FROM factory_pressing_confirmations active ' +
       'WHERE active.company_id = c.company_id AND active.bale_id = c.bale_id ' +
       'AND active.voided_at IS NULL)) AS "canReturn"',
@@ -110,22 +117,22 @@ async function report(ctx: QueryCtx, filters: PressingReportFilters) {
       'ORDER BY p.confirmed_at DESC,p.id DESC LIMIT 1) AS "secondsSincePrevious"',
   ].join(", ");
   const condensed = [
-    'c.production_date::text AS "productionDate"', 'c.machine_id AS "machineId"',
+    PRESSING_LOCAL_DATE_SQL + '::text AS "productionDate"', 'c.machine_id AS "machineId"',
     'MAX(c.machine_name_snapshot) AS "machineName"', 'c.user_id AS "operatorUserId"',
     'MAX(c.user_name_snapshot) AS "operatorName"', 'c.shift_id AS "shiftId"',
     'c.article_code AS "articleCode"', 'c.product_name AS "productName"',
-    'MAX(c.timezone_name) AS "timezoneName"',
+    "'" + PRESSING_TIME_ZONE + "' AS \"timezoneName\"",
     '(c.voided_at IS NOT NULL) AS "voided"',
     'COUNT(*)::integer AS "bales"', 'COALESCE(SUM(c.weight_kg),0)::numeric(18,3) AS "weightKg"',
     'MIN(c.confirmed_at) AS "firstScanAt"', 'MAX(c.confirmed_at) AS "lastScanAt"',
   ].join(", ");
   // Keep distinct bale names separate, even when they share an article code.
-  const group = ' GROUP BY c.production_date,c.machine_id,c.user_id,c.shift_id,c.article_code,c.product_name,(c.voided_at IS NOT NULL)';
+  const group = ' GROUP BY ' + PRESSING_LOCAL_DATE_SQL + ',c.machine_id,c.user_id,c.shift_id,c.article_code,c.product_name,(c.voided_at IS NOT NULL)';
   const detailed = filters.mode === "detailed";
   const selectSql = detailed
     ? 'SELECT ' + detail + from + ' ORDER BY c.confirmed_at DESC,c.id DESC'
     : 'SELECT ' + condensed + from + group +
-      ' ORDER BY c.production_date DESC,c.machine_id,c.user_id,c.product_name NULLS LAST,c.article_code NULLS LAST,' +
+      ' ORDER BY ' + PRESSING_LOCAL_DATE_SQL + ' DESC,c.machine_id,c.user_id,c.product_name NULLS LAST,c.article_code NULLS LAST,' +
       'c.shift_id NULLS LAST,(c.voided_at IS NOT NULL) ASC';
   const countSql = detailed
     ? 'SELECT COUNT(*)::integer AS total' + from
@@ -257,10 +264,8 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
         ' ORDER BY kg ASC LIMIT 200',
         ctx.supervisor ? [ctx.companyId] : [ctx.companyId, ctx.userId],
       );
-      const [settings] = await db.select({ extraSettings: factorySettings.extraSettings })
-        .from(factorySettings).where(eq(factorySettings.companyId, ctx.companyId)).limit(1);
-      // One production date basis: company settings only; no shifts.
-      const timeZone = settingsTimezone(settings?.extraSettings);
+      // The pressing scanner uses the same fixed IANA timezone as its report.
+      const timeZone = PRESSING_TIME_ZONE;
       const serverToday = factoryLocalDate(new Date(), timeZone);
       return res.json({ operators, canViewAll: ctx.supervisor, canCorrect: ctx.canCorrect,
         weightsKg: weights.rows.map(row => String(row.kg)), serverToday, timeZone });
