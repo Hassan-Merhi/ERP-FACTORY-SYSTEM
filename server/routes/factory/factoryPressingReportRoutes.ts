@@ -110,17 +110,19 @@ async function report(ctx: QueryCtx, filters: PressingReportFilters) {
     'c.production_date::text AS "productionDate"', 'c.machine_id AS "machineId"',
     'MAX(c.machine_name_snapshot) AS "machineName"', 'c.user_id AS "operatorUserId"',
     'MAX(c.user_name_snapshot) AS "operatorName"', 'c.shift_id AS "shiftId"',
-    'c.article_code AS "articleCode"', 'MAX(c.timezone_name) AS "timezoneName"',
+    'c.article_code AS "articleCode"', 'c.product_name AS "productName"',
+    'MAX(c.timezone_name) AS "timezoneName"',
     '(c.voided_at IS NOT NULL) AS "voided"',
     'COUNT(*)::integer AS "bales"', 'COALESCE(SUM(c.weight_kg),0)::numeric(18,3) AS "weightKg"',
     'MIN(c.confirmed_at) AS "firstScanAt"', 'MAX(c.confirmed_at) AS "lastScanAt"',
   ].join(", ");
-  const group = ' GROUP BY c.production_date,c.machine_id,c.user_id,c.shift_id,c.article_code,(c.voided_at IS NOT NULL)';
+  // Keep distinct bale names separate, even when they share an article code.
+  const group = ' GROUP BY c.production_date,c.machine_id,c.user_id,c.shift_id,c.article_code,c.product_name,(c.voided_at IS NOT NULL)';
   const detailed = filters.mode === "detailed";
   const selectSql = detailed
     ? 'SELECT ' + detail + from + ' ORDER BY c.confirmed_at DESC,c.id DESC'
     : 'SELECT ' + condensed + from + group +
-      ' ORDER BY c.production_date DESC,c.machine_id,c.user_id,c.article_code NULLS LAST,' +
+      ' ORDER BY c.production_date DESC,c.machine_id,c.user_id,c.product_name NULLS LAST,c.article_code NULLS LAST,' +
       'c.shift_id NULLS LAST,(c.voided_at IS NOT NULL) ASC';
   const countSql = detailed
     ? 'SELECT COUNT(*)::integer AS total' + from
