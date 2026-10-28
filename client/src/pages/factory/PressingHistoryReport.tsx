@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { type PressingReportFilters, type PressingReportColumn } from "@shared/pressingReportContracts";
 import {
-  exportPressingReport, fetchPressingReport, pressingCell, pressingDisplayDateTime,
+  exportPressingReport, fetchPressingReport, pressingCell, pressingDisplayDateTime, pressingKpiWorkers,
   type PressingCondensedRow, type PressingDetailRow, type PressingReportOptions,
 } from "./pressing-scanner/pressingReportClient";
 import PressingCorrectionReview from "./PressingCorrectionReview";
@@ -22,7 +22,6 @@ const DETAIL_COLUMNS: PressingReportColumn[] = [
 const SUMMARY_COLUMNS: PressingReportColumn[] = [
   "productionDate", "operatorName", "productName", "bales", "weightKg", "firstScanAt", "lastScanAt",
 ];
-const WORKER_SLOTS = ["P1", "P2", "P3"] as const;
 const today = () => {
   const now = new Date();
   return [now.getFullYear(), String(now.getMonth() + 1).padStart(2, "0"),
@@ -61,7 +60,7 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
       if (!response.ok) throw new Error("Could not load pressing filter options");
       return response.json();
     },
-    staleTime: 60000, refetchOnWindowFocus: false,
+    staleTime: 0, refetchOnMount: "always", refetchOnWindowFocus: false,
   });
   useEffect(() => {
     const day = options.data?.serverToday;
@@ -93,18 +92,9 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
   const operators = options.data?.operators || [];
   const weightOptions = options.data?.weightsKg || [];
 
-  // Resolve the named pressing operators from company users, not a page of
-  // results. A worker with no scans still has a visible zero-valued card.
-  const workers = WORKER_SLOTS.map(slot => {
-    const operator = operators.find(item => item.isPressingWorker === true && item.username?.trim().toUpperCase() === slot);
-    const id = operator?.userId;
-    const matching = byOperator.filter(item => !!id && item.userId === id);
-    return {
-      label: slot, userId: id,
-      bales: matching.reduce((sum, item) => sum + Number(item.totalBales || 0), 0),
-      kg: matching.reduce((sum, item) => sum + Number(item.totalKg || 0), 0),
-    };
-  });
+  // The account login identifies the worker; the visible KPI title is the
+  // current Factory profile display name, not P1/P2/P3.
+  const workers = pressingKpiWorkers(operators, byOperator);
 
   const allWorkerBales = workers.reduce((sum, worker) => sum + worker.bales, 0);
   const allWorkerKg = workers.reduce((sum, worker) => sum + worker.kg, 0);
@@ -158,8 +148,8 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
             "bg-amber-500/10 text-amber-600 dark:text-amber-400",
           ][index];
           return (
-            <button type="button" key={worker.label}
-              data-testid={"pressing-kpi-" + worker.label.toLowerCase()}
+            <button type="button" key={worker.slot}
+              data-testid={"pressing-kpi-" + worker.slot.toLowerCase()}
               disabled={!canSeeEveryone || !worker.userId}
               aria-pressed={selected}
               onClick={() => selectWorker(worker.userId)}
@@ -168,7 +158,8 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
                   "border-border/80 hover:border-primary/40") +
                 (!canSeeEveryone || !worker.userId ? " cursor-default" : " cursor-pointer")}>
               <div className="flex items-center justify-between gap-2">
-                <span className={"rounded-lg px-2.5 py-1 text-xs font-bold " + accent}>{worker.label}</span>
+                <span className={"min-w-0 break-words rounded-lg px-2.5 py-1 text-xs font-bold sm:text-sm " + accent}
+                   data-testid={"pressing-kpi-display-name-" + worker.slot.toLowerCase()}>{worker.label}</span>
                 <ScanLine className="h-4 w-4 text-muted-foreground/60" />
               </div>
               <div className="mt-3 text-2xl font-bold leading-none tabular-nums sm:text-3xl">{countText(worker.bales)}</div>
@@ -185,7 +176,7 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
           className={"min-w-0 rounded-xl border bg-linear-to-br from-emerald-500/10 via-card to-card p-3 text-left shadow-sm transition-colors sm:p-4 " +
             (!filters.userId ? "border-emerald-500/50" : "border-border/80 hover:border-emerald-500/50")}>
           <div className="flex items-center justify-between gap-2">
-            <span className="rounded-lg bg-emerald-500/15 px-2.5 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-400">P1 + P2 + P3</span>
+            <span className="rounded-lg bg-emerald-500/15 px-2.5 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-400">All pressing workers</span>
             <PackageCheck className="h-4 w-4 text-emerald-500" />
           </div>
           <div className="mt-3 text-2xl font-bold leading-none tabular-nums sm:text-3xl">{countText(allWorkerBales)}</div>
