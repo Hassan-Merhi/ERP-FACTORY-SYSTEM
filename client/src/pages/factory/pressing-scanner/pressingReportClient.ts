@@ -39,7 +39,8 @@ export interface PressingCondensedRow {
 export interface PressingReportResponse {
   rows: Array<PressingDetailRow | PressingCondensedRow>;
   total: number;
-  summary: { totalBales: number; totalKg: string; voidedBales: number };
+  summary: { totalBales: number; totalKg: string; voidedBales: number;
+    byOperator: Array<{ userId: string; name: string | null; totalBales: number; totalKg: string }> };
   page: number;
   limit: number;
   mode: "detailed" | "condensed";
@@ -59,6 +60,8 @@ export interface PressingReportOptions {
   timeZone: string;
   machines: Array<{ id: number; code: string; name: string; active: boolean }>;
   operators: Array<{ userId: string; name: string }>;
+  weightsKg: string[];
+  canCorrect: boolean;
 }
 export function pressingParams(filters: PressingReportFilters): URLSearchParams {
   const params = new URLSearchParams();
