@@ -50,7 +50,11 @@ describe("Pressing worker camera-only access", () => {
     expect(report).toContain('const MANAGER_ROLES = new Set(["Admin", "Owner"])');
     expect(report).toContain('push("c.user_id = ?", ctx.userId)');
     expect(report).toContain('app.get("/api/factory/pressing-machines/report/worker-totals", requireAuth');
-    expect(report).toContain('WHERE company_id = $1');
+    expect(report).toContain("UPPER(BTRIM(u.username)) IN ('P1', 'P2', 'P3')");
+    expect(report).toContain("r.company_id = $1 AND r.user_id = u.id");
+    expect(report).toContain("r.role IN ('User', 'Normal User')");
+    expect(report).toContain('c.company_id = $1 AND c.user_id = u.id AND c.voided_at IS NULL');
+    expect(report).not.toContain('SELECT user_id FROM factory_pressing_assignments WHERE company_id = $1');
     expect(report).toContain('c.voided_at IS NULL');
     expect(corrections).toContain('const SUPERVISORS = new Set(["Admin", "Owner"])');
   });
