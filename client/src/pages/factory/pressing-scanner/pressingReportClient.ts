@@ -1,4 +1,5 @@
 import * as XLSX from "@/lib/excelHelper";
+import { PRESSING_TIME_ZONE } from "@shared/pressingTimeZone";
 import {
   PRESSING_COLUMN_LABELS, type PressingReportColumn, type PressingReportFilters,
 } from "@shared/pressingReportContracts";
@@ -81,22 +82,16 @@ export async function fetchPressingReport(filters: PressingReportFilters): Promi
   if (!response.ok) throw new Error("Could not load pressing history (" + response.status + ")");
   return response.json() as Promise<PressingReportResponse>;
 }
-export function pressingDisplayDateTime(time: string | null | undefined, timeZone?: string) {
+export function pressingDisplayDateTime(time: string | null | undefined, _recordedTimeZone?: string) {
   if (!time) return "—";
   const date = new Date(time);
   if (!Number.isFinite(date.getTime())) return "—";
-  try {
-    return date.toLocaleString("en-GB", {
-      day: "2-digit", month: "2-digit", year: "numeric",
-      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
-      ...(timeZone ? { timeZone } : {}),
-    });
-  } catch {
-    return date.toLocaleString("en-GB", {
-      day: "2-digit", month: "2-digit", year: "numeric",
-      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
-    });
-  }
+  // Even older confirmations recorded as UTC must display in Beirut.
+  return date.toLocaleString("en-GB", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+    timeZone: PRESSING_TIME_ZONE,
+  });
 }
 export function pressingCell(
   row: PressingDetailRow | PressingCondensedRow, key: PressingReportColumn
