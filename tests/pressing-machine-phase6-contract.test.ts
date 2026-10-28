@@ -76,6 +76,8 @@ describe("pressing machine Phase 6 reporting contracts", () => {
     expect(server).toContain("filters.search");
     expect(server).toContain("const asOf = filters.asOf ?? new Date().toISOString()");
     expect(server).toContain('COUNT(*)::integer AS "bales"');
+    expect(server).toContain('c.product_name AS "productName"');
+    expect(server).toContain('c.article_code,c.product_name,(c.voided_at IS NOT NULL)');
     expect(server).toContain('const pageArgs = [...args, filters.limit, (filters.page - 1) * filters.limit]');
   });
   it("calculates previous-machine intervals outside the visible filter and indexes lookup", () => {
@@ -94,6 +96,9 @@ describe("pressing machine Phase 6 reporting contracts", () => {
     expect(page).toContain('aria-label="Pressing user filter"');
     expect(page).toContain("All users");
     expect(page).toContain("Scanned Bales");
+    expect(page).toContain('<th className="p-3">Bale name</th>');
+    expect(page).toContain('{row.productName || "—"}');
+    expect(page).toContain('"operatorName", "productName", "bales"');
     expect(page).toContain('useState(false)');
     expect(page).toContain('aria-label="Pressing KG filter"');
     expect(page).toContain('pressing-kpi-');
