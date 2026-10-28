@@ -201,8 +201,10 @@ export default function PressingMachineManagement({ active }: { active: boolean 
         fullControls
           ? <PressingHistoryReport key={companyId + ":" + userId}
               active={active} companyId={companyId} userId={userId} />
-          : <PressingWorkerTotals key={companyId + ":" + userId}
-              active={active} companyId={companyId} userId={userId} />
+          : assignment
+            ? <PressingWorkerTotals key={companyId + ":" + userId}
+                active={active} companyId={companyId} userId={userId} />
+            : null
       )}
     </div>
   );
