@@ -203,11 +203,19 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
   app.get("/api/factory/pressing-machines/report/options", requireAuth, async (req: Request, res: Response) => {
     try {
       const ctx = await context(req);
+      // Include assigned operators with zero scans so P1/P2/P3 filters are usable
+      // before any production is recorded.
       const operators = ctx.supervisor
         ? (await pool.query(
-          'SELECT c.user_id AS "userId",COALESCE(MAX(c.user_name_snapshot),c.user_id) AS name ' +
-          'FROM factory_pressing_confirmations c WHERE c.company_id=$1 ' +
-          'GROUP BY c.user_id ORDER BY name LIMIT 1500', [ctx.companyId]
+          'WITH operator_ids AS (SELECT user_id FROM factory_pressing_assignments WHERE company_id = $1 ' +
+          'UNION SELECT user_id FROM factory_pressing_confirmations WHERE company_id = $1) ' +
+          'SELECT o.user_id AS "userId", ' +
+          "COALESCE(NULLIF(MAX(p.display_name), ''), NULLIF(MAX(u.username), ''), " +
+          "NULLIF(MAX(c.user_name_snapshot), ''), o.user_id) AS name " +
+          'FROM operator_ids o LEFT JOIN users u ON u.id = o.user_id ' +
+          'LEFT JOIN factory_user_profiles p ON p.company_id = $1 AND p.user_id = o.user_id ' +
+          'LEFT JOIN factory_pressing_confirmations c ON c.company_id = $1 AND c.user_id = o.user_id ' +
+          'GROUP BY o.user_id ORDER BY name LIMIT 1500', [ctx.companyId]
         )).rows
         : [];
       const weights = await pool.query(
