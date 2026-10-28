@@ -11,6 +11,7 @@ import { ContinuousPressingScanner, type PressingScanOutcome } from "./Continuou
 import { usePressingOfflineSync } from "./pressing-scanner/usePressingOfflineSync";
 import PressingOfflineQueueStatus from "./PressingOfflineQueueStatus";
 import PressingHistoryReport from "./PressingHistoryReport";
+import PressingWorkerTotals from "./PressingWorkerTotals";
 
 const ROOT = "/api/factory/pressing-machines";
 type Assignment = {
@@ -197,8 +198,11 @@ export default function PressingMachineManagement({ active }: { active: boolean 
         retryNow={scanner.retryNow} />}
 
       {active && validCompany && companyId !== undefined && userId && (
-        <PressingHistoryReport key={companyId + ":" + userId}
-          active={active} companyId={companyId} userId={userId} simpleMode={!fullControls} />
+        fullControls
+          ? <PressingHistoryReport key={companyId + ":" + userId}
+              active={active} companyId={companyId} userId={userId} />
+          : <PressingWorkerTotals key={companyId + ":" + userId}
+              active={active} companyId={companyId} userId={userId} />
       )}
     </div>
   );
