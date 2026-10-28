@@ -264,6 +264,24 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
     expect(stolen.body.code).toBe("PRESSING_ASSIGNMENT_CHANGED");
   });
 
+  it("shows updated Factory display names in old history, totals, and duplicate alerts",async()=>{
+    await db.execute(sql`UPDATE factory_user_profiles SET display_name=${"Updated Operator One"}
+      WHERE company_id=${companies.a} AND user_id=${actors.opA1.userId}`);
+    const history=await call("GET /api/factory/pressing-machines/report",actors.supA,{
+      query:{mode:"detailed",status:"active"},
+    });
+    expect(history.statusCode).toBe(200);
+    const entry=history.body.rows.find((row:any)=>row.operatorUserId===actors.opA1.userId);
+    expect(entry.operatorName).toBe("Updated Operator One");
+    expect(history.body.summary.byOperator.find((row:any)=>row.userId===actors.opA1.userId).name)
+      .toBe("Updated Operator One");
+    const duplicate=await scan(actors.opA2,"one");
+    expect(duplicate.statusCode).toBe(409);
+    expect(duplicate.body.previous.operatorName).toBe("Updated Operator One");
+    await db.execute(sql`UPDATE factory_user_profiles SET display_name=${"Display opA1"}
+      WHERE company_id=${companies.a} AND user_id=${actors.opA1.userId}`);
+  });
+
   it("records a first pressing scan at every non-deleted inventory stage without stock writes",async()=>{
     for (const [key,status] of [
       ["done","IN_STOCK"],
