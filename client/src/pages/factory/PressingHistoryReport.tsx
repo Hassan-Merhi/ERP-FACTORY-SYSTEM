@@ -334,7 +334,7 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
                       <tr>
                         <th className="p-3">Bale Ref</th><th className="p-3">Article</th>
                         <th className="p-3">Product</th><th className="p-3 text-right">KG</th>
-                        <th className="p-3">Scanned by</th><th className="p-3">Date &amp; Time</th>
+                        <th className="p-3">Scanned by</th><th className="p-3">Date &amp; Time (Beirut)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -360,7 +360,7 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
                         <th className="p-3">Day</th><th className="p-3">Worker</th>
                         <th className="p-3">Bale name</th><th className="p-3 text-right">Bales</th>
                         <th className="p-3 text-right">KG</th>
-                        <th className="p-3">First scan</th><th className="p-3">Last scan</th>
+                        <th className="p-3">First scan (Beirut)</th><th className="p-3">Last scan (Beirut)</th>
                       </tr>
                     </thead>
                     <tbody>
