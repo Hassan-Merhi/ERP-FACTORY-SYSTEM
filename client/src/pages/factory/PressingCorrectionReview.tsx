@@ -20,6 +20,7 @@ type CorrectionEvent = {
   action: "VOID" | "RECONFIRM";
   reason: string;
   supervisorUserId: string;
+  supervisorDisplayName?: string;
   createdAt: string;
 };
 function explanation(error: unknown): string {
@@ -211,7 +212,7 @@ export default function PressingCorrectionReview({
                   {" · Original #" + entry.confirmationId}
                   {entry.replacementConfirmationId && " → Replacement #" + entry.replacementConfirmationId}</p>
                 <p className="text-xs text-muted-foreground">{dateTime(entry.createdAt)}
-                  {" · Supervisor " + entry.supervisorUserId}</p>
+                  {" · Supervisor " + (entry.supervisorDisplayName?.trim() || "Display name not set")}</p>
                 <p className="text-sm">{entry.reason}</p>
               </div>
             ))}
