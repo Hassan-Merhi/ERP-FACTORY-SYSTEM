@@ -1,9 +1,8 @@
-/** Pressing KPI: actual confirmed kilograms expressed as equivalent 40 KG bales.
- * Confirmed weights use 3 decimals; dividing by 40 can require 5 decimals.
- * Never round to tens or an integer, or 3,770 KG incorrectly displays as 90.
+/** Pressing KPI: display confirmed KG / 40 as a whole-number bale equivalent.
+ * Round to the nearest unit (not nearest ten); exact halves round up.
+ * For example, 3,770 KG -> 94 and 8,500 KG -> 213.
+ * The original KG totals remain unchanged.
  */
 export function approx40KgText(kg: number): string {
-  return (kg / 40).toLocaleString("en-US", {
-    maximumFractionDigits: 5,
-  });
+  return Math.round(kg / 40).toLocaleString("en-US", { maximumFractionDigits: 0 });
 }
