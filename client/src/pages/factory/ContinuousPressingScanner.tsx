@@ -100,7 +100,7 @@ export function ContinuousPressingScanner({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const trackRef = useRef<MediaStreamTrack | null>(null);
   const audioRef = useRef<AudioContextLike | null>(null);
-  const gateRef = useRef(new ContinuousScanGate());
+  const gateRef = useRef(new ContinuousScanGate(1500, 3));
   // The camera must keep decoding DIFFERENT barcodes during slow HTTP.
   // All captures are persisted individually in IndexedDB before submission.
   const inFlightRef = useRef(0);
@@ -284,6 +284,9 @@ export function ContinuousPressingScanner({
         decoder = await createCameraDecoder();
         if (canceled) { decoder?.dispose(); return; }
         if (!decoder) {
+          stream?.getTracks().forEach(track => track.stop());
+          stream = null;
+          if (videoRef.current) videoRef.current.srcObject = null;
           setStatus("manual");
           setError("Automatic barcode decoding could not start in this browser. Use manual entry below.");
           return;
@@ -378,8 +381,11 @@ export function ContinuousPressingScanner({
             <video ref={videoRef} muted playsInline autoPlay
               aria-label="Rear camera barcode preview"
               className="aspect-[4/3] max-h-[440px] w-full object-cover" />
-            <div className="pointer-events-none absolute inset-[16%] rounded-md border-2 border-emerald-300/85" aria-hidden="true">
-              <div className="absolute left-0 right-0 top-1/2 border-t border-emerald-400/70" />
+            <div className={"pointer-events-none absolute inset-[16%] rounded-md border-2 " +
+              (last?.outcome === "confirmed" ? "border-emerald-400" :
+                last?.outcome === "duplicate" || last?.outcome === "rejected" ? "border-red-500" : "border-white/70")}
+              aria-hidden="true">
+              <div className="absolute left-0 right-0 top-1/2 border-t border-white/50" />
             </div>
             {activeStatus === "starting" && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-sm text-white">
