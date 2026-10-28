@@ -79,9 +79,9 @@ function UpdateBanner() {
         const res = await fetch("/api/build-info", { credentials: "same-origin", cache: "no-store" });
         if (!res.ok) return;
         const data = await res.json();
-        // A privileged administrator can issue a DB-backed, all-company refresh
-        // independently of software deployments. All logged-in tabs poll this
-        // signal and show the mandatory five-second notice before reloading.
+        // The server provides the current session's role-scoped refresh token
+        // (regular users OR admins/owners/developers). Each tab watches only its
+        // own group and shows the five-second notice when that token changes.
         if (
           typeof data.forceRefreshToken === "string" &&
           shouldApplyGlobalForceRefresh(data.forceRefreshToken)
