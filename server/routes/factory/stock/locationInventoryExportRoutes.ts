@@ -21,7 +21,7 @@ import {
   locations,
   factorySettings,
 } from "@shared/schema";
-import { eq, and, or, inArray } from "drizzle-orm";
+import { eq, and, or, inArray, isNull } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, sumMoney, toMoney } from "../../../lib/money";
 
