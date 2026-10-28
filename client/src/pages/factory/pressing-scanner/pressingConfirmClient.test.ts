@@ -46,7 +46,23 @@ describe("Phase 5 pressing scan transport", () => {
     vi.mocked(apiRequest).mockRejectedValue(error);
     const outcome = await sendQueuedPressingScan(row);
     expect(isPressingDuplicate(error.code)).toBe(true);
-    expect(outcome).toEqual({ kind: "rejected", code: error.code, message: error.message });
+    expect(outcome).toEqual({
+      kind: "rejected", code: error.code,
+      message: "Already scanned — original user unavailable", previousScan: undefined,
+    });
+  });
+
+  it("returns the original P1/P2/P3 username from the server on a duplicate", async () => {
+    const error = Object.assign(new Error("Already pressed"), {
+      code: "PRESSING_ALREADY_CONFIRMED", status: 409,
+      previous: { operatorName: "P2", operatorUserId: "user-p2", confirmedAt: "2026-10-28T06:39:35.000Z" },
+    });
+    vi.mocked(apiRequest).mockRejectedValue(error);
+    const outcome = await sendQueuedPressingScan(row);
+    expect(outcome).toMatchObject({
+      kind: "rejected", code: "PRESSING_ALREADY_CONFIRMED",
+      message: "Already scanned by P2", previousScan: { operatorName: "P2" },
+    });
   });
 
   it("treats lost response or network timeout as retry, not confirmed", async () => {
