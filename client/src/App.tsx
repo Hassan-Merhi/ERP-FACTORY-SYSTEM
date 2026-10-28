@@ -71,6 +71,8 @@ function UpdateBanner() {
     if (import.meta.env.DEV) return;
 
     async function checkVersion() {
+      // An unauthenticated login page is not a target of the admin command.
+      if (window.location.pathname === "/login" || window.location.pathname.startsWith("/login/")) return;
       if (checkingRef.current) return;
       checkingRef.current = true;
       try {
@@ -79,7 +81,7 @@ function UpdateBanner() {
         const data = await res.json();
         // A privileged administrator can issue a DB-backed, all-company refresh
         // independently of software deployments. All logged-in tabs poll this
-        // signal and immediately reload when it changes.
+        // signal and show the mandatory five-second notice before reloading.
         if (
           typeof data.forceRefreshToken === "string" &&
           shouldApplyGlobalForceRefresh(data.forceRefreshToken)
