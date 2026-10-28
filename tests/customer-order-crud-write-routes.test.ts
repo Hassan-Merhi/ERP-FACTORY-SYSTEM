@@ -479,6 +479,27 @@ describe("DELETE /api/factory/customer-orders/:id", () => {
 
     const links = await pool.query(`SELECT id FROM customer_order_bales WHERE order_id = $1`, [orderId]);
     expect(links.rowCount).toBe(1);
+
+    // A deleted loading's historical bale link must not keep the bale
+    // marked as loading in Stock Entry after the release.
+    const stockResponse = await agent.get("/api/factory/stock-entry/in-stock");
+    expect(stockResponse.status).toBe(200);
+    const stockRow = stockResponse.body.find((b: { id: number }) => b.id === baleId);
+    expect(stockRow).toBeDefined();
+    expect(stockRow.isInLoadingOrder).toBe(false);
+
+    // The same physical bale should be reusable without a phantom active
+    // loading blocking availability (and no duplicate stock receipt).
+    const ref = await pool.query<{ reference_number: string }>(
+      `SELECT reference_number FROM factory_bales WHERE id = $1`, [baleId]
+    );
+    await pool.query(`UPDATE factory_bales SET article_code = $1 WHERE id = $2`, [ref.rows[0].reference_number, baleId]);
+    const available = await agent.get("/api/factory/bale-stock-list").query({ articleCode: ref.rows[0].reference_number });
+    expect(available.status).toBe(200);
+    const availableRow = available.body.find((b: { id: number }) => b.id === baleId);
+    expect(availableRow).toBeDefined();
+    expect(availableRow.blockedByOrder).toBe(false);
+    expect(availableRow.lockedInLoading).toBe(false);
   });
 
   it("refuses to delete a finalized invoice, leaving its bales alone", async () => {
