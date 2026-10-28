@@ -21,6 +21,10 @@ describe("pressing machine Phase 6 reporting contracts", () => {
     expect(pressingReportFiltersSchema.safeParse({ page: "0" }).success).toBe(false);
     expect(pressingReportFiltersSchema.safeParse({ companyId: 999 }).success).toBe(false);
     expect(pressingReportFiltersSchema.safeParse({ status: "invalid" }).success).toBe(false);
+    expect(pressingReportFiltersSchema.safeParse({ weightKg: "40" }).success).toBe(true);
+    expect(pressingReportFiltersSchema.safeParse({ weightKg: "45.5" }).success).toBe(true);
+    expect(pressingReportFiltersSchema.safeParse({ weightKg: "0" }).success).toBe(false);
+    expect(pressingReportFiltersSchema.safeParse({ weightKg: "-1" }).success).toBe(false);
   });
   it("accepts saved view filters and strict column names", () => {
     const view = {
@@ -66,6 +70,7 @@ describe("pressing machine Phase 6 reporting contracts", () => {
     expect(server).toContain('push("c.production_date >= ?::date", filters.from)');
     expect(server).toContain('push("c.production_date <= ?::date", filters.to)');
     expect(server).toContain('push("c.machine_id = ?", filters.machineId)');
+    expect(server).toContain('push("c.weight_kg = ?::numeric", filters.weightKg)');
     expect(server).toContain('push("c.shift_id = ?", filters.shiftId)');
     expect(server).toContain("filters.articleCode");
     expect(server).toContain("filters.search");
@@ -89,6 +94,13 @@ describe("pressing machine Phase 6 reporting contracts", () => {
     expect(page).toContain('aria-label="Pressing user filter"');
     expect(page).toContain("All users");
     expect(page).toContain("Scanned Bales");
+    expect(page).toContain('useState(false)');
+    expect(page).toContain('aria-label="Pressing KG filter"');
+    expect(page).toContain('pressing-kpi-');
+    expect(page).toContain('mode: "condensed"');
+    expect(page).toContain('kpiSummary?.totalBales');
+    expect(server).toContain('overview');
+    expect(server).toContain('byOperatorSqlFor');
     expect(page).toContain("Export Excel");
     expect(page).toContain("queryClient.invalidateQueries");
     expect(client).toContain("XLSX.writeFile");
