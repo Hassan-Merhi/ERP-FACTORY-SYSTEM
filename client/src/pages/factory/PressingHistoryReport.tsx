@@ -83,7 +83,8 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
   const canSeeEveryone = options.data?.canViewAll === true;
   const canCorrect = options.data?.canCorrect === true;
   const summary = report.data?.summary;
-  const byOperator = summary?.byOperator || [];
+  const kpiSummary = report.data?.overview || summary;
+  const byOperator = kpiSummary?.byOperator || [];
   const detail = (report.data?.rows || []).filter(
     (row): row is PressingDetailRow => "id" in row,
   );
