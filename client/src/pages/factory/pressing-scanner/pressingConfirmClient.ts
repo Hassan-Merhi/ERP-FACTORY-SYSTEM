@@ -83,7 +83,7 @@ export async function sendQueuedPressingScan(row: PressingQueuedScan): Promise<P
     }
     if (isPressingDuplicate(code)) {
       const previousScan = previousPressingScan(error.previous);
-      const scanner = previousScan?.operatorName || previousScan?.operatorUserId;
+      const scanner = previousScan?.operatorName?.trim();
       return { kind: "rejected", code,
         message: scanner ? "Already scanned by " + scanner : "Already scanned — original user unavailable",
         previousScan };
