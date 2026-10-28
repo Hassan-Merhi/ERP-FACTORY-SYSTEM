@@ -6,6 +6,7 @@ const manager = read("client/src/pages/factory/PressingMachineManagement.tsx");
 const camera = read("client/src/pages/factory/ContinuousPressingScanner.tsx");
 const history = read("client/src/pages/factory/PressingHistoryReport.tsx");
 const workerTotals = read("client/src/pages/factory/PressingWorkerTotals.tsx");
+const hourlyTargets = read("client/src/pages/factory/PressingHourlyTargets.tsx");
 const stockEntry = read("client/src/pages/factory/BaleStockEntry.tsx");
 const access = read("server/routes/factory/factoryPressingMachineManagementRoutes.ts");
 const report = read("server/routes/factory/factoryPressingReportRoutes.ts");
@@ -44,6 +45,20 @@ describe("Pressing worker camera-only access", () => {
     expect(history).toContain("Export Excel");
     expect(stockEntry).toContain("isPressingOnlyWorker");
     expect(stockEntry).toContain("<PressingMachineManagement active />");
+  });
+
+  it("shows read-only hourly KG targets directly below pressing worker totals", () => {
+    const totalsAt = manager.indexOf("<PressingWorkerTotals");
+    const hourlyAt = manager.indexOf("<PressingHourlyTargets", totalsAt);
+    expect(totalsAt).toBeGreaterThan(-1);
+    expect(hourlyAt).toBeGreaterThan(totalsAt);
+    expect(manager).toContain('import PressingHourlyTargets from "./PressingHourlyTargets"');
+    expect(hourlyTargets).toContain("enabled: active,");
+    expect(hourlyTargets).toContain('day ? "?day=" + encodeURIComponent(day) : ""');
+    expect(hourlyTargets).toContain('value={day || data?.day || ""}');
+    expect(hourlyTargets).toContain("{data.canEdit && <Button");
+    expect(report).toContain("canEdit: ctx.canCorrect");
+    expect(report).toContain("if (!ctx.canCorrect) throw new ReportPermissionError(403");
   });
 
   it("allows shared aggregates while restricting other workers' detailed records and corrections", () => {
