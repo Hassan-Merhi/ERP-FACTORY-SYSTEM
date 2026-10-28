@@ -81,6 +81,8 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
       VALUES(${id},${key+suffix},'x',${options.active??true})`);
     await db.execute(sql`INSERT INTO user_company_roles(user_id,company_id,role,pos_view_only)
       VALUES(${id},${companyId},${role},${options.posViewOnly??false})`);
+    await db.execute(sql`INSERT INTO factory_user_profiles(company_id,user_id,display_name)
+      VALUES(${companyId},${id},${"Display "+key})`);
     actors[key]={userId:id,companyId,username:key+suffix};
   }
   async function fixtureBale(key:string,companyId:number,status="PENDING_PRESSING",deleted=false){
@@ -159,7 +161,7 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
         "factory_pressing_downtime","factory_pressing_sessions",
         "factory_pressing_assignments","factory_pressing_shifts",
         "factory_pressing_saved_views","factory_pressing_machines",
-        "factory_bales","factory_settings","user_company_roles",
+        "factory_bales","factory_settings","factory_user_profiles","user_company_roles",
       ]){
         await conn.query("DELETE FROM "+table+" WHERE company_id = ANY($1::int[])",[ids]);
       }
@@ -244,7 +246,7 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
     expect(duplicate.statusCode).toBe(409);
     expect(duplicate.body.code).toBe("PRESSING_ALREADY_CONFIRMED");
     expect(duplicate.body.previous).toMatchObject({
-      operatorName:actors.opA1.username,
+      operatorName:"Display opA1",
       operatorUserId:actors.opA1.userId,
       referenceNumber:bales.one.ref,
     });
