@@ -34,7 +34,7 @@ const detailed: PressingDetailRow = {
 const condensed: PressingCondensedRow = {
   productionDate: "2026-10-27", machineId: 4, machineName: "Press 04",
   operatorUserId: "user-12", operatorName: "Operator A", shiftId: null,
-  articleCode: "HMD11476", voided: false, timezoneName: "UTC",
+  articleCode: "HMD11476", productName: "Wipers", voided: false, timezoneName: "UTC",
   bales: 3, weightKg: "135.375", firstScanAt: detailed.confirmedAt,
   lastScanAt: detailed.confirmedAt,
 };
@@ -67,6 +67,7 @@ describe("pressing history client", () => {
 
   it("keeps condensed totals numeric and distinguishes voided records", () => {
     expect(pressingCell(condensed, "bales")).toBe(3);
+    expect(pressingCell(condensed, "productName")).toBe("Wipers");
     expect(pressingCell(condensed, "weightKg")).toBe(135.375);
     expect(pressingCell({ ...condensed, voided: true }, "status")).toBe("Voided");
   });
