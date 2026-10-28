@@ -23,6 +23,7 @@ export type PressingScanOutcome = {
   timezoneName?: string;
   weightKg?: string;
   machineName?: string;
+  scannedBy?: string;
 };
 export type PressingScannerAssignment = {
   assignmentId: number;
@@ -41,7 +42,9 @@ type ScreenWakeLockNavigator = Navigator & { wakeLock?: { request(type: "screen"
 
 type TorchCapabilities = MediaTrackCapabilities & { torch?: boolean; focusMode?: string[] };
 
-const SCAN_POLL_MS = 220;
+// Schedule only after each decoder call finishes; avoid overlapping ZXing work.
+// Native can poll faster because it is hardware accelerated.
+const SCAN_POLL_MS = { native: 70, zxing: 90 } as const;
 function capturedTime(iso: string, timeZone?: string): string {
   try {
     return new Date(iso).toLocaleTimeString(undefined, {
@@ -86,7 +89,7 @@ export function ContinuousPressingScanner({
   const [last, setLast] = useState<{
     barcode: string; at: string; outcome: ScanFeedback; message: string; intervalSeconds: number | null;
     confirmedAt?: string; timezoneName?: string; weightKg?: string; machineName?: string;
-    confirmationId?: number; productionDate?: string;
+    confirmationId?: number; productionDate?: string; scannedBy?: string;
   } | null>(null);
   const [manualCode, setManualCode] = useState("");
   const [sound, setSound] = useState(true);
@@ -194,7 +197,7 @@ export function ContinuousPressingScanner({
         barcode, at: deviceCapturedAt, outcome: result.kind, message: result.message, intervalSeconds,
         confirmedAt: result.confirmedAt, timezoneName: result.timezoneName, weightKg: result.weightKg,
         machineName: result.machineName, confirmationId: result.confirmationId,
-        productionDate: result.productionDate,
+        productionDate: result.productionDate, scannedBy: result.scannedBy,
       });
       feedback(result.kind);
     } catch {
@@ -242,7 +245,7 @@ export function ContinuousPressingScanner({
           if (next) void handleRead(next, currentAssignment);
         } catch { /* A transient bad frame is not a fatal camera error. */ }
       }
-      if (!canceled) timer = setTimeout(() => void tick(detector), SCAN_POLL_MS);
+      if (!canceled) timer = setTimeout(() => void tick(detector), SCAN_POLL_MS[detector.engine]);
     };
 
     const start = async () => {
@@ -251,17 +254,9 @@ export function ContinuousPressingScanner({
         setError("Camera access requires a supported browser and a secure (HTTPS) connection. Manual entry stays available.");
         return;
       }
-      // Native BarcodeDetector where it works; otherwise the bundled ZXing
-      // decoder (iPhone Safari and other browsers without native support).
-      decoder = await createCameraDecoder();
-      if (canceled) { decoder?.dispose(); return; }
-      if (!decoder) {
-        setStatus("manual");
-        setError("Automatic barcode decoding could not start in this browser. Use manual entry below.");
-        return;
-      }
-      setEngine(decoder.engine);
       try {
+        // Open and focus the camera first. Downloading ZXing on iOS can be
+        // slow, but autofocus/preview can start while the decoder loads.
         stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
           audio: false,
@@ -285,6 +280,15 @@ export function ContinuousPressingScanner({
             }).catch(() => {});
           }
         }
+        // Native BarcodeDetector when supported, bundled ZXing on iOS.
+        decoder = await createCameraDecoder();
+        if (canceled) { decoder?.dispose(); return; }
+        if (!decoder) {
+          setStatus("manual");
+          setError("Automatic barcode decoding could not start in this browser. Use manual entry below.");
+          return;
+        }
+        setEngine(decoder.engine);
         setStatus("scanning");
         // Where supported, keep the screen awake during deliberate scanning.
         // Browsers may refuse this request; it is never required for scanning.
@@ -347,7 +351,7 @@ export function ContinuousPressingScanner({
   const badgeColor = last?.outcome === "confirmed" ? "bg-emerald-100 text-emerald-900 border-emerald-400"
     : last?.outcome === "rejected" || last?.outcome === "duplicate"
       ? "bg-red-100 text-red-900 border-red-400"
-      : "bg-amber-100 text-amber-950 border-amber-400";
+      : "bg-slate-100 text-slate-900 border-slate-400 dark:bg-slate-800 dark:text-slate-100";
 
   return (
     <Card className="overflow-hidden" data-testid="continuous-pressing-scanner">
@@ -438,7 +442,22 @@ export function ContinuousPressingScanner({
                   : capturedTime(last.at)}
               </span>
             </div>
-            <p className="text-sm">{last.message}</p>
+            <p className="text-base font-bold" data-testid="pressing-camera-scan-status">
+              {last.outcome === "duplicate" ? "ALREADY SCANNED" :
+                last.outcome === "confirmed" ? "SCAN CONFIRMED" :
+                last.outcome === "queued" ? "WAITING FOR SERVER" :
+                last.outcome === "processing" ? "CHECKING…" :
+                last.outcome === "rejected" ? "SCAN REJECTED" : "SCAN PREVIEW"}
+            </p>
+            {last.outcome === "duplicate" && last.scannedBy && (
+              <p className="text-base font-semibold" data-testid="pressing-duplicate-user">
+                Scanned by: {last.scannedBy}
+              </p>
+            )}
+            {last.outcome !== "duplicate" && <p className="text-sm">{last.message}</p>}
+            {last.outcome === "duplicate" && !last.scannedBy && (
+              <p className="text-sm">{last.message}</p>
+            )}
             {last.confirmedAt && (
               <p className="text-xs">
                 Server confirmed: {last.productionDate} {capturedTime(last.confirmedAt, last.timezoneName)}
