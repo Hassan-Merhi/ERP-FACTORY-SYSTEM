@@ -193,7 +193,7 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
           <div className="mt-1 text-xs text-muted-foreground">Total bales</div>
           <div className="mt-3 flex items-center gap-1.5 border-t pt-2.5">
             <Weight className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-            <strong className="text-sm tabular-nums">{kgText(summary?.totalKg)} KG</strong>
+            <strong className="text-sm tabular-nums">{kgText(kpiSummary?.totalKg)} KG</strong>
           </div>
         </button>
       </div>
