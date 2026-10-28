@@ -33,6 +33,8 @@ export const pressingReportFiltersSchema = z.object({
   shiftId: positiveInt.optional(),
   articleCode: z.string().trim().min(1).max(50).optional(),
   search: z.string().trim().min(1).max(100).optional(),
+  // Exact bale weight; decimal KG values are supported (not just 40 or 80 KG).
+  weightKg: z.coerce.number().positive().max(100000).optional(),
   status: z.enum(["active", "voided", "all"]).default("active"),
   mode: z.enum(["detailed", "condensed"]).default("detailed"),
   page: positiveInt.max(100000).default(1),
