@@ -21,6 +21,7 @@ import { blockErpTesterSettings, blockViewOnlyWrites } from "./auth";
 import { registerWebSocketHttpFallback, setupWS } from "./wsServer";
 import { startScheduler } from "./services/scheduler";
 import { pool } from "./db";
+import { readGlobalForceRefreshToken } from "./services/globalForceRefresh";
 import { requestLogger } from "./middleware/requestLogger";
 import { bandwidthDebugMiddleware } from "./middleware/bandwidthDebug";
 import { apiRateLimit } from "./middleware/apiRateLimit";
@@ -193,8 +194,16 @@ let migrationsDone = false;
   registerDbHealthRoute(app, () => migrationsDone);
 
   // Build info endpoint for frontend version checking (must be before registerRoutes)
-  app.get("/api/build-info", (_req, res) => {
-    res.json({ version: BUILD_VERSION });
+  app.get("/api/build-info", async (_req, res) => {
+    try {
+      const forceRefreshToken = await readGlobalForceRefreshToken();
+      res.json({ version: BUILD_VERSION, forceRefreshToken });
+    } catch (error) {
+      logger.warn("[GlobalForceRefresh] Build info token unavailable", { error });
+      // Keep normal build update detection working during a transient DB issue.
+      // Omitting the token makes the client ignore this failed check.
+      res.json({ version: BUILD_VERSION });
+    }
   });
 
   // Boot ID endpoint — returns a random ID generated once per server process start.
