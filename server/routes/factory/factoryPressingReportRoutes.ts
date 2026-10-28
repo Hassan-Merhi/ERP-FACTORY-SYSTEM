@@ -152,25 +152,28 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
   app.get("/api/factory/pressing-machines/report/worker-totals", requireAuth, async (req: Request, res: Response) => {
     try {
       const ctx = await context(req);
-      // Includes activated pressing workers even before their first scan, plus
-      // historical operators without active assignments. No cross-company data.
+      // P1/P2/P3 are the dedicated pressing worker logins. Other accounts
+      // (including Admin, Manager, Owner and Developer) must never appear in
+      // the worker scoreboard, even if they initialized a pressing station.
+      // Membership is checked in the active company; no cross-company rows.
       const result = await pool.query(
-        `WITH operators AS (
-          SELECT user_id FROM factory_pressing_assignments WHERE company_id = $1
-          UNION
-          SELECT user_id FROM factory_pressing_confirmations WHERE company_id = $1
-        )
-        SELECT o.user_id AS "userId",
-          COALESCE(NULLIF(MAX(p.display_name), ''), NULLIF(MAX(u.username), ''), NULLIF(MAX(c.user_name_snapshot), ''), o.user_id) AS "name",
+        `SELECT u.id AS "userId",
+          COALESCE(NULLIF(MAX(p.display_name), ''), u.username) AS "name",
           COUNT(c.id)::integer AS "totalBales",
           COALESCE(SUM(c.weight_kg), 0)::numeric(18,3) AS "totalKg"
-        FROM operators o
-        LEFT JOIN users u ON u.id = o.user_id
-        LEFT JOIN factory_user_profiles p ON p.company_id = $1 AND p.user_id = o.user_id
+        FROM users u
+        LEFT JOIN factory_user_profiles p
+          ON p.company_id = $1 AND p.user_id = u.id
         LEFT JOIN factory_pressing_confirmations c
-          ON c.company_id = $1 AND c.user_id = o.user_id AND c.voided_at IS NULL
-        GROUP BY o.user_id
-        ORDER BY name ASC, o.user_id ASC`,
+          ON c.company_id = $1 AND c.user_id = u.id AND c.voided_at IS NULL
+        WHERE UPPER(BTRIM(u.username)) IN ('P1', 'P2', 'P3')
+          AND EXISTS (
+            SELECT 1 FROM user_company_roles r
+            WHERE r.company_id = $1 AND r.user_id = u.id
+              AND r.role IN ('User', 'Normal User')
+          )
+        GROUP BY u.id, u.username
+        ORDER BY UPPER(BTRIM(u.username))`,
         [ctx.companyId],
       );
       return res.json({ workers: result.rows });
