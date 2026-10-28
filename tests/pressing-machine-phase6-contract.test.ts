@@ -111,6 +111,11 @@ describe("pressing machine Phase 6 reporting contracts", () => {
     expect(page).toContain('pressingKpiWorkers(operators, byOperator)');
     expect(page).toContain('data-testid={"pressing-kpi-display-name-" + worker.slot.toLowerCase()}');
     expect(server).toContain('AS "displayName"');
+    expect(server).toContain('FROM factory_user_profiles WHERE company_id = $1');
+    expect(server).toContain('operatorName: displayName(row.operatorUserId)');
+    expect(server).toContain('name: displayName(row.userId)');
+    expect(page).toContain('operator.displayName?.trim() || "Display name not set"');
+    expect(client).toContain('row.operatorName?.trim() || "Display name not set"');
     expect(server).toContain('overview');
     expect(server).toContain('byOperatorSqlFor');
     expect(page).toContain("Export Excel");
