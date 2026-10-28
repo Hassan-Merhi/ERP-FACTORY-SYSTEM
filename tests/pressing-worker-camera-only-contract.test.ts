@@ -12,8 +12,8 @@ const report = read("server/routes/factory/factoryPressingReportRoutes.ts");
 const corrections = read("server/routes/factory/factoryPressingCorrectionRoutes.ts");
 
 describe("Pressing worker camera-only access", () => {
-  it("grants full scanner UI only to Admin and Owner using the authenticated company role", () => {
-    expect(access).toContain('canManage: (ctx.role === "Admin" || ctx.role === "Owner") && !ctx.posViewOnly');
+  it("grants full scanner UI to Admin, Owner and Developer using the authenticated company role", () => {
+    expect(access).toContain('canManage: ["Admin", "Owner", "Developer"].includes(ctx.role) && !ctx.posViewOnly');
     expect(manager).toContain("access.data?.canManage === true");
     expect(manager).toContain('{fullControls && <><div className="relative min-w-0 flex-1">');
     expect(manager).toContain('data-testid="button-pressing-camera"');
@@ -47,7 +47,7 @@ describe("Pressing worker camera-only access", () => {
   });
 
   it("allows shared aggregates while restricting other workers' detailed records and corrections", () => {
-    expect(report).toContain('const MANAGER_ROLES = new Set(["Admin", "Owner"])');
+    expect(report).toContain('const MANAGER_ROLES = new Set(["Admin", "Owner", "Developer"])');
     expect(report).toContain('push("c.user_id = ?", ctx.userId)');
     expect(report).toContain('app.get("/api/factory/pressing-machines/report/worker-totals", requireAuth');
     expect(report).toContain('WHERE company_id = $1');
