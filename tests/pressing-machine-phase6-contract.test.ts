@@ -106,7 +106,11 @@ describe("pressing machine Phase 6 reporting contracts", () => {
     expect(page).toContain('pressing-kpi-');
     expect(page).toContain('mode: "condensed"');
     expect(page).toContain('const allWorkerBales = workers.reduce');
-    expect(page).toContain('item.isPressingWorker === true && item.username?.trim().toUpperCase() === slot');
+    expect(client).toContain('item.isPressingWorker === true && item.username?.trim().toUpperCase() === slot');
+    expect(client).toContain('operator?.displayName?.trim()');
+    expect(page).toContain('pressingKpiWorkers(operators, byOperator)');
+    expect(page).toContain('data-testid={"pressing-kpi-display-name-" + worker.slot.toLowerCase()}');
+    expect(server).toContain('AS "displayName"');
     expect(server).toContain('overview');
     expect(server).toContain('byOperatorSqlFor');
     expect(page).toContain("Export Excel");
