@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { PRESSING_TIME_ZONE } from "@shared/pressingTimeZone";
 import {
   fetchPressingReport, type PressingDetailRow, type PressingReportResponse,
 } from "./pressing-scanner/pressingReportClient";
@@ -27,7 +28,8 @@ function explanation(error: unknown): string {
 function dateTime(raw: string): string {
   return new Date(raw).toLocaleString("en-GB", {
     year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+    timeZone: PRESSING_TIME_ZONE,
   });
 }
 
@@ -146,7 +148,7 @@ export default function PressingCorrectionReview({
           <table className="w-full min-w-[540px] text-sm">
             <thead className="bg-muted text-left"><tr>
               <th className="p-2">Reference</th><th className="p-2">Record</th>
-              <th className="p-2">Machine</th><th className="p-2">Server time</th>
+              <th className="p-2">Machine</th><th className="p-2">Server time (Beirut)</th>
               <th className="p-2">Action</th>
             </tr></thead>
             <tbody>
