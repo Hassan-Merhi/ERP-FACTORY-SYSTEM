@@ -22,8 +22,8 @@ const STABLE_QUERY_PREFIXES = [
 ];
 
 const TOPIC_QUERY_PREFIXES: Record<RealtimeInvalidationTopic, readonly string[]> = {
-  inventory: ["/api/locations", "/api/inventory", "/api/stock", "/api/bales", "/api/location-inventory"],
-  pos: ["/api/pos", "/api/sales", "/api/dashboard", "/api/pending-loadings"],
+  inventory: ["/api/locations", "/api/inventory", "/api/stock", "/api/bales", "/api/location-inventory", "/api/factory/ground-scan-items", "/api/factory/stock-entry/in-stock-locations"],
+  pos: ["/api/pos", "/api/sales", "/api/dashboard", "/api/pending-loadings", "/api/factory/ground-scan-items", "/api/factory/stock-entry/in-stock-locations"],
   fx: [], // matched via the exact-path predicate, not a broad topic prefix
   accounting: [
     "/api/accounts",
@@ -44,7 +44,7 @@ const TOPIC_QUERY_PREFIXES: Record<RealtimeInvalidationTopic, readonly string[]>
   factory: ["/api/factory/"],
   scans: ["/api/factory/daily-bale-scans", "/api/factory/ground-scan-items"],
   payroll: ["/api/factory/payroll", "/api/factory-payroll"],
-  containers: ["/api/containers", "/api/import", "/api/sp/", "/api/supplier-proforma"],
+  containers: ["/api/containers", "/api/import", "/api/sp/", "/api/supplier-proforma", "/api/factory/ground-scan-items"],
   reference: [
     "/api/suppliers",
     "/api/customers",
