@@ -56,8 +56,8 @@ export function registerFactoryPressingMachineManagementRoutes(app: Express) {
       const ctx = await getActiveCompanyPermissionContext(req);
       return res.json({
         companyId: ctx.companyId, userId: ctx.userId,
-        // Full pressing controls are reserved for Admin and Owner only.
-        canManage: (ctx.role === "Admin" || ctx.role === "Owner") && !ctx.posViewOnly,
+        // Company-wide dashboard and scanner for Admin, Owner and Developer.
+        canManage: ["Admin", "Owner", "Developer"].includes(ctx.role) && !ctx.posViewOnly,
         assignment: await db.transaction(async tx => currentAssignment(ctx.companyId, ctx.userId, tx)),
       });
     } catch (error) { return sendError(res, error); }
