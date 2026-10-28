@@ -247,6 +247,7 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
           "AND r.company_id = $1 AND r.role IN ('User', 'Normal User') " +
           "WHERE UPPER(BTRIM(u.username)) IN ('P1', 'P2', 'P3')) " +
           'SELECT o.user_id AS "userId", MAX(u.username) AS username, ' +
+          'NULLIF(BTRIM(MAX(p.display_name)), \'\') AS "displayName", ' +
           "EXISTS (SELECT 1 FROM user_company_roles r WHERE r.company_id = $1 " +
           "AND r.user_id = o.user_id AND r.role IN ('User', 'Normal User')) AS \"isPressingWorker\", " +
           "COALESCE(NULLIF(MAX(p.display_name), ''), NULLIF(MAX(u.username), ''), " +
