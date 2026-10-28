@@ -131,29 +131,48 @@ async function report(ctx: QueryCtx, filters: PressingReportFilters) {
   // Production KPIs count only non-voided records even when the history
   // filter displays voided audit rows.
   const sumConditions = conditions(ctx, filters);
-  const sumSql = 'SELECT COUNT(*) FILTER (WHERE c.voided_at IS NULL)::integer AS "totalBales",' +
+  const sumSqlFor = (where: string[]) =>
+    'SELECT COUNT(*) FILTER (WHERE c.voided_at IS NULL)::integer AS "totalBales",' +
     'COALESCE(SUM(c.weight_kg) FILTER (WHERE c.voided_at IS NULL),0)::numeric(18,3) AS "totalKg",' +
     'COUNT(*) FILTER (WHERE c.voided_at IS NOT NULL)::integer AS "voidedBales"' +
-    ' FROM factory_pressing_confirmations c WHERE ' + sumConditions.where.join(" AND ");
-  // The same company/date/user/KG/search predicates drive each KPI. This is
-  // an aggregate over the full matching set, not the currently visible page.
-  const perOperatorSql = 'SELECT c.user_id AS "userId",' +
+    ' FROM factory_pressing_confirmations c WHERE ' + where.join(" AND ");
+  // Always aggregate server-side across all matching records, never the 50
+  // current groups on screen. Voided confirmations do not inflate the KPIs.
+  const byOperatorSqlFor = (where: string[]) =>
+    'SELECT c.user_id AS "userId",' +
     'MAX(c.user_name_snapshot) AS "name",' +
     'COUNT(*)::integer AS "totalBales",' +
     'COALESCE(SUM(c.weight_kg),0)::numeric(18,3) AS "totalKg"' +
-    ' FROM factory_pressing_confirmations c WHERE ' + sumConditions.where.join(" AND ") +
+    ' FROM factory_pressing_confirmations c WHERE ' + where.join(" AND ") +
     ' AND c.voided_at IS NULL GROUP BY c.user_id ORDER BY c.user_id';
+  const sumSql = sumSqlFor(sumConditions.where);
+  const perOperatorSql = byOperatorSqlFor(sumConditions.where);
   const [rows, count, summary, byOperator] = await Promise.all([
     pool.query(sqlPage, pageArgs),
     pool.query(countSql, args),
     pool.query(sumSql, sumConditions.args),
     pool.query(perOperatorSql, sumConditions.args),
   ]);
+  const filteredSummary = { ...(summary.rows[0] ?? { totalBales: 0, totalKg: "0", voidedBales: 0 }),
+    byOperator: byOperator.rows };
+  // Filtering the table to P2 should not make P1/P3 or ALL WORKERS show
+  // zero. Keep the dashboard across all operators for the selected date,
+  // barcode, status and KG, while the history/export obey userId.
+  let overview = filteredSummary;
+  if (ctx.supervisor && filters.userId) {
+    const allConditions = conditions(ctx, { ...filters, userId: undefined });
+    const [allSummary, allOperators] = await Promise.all([
+      pool.query(sumSqlFor(allConditions.where), allConditions.args),
+      pool.query(byOperatorSqlFor(allConditions.where), allConditions.args),
+    ]);
+    overview = { ...(allSummary.rows[0] ?? { totalBales: 0, totalKg: "0", voidedBales: 0 }),
+      byOperator: allOperators.rows };
+  }
   return {
     rows: rows.rows,
     total: Number(count.rows[0]?.total || 0),
-    summary: { ...(summary.rows[0] ?? { totalBales: 0, totalKg: "0", voidedBales: 0 }),
-      byOperator: byOperator.rows },
+    summary: filteredSummary,
+    overview,
     page: filters.page, limit: filters.limit, mode: filters.mode,
     asOf,
   };
