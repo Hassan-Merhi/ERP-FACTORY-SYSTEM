@@ -6,9 +6,9 @@ This specification supersedes the previously implemented complicated Phase 2 and
 
 Factory > Stock Entry > Pressing Machines uses a simplified role-specific layout:
 - **Admin / Owner:** full barcode input, Scan action, continuous camera, scan status/sync details, full-company date/user/status filters, corrections and Excel export.
-- **All other roles:** **Open Camera / Close Camera** and their own scanned-bale list with totals. No manual barcode field, sync/settings panel, report filters, export, or supervisor actions. When Pressing Machines is their only Stock Entry section, omit the Stock Entry header, print settings, daily production KPIs and tab switcher as well. The camera starts on Open Camera and releases on Close Camera; confirmations appear in the camera panel. The worker's list defaults to all time, with pagination for long histories.
+- **All other roles:** **Open Camera / Close Camera** and an all-time **per-worker totals** table (username, confirmed bale count, KG), including their own row and a grand total. Do not show individual bale references, articles, scanned-by timestamps or a paginated history table. No manual barcode field, sync/settings panel, report filters, export, or supervisor actions. When Pressing Machines is their only Stock Entry section, omit the Stock Entry header, print settings, daily production KPIs and tab switcher as well. The camera starts on Open Camera and releases on Close Camera; confirmations appear in the camera panel.
 
-Only the existing user/page permission must be configured. A permitted employee opens the page, and the server automatically creates an internal station and assignment if needed. Every accepted scan records the authenticated user, not a configured shift operator. Workers can see only their own results. Admin and Owner can filter by employee; Manager and Developer do not receive elevated pressing history access.
+Only the existing user/page permission must be configured. A permitted employee opens the page, and the server automatically creates an internal station and assignment if needed. Every accepted scan records the authenticated user, not a configured shift operator. Workers can see all operators' **aggregate totals**, but the detailed history endpoint remains restricted to their own confirmations. Admin and Owner can filter full history by employee; Manager and Developer do not receive elevated detailed pressing history or correction permissions. The summary is company-scoped, includes operators with an initialized station even if their count is zero, and excludes voided confirmations.
 
 ## Removed from the active system
 
@@ -33,5 +33,7 @@ A pressing scan NEVER changes Factory bale stock status, stock counts, raw-mater
 Updated tests include simplified permission and user initialization contracts, offline confirmation, report filtering and a real-PostgreSQL integration suite covering automatic activation, concurrent duplicate scans, actor/company isolation, immutable corrections and unchanged stock.
 
 Local TypeScript checks, Vitest tests, isolated PostgreSQL tests and real-phone camera verification remain required before merging/deploying.
+
+October 28, 2026 follow-up: Workers now see team totals (one row per pressing user and total) rather than individual bale history; this uses a separate company-scoped aggregate read endpoint.
 
 October 27, 2026 follow-up: feature/pressing-worker-camera-only-20261027 narrows the operator UI and Admin/Owner-only report/correction authorization.
