@@ -147,6 +147,35 @@ async function report(ctx: QueryCtx, filters: PressingReportFilters) {
   };
 }
 export function registerFactoryPressingReportRoutes(app: Express): void {
+  // Team-wide totals are safe for permitted pressing workers to see. Keep the
+  // individual confirmation history endpoint operator-scoped for non-admins.
+  app.get("/api/factory/pressing-machines/report/worker-totals", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const ctx = await context(req);
+      // Includes activated pressing workers even before their first scan, plus
+      // historical operators without active assignments. No cross-company data.
+      const result = await pool.query(
+        `WITH operators AS (
+          SELECT user_id FROM factory_pressing_assignments WHERE company_id = $1
+          UNION
+          SELECT user_id FROM factory_pressing_confirmations WHERE company_id = $1
+        )
+        SELECT o.user_id AS "userId",
+          COALESCE(NULLIF(MAX(u.username), ''), NULLIF(MAX(c.user_name_snapshot), ''), o.user_id) AS "name",
+          COUNT(c.id)::integer AS "totalBales",
+          COALESCE(SUM(c.weight_kg), 0)::numeric(18,3) AS "totalKg"
+        FROM operators o
+        LEFT JOIN users u ON u.id = o.user_id
+        LEFT JOIN factory_pressing_confirmations c
+          ON c.company_id = $1 AND c.user_id = o.user_id AND c.voided_at IS NULL
+        GROUP BY o.user_id
+        ORDER BY name ASC, o.user_id ASC`,
+        [ctx.companyId],
+      );
+      return res.json({ workers: result.rows });
+    } catch (error) { return handleError(res, error); }
+  });
+
   app.get("/api/factory/pressing-machines/report", requireAuth, async (req: Request, res: Response) => {
     try {
       const ctx = await context(req);
