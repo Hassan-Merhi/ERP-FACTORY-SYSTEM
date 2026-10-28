@@ -226,9 +226,12 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
       // before any production is recorded.
       const operators = ctx.supervisor
         ? (await pool.query(
-          'WITH operator_ids AS (SELECT user_id FROM factory_pressing_assignments WHERE company_id = $1 ' +
-          'UNION SELECT user_id FROM factory_pressing_confirmations WHERE company_id = $1) ' +
-          'SELECT o.user_id AS "userId", ' +
+          'WITH operator_ids AS (SELECT a.user_id FROM factory_pressing_assignments a WHERE a.company_id = $1 ' +
+          'UNION SELECT c.user_id FROM factory_pressing_confirmations c WHERE c.company_id = $1 ' +
+          'UNION SELECT u.id FROM users u JOIN user_company_roles r ON r.user_id = u.id ' +
+          "AND r.company_id = $1 AND r.role IN ('User', 'Normal User') " +
+          "WHERE UPPER(BTRIM(u.username)) IN ('P1', 'P2', 'P3')) " +
+          'SELECT o.user_id AS "userId", MAX(u.username) AS username, ' +
           "COALESCE(NULLIF(MAX(p.display_name), ''), NULLIF(MAX(u.username), ''), " +
           "NULLIF(MAX(c.user_name_snapshot), ''), o.user_id) AS name " +
           'FROM operator_ids o LEFT JOIN users u ON u.id = o.user_id ' +
