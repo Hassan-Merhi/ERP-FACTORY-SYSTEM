@@ -9,7 +9,9 @@ const stockEntry = source("client/src/pages/factory/BaleStockEntry.tsx");
 
 describe("Pressing Machine Phase 3 integration contract", () => {
   it("continues scanning, instead of closing after a barcode read", () => {
-    expect(scanner).toContain("setTimeout(() => void tick(detector), SCAN_POLL_MS)");
+    expect(scanner).toContain("setTimeout(() => void tick(detector), SCAN_POLL_MS[detector.engine])");
+    expect(scanner).toContain("const SCAN_POLL_MS = { native: 70, zxing: 90 }");
+    expect(scanner).toContain("new ContinuousScanGate(1500, 3)");
     expect(scanner).toContain("const next = gateRef.current.frame(value, Date.now())");
     expect(gate).toContain("if (barcode === this.visible) return null");
     expect(scanner).not.toContain("setRequested(false);\n              onBarcode");
