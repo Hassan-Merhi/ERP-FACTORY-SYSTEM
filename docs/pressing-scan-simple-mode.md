@@ -14,7 +14,7 @@ Only the existing user/page permission must be configured. A permitted employee 
 
 - Configured shifts, shift schedules, shift selection and shift productivity analysis.
 - Machine downtime controls and machine-down scan blocking.
-- Productivity reports, bales/hour, KG/hour and machine targets.
+- Machine productivity reports, downtime, shift goals and machine-level targets. Admin/Owner pressing overview now has a separate, simple hourly worker KG target table.
 - Manual machine management, employee-machine assignments and machine history UI.
 - Advanced report saved-view/column configuration UI.
 
@@ -37,3 +37,4 @@ Local TypeScript checks, Vitest tests, isolated PostgreSQL tests and real-phone 
 October 28, 2026 follow-up: Workers now see team totals for the three dedicated P1, P2 and P3 logins rather than individual bale history; this uses a separate company-scoped aggregate read endpoint.
 
 October 27, 2026 follow-up: feature/pressing-worker-camera-only-20261027 narrows the operator UI and Admin/Owner-only report/correction authorization.
+October 28, 2026 hourly targets: The Admin/Owner Pressing Overview shows an independent hourly comparison for dedicated P1/P2/P3 workers, default 850 KG/hour. Admin/Owner may edit each company's per-worker target, stored atomically in factory_settings.extra_settings. Completed Beirut-local hours with scans show above, met or below; the current hour is in progress; zero-scan hours remain neutral without a shift/work schedule. No stock/costing/accounting posting is made.
