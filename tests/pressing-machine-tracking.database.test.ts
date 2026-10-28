@@ -238,6 +238,11 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
     const duplicate=await scan(actors.opA2,"one");
     expect(duplicate.statusCode).toBe(409);
     expect(duplicate.body.code).toBe("PRESSING_ALREADY_CONFIRMED");
+    expect(duplicate.body.previous).toMatchObject({
+      operatorName:actors.opA1.username,
+      operatorUserId:actors.opA1.userId,
+      referenceNumber:bales.one.ref,
+    });
     const a=assignments[actors.opA1.userId];
     const foreign=await call("POST /api/factory/pressing-machines/confirm",actors.opB1,{
       body:{barcode:bales.one.ref,assignmentId:a.assignmentId,machineId:a.machineId,
