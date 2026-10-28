@@ -4,14 +4,27 @@
  * All receipts are authoritative server responses.
  */
 import { apiRequest } from "@/lib/queryClient";
-import type { PressingQueuedScan, PressingServerReceipt } from "./pressingOfflineQueue";
+import type { PressingQueuedScan, PressingServerReceipt, PressingPreviousScan } from "./pressingOfflineQueue";
 
 export type PressingTransportResult =
   | { kind: "confirmed"; receipt: PressingServerReceipt; message: string }
-  | { kind: "rejected"; code: string; message: string }
+  | { kind: "rejected"; code: string; message: string; previousScan?: PressingPreviousScan }
   | { kind: "retry"; code: string; message: string; needsAuth?: boolean };
 
-type ApiFailure = Error & { code?: string; status?: number };
+type ApiFailure = Error & { code?: string; status?: number; previous?: unknown };
+
+function previousPressingScan(input: unknown): PressingPreviousScan | undefined {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
+  const source = input as Record<string, unknown>;
+  const safeText = (value: unknown) => typeof value === "string" && value.length <= 150
+    ? value.trim() || undefined : undefined;
+  return {
+    operatorName: safeText(source.operatorName),
+    operatorUserId: safeText(source.operatorUserId),
+    confirmedAt: safeText(source.confirmedAt),
+    referenceNumber: safeText(source.referenceNumber),
+  };
+}
 
 export function isPressingDuplicate(code: string | undefined): boolean {
   return code === "PRESSING_ALREADY_CONFIRMED";
@@ -69,7 +82,11 @@ export async function sendQueuedPressingScan(row: PressingQueuedScan): Promise<P
       };
     }
     if (isPressingDuplicate(code)) {
-      return { kind: "rejected", code, message };
+      const previousScan = previousPressingScan(error.previous);
+      const scanner = previousScan?.operatorName || previousScan?.operatorUserId;
+      return { kind: "rejected", code,
+        message: scanner ? "Already scanned by " + scanner : "Already scanned — original user unavailable",
+        previousScan };
     }
     if (status === 0 || status === 408 || status === 429 || status >= 500 || code === "OfflineQueued") {
       return {
