@@ -67,7 +67,9 @@ export function registerFactoryLocationInventoryExportRoutes(app: Express) {
                 eq(customerOrders.status, "PENDING_VERIFICATION"),
                 eq(customerOrders.status, "VERIFIED")
               ),
-              inArray(customerOrderBales.baleId, allBaleIdsRaw)
+              inArray(customerOrderBales.baleId, allBaleIdsRaw),
+              eq(customerOrders.companyId, companyId),
+              isNull(customerOrders.deletedAt)
             )
           );
         for (const r of loadingRowsAll) loadingBaleIdsAll.add(r.baleId);
