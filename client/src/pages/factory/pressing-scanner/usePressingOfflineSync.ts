@@ -46,7 +46,7 @@ function outcomeFromRow(row: PressingQueuedScan): PressingScanOutcome {
     return {
       kind: row.errorCode === "PRESSING_ALREADY_CONFIRMED" ? "duplicate" : "rejected",
       message: row.lastError || "Pressing confirmation was rejected by the server",
-      scannedBy: row.previousScan?.operatorName || row.previousScan?.operatorUserId,
+      scannedBy: row.previousScan?.operatorName?.trim(),
     };
   }
   return {
