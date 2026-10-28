@@ -33,8 +33,8 @@ const countText = (value: number | string | null | undefined) =>
   Number(value || 0).toLocaleString();
 const kgText = (value: number | string | null | undefined) =>
   Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 3 });
-const workerName = (name: string | null | undefined, fallback: string) =>
-  name?.trim() || fallback;
+const workerName = (name: string | null | undefined) =>
+  name?.trim() || "Display name not set";
 
 export default function PressingHistoryReport({ active, companyId, userId, simpleMode = false }: {
   active: boolean; companyId: number; userId: string; simpleMode?: boolean;
@@ -223,7 +223,7 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
                   onChange={e => update({ userId: e.target.value || undefined })}>
                   <option value="">All users</option>
                   {operators.map(operator => (
-                    <option key={operator.userId} value={operator.userId}>{operator.name}</option>
+                    <option key={operator.userId} value={operator.userId}>{operator.displayName?.trim() || "Display name not set"}</option>
                   ))}
                 </select>
               </label>
@@ -335,7 +335,7 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
                           <td className="p-3">{row.articleCode || "—"}</td>
                           <td className="p-3">{row.productName || "—"}</td>
                           <td className="p-3 text-right font-medium tabular-nums">{kgText(row.weightKg)}</td>
-                          <td className="p-3">{workerName(row.operatorName, row.operatorUserId)}</td>
+                          <td className="p-3">{workerName(row.operatorName)}</td>
                           <td className="p-3 text-xs tabular-nums">{pressingCell(row, "confirmedAt")}</td>
                         </tr>
                       ))}
@@ -359,7 +359,7 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
                         <tr key={[row.productionDate, row.operatorUserId, row.articleCode, row.productName, row.shiftId, row.voided, index].join(":")}
                           className="border-t transition-colors hover:bg-muted/25">
                           <td className="p-3 text-xs tabular-nums">{pressingCell(row, "productionDate")}</td>
-                          <td className="p-3 font-medium">{workerName(row.operatorName, row.operatorUserId)}</td>
+                          <td className="p-3 font-medium">{workerName(row.operatorName)}</td>
                           <td className="p-3">{row.productName || "—"}</td>
                           <td className="p-3 text-right font-semibold tabular-nums">{countText(row.bales)}</td>
                           <td className="p-3 text-right font-medium tabular-nums">{kgText(row.weightKg)}</td>
