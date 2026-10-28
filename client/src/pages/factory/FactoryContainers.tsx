@@ -227,6 +227,16 @@ export default function FactoryContainers() {
     return true;
   });
 
+  // Keep supplier grouping, but list each supplier's offloaded containers by number.
+  if (statusFilter === "OFFLOADED") {
+    filteredContainers?.sort((a, b) =>
+      (a.containerNumber ?? "").localeCompare(b.containerNumber ?? "", undefined, {
+        numeric: true,
+        sensitivity: "base",
+      })
+    );
+  }
+
   const openEdit = (c: ContainerWithSupplier) => {
     setEditingContainer(c);
   };
