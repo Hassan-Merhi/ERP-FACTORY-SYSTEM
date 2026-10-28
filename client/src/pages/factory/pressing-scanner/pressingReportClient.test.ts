@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   pressingParams, pressingCell, fetchPressingReport,
-  pressingDisplayDateTime, exportPressingReport,
+  pressingDisplayDateTime, exportPressingReport, pressingKpiWorkers,
   type PressingDetailRow, type PressingCondensedRow,
 } from "./pressingReportClient";
 import * as XLSX from "@/lib/excelHelper";
@@ -45,6 +45,34 @@ afterEach(() => {
 });
 
 describe("pressing history client", () => {
+  it("shows the saved Factory display name on each KPI while using login only for identity", () => {
+    const operators = [
+      { userId: "p1-id", username: "P1", name: "Amir Darwish", displayName: "Amir Darwish", isPressingWorker: true },
+      { userId: "p2-id", username: "p2", name: "Maya H.", displayName: "Maya H.", isPressingWorker: true },
+      { userId: "p3-id", username: " P3 ", name: "Rami", displayName: " Rami ", isPressingWorker: true },
+      { userId: "admin", username: "ADMIN", name: "Administrator", displayName: "Administrator", isPressingWorker: false },
+    ];
+    const aggregate = [
+      { userId: "p1-id", name: "P1", totalBales: 12, totalKg: "600.000" },
+      { userId: "p2-id", name: "P2", totalBales: 8, totalKg: "440.500" },
+      { userId: "admin", name: "ADMIN", totalBales: 999, totalKg: "90000.000" },
+    ];
+    const workers = pressingKpiWorkers(operators, aggregate);
+    expect(workers.map(worker => worker.label)).toEqual(["Amir Darwish", "Maya H.", "Rami"]);
+    expect(workers.map(worker => worker.userId)).toEqual(["p1-id", "p2-id", "p3-id"]);
+    expect(workers.map(worker => worker.bales)).toEqual([12, 8, 0]);
+    expect(workers.map(worker => worker.kg)).toEqual([600, 440.5, 0]);
+    expect(workers.reduce((sum, worker) => sum + worker.bales, 0)).toBe(20);
+  });
+
+  it("never substitutes a username for a missing Factory display name", () => {
+    const workers = pressingKpiWorkers([
+      { userId: "p1-id", username: "P1", name: "P1", displayName: null, isPressingWorker: true },
+    ], []);
+    expect(workers[0].label).toBe("Worker 1 (display name not set)");
+    expect(workers[1].userId).toBeUndefined();
+  });
+
   it("preserves date, selected machine, operator, status and pagination", () => {
     const params = pressingParams({
       from: "2026-10-01", to: "2026-10-27", machineId: 4, userId: "user-12",
