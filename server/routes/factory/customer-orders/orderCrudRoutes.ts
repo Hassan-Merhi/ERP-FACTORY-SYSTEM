@@ -627,7 +627,7 @@ export function registerOrderCrudRoutes(app: Express) {
                   AND co.company_id = ${companyId}
                   AND co.id <> ${orderId}
                   AND co.deleted_at IS NULL
-                  AND co.status NOT IN ('CANCELLED', 'DRAFT')
+                  AND co.status <> 'CANCELLED'
               )`
             ));
         }
@@ -651,7 +651,7 @@ export function registerOrderCrudRoutes(app: Express) {
         );
       });
 
-      res.json({ success: true, message: "Loading moved to Deleted Items; eligible bales returned to stock" });
+      res.json({ success: true, message: "Order moved to Deleted Items; eligible bales returned to stock" });
     } catch (error: unknown) {
       logger.error("Error deleting customer order:", { error: error });
       sendHttpError(res, error);
