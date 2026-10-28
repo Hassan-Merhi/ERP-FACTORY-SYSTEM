@@ -511,6 +511,16 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
       ...(voucherPage === 1 && includeOffloads ? offloads.map((o) => ({ _type: "offload" as const, data: o })) : []),
     ];
     return rows.sort((a, b) => {
+      // Daybook > Offload is a container-number list, not a date/record-ID list.
+      // Sort the entire selected date range A–Z before display limits are applied.
+      if (filters.voucherType === "Offload" && a._type === "offload" && b._type === "offload") {
+        return (
+          (a.data.containerNumber ?? "").localeCompare(b.data.containerNumber ?? "", undefined, {
+            numeric: true,
+            sensitivity: "base",
+          }) || a.data.id - b.data.id
+        );
+      }
       const da = a._type === "voucher" ? a.data.voucherDate : a.data.offloadedAt.slice(0, 10);
       const db = b._type === "voucher" ? b.data.voucherDate : b.data.offloadedAt.slice(0, 10);
       if (da !== db) return filters.sortOrder === "asc" ? da.localeCompare(db) : db.localeCompare(da);
@@ -711,6 +721,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
             <DaybookTable
               displayedRows={displayedRows}
               visibleRows={visibleRows}
+              offloadAlphabetical={filters.voucherType === "Offload"}
               viewMode={viewMode}
               selectedRowId={selectedRowId}
               setSelectedRowId={setSelectedRowId}
