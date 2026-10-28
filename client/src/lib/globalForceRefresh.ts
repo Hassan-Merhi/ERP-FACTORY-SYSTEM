@@ -2,16 +2,19 @@ const SESSION_TOKEN_KEY = "erp:global-force-refresh-token";
 
 // Each tab keeps its own last-applied token. Using localStorage would cause
 // the first reloaded tab to suppress the update for other open tabs.
+let memoryToken: string | null = null;
+
 export function shouldApplyGlobalForceRefresh(token: string): boolean {
-  if (!token) return false;
+  let previous = memoryToken;
   try {
-    const previous = sessionStorage.getItem(SESSION_TOKEN_KEY);
+    const stored = sessionStorage.getItem(SESSION_TOKEN_KEY);
+    if (stored !== null) previous = stored;
     sessionStorage.setItem(SESSION_TOKEN_KEY, token); // persist BEFORE reload
-    return previous !== null && previous !== token;
   } catch {
-    // Storage-disabled browsers still get the current build when first loaded.
-    return false;
+    // Use the in-memory baseline when sessionStorage is unavailable.
   }
+  memoryToken = token;
+  return previous !== null && previous !== token;
 }
 
 async function clearApplicationCaches(): Promise<void> {
