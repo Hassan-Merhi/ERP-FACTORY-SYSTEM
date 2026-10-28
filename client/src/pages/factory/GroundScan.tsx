@@ -60,7 +60,8 @@ export default function GroundScan() {
 
   const { data: stockLocations } = useQuery<StockLocation[]>({
     queryKey: ["/api/factory/stock-entry/in-stock-locations"],
-    staleTime: 60000,
+    staleTime: 30_000,
+    refetchInterval: visibleTabInterval(60_000),
   });
 
   const { data: serverItems = [], isLoading } = useQuery<GroundScanItem[]>({
@@ -70,7 +71,10 @@ export default function GroundScan() {
         r.json()
       ),
     staleTime: 10_000,
-    refetchInterval: visibleTabInterval(30_000),
+    // Realtime invalidation updates immediately after writes; polling catches
+    // cross-system mutations and reconnects without refreshing the page itself.
+    refetchInterval: visibleTabInterval(15_000),
+    refetchOnWindowFocus: "always",
     refetchIntervalInBackground: false,
   });
 
