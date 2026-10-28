@@ -21,6 +21,14 @@ function hourLabel(iso: string) {
     timeZoneName: "shortOffset",
   });
 }
+// The production day is 07:00–17:00 in Beirut. The last hourly
+// bucket starts at 16:00 and finishes at 17:00; never show 17:00–18:00.
+function isPressingWorkHour(iso: string): boolean {
+  const localHour = Number(new Intl.DateTimeFormat("en-GB", {
+    timeZone: ZONE, hour: "2-digit", hourCycle: "h23",
+  }).format(new Date(iso)));
+  return localHour >= 7 && localHour < 17;
+}
 function status(kg: number, target: number, complete: boolean, bales: number) {
   if (!complete) return { label: "In progress", cls: "text-sky-600 dark:text-sky-400" };
   if (!bales) return { label: "No scans", cls: "text-muted-foreground" };
@@ -58,7 +66,7 @@ export default function PressingHourlyTargets({ active, companyId, serverToday }
   const now = data ? new Date(data.serverNow).getTime() : 0;
   // The UTC timestamps keep repeated Beirut DST hours separate.
   const hours = [...new Set((data?.hours || []).map(row => row.hourStart))]
-    .filter(hour => new Date(hour).getTime() <= now)
+    .filter(hour => new Date(hour).getTime() <= now && isPressingWorkHour(hour))
     .sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 
   async function save(worker: Worker) {
@@ -93,7 +101,7 @@ export default function PressingHourlyTargets({ active, companyId, serverToday }
         <div>
           <h4 className="flex items-center gap-2 text-sm font-semibold"><Target className="h-4 w-4 text-primary" />Hourly KG targets</h4>
           <p className="mt-1 text-xs text-muted-foreground">
-            Completed hours in Beirut time · confirmed scans only · target per worker
+            07:00–17:00 Beirut time · confirmed scans only · target per worker
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -167,7 +175,7 @@ export default function PressingHourlyTargets({ active, companyId, serverToday }
                     })}
                   </tr>;
                 })}
-                {!hours.length && <tr><td colSpan={data.workers.length + 1} className="p-4 text-center text-muted-foreground">No hours to show for this date.</td></tr>}
+                {!hours.length && <tr><td colSpan={data.workers.length + 1} className="p-4 text-center text-muted-foreground">No working hours (07:00–17:00 Beirut) to show for this date.</td></tr>}
               </tbody>
             </table>
           </div>
