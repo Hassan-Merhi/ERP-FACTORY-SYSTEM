@@ -29,6 +29,7 @@ export interface PressingCondensedRow {
   operatorName: string | null;
   shiftId: number | null;
   articleCode: string | null;
+  productName: string | null;
   voided: boolean;
   timezoneName: string;
   bales: number;
@@ -103,7 +104,7 @@ export function pressingCell(
   switch (key) {
     case "referenceNumber": return detailed ? row.referenceNumber : "—";
     case "articleCode": return row.articleCode || "";
-    case "productName": return detailed ? row.productName || "" : "";
+    case "productName": return row.productName || "";
     case "weightKg": return Number(row.weightKg);
     case "machineName": return row.machineName;
     case "operatorName": return row.operatorName || row.operatorUserId;
