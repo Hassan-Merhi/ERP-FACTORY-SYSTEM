@@ -17,7 +17,7 @@ function safeKg(kg: string): number {
 }
 
 export function rankPressingWorkers(workers: PressingWorkerTotal[]): Array<
-  PressingWorkerTotal & { standing: PressingStanding; percentOfLeader: number }
+  PressingWorkerTotal & { standing: PressingStanding }
 > {
   const ordered = [...workers].sort((a, b) =>
     safeKg(b.totalKg) - safeKg(a.totalKg) ||
@@ -32,10 +32,6 @@ export function rankPressingWorkers(workers: PressingWorkerTotal[]): Array<
     const standing: PressingStanding = highest === 0 ? "unranked"
       : kg === highest ? "leading"
       : kg === lowest ? "lowest" : "middle";
-    return {
-      ...worker,
-      standing,
-      percentOfLeader: highest > 0 ? Math.max(0, Math.min(100, Math.round((kg / highest) * 100))) : 0,
-    };
+    return { ...worker, standing };
   });
 }
