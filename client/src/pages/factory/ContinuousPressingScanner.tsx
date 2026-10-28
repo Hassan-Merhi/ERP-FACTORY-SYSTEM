@@ -54,6 +54,16 @@ function capturedTime(iso: string): string {
     timeZone: PRESSING_TIME_ZONE,
   });
 }
+function capturedDate(iso: string): string {
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return "—";
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    year: "numeric", month: "2-digit", day: "2-digit",
+    timeZone: PRESSING_TIME_ZONE,
+  }).formatToParts(date);
+  const value = (type: string) => parts.find(part => part.type === type)?.value ?? "";
+  return [value("year"), value("month"), value("day")].join("-");
+}
 function cameraErrorMessage(error: unknown): string {
   const name = error instanceof DOMException ? error.name : "";
   if (name === "NotAllowedError" || name === "PermissionDeniedError") {
@@ -463,7 +473,7 @@ export function ContinuousPressingScanner({
             )}
             {last.confirmedAt && (
               <p className="text-xs">
-                Server confirmed: {last.productionDate} {capturedTime(last.confirmedAt)}
+                Server confirmed: {capturedDate(last.confirmedAt)} {capturedTime(last.confirmedAt)}
                 {" (" + PRESSING_TIME_ZONE + ")"}
                 {last.weightKg ? " · " + last.weightKg + " KG" : ""}
                 
