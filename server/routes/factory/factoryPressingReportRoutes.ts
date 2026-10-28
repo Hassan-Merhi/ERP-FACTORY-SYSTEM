@@ -4,7 +4,7 @@
  */
 import type { Express, Request, Response } from "express";
 import { and, asc, eq } from "drizzle-orm";
-import { ZodError } from "zod";
+import { ZodError, z } from "zod";
 import { db, pool } from "../../db";
 import { requireAuth } from "../../auth";
 import { factoryPressingSavedViews } from "@shared/schema";
@@ -266,6 +266,103 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
         [ctx.companyId],
       );
       return res.json({ workers: result.rows });
+    } catch (error) { return handleError(res, error); }
+  });
+
+
+  // Uses the same three dedicated P1/P2/P3 accounts as the worker scoreboard.
+  // An hour is measured by server-confirmed UTC instants. The generated
+  // Beirut-local day is 23/24/25 hours as appropriate across DST changes.
+  app.get("/api/factory/pressing-machines/report/hourly-targets", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const ctx = await context(req);
+      const value = typeof req.query.day === "string" ? req.query.day : factoryLocalDate(new Date(), PRESSING_TIME_ZONE);
+      const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(date =>
+        !Number.isNaN(Date.parse(date + "T00:00:00Z")) &&
+        new Date(date + "T00:00:00Z").toISOString().slice(0, 10) === date
+      ).parse(value);
+      const workersResult = await pool.query(
+        'SELECT u.id AS "userId", UPPER(BTRIM(u.username)) AS "slot", ' +
+        'COALESCE(NULLIF(BTRIM(MAX(p.display_name)), \'\'), \'Display name not set\') AS name ' +
+        'FROM users u LEFT JOIN factory_user_profiles p ON p.company_id=$1 AND p.user_id=u.id ' +
+        "WHERE UPPER(BTRIM(u.username)) IN ('P1','P2','P3') AND EXISTS (" +
+        "SELECT 1 FROM user_company_roles r WHERE r.company_id=$1 AND r.user_id=u.id " +
+        "AND r.role IN ('User','Normal User')) " +
+        'GROUP BY u.id,u.username ORDER BY UPPER(BTRIM(u.username))',
+        [ctx.companyId],
+      );
+      const settings = await pool.query(
+        "SELECT extra_settings->'pressingWorkerTargetsKg' AS targets FROM factory_settings WHERE company_id=$1",
+        [ctx.companyId],
+      );
+      const raw = settings.rows[0]?.targets;
+      const targets = raw && typeof raw === "object" && !Array.isArray(raw)
+        ? raw as Record<string, unknown> : {};
+      const workers = workersResult.rows.map(row => {
+        const configured = Number(targets[String(row.userId)]);
+        return {
+          ...row,
+          targetKgPerHour: Number.isFinite(configured) && configured > 0 && configured <= 100000
+            ? configured : 850,
+        };
+      });
+      const result = await pool.query(
+        'WITH hours AS (SELECT generate_series(' +
+          "($2::date::timestamp AT TIME ZONE '" + PRESSING_TIME_ZONE + "'), " +
+          "(($2::date + 1)::timestamp AT TIME ZONE '" + PRESSING_TIME_ZONE + "') - interval '1 hour', " +
+          "interval '1 hour') AS hour_start), " +
+        'scans AS (SELECT c.user_id, ' +
+          "date_trunc('hour', c.confirmed_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AS hour_start, " +
+          'COUNT(*)::integer AS bales, COALESCE(SUM(c.weight_kg),0)::numeric(18,3) AS kg ' +
+          'FROM factory_pressing_confirmations c WHERE c.company_id=$1 AND c.voided_at IS NULL ' +
+          "AND c.confirmed_at >= ($2::date::timestamp AT TIME ZONE '" + PRESSING_TIME_ZONE + "') " +
+          "AND c.confirmed_at < (($2::date + 1)::timestamp AT TIME ZONE '" + PRESSING_TIME_ZONE + "') " +
+          "GROUP BY c.user_id,date_trunc('hour', c.confirmed_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') " +
+        'SELECT h.hour_start AS "hourStart", w.user_id AS "userId", ' +
+          'COALESCE(s.bales,0)::integer AS bales, COALESCE(s.kg,0)::numeric(18,3) AS kg ' +
+          'FROM hours h CROSS JOIN (SELECT u.id AS user_id FROM users u ' +
+          "WHERE UPPER(BTRIM(u.username)) IN ('P1','P2','P3') " +
+          "AND EXISTS (SELECT 1 FROM user_company_roles r WHERE r.company_id=$1 AND r.user_id=u.id " +
+          "AND r.role IN ('User','Normal User'))) w " +
+          'LEFT JOIN scans s ON s.user_id=w.user_id AND s.hour_start=h.hour_start ' +
+          'ORDER BY h.hour_start DESC,w.user_id',
+        [ctx.companyId, day],
+      );
+      res.set("Cache-Control", "private, no-store");
+      return res.json({ day, serverNow: new Date().toISOString(), canEdit: ctx.canCorrect,
+        workers, hours: result.rows });
+    } catch (error) { return handleError(res, error); }
+  });
+
+  // Store targets in existing company-scoped Factory settings, with an atomic
+  // JSONB update so unrelated flags and other workers' targets are not lost.
+  // Only Admin / Owner may edit; workers may not change their own targets.
+  app.put("/api/factory/pressing-machines/report/hourly-targets", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const ctx = await context(req);
+      if (!ctx.canCorrect) throw new ReportPermissionError(403, "PRESSING_TARGET_FORBIDDEN", "Only Admin or Owner may edit pressing targets");
+      const input = z.object({
+        userId: z.string().trim().min(1).max(255),
+        targetKgPerHour: z.number().finite().positive().max(100000),
+      }).strict().parse(req.body);
+      const eligible = await pool.query(
+        "SELECT 1 FROM users u WHERE u.id=$2 AND UPPER(BTRIM(u.username)) IN ('P1','P2','P3') " +
+        "AND EXISTS (SELECT 1 FROM user_company_roles r WHERE r.company_id=$1 AND r.user_id=u.id " +
+        "AND r.role IN ('User','Normal User'))",
+        [ctx.companyId, input.userId],
+      );
+      if (!eligible.rowCount) return res.status(404).json({ code: "PRESSING_WORKER_NOT_FOUND", message: "Pressing worker not found in this company" });
+      await pool.query(
+        "INSERT INTO factory_settings (company_id,extra_settings,updated_at) " +
+        "VALUES ($1,jsonb_build_object('pressingWorkerTargetsKg',jsonb_build_object($2::text,$3::numeric)),now()) " +
+        "ON CONFLICT (company_id) DO UPDATE SET " +
+        "extra_settings=COALESCE(factory_settings.extra_settings,'{}'::jsonb) || " +
+        "jsonb_build_object('pressingWorkerTargetsKg', " +
+        "COALESCE(factory_settings.extra_settings->'pressingWorkerTargetsKg','{}'::jsonb) || " +
+        "jsonb_build_object($2::text,$3::numeric)),updated_at=now()",
+        [ctx.companyId, input.userId, input.targetKgPerHour],
+      );
+      return res.json({ saved: true, userId: input.userId, targetKgPerHour: input.targetKgPerHour });
     } catch (error) { return handleError(res, error); }
   });
 
