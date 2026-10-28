@@ -20,7 +20,7 @@ const DETAIL_COLUMNS: PressingReportColumn[] = [
   "referenceNumber", "articleCode", "productName", "weightKg", "operatorName", "confirmedAt",
 ];
 const SUMMARY_COLUMNS: PressingReportColumn[] = [
-  "productionDate", "operatorName", "articleCode", "bales", "weightKg", "firstScanAt", "lastScanAt",
+  "productionDate", "operatorName", "productName", "bales", "weightKg", "firstScanAt", "lastScanAt",
 ];
 const WORKER_SLOTS = ["P1", "P2", "P3"] as const;
 const today = () => {
@@ -358,18 +358,18 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
                     <thead className="bg-muted/70">
                       <tr>
                         <th className="p-3">Day</th><th className="p-3">Worker</th>
-                        <th className="p-3">Article</th><th className="p-3 text-right">Bales</th>
+                        <th className="p-3">Bale name</th><th className="p-3 text-right">Bales</th>
                         <th className="p-3 text-right">KG</th>
                         <th className="p-3">First scan</th><th className="p-3">Last scan</th>
                       </tr>
                     </thead>
                     <tbody>
                       {condensed.map((row, index) => (
-                        <tr key={[row.productionDate, row.operatorUserId, row.articleCode, row.shiftId, row.voided, index].join(":")}
+                        <tr key={[row.productionDate, row.operatorUserId, row.articleCode, row.productName, row.shiftId, row.voided, index].join(":")}
                           className="border-t transition-colors hover:bg-muted/25">
                           <td className="p-3 text-xs tabular-nums">{pressingCell(row, "productionDate")}</td>
                           <td className="p-3 font-medium">{workerName(row.operatorName, row.operatorUserId)}</td>
-                          <td className="p-3">{row.articleCode || "—"}</td>
+                          <td className="p-3">{row.productName || "—"}</td>
                           <td className="p-3 text-right font-semibold tabular-nums">{countText(row.bales)}</td>
                           <td className="p-3 text-right font-medium tabular-nums">{kgText(row.weightKg)}</td>
                           <td className="p-3 text-xs tabular-nums">{pressingDisplayDateTime(row.firstScanAt, row.timezoneName)}</td>
