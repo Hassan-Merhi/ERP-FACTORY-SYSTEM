@@ -11,7 +11,7 @@ import { requireAuth } from "../../auth";
 import {
   factoryBales, factoryPressingMachines, factoryPressingAssignments,
   factoryPressingSessions, factoryPressingConfirmations, factorySettings,
-  factoryPressingCorrections,
+  factoryPressingCorrections, factoryUserProfiles,
   users,
 } from "@shared/schema";
 import {
@@ -138,8 +138,13 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
         if (!assignment) {
           throw new ConfirmationError(409, "PRESSING_ASSIGNMENT_CHANGED", "Your assigned machine has changed. Refresh before scanning.");
         }
-        const [operator] = await tx.select({ active: users.active, username: users.username })
-          .from(users).where(eq(users.id, userId)).limit(1);
+        const [operator] = await tx.select({
+          active: users.active, username: users.username,
+          displayName: factoryUserProfiles.displayName,
+        }).from(users).leftJoin(factoryUserProfiles, and(
+          eq(factoryUserProfiles.userId, users.id),
+          eq(factoryUserProfiles.companyId, companyId),
+        )).where(eq(users.id, userId)).limit(1);
         if (!operator?.active) {
           throw new ConfirmationError(403, "PRESSING_USER_INACTIVE", "Your user account is inactive");
         }
@@ -175,13 +180,18 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
             eq(factoryPressingConfirmations.baleId, bale.id),
             isNull(factoryPressingConfirmations.voidedAt))).limit(1);
         if (alreadyPressed) {
+          const [priorProfile] = await tx.select({ displayName: factoryUserProfiles.displayName })
+            .from(factoryUserProfiles).where(and(
+              eq(factoryUserProfiles.companyId, companyId),
+              eq(factoryUserProfiles.userId, alreadyPressed.userId),
+            )).limit(1);
           throw new ConfirmationError(409, "PRESSING_ALREADY_CONFIRMED",
             "Already confirmed on " + alreadyPressed.machineNameSnapshot + " at " + alreadyPressed.confirmedAt.toISOString(),
             { previous: {
               confirmedAt: alreadyPressed.confirmedAt.toISOString(),
               machineName: alreadyPressed.machineNameSnapshot,
               operatorUserId: alreadyPressed.userId,
-              operatorName: alreadyPressed.userNameSnapshot,
+              operatorName: priorProfile?.displayName?.trim() || "Display name not set",
               referenceNumber: alreadyPressed.referenceNumber,
             } });
         }
@@ -229,7 +239,7 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
           .values({
             companyId, baleId: bale.id, machineId: machine.id,
             assignmentId: assignment.id, sessionId: session.id, shiftId,
-            userId, userNameSnapshot: operator.username, machineNameSnapshot: machine.name,
+            userId, userNameSnapshot: operator.displayName?.trim() || "Display name not set", machineNameSnapshot: machine.name,
             referenceNumber: bale.referenceNumber, articleCode: bale.articleCode,
             productName: bale.productName, weightKg: bale.weightKg,
             requestId: parsed.requestId, deviceCapturedAt, confirmedAt: now,
@@ -249,12 +259,17 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
               eq(factoryPressingConfirmations.baleId, bale.id),
               isNull(factoryPressingConfirmations.voidedAt))).limit(1);
           if (other) {
+            const [otherProfile] = await tx.select({ displayName: factoryUserProfiles.displayName })
+              .from(factoryUserProfiles).where(and(
+                eq(factoryUserProfiles.companyId, companyId),
+                eq(factoryUserProfiles.userId, other.userId),
+              )).limit(1);
             throw new ConfirmationError(409, "PRESSING_ALREADY_CONFIRMED",
               "Already confirmed on " + other.machineNameSnapshot + " at " + other.confirmedAt.toISOString(), { previous: {
                 confirmedAt: other.confirmedAt.toISOString(),
                 machineName: other.machineNameSnapshot,
                 operatorUserId: other.userId,
-                operatorName: other.userNameSnapshot,
+                operatorName: otherProfile?.displayName?.trim() || "Display name not set",
                 referenceNumber: other.referenceNumber,
               } });
           }
