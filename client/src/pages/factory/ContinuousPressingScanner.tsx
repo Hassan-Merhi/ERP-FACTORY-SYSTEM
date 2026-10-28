@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { createCameraDecoder, hasCameraAccess, type CameraBarcodeDecoder, type CameraDecoderEngine } from "./pressing-scanner/cameraDecoder";
 import { ContinuousScanGate } from "./pressing-scanner/continuousScanGate";
+import { PRESSING_TIME_ZONE } from "@shared/pressingTimeZone";
 
 export type PressingScanCapture = {
   barcode: string;
@@ -45,17 +46,13 @@ type TorchCapabilities = MediaTrackCapabilities & { torch?: boolean; focusMode?:
 // Schedule only after each decoder call finishes; avoid overlapping ZXing work.
 // Native can poll faster because it is hardware accelerated.
 const SCAN_POLL_MS = { native: 70, zxing: 90 } as const;
-function capturedTime(iso: string, timeZone?: string): string {
-  try {
-    return new Date(iso).toLocaleTimeString(undefined, {
-      hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit",
-      ...(timeZone ? { timeZone } : {}),
-    });
-  } catch {
-    return new Date(iso).toLocaleTimeString(undefined, {
-      hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit",
-    });
-  }
+function capturedTime(iso: string): string {
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return "—";
+  return date.toLocaleTimeString("en-GB", {
+    hourCycle: "h23", hour: "2-digit", minute: "2-digit", second: "2-digit",
+    timeZone: PRESSING_TIME_ZONE,
+  });
 }
 function cameraErrorMessage(error: unknown): string {
   const name = error instanceof DOMException ? error.name : "";
@@ -442,9 +439,9 @@ export function ContinuousPressingScanner({
           <div role="status" aria-live="polite" className={`rounded-lg border p-3 ${badgeColor}`}>
             <div className="flex flex-wrap justify-between gap-1">
               <strong className="break-all">{last.barcode}</strong>
-              <span className="font-mono text-sm">
+              <span className="font-mono text-sm" title={"Time in " + PRESSING_TIME_ZONE}>
                 {last.confirmedAt
-                  ? capturedTime(last.confirmedAt, last.timezoneName)
+                  ? capturedTime(last.confirmedAt)
                   : capturedTime(last.at)}
               </span>
             </div>
@@ -466,8 +463,8 @@ export function ContinuousPressingScanner({
             )}
             {last.confirmedAt && (
               <p className="text-xs">
-                Server confirmed: {last.productionDate} {capturedTime(last.confirmedAt, last.timezoneName)}
-                {last.timezoneName ? " (" + last.timezoneName + ")" : ""}
+                Server confirmed: {last.productionDate} {capturedTime(last.confirmedAt)}
+                {" (" + PRESSING_TIME_ZONE + ")"}
                 {last.weightKg ? " · " + last.weightKg + " KG" : ""}
                 
                 {last.confirmationId ? " · Record #" + last.confirmationId : ""}
