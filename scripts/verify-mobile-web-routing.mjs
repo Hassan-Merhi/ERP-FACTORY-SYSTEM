@@ -68,7 +68,7 @@ for (const token of [
   'fetch(request.clone(), { cache: "no-store" })',
   'await cache.put("/", response.clone())',
   'contentType.includes("text/html")',
-  'const IOS_FORCE_UPDATE_CAMPAIGN = "ios-pwa-2026-09-30-v1"',
+  'const IOS_FORCE_UPDATE_CAMPAIGN = "ios-pwa-2026-10-28-v2"',
   "IOS_FORCE_UPDATE_MARKER_CACHE",
   "runOneTimeIosForceUpdate(clients)",
   'url.searchParams.set("_pwa_update", IOS_FORCE_UPDATE_CAMPAIGN)',
