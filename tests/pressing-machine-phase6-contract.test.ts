@@ -67,8 +67,10 @@ describe("pressing machine Phase 6 reporting contracts", () => {
     expect(server).not.toContain("writeDaybookEntry");
   });
   it("uses filtered date, shift, article, search and machine with stable page anchor", () => {
-    expect(server).toContain('push("c.production_date >= ?::date", filters.from)');
-    expect(server).toContain('push("c.production_date <= ?::date", filters.to)');
+    expect(server).toContain('c.confirmed_at >= (?::date::timestamp AT TIME ZONE');
+    expect(server).toContain('c.confirmed_at < ((?::date + 1)::timestamp AT TIME ZONE');
+    expect(server).toContain('const PRESSING_LOCAL_DATE_SQL');
+    expect(server).toContain("GROUP BY ' + PRESSING_LOCAL_DATE_SQL");
     expect(server).toContain('push("c.machine_id = ?", filters.machineId)');
     expect(server).toContain('push("c.weight_kg = ?::numeric", filters.weightKg)');
     expect(server).toContain('push("c.shift_id = ?", filters.shiftId)');
