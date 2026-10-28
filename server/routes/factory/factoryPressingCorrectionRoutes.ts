@@ -14,7 +14,7 @@ import { db } from "../../db";
 import { requireAuth } from "../../auth";
 import {
   factoryBales, factoryPressingMachines, factoryPressingConfirmations,
-  factoryPressingCorrections,
+  factoryPressingCorrections, factoryUserProfiles,
 } from "@shared/schema";
 import {
   ActiveCompanyPermissionContextError, getActiveCompanyPermissionContext,
@@ -287,7 +287,23 @@ export function registerFactoryPressingCorrectionRoutes(app: Express): void {
         const rows = await db.select().from(factoryPressingCorrections)
           .where(and(...where)).orderBy(desc(factoryPressingCorrections.createdAt),
             desc(factoryPressingCorrections.id)).limit(filters.limit);
-        return res.json(rows);
+        // Supervisor identity stays as immutable user ID in the audit table,
+        // but UI receives only the current company-specific display name.
+        const supervisorIds = [...new Set(rows.map(row => row.supervisorUserId))];
+        const profiles = supervisorIds.length
+          ? await db.select({
+              userId: factoryUserProfiles.userId,
+              displayName: factoryUserProfiles.displayName,
+            }).from(factoryUserProfiles).where(and(
+              eq(factoryUserProfiles.companyId, ctx.companyId),
+              inArray(factoryUserProfiles.userId, supervisorIds),
+            ))
+          : [];
+        const names = new Map(profiles.map(row => [row.userId, row.displayName.trim()]));
+        return res.json(rows.map(row => ({
+          ...row,
+          supervisorDisplayName: names.get(row.supervisorUserId) || "Display name not set",
+        })));
       } catch (error) { return fail(res, error); }
     }
   );
