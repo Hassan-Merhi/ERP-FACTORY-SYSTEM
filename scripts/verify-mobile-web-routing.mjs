@@ -59,12 +59,12 @@ if (!/const CACHE_VERSION = "erp-v\d+"/.test(serviceWorker)) {
   failures.push('Service-worker recovery contract missing: versioned CACHE_VERSION (for example "erp-v11")');
 }
 
-// One-time October 28 rollout: ensure the browser and installed PWA worker
-// really changes, iOS receives a NEW one-shot marker, and no refresh loop
+// One-time global force-refresh listener rollout: ensure the browser and
+// installed PWA worker changes, iOS gets a NEW marker, and no refresh loop
 // can be caused by normal application deployments after this campaign.
 for (const token of [
-  'const CACHE_VERSION = "erp-v13"',
-  'const IOS_FORCE_UPDATE_CAMPAIGN = "ios-pwa-2026-10-28-v2"',
+  'const CACHE_VERSION = "erp-v14"',
+  'const IOS_FORCE_UPDATE_CAMPAIGN = "ios-pwa-2026-10-28-v3"',
   'if (await markerCache.match(IOS_FORCE_UPDATE_MARKER_URL)) return',
   'await markerCache.put(',
   'self.skipWaiting()',
@@ -87,7 +87,7 @@ for (const token of [
   'fetch(request.clone(), { cache: "no-store" })',
   'await cache.put("/", response.clone())',
   'contentType.includes("text/html")',
-  'const IOS_FORCE_UPDATE_CAMPAIGN = "ios-pwa-2026-10-28-v2"',
+  'const IOS_FORCE_UPDATE_CAMPAIGN = "ios-pwa-2026-10-28-v3"',
   "IOS_FORCE_UPDATE_MARKER_CACHE",
   "runOneTimeIosForceUpdate(clients)",
   'url.searchParams.set("_pwa_update", IOS_FORCE_UPDATE_CAMPAIGN)',
