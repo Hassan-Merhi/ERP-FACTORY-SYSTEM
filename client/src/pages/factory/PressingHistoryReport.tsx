@@ -34,8 +34,6 @@ const countText = (value: number | string | null | undefined) =>
   Number(value || 0).toLocaleString();
 const kgText = (value: number | string | null | undefined) =>
   Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 3 });
-const workerSlot = (name: string | null | undefined) =>
-  /\bP[123]\b/i.exec(name || "")?.[0].toUpperCase() || null;
 const workerName = (name: string | null | undefined, fallback: string) =>
   name?.trim() || fallback;
 
@@ -98,17 +96,18 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
   // Resolve the named pressing operators from company users, not a page of
   // results. A worker with no scans still has a visible zero-valued card.
   const workers = WORKER_SLOTS.map(slot => {
-    const operator = operators.find(item => workerSlot(item.name) === slot) ||
-      byOperator.find(item => workerSlot(item.name) === slot);
+    const operator = operators.find(item => item.username?.trim().toUpperCase() === slot);
     const id = operator?.userId;
-    const matching = byOperator.filter(item => item.userId === id ||
-      (!id && workerSlot(item.name) === slot));
+    const matching = byOperator.filter(item => !!id && item.userId === id);
     return {
       label: slot, userId: id,
       bales: matching.reduce((sum, item) => sum + Number(item.totalBales || 0), 0),
       kg: matching.reduce((sum, item) => sum + Number(item.totalKg || 0), 0),
     };
   });
+
+  const allWorkerBales = workers.reduce((sum, worker) => sum + worker.bales, 0);
+  const allWorkerKg = workers.reduce((sum, worker) => sum + worker.kg, 0);
 
   const selectWorker = (selectedId?: string) => update({
     userId: filters.userId === selectedId ? undefined : selectedId,
@@ -186,14 +185,14 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
           className={"min-w-0 rounded-xl border bg-linear-to-br from-emerald-500/10 via-card to-card p-3 text-left shadow-sm transition-colors sm:p-4 " +
             (!filters.userId ? "border-emerald-500/50" : "border-border/80 hover:border-emerald-500/50")}>
           <div className="flex items-center justify-between gap-2">
-            <span className="rounded-lg bg-emerald-500/15 px-2.5 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-400">ALL WORKERS</span>
+            <span className="rounded-lg bg-emerald-500/15 px-2.5 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-400">P1 + P2 + P3</span>
             <PackageCheck className="h-4 w-4 text-emerald-500" />
           </div>
-          <div className="mt-3 text-2xl font-bold leading-none tabular-nums sm:text-3xl">{countText(kpiSummary?.totalBales)}</div>
+          <div className="mt-3 text-2xl font-bold leading-none tabular-nums sm:text-3xl">{countText(allWorkerBales)}</div>
           <div className="mt-1 text-xs text-muted-foreground">Total bales</div>
           <div className="mt-3 flex items-center gap-1.5 border-t pt-2.5">
             <Weight className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-            <strong className="text-sm tabular-nums">{kgText(kpiSummary?.totalKg)} KG</strong>
+            <strong className="text-sm tabular-nums">{kgText(allWorkerKg)} KG</strong>
           </div>
         </button>
       </div>
