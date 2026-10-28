@@ -14,6 +14,7 @@ import {
   type PressingCondensedRow, type PressingDetailRow, type PressingReportOptions,
 } from "./pressing-scanner/pressingReportClient";
 import PressingCorrectionReview from "./PressingCorrectionReview";
+import PressingHourlyTargets from "./PressingHourlyTargets";
 
 const ROOT = "/api/factory/pressing-machines/report";
 const DETAIL_COLUMNS: PressingReportColumn[] = [
@@ -198,6 +199,10 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
           </div>
         </button>
       </div>
+
+      {!simpleMode && canSeeEveryone && (
+        <PressingHourlyTargets active={active} companyId={companyId} serverToday={options.data?.serverToday} />
+      )}
 
       {!simpleMode && (
         <div className="rounded-xl border bg-card p-3 shadow-sm sm:p-4" data-testid="pressing-report-filters">
