@@ -12,6 +12,7 @@ import { usePressingOfflineSync } from "./pressing-scanner/usePressingOfflineSyn
 import PressingOfflineQueueStatus from "./PressingOfflineQueueStatus";
 import PressingHistoryReport from "./PressingHistoryReport";
 import PressingWorkerTotals from "./PressingWorkerTotals";
+import PressingHourlyTargets from "./PressingHourlyTargets";
 
 const ROOT = "/api/factory/pressing-machines";
 type Assignment = {
@@ -202,8 +203,10 @@ export default function PressingMachineManagement({ active }: { active: boolean 
           ? <PressingHistoryReport key={companyId + ":" + userId}
               active={active} companyId={companyId} userId={userId} />
           : assignment
-            ? <PressingWorkerTotals key={companyId + ":" + userId}
-                active={active} companyId={companyId} userId={userId} />
+            ? <div key={companyId + ":" + userId} className="min-w-0 space-y-4">
+                <PressingWorkerTotals active={active} companyId={companyId} userId={userId} />
+                <PressingHourlyTargets active={active} companyId={companyId} />
+              </div>
             : null
       )}
     </div>
