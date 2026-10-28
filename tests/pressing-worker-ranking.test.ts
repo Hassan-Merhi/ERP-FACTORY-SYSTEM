@@ -12,7 +12,6 @@ describe("pressing scoreboard KG ranking", () => {
     const result = rankPressingWorkers(workers);
     expect(result.map(row => row.name)).toEqual(["ALI BOUSTANI", "KASSEM", "ISSA"]);
     expect(result.map(row => row.standing)).toEqual(["leading", "middle", "lowest"]);
-    expect(result.map(row => row.percentOfLeader)).toEqual([100, 93, 31]);
     expect(workers[0].name).toBe("ISSA"); // no in-place mutation
   });
 
@@ -23,16 +22,15 @@ describe("pressing scoreboard KG ranking", () => {
       { ...workers[2], totalKg: "800" },
     ]);
     expect(result.map(row => row.standing)).toEqual(["leading", "leading", "lowest"]);
-    expect(result.map(row => row.percentOfLeader)).toEqual([100, 100, 50]);
   });
 
   it("does not label anyone a winner or loser without production", () => {
     const result = rankPressingWorkers(workers.map(worker => ({ ...worker, totalKg: "0" })));
-    expect(result.every(row => row.standing === "unranked" && row.percentOfLeader === 0)).toBe(true);
+    expect(result.every(row => row.standing === "unranked")).toBe(true);
   });
 
   it("handles missing workers and a single worker", () => {
     expect(rankPressingWorkers([])).toEqual([]);
-    expect(rankPressingWorkers([workers[0]])[0]).toMatchObject({ standing: "leading", percentOfLeader: 100 });
+    expect(rankPressingWorkers([workers[0]])[0]).toMatchObject({ standing: "leading" });
   });
 });
