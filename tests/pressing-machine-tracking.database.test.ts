@@ -221,7 +221,12 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
     });
     expect(Date.parse(response.body.confirmedAt)).not.toBeNaN();
     expect(response.body.productionDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(response.body.timezoneName).toBe("Africa/Lubumbashi");
+    // A prior company setting must not shift pressing away from Beirut.
+    expect(response.body.timezoneName).toBe("Asia/Beirut");
+    const expectedBeirutDay = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Beirut", year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(new Date(response.body.confirmedAt));
+    expect(response.body.productionDate).toBe(expectedBeirutDay);
     const [record]=await rows(sql`SELECT * FROM factory_pressing_confirmations
       WHERE company_id=${companies.a} AND bale_id=${bales.one.id}`);
     expect(record.shift_id).toBeNull();
@@ -313,7 +318,7 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
     const other=await call("GET /api/factory/pressing-machines/report",actors.supB);
     expect(other.body.total).toBe(0);
     const options=await call("GET /api/factory/pressing-machines/report/options",actors.supA);
-    expect(options.body.timeZone).toBe("Africa/Lubumbashi");
+    expect(options.body.timeZone).toBe("Asia/Beirut");
     expect(options.body.operators.map((x:any)=>x.userId)).toContain(actors.opA1.userId);
     expect(options.body.machines).toBeUndefined();
     expect((await call("GET /api/factory/pressing-machines/report/options",actors.opA1)).body.canViewAll).toBe(false);
