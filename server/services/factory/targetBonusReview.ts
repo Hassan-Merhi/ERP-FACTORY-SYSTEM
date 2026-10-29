@@ -48,13 +48,15 @@ export async function loadTargetBonusRows(
       w.full_name AS "workerName",
       COALESCE(e.category, '') AS category,
       links.id AS "linkGroupId",
-      COALESCE(e.target_bales, 0) AS "targetBales",
-      COALESCE(output.count, 0)::integer AS "producedBales",
-      GREATEST(0::numeric, COALESCE(output.count, 0) - COALESCE(e.target_bales, 0)) AS "extraBales",
-      rate.rate_per_bale AS "ratePerBale",
-      ROUND(
-        GREATEST(0::numeric, COALESCE(output.count, 0) - COALESCE(e.target_bales, 0))
-        * COALESCE(rate.rate_per_bale, 0), 2
+      COALESCE(review.target_bales, e.target_bales, 0) AS "targetBales",
+      COALESCE(review.produced_bales, output.count, 0)::integer AS "producedBales",
+      COALESCE(review.extra_bales, GREATEST(0::numeric, COALESCE(output.count, 0) - COALESCE(e.target_bales, 0))) AS "extraBales",
+      COALESCE(review.rate_per_bale, rate.rate_per_bale) AS "ratePerBale",
+      COALESCE(review.bonus_amount,
+        ROUND(
+          GREATEST(0::numeric, COALESCE(output.count, 0) - COALESCE(e.target_bales, 0))
+          * COALESCE(rate.rate_per_bale, 0), 2
+        )
       ) AS "proposedAmount",
       COALESCE(review.status, 'pending') AS status,
       review.reviewed_by AS "reviewedBy",
@@ -85,7 +87,6 @@ export async function loadTargetBonusRows(
         AND b.finalized_by = e.person_id
         AND b.stock_entry_date = e.period_start
         AND COALESCE(b.finalized_at, b.created_at) <= closure.ended_at
-        AND b.status IN ('IN_STOCK', 'SOLD', 'RESERVED_FOR_ORDER', 'DISPATCHED', 'FINALIZED')
     ) output ON true
     LEFT JOIN LATERAL (
       SELECT r.rate_per_bale
