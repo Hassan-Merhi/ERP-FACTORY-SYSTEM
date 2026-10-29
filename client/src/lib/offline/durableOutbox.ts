@@ -185,7 +185,9 @@ export async function deliverOfflineOperations(
         if (parents.some((parent) => !parent || parent.state !== "acknowledged")) break;
       }
       const item = await claimOfflineOperation(candidate.id, actor);
-      if (!item) continue;
+      // An earlier operation may be in backoff or leased by another tab.
+      // Never overtake it with a later business write.
+      if (!item) break;
       try {
         const response = await transport(item.url, {
           method: item.method,

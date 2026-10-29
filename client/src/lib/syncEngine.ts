@@ -212,7 +212,11 @@ export async function runSync(): Promise<void> {
       const { deliverOfflineOperations } = await import("./offline/durableOutbox");
       const result = await deliverOfflineOperations();
       const allClear =
-        !result.paused && result.retried === 0 && result.conflicts === 0 && result.rejected === 0;
+        result.acknowledged > 0 &&
+        !result.paused &&
+        result.retried === 0 &&
+        result.conflicts === 0 &&
+        result.rejected === 0;
       emitSyncEvent({
         syncing: false,
         conflictDetected: result.conflicts > 0,

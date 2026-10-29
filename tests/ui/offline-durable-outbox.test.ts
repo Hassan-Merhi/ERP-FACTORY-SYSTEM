@@ -155,6 +155,17 @@ describe("durable outbox — capture before delivery", () => {
     expect(otherUser.calls).toHaveLength(2);
   });
 
+  it("does not overtake an earlier operation waiting for retry", async () => {
+    const first = await queue();
+    const second = await queue();
+    state.records.get(first.id).nextAttemptAt = Date.now() + 100000;
+    const { transport, calls } = transportFor();
+    const { deliverOfflineOperations } = await import("@/lib/offline/durableOutbox");
+    await deliverOfflineOperations(transport);
+    expect(calls).toHaveLength(2);
+    expect(state.records.get(second.id).state).toBe("pending");
+  });
+
   it("retains conflicts and terminal rejections for operator review", async () => {
     const { deliverOfflineOperations } = await import("@/lib/offline/durableOutbox");
     const conflictRow = await queue();
