@@ -80,7 +80,7 @@ async function probeDatabase() {
     await client.connect();
     await client.query("SELECT 1");
     const schema = await probeCriticalSchema(client);
-    const edgeDataProvisioned = factoryEdgeRuntimeConfig.mode !== "lan" || await hasFactoryEdgeData(client);
+    const edgeDataProvisioned = factoryEdgeRuntimeConfig.mode !== "lan" || (await hasFactoryEdgeData(client));
     return { ok: true, schema, edgeDataProvisioned };
   } catch (error) {
     return { ok: false, reason: error?.message || String(error) };
@@ -128,8 +128,13 @@ Server.prototype.emit = function healthAwareEmit(event, ...args) {
 
   if (pathname === "/api/health/ready") {
     void probeDatabase().then((database) => {
-      const ready = listening && !shuttingDown && hasDatabaseConfig && database.ok &&
-        database.schema?.ok === true && database.edgeDataProvisioned !== false;
+      const ready =
+        listening &&
+        !shuttingDown &&
+        hasDatabaseConfig &&
+        database.ok &&
+        database.schema?.ok === true &&
+        database.edgeDataProvisioned !== false;
       sendJson(res, ready ? 200 : 503, {
         status: ready ? "ready" : "not_ready",
         listening,

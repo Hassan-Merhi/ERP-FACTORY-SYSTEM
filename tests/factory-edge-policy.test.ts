@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  edgeBlocksWrite,
-  edgeStatusPayload,
-  readFactoryEdgeConfiguration,
-} from "../server/edge/edgeRuntimePolicy.mjs";
+import { edgeBlocksWrite, edgeStatusPayload, readFactoryEdgeConfiguration } from "../server/edge/edgeRuntimePolicy.mjs";
 
 const safe = {
   FACTORY_EDGE_MODE: "lan",
@@ -49,7 +45,8 @@ describe("factory LAN edge deployment policy", () => {
   });
   it("requires explicit acknowledgment for LAN-primary mode", () => {
     const p = readFactoryEdgeConfiguration({
-      ...safe, FACTORY_EDGE_WRITE_MODE: "lan-primary",
+      ...safe,
+      FACTORY_EDGE_WRITE_MODE: "lan-primary",
       FACTORY_EDGE_PRIMARY_ACK: "CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED",
     });
     expect(p.primary).toBe(true);
@@ -69,7 +66,9 @@ describe("factory LAN edge deployment policy", () => {
   it("never claims cloud sync", () => {
     const p = readFactoryEdgeConfiguration(safe);
     expect(edgeStatusPayload(p, false)).toMatchObject({
-      writeMode: "read-only", databaseProvisioned: false, cloudReplication: "not-configured",
+      writeMode: "read-only",
+      databaseProvisioned: false,
+      cloudReplication: "not-configured",
     });
   });
 });

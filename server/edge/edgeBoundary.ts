@@ -17,11 +17,7 @@ export function makeFactoryEdgeWriteGuard(
 
     // When operator cutover was explicitly acknowledged, still reject writes
     // against a blank/unprovisioned local database.
-    if (
-      config.mode === "lan" &&
-      config.primary &&
-      !["GET", "HEAD", "OPTIONS"].includes(req.method.toUpperCase())
-    ) {
+    if (config.mode === "lan" && config.primary && !["GET", "HEAD", "OPTIONS"].includes(req.method.toUpperCase())) {
       try {
         if (!(await hasApprovedData())) {
           return res.status(503).json({ code: "EDGE_DATABASE_NOT_PROVISIONED" });

@@ -203,8 +203,8 @@ let migrationsDone = false;
     try {
       // The server selects the signal using the authenticated session's
       // effective role. Never trust a client-provided role for this decision.
-      const target = req.session?.userId &&
-        ["Admin", "Owner", "Developer"].includes(req.session.currentRole ?? "")
+      const target =
+        req.session?.userId && ["Admin", "Owner", "Developer"].includes(req.session.currentRole ?? "")
           ? "privileged"
           : "regular";
       const forceRefreshToken = await readGlobalForceRefreshToken(target);

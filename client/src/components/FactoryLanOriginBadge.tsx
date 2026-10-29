@@ -29,9 +29,12 @@ export function FactoryLanOriginBadge() {
         if (!res.ok || !(res.headers.get("content-type") ?? "").includes("json")) return;
         const body: unknown = await res.json();
         if (
-          body && typeof body === "object" &&
-          "mode" in body && body.mode === "lan" &&
-          "siteId" in body && typeof body.siteId === "string" &&
+          body &&
+          typeof body === "object" &&
+          "mode" in body &&
+          body.mode === "lan" &&
+          "siteId" in body &&
+          typeof body.siteId === "string" &&
           "writeMode" in body &&
           (body.writeMode === "read-only" || body.writeMode === "lan-primary")
         ) {
@@ -53,9 +56,7 @@ export function FactoryLanOriginBadge() {
       className="pointer-events-none fixed bottom-3 right-3 z-50 max-w-[min(90vw,19rem)] rounded-md border border-amber-400/60 bg-background/95 px-3 py-2 text-xs text-foreground shadow-md"
     >
       <strong>{t("edge.lanServer")}</strong>
-      <span className="ml-1">
-        · {status.writeMode === "read-only" ? t("edge.readOnly") : t("edge.lanPrimary")}
-      </span>
+      <span className="ml-1">· {status.writeMode === "read-only" ? t("edge.readOnly") : t("edge.lanPrimary")}</span>
       <p className="text-muted-foreground">{t("edge.replicationNotConfigured")}</p>
       <p className="font-mono text-muted-foreground">{status.siteId.slice(0, 8)}</p>
     </div>

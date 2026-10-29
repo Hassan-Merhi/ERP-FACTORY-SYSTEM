@@ -43,9 +43,7 @@ export function AuthenticatedAppOverlays() {
   return (
     <>
       <FactoryLanOriginBadge />
-      <Suspense fallback={null}>
-        {remoteSupportReady ? <RemoteSupportRuntime /> : null}
-      </Suspense>
+      <Suspense fallback={null}>{remoteSupportReady ? <RemoteSupportRuntime /> : null}</Suspense>
     </>
   );
 }

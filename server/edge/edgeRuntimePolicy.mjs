@@ -1,20 +1,22 @@
 /** Factory LAN edge: explicit opt-in, never inferred from network reachability. */
 const SAFE_EDGE_HOSTS = new Set(["postgres", "db", "localhost", "127.0.0.1", "::1"]);
 const PRIMARY_ACK = "CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED";
-const SAFE_SESSION_PATHS = new Set([
-  "/api/auth/login", "/api/auth/logout", "/api/auth/set-company",
-  "/api/csp-report",
-]);
+const SAFE_SESSION_PATHS = new Set(["/api/auth/login", "/api/auth/logout", "/api/auth/set-company", "/api/csp-report"]);
 
 function parseSite(value) {
-  return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  return (
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+  );
 }
 
 function parseHostname(value) {
-  return typeof value === "string" &&
+  return (
+    typeof value === "string" &&
     value.length <= 253 &&
     /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{1,62}$/i.test(value) &&
-    !value.includes("..");
+    !value.includes("..")
+  );
 }
 
 export function readFactoryEdgeConfiguration(env = process.env) {
