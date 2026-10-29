@@ -253,9 +253,9 @@ function createWorkbook(
   start: string,
   end: string,
   through: string,
-  ExcelRuntime: typeof ExcelJS,
+  WorkbookCtor: new () => ExcelJS.Workbook,
 ) {
-  const book = new ExcelRuntime.Workbook();
+  const book = new WorkbookCtor();
   book.creator = "Factory Production Targets";
   book.created = new Date();
   book.calcProperties.fullCalcOnLoad = true;
@@ -342,7 +342,7 @@ export async function exportWeeklyProductionExcel(referenceDate: string): Promis
   const data = buildWeeklyProductionData(days);
   const excelModule = await import("exceljs");
   const runtime = excelModule.default ?? excelModule;
-  const workbook = createWorkbook(data, start, end, through, runtime);
+  const workbook = createWorkbook(data, start, end, through, runtime.Workbook);
   const raw = await workbook.xlsx.writeBuffer();
   const blob = new Blob([raw], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const url = URL.createObjectURL(blob);
