@@ -68,6 +68,19 @@ function cents(value: string | number) {
   return toMoney(value).toDecimalPlaces(2).toFixed(2);
 }
 
+
+/** Pure gate shared by API writes and regression tests. */
+export function assertDirectBonusPayable(
+  allocation: Pick<AllocationRow, "decisionStatus" | "finished" | "payrollId" | "extraBales" | "amount">,
+  alreadyClaimed: boolean,
+): void {
+  if (alreadyClaimed) throw new HttpError(409, "This bonus has already been paid or reversed; duplicate payment blocked");
+  if (allocation.decisionStatus !== "APPROVED") throw new HttpError(409, "Bonus must be approved before payment");
+  if (!allocation.finished) throw new HttpError(409, "End Production must be finalized before this bonus can be paid");
+  if (allocation.payrollId !== null) throw new HttpError(409, "This bonus is assigned to payroll; pay it through payroll instead");
+  if (allocation.extraBales <= 0 || toMoney(allocation.amount).lte(0)) throw new HttpError(409, "No payable extra-bale bonus");
+}
+
 async function loadAllocationTx(tx: DbTransaction, companyId: number, allocationId: number): Promise<AllocationRow> {
   const row = first<Record<string, unknown>>(await tx.execute(sql`
     SELECT a.id, a.worker_id AS "workerId", a.worker_name_snapshot AS "workerName",
@@ -179,10 +192,18 @@ export async function postProductionTargetBonusPayment(input: BonusPaymentPostin
           prior.amount === cents(allocation.amount)) return { ...prior, replayed: true };
       throw new HttpError(409, "This bonus has already been paid or reversed; duplicate payment blocked");
     }
-    if (allocation.decisionStatus !== "APPROVED") throw new HttpError(409, "Bonus must be approved before payment");
-    if (!allocation.finished) throw new HttpError(409, "End Production must be finalized before this bonus can be paid");
-    if (allocation.payrollId !== null) throw new HttpError(409, "This bonus is assigned to payroll; pay it through payroll instead");
-    if (allocation.extraBales <= 0 || toMoney(allocation.amount).lte(0)) throw new HttpError(409, "No payable extra-bale bonus");
+    assertDirectBonusPayable(allocation, false);
+
+    // An already approved or paid salary period must not be paid again through
+    // a second route just because an old allocation lost its payroll_id.
+    const related = first<Record<string, unknown>>(await tx.execute(sql`
+      SELECT id FROM factory_payrolls
+      WHERE company_id = ${input.companyId} AND worker_id = ${allocation.workerId}
+        AND ${allocation.productionDate}::date BETWEEN period_start AND period_end
+        AND status IN ('APPROVED','PAID')
+      LIMIT 1
+    `));
+    if (related) throw new HttpError(409, "Finalized payroll already covers this worker and production date; reconcile before paying separately");
     const amount = cents(allocation.amount);
     await ensureUsdCashBalanceTx(tx, input.companyId, input.cashAccountId, amount);
     const expenseAccountId = await depositExpenseAccountTx(tx, input.companyId);
