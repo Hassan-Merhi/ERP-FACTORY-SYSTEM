@@ -78,6 +78,13 @@ export function registerFactoryTargetBonusRoutes(app: Express): void {
         if (!targetBonusValidRange(start, end)) {
           return res.status(400).json({ message: "Select a valid date range of up to 32 days" });
         }
+        // Production targets are visible to staff with that tab, but monetary
+        // bonuses and review history are confidential to Owners and Admins.
+        if (!canDecide(req)) {
+          return res.json({
+            start, end, rows: [], totals: totals([]), canDecide: false,
+          });
+        }
         const rows = await loadTargetBonusRows(db, companyId, start, end);
         return res.json({ start, end, rows, totals: totals(rows), canDecide: canDecide(req) });
       } catch (error: unknown) { return sendError(res, error); }
