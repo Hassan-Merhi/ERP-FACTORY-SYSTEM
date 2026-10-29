@@ -482,13 +482,16 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
                 </Select>
               </div>
 
+            </div>
+            <div className="mx-3 flex flex-wrap items-center gap-2 border-x border-b bg-card/70 px-3.5 py-3 sm:mx-5 sm:px-4">
               {zeroItemCount > 0 && (
-                <div className="border-l pl-4">
+                <div className="">
                   <Button
                     size="default"
                     variant={showZeroItems ? "secondary" : "outline"}
                     onClick={() => setShowZeroItems((v) => !v)}
                     data-testid="button-edit-v5-toggle-zero"
+                    className="h-9 rounded-full px-4 text-xs font-semibold"
                   >
                     {showZeroItems ? `Hide 0-stock (${zeroItemCount})` : `Show 0-stock (${zeroItemCount})`}
                   </Button>
@@ -496,12 +499,13 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
               )}
 
               {nonPositiveCount > 0 && (
-                <div className={zeroItemCount === 0 ? "border-l pl-4" : ""}>
+                <div className={zeroItemCount === 0 ? "" : ""}>
                   <Button
                     size="default"
                     variant={hideNonPositive ? "default" : "outline"}
                     onClick={() => setHideNonPositive((v) => !v)}
                     data-testid="button-edit-v5-hide-non-positive"
+                    className="h-9 rounded-full px-4 text-xs font-semibold"
                   >
                     {hideNonPositive
                       ? `Show all (${nonPositiveCount} hidden)`
@@ -517,6 +521,7 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
                     variant={showGarbageWipers ? "secondary" : "outline"}
                     onClick={() => setShowGarbageWipers((v) => !v)}
                     data-testid="button-edit-v5-toggle-garbage-wipers"
+                    className="h-9 rounded-full px-4 text-xs font-semibold"
                   >
                     {showGarbageWipers
                       ? `Hide Garbage/Wipers (${garbageWipersCount})`
@@ -525,14 +530,14 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
                 </div>
               )}
 
-              <div className="flex items-center gap-2 ml-auto flex-wrap">
+              <div className="ml-auto flex flex-wrap items-center gap-2">
                 <Button
                   size="sm"
                   variant={appliedPrice === "sell" ? "secondary" : "outline"}
                   onClick={applyCatalogSellingPrice}
                   disabled={!productsQuery.data}
                   data-testid="button-edit-v5-apply-sell-price"
-                  className={cn(appliedPrice === "sell" && "ring-2 ring-primary/40")}
+                  className={cn("h-9 rounded-full px-4 text-xs font-semibold", appliedPrice === "sell" && "ring-2 ring-violet-500/40")}
                 >
                   {appliedPrice === "sell" && <CheckCircle2 className="h-3.5 w-3.5 mr-1.5 text-primary" />}
                   Apply Sell Price
@@ -543,7 +548,7 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
                   onClick={applyCatalogProductionPrice}
                   disabled={!productsQuery.data}
                   data-testid="button-edit-v5-apply-prod-price"
-                  className={cn(appliedPrice === "prod" && "ring-2 ring-primary/40")}
+                  className={cn("h-9 rounded-full px-4 text-xs font-semibold", appliedPrice === "prod" && "ring-2 ring-violet-500/40")}
                 >
                   {appliedPrice === "prod" && <CheckCircle2 className="h-3.5 w-3.5 mr-1.5 text-primary" />}
                   Apply Prod Price
@@ -559,7 +564,7 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
                     : customerPriceListQuery.data?.length
                       ? `Apply ${customerPriceListQuery.data.length} saved agreed price(s) for this customer`
                       : "No agreed prices saved for this customer yet"}
-                  className={cn(appliedPrice === "customer" && "ring-2 ring-primary/40")}
+                  className={cn("h-9 rounded-full px-4 text-xs font-semibold", appliedPrice === "customer" && "ring-2 ring-violet-500/40")}
                 >
                   {appliedPrice === "customer" && <CheckCircle2 className="h-3.5 w-3.5 mr-1.5 text-primary" />}
                   <BookmarkCheck className="h-3.5 w-3.5 mr-1.5" />
