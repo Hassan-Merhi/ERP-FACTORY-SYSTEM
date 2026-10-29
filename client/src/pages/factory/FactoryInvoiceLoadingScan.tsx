@@ -2,6 +2,8 @@ import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { MobileBarcodeScanner, type CameraScanFeedback } from "@/components/MobileBarcodeScanner";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translateCameraScanMessage } from "@/i18n/mobileCameraScanTranslations";
 import { FACTORY_MOBILE_ACTION_BAR_CLEARANCE, FactoryMobileActionBar } from "@/components/ui/factory-mobile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -47,6 +49,7 @@ export default function FactoryInvoiceLoadingScan() {
   const [, params] = useRoute("/factory/invoices/:id/loading-scan");
   const invoiceId = params?.id ? parseInt(params.id) : null;
   const { toast } = useToast();
+  const { language } = useApplicationLanguage();
   const { formatDisplayDate } = useDateFormat();
   useEscapeToParent(`/factory/sales/invoices/${invoiceId}`);
 
@@ -174,7 +177,7 @@ export default function FactoryInvoiceLoadingScan() {
       setCameraScanFeedback({
         type: "success",
         referenceNumber: data.bale?.referenceNumber || data.loadingBale?.baleReference || barcode,
-        message: "Bale added to the invoice loading session.",
+        message: translateCameraScanMessage("invoiceSuccess", language),
       });
       setTimeout(() => scanRef.current?.focus(), 50);
     },
