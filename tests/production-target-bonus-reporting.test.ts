@@ -5,7 +5,7 @@ import {
 } from "../shared/productionTargetBonusReporting";
 
 const row = (overrides: Partial<ProductionTargetBonusHistoryRow> = {}): ProductionTargetBonusHistoryRow => ({
-  id: 1, workerId: 10, workerNameSnapshot: "Worker A", workerCodeSnapshot: "W10",
+  id: 1, companyId: 100, workerId: 10, workerNameSnapshot: "Worker A", workerCodeSnapshot: "W10",
   productionDate: "2026-10-29", currency: "USD", targetBales: 7,
   creditedBales: 10, excessBales: 3, bonusPerExtraBale: "0.1250",
   amount: "0.38", status: "PENDING", approvedAt: null, postedAt: null,
@@ -58,6 +58,7 @@ describe("phase 7 production target bonus reports", () => {
     expect(() => report([row({ status: "POSTED", postedAt: "2026-10-30T00:00:00Z" })])).toThrow("voucher");
     expect(() => report([row({ status: "APPROVED", paymentVoucherId: 11 })])).toThrow("Unposted");
     expect(() => report([row(), row({ amount: "99.00" })])).toThrow("Duplicate");
+    expect(() => report([row(), row({ id: 4, companyId: 101 })])).toThrow("company IDs");
   });
 
   it("checks dates, worker snapshot, historical rate and range", () => {
