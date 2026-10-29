@@ -245,6 +245,14 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
       // (including Admin, Manager, Owner and Developer) must never appear in
       // the worker scoreboard, even if they initialized a pressing station.
       // Membership is checked in the active company; no cross-company rows.
+      // Use the server's Beirut calendar date, not the browser's local timezone.
+      // Without a day parameter the endpoint follows today's day after midnight.
+      const serverToday = factoryLocalDate(new Date(), PRESSING_TIME_ZONE);
+      const value = typeof req.query.day === "string" ? req.query.day : serverToday;
+      const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(date =>
+        !Number.isNaN(Date.parse(date + "T00:00:00Z")) &&
+        new Date(date + "T00:00:00Z").toISOString().slice(0, 10) === date
+      ).parse(value);
       const result = await pool.query(
         `SELECT u.id AS "userId",
           COALESCE(NULLIF(BTRIM(MAX(p.display_name)), ''), 'Display name not set') AS "name",
@@ -255,6 +263,8 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
           ON p.company_id = $1 AND p.user_id = u.id
         LEFT JOIN factory_pressing_confirmations c
           ON c.company_id = $1 AND c.user_id = u.id AND c.voided_at IS NULL
+          AND c.confirmed_at >= ($2::date::timestamp AT TIME ZONE '${PRESSING_TIME_ZONE}')
+          AND c.confirmed_at < (($2::date + 1)::timestamp AT TIME ZONE '${PRESSING_TIME_ZONE}')
         WHERE UPPER(BTRIM(u.username)) IN ('P1', 'P2', 'P3')
           AND EXISTS (
             SELECT 1 FROM user_company_roles r
@@ -263,9 +273,10 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
           )
         GROUP BY u.id, u.username
         ORDER BY UPPER(BTRIM(u.username))`,
-        [ctx.companyId],
+        [ctx.companyId, day],
       );
-      return res.json({ workers: result.rows });
+      res.set("Cache-Control", "private, no-store");
+      return res.json({ day, serverToday, workers: result.rows });
     } catch (error) { return handleError(res, error); }
   });
 
