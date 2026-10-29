@@ -575,11 +575,9 @@ export async function apiRequest(
       // Phase 1: a generic failed request cannot be made safe by replaying its
       // raw HTTP body. Only explicitly registered operations saved BEFORE
       // transport may use the durable outbox; never fall back to localStorage.
-      const offlineError = new Error("OFFLINE_WRITE_NOT_REGISTERED", {
-        cause: error,
-      });
-      offlineError.name = "OfflineWriteNotRegistered";
-      throw offlineError;
+      const rejectedWrite = Object.assign(offlineError("OFFLINE_WRITE_NOT_REGISTERED"), { cause: error });
+      rejectedWrite.name = "OfflineWriteNotRegistered";
+      throw rejectedWrite;
     }
     throw error;
   }

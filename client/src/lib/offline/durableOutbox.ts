@@ -261,7 +261,7 @@ export async function deliverOfflineOperations(transport: typeof fetch = fetch):
         await settleOperation(item.id, "pending", {
           attempts,
           nextAttemptAt: Date.now() + offlineRetryDelay(attempts),
-          lastError: error instanceof Error ? error.message : "OFFLINE_TRANSPORT_FAILED",
+          lastError: error instanceof Error ? error.message : String("OFFLINE_TRANSPORT_FAILED"),
         });
         summary.retried++;
         break;
