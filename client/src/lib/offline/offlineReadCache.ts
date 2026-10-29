@@ -92,7 +92,8 @@ export function activateVerifiedOfflineReadScope(actor: OfflineReadActor, ttlMs 
   if (!Number.isSafeInteger(actor.companyId) || actor.companyId <= 0 || !actor.userId.trim()) {
     throw offlineError("OFFLINE_READ_ACTOR_INVALID");
   }
-  // Any new verification begins locked; no hidden reuse of a prior unlock.
+  // A fresh verification invalidates in-flight reads and unlocks.
+  verificationVersion++;
   lockVerifiedOfflineReadVault();
   verifiedScope = {
     companyId: actor.companyId,
@@ -251,6 +252,7 @@ export async function readPreparedOfflineResponse(method: string, url: string): 
   if (!classifyOfflineReadFallback(method, url, "network")) return null;
   const actor = getVerifiedOfflineReadScope();
   if (!actor) return null;
+  const requestVersion = verificationVersion;
   try {
     const grant = await getOfflineReadGrant(actor);
     if (!grant || grant.status !== "ready" || grant.expiresAt <= Date.now()) return null;
@@ -282,6 +284,14 @@ export async function readPreparedOfflineResponse(method: string, url: string): 
       // A sealed row without a matching grant must never downgrade to plaintext.
       return null;
     }
+    // Sign-out/company-switch may happen while IndexedDB or WebCrypto awaits.
+    const finalActor = getVerifiedOfflineReadScope();
+    if (
+      verificationVersion !== requestVersion ||
+      finalActor?.companyId !== actor.companyId ||
+      finalActor?.userId !== actor.userId
+    )
+      return null;
     return new Response(body, {
       status: 200,
       headers: {
