@@ -301,6 +301,11 @@ export async function attachProductionBonusesToPayroll(
       AND a.company_id = ${Number(payroll.companyId)}
       AND a.worker_id = ${Number(payroll.workerId)}
       AND a.payroll_id IS NULL
+      -- A separately paid (or reversed) bonus must never reattach to payroll.
+      AND NOT EXISTS (
+        SELECT 1 FROM factory_production_target_bonus_payments p
+        WHERE p.company_id = a.company_id AND p.allocation_id = a.id
+      )
       AND r.production_date BETWEEN ${String(payroll.periodStart)}::date AND ${String(payroll.periodEnd)}::date
   `);
   const newTotals = (await getProductionBonusTotalsForPayrollIds(executor, [payrollId])).get(payrollId) ?? EMPTY_TOTALS;
