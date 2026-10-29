@@ -44,6 +44,7 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
   { en: "Mix Batches", ar: "الدفعات المختلطة", fr: "Lots mélangés" },
   { en: "Bales", ar: "البالات", fr: "Balles" },
   { en: "Daily confirmed scans (Beirut time) · ranked by KG", ar: "عمليات المسح المؤكدة يوميًا (بتوقيت بيروت) · الترتيب حسب الكيلوغرام", fr: "Scans confirmés du jour (heure de Beyrouth) · classement par kg" },
+  { en: "Scanned bales date", ar: "تاريخ مسح البالات", fr: "Date de scan des balles" },
   { en: "Bale Products", ar: "منتجات البالات", fr: "Produits en balles" },
   {
     en: "Select a product before saving changes",
