@@ -44,12 +44,25 @@ describe("Pressing worker camera-only access", () => {
     expect(workerTotals).not.toContain("Worker / progress");
     expect(workerTotals).toContain("Worker");
     expect(workerTotals).toContain("style.badge");
-    expect(workerTotals).toContain('"worker-totals", companyId, userId');
+    expect(workerTotals).toContain('"worker-totals", companyId, userId, day');
     expect(workerTotals).not.toContain("referenceNumber");
     expect(workerTotals).not.toContain("Export Excel");
     expect(history).toContain("Export Excel");
     expect(stockEntry).toContain("isPressingOnlyWorker");
     expect(stockEntry).toContain("<PressingMachineManagement active />");
+  });
+
+  it("filters worker scoreboard to one Beirut production day without lifetime totals", () => {
+    expect(workerTotals).toContain('Daily confirmed scans (Beirut time)');
+    expect(workerTotals).toContain('type="date"');
+    expect(workerTotals).toContain('max={totals.data?.serverToday}');
+    expect(workerTotals).toContain('day ? "?day=" + encodeURIComponent(day) : ""');
+    expect(workerTotals).toContain('value={day || totals.data?.day || ""}');
+    expect(workerTotals).not.toContain("All-time confirmed scans");
+    expect(report).toContain('const serverToday = factoryLocalDate(new Date(), PRESSING_TIME_ZONE)');
+    expect(report).toContain('c.confirmed_at >= ($2::date::timestamp AT TIME ZONE');
+    expect(report).toContain('c.confirmed_at < (($2::date + 1)::timestamp AT TIME ZONE');
+    expect(report).toContain('return res.json({ day, serverToday, workers: result.rows })');
   });
 
   it("shows read-only hourly KG targets directly below pressing worker totals", () => {
