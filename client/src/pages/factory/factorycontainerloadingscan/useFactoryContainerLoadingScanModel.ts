@@ -9,6 +9,8 @@ import { useState, useRef, useCallback, useEffect, useMemo, type KeyboardEvent, 
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import type { CameraScanFeedback } from "@/components/MobileBarcodeScanner";
+import { translateCameraScanMessage } from "@/i18n/mobileCameraScanTranslations";
 import { queryClient } from "@/lib/queryClient";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
@@ -70,6 +72,7 @@ export function useFactoryContainerLoadingScanModel() {
   const [loadingNote, setLoadingNote] = useState<string>("");
   const [scanCode, setScanCode] = useState("");
   const [scanFlash, setScanFlash] = useState<"success" | "error" | null>(null);
+  const [cameraScanFeedback, setCameraScanFeedback] = useState<CameraScanFeedback | null>(null);
   const [showScanSuccessPopup, setShowScanSuccessPopup] = useState(false);
   const [showScanErrorPopup, setShowScanErrorPopup] = useState(false);
   const [pendingBypassBaleRef, setPendingBypassBaleRef] = useState<string | null>(null);
@@ -317,6 +320,11 @@ export function useFactoryContainerLoadingScanModel() {
       setPendingBypassOverloadRef(null);
       setScanFlash("success");
       setShowScanSuccessPopup(true);
+      setCameraScanFeedback({
+        type: "success",
+        referenceNumber: variables.scanCode,
+        message: translateCameraScanMessage("loadingSuccess", language),
+      });
       playScanBeep(SCAN_SUCCESS_TONE.frequency, SCAN_SUCCESS_TONE.durationMs);
       scheduleFlashReset(() => {
         setScanFlash(null);
@@ -355,12 +363,17 @@ export function useFactoryContainerLoadingScanModel() {
       setScanCode("");
     },
     onError: (error: Error, variables: AddLoadingBaleInput) => {
-      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
+      const handledGlobally = (error as { _handledGlobally?: boolean })?._handledGlobally === true;
       // Overload and not-in-proforma are soft rejections: arm a bypass so the
       // same code scanned a second time goes through.
       if ((error as unknown as Error & { overloaded: unknown }).overloaded) {
         setPendingBypassOverloadRef(variables.scanCode);
         setPendingBypassBaleRef(null);
+        setCameraScanFeedback({
+          type: "warn",
+          referenceNumber: variables.scanCode,
+          message: translateCameraScanMessage("overload", language),
+        });
         setScanFlash("error");
         playScanBeep(SCAN_OVERLOAD_TONE.frequency, SCAN_OVERLOAD_TONE.durationMs);
         scheduleFlashReset(() => setScanFlash(null), 600);
@@ -370,6 +383,11 @@ export function useFactoryContainerLoadingScanModel() {
       if ((error as unknown as Error & { notInProforma: unknown }).notInProforma) {
         setPendingBypassBaleRef(variables.scanCode);
         setPendingBypassOverloadRef(null);
+        setCameraScanFeedback({
+          type: "warn",
+          referenceNumber: variables.scanCode,
+          message: translateCameraScanMessage("notRequested", language),
+        });
         setScanFlash("error");
         playScanBeep(SCAN_NOT_IN_PROFORMA_TONE.frequency, SCAN_NOT_IN_PROFORMA_TONE.durationMs);
         scheduleFlashReset(() => setScanFlash(null), 600);
@@ -378,16 +396,25 @@ export function useFactoryContainerLoadingScanModel() {
       }
       setScanFlash("error");
       setShowScanErrorPopup(true);
+      setCameraScanFeedback({
+        type: /already (?:been )?(?:scanned|loaded|added|in)|reserved for another loading/i.test(error.message)
+          ? "duplicate"
+          : "error",
+        referenceNumber: variables.scanCode,
+        message: error.message || translateCameraScanMessage("unableToAdd", language),
+      });
       playScanErrorSweep();
       scheduleFlashReset(() => {
         setScanFlash(null);
         setShowScanErrorPopup(false);
       }, 1500);
-      toast({
-        title: "Scan Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      if (!handledGlobally) {
+        toast({
+          title: "Scan Error",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
       setScanCode("");
     },
     onSettled: () => {
@@ -669,6 +696,7 @@ export function useFactoryContainerLoadingScanModel() {
     handleScan,
     submitScannedCode,
     scanFlash,
+    cameraScanFeedback,
     scanInputClass,
     showScanSuccessPopup,
     showScanErrorPopup,

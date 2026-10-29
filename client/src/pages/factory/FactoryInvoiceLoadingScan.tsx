@@ -1,7 +1,9 @@
 import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
+import { MobileBarcodeScanner, type CameraScanFeedback } from "@/components/MobileBarcodeScanner";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translateCameraScanMessage } from "@/i18n/mobileCameraScanTranslations";
 import { FACTORY_MOBILE_ACTION_BAR_CLEARANCE, FactoryMobileActionBar } from "@/components/ui/factory-mobile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -47,6 +49,7 @@ export default function FactoryInvoiceLoadingScan() {
   const [, params] = useRoute("/factory/invoices/:id/loading-scan");
   const invoiceId = params?.id ? parseInt(params.id) : null;
   const { toast } = useToast();
+  const { language } = useApplicationLanguage();
   const { formatDisplayDate } = useDateFormat();
   useEscapeToParent(`/factory/sales/invoices/${invoiceId}`);
 
@@ -86,6 +89,7 @@ export default function FactoryInvoiceLoadingScan() {
   const [scanInput, setScanInput] = useState("");
   const [scanFlash, setScanFlash] = useState<"success" | "error" | null>(null);
   const [scanMessage, setScanMessage] = useState("");
+  const [cameraScanFeedback, setCameraScanFeedback] = useState<CameraScanFeedback | null>(null);
   const scanRef = useRef<HTMLInputElement>(null);
 
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
@@ -166,15 +170,27 @@ export default function FactoryInvoiceLoadingScan() {
       }
       return res.json();
     },
-    onSuccess: (data) => {
+    onSuccess: (data, barcode) => {
       setScanInput("");
       queryClient.invalidateQueries({ queryKey: [`/api/factory/invoices/${invoiceId}/loading-summary`] });
       flashFeedback("success", `Scanned: ${data.bale?.referenceNumber || data.loadingBale?.baleReference}`);
+      setCameraScanFeedback({
+        type: "success",
+        referenceNumber: data.bale?.referenceNumber || data.loadingBale?.baleReference || barcode,
+        message: translateCameraScanMessage("invoiceSuccess", language),
+      });
       setTimeout(() => scanRef.current?.focus(), 50);
     },
-    onError: (err) => {
+    onError: (err, barcode) => {
       setScanInput("");
       flashFeedback("error", err.message);
+      setCameraScanFeedback({
+        type: /already (?:been )?(?:scanned|loaded|added|in)|reserved for another loading/i.test(err.message)
+          ? "duplicate"
+          : "error",
+        referenceNumber: barcode,
+        message: err.message,
+      });
       setTimeout(() => scanRef.current?.focus(), 50);
     },
   });
@@ -558,7 +574,7 @@ export default function FactoryInvoiceLoadingScan() {
                 disabled={scanBaleMutation.isPending}
                 data-testid="input-scanner"
               />
-              <MobileBarcodeScanner onScan={(code) => scanBaleMutation.mutate(code)} disabled={!activeSessionId || scanBaleMutation.isPending} className="h-12 w-12 shrink-0" />
+              <MobileBarcodeScanner onScan={(code) => scanBaleMutation.mutate(code)} feedback={cameraScanFeedback} disabled={!activeSessionId || scanBaleMutation.isPending} className="h-12 w-12 shrink-0" />
               <Button
                 type="submit"
                 size="default"
