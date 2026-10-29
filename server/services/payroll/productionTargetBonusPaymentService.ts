@@ -131,7 +131,7 @@ async function loadPaymentTx(tx: DbTransaction, companyId: number, reviewId: num
 async function ensureUsdCashBalanceTx(tx: DbTransaction, companyId: number, cashAccountId: number, amount: string): Promise<void> {
   const source = first<Record<string, unknown>>(await tx.execute(sql`
     SELECT id, name, active, account_type AS "accountType",
-           opening_balance::text AS "openingBalance",
+           COALESCE(opening_balance_native_amount, opening_balance)::text AS "openingBalance",
            opening_balance_side AS "openingSide",
            opening_balance_currency AS "openingCurrency"
     FROM ledger_accounts
@@ -151,7 +151,7 @@ async function ensureUsdCashBalanceTx(tx: DbTransaction, companyId: number, cash
       COUNT(*) FILTER (WHERE COALESCE(UPPER(v.currency), 'USD') <> 'USD' OR
         (ve.transaction_currency IS NOT NULL AND UPPER(ve.transaction_currency) <> 'USD'))::integer AS "nonUsdEntries"
     FROM voucher_entries ve
-    JOIN vouchers v ON v.id = ve.voucher_id AND v.company_id = ${companyId} AND v.deleted_at IS NULL
+    JOIN vouchers v ON v.id = ve.voucher_id AND v.company_id = ${companyId} AND v.deleted_at IS NULL AND v.optional = FALSE
     WHERE ve.ledger_account_id = ${cashAccountId}
   `));
   if (Number(row?.nonUsdEntries ?? 0) > 0)
