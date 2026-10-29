@@ -73,10 +73,12 @@ export function ProductionTargetBonusPaymentsPanel({ initialDate }: { initialDat
   // Share the Phase 4 cached authorization response. Non-Admin users never
   // fetch payment accounts/history or see financial payment controls.
   const { data: reviewAccess } = useQuery<{ canDecide: boolean }>({
-    queryKey: ["/api/factory/staff-tracking/production-bonuses", start, end],
-    enabled: datesValid,
+    // The approval endpoint permits 32 days only. Authorization is invariant
+    // by date; use the selected daily date so payment history can cover a year.
+    queryKey: ["/api/factory/staff-tracking/production-bonuses", initialDate, initialDate],
+    enabled: true,
     queryFn: () => api("GET", "/api/factory/staff-tracking/production-bonuses?" +
-      new URLSearchParams({ start, end }).toString()),
+      new URLSearchParams({ start: initialDate, end: initialDate }).toString()),
   });
   const canViewPayments = reviewAccess?.canDecide === true;
   const key = ["/api/factory/staff-tracking/production-bonuses/payments", start, end];
