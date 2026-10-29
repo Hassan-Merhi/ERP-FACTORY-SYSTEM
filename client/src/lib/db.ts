@@ -87,6 +87,28 @@ export interface CachedEntity {
   fetchedAt: number;
 }
 
+export interface OfflineReadSnapshot {
+  key: string;
+  userId: string;
+  companyId: number;
+  url: string;
+  body: string;
+  cachedAt: number;
+  expiresAt: number;
+}
+
+export interface OfflineReadGrant {
+  key: string;
+  userId: string;
+  companyId: number;
+  status: "ready" | "partial" | "not_ready";
+  preparedAt: number;
+  expiresAt: number;
+  completed: number;
+  total: number;
+  errors: string;
+}
+
 export interface OfflineMeta {
   id?: number;
   key: string;
@@ -126,6 +148,8 @@ export interface BulkFxCacheEntry {
 class ERPDatabase extends Dexie {
   syncQueue!: Table<SyncQueueItem, number>;
   offlineOperations!: Table<OfflineOperation, string>;
+  offlineReadSnapshots!: Table<OfflineReadSnapshot, string>;
+  offlineReadGrants!: Table<OfflineReadGrant, string>;
   syncState!: Table<SyncState, number>;
   syncLogs!: Table<SyncLog, number>;
   conflicts!: Table<Conflict, number>;
@@ -236,6 +260,12 @@ class ERPDatabase extends Dexie {
     // v7 — durable operation outbox. Legacy queues are preserved, never auto-migrated.
     this.version(7).stores({
       offlineOperations: "&id, companyId, state, [companyId+userId+state], [state+nextAttemptAt], createdAt",
+    });
+
+    // v8 — independently scoped offline GET response snapshots and readiness.
+    this.version(8).stores({
+      offlineReadSnapshots: "&key, [companyId+userId], url, expiresAt",
+      offlineReadGrants: "&key, [companyId+userId], expiresAt",
     });
   }
 }
