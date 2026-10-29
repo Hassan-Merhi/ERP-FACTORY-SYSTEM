@@ -70,6 +70,7 @@ jobs:
           url="https://erp.factory.internal"
           ready=0
           for attempt in $(seq 1 60); do
+            echo "Edge status probe attempt ${attempt}/60"
             if curl --silent --show-error --max-time 4 \
               --noproxy '*' --cacert deploy/lan/certs/server.pem \
               --resolve "erp.factory.internal:443:$lan_ip" \
