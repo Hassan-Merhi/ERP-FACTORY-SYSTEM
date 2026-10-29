@@ -1,3 +1,5 @@
+import { execFileSync, spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -63,5 +65,25 @@ describe("isolated checkpoint verification", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("isolated cloud bootstrap rehearsal", () => {
+  const script = "deploy/lan/rehearse-encrypted-bootstrap.sh";
+  it("passes bash syntax validation and cannot run without a dedicated acknowledgment", () => {
+    expect(() => execFileSync("bash", ["-n", script])).not.toThrow();
+    const denied = spawnSync("bash", [script, "/not-here", "/not-here"], {
+      encoding: "utf8",
+      env: { ...process.env, EDGE_RESTORE_ACK: "" },
+    });
+    expect(denied.status).toBe(1);
+    expect(denied.stderr).toContain("EDGE_RESTORE_REHEARSAL_ACK_REQUIRED");
+  });
+  it("never selects the live ERP database or a destructive pg_restore mode", () => {
+    const source = readFileSync(script, "utf8");
+    expect(source).toContain('target="erp_edge_rehearsal_');
+    expect(source).toContain('createdb --username=erp_edge --template=template0 "$target"');
+    expect(source).not.toContain("pg_restore --clean");
+    expect(source).toContain("--single-transaction --exit-on-error");
   });
 });
