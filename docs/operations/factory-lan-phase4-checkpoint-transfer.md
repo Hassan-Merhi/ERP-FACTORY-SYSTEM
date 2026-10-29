@@ -144,3 +144,29 @@ cross-database conflict resolution. No process should automatically advance
 or delete this outbox based solely on upload success. Do not enable LAN-primary
 for a full ERP rollout until these missing paths and a real DB-backed
 single-writer cutover are certified.
+
+## Isolated cloud-to-factory bootstrap rehearsal
+
+An operator may use a signed and age-encrypted **approved cloud checkpoint**
+to rehearse an initial LAN baseline. Keep the private age identity on a
+restricted recovery device, and ensure the PostgreSQL 17 factory server
+container is running. Run from the factory server source checkout, using a
+**cloud-signed** checkpoint verified against its cloud source site ID:
+
+```sh
+# Supply EDGE_SYNC_SITE_ID and EDGE_SYNC_SIGNING_KEY securely from recovery vault.
+export EDGE_RESTORE_ACK=DISPOSABLE_DATABASE_ONLY
+bash deploy/lan/rehearse-encrypted-bootstrap.sh \
+  /secure/edge-checkpoint-20261029T223001Z.json /secure/age-identity.txt
+```
+
+This script performs HMAC + ciphertext checks before decrypting, then restores
+only into a **new database named `erp_edge_rehearsal_...`** on private
+PostgreSQL. It never truncates, restores into or promotes the active
+`erp_edge` database. It checks restored users and companies are queryable.
+The disposable database still contains sensitive decrypted business data:
+protect the factory host, restrict database access and erase the rehearsal
+database after approved review. A passing rehearsal is not permission to turn
+on LAN-primary. Production provisioning also requires verified uploaded
+files, ledger/stock/inventory totals, schema and sequence compatibility,
+role isolation and documented operator cutover.
