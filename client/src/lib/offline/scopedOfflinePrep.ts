@@ -97,7 +97,8 @@ export async function getScopedOfflineReadiness(actor: OfflineReadActor): Promis
 export async function runScopedOfflinePrep(
   companyId: number,
   onProgress: (value: PrepProgress) => void,
-  companyType: CompanyType
+  companyType: CompanyType,
+  vaultPassphrase?: string
 ): Promise<PrepProgress> {
   if (activePreparations.has(companyId)) throw offlineError("OFFLINE_PREP_ALREADY_RUNNING");
   activePreparations.add(companyId);
@@ -187,7 +188,7 @@ export async function runScopedOfflinePrep(
     }
 
     emit("verifying", "OFFLINE_PREP_VERIFYING");
-    await saveVerifiedOfflineReadBatch({ ...actor, snapshots: generation, total, packSummary });
+    await saveVerifiedOfflineReadBatch({ ...actor, snapshots: generation, total, packSummary }, vaultPassphrase);
     return emit("done", "OFFLINE_PREP_READY");
   } catch (error) {
     errors.push(getErrorDetails(error).optionalMessage ?? "OFFLINE_PREP_FAILED");
