@@ -126,10 +126,21 @@ async function hasLegacyPayrollCollisionTx(tx: DbTransaction, companyId: number,
     JOIN factory_production_bonus_runs run ON run.id = a.run_id
     WHERE a.company_id = ${companyId} AND run.company_id = ${companyId}
       AND a.worker_id = ${workerId} AND run.production_date = ${date}::date
-      AND a.decision_status = 'APPROVED' AND a.amount > 0
+      AND (a.decision_status = 'APPROVED' OR a.payroll_id IS NOT NULL) AND a.amount > 0
     LIMIT 1
   `));
-  return Boolean(blocked);
+  // A paid/approved salary payroll might already carry the same bonus in
+  // its stored bonuses/net salary even if its legacy allocation has changed.
+  // Fail closed: require reconciliation before a second independent payout.
+  const finalizedPayroll = first(await tx.execute(sql`
+    SELECT 1 AS blocked
+    FROM factory_payrolls fp
+    WHERE fp.company_id = ${companyId} AND fp.worker_id = ${workerId}
+      AND ${date}::date BETWEEN fp.period_start AND fp.period_end
+      AND fp.status IN ('APPROVED', 'PAID')
+    LIMIT 1
+  `));
+  return Boolean(blocked || finalizedPayroll);
 }
 
 /** All selected rows post atomically, so a partial failure creates no payments. */
