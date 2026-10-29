@@ -46,6 +46,7 @@ interface BonusResponse {
   };
   canDecide: boolean;
 }
+const EMPTY_BONUS_ROWS: BonusRow[] = [];
 const rowKey = (row: BonusRow) => row.date + ":" + row.workerId;
 const money = (amount: number) => "$" + amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const count = (amount: number) => amount.toLocaleString("en-US", { maximumFractionDigits: 2 });
@@ -91,7 +92,7 @@ export function ProductionBonusesPanel({ initialDate }: { initialDate: string })
     enabled: rangeValid,
   });
 
-  const rows = data?.rows ?? [];
+  const rows = data?.rows ?? EMPTY_BONUS_ROWS;
   const visible = useMemo(() => rows.filter((row) => {
     const needle = search.trim().toLocaleLowerCase();
     const matchesName = !needle ||
@@ -108,6 +109,27 @@ export function ProductionBonusesPanel({ initialDate }: { initialDate: string })
   );
   const allVisibleSelected = eligible.length > 0 &&
     eligible.every((row) => selected.includes(rowKey(row)));
+
+  // Weekly/date-range worker totals combine historically linked and unlinked
+  // days without counting the displayed linked-team production twice.
+  const workerBreakdown = useMemo(() => {
+    const grouped = new Map<number, {
+      workerId: number; name: string; target: number; produced: number; extra: number;
+      pending: number; approved: number;
+    }>();
+    for (const row of rows) {
+      const current = grouped.get(row.workerId) ?? {
+        workerId: row.workerId, name: row.workerName, target: 0, produced: 0, extra: 0, pending: 0, approved: 0,
+      };
+      current.target += row.targetBales;
+      current.produced += row.producedBales;
+      current.extra += row.extraBales;
+      if (row.status === "pending") current.pending += row.proposedAmount;
+      if (row.status === "approved") current.approved += row.lockedAmount ?? 0;
+      grouped.set(row.workerId, current);
+    }
+    return [...grouped.values()].sort((a, b) => b.extra - a.extra || a.name.localeCompare(b.name));
+  }, [rows]);
 
   const reviewMutation = useMutation({
     mutationFn: async (decision: Decision) =>
@@ -146,6 +168,9 @@ export function ProductionBonusesPanel({ initialDate }: { initialDate: string })
     row.extraBales > 0 && row.ratePerBale != null && row.ratePerBale > 0
   );
   const selectedAmount = selectedRows.reduce((total, row) => total + row.proposedAmount, 0);
+
+  // Keep worker compensation information entirely out of non-admin UI.
+  if (data && !data.canDecide) return null;
 
   return (
     <Card className="overflow-hidden shadow-none" data-testid="production-bonuses-panel">
@@ -207,6 +232,39 @@ export function ProductionBonusesPanel({ initialDate }: { initialDate: string })
             </div>
           ))}
         </div>
+        {workerBreakdown.length > 0 && (
+          <details className="rounded-md border bg-muted/10">
+            <summary className="cursor-pointer px-3 py-2.5 text-sm font-medium">
+              Worker totals across selected dates ({workerBreakdown.length} workers)
+            </summary>
+            <div className="overflow-x-auto border-t">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Worker</TableHead>
+                    <TableHead className="text-right">Target</TableHead>
+                    <TableHead className="text-right">Produced</TableHead>
+                    <TableHead className="text-right">Extra</TableHead>
+                    <TableHead className="text-right">Pending</TableHead>
+                    <TableHead className="text-right">Approved</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {workerBreakdown.map((worker) => (
+                    <TableRow key={worker.workerId}>
+                      <TableCell className="font-medium">{worker.name}</TableCell>
+                      <TableCell className="text-right tabular-nums">{count(worker.target)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{count(worker.produced)}</TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">{count(worker.extra)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{money(worker.pending)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{money(worker.approved)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </details>
+        )}
         {data?.canDecide && (
           <div className="flex flex-wrap items-center gap-2 border-b pb-3">
             <Button size="sm" variant="outline" onClick={() => setSelected(
