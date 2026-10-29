@@ -98,7 +98,7 @@ function conditions(ctx: QueryCtx, filters: PressingReportFilters) {
   }
   return { args, where };
 }
-function invalidDateTimeRange(filters: PressingReportFilters): boolean {
+function invalidDateTimeRange(filters: Pick<PressingReportFilters, "from" | "to" | "fromTime" | "toTime">): boolean {
   return Boolean(
     (filters.fromTime && !filters.from) ||
     (filters.toTime && !filters.to) ||
@@ -208,8 +208,8 @@ async function report(ctx: QueryCtx, filters: PressingReportFilters) {
   // summary, so renamed workers are shown correctly without rewriting evidence.
   const operatorIds = [...new Set([
     ...rows.rows.map(row => row.operatorUserId),
-    ...filteredSummary.byOperator.map(row => row.userId),
-    ...overview.byOperator.map(row => row.userId),
+    ...filteredSummary.byOperator.map((row: { userId: string }) => row.userId),
+    ...overview.byOperator.map((row: { userId: string }) => row.userId),
   ].filter((value): value is string => typeof value === "string" && value.length > 0))];
   const profiles = operatorIds.length
     ? await pool.query(
@@ -225,10 +225,10 @@ async function report(ctx: QueryCtx, filters: PressingReportFilters) {
   return {
     rows: rows.rows.map(row => ({ ...row, operatorName: displayName(row.operatorUserId) })),
     total: Number(count.rows[0]?.total || 0),
-    summary: { ...filteredSummary, byOperator: filteredSummary.byOperator.map(row => ({
+    summary: { ...filteredSummary, byOperator: filteredSummary.byOperator.map((row: { userId: string }) => ({
       ...row, name: displayName(row.userId),
     })) },
-    overview: { ...overview, byOperator: overview.byOperator.map(row => ({
+    overview: { ...overview, byOperator: overview.byOperator.map((row: { userId: string }) => ({
       ...row, name: displayName(row.userId),
     })) },
     page: filters.page, limit: filters.limit, mode: filters.mode,
