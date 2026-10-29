@@ -156,7 +156,7 @@ function groupBales(
     const recipients = exists.filter((member) => member.status !== "Absent").sort((a, b) => a.workerId - b.workerId);
     if (!recipients.length && teamProduced > 0) groupIssues.push("ABSENT");
     const credits = new Map<number, number>();
-    if (!groupIssues.length || (groupIssues.length === 0 && recipients.length)) {
+    if (groupIssues.length === 0 && recipients.length > 0) {
       const each = Math.floor(teamProduced / recipients.length);
       const remainder = teamProduced % recipients.length;
       recipients.forEach((member, index) => credits.set(member.workerId, each + (index < remainder ? 1 : 0)));
