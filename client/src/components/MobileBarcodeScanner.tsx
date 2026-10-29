@@ -64,6 +64,7 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className, feed
     let timeout: ReturnType<typeof setTimeout> | undefined;
     let stream: MediaStream | undefined;
     let decoder: CameraBarcodeDecoder | null = null;
+    const videoElement = videoRef.current;
     // Re-presenting the same retail item should count again after a brief removal;
     // suppress duplicate frames while leaving different barcodes immediately scannable.
     const gate = new ContinuousScanGate(1200, 2);
@@ -166,7 +167,7 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className, feed
       document.removeEventListener("visibilitychange", onVisibilityChange);
       stream?.getTracks().forEach((track) => track.stop());
       trackRef.current = null;
-      if (videoRef.current) videoRef.current.srcObject = null;
+      if (videoElement) videoElement.srcObject = null;
       decoder?.dispose();
       gate.reset();
     };
