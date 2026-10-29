@@ -1,11 +1,15 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { rankPressingWorkers, type PressingStanding, type PressingWorkerTotal } from "./pressingWorkerRanking";
 
 const ROOT = "/api/factory/pressing-machines/report";
 
 interface WorkerTotalsResponse {
+  day: string;
+  serverToday: string;
   workers: PressingWorkerTotal[];
 }
 const formatCount = (value: number) => value.toLocaleString();
@@ -48,11 +52,12 @@ const standingStyles: Record<PressingStanding, {
 export default function PressingWorkerTotals({ active, companyId, userId }: {
   active: boolean; companyId: number; userId: string;
 }) {
+  const [day, setDay] = useState("");
   const totals = useQuery<WorkerTotalsResponse>({
-    queryKey: [ROOT, "worker-totals", companyId, userId],
+    queryKey: [ROOT, "worker-totals", companyId, userId, day],
     enabled: active,
     queryFn: async () => {
-      const response = await fetch(ROOT + "/worker-totals", {
+      const response = await fetch(ROOT + "/worker-totals" + (day ? "?day=" + encodeURIComponent(day) : ""), {
         credentials: "include", cache: "no-store",
       });
       if (!response.ok) throw new Error("Could not load pressing worker totals");
@@ -73,14 +78,22 @@ export default function PressingWorkerTotals({ active, companyId, userId }: {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-base font-semibold">Scanned Bales by Worker</h3>
-          <p className="text-xs text-muted-foreground">All-time confirmed scans · ranked by KG</p>
+          <p className="text-xs text-muted-foreground">Daily confirmed scans (Beirut time) · ranked by KG</p>
         </div>
-        <Button type="button" size="sm" variant="outline"
-          data-testid="button-refresh-pressing-totals"
-          disabled={totals.isFetching}
-          onClick={() => void totals.refetch()}>
-          <RefreshCw className="mr-1 h-4 w-4" />Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Input aria-label="Scanned bales date" type="date"
+            data-testid="input-pressing-worker-date"
+            max={totals.data?.serverToday}
+            className="h-9 w-[145px] text-xs"
+            value={day || totals.data?.day || ""}
+            onChange={event => setDay(event.target.value)} />
+          <Button type="button" size="sm" variant="outline"
+            data-testid="button-refresh-pressing-totals"
+            disabled={totals.isFetching}
+            onClick={() => void totals.refetch()}>
+            <RefreshCw className="mr-1 h-4 w-4" />Refresh
+          </Button>
+        </div>
       </div>
       {totals.isLoading && <p className="text-sm text-muted-foreground">Loading worker totals…</p>}
       {totals.isError && (
