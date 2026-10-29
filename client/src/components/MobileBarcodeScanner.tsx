@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Camera, CheckCircle2, Flashlight, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translateCameraScanTitle } from "@/i18n/mobileCameraScanTranslations";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   createCameraDecoder,
@@ -30,6 +32,7 @@ interface MobileBarcodeScannerProps {
  * The decoder is native when supported, with lazily loaded ZXing for iOS Safari.
  */
 export function MobileBarcodeScanner({ onScan, disabled = false, className, feedback = null }: MobileBarcodeScannerProps) {
+  const { language } = useApplicationLanguage();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastDetected, setLastDetected] = useState("");
@@ -237,9 +240,7 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className, feed
                     {visibleFeedback.type === "success" ? <CheckCircle2 className="h-6 w-6 shrink-0" /> :
                       visibleFeedback.type === "warn" ? <AlertTriangle className="h-6 w-6 shrink-0" /> :
                         <XCircle className="h-6 w-6 shrink-0" />}
-                    <span>{visibleFeedback.type === "success" ? "Scanned successfully" :
-                      visibleFeedback.type === "duplicate" ? "Already scanned" :
-                        visibleFeedback.type === "warn" ? "Check scan" : "Scan failed"}</span>
+                    <span>{translateCameraScanTitle(visibleFeedback.type, language)}</span>
                   </div>
                   <div className="mt-1 break-all font-mono text-sm font-semibold">{visibleFeedback.referenceNumber}</div>
                   <div className="mt-1 text-sm font-medium leading-snug">{visibleFeedback.message}</div>
