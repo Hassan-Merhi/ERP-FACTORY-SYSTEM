@@ -240,6 +240,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       <Route path="/factory/dispatch-batches/:batchId/rides/:rideId/scan" component={FactoryDispatchBatchScan} />
       <Route path="/factory/dispatch-batches/:id" component={FactoryDispatchBatchDetail} />
       <Route path="/factory/dispatch-batches" component={FactoryDispatchBatches} />
+      <Route path="/factory/invoicing/proformas/:id/edit" component={FactoryStockAllocationV5EditProforma} />
       <Route path="/factory/invoicing" component={FactoryInvoicing} />
       <Route path="/factory/stock-allocation" component={FactoryStockAllocation} />
       <Route path="/factory/stock-allocation-v3" component={FactoryStockAllocationV3} />
