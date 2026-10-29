@@ -48,7 +48,7 @@ import {
 } from "./factoryProductionTargetsModel";
 import { ProductionTargetDefaultsDialog } from "./productiontargets/ProductionTargetDefaultsDialog";
 import { ProductionTargetsEditorDialog } from "./productiontargets/ProductionTargetsEditorDialog";
-import { exportWeeklyProductionExcel } from "./productiontargets/productionWeeklyExcel";
+import { exportWeeklyProductionExcel, FutureProductionWeekError } from "./productiontargets/productionWeeklyExcel";
 
 function SummaryTile({ label, value, icon }: { label: string; value: string | number; icon: React.ReactNode }) {
   return (
@@ -232,7 +232,7 @@ export default function FactoryProductionTargets() {
       });
     },
     onError: (error: Error) => {
-      toast({ title: tr("weeklyExcelExportFailed"), description: error.message === "FUTURE_PRODUCTION_WEEK" ? tr("futureWeekNotReady") : error.message, variant: "destructive" });
+      toast({ title: tr("weeklyExcelExportFailed"), description: error instanceof FutureProductionWeekError ? tr("futureWeekNotReady") : error.message, variant: "destructive" });
     },
   });
 
