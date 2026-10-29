@@ -13,6 +13,8 @@ import PressingOfflineQueueStatus from "./PressingOfflineQueueStatus";
 import PressingHistoryReport from "./PressingHistoryReport";
 import PressingWorkerTotals from "./PressingWorkerTotals";
 import PressingHourlyTargets from "./PressingHourlyTargets";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translatePressingUiText } from "@/i18n/pressingUiTranslations";
 
 const ROOT = "/api/factory/pressing-machines";
 type Assignment = {
@@ -27,6 +29,8 @@ const problem = (error: unknown) => error instanceof Error ? error.message : "Un
 export default function PressingMachineManagement({ active }: { active: boolean }) {
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
+  const { language } = useApplicationLanguage();
+  const t = (key: Parameters<typeof translatePressingUiText>[0]) => translatePressingUiText(key, language);
   const [barcode, setBarcode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [last, setLast] = useState<{ barcode: string; outcome: PressingScanOutcome } | null>(null);
@@ -154,7 +158,7 @@ export default function PressingMachineManagement({ active }: { active: boolean 
             <div className="inline-flex rounded-xl border border-border/70 bg-background/45 p-1">
               <Button type="button" size="sm" variant={scanMode === "barcode" ? "default" : "ghost"}
                 className={"h-9 rounded-lg px-4 text-xs font-semibold " + (scanMode === "barcode" ? "bg-blue-600 text-white hover:bg-blue-500" : "")}
-                onClick={() => { setScanMode("barcode"); inputRef.current?.focus(); }}>Barcode Scan</Button>
+                onClick={() => { setScanMode("barcode"); inputRef.current?.focus(); }}>{t("barcodeScan")}</Button>
               <Button type="button" size="sm" variant={scanMode === "manual" ? "default" : "ghost"}
                 className={"h-9 rounded-lg px-4 text-xs font-semibold " + (scanMode === "manual" ? "bg-blue-600 text-white hover:bg-blue-500" : "")}
                 onClick={() => { setScanMode("manual"); inputRef.current?.focus(); }}>Manual Entry</Button>
