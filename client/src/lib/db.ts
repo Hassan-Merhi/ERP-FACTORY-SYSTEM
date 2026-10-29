@@ -1,4 +1,5 @@
 import Dexie, { type Table } from "dexie";
+import type { OfflineOperation } from "./offline/operationContract";
 
 // ─── Schema Types ─────────────────────────────────────────────────────────────
 
@@ -124,6 +125,7 @@ export interface BulkFxCacheEntry {
 
 class ERPDatabase extends Dexie {
   syncQueue!: Table<SyncQueueItem, number>;
+  offlineOperations!: Table<OfflineOperation, string>;
   syncState!: Table<SyncState, number>;
   syncLogs!: Table<SyncLog, number>;
   conflicts!: Table<Conflict, number>;
@@ -229,6 +231,11 @@ class ERPDatabase extends Dexie {
     // v6 — bulk FX offline preview cache keyed by [brokerId, currency]
     this.version(6).stores({
       bulkFxCache: "[brokerId+currency], cachedAt",
+    });
+
+    // v7 — durable operation outbox. Legacy queues are preserved, never auto-migrated.
+    this.version(7).stores({
+      offlineOperations: "&id, state, [companyId+userId+state], [state+nextAttemptAt], createdAt",
     });
   }
 }
