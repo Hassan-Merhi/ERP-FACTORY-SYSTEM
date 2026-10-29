@@ -6,6 +6,7 @@
  */
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
+import { assertAgeV1Header } from "./check-age-archive.mjs";
 import { lstat, readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,6 +17,7 @@ async function digestFile(filePath, name) {
   if (!stat.isFile() || stat.isSymbolicLink() || stat.size <= 0) {
     throw new Error("EDGE_CHECKPOINT_ARCHIVE_INVALID");
   }
+  await assertAgeV1Header(filePath);
   let bytes = 0;
   const hash = createHash("sha256");
   for await (const chunk of createReadStream(filePath)) {
