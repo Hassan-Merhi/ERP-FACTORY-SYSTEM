@@ -8,6 +8,13 @@ type SharedEntry = Record<ApplicationLanguage, string>;
  * business values are intentionally absent and remain protected by the translator.
  */
 export const sharedInterfaceTranslations: SharedEntry[] = [
+  // Proforma creation/editing dashboard labels.
+  { en: "Qty / Container", ar: "الكمية لكل حاوية", fr: "Quantité par conteneur" },
+  { en: "Total KG", ar: "إجمالي الكيلوغرامات", fr: "Poids total (kg)" },
+  { en: "Shortages", ar: "النواقص", fr: "Manquants" },
+  { en: "Total Value", ar: "القيمة الإجمالية", fr: "Valeur totale" },
+  { en: "Stock Allocation", ar: "تخصيص المخزون", fr: "Affectation du stock" },
+  { en: "Clear search", ar: "مسح البحث", fr: "Effacer la recherche" },
   // Stock Allocation dashboard redesign (English, Arabic, French).
   { en: "Monitor product stock, expected loading and available balances.", ar: "راقب مخزون المنتجات والكميات المتوقع تحميلها والأرصدة المتاحة.", fr: "Suivez les stocks des produits, les chargements prévus et les soldes disponibles." },
   { en: "Total Products", ar: "إجمالي المنتجات", fr: "Total des produits" },

@@ -3,10 +3,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertTriangle,
+  FilePlus2,
+  Package,
+  Boxes,
+  Truck,
+  Scale,
   Save,
   Loader2,
   CheckCircle,
@@ -91,18 +95,18 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
   } = useCreateProformaV5Model({ open, onClose, articleRows, onSuccess });
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col bg-background" data-testid="page-create-proforma-v5">
-        <div className="px-5 py-4 border-b shrink-0">
-          <h1 className="text-base font-semibold flex items-center gap-2">
-            Create Proforma
-            <Badge variant="secondary" className="text-[11px] font-semibold tracking-wide">
-              v5
-            </Badge>
-          </h1>
-        </div>
+    <div className="flex min-w-0 flex-col bg-background pb-5" data-testid="page-create-proforma-v5">
+        <section className="px-3 pb-3 pt-5 sm:px-5">
+          <div className="flex items-center gap-3"><div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-violet-500/30 bg-violet-500/15 text-violet-500"><FilePlus2 className="h-6 w-6" /></div><div><h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Create Proforma</h1><p className="mt-0.5 text-sm text-muted-foreground">Stock Allocation</p></div></div>
+          <div className="mt-5 grid grid-cols-2 gap-2.5 lg:grid-cols-3 xl:grid-cols-5"><div className="flex min-w-0 items-center gap-3 rounded-xl border border-violet-500/25 bg-violet-500/[0.07] p-3.5 shadow-sm"><Package className="hidden h-9 w-9 shrink-0 rounded-lg bg-violet-500/15 p-2 text-violet-500 sm:block" /><div className="min-w-0"><p className="text-xs text-muted-foreground">Total Products</p><p className="mt-1 text-2xl font-bold tabular-nums text-violet-500">{visibleRows.length.toLocaleString()}</p></div></div>
+<div className="flex min-w-0 items-center gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] p-3.5 shadow-sm"><Boxes className="hidden h-9 w-9 shrink-0 rounded-lg bg-emerald-500/15 p-2 text-emerald-500 sm:block" /><div className="min-w-0"><p className="text-xs text-muted-foreground">Qty / Container</p><p className="mt-1 text-2xl font-bold tabular-nums text-emerald-500">{totalQty.toLocaleString()}</p></div></div>
+<div className="flex min-w-0 items-center gap-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] p-3.5 shadow-sm"><Truck className="hidden h-9 w-9 shrink-0 rounded-lg bg-amber-500/15 p-2 text-amber-500 sm:block" /><div className="min-w-0"><p className="text-xs text-muted-foreground">Expected to Load</p><p className="mt-1 text-2xl font-bold tabular-nums text-amber-500">{totalExpected.toLocaleString()}</p></div></div>
+<div className="flex min-w-0 items-center gap-3 rounded-xl border border-sky-500/25 bg-sky-500/[0.07] p-3.5 shadow-sm"><Scale className="hidden h-9 w-9 shrink-0 rounded-lg bg-sky-500/15 p-2 text-sky-500 sm:block" /><div className="min-w-0"><p className="text-xs text-muted-foreground">Total KG</p><p className="mt-1 text-2xl font-bold tabular-nums text-sky-500">{totalKg.toLocaleString()}</p></div></div>
+<div className="col-span-2 lg:col-span-1 flex min-w-0 items-center gap-3 rounded-xl border border-rose-500/25 bg-rose-500/[0.07] p-3.5 shadow-sm"><AlertTriangle className="hidden h-9 w-9 shrink-0 rounded-lg bg-rose-500/15 p-2 text-rose-500 sm:block" /><div className="min-w-0"><p className="text-xs text-muted-foreground">Shortages</p><p className="mt-1 text-2xl font-bold tabular-nums text-rose-500">{warningCount.toLocaleString()}</p></div></div></div>
+        </section>
 
         {/* Top fields */}
-        <div className="px-5 pt-3 pb-2 border-b shrink-0 flex flex-col gap-2">
+        <div className="mx-3 flex flex-col gap-3 rounded-t-xl border bg-card/70 p-3.5 shadow-sm sm:mx-5 sm:p-4">
           {/* Row 1 — form fields */}
           <div className="flex flex-wrap gap-3 items-end">
             <div className="flex flex-col gap-1.5 min-w-[180px] flex-1">
@@ -206,7 +210,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
 
           {/* Row 2 — view filters + price actions (only shown when relevant) */}
           {(zeroItemCount > 0 || nonPositiveCount > 0 || negativeCount > 0 || productsQuery.data) && (
-            <div className="flex items-center gap-1.5 flex-wrap pt-1">
+            <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
               <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
 
               {zeroItemCount > 0 && (
@@ -215,6 +219,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                   variant={showZeroItems ? "secondary" : "outline"}
                   onClick={() => setShowZeroItems((v) => !v)}
                   data-testid="button-v5-toggle-zero"
+                  className="h-9 rounded-full px-4 text-xs font-semibold"
                 >
                   {showZeroItems ? `Hide 0-stock (${zeroItemCount})` : `Show 0-stock (${zeroItemCount})`}
                 </Button>
@@ -229,6 +234,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                     setShowNegativeOnly(false);
                   }}
                   data-testid="button-v5-hide-non-positive"
+                  className="h-9 rounded-full px-4 text-xs font-semibold"
                 >
                   {hideNonPositive ? `Show all (${nonPositiveCount} hidden)` : `Hide 0 & neg (${nonPositiveCount})`}
                 </Button>
@@ -243,6 +249,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                     setHideNonPositive(false);
                   }}
                   data-testid="button-v5-show-negative-only"
+                  className="h-9 rounded-full px-4 text-xs font-semibold"
                 >
                   {showNegativeOnly ? `Negative Only (${negativeCount})` : `Negative Only (${negativeCount})`}
                 </Button>
@@ -254,6 +261,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                   variant={showGarbageWipers ? "secondary" : "outline"}
                   onClick={() => setShowGarbageWipers((v) => !v)}
                   data-testid="button-v5-toggle-garbage-wipers"
+                  className="h-9 rounded-full px-4 text-xs font-semibold"
                 >
                   {showGarbageWipers
                     ? `Hide Garbage/Wipers (${garbageWipersCount})`
@@ -272,7 +280,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                 }}
                 disabled={!productsQuery.data}
                 data-testid="button-v5-apply-sell-price"
-                className={cn(appliedPrice === "sell" && "ring-2 ring-primary/40")}
+                className={cn("h-9 rounded-full px-4 text-xs font-semibold", appliedPrice === "sell" && "ring-2 ring-violet-500/40")}
               >
                 {appliedPrice === "sell" && <CheckCircle2 className="h-3.5 w-3.5 mr-1.5 text-primary" />}
                 Sell Price
@@ -286,7 +294,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                 }}
                 disabled={!productsQuery.data}
                 data-testid="button-v5-apply-prod-price"
-                className={cn(appliedPrice === "prod" && "ring-2 ring-primary/40")}
+                className={cn("h-9 rounded-full px-4 text-xs font-semibold", appliedPrice === "prod" && "ring-2 ring-violet-500/40")}
               >
                 {appliedPrice === "prod" && <CheckCircle2 className="h-3.5 w-3.5 mr-1.5 text-primary" />}
                 Prod Price
@@ -319,7 +327,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                       ? `Apply ${customerPriceListQuery.data.length} agreed price(s) for this customer`
                       : "No agreed prices saved for this customer yet"
                   }
-                  className={cn((appliedPrice as string) === "customer" && "ring-2 ring-primary/40")}
+                  className={cn("h-9 rounded-full px-4 text-xs font-semibold", (appliedPrice as string) === "customer" && "ring-2 ring-violet-500/40")}
                 >
                   {(appliedPrice as string) === "customer" && (
                     <CheckCircle2 className="h-3.5 w-3.5 mr-1.5 text-primary" />
@@ -355,7 +363,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
             {errors.containers && <p className="text-xs text-destructive mb-1">{errors.containers}</p>}
             <div className="flex flex-wrap gap-2 max-h-32 overflow-auto">
               {containerNames.map((name, idx) => (
-                <div key={idx} className="flex items-center gap-1 bg-background border rounded-md px-2 py-1">
+                <div key={idx} className="flex items-center gap-1 bg-background border rounded-md px-2 py-2.5">
                   <Container className="h-3 w-3 text-muted-foreground shrink-0" />
                   <Input
                     value={name}
@@ -385,14 +393,14 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
         )}
 
         {/* Search bar */}
-        <div className="px-5 py-2 border-b shrink-0 flex flex-wrap items-end gap-3">
+        <div className="mx-3 flex flex-wrap items-end gap-3 border-x border-b bg-card/70 px-3.5 py-3 sm:mx-5 sm:px-4">
           <div className="relative w-full sm:w-72">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
             <Input
               value={articleSearch}
               onChange={(e) => setArticleSearch(e.target.value)}
-              placeholder="Search product or code…"
-              className="pl-8 h-8 text-sm"
+              placeholder="Search product name or code..."
+              className="h-10 rounded-lg pl-8 text-sm"
               data-testid="input-v5-create-search"
             />
             {articleSearch && (
@@ -408,7 +416,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
           <div className="w-full sm:w-56">
             <Label className="mb-1 block text-xs font-medium">Catalog</Label>
             <Select value={catalogFilter} onValueChange={setCatalogFilter}>
-              <SelectTrigger className="h-8" data-testid="select-v5-create-catalog">
+              <SelectTrigger className="h-10 rounded-lg" data-testid="select-v5-create-catalog">
                 <SelectValue placeholder="All Catalogs" />
               </SelectTrigger>
               <SelectContent>
@@ -425,28 +433,28 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
         </div>
 
         {/* Table */}
-        <div className="flex-1 overflow-auto">
-          <table className="w-full text-sm border-collapse min-w-max">
-            <thead>
-              <tr className="bg-muted sticky top-0 z-30">
-                <th className="text-left px-3 py-2 font-medium border-b border-r whitespace-nowrap min-w-[200px] sticky left-0 bg-muted z-20">
-                  Product
-                </th>
-                <th className="text-right px-3 py-2 font-medium border-b border-r whitespace-nowrap min-w-[130px]">
+        <div className="mx-3 min-w-0 overflow-x-auto rounded-b-xl border border-t-0 bg-card shadow-sm sm:mx-5">
+          <table className="w-full min-w-[1120px] table-fixed border-collapse text-sm">
+            <colgroup>
+              {sendToLoading && n > 0 ? (<><col style={{ width: "25%" }} /><col style={{ width: "10%" }} /><col style={{ width: "14%" }} /><col style={{ width: "12%" }} /><col style={{ width: "11%" }} /><col style={{ width: "12%" }} /><col style={{ width: "16%" }} /></>) : (<><col style={{ width: "27%" }} /><col style={{ width: "10%" }} /><col style={{ width: "16%" }} /><col style={{ width: "14%" }} /><col style={{ width: "13%" }} /><col style={{ width: "20%" }} /></>)}
+            </colgroup>
+            <thead><tr className="sticky top-0 z-30 bg-slate-100 text-slate-700 dark:bg-slate-800/95 dark:text-slate-200">
+                <th className="sticky left-0 z-20 border-b border-r bg-slate-100 px-4 py-3 text-left text-xs font-semibold dark:bg-slate-800/95">Product</th><th className="border-b border-r px-3 py-3 text-left text-xs font-semibold">Code</th>
+                <th className="border-b border-r px-2 py-3 text-center text-xs font-semibold whitespace-nowrap">
                   Available Balance
                 </th>
-                <th className="text-center px-3 py-2 font-medium border-b border-r whitespace-nowrap min-w-[110px]">
+                <th className="border-b border-r px-2 py-3 text-center text-xs font-semibold whitespace-nowrap">
                   Qty / Container
                 </th>
-                <th className="text-right px-3 py-2 font-medium border-b border-r whitespace-nowrap min-w-[90px] text-muted-foreground">
+                <th className="border-b border-r px-2 py-3 text-center text-xs font-semibold whitespace-nowrap text-muted-foreground">
                   Total KG
                 </th>
                 {sendToLoading && n > 0 && (
-                  <th className="text-right px-3 py-2 font-medium border-b border-r whitespace-nowrap min-w-[110px] text-amber-600 dark:text-amber-400">
+                  <th className="border-b border-r px-2 py-3 text-center text-xs font-semibold whitespace-nowrap text-amber-600 dark:text-amber-400">
                     Expected Total ({n}×)
                   </th>
                 )}
-                <th className="text-center px-3 py-2 font-medium border-b whitespace-nowrap min-w-[130px]">Price</th>
+                <th className="border-b px-2 py-3 text-center text-xs font-semibold whitespace-nowrap">Price</th>
               </tr>
             </thead>
             <tbody>
@@ -465,21 +473,17 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                     key={row.articleCode}
                     className={cn(
                       "border-b transition-colors",
-                      idx % 2 === 0 ? "bg-background" : "bg-muted/20",
-                      qty > 0 && "bg-blue-50/30 dark:bg-blue-950/20"
+                      idx % 2 === 0 ? "bg-card" : "bg-muted/25",
+                      qty > 0 && "bg-violet-500/[0.06]"
                     )}
                     data-testid={`row-v5-create-${row.articleCode}`}
                   >
-                    <td className="px-3 py-1.5 border-r sticky left-0 bg-inherit z-10">
-                      <div className="font-medium truncate max-w-[220px] text-xs leading-tight" title={row.productName}>
-                        {row.productName}
-                      </div>
-                      <div className="text-[11px] text-muted-foreground font-mono">{row.articleCode}</div>
-                    </td>
+                    <td className="sticky left-0 z-10 border-r bg-inherit px-4 py-2.5"><div className="flex min-w-0 items-center gap-2">{row.freeToPromise < 0 && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-500" />}<span className="block truncate text-xs font-semibold sm:text-sm" title={row.productName}>{row.productName}</span></div></td>
+                    <td className="border-r px-3 py-2.5 font-mono text-xs text-muted-foreground" title={row.articleCode}>{row.articleCode}</td>
 
                     <td
                       className={cn(
-                        "px-3 py-1.5 border-r text-right font-mono tabular-nums text-xs font-semibold",
+                        "border-r px-2 py-2.5 text-center font-mono tabular-nums text-xs font-semibold",
                         row.freeToPromise < 0
                           ? "text-destructive"
                           : row.freeToPromise === 0
@@ -491,7 +495,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                       {row.freeToPromise > 0 ? `+${row.freeToPromise}` : row.freeToPromise}
                     </td>
 
-                    <td className="px-2 py-1 border-r">
+                    <td className="border-r px-2 py-2.5">
                       <div className="flex flex-col gap-0.5 items-center">
                         <Input
                           ref={(el) => {
@@ -530,7 +534,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                       const weightPerBale = parseFloat(product?.weightPerBaleKg || "0");
                       const rowKg = qty > 0 && weightPerBale > 0 ? qty * weightPerBale : null;
                       return (
-                        <td className="px-3 py-1.5 border-r text-right font-mono tabular-nums text-xs text-muted-foreground">
+                        <td className="border-r px-2 py-2.5 text-center font-mono tabular-nums text-xs text-muted-foreground">
                           {rowKg != null ? (
                             <span className="text-foreground font-medium">
                               {rowKg.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg
@@ -545,7 +549,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                     {sendToLoading && n > 0 && (
                       <td
                         className={cn(
-                          "px-3 py-1.5 border-r text-right font-mono tabular-nums text-xs font-semibold",
+                          "border-r px-2 py-2.5 text-center font-mono tabular-nums text-xs font-semibold",
                           shortage
                             ? "text-destructive"
                             : request > 0
@@ -564,7 +568,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                       </td>
                     )}
 
-                    <td className="px-2 py-1">
+                    <td className="px-2 py-2.5">
                       {(() => {
                         const mode = pricingModes[row.articleCode] ?? "per_bale";
                         return (
@@ -635,14 +639,12 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
               })}
             </tbody>
             <tfoot>
-              <tr className="bg-muted border-t-2 sticky bottom-0 z-20 text-xs font-semibold">
-                <td className="px-3 py-2 border-r sticky left-0 bg-muted z-10">
-                  <span className="text-foreground">Totals</span>
-                  <span className="font-normal text-muted-foreground ml-1.5">({visibleRows.length} products)</span>
-                </td>
+              <tr className="sticky bottom-0 z-20 border-t-2 bg-slate-100 text-xs font-semibold dark:bg-slate-800">
+<td className="sticky left-0 z-10 border-r bg-slate-100 px-4 py-3 dark:bg-slate-800"><span className="text-foreground">Totals</span><span className="ml-1.5 font-normal text-muted-foreground">({visibleRows.length} products)</span></td>
+                <td className="border-r px-3 py-3 text-xs text-muted-foreground">Total</td>
                 <td
                   className={cn(
-                    "px-3 py-2 border-r text-right font-mono tabular-nums",
+                    "border-r px-2 py-3 text-center font-mono tabular-nums",
                     visibleTotalBalance < 0
                       ? "text-destructive"
                       : visibleTotalBalance > 0
@@ -652,10 +654,10 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                 >
                   {visibleTotalBalance > 0 ? `+${visibleTotalBalance}` : visibleTotalBalance}
                 </td>
-                <td className="px-3 py-2 border-r text-center font-mono tabular-nums text-foreground">
+                <td className="border-r px-2 py-3 text-center font-mono tabular-nums text-foreground">
                   {totalQty > 0 ? totalQty : <span className="text-muted-foreground/40">—</span>}
                 </td>
-                <td className="px-3 py-2 border-r text-right font-mono tabular-nums text-muted-foreground">
+                <td className="border-r px-2 py-3 text-center font-mono tabular-nums text-muted-foreground">
                   {totalKg > 0 ? (
                     <span className="text-foreground">
                       {totalKg.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg
@@ -665,11 +667,11 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                   )}
                 </td>
                 {sendToLoading && n > 0 && (
-                  <td className="px-3 py-2 border-r text-right font-mono tabular-nums text-amber-600 dark:text-amber-400">
+                  <td className="border-r px-2 py-3 text-center font-mono tabular-nums text-amber-600 dark:text-amber-400">
                     {totalExpected > 0 ? totalExpected : <span className="text-muted-foreground/40">—</span>}
                   </td>
                 )}
-                <td className="px-3 py-2 text-right font-mono tabular-nums text-foreground">
+                <td className="px-2 py-3 text-center font-mono tabular-nums text-foreground">
                   {totalValue > 0 ? (
                     `$${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                   ) : (
@@ -682,7 +684,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t bg-muted/30 shrink-0 flex items-center justify-between gap-4 flex-wrap">
+        <div className="mx-3 mt-3 flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card/90 px-4 py-3 shadow-sm sm:mx-5">
           <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
             <span>
               <span className="font-semibold text-foreground">{filledLines}</span> line{filledLines !== 1 ? "s" : ""}
@@ -721,6 +723,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
               onClick={handleSubmit}
               disabled={createMutation.isPending}
               data-testid="button-v5-create-proforma-submit"
+              className="bg-violet-600 text-white hover:bg-violet-700"
             >
               {createMutation.isPending ? (
                 <>

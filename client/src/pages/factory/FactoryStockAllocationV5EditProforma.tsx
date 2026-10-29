@@ -81,13 +81,13 @@ export default function FactoryStockAllocationV5EditProforma() {
   }
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col">
-      <div className="border-b px-4 py-2">
-        <Button variant="ghost" size="sm" onClick={back} data-testid="button-v5-edit-back">
+    <div className="flex min-w-0 flex-col">
+      <div className="border-b bg-card/40 px-3 py-3 sm:px-5">
+        <Button variant="outline" size="sm" className="h-9 gap-1.5 rounded-lg" onClick={back} data-testid="button-v5-edit-back">
           <ArrowLeft className="mr-2 h-4 w-4" /> {fromInvoicing ? "Invoicing / Proformas" : "Stock Allocation"}
         </Button>
       </div>
-      <div className="min-h-0 flex-1">
+      <div className="min-w-0 flex-1">
         <EditProformaV5Drawer open onClose={back} onSuccess={back} proformaId={proformaId} articleRows={articleRows} />
       </div>
     </div>
