@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2274,
+  "routeCount": 2278,
   "middlewareMountCount": 138,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -623,6 +623,10 @@
     "GET /api/factory/staff-tracking/production-target-defaults [requireAuth > <anonymous>]",
     "POST /api/factory/staff-tracking/production-target-defaults [requireAuth > <anonymous>]",
     "POST /api/factory/staff-tracking/bulk [requireAuth > <anonymous>]",
+    "GET /api/factory/staff-tracking/production-bonuses/payment-accounts [requireAuth > <anonymous> > <anonymous>]",
+    "GET /api/factory/staff-tracking/production-bonuses/payments [requireAuth > <anonymous> > <anonymous>]",
+    "POST /api/factory/staff-tracking/production-bonuses/pay [requireAuth > <anonymous> > <anonymous>]",
+    "POST /api/factory/staff-tracking/production-bonuses/payments/:id/reverse [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/factory/staff-tracking/production-worker-links [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/factory/staff-tracking/production-worker-links [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/factory/staff-tracking/production-worker-links/:linkId/unlink [requireAuth > <anonymous> > <anonymous>]",
