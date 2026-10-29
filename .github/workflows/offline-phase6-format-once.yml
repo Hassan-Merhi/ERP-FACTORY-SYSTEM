@@ -32,12 +32,16 @@ jobs:
             tests/offline-phase6-certification.node.test.mjs \
             client/src/components/FactoryLanOriginBadge.tsx \
             client/src/pages/factory/PressingHistoryReport.tsx \
-            server/routes/factory/factoryPressingReportRoutes.ts
+            server/routes/factory/factoryPressingReportRoutes.ts \
+            client/src/components/MobileBarcodeScanner.tsx \
+            client/src/lib/offline/durableOutbox.ts \
+            client/src/pages/factory/FactoryStockAllocationV5.tsx \
+            client/src/pages/factory/production-raw-stock/FixedProductionPlannerDialog.tsx
           git diff --check
       - name: Commit formatting only to Phase 6 branch
         run: |
           set -euo pipefail
-          git add -- scripts/edge/certify-offline-phase6.mjs tests/offline-phase6-certification.node.test.mjs client/src/components/FactoryLanOriginBadge.tsx client/src/pages/factory/PressingHistoryReport.tsx server/routes/factory/factoryPressingReportRoutes.ts
+          git add -- scripts/edge/certify-offline-phase6.mjs tests/offline-phase6-certification.node.test.mjs client/src/components/FactoryLanOriginBadge.tsx client/src/pages/factory/PressingHistoryReport.tsx server/routes/factory/factoryPressingReportRoutes.ts client/src/components/MobileBarcodeScanner.tsx client/src/lib/offline/durableOutbox.ts client/src/pages/factory/FactoryStockAllocationV5.tsx client/src/pages/factory/production-raw-stock/FixedProductionPlannerDialog.tsx
           if ! git diff --cached --quiet; then
             git -c user.name="ERP Phase 6 Formatter" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "style(offline): format phase 6 and inherited verification fixes"
             git push origin HEAD:feat/offline-phase6-certification-20261030
