@@ -5,12 +5,20 @@ import { errorStatus, getErrorMessage, translateDatabaseError } from "../../lib/
 import { logger } from "../../lib/logger";
 import { parseId } from "../../lib/parseId";
 import { resultRows } from "../../lib/queryResult";
-import { checkFactoryAdmin } from "../factory/_helpers";
+
 import {
   postProductionTargetBonusPayment,
   reverseProductionTargetBonusPayment,
 } from "../../services/payroll/productionTargetBonusPaymentService";
 
+function checkBonusPaymentAdmin(req: Request, res: Response): boolean {
+  // Owners are authorized explicitly. The legacy checkFactoryAdmin helper
+  // incorrectly excludes Owner and admits Developer for this financial action.
+  const role = String(req.session.currentRole || "");
+  if (role === "Admin" || role === "Owner") return true;
+  res.status(403).json({ message: "Owner or Admin permission is required for bonus payment" });
+  return false;
+}
 function factoryCompany(req: Request): number | null {
   const raw = req.session.factoryCompanyId || req.session.currentCompanyId;
   const n = Number(raw);
@@ -33,7 +41,7 @@ export function registerProductionTargetBonusPaymentRoutes(
   app: Express, requireAuth: RequestHandler,
 ): void {
   app.get("/api/factory/production-target-bonuses/payment-accounts", requireAuth, async (req: Request, res: Response) => {
-    if (!checkFactoryAdmin(req, res)) return;
+    if (!checkBonusPaymentAdmin(req, res)) return;
     const companyId = factoryCompany(req);
     if (!companyId) return res.status(400).json({ message: "Choose a company" });
     try {
@@ -49,7 +57,7 @@ export function registerProductionTargetBonusPaymentRoutes(
   });
 
   app.get("/api/factory/production-target-bonuses/payments", requireAuth, async (req: Request, res: Response) => {
-    if (!checkFactoryAdmin(req, res)) return;
+    if (!checkBonusPaymentAdmin(req, res)) return;
     const companyId = factoryCompany(req);
     if (!companyId) return res.status(400).json({ message: "Choose a company" });
     const startDate = dateParam(req.query.startDate);
@@ -89,7 +97,7 @@ export function registerProductionTargetBonusPaymentRoutes(
   });
 
   app.post("/api/factory/production-target-bonuses/payments", requireAuth, async (req: Request, res: Response) => {
-    if (!checkFactoryAdmin(req, res)) return;
+    if (!checkBonusPaymentAdmin(req, res)) return;
     const companyId = factoryCompany(req);
     if (!companyId) return res.status(400).json({ message: "Choose a company" });
     if (req.body?.confirm !== true) return res.status(400).json({ message: "Review and confirm the bonus payment before posting" });
@@ -110,7 +118,7 @@ export function registerProductionTargetBonusPaymentRoutes(
   });
 
   app.post("/api/factory/production-target-bonuses/payments/:id/reverse", requireAuth, async (req: Request, res: Response) => {
-    if (!checkFactoryAdmin(req, res)) return;
+    if (!checkBonusPaymentAdmin(req, res)) return;
     const companyId = factoryCompany(req);
     if (!companyId) return res.status(400).json({ message: "Choose a company" });
     if (req.body?.confirm !== true) return res.status(400).json({ message: "Review and confirm the reversal before posting" });
