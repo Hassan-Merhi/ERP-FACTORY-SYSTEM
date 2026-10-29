@@ -362,6 +362,16 @@ const factoryStaffTrackingTranslations = {
   weeklyExcelExported: { en: "Weekly Excel exported", ar: "تم تصدير إكسل الأسبوع", fr: "Excel hebdomadaire exporté" },
   weeklyExcelExportFailed: { en: "Weekly Excel export failed", ar: "فشل تصدير إكسل الأسبوع", fr: "Échec de l’export Excel hebdomadaire" },
   weeklyExcelRange: { en: "Daily targets and worker links:", ar: "الأهداف اليومية وروابط العمال:", fr: "Objectifs quotidiens et liens des ouvriers :" },
+  weeklyExcelTooltip: {
+    en: "Download Monday–Sunday production using each day's worker links",
+    ar: "نزّل إنتاج الاثنين إلى الأحد باستخدام روابط العمال في كل يوم",
+    fr: "Télécharger la production du lundi au dimanche avec les liens quotidiens des ouvriers",
+  },
+  futureWeekNotReady: {
+    en: "A future production week cannot be exported yet.",
+    ar: "لا يمكن تصدير أسبوع إنتاج مستقبلي بعد.",
+    fr: "Une semaine de production future ne peut pas encore être exportée.",
+  },
   dailyTotal: { en: "Daily Total", ar: "الإجمالي اليومي", fr: "Total du jour" },
 } as const;
 
