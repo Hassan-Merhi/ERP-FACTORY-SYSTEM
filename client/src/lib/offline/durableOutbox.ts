@@ -188,12 +188,23 @@ export async function deliverOfflineOperations(
       summary.paused = true;
       return summary;
     }
-    const candidates = await listOfflineOperations(actor, ["pending", "sending"]);
+    const candidates = await listOfflineOperations(actor);
     for (const candidate of candidates) {
-      if (!isAutoReplayAllowed(candidate.method, candidate.url)) continue;
+      if (candidate.state === "acknowledged") continue;
+      // Stop after a conflict/rejection: later writes may depend on this one.
+      if (candidate.state !== "pending" && candidate.state !== "sending") break;
+      if (!isAutoReplayAllowed(candidate.method, candidate.url)) break;
       if (candidate.dependencies.length > 0) {
         const parents = await db.offlineOperations.bulkGet(candidate.dependencies);
-        if (parents.some((parent) => !parent || parent.state !== "acknowledged")) break;
+        if (
+          parents.some(
+            (parent) =>
+              !parent ||
+              parent.companyId !== actor.companyId ||
+              parent.userId !== actor.userId ||
+              parent.state !== "acknowledged"
+          )
+        ) break;
       }
       const item = await claimOfflineOperation(candidate.id, actor);
       // An earlier operation may be in backoff or leased by another tab.

@@ -183,6 +183,17 @@ describe("durable outbox — capture before delivery", () => {
     expect(state.records.size).toBe(2);
   });
 
+  it("blocks later writes until an earlier rejection is reviewed", async () => {
+    const earlier = await queue();
+    const later = await queue();
+    state.records.get(earlier.id).state = "conflict";
+    const { transport, calls } = transportFor();
+    const { deliverOfflineOperations } = await import("@/lib/offline/durableOutbox");
+    await deliverOfflineOperations(transport);
+    expect(calls).toHaveLength(2);
+    expect(state.records.get(later.id).state).toBe("pending");
+  });
+
   it("pauses without deleting requests when session authentication fails", async () => {
     const row = await queue();
     const { deliverOfflineOperations } = await import("@/lib/offline/durableOutbox");
