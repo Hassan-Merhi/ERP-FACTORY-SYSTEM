@@ -1,0 +1,46 @@
+name: Phase 2 one-time formatting (temporary)
+on:
+  push:
+    branches:
+      - feat/offline-phase1-durable-foundation-20261029
+    paths:
+      - .github/workflows/offline-phase2-format-once.yml
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Install formatter without executing dependency lifecycle scripts
+        run: npm ci --ignore-scripts
+      - name: Format only files changed by the Phase 1 and 2 pull request
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          mapfile -d '' -t files < <(git diff --name-only -z origin/main...HEAD -- '*.ts' '*.tsx' '*.css' '*.mjs')
+          if (( ${#files[@]} )); then
+            node node_modules/prettier/bin/prettier.cjs --write "${files[@]}"
+            git add -- "${files[@]}"
+          fi
+          if ! git diff --cached --quiet; then
+            git -c user.name='ERP Offline Formatter' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'style(offline): run Prettier on changed source files'
+            git push origin "HEAD:feat/offline-phase1-durable-foundation-20261029"
+          fi
+
+      - name: Verify focused Phase 1 and Phase 2 browser contracts
+        run: >-
+          node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts
+          tests/ui/offline-read-policy.test.ts
+          tests/ui/offline-read-cache.test.ts
+          tests/ui/offline-scoped-preparation.test.ts
+          tests/ui/offline-manifest-coverage.test.ts
+          tests/ui/offline-operation-contract.test.ts
+          tests/ui/offline-durable-outbox.test.ts
+      - name: Verify server-side operation scope
+        run: node node_modules/vitest/vitest.mjs run tests/offline-operation-scope.test.ts
