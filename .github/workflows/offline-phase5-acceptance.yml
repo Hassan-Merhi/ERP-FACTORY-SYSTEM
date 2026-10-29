@@ -1,0 +1,24 @@
+name: Offline Phase 5 acceptance tests
+on:
+  push:
+    branches:
+      - feat/offline-phase5-acceptance-20261030
+  pull_request:
+    paths:
+      - 'scripts/offline-phase5/**'
+      - 'tests/offline-phase5-acceptance.test.mjs'
+      - '.github/workflows/offline-phase5-acceptance.yml'
+  workflow_dispatch:
+jobs:
+  acceptance-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.22.1'
+      - name: Offline acceptance contract tests (no credentials or live network)
+        run: node --test tests/offline-phase5-acceptance.test.mjs
