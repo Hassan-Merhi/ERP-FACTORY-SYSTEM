@@ -240,16 +240,22 @@ export const applicationFrenchTranslations = {
   "pos.paymentTotals": "Totaux des paiements",
   "analytics.expenses.periodActivity": "Écritures comptabilisées pour la période sélectionnée",
   "analytics.expenses.netExpense": "Dépense nette",
-  "analytics.expenses.loadFailed": "Impossible de charger les dépenses pour cette période. Veuillez réessayer le filtre de dates.",
+  "analytics.expenses.loadFailed":
+    "Impossible de charger les dépenses pour cette période. Veuillez réessayer le filtre de dates.",
   "analytics.expenses.loadFailedShort": "Impossible de charger les dépenses pour la période sélectionnée",
   "offlineReads.writeLimitTitle": "Limites des écritures hors ligne",
-  "offlineReads.writeLimitDetail": "Seules les opérations explicitement prises en charge peuvent être enregistrées pour synchronisation ultérieure. Les mouvements de stock, les paiements et les autres formulaires nécessitent encore le serveur.",
-  "offlineReads.exactCoverageDetail": "Seules les données préalablement préparées et non expirées sont accessibles hors ligne. Les pages et requêtes non enregistrées nécessitent une connexion.",
+  "offlineReads.writeLimitDetail":
+    "Seules les opérations explicitement prises en charge peuvent être enregistrées pour synchronisation ultérieure. Les mouvements de stock, les paiements et les autres formulaires nécessitent encore le serveur.",
+  "offlineReads.exactCoverageDetail":
+    "Seules les données préalablement préparées et non expirées sont accessibles hors ligne. Les pages et requêtes non enregistrées nécessitent une connexion.",
   "offlineReads.preparedTitle": "Données hors ligne préparées",
-  "offlineReads.preparedDetail": "Les données en lecture seule ont été enregistrées pour votre compte et votre société.",
+  "offlineReads.preparedDetail":
+    "Les données en lecture seule ont été enregistrées pour votre compte et votre société.",
   "offlineReads.incompleteTitle": "Préparation hors ligne incomplète",
-  "offlineReads.incompleteDetail": "Certaines données n'ont pas pu être téléchargées. L'ancien instantané complet a été préservé.",
+  "offlineReads.incompleteDetail":
+    "Certaines données n'ont pas pu être téléchargées. L'ancien instantané complet a été préservé.",
   "offlineReads.readyLabel": "Données de lecture prêtes",
-  "offlineReads.intro": "Enregistrez des données en lecture seule vérifiées pour ce compte et cette société. La connexion hors ligne et les pages non mises en cache ne sont pas encore prises en charge.",
+  "offlineReads.intro":
+    "Enregistrez des données en lecture seule vérifiées pour ce compte et cette société. La connexion hors ligne et les pages non mises en cache ne sont pas encore prises en charge.",
   "supplierPartner.postOpeningStock": "Enregistrer le stock d'ouverture",
 } as const satisfies ApplicationTranslationCatalog;

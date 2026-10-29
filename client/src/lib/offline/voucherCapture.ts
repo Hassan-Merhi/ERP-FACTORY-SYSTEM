@@ -1,9 +1,6 @@
 import { offlineError } from "./offlineError";
 import { db } from "../db";
-import {
-  queueOfflineOperation,
-  deliverOfflineOperations,
-} from "./durableOutbox";
+import { queueOfflineOperation, deliverOfflineOperations } from "./durableOutbox";
 import type { OfflineActor } from "./operationContract";
 
 /**

@@ -44,9 +44,11 @@ export function classifyOfflineReadFallback(
   url: string,
   reason: number | "network" | "sw-offline"
 ): boolean {
-  return method.toUpperCase() === "GET" &&
+  return (
+    method.toUpperCase() === "GET" &&
     normalizeOfflineReadUrl(url) !== null &&
-    (reason === "network" || reason === "sw-offline");
+    (reason === "network" || reason === "sw-offline")
+  );
 }
 
 type JsonRecord = Record<string, unknown>;
@@ -67,15 +69,9 @@ const MAX_OFFLINE_PAGES = 1000;
 
 export function readPaginationPlan(payload: unknown, headers: Headers): PaginationPlan {
   if (Array.isArray(payload)) {
-    const total = headers.has("X-Total-Count")
-      ? intOrZero(headers.get("X-Total-Count"))
-      : payload.length;
-    const totalPages = headers.has("X-Total-Pages")
-      ? Math.max(1, intOrZero(headers.get("X-Total-Pages")))
-      : 1;
-    const pageSize = headers.has("X-Page-Size")
-      ? intOrZero(headers.get("X-Page-Size"))
-      : Math.max(1, payload.length);
+    const total = headers.has("X-Total-Count") ? intOrZero(headers.get("X-Total-Count")) : payload.length;
+    const totalPages = headers.has("X-Total-Pages") ? Math.max(1, intOrZero(headers.get("X-Total-Pages"))) : 1;
+    const pageSize = headers.has("X-Page-Size") ? intOrZero(headers.get("X-Page-Size")) : Math.max(1, payload.length);
     if (!totalPages || totalPages > MAX_OFFLINE_PAGES || !pageSize || total < payload.length) {
       throw offlineError("OFFLINE_PAGINATION_UNBOUNDED");
     }
@@ -111,11 +107,7 @@ export function mergeOfflinePages(pages: unknown[], plan: PaginationPlan): unkno
   for (let i = 0; i < pages.length; i++) {
     const value = pages[i];
     const array =
-      plan.field === "array"
-        ? value
-        : value && typeof value === "object"
-          ? (value as JsonRecord).data
-          : undefined;
+      plan.field === "array" ? value : value && typeof value === "object" ? (value as JsonRecord).data : undefined;
     if (!Array.isArray(array)) throw offlineError("OFFLINE_PAGINATION_INCOMPLETE");
     // In a multi-page export each intermediate page must be full.
     if (i < pages.length - 1 && array.length !== plan.pageSize) {

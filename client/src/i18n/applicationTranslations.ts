@@ -240,14 +240,17 @@ export const applicationEnglishTranslations = {
   "analytics.expenses.loadFailed": "Could not load expenses for this period. Please retry the date filter.",
   "analytics.expenses.loadFailedShort": "Could not load expenses for the selected period",
   "offlineReads.writeLimitTitle": "Offline write limits",
-  "offlineReads.writeLimitDetail": "Only explicitly supported operations can be saved for later sync. Factory stock allocation, payments, and arbitrary forms still require the server.",
-  "offlineReads.exactCoverageDetail": "Only previously prepared, unexpired datasets are readable while disconnected. Uncached pages and queries need a connection.",
+  "offlineReads.writeLimitDetail":
+    "Only explicitly supported operations can be saved for later sync. Factory stock allocation, payments, and arbitrary forms still require the server.",
+  "offlineReads.exactCoverageDetail":
+    "Only previously prepared, unexpired datasets are readable while disconnected. Uncached pages and queries need a connection.",
   "offlineReads.preparedTitle": "Offline read data prepared",
   "offlineReads.preparedDetail": "Verified read-only data was saved for your account and company.",
   "offlineReads.incompleteTitle": "Offline preparation incomplete",
   "offlineReads.incompleteDetail": "Some records could not be downloaded. An earlier complete snapshot was preserved.",
   "offlineReads.readyLabel": "Read data ready",
-  "offlineReads.intro": "Save verified read-only data for this account and company. Offline login and uncached pages are not supported yet.",
+  "offlineReads.intro":
+    "Save verified read-only data for this account and company. Offline login and uncached pages are not supported yet.",
   "supplierPartner.postOpeningStock": "Post Opening Stock",
 } as const;
 

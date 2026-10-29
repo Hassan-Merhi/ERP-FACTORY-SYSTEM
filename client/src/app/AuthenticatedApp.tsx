@@ -31,13 +31,15 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
   useEffect(() => {
     if (!OFFLINE_MODE_ENABLED) return;
     let stopped = false;
-    void import("@/lib/offline/offlineReadCache").then(async ({ revokeOfflineReadScope, verifyOfflineReadScope }) => {
-      if (stopped) return;
-      revokeOfflineReadScope();
-      if (selectedCompanyId && navigator.onLine) {
-        await verifyOfflineReadScope(selectedCompanyId);
-      }
-    }).catch(() => {});
+    void import("@/lib/offline/offlineReadCache")
+      .then(async ({ revokeOfflineReadScope, verifyOfflineReadScope }) => {
+        if (stopped) return;
+        revokeOfflineReadScope();
+        if (selectedCompanyId && navigator.onLine) {
+          await verifyOfflineReadScope(selectedCompanyId);
+        }
+      })
+      .catch(() => {});
 
     const restoreVerification = () => {
       if (stopped || !selectedCompanyId) return;
@@ -46,11 +48,7 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
         .catch(() => {});
     };
     const onOtherTabIdentityChanged = (event: StorageEvent) => {
-      if (
-        event.key === "erp_offline_logout_broadcast" ||
-        event.key === "selectedCompanyId" ||
-        event.key === null
-      ) {
+      if (event.key === "erp_offline_logout_broadcast" || event.key === "selectedCompanyId" || event.key === null) {
         void import("@/lib/offline/offlineReadCache")
           .then(({ revokeOfflineReadScope }) => revokeOfflineReadScope())
           .catch(() => {});

@@ -13,10 +13,7 @@ import { mergeOfflinePages, normalizeOfflineReadUrl, readPaginationPlan } from "
 const activePreparations = new Set<number>();
 
 /** Download every page, or refuse to promote an incomplete snapshot. */
-export async function downloadCompleteOfflineDataset(
-  url: string,
-  transport: typeof fetch = fetch
-): Promise<string> {
+export async function downloadCompleteOfflineDataset(url: string, transport: typeof fetch = fetch): Promise<string> {
   if (normalizeOfflineReadUrl(url) !== url) throw offlineError("OFFLINE_PREP_URL_UNSUPPORTED");
   const getPage = async (pageUrl: string): Promise<{ payload: unknown; headers: Headers }> => {
     const result = await transport(pageUrl, { credentials: "include", cache: "no-store" });
@@ -36,14 +33,12 @@ export async function downloadCompleteOfflineDataset(
   const pages: unknown[] = [first.payload];
   for (let page = 2; page <= plan.totalPages; page++) {
     const separator = url.includes("?") ? "&" : "?";
-    const paging = plan.field === "data" ? `page=${page}&pageSize=${plan.pageSize}` : `page=${page}&limit=${plan.pageSize}`;
+    const paging =
+      plan.field === "data" ? `page=${page}&pageSize=${plan.pageSize}` : `page=${page}&limit=${plan.pageSize}`;
     const next = await getPage(`${url}${separator}${paging}`);
     const nextPlan = readPaginationPlan(next.payload, next.headers);
-    if (
-      nextPlan.totalPages !== plan.totalPages ||
-      nextPlan.total !== plan.total ||
-      nextPlan.field !== plan.field
-    ) throw offlineError("OFFLINE_PAGINATION_CHANGED");
+    if (nextPlan.totalPages !== plan.totalPages || nextPlan.total !== plan.total || nextPlan.field !== plan.field)
+      throw offlineError("OFFLINE_PAGINATION_CHANGED");
     pages.push(next.payload);
   }
   const complete = mergeOfflinePages(pages, plan);
@@ -129,9 +124,8 @@ export async function runScopedOfflinePrep(
         // The response must have the expected business wrapper. The offline
         // GET path replays this exact response, not legacy CachedEntity tables.
         const parsed: unknown = JSON.parse(body);
-        const record = parsed && typeof parsed === "object" && !Array.isArray(parsed)
-          ? parsed as Record<string, unknown>
-          : null;
+        const record =
+          parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
         const count = Array.isArray(parsed) ? parsed.length : Array.isArray(record?.data) ? record.data.length : 1;
         generation.push({ url, body });
         const pack = packSummary[dataset.packId] ?? { label: dataset.packId, count: 0, completedAt: Date.now() };

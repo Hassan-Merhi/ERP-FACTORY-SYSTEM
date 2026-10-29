@@ -359,8 +359,7 @@ if (
     // GET requests may fall back to a verified per-user/company snapshot only
     // after a real transport failure or the known offline service worker 503.
     // Never replace 401/403/ordinary server failures with cached business data.
-    const exactReadUrl =
-      method === "GET" && typeof input === "string" && input.startsWith("/api/") ? input : null;
+    const exactReadUrl = method === "GET" && typeof input === "string" && input.startsWith("/api/") ? input : null;
     const fromOfflineRead = async (): Promise<Response | null> => {
       if (!OFFLINE_MODE_ENABLED || !exactReadUrl || effectiveInit?.signal?.aborted) return null;
       const { readPreparedOfflineResponse } = await import("./offline/offlineReadCache");
@@ -371,8 +370,7 @@ if (
       fallbackRes = await originalFetch(input, effectiveInit);
     } catch (error) {
       const networkFailure =
-        error instanceof TypeError ||
-        (error instanceof DOMException && error.name === "NetworkError");
+        error instanceof TypeError || (error instanceof DOMException && error.name === "NetworkError");
       if (networkFailure) {
         const cached = await fromOfflineRead();
         if (cached) return cached;
@@ -549,11 +547,7 @@ export async function apiRequest(
       throw offlineError("OFFLINE_ACTOR_NOT_PREPARED");
     }
     const { submitDurableVoucherWithEntries } = await import("./offline/voucherCapture");
-    return submitDurableVoucherWithEntries(
-      { companyId, userId: String(user.id) },
-      data,
-      getAppDate()
-    );
+    return submitDurableVoucherWithEntries({ companyId, userId: String(user.id) }, data, getAppDate());
   }
   const prepared = await prepareApiRequest(method, url, data, timeoutMs);
 

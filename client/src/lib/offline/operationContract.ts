@@ -1,12 +1,6 @@
 /** A fail-closed, versioned contract for Phase 1 offline writes. */
 export type OfflineOutcome = "acknowledged" | "paused" | "retry" | "conflict" | "rejected";
-export type OfflineOperationState =
-  | "pending"
-  | "sending"
-  | "acknowledged"
-  | "conflict"
-  | "rejected"
-  | "needs_review";
+export type OfflineOperationState = "pending" | "sending" | "acknowledged" | "conflict" | "rejected" | "needs_review";
 
 export type OfflineMode = "erp" | "factory" | "pos" | "properties";
 

@@ -28,11 +28,7 @@ import { useConnectivity } from "@/contexts/ConnectivityContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { applicationEnglishTranslations } from "@/i18n/applicationTranslations";
-import {
-  buildPacks,
-  type PrepProgress,
-  type OfflineReadiness,
-} from "@/lib/offlinePrep";
+import { buildPacks, type PrepProgress, type OfflineReadiness } from "@/lib/offlinePrep";
 import { getVerifiedOfflineReadScope } from "@/lib/offline/offlineReadCache";
 import { getScopedOfflineReadiness, runScopedOfflinePrep } from "@/lib/offline/scopedOfflinePrep";
 
@@ -192,9 +188,7 @@ function OfflinePrepPanelContent() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h3 className="font-semibold text-base">Offline Device Preparation</h3>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {t("offlineReads.intro")}
-          </p>
+          <p className="text-sm text-muted-foreground mt-0.5">{t("offlineReads.intro")}</p>
         </div>
         {statusBadge()}
       </div>

@@ -239,13 +239,16 @@ export const applicationArabicTranslations = {
   "analytics.expenses.loadFailed": "تعذر تحميل المصروفات لهذه الفترة. يُرجى إعادة محاولة تحديد التاريخ.",
   "analytics.expenses.loadFailedShort": "تعذر تحميل مصروفات الفترة المحددة",
   "offlineReads.writeLimitTitle": "حدود الكتابة دون اتصال",
-  "offlineReads.writeLimitDetail": "يمكن حفظ العمليات المدعومة صراحةً فقط للمزامنة لاحقاً. تخصيص مخزون المصنع والمدفوعات والنماذج الأخرى ما زالت تتطلب الاتصال بالخادم.",
-  "offlineReads.exactCoverageDetail": "يمكن قراءة البيانات المجهّزة مسبقاً والتي لم تنته صلاحيتها فقط دون اتصال. الصفحات والاستعلامات غير المحفوظة تتطلب الاتصال.",
+  "offlineReads.writeLimitDetail":
+    "يمكن حفظ العمليات المدعومة صراحةً فقط للمزامنة لاحقاً. تخصيص مخزون المصنع والمدفوعات والنماذج الأخرى ما زالت تتطلب الاتصال بالخادم.",
+  "offlineReads.exactCoverageDetail":
+    "يمكن قراءة البيانات المجهّزة مسبقاً والتي لم تنته صلاحيتها فقط دون اتصال. الصفحات والاستعلامات غير المحفوظة تتطلب الاتصال.",
   "offlineReads.preparedTitle": "تم تجهيز بيانات القراءة دون اتصال",
   "offlineReads.preparedDetail": "تم حفظ بيانات للقراءة فقط لحسابك وشركتك بعد التحقق منها.",
   "offlineReads.incompleteTitle": "لم يكتمل تجهيز وضع عدم الاتصال",
   "offlineReads.incompleteDetail": "تعذّر تنزيل بعض السجلات. تم الاحتفاظ بالنسخة المكتملة السابقة.",
   "offlineReads.readyLabel": "بيانات القراءة جاهزة",
-  "offlineReads.intro": "احفظ بيانات للقراءة فقط بعد التحقق منها لهذا الحساب والشركة. تسجيل الدخول دون اتصال والصفحات غير المحفوظة غير مدعومين بعد.",
+  "offlineReads.intro":
+    "احفظ بيانات للقراءة فقط بعد التحقق منها لهذا الحساب والشركة. تسجيل الدخول دون اتصال والصفحات غير المحفوظة غير مدعومين بعد.",
   "supplierPartner.postOpeningStock": "ترحيل المخزون الافتتاحي",
 } as const satisfies ApplicationTranslationCatalog;

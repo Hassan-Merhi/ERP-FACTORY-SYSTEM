@@ -1,6 +1,11 @@
 import { offlineError } from "./offlineError";
 import { db, type OfflineReadGrant, type OfflineReadSnapshot } from "../db";
-import { classifyOfflineReadFallback, normalizeOfflineReadUrl, offlineReadKey, offlineReadinessKey } from "./offlineReadPolicy";
+import {
+  classifyOfflineReadFallback,
+  normalizeOfflineReadUrl,
+  offlineReadKey,
+  offlineReadinessKey,
+} from "./offlineReadPolicy";
 
 export interface OfflineReadActor {
   companyId: number;
@@ -58,17 +63,16 @@ export async function verifyOfflineReadScope(companyId: number): Promise<Offline
     const assignments: unknown = await assignmentsRes.json();
     const userId = user && typeof user === "object" && "id" in user ? String(user.id ?? "") : "";
     const selectedId =
-      selected && typeof selected === "object" && "companyId" in selected
-        ? Number(selected.companyId)
-        : 0;
+      selected && typeof selected === "object" && "companyId" in selected ? Number(selected.companyId) : 0;
     const userActive = user && typeof user === "object" && "active" in user ? user.active !== false : true;
-    const assigned = Array.isArray(assignments) && assignments.some(
-      (item) =>
-        item && typeof item === "object" &&
-        Number(item.companyId) === companyId &&
-        item.companyActive !== false
-    );
-    if (!userId || !userActive || selectedId !== companyId || !assigned || requestVersion !== verificationVersion) return null;
+    const assigned =
+      Array.isArray(assignments) &&
+      assignments.some(
+        (item) =>
+          item && typeof item === "object" && Number(item.companyId) === companyId && item.companyActive !== false
+      );
+    if (!userId || !userActive || selectedId !== companyId || !assigned || requestVersion !== verificationVersion)
+      return null;
 
     const actor = { companyId, userId };
     activateVerifiedOfflineReadScope(actor);
@@ -133,10 +137,7 @@ export async function getOfflineReadGrant(actor: OfflineReadActor): Promise<Offl
   return grant;
 }
 
-export async function readPreparedOfflineResponse(
-  method: string,
-  url: string
-): Promise<Response | null> {
+export async function readPreparedOfflineResponse(method: string, url: string): Promise<Response | null> {
   if (!classifyOfflineReadFallback(method, url, "network")) return null;
   const actor = getVerifiedOfflineReadScope();
   if (!actor) return null;
@@ -151,7 +152,8 @@ export async function readPreparedOfflineResponse(
       row.url !== url ||
       row.expiresAt <= Date.now() ||
       row.cachedAt > Date.now()
-    ) return null;
+    )
+      return null;
     return new Response(row.body, {
       status: 200,
       headers: {
@@ -173,8 +175,7 @@ export async function isServiceWorkerOfflineResponse(response: Response): Promis
     const contentType = response.headers.get("Content-Type") ?? "";
     if (!contentType.includes("application/json")) return false;
     const body: unknown = await response.clone().json();
-    return body !== null && typeof body === "object" &&
-      "offline" in body && body.offline === true;
+    return body !== null && typeof body === "object" && "offline" in body && body.offline === true;
   } catch {
     return false;
   }

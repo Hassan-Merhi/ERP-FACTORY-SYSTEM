@@ -171,9 +171,7 @@ async function settleOperation(
  * Results are never silently deleted. Missing acknowledgements retry with the
  * original X-Idempotency-Key; the server must own exactly-once posting.
  */
-export async function deliverOfflineOperations(
-  transport: typeof fetch = fetch
-): Promise<OfflineDeliverySummary> {
+export async function deliverOfflineOperations(transport: typeof fetch = fetch): Promise<OfflineDeliverySummary> {
   const summary: OfflineDeliverySummary = {
     acknowledged: 0,
     conflicts: 0,
@@ -205,7 +203,8 @@ export async function deliverOfflineOperations(
               parent.userId !== actor.userId ||
               parent.state !== "acknowledged"
           )
-        ) break;
+        )
+          break;
       }
       const item = await claimOfflineOperation(candidate.id, actor);
       // An earlier operation may be in backoff or leased by another tab.

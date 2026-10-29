@@ -22,8 +22,12 @@ describe("offline phase 1 operation contract", () => {
     expect(isVettedOfflineVoucherPayload({ voucher: { currency: "USD" }, entries: [] })).toBe(false);
     expect(isVettedOfflineVoucherPayload({ voucher: { optional: true }, entries: [{}, {}] })).toBe(false);
     expect(isVettedOfflineVoucherPayload({ voucher: { currency: "EUR" }, entries: [{}, {}] })).toBe(false);
-    expect(isVettedOfflineVoucherPayload({ voucher: {}, entries: [{ debitAmount: "1.001" }, { creditAmount: "1.001" }] })).toBe(false);
-    expect(isVettedOfflineVoucherPayload({ voucher: {}, entries: [{ debitAmount: 1 }, { creditAmount: 1 }] })).toBe(true);
+    expect(
+      isVettedOfflineVoucherPayload({ voucher: {}, entries: [{ debitAmount: "1.001" }, { creditAmount: "1.001" }] })
+    ).toBe(false);
+    expect(isVettedOfflineVoucherPayload({ voucher: {}, entries: [{ debitAmount: 1 }, { creditAmount: 1 }] })).toBe(
+      true
+    );
   });
 
   it("does not persist credentials as queued JSON", () => {

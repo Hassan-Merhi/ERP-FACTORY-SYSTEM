@@ -39,15 +39,18 @@ describe("Phase 2 offline read policy", () => {
   });
 
   it("treats a genuinely empty inventory table as one complete page", () => {
-    expect(readPaginationPlan(
-      { data: [], page: 1, total: 0, totalPages: 0, pageSize: 100 },
-      new Headers()
-    )).toEqual({ field: "data", totalPages: 1, total: 0, pageSize: 100 });
+    expect(readPaginationPlan({ data: [], page: 1, total: 0, totalPages: 0, pageSize: 100 }, new Headers())).toEqual({
+      field: "data",
+      totalPages: 1,
+      total: 0,
+      pageSize: 100,
+    });
   });
 
   it("rejects unrecognized paginated wrappers", () => {
-    expect(() => readPaginationPlan({ rows: [{ id: 1 }], total: 201, totalPages: 2 }, new Headers()))
-      .toThrow("OFFLINE_PAGINATION_SHAPE_UNSUPPORTED");
+    expect(() => readPaginationPlan({ rows: [{ id: 1 }], total: 201, totalPages: 2 }, new Headers())).toThrow(
+      "OFFLINE_PAGINATION_SHAPE_UNSUPPORTED"
+    );
   });
 
   it("detects all remaining inventory pages rather than accepting page one", () => {
@@ -55,12 +58,19 @@ describe("Phase 2 offline read policy", () => {
       readPaginationPlan({ data: [{ id: 1 }], page: 1, pageSize: 1, total: 3, totalPages: 3 }, new Headers())
     ).toEqual({ totalPages: 3, total: 3, field: "data", pageSize: 1 });
     expect(
-      readPaginationPlan([{ id: 1 }], new Headers({ "X-Total-Count": "201", "X-Total-Pages": "3", "X-Page-Size": "100" }))
+      readPaginationPlan(
+        [{ id: 1 }],
+        new Headers({ "X-Total-Count": "201", "X-Total-Pages": "3", "X-Page-Size": "100" })
+      )
     ).toEqual({ totalPages: 3, total: 201, field: "array", pageSize: 100 });
     expect(readPaginationPlan([{ id: 1 }], new Headers())).toEqual({
-      totalPages: 1, total: 1, field: "array", pageSize: 1,
+      totalPages: 1,
+      total: 1,
+      field: "array",
+      pageSize: 1,
     });
-    expect(() => readPaginationPlan({ data: [], total: 10, totalPages: 2000, pageSize: 1 }, new Headers()))
-      .toThrow("OFFLINE_PAGINATION_UNBOUNDED");
+    expect(() => readPaginationPlan({ data: [], total: 10, totalPages: 2000, pageSize: 1 }, new Headers())).toThrow(
+      "OFFLINE_PAGINATION_UNBOUNDED"
+    );
   });
 });

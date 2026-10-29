@@ -8,14 +8,20 @@ const state = vi.hoisted(() => ({
 vi.mock("../../client/src/lib/db", () => {
   const table = (map: Map<string, any>) => ({
     get: async (key: string) => map.get(key),
-    put: async (row: any) => { map.set(row.key, { ...row }); },
-    bulkPut: async (rows: any[]) => { for (const row of rows) map.set(row.key, { ...row }); },
+    put: async (row: any) => {
+      map.set(row.key, { ...row });
+    },
+    bulkPut: async (rows: any[]) => {
+      for (const row of rows) map.set(row.key, { ...row });
+    },
   });
-  return { db: {
-    transaction: async (_mode: string, _t1: any, _t2: any, cb: () => Promise<unknown>) => cb(),
-    offlineReadSnapshots: table(state.rows),
-    offlineReadGrants: table(state.grants),
-  }};
+  return {
+    db: {
+      transaction: async (_mode: string, _t1: any, _t2: any, cb: () => Promise<unknown>) => cb(),
+      offlineReadSnapshots: table(state.rows),
+      offlineReadGrants: table(state.grants),
+    },
+  };
 });
 
 const company = 6;
@@ -43,7 +49,8 @@ describe("Phase 2 scoped read snapshots", () => {
     } = await import("../../client/src/lib/offline/offlineReadCache");
     activateVerifiedOfflineReadScope({ companyId: company, userId }, 60_000);
     await saveVerifiedOfflineReadBatch({
-      companyId: company, userId,
+      companyId: company,
+      userId,
       snapshots: [{ url: source, body: JSON.stringify({ data: [{ inventoryId: 1 }] }) }],
       total: 1,
     });
@@ -65,7 +72,8 @@ describe("Phase 2 scoped read snapshots", () => {
       await import("../../client/src/lib/offline/offlineReadCache");
     activateVerifiedOfflineReadScope({ companyId: company, userId });
     await saveVerifiedOfflineReadBatch({
-      companyId: company, userId,
+      companyId: company,
+      userId,
       snapshots: [{ url: source, body: "[]" }],
       total: 1,
     });
