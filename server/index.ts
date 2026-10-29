@@ -12,6 +12,7 @@
  */
 import express from "express";
 import { createHttpApp } from "./httpApp";
+import { registerFactoryEdgeBoundary } from "./edge/edgeBoundary";
 import compression from "compression";
 import { securityHeadersMiddleware } from "./security/securityHeaders";
 import { registerRoutes } from "./routes";
@@ -140,6 +141,10 @@ app.set("etag", false);
 // Session middleware (see server/startup/sessionMiddleware.ts)
 const sessionMiddleware = buildSessionMiddleware();
 app.use(sessionMiddleware);
+
+// Read-only LAN edge safety boundary + same-origin server identity endpoint.
+// Cloud stays unchanged; edge requests never silently proxy to cloud.
+registerFactoryEdgeBoundary(app);
 
 // Globally block all mutation requests (POST/PUT/PATCH/DELETE) for View Only role.
 // Must run after session middleware so req.session.currentRole is populated.
