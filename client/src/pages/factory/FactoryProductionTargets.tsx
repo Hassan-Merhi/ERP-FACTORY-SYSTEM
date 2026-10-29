@@ -3,8 +3,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   CalendarClock,
   CalendarDays,
-  FileDown,
   ClipboardCheck,
+  FileDown,
   Loader2,
   LockKeyhole,
   MessageCircle,
@@ -232,7 +232,7 @@ export default function FactoryProductionTargets() {
       });
     },
     onError: (error: Error) => {
-      toast({ title: tr("weeklyExcelExportFailed"), description: error.message, variant: "destructive" });
+      toast({ title: tr("weeklyExcelExportFailed"), description: error.message === "FUTURE_PRODUCTION_WEEK" ? tr("futureWeekNotReady") : error.message, variant: "destructive" });
     },
   });
 
@@ -322,7 +322,7 @@ export default function FactoryProductionTargets() {
             variant="outline"
             onClick={() => exportWeeklyMutation.mutate()}
             disabled={busy || !referenceDate}
-            title="Download Monday–Sunday production results using each day's historical worker links"
+            title={tr("weeklyExcelTooltip")}
             data-testid="button-export-production-weekly-excel"
           >
             {exportWeeklyMutation.isPending ? (
