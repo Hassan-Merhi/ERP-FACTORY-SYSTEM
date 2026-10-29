@@ -114,3 +114,26 @@ run an unreviewed `pg_restore --clean` against live cloud data.
 because the checkpoint files reached the cloud.** Cloud-to-factory bootstrap,
 operation-level cloud synchronization, and production acceptance are still
 outstanding Phase 4 requirements.
+
+## LAN voucher capture (development-only, incomplete sync)
+
+In LAN-primary mode, the `POST /api/vouchers/with-entries` posting transaction now
+also inserts one immutable record in `factory_edge_voucher_outbox`. The table
+is created at LAN startup and enforces a unique operation ID per site and a
+unique voucher ID per site/company. Source evidence contains the posted voucher
+and entries, actor, company, site, stable request ID when available, plus a
+payload digest. An advisory transaction lock serializes insertion so that
+the ordered outbox does not skip an earlier uncommitted voucher event.
+
+A failed outbox insert rolls back the voucher transaction; the app never tells
+a user that a voucher succeeded if its LAN capture failed. Replayed vouchers
+do not generate a second record. In ordinary cloud mode no outbox is created.
+
+**This is only one audited write path.** POS, inventory, factories, scanner
+queues, payments, many other voucher operations, and document attachment
+changes are *not* captured through this hook. There is currently no
+authenticated cloud receiver, cloud ledger posting, replay receipt, or
+cross-database conflict resolution. No process should automatically advance
+or delete this outbox based solely on upload success. Do not enable LAN-primary
+for a full ERP rollout until these missing paths and a real DB-backed
+single-writer cutover are certified.
