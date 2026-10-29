@@ -1,0 +1,7 @@
+# TLS is mandatory: use an administrator-provisioned, trusted local certificate
+# whose Subject Alternative Name contains EDGE_HOSTNAME. Never disable validation.
+{$EDGE_HOSTNAME} {
+  tls /certs/server.pem /certs/server-key.pem
+  encode gzip
+  reverse_proxy app:5000
+}

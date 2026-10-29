@@ -1,0 +1,4 @@
+# Factory LAN server secrets and certificates
+/deploy/lan/.env
+/deploy/lan/certs/
+/deploy/lan/backups/
