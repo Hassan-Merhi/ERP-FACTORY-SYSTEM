@@ -57,31 +57,31 @@ export function registerProductionTargetBonusPaymentRoutes(
     if (!startDate || !endDate || startDate > endDate) return res.status(400).json({ message: "Valid startDate and endDate are required" });
     try {
       const results = await db.execute(sql`
-        SELECT a.id AS "allocationId", a.worker_id AS "workerId",
-          a.worker_name_snapshot AS "workerName", a.amount::text AS amount,
-          a.decision_status AS "decisionStatus", a.payroll_id AS "payrollId",
+        SELECT r.id AS "reviewId", r.worker_id AS "workerId",
+          w.full_name AS "workerName", r.bonus_amount::text AS amount,
+          r.status AS "decisionStatus",
           r.production_date::text AS "productionDate", r.target_bales AS "targetBales",
-          r.actual_bales AS "actualBales", r.extra_bales AS "extraBales",
+          r.produced_bales AS "actualBales", r.extra_bales AS "extraBales",
           p.id AS "paymentId", p.status AS "paymentStatus",
           p.payment_date::text AS "paymentDate", p.cash_ledger_account_id AS "cashAccountId",
-          p.voucher_id AS "voucherId", p.reversal_voucher_id AS "reversalVoucherId",
-          EXISTS (
-            SELECT 1 FROM factory_staff_tracking_period_closures c
-            WHERE c.company_id = ${companyId} AND c.page_type = 'production'
-              AND c.period_type = 'daily' AND c.period_start = r.production_date
-              AND c.period_end = r.production_date
-          ) AS finalized,
+          p.payment_voucher_id AS "voucherId", p.reversal_voucher_id AS "reversalVoucherId",
           (SELECT COUNT(*)::integer FROM factory_payrolls fp
-           WHERE fp.company_id = ${companyId} AND fp.worker_id = a.worker_id
+           WHERE fp.company_id = ${companyId} AND fp.worker_id = r.worker_id
              AND r.production_date BETWEEN fp.period_start AND fp.period_end
-             AND fp.status IN ('APPROVED','PAID')) AS "relatedFinalPayrollCount"
-        FROM factory_production_bonus_allocations a
-        JOIN factory_production_bonus_runs r ON r.id = a.run_id AND r.company_id = a.company_id
-        LEFT JOIN factory_production_target_bonus_payments p
-          ON p.allocation_id = a.id AND p.company_id = a.company_id
-        WHERE a.company_id = ${companyId}
+             AND fp.status IN ('APPROVED','PAID')) AS "relatedFinalPayrollCount",
+          (SELECT COUNT(*)::integer
+           FROM factory_production_bonus_allocations a
+           JOIN factory_production_bonus_runs run ON run.id = a.run_id AND run.company_id = a.company_id
+           WHERE a.company_id = ${companyId} AND a.worker_id = r.worker_id
+             AND run.production_date = r.production_date AND a.decision_status = 'APPROVED'
+          ) AS "legacyPlannerApprovedCount"
+        FROM factory_target_bonus_reviews r
+        JOIN factory_workers w ON w.id = r.worker_id AND w.company_id = r.company_id
+        LEFT JOIN factory_target_bonus_payments p
+          ON p.review_id = r.id AND p.company_id = r.company_id
+        WHERE r.company_id = ${companyId}
           AND r.production_date BETWEEN ${startDate}::date AND ${endDate}::date
-        ORDER BY r.production_date DESC, a.worker_name_snapshot, a.id
+        ORDER BY r.production_date DESC, w.full_name, r.id
       `);
       return res.json(resultRows(results));
     } catch (error) { return handleError(res, error); }
@@ -92,12 +92,12 @@ export function registerProductionTargetBonusPaymentRoutes(
     const companyId = factoryCompany(req);
     if (!companyId) return res.status(400).json({ message: "Choose a company" });
     if (req.body?.confirm !== true) return res.status(400).json({ message: "Review and confirm the bonus payment before posting" });
-    const allocationId = parseId(req.body?.allocationId);
+    const reviewId = parseId(req.body?.reviewId);
     const cashAccountId = parseId(req.body?.cashAccountId);
-    if (allocationId === null || cashAccountId === null) return res.status(400).json({ message: "Select an allocation and paying account" });
+    if (reviewId === null || cashAccountId === null) return res.status(400).json({ message: "Select an approved review and paying account" });
     try {
       const result = await postProductionTargetBonusPayment({
-        companyId, allocationId, cashAccountId,
+        companyId, reviewId, cashAccountId,
         paymentDate: String(req.body?.paymentDate ?? ""),
         currency: String(req.body?.currency ?? "USD").toUpperCase(),
         actorId: String(req.session.userId || "unknown"),
