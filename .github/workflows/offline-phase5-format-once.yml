@@ -45,3 +45,5 @@ jobs:
             git -c user.name="ERP Offline Validator" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "style(offline phase5): format validated encrypted-snapshot changes"
             git push origin "HEAD:feat/offline-phase5-secure-snapshots-20261030"
           fi
+
+# One final formatting pass after revocation-race regression hardening.
