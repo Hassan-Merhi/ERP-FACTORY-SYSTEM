@@ -53,7 +53,7 @@ ciphertext="$(dirname -- "$manifest")/edge-db-${backup_id}.dump.age"
 compose() {
   docker compose --env-file "$env_file" -f "$compose_file" "$@"
 }
-# Restore is always to a new database name. Never run pg_restore --clean
+# Restore is always to a new database name. Never run an in-place destructive restore
 # or point at the active erp_edge database.
 target="erp_edge_rehearsal_$(date -u +%Y%m%d%H%M%S)_$RANDOM"
 compose exec -T postgres createdb --username=erp_edge --template=template0 "$target"
