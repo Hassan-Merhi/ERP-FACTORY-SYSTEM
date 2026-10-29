@@ -65,7 +65,6 @@ export default function FactoryStockAllocationV5() {
     setCancelSuperUser,
     setCancelSuperPass,
     query,
-    garbageWipersCount,
     rows,
     allCategories,
     totals,
