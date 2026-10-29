@@ -73,7 +73,8 @@ export function registerProductionTargetBonusPaymentRoutes(
            FROM factory_production_bonus_allocations a
            JOIN factory_production_bonus_runs run ON run.id = a.run_id AND run.company_id = a.company_id
            WHERE a.company_id = ${companyId} AND a.worker_id = r.worker_id
-             AND run.production_date = r.production_date AND a.decision_status = 'APPROVED'
+             AND run.production_date = r.production_date
+             AND (a.decision_status = 'APPROVED' OR a.payroll_id IS NOT NULL)
           ) AS "legacyPlannerApprovedCount"
         FROM factory_target_bonus_reviews r
         JOIN factory_workers w ON w.id = r.worker_id AND w.company_id = r.company_id
