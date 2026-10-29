@@ -156,7 +156,6 @@ function factoryToday(): string {
 
 const INK = "FF172337";
 const NAVY = "FF183153";
-const BLUE = "FF2563EB";
 const WHITE = "FFFFFFFF";
 const PALE = "FFF1F5F9";
 const GREEN = "FF047857";
