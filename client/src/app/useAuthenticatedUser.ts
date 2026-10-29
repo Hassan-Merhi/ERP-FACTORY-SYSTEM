@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient, resetCsrfToken } from "@/lib/queryClient";
 import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import { clearBiometricCredentials } from "@/lib/biometricCredentials";
+import { revokeOfflineReadScope } from "@/lib/offline/offlineReadCache";
 
 /**
  * Manages the authenticated user session:
@@ -18,6 +19,7 @@ export function useAuthenticatedUser() {
   const { data: user, isLoading, error } = useQuery(authenticatedUserQueryOptions());
 
   const handleLogout = async (): Promise<void> => {
+    revokeOfflineReadScope();
     try {
       // Stop active query traffic before destroying the server session. This
       // reduces the chance of an in-flight request racing the logout response.

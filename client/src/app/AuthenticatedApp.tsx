@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { useMobilePerformanceLifecycle } from "@/hooks/use-mobile-performance-lifecycle";
 import { useLocation, Redirect } from "wouter";
@@ -25,6 +25,33 @@ interface AuthenticatedAppProps {
 
 export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) {
   const { selectedCompany, isLoading: companyLoading } = useCompany();
+  const selectedCompanyId = selectedCompany?.id ?? null;
+  const authenticatedUserId = String(user.id);
+  useEffect(() => {
+    let stopped = false;
+    void import("@/lib/offline/offlineReadCache").then(async ({ revokeOfflineReadScope, verifyOfflineReadScope }) => {
+      if (stopped) return;
+      revokeOfflineReadScope();
+      if (selectedCompanyId && navigator.onLine) {
+        await verifyOfflineReadScope(selectedCompanyId);
+      }
+    }).catch(() => {});
+
+    const restoreVerification = () => {
+      if (stopped || !selectedCompanyId) return;
+      void import("@/lib/offline/offlineReadCache")
+        .then(({ verifyOfflineReadScope }) => verifyOfflineReadScope(selectedCompanyId))
+        .catch(() => {});
+    };
+    window.addEventListener("online", restoreVerification);
+    return () => {
+      stopped = true;
+      window.removeEventListener("online", restoreVerification);
+      void import("@/lib/offline/offlineReadCache")
+        .then(({ revokeOfflineReadScope }) => revokeOfflineReadScope())
+        .catch(() => {});
+    };
+  }, [selectedCompanyId, authenticatedUserId]);
   useMobilePerformanceLifecycle();
   useWsInvalidation();
 

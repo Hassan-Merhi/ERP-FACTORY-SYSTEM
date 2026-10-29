@@ -27,12 +27,12 @@ import { useToast } from "@/hooks/use-toast";
 import { useConnectivity } from "@/contexts/ConnectivityContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import {
-  runOfflinePrep,
-  getOfflineReadiness,
   buildPacks,
   type PrepProgress,
   type OfflineReadiness,
 } from "@/lib/offlinePrep";
+import { getVerifiedOfflineReadScope } from "@/lib/offline/offlineReadCache";
+import { getScopedOfflineReadiness, runScopedOfflinePrep } from "@/lib/offline/scopedOfflinePrep";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -84,9 +84,14 @@ function OfflinePrepPanelContent() {
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   const loadReadiness = useCallback(async () => {
-    const r = await getOfflineReadiness();
+    const actor = getVerifiedOfflineReadScope();
+    if (!actor || actor.companyId !== companyId) {
+      setReadiness(null);
+      return;
+    }
+    const r = await getScopedOfflineReadiness(actor);
     setReadiness(r);
-  }, []);
+  }, [companyId]);
 
   useEffect(() => {
     void loadReadiness();
@@ -115,9 +120,13 @@ function OfflinePrepPanelContent() {
     });
 
     try {
-      await runOfflinePrep(companyId, (p) => setProgress({ ...p }));
+      const outcome = await runScopedOfflinePrep(companyId, (p) => setProgress({ ...p }));
       await loadReadiness();
-      toast({ title: "Device prepared", description: "All offline data downloaded and ready." });
+      if (outcome.phase === "done") {
+        toast({ title: "Offline read snapshot prepared", description: "Verified datasets are saved on this device." });
+      } else {
+        toast({ title: "Offline preparation incomplete", description: "Some datasets could not be downloaded; previous complete data was preserved.", variant: "destructive" });
+      }
     } catch (e) {
       toast({
         title: "Preparation failed",
@@ -149,7 +158,7 @@ function OfflinePrepPanelContent() {
       return (
         <Badge className="gap-1 bg-green-600 dark:bg-green-700 text-white">
           <CheckCircle2 className="h-3 w-3" />
-          Offline Ready
+          Read snapshots ready
         </Badge>
       );
     if (readiness.partial)
@@ -174,7 +183,7 @@ function OfflinePrepPanelContent() {
         <div>
           <h3 className="font-semibold text-base">Offline Device Preparation</h3>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Download all business data to this device so the app works without internet.
+            Prepare verified read-only snapshots for this user and company. Offline login, uncached pages and server posting are not yet supported.
           </p>
         </div>
         {statusBadge()}

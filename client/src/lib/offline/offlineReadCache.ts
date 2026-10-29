@@ -13,6 +13,7 @@ export interface ReadBatchInput extends OfflineReadActor {
 
 const MAX_OFFLINE_READ_AGE = 8 * 60 * 60 * 1000;
 let verifiedScope: (OfflineReadActor & { expiresAt: number }) | null = null;
+let verificationVersion = 0;
 
 /** In-memory scope only. Never restore authenticated status from IndexedDB. */
 export function activateVerifiedOfflineReadScope(actor: OfflineReadActor, ttlMs = MAX_OFFLINE_READ_AGE): void {
@@ -27,6 +28,7 @@ export function activateVerifiedOfflineReadScope(actor: OfflineReadActor, ttlMs 
 }
 
 export function revokeOfflineReadScope(): void {
+  verificationVersion++;
   verifiedScope = null;
 }
 
@@ -40,6 +42,7 @@ export function getVerifiedOfflineReadScope(): OfflineReadActor | null {
 
 export async function verifyOfflineReadScope(companyId: number): Promise<OfflineReadActor | null> {
   revokeOfflineReadScope();
+  const requestVersion = verificationVersion;
   if (!Number.isSafeInteger(companyId) || companyId <= 0) return null;
   try {
     const [userRes, companyRes, assignmentsRes] = await Promise.all([
@@ -63,7 +66,7 @@ export async function verifyOfflineReadScope(companyId: number): Promise<Offline
         Number(item.companyId) === companyId &&
         item.companyActive !== false
     );
-    if (!userId || !userActive || selectedId !== companyId || !assigned) return null;
+    if (!userId || !userActive || selectedId !== companyId || !assigned || requestVersion !== verificationVersion) return null;
 
     const actor = { companyId, userId };
     activateVerifiedOfflineReadScope(actor);
