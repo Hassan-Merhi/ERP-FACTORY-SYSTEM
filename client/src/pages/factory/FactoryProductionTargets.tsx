@@ -48,6 +48,7 @@ import {
 } from "./factoryProductionTargetsModel";
 import { ProductionTargetDefaultsDialog } from "./productiontargets/ProductionTargetDefaultsDialog";
 import { ProductionTargetsEditorDialog } from "./productiontargets/ProductionTargetsEditorDialog";
+import { ProductionTargetBonusPaymentsPanel } from "./productiontargets/ProductionTargetBonusPaymentsPanel";
 import { ProductionExcelRangeDialog, type ProductionExportDates } from "./productiontargets/ProductionExcelRangeDialog";
 import { exportWeeklyProductionExcel, ProductionDateRangeError } from "./productiontargets/productionWeeklyExcel";
 
@@ -568,6 +569,8 @@ export default function FactoryProductionTargets() {
           </TableBody>
         </Table>
       </div>
+
+      {periodType === "daily" && <ProductionTargetBonusPaymentsPanel initialDate={period.start} />}
 
       <ProductionExcelRangeDialog
         open={excelRangeOpen}
