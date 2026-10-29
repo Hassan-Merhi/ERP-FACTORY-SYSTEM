@@ -1,3 +1,4 @@
+import { offlineError } from "./offlineError";
 import { getErrorDetails } from "@shared/errorUtils";
 import { buildPacks, type OfflineReadiness, type PrepProgress } from "../offlinePrep";
 import {
@@ -16,16 +17,16 @@ export async function downloadCompleteOfflineDataset(
   url: string,
   transport: typeof fetch = fetch
 ): Promise<string> {
-  if (normalizeOfflineReadUrl(url) !== url) throw new Error("OFFLINE_PREP_URL_UNSUPPORTED");
+  if (normalizeOfflineReadUrl(url) !== url) throw offlineError("OFFLINE_PREP_URL_UNSUPPORTED");
   const getPage = async (pageUrl: string): Promise<{ payload: unknown; headers: Headers }> => {
     const result = await transport(pageUrl, { credentials: "include", cache: "no-store" });
-    if (!result.ok) throw new Error(`OFFLINE_PREP_HTTP_${result.status}`);
+    if (!result.ok) throw offlineError(`OFFLINE_PREP_HTTP_${result.status}`);
     if (!(result.headers.get("content-type") ?? "").includes("json")) {
-      throw new Error("OFFLINE_PREP_EXPECTED_JSON");
+      throw offlineError("OFFLINE_PREP_EXPECTED_JSON");
     }
     const payload: unknown = await result.json();
     if (payload && typeof payload === "object" && "offline" in payload && payload.offline === true) {
-      throw new Error("OFFLINE_PREP_NOT_CONNECTED");
+      throw offlineError("OFFLINE_PREP_NOT_CONNECTED");
     }
     return { payload, headers: result.headers };
   };
@@ -42,7 +43,7 @@ export async function downloadCompleteOfflineDataset(
       nextPlan.totalPages !== plan.totalPages ||
       nextPlan.total !== plan.total ||
       nextPlan.field !== plan.field
-    ) throw new Error("OFFLINE_PAGINATION_CHANGED");
+    ) throw offlineError("OFFLINE_PAGINATION_CHANGED");
     pages.push(next.payload);
   }
   const complete = mergeOfflinePages(pages, plan);
@@ -87,7 +88,7 @@ export async function runScopedOfflinePrep(
   companyId: number,
   onProgress: (value: PrepProgress) => void
 ): Promise<PrepProgress> {
-  if (activePreparations.has(companyId)) throw new Error("OFFLINE_PREP_ALREADY_RUNNING");
+  if (activePreparations.has(companyId)) throw offlineError("OFFLINE_PREP_ALREADY_RUNNING");
   activePreparations.add(companyId);
   const results: PrepProgress["results"] = [];
   const errors: string[] = [];
@@ -117,7 +118,7 @@ export async function runScopedOfflinePrep(
   try {
     emit("preparing", "OFFLINE_PREP_AUTH_CHECK");
     const actor = await verifyOfflineReadScope(companyId);
-    if (!actor) throw new Error("OFFLINE_PREP_AUTH_REQUIRED");
+    if (!actor) throw offlineError("OFFLINE_PREP_AUTH_REQUIRED");
     const generation: Array<{ url: string; body: string }> = [];
     for (const dataset of datasets) {
       const url = dataset.endpoint;
@@ -153,11 +154,11 @@ export async function runScopedOfflinePrep(
     // Revalidate the server-owned identity before promoting any cached pages.
     const finalActor = await verifyOfflineReadScope(companyId);
     if (!finalActor || finalActor.userId !== actor.userId) {
-      throw new Error("OFFLINE_PREP_SCOPE_CHANGED");
+      throw offlineError("OFFLINE_PREP_SCOPE_CHANGED");
     }
     const verified = getVerifiedOfflineReadScope();
     if (!verified || verified.companyId !== companyId || verified.userId !== actor.userId) {
-      throw new Error("OFFLINE_PREP_SCOPE_CHANGED");
+      throw offlineError("OFFLINE_PREP_SCOPE_CHANGED");
     }
     if (errors.length || generation.length !== total) {
       return emit("error", "OFFLINE_PREP_INCOMPLETE");

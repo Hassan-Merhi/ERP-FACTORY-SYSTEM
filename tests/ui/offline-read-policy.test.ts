@@ -45,6 +45,11 @@ describe("Phase 2 offline read policy", () => {
     )).toEqual({ field: "data", totalPages: 1, total: 0, pageSize: 100 });
   });
 
+  it("rejects unrecognized paginated wrappers", () => {
+    expect(() => readPaginationPlan({ rows: [{ id: 1 }], total: 201, totalPages: 2 }, new Headers()))
+      .toThrow("OFFLINE_PAGINATION_SHAPE_UNSUPPORTED");
+  });
+
   it("detects all remaining inventory pages rather than accepting page one", () => {
     expect(
       readPaginationPlan({ data: [{ id: 1 }], page: 1, pageSize: 1, total: 3, totalPages: 3 }, new Headers())

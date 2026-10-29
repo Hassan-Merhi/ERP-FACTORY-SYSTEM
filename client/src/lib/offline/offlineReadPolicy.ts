@@ -1,3 +1,4 @@
+import { offlineError } from "./offlineError";
 /**
  * Phase 2 read policy. No auth/session endpoint is ever returned from disk.
  * Exact URLs only: query parameters can change access and data meaning.
@@ -76,14 +77,19 @@ export function readPaginationPlan(payload: unknown, headers: Headers): Paginati
       ? intOrZero(headers.get("X-Page-Size"))
       : Math.max(1, payload.length);
     if (!totalPages || totalPages > MAX_OFFLINE_PAGES || !pageSize || total < payload.length) {
-      throw new Error("OFFLINE_PAGINATION_UNBOUNDED");
+      throw offlineError("OFFLINE_PAGINATION_UNBOUNDED");
     }
     return { totalPages, total, pageSize, field: "array" };
   }
 
-  if (!payload || typeof payload !== "object") throw new Error("OFFLINE_RESPONSE_SHAPE_INVALID");
+  if (!payload || typeof payload !== "object") throw offlineError("OFFLINE_RESPONSE_SHAPE_INVALID");
   const record = payload as JsonRecord;
   if (!Array.isArray(record.data)) {
+    const totalPages = intOrZero(record.totalPages ?? 1);
+    const headerPages = intOrZero(headers.get("X-Total-Pages") ?? 1);
+    if (totalPages > 1 || headerPages > 1) {
+      throw offlineError("OFFLINE_PAGINATION_SHAPE_UNSUPPORTED");
+    }
     return { field: "object", totalPages: 1, total: 1, pageSize: 1 };
   }
 
@@ -92,13 +98,13 @@ export function readPaginationPlan(payload: unknown, headers: Headers): Paginati
   const totalPages = Math.max(1, intOrZero(record.totalPages ?? 1));
   const pageSize = intOrZero(record.pageSize ?? data.length) || 1;
   if (!totalPages || totalPages > MAX_OFFLINE_PAGES || total < data.length) {
-    throw new Error("OFFLINE_PAGINATION_UNBOUNDED");
+    throw offlineError("OFFLINE_PAGINATION_UNBOUNDED");
   }
   return { totalPages, total, pageSize, field: "data" };
 }
 
 export function mergeOfflinePages(pages: unknown[], plan: PaginationPlan): unknown {
-  if (pages.length !== plan.totalPages) throw new Error("OFFLINE_PAGINATION_INCOMPLETE");
+  if (pages.length !== plan.totalPages) throw offlineError("OFFLINE_PAGINATION_INCOMPLETE");
   if (plan.field === "object") return pages[0];
 
   const rows: unknown[] = [];
@@ -110,14 +116,14 @@ export function mergeOfflinePages(pages: unknown[], plan: PaginationPlan): unkno
         : value && typeof value === "object"
           ? (value as JsonRecord).data
           : undefined;
-    if (!Array.isArray(array)) throw new Error("OFFLINE_PAGINATION_INCOMPLETE");
+    if (!Array.isArray(array)) throw offlineError("OFFLINE_PAGINATION_INCOMPLETE");
     // In a multi-page export each intermediate page must be full.
     if (i < pages.length - 1 && array.length !== plan.pageSize) {
-      throw new Error("OFFLINE_PAGINATION_INCOMPLETE");
+      throw offlineError("OFFLINE_PAGINATION_INCOMPLETE");
     }
     rows.push(...array);
   }
-  if (rows.length !== plan.total) throw new Error("OFFLINE_PAGINATION_INCOMPLETE");
+  if (rows.length !== plan.total) throw offlineError("OFFLINE_PAGINATION_INCOMPLETE");
 
   if (plan.field === "array") return rows;
   const first = pages[0] as JsonRecord;

@@ -1,3 +1,4 @@
+import { offlineError } from "./offlineError";
 import { db, type OfflineReadGrant, type OfflineReadSnapshot } from "../db";
 import { classifyOfflineReadFallback, normalizeOfflineReadUrl, offlineReadKey, offlineReadinessKey } from "./offlineReadPolicy";
 
@@ -18,7 +19,7 @@ let verificationVersion = 0;
 /** In-memory scope only. Never restore authenticated status from IndexedDB. */
 export function activateVerifiedOfflineReadScope(actor: OfflineReadActor, ttlMs = MAX_OFFLINE_READ_AGE): void {
   if (!Number.isSafeInteger(actor.companyId) || actor.companyId <= 0 || !actor.userId.trim()) {
-    throw new Error("OFFLINE_READ_ACTOR_INVALID");
+    throw offlineError("OFFLINE_READ_ACTOR_INVALID");
   }
   verifiedScope = {
     companyId: actor.companyId,
@@ -82,16 +83,16 @@ export async function verifyOfflineReadScope(companyId: number): Promise<Offline
 export async function saveVerifiedOfflineReadBatch(input: ReadBatchInput): Promise<void> {
   const scope = getVerifiedOfflineReadScope();
   if (!scope || scope.userId !== input.userId || scope.companyId !== input.companyId) {
-    throw new Error("OFFLINE_READ_SCOPE_MISMATCH");
+    throw offlineError("OFFLINE_READ_SCOPE_MISMATCH");
   }
   if (input.snapshots.length !== input.total || input.total === 0) {
-    throw new Error("OFFLINE_READ_DATASET_INCOMPLETE");
+    throw offlineError("OFFLINE_READ_DATASET_INCOMPLETE");
   }
   const seen = new Set<string>();
   const now = Date.now();
   const rows: OfflineReadSnapshot[] = input.snapshots.map(({ url, body }) => {
     if (normalizeOfflineReadUrl(url) !== url || seen.has(url)) {
-      throw new Error("OFFLINE_READ_DATASET_UNVERIFIED");
+      throw offlineError("OFFLINE_READ_DATASET_UNVERIFIED");
     }
     seen.add(url);
     // Reject incomplete or non-JSON payloads; no "ready" timestamp for them.
