@@ -9,6 +9,8 @@ import {
   type ProductionRow,
 } from "../factoryProductionTargetsModel";
 
+export class FutureProductionWeekError extends Error {}
+
 export interface ProductionReportDay {
   date: string;
   snapshot: ProductionResponse;
@@ -326,7 +328,7 @@ function createWorkbook(
 export async function exportWeeklyProductionExcel(referenceDate: string): Promise<{ start: string; end: string; through: string }> {
   const { start, end } = periodFor("weekly", referenceDate);
   const today = factoryToday();
-  if (start > today) throw new Error("FUTURE_PRODUCTION_WEEK");
+  if (start > today) throw new FutureProductionWeekError();
   const through = end < today ? end : today;
   const dates: string[] = [];
   for (let date = start; date <= through; date = addIsoDays(date, 1)) dates.push(date);
