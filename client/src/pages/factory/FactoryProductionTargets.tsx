@@ -4,6 +4,7 @@ import {
   CalendarClock,
   CalendarDays,
   ClipboardCheck,
+  FileDown,
   Loader2,
   LockKeyhole,
   MessageCircle,
@@ -47,6 +48,7 @@ import {
 } from "./factoryProductionTargetsModel";
 import { ProductionTargetDefaultsDialog } from "./productiontargets/ProductionTargetDefaultsDialog";
 import { ProductionTargetsEditorDialog } from "./productiontargets/ProductionTargetsEditorDialog";
+import { exportWeeklyProductionExcel, FutureProductionWeekError } from "./productiontargets/productionWeeklyExcel";
 
 function SummaryTile({ label, value, icon }: { label: string; value: string | number; icon: React.ReactNode }) {
   return (
@@ -221,6 +223,19 @@ export default function FactoryProductionTargets() {
     },
   });
 
+  const exportWeeklyMutation = useMutation({
+    mutationFn: () => exportWeeklyProductionExcel(referenceDate),
+    onSuccess: ({ start, through }) => {
+      toast({
+        title: tr("weeklyExcelExported"),
+        description: tr("weeklyExcelRange") + " " + start + " — " + through,
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: tr("weeklyExcelExportFailed"), description: error instanceof FutureProductionWeekError ? tr("futureWeekNotReady") : error.message, variant: "destructive" });
+    },
+  });
+
   const collapsedRows = useMemo(() => collapseLinkedProductionRows(rows), [rows]);
 
   const groupedVisibleRows = useMemo<ProductionGroup[]>(() => {
@@ -253,7 +268,7 @@ export default function FactoryProductionTargets() {
     [rows]
   );
 
-  const busy = sendWhatsappMutation.isPending || endProductionMutation.isPending;
+  const busy = sendWhatsappMutation.isPending || endProductionMutation.isPending || exportWeeklyMutation.isPending;
 
   return (
     <div className="space-y-4">
@@ -302,6 +317,21 @@ export default function FactoryProductionTargets() {
               {tr("defaultTargets")}
             </Button>
           )}
+
+          <Button
+            variant="outline"
+            onClick={() => exportWeeklyMutation.mutate()}
+            disabled={busy || !referenceDate}
+            title={tr("weeklyExcelTooltip")}
+            data-testid="button-export-production-weekly-excel"
+          >
+            {exportWeeklyMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <FileDown className="mr-2 h-4 w-4" />
+            )}
+            {exportWeeklyMutation.isPending ? tr("exportingWeeklyExcel") : tr("exportWeeklyExcel")}
+          </Button>
 
           <Button
             onClick={() => setEditorOpen(true)}
