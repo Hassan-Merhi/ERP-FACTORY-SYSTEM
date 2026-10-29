@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWeeklyProductionData } from "./productionWeeklyExcel";
+import { buildWeeklyProductionData, getProductionRangeDates, ProductionDateRangeError } from "./productionWeeklyExcel";
 import type { ProductionResponse, ProductionRow } from "../factoryProductionTargetsModel";
 
 function worker(
@@ -67,5 +67,35 @@ describe("weekly production Excel historical grouping", () => {
     expect(data.workers.find((row) => row.name === "Bob")).toMatchObject({
       target: 7, absentTarget: 7, expected: 0, absent: 1,
     });
+  });
+});
+
+describe("production Excel calendar range validation", () => {
+  const today = "2026-10-29";
+
+  it("allows one day, arbitrary days, and ranges spanning several calendar weeks", () => {
+    expect(getProductionRangeDates("2026-10-29", "2026-10-29", today)).toEqual(["2026-10-29"]);
+    expect(getProductionRangeDates("2026-10-30", "2026-11-02", "2026-11-02")).toEqual([
+      "2026-10-30", "2026-10-31", "2026-11-01", "2026-11-02",
+    ]);
+    const result = getProductionRangeDates("2026-09-01", "2026-10-29", today);
+    expect(result[0]).toBe("2026-09-01");
+    expect(result.at(-1)).toBe(today);
+    expect(result).toHaveLength(59);
+  });
+
+  it("rejects reversed dates, impossible dates and future dates", () => {
+    expect(() => getProductionRangeDates("2026-10-30", "2026-10-29", today))
+      .toThrow(ProductionDateRangeError);
+    expect(() => getProductionRangeDates("2026-02-30", "2026-03-01", today))
+      .toThrow(ProductionDateRangeError);
+    expect(() => getProductionRangeDates("2026-10-29", "2026-10-30", today))
+      .toThrow(ProductionDateRangeError);
+  });
+
+  it("caps exports at twelve weeks to protect daily factory API calls", () => {
+    expect(getProductionRangeDates("2026-08-07", "2026-10-29", today)).toHaveLength(84);
+    expect(() => getProductionRangeDates("2026-08-06", "2026-10-29", today))
+      .toThrow(ProductionDateRangeError);
   });
 });
