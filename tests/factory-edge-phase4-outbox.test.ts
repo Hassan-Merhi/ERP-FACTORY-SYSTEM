@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { captureEdgeVoucherTx, ensureEdgeVoucherOutboxSchema } from "../server/edge/edgeVoucherOutbox";
+import { canonicalEdgeVoucherPayload, captureEdgeVoucherTx, ensureEdgeVoucherOutboxSchema } from "../server/edge/edgeVoucherOutbox";
 
 const lan = {
   FACTORY_EDGE_MODE: "lan",
@@ -49,6 +49,12 @@ describe("Phase 4 voucher outbox durability policy", () => {
     expect(ddl).toContain("CREATE TABLE IF NOT EXISTS factory_edge_voucher_outbox");
     expect(ddl).toContain("BEFORE UPDATE OR DELETE");
     expect(ddl).toContain("UNIQUE (site_id, operation_id)");
+  });
+
+  it("canonicalizes equivalent JSONB payloads for reproducible SHA-256 fingerprints", () => {
+    const a = canonicalEdgeVoucherPayload({ id: 4, metadata: { z: 1, a: 2 } }, [{ id: 5, debit: "1" }]);
+    const b = canonicalEdgeVoucherPayload({ metadata: { a: 2, z: 1 }, id: 4 }, [{ debit: "1", id: 5 }]);
+    expect(a).toBe(b);
   });
 
   it("captures an ordered source event only on LAN primary", async () => {
