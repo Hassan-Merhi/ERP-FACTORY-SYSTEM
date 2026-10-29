@@ -35,6 +35,12 @@ export function readFactoryEdgeConfiguration(env = process.env) {
   if (!env.PGUSER || !env.PGPASSWORD || !env.PGDATABASE || !env.PGPORT) {
     throw new Error("EDGE_DATABASE_UNCONFIGURED");
   }
+  if (env.PGPASSWORD.length < 32 || /^REPLACE/i.test(env.PGPASSWORD)) {
+    throw new Error("EDGE_DATABASE_PASSWORD_WEAK");
+  }
+  if (env.SESSION_SECRET && /^REPLACE/i.test(env.SESSION_SECRET)) {
+    throw new Error("EDGE_SESSION_SECRET_PLACEHOLDER");
+  }
   if (env.PGSSLMODE !== "disable") throw new Error("EDGE_DATABASE_MUST_USE_PRIVATE_NETWORK");
   if (env.CSRF_ENFORCE !== "1") throw new Error("EDGE_CSRF_REQUIRED");
   if (env.ENABLE_SCHEDULERS !== "false") throw new Error("EDGE_SCHEDULERS_MUST_BE_DISABLED");
