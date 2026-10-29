@@ -151,7 +151,10 @@ async function processBackup({ id, files }, env, dryRun) {
     }
   }
   const manifestBytes = Buffer.from(JSON.stringify(manifest, null, 2) + "\n");
-  const manifestDigest = { bytes: manifestBytes.length, sha256: createHash("sha256").update(manifestBytes).digest("hex") };
+  const manifestDigest = {
+    bytes: manifestBytes.length,
+    sha256: createHash("sha256").update(manifestBytes).digest("hex"),
+  };
   await uploadAndVerify(manifestPath, `${remotePrefix}/${manifestName}`, manifestDigest);
   console.log(`Encrypted checkpoint ${id} staged and byte-verified; database NOT promoted`);
 }
