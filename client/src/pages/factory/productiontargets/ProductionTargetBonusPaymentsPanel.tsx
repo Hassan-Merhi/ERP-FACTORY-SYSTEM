@@ -70,15 +70,25 @@ export function ProductionTargetBonusPaymentsPanel({ initialDate }: { initialDat
 
   const datesValid = Boolean(start && end && start <= end) &&
     (Date.parse(end) - Date.parse(start)) / 86400000 <= 366;
+  // Share the Phase 4 cached authorization response. Non-Admin users never
+  // fetch payment accounts/history or see financial payment controls.
+  const { data: reviewAccess } = useQuery<{ canDecide: boolean }>({
+    queryKey: ["/api/factory/staff-tracking/production-bonuses", start, end],
+    enabled: datesValid,
+    queryFn: () => api("GET", "/api/factory/staff-tracking/production-bonuses?" +
+      new URLSearchParams({ start, end }).toString()),
+  });
+  const canViewPayments = reviewAccess?.canDecide === true;
   const key = ["/api/factory/staff-tracking/production-bonuses/payments", start, end];
   const { data, error, isLoading } = useQuery<PaymentSummary>({
     queryKey: key,
-    enabled: datesValid,
+    enabled: datesValid && canViewPayments,
     queryFn: () => api("GET", `/api/factory/staff-tracking/production-bonuses/payments?` +
       new URLSearchParams({ start, end }).toString()),
   });
   const { data: accountResponse, error: accountsError } = useQuery<AccountResponse>({
     queryKey: ["/api/factory/staff-tracking/production-bonuses/payment-accounts"],
+    enabled: canViewPayments,
     queryFn: () => api("GET", "/api/factory/staff-tracking/production-bonuses/payment-accounts"),
   });
 
@@ -136,6 +146,8 @@ export function ProductionTargetBonusPaymentsPanel({ initialDate }: { initialDat
       title: "Reversal not posted", description: error.message, variant: "destructive",
     }),
   });
+
+  if (!canViewPayments) return null;
 
   return (
     <Card className="overflow-hidden shadow-none" data-testid="production-target-bonus-payments">
