@@ -36,7 +36,7 @@ describe("isolated checkpoint verification", () => {
     try {
       const originals = names.map((name, i) => ({
         name,
-        body: Buffer.from("age-encryption.org/v1\\nfixture-" + i),
+        body: Buffer.from("age-encryption.org/v1\nfixture-" + i),
       }));
       for (const item of originals) await writeFile(join(dir, item.name), item.body);
       const evidence = originals.map(({ name, body }) => ({
