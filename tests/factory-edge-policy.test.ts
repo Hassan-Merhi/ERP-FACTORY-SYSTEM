@@ -53,6 +53,8 @@ describe("factory LAN edge deployment policy", () => {
     });
     expect(p.primary).toBe(true);
     expect(edgeBlocksWrite(p, "POST", "/api/vouchers/with-entries")).toBe(false);
+    expect(edgeBlocksWrite(p, "POST", "/api/factory/bales")).toBe(true);
+    expect(edgeBlocksWrite(p, "PATCH", "/api/inventory/1")).toBe(true);
   });
   it("only admits session traffic in read-only mode", () => {
     const p = readFactoryEdgeConfiguration(safe);
