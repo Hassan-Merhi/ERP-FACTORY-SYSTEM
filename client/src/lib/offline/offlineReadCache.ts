@@ -92,9 +92,8 @@ export function activateVerifiedOfflineReadScope(actor: OfflineReadActor, ttlMs 
   if (!Number.isSafeInteger(actor.companyId) || actor.companyId <= 0 || !actor.userId.trim()) {
     throw offlineError("OFFLINE_READ_ACTOR_INVALID");
   }
-  if (verifiedScope?.companyId !== actor.companyId || verifiedScope?.userId !== actor.userId) {
-    lockVerifiedOfflineReadVault();
-  }
+  // Any new verification begins locked; no hidden reuse of a prior unlock.
+  lockVerifiedOfflineReadVault();
   verifiedScope = {
     companyId: actor.companyId,
     userId: actor.userId,
@@ -223,6 +222,10 @@ export async function saveVerifiedOfflineReadBatch(input: ReadBatchInput, passph
     vaultCheck,
   };
   await db.transaction("rw", db.offlineReadSnapshots, db.offlineReadGrants, async () => {
+    const previous = await db.offlineReadGrants.get(grant.key);
+    if (previous?.protection && !vault) {
+      throw offlineError("OFFLINE_VAULT_PROTECTION_REQUIRED");
+    }
     await db.offlineReadSnapshots.bulkPut(rows);
     await db.offlineReadGrants.put(grant);
   });
@@ -258,7 +261,9 @@ export async function readPreparedOfflineResponse(method: string, url: string): 
       row.userId !== actor.userId ||
       row.url !== url ||
       row.expiresAt <= Date.now() ||
-      row.cachedAt > Date.now()
+      row.cachedAt > Date.now() ||
+      row.cachedAt !== grant.preparedAt ||
+      row.expiresAt !== grant.expiresAt
     )
       return null;
     let body = row.body;
