@@ -238,6 +238,10 @@ export const applicationArabicTranslations = {
   "analytics.expenses.netExpense": "صافي المصروف",
   "analytics.expenses.loadFailed": "تعذر تحميل المصروفات لهذه الفترة. يُرجى إعادة محاولة تحديد التاريخ.",
   "analytics.expenses.loadFailedShort": "تعذر تحميل مصروفات الفترة المحددة",
+  "edge.lanServer": "خادم المصنع المحلي",
+  "edge.readOnly": "قراءة فقط",
+  "edge.lanPrimary": "الخادم المحلي الأساسي",
+  "edge.replicationNotConfigured": "المزامنة مع السحابة غير مفعّلة.",
   "offlineReads.writeLimitTitle": "حدود الكتابة دون اتصال",
   "offlineReads.writeLimitDetail":
     "يمكن حفظ العمليات المدعومة صراحةً فقط للمزامنة لاحقاً. تخصيص مخزون المصنع والمدفوعات والنماذج الأخرى ما زالت تتطلب الاتصال بالخادم.",

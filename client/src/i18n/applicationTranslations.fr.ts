@@ -243,6 +243,10 @@ export const applicationFrenchTranslations = {
   "analytics.expenses.loadFailed":
     "Impossible de charger les dépenses pour cette période. Veuillez réessayer le filtre de dates.",
   "analytics.expenses.loadFailedShort": "Impossible de charger les dépenses pour la période sélectionnée",
+  "edge.lanServer": "Serveur local de l'usine",
+  "edge.readOnly": "Lecture seule",
+  "edge.lanPrimary": "Serveur local principal",
+  "edge.replicationNotConfigured": "La synchronisation cloud n'est pas configurée.",
   "offlineReads.writeLimitTitle": "Limites des écritures hors ligne",
   "offlineReads.writeLimitDetail":
     "Seules les opérations explicitement prises en charge peuvent être enregistrées pour synchronisation ultérieure. Les mouvements de stock, les paiements et les autres formulaires nécessitent encore le serveur.",

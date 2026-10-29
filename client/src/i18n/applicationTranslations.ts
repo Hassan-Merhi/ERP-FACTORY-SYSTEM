@@ -239,6 +239,10 @@ export const applicationEnglishTranslations = {
   "analytics.expenses.netExpense": "Net Expense",
   "analytics.expenses.loadFailed": "Could not load expenses for this period. Please retry the date filter.",
   "analytics.expenses.loadFailedShort": "Could not load expenses for the selected period",
+  "edge.lanServer": "Factory LAN server",
+  "edge.readOnly": "Read-only",
+  "edge.lanPrimary": "LAN primary",
+  "edge.replicationNotConfigured": "Cloud synchronization is not configured.",
   "offlineReads.writeLimitTitle": "Offline write limits",
   "offlineReads.writeLimitDetail":
     "Only explicitly supported operations can be saved for later sync. Factory stock allocation, payments, and arbitrary forms still require the server.",
