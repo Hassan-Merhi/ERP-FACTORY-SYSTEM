@@ -1,7 +1,7 @@
 /**
- * Phase 5+6: transaction-owned payout of an APPROVED production bonus allocation.
+ * Phase 5+6: transaction-owned payout of an APPROVED production bonus review.
  * Direct payouts and payroll payouts are mutually exclusive. A reversal
- * preserves the unique allocation claim; manual re-approval is required before
+ * preserves the unique review claim; manual re-approval is required before
  * any future replacement payment can be designed.
  */
 import { sql } from "drizzle-orm";
@@ -16,7 +16,7 @@ import { logAudit } from "../../routes/helpers/auditHelpers";
 
 export type BonusPaymentPostingRequest = {
   companyId: number;
-  allocationId: number;
+  reviewId: number;
   cashAccountId: number;
   paymentDate: string;
   currency: string;
@@ -25,8 +25,8 @@ export type BonusPaymentPostingRequest = {
 };
 
 export function validateBonusPaymentPostingRequest(input: BonusPaymentPostingRequest): void {
-  if (![input.companyId, input.allocationId, input.cashAccountId].every((value) => Number.isSafeInteger(value) && value > 0)) {
-    throw new HttpError(400, "Company, allocation and paying account must be valid IDs");
+  if (![input.companyId, input.reviewId, input.cashAccountId].every((value) => Number.isSafeInteger(value) && value > 0)) {
+    throw new HttpError(400, "Company, review and paying account must be valid IDs");
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.paymentDate) || !Number.isFinite(Date.parse(input.paymentDate + "T00:00:00Z")) ||
       new Date(input.paymentDate + "T00:00:00Z").toISOString().slice(0,10) !== input.paymentDate) {
@@ -36,7 +36,7 @@ export function validateBonusPaymentPostingRequest(input: BonusPaymentPostingReq
   if (input.currency !== "USD") throw new HttpError(400, "Only confirmed USD payments are available; other currencies require verified FX");
 }
 
-type AllocationRow = {
+type ReviewRow = {
   id: number;
   workerId: number;
   workerName: string;
@@ -50,7 +50,7 @@ type AllocationRow = {
 type PaymentRow = {
   id: number;
   companyId: number;
-  allocationId: number;
+  reviewId: number;
   cashAccountId: number;
   paymentDate: string;
   currency: string;
@@ -71,57 +71,55 @@ function cents(value: string | number) {
 
 /** Pure gate shared by API writes and regression tests. */
 export function assertDirectBonusPayable(
-  allocation: Pick<AllocationRow, "decisionStatus" | "finished" | "payrollId" | "extraBales" | "amount">,
+  review: Pick<ReviewRow, "decisionStatus" | "finished" | "payrollId" | "extraBales" | "amount">,
   alreadyClaimed: boolean,
 ): void {
   if (alreadyClaimed) throw new HttpError(409, "This bonus has already been paid or reversed; duplicate payment blocked");
-  if (allocation.decisionStatus !== "APPROVED") throw new HttpError(409, "Bonus must be approved before payment");
-  if (!allocation.finished) throw new HttpError(409, "End Production must be finalized before this bonus can be paid");
-  if (allocation.payrollId !== null) throw new HttpError(409, "This bonus is assigned to payroll; pay it through payroll instead");
-  if (allocation.extraBales <= 0 || toMoney(allocation.amount).lte(0)) throw new HttpError(409, "No payable extra-bale bonus");
+  if (review.decisionStatus !== "approved") throw new HttpError(409, "Bonus must be approved before payment");
+  if (!review.finished) throw new HttpError(409, "End Production must be finalized before this bonus can be paid");
+  if (review.payrollId !== null) throw new HttpError(409, "This bonus is assigned to payroll; pay it through payroll instead");
+  if (review.extraBales <= 0 || toMoney(review.amount).lte(0)) throw new HttpError(409, "No payable extra-bale bonus");
 }
 
-async function loadAllocationTx(tx: DbTransaction, companyId: number, allocationId: number): Promise<AllocationRow> {
+async function loadReviewTx(tx: DbTransaction, companyId: number, reviewId: number): Promise<ReviewRow> {
   const row = first<Record<string, unknown>>(await tx.execute(sql`
-    SELECT a.id, a.worker_id AS "workerId", a.worker_name_snapshot AS "workerName",
-           a.amount::text AS amount, a.decision_status AS "decisionStatus",
-           a.payroll_id AS "payrollId", r.production_date::text AS "productionDate",
-           r.extra_bales AS "extraBales",
+    SELECT r.id, r.worker_id AS "workerId", w.full_name AS "workerName",
+           r.bonus_amount::text AS amount, r.status AS "decisionStatus",
+           r.production_date::text AS "productionDate", r.extra_bales AS "extraBales",
            EXISTS (
              SELECT 1 FROM factory_staff_tracking_period_closures c
-             WHERE c.company_id = a.company_id AND c.page_type = 'production'
+             WHERE c.company_id = r.company_id AND c.page_type = 'production'
                AND c.period_type = 'daily' AND c.period_start = r.production_date
                AND c.period_end = r.production_date
            ) AS finished
-    FROM factory_production_bonus_allocations a
-    JOIN factory_production_bonus_runs r ON r.id = a.run_id AND r.company_id = a.company_id
-    WHERE a.id = ${allocationId} AND a.company_id = ${companyId}
-    FOR UPDATE OF a
+    FROM factory_target_bonus_reviews r
+    JOIN factory_workers w ON w.id = r.worker_id AND w.company_id = r.company_id
+    WHERE r.id = ${reviewId} AND r.company_id = ${companyId}
+    FOR UPDATE OF r
   `));
-  if (!row) throw new HttpError(404, "Production bonus allocation not found");
+  if (!row) throw new HttpError(404, "Reviewed production target bonus not found");
   return {
     id: Number(row.id), workerId: Number(row.workerId), workerName: String(row.workerName),
     amount: String(row.amount), decisionStatus: String(row.decisionStatus),
-    payrollId: row.payrollId == null ? null : Number(row.payrollId),
-    productionDate: String(row.productionDate), extraBales: Number(row.extraBales),
-    finished: row.finished === true,
+    payrollId: null, productionDate: String(row.productionDate),
+    extraBales: Number(row.extraBales), finished: row.finished === true,
   };
 }
 
-async function loadPaymentTx(tx: DbTransaction, companyId: number, allocationId: number): Promise<PaymentRow | undefined> {
+async function loadPaymentTx(tx: DbTransaction, companyId: number, reviewId: number): Promise<PaymentRow | undefined> {
   const row = first<Record<string, unknown>>(await tx.execute(sql`
-    SELECT id, company_id AS "companyId", allocation_id AS "allocationId",
-      worker_id AS "workerId", amount::text AS amount, currency_code AS currency,
+    SELECT id, company_id AS "companyId", review_id AS "reviewId",
+      worker_id AS "workerId", bonus_amount::text AS amount, currency_code AS currency,
       cash_ledger_account_id AS "cashAccountId",
       expense_ledger_account_id AS "expenseAccountId",
-      payment_date::text AS "paymentDate", status, voucher_id AS "voucherId",
+      payment_date::text AS "paymentDate", status, payment_voucher_id AS "voucherId",
       reversal_voucher_id AS "reversalVoucherId"
-    FROM factory_production_target_bonus_payments
-    WHERE company_id = ${companyId} AND allocation_id = ${allocationId}
+    FROM factory_target_bonus_payments
+    WHERE company_id = ${companyId} AND review_id = ${reviewId}
     FOR UPDATE
   `));
   return row ? {
-    id: Number(row.id), companyId: Number(row.companyId), allocationId: Number(row.allocationId),
+    id: Number(row.id), companyId: Number(row.companyId), reviewId: Number(row.reviewId),
     workerId: Number(row.workerId), amount: String(row.amount), currency: String(row.currency),
     cashAccountId: Number(row.cashAccountId), expenseAccountId: Number(row.expenseAccountId),
     paymentDate: String(row.paymentDate), status: String(row.status),
@@ -150,7 +148,8 @@ async function ensureUsdCashBalanceTx(tx: DbTransaction, companyId: number, cash
   const row = first<Record<string, unknown>>(await tx.execute(sql`
     SELECT
       COALESCE(SUM(COALESCE(ve.debit_amount,0)::numeric - COALESCE(ve.credit_amount,0)::numeric),0)::text AS net,
-      COUNT(*) FILTER (WHERE COALESCE(UPPER(v.currency), 'USD') <> 'USD')::integer AS "nonUsdEntries"
+      COUNT(*) FILTER (WHERE COALESCE(UPPER(v.currency), 'USD') <> 'USD' OR
+        (ve.transaction_currency IS NOT NULL AND UPPER(ve.transaction_currency) <> 'USD'))::integer AS "nonUsdEntries"
     FROM voucher_entries ve
     JOIN vouchers v ON v.id = ve.voucher_id AND v.company_id = ${companyId} AND v.deleted_at IS NULL
     WHERE ve.ledger_account_id = ${cashAccountId}
@@ -164,50 +163,64 @@ async function ensureUsdCashBalanceTx(tx: DbTransaction, companyId: number, cash
 }
 
 async function depositExpenseAccountTx(tx: DbTransaction, companyId: number): Promise<number> {
-  const row = first<Record<string, unknown>>(await tx.execute(sql`
-    INSERT INTO ledger_accounts (company_id, code, name, account_type, opening_balance, active)
-    VALUES (${companyId}, 'PAYROLL_DEPOSIT_EXPENSE', 'Payroll Deposit Expense', 'Indirect Expense', '0', true)
-    ON CONFLICT DO NOTHING
-    RETURNING id
-  `));
-  if (row) return Number(row.id);
   const existing = first<Record<string, unknown>>(await tx.execute(sql`
-    SELECT id FROM ledger_accounts
+    SELECT id, active, account_type AS "accountType" FROM ledger_accounts
     WHERE company_id = ${companyId} AND code = 'PAYROLL_DEPOSIT_EXPENSE' AND deleted_at IS NULL
     ORDER BY id LIMIT 1 FOR UPDATE
   `));
-  if (!existing) throw new HttpError(409, "Payroll Deposit Expense account is unavailable");
-  return Number(existing.id);
+  if (existing) {
+    if (existing.active !== true || existing.accountType !== "Indirect Expense")
+      throw new HttpError(409, "Payroll Deposit Expense account is inactive or misclassified");
+    return Number(existing.id);
+  }
+  const row = first<Record<string, unknown>>(await tx.execute(sql`
+    INSERT INTO ledger_accounts (company_id, code, name, account_type, opening_balance, active)
+    VALUES (${companyId}, 'PAYROLL_DEPOSIT_EXPENSE', 'Payroll Deposit Expense', 'Indirect Expense', '0', true)
+    RETURNING id
+  `));
+  if (!row) throw new HttpError(409, "Payroll Deposit Expense account is unavailable");
+  return Number(row.id);
 }
 
 export async function postProductionTargetBonusPayment(input: BonusPaymentPostingRequest) {
   validateBonusPaymentPostingRequest(input);
   return db.transaction(async (tx) => {
-    // Order the allocation lock before checking existing payout and before any payroll association.
-    const allocation = await loadAllocationTx(tx, input.companyId, input.allocationId);
-    const prior = await loadPaymentTx(tx, input.companyId, input.allocationId);
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(84023, ${input.companyId})`);
+    // Order the review lock before checking existing payout and before any payroll association.
+    const review = await loadReviewTx(tx, input.companyId, input.reviewId);
+    const prior = await loadPaymentTx(tx, input.companyId, input.reviewId);
     if (prior) {
       if (prior.status === "POSTED" && prior.cashAccountId === input.cashAccountId &&
           prior.paymentDate === input.paymentDate && prior.currency === input.currency &&
-          prior.amount === cents(allocation.amount)) return { ...prior, replayed: true };
+          prior.amount === cents(review.amount)) return { ...prior, replayed: true };
       throw new HttpError(409, "This bonus has already been paid or reversed; duplicate payment blocked");
     }
-    assertDirectBonusPayable(allocation, false);
+    assertDirectBonusPayable(review, false);
 
     // An already approved or paid salary period must not be paid again through
-    // a second route just because an old allocation lost its payroll_id.
+    // a second route just because an old review lost its payroll_id.
     const related = first<Record<string, unknown>>(await tx.execute(sql`
       SELECT id FROM factory_payrolls
-      WHERE company_id = ${input.companyId} AND worker_id = ${allocation.workerId}
-        AND ${allocation.productionDate}::date BETWEEN period_start AND period_end
+      WHERE company_id = ${input.companyId} AND worker_id = ${review.workerId}
+        AND ${review.productionDate}::date BETWEEN period_start AND period_end
         AND status IN ('APPROVED','PAID')
       LIMIT 1
     `));
     if (related) throw new HttpError(409, "Finalized payroll already covers this worker and production date; reconcile before paying separately");
-    const amount = cents(allocation.amount);
+    const oldBonus = first<Record<string, unknown>>(await tx.execute(sql`
+      SELECT a.id
+      FROM factory_production_bonus_allocations a
+      JOIN factory_production_bonus_runs run ON run.id = a.run_id AND run.company_id = a.company_id
+      WHERE a.company_id = ${input.companyId} AND a.worker_id = ${review.workerId}
+        AND run.production_date = ${review.productionDate}::date
+        AND a.decision_status = 'APPROVED'
+      LIMIT 1
+    `));
+    if (oldBonus) throw new HttpError(409, "An older Production Planner bonus is approved for this worker/date; reconcile first");
+    const amount = cents(review.amount);
     await ensureUsdCashBalanceTx(tx, input.companyId, input.cashAccountId, amount);
     const expenseAccountId = await depositExpenseAccountTx(tx, input.companyId);
-    const narration = `Approved extra-bale bonus: ${allocation.workerName} (${allocation.productionDate})`;
+    const narration = `Approved extra-bale bonus: ${review.workerName} (${review.productionDate})`;
     // Voucher is posted first inside this one transaction. Failed inserts/validations roll it back.
     const { voucher } = await postErpVoucherTx(tx, {
       companyId: input.companyId,
@@ -216,18 +229,18 @@ export async function postProductionTargetBonusPayment(input: BonusPaymentPostin
       description: narration,
       currency: "USD",
       sourceModule: "FACTORY",
-      source: { type: "factory-production-target-bonus", id: `${input.companyId}:${input.allocationId}`, revision: "payment" },
+      source: { type: "factory-production-target-bonus", id: `${input.companyId}:${input.reviewId}`, revision: "payment" },
       lines: [
         { ledgerAccountId: expenseAccountId, debit: amount, narration },
         { ledgerAccountId: input.cashAccountId, credit: amount, narration },
       ],
     });
     const inserted = first<Record<string, unknown>>(await tx.execute(sql`
-      INSERT INTO factory_production_target_bonus_payments
-        (company_id, allocation_id, worker_id, amount, currency_code,
-         cash_ledger_account_id, expense_ledger_account_id, payment_date, voucher_id, posted_by)
+      INSERT INTO factory_target_bonus_payments
+        (company_id, review_id, worker_id, production_date, bonus_amount, currency_code,
+         cash_ledger_account_id, expense_ledger_account_id, payment_date, payment_voucher_id, posted_by)
       VALUES
-        (${input.companyId}, ${allocation.id}, ${allocation.workerId}, ${amount}, 'USD',
+        (${input.companyId}, ${review.id}, ${review.workerId}, ${review.productionDate}::date, ${amount}, 'USD',
          ${input.cashAccountId}, ${expenseAccountId}, ${input.paymentDate}::date, ${voucher.id}, ${input.actorId})
       RETURNING id
     `));
@@ -235,18 +248,18 @@ export async function postProductionTargetBonusPayment(input: BonusPaymentPostin
     const id = Number(inserted.id);
     await writeDaybookEntry(tx, {
       companyId: input.companyId, txDate: input.paymentDate, txType: "PRODUCTION_BONUS_PAYMENT",
-      referenceId: id, referenceTable: "factory_production_target_bonus_payments",
+      referenceId: id, referenceTable: "factory_target_bonus_payments",
       description: narration, currencyCode: "USD", amountCurrency: Number(amount),
       amountUsd: Number(amount), createdBy: input.actorId,
-      metaJson: JSON.stringify({ allocationId: allocation.id, voucherId: voucher.id, cashAccountId: input.cashAccountId }),
+      metaJson: JSON.stringify({ reviewId: review.id, voucherId: voucher.id, cashAccountId: input.cashAccountId }),
     });
     await logAudit({
       userId: input.actorId, username: input.actorName, companyId: input.companyId,
-      action: "create", tableName: "factory_production_target_bonus_payments",
+      action: "create", tableName: "factory_target_bonus_payments",
       recordId: id, recordIdentifier: `Production bonus payment #${id}`,
-      changes: { allocationId: { old: null, new: allocation.id }, amount: { old: null, new: amount }, voucherId: { old: null, new: voucher.id } },
+      changes: { reviewId: { old: null, new: review.id }, amount: { old: null, new: amount }, voucherId: { old: null, new: voucher.id } },
     }, tx);
-    return { id, allocationId: allocation.id, workerId: allocation.workerId, amount,
+    return { id, reviewId: review.id, workerId: review.workerId, amount,
       cashAccountId: input.cashAccountId, paymentDate: input.paymentDate,
       currency: "USD", status: "POSTED", voucherId: voucher.id, replayed: false };
   });
@@ -257,45 +270,45 @@ export async function reverseProductionTargetBonusPayment(input: {
 }) {
   if (!Number.isSafeInteger(input.paymentId) || input.paymentId <= 0) throw new HttpError(400, "Invalid payment ID");
   if (!input.reason.trim()) throw new HttpError(400, "Reversal reason is required");
-  validateBonusPaymentPostingRequest({ ...input, allocationId: input.paymentId, cashAccountId: 1,
+  validateBonusPaymentPostingRequest({ ...input, reviewId: input.paymentId, cashAccountId: 1,
     paymentDate: input.reversalDate, currency: "USD" });
   return db.transaction(async (tx) => {
     const base = first<Record<string, unknown>>(await tx.execute(sql`
-      SELECT allocation_id AS "allocationId"
-      FROM factory_production_target_bonus_payments
+      SELECT review_id AS "reviewId"
+      FROM factory_target_bonus_payments
       WHERE id = ${input.paymentId} AND company_id = ${input.companyId}
     `));
     if (!base) throw new HttpError(404, "Bonus payment not found");
-    const allocation = await loadAllocationTx(tx, input.companyId, Number(base.allocationId));
-    const payment = await loadPaymentTx(tx, input.companyId, allocation.id);
+    const review = await loadReviewTx(tx, input.companyId, Number(base.reviewId));
+    const payment = await loadPaymentTx(tx, input.companyId, review.id);
     if (!payment) throw new HttpError(404, "Bonus payment not found");
     if (payment.status === "REVERSED") return { ...payment, replayed: true };
     const narration = `Reversal of production bonus payment #${payment.id}: ${input.reason.trim().slice(0, 500)}`;
     const { voucher } = await postErpVoucherTx(tx, {
       companyId: input.companyId, voucherType: "Receipt", voucherDate: input.reversalDate,
       description: narration, currency: "USD", sourceModule: "FACTORY",
-      source: { type: "factory-production-target-bonus", id: `${input.companyId}:${allocation.id}`, revision: "reversal" },
+      source: { type: "factory-production-target-bonus", id: `${input.companyId}:${review.id}`, revision: "reversal" },
       lines: [
         { ledgerAccountId: payment.cashAccountId, debit: payment.amount, narration },
         { ledgerAccountId: payment.expenseAccountId, credit: payment.amount, narration },
       ],
     });
     await tx.execute(sql`
-      UPDATE factory_production_target_bonus_payments
+      UPDATE factory_target_bonus_payments
       SET status='REVERSED', reversal_voucher_id=${voucher.id}, reversed_at=NOW(),
         reversed_by=${input.actorId}, reversal_reason=${input.reason.trim().slice(0,500)}
       WHERE id=${payment.id} AND company_id=${input.companyId} AND status='POSTED'
     `);
     await writeDaybookEntry(tx, {
       companyId: input.companyId, txDate: input.reversalDate, txType: "PRODUCTION_BONUS_REVERSAL",
-      referenceId: payment.id, referenceTable: "factory_production_target_bonus_payments",
+      referenceId: payment.id, referenceTable: "factory_target_bonus_payments",
       description: narration, currencyCode: "USD", amountCurrency: -Number(payment.amount),
       amountUsd: -Number(payment.amount), createdBy: input.actorId,
-      metaJson: JSON.stringify({ allocationId: allocation.id, originalVoucherId: payment.voucherId, reversalVoucherId: voucher.id }),
+      metaJson: JSON.stringify({ reviewId: review.id, originalVoucherId: payment.voucherId, reversalVoucherId: voucher.id }),
     });
     await logAudit({
       userId: input.actorId, username: input.actorName, companyId: input.companyId,
-      action: "update", tableName: "factory_production_target_bonus_payments",
+      action: "update", tableName: "factory_target_bonus_payments",
       recordId: payment.id, recordIdentifier: `Production bonus reversal #${payment.id}`,
       changes: { status: { old: "POSTED", new: "REVERSED" }, reversalVoucherId: { old: null, new: voucher.id } },
     }, tx);
