@@ -9,7 +9,7 @@ const env = {
   FACTORY_EDGE_SITE_ID: "027d7472-4a29-4bb3-a4aa-5b30e4ad631f",
   FACTORY_EDGE_HOSTNAME: "erp.factory.internal",
   NODE_ENV: "production", PGHOST: "postgres", PGPORT: "5432",
-  PGUSER: "erp_edge", PGPASSWORD: "secure-value", PGDATABASE: "erp_edge", PGSSLMODE: "disable",
+  PGUSER: "erp_edge", PGPASSWORD: "B".repeat(64), PGDATABASE: "erp_edge", PGSSLMODE: "disable",
   SESSION_SECRET: "A".repeat(64), CSRF_ENFORCE: "1",
   ENABLE_SCHEDULERS: "false", RUN_STARTUP_MIGRATIONS: "true",
 };
