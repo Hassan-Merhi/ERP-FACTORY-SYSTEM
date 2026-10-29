@@ -367,7 +367,7 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
       const kgSchema = z.number().finite().positive().max(100000);
       const input = z.union([
         z.object({
-          day: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).refine(date =>
+          day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(date =>
             !Number.isNaN(Date.parse(date + "T00:00:00Z")) &&
             new Date(date + "T00:00:00Z").toISOString().slice(0, 10) === date),
           hour: z.number().int().min(7).max(16),
