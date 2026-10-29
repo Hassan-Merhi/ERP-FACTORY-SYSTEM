@@ -158,6 +158,7 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className, feed
     const onVisibilityChange = () => {
       if (document.hidden) setOpen(false);
     };
+    const cleanupVideo = videoRef.current;
     document.addEventListener("visibilitychange", onVisibilityChange);
     void start();
     return () => {
@@ -166,7 +167,7 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className, feed
       document.removeEventListener("visibilitychange", onVisibilityChange);
       stream?.getTracks().forEach((track) => track.stop());
       trackRef.current = null;
-      if (videoRef.current) videoRef.current.srcObject = null;
+      if (cleanupVideo) cleanupVideo.srcObject = null;
       decoder?.dispose();
       gate.reset();
     };
