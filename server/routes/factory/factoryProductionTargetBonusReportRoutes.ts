@@ -55,6 +55,9 @@ export function registerFactoryProductionTargetBonusReportRoutes(
         }
         // Defense-in-depth: disallow a source adapter silently dropping the
         // requested worker scope. The adapter itself must query by company.
+        if (rows.some(row => row.companyId !== Number(companyId))) {
+          throw new Error("Bonus report source returned a foreign-company award");
+        }
         if (workerId !== null && rows.some(row => row.workerId !== workerId)) {
           throw new Error("Bonus report source returned an unexpected worker");
         }
