@@ -140,6 +140,37 @@ const FACTORY_WORKER_PRODUCTION_LINKS_SCHEMA_SQL = `
     ON factory_worker_production_link_target_defaults (company_id, link_id, effective_from DESC);
 `;
 
+
+/**
+ * Phase 2: effective-dated, append-only rates for the Production Targets bonus.
+ * This is separate from position-planner/payroll bonus rules. Neither rate
+ * changes nor previews post any accounting movement.
+ */
+const FACTORY_PRODUCTION_TARGET_BONUS_RATES_SQL = `
+  CREATE TABLE IF NOT EXISTS factory_production_target_bonus_rates (
+    id serial PRIMARY KEY,
+    company_id integer NOT NULL,
+    scope varchar(12) NOT NULL CHECK (scope IN ('company', 'worker')),
+    worker_id integer REFERENCES factory_workers(id) ON DELETE RESTRICT,
+    effective_from date NOT NULL,
+    enabled boolean NOT NULL DEFAULT false,
+    rate_per_extra_bale numeric(20, 4) NOT NULL DEFAULT 0
+      CHECK (rate_per_extra_bale >= 0 AND rate_per_extra_bale <= 10000),
+    note varchar(500),
+    request_key varchar(128) NOT NULL,
+    created_by varchar(255),
+    created_at timestamp NOT NULL DEFAULT now(),
+    CONSTRAINT factory_production_target_bonus_scope_check
+      CHECK ((scope = 'company' AND worker_id IS NULL) OR (scope = 'worker' AND worker_id IS NOT NULL))
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS factory_production_target_bonus_req_unique
+    ON factory_production_target_bonus_rates (company_id, request_key);
+
+  CREATE INDEX IF NOT EXISTS factory_production_target_bonus_history_idx
+    ON factory_production_target_bonus_rates (company_id, worker_id, effective_from DESC, id DESC);
+`;
+
 export const factoryStaffTrackingSchema = [
   FACTORY_STAFF_TRACKING_TABLE_SQL,
   `CREATE UNIQUE INDEX IF NOT EXISTS factory_staff_tracking_unique_period_person
@@ -170,6 +201,9 @@ export async function ensureFactoryStaffTrackingSchema(database: StartupQueryabl
   // Linked production workers use effective-dated membership and one shared
   // target history, so unlinking never rewrites earlier production days.
   await database.query(FACTORY_WORKER_PRODUCTION_LINKS_SCHEMA_SQL);
+
+  // Bonus settings are always ensured even without the optional startup migration pass.
+  await database.query(FACTORY_PRODUCTION_TARGET_BONUS_RATES_SQL);
 
   // Production can run with RUN_STARTUP_MIGRATIONS=false. Supplier tracking
   // defaults are required by ordinary ERP requests, so ensure their idempotent
