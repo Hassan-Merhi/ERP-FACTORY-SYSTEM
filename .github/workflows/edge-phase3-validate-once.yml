@@ -39,7 +39,7 @@ jobs:
       - name: Validate backup shell and Docker compose config
         run: |
           bash -n deploy/lan/backup-encrypted.sh
-          docker compose --env-file deploy/lan/.env.example -f deploy/lan/compose.yaml config -q
+          docker compose --env-file deploy/lan/factory-edge.env.sample -f deploy/lan/compose.yaml config -q
       - name: Build application
         run: npm run build
       - name: Build and smoke-test full factory LAN Docker stack
@@ -69,7 +69,7 @@ jobs:
           docker compose --env-file deploy/lan/.env -f deploy/lan/compose.yaml up -d
           url="https://erp.factory.internal"
           ready=0
-          for attempt in $(seq 1 60); do
+          for ((attempt = 1; attempt <= 60; attempt++)); do
             if curl --silent --show-error --max-time 4 \
               --noproxy '*' --cacert deploy/lan/certs/server.pem \
               --resolve "erp.factory.internal:443:$lan_ip" \
