@@ -1,0 +1,100 @@
+# Phase 4 checkpoint transport — guarded, **not live ERP replication**
+
+Status: development branch only; no live factory or cloud rollout approved. This
+phase establishes a fail-closed cloud HTTP write fence and an encrypted archive
+handoff to private object storage. **It does not automatically merge local
+PostgreSQL transactions into the cloud or make two databases simultaneously
+writable.** The API intentionally continues to report `cloudReplication:
+"not-configured"`.
+
+## What this implementation protects
+
+- Cloud defaults remain unchanged. To begin a supervised cutover, every cloud
+  API instance can be restarted with `FACTORY_CLOUD_WRITE_MODE=fenced` and
+  `FACTORY_CLOUD_FENCE_ACK=CLOUD_WRITES_DISABLED_FOR_FACTORY_HANDOFF`.
+  Business HTTP POST/PUT/PATCH/DELETE then return 423
+  `CLOUD_WRITES_FENCED`; session/logout/company selection still work. Startup
+  background jobs are disabled. This is an HTTP/app-level fence, **not** a
+  database-enforced global lock; direct SQL, legacy instances, WebSocket
+  mutation paths, existing jobs, integrations and other writer processes MUST
+  be separately stopped and independently verified by an operator.
+- LAN defaults to read-only. Its separate `lan-primary` switch from Phase 3
+  is still forbidden unless cloud writes are comprehensively fenced and an
+  audited factory data baseline is restored. The Phase 3 operator ACK alone
+  does not prove that another cloud instance has stopped writing.
+- Only **age-encrypted** PostgreSQL and upload archives travel to a configured
+  private object-store remote; plaintext dumps are never uploaded by this
+  command. A signed per-site manifest records file lengths and SHA-256 hashes.
+  Each remote ciphertext object is read back and checked byte-for-byte before
+  the manifest is published. Remote object names are immutable, and reruns
+  verify identical data instead of overwriting differences.
+- No browser credentials or PostgreSQL passwords are deployed on laptops or
+  stored in the uploaded manifest.
+
+## Configure the encrypted handoff
+
+1. Install `age` and `rclone` on the **factory server**, configure rclone
+   with least-privilege access to a private encrypted-backup bucket. Prefer an
+   object-store lifecycle policy and separate recovery credentials. Verify the
+   cloud location, residency and retention policy with the data owner.
+2. Create `deploy/lan/.env` from `.env.example` (owner-readable only). Keep
+   the existing `EDGE_BACKUP_AGE_RECIPIENT` as the recipient public key; keep
+   the age private identity off the factory host. Set
+   `EDGE_SYNC_REMOTE=s3:your-private-backup-bucket/factory-edge` to the name
+   of your *preconfigured* rclone remote and bucket/prefix. Set
+   `EDGE_SYNC_SIGNING_KEY` to a fresh, independent random 48+ character key
+   saved in the disaster-recovery vault. Never reuse a database/session
+   password, check in secrets, or email the signing key.
+3. Quiesce application writes and uploaded-file changes for a consistent
+   point-in-time checkpoint. In a planned maintenance window perform
+   `bash deploy/lan/backup-encrypted.sh`. A running-backup script by itself
+   cannot prove the database and uploads are mutually consistent; it must not
+   be used as an unreviewed replication cutover baseline.
+4. Dry-run the paired archives:
+   `node scripts/edge/transfer-encrypted-snapshots.mjs --dry-run`.
+   Then upload:
+   `node scripts/edge/transfer-encrypted-snapshots.mjs`.
+   Both commands validate local configuration. The uploader fails closed on
+   incomplete pairs, unexpected paths, mismatched hashes or changed archives.
+   `rclone cat` is used to verify the bytes stored remotely before the signed
+   manifest is published. Remote failures remain errors and can be retried
+   without silently replacing objects.
+5. Once an approved, immutable checkpoint has been generated, the transfer
+   command may be retried on each WAN reconnect or scheduled periodically.
+   This only stages ciphertext to cloud object storage. It is **not** a
+   cloud ERP database update. Monitor failures and bucket capacity; do not
+   interpret a successful network transfer as a restored application.
+
+## Restoring and verifying data
+
+No automatic restore/promotion command is supplied: it would be unsafe to
+overwrite the independently writable cloud ERP with a factory backup. A
+future importer must verify the HMAC manifest and ciphertext on a separate
+machine, decrypt with the offline age recovery identity, restore the database
+and uploads to a **disposable isolated environment**, verify migrations, all
+company/user boundaries, voucher and stock journals, sequence positions,
+file/document references, and reconcile the approved authoritative checkpoint.
+Only then may an operator approve a separately protected cloud cutover. Never
+run an unreviewed `pg_restore --clean` against live cloud data.
+
+## Operations and unfinished release gates
+
+- Disable **all** competing writers (API replicas, workers, direct SQL,
+  cron, integrations and WebSocket mutations), rather than relying only on
+  the HTTP 423 boundary. Do not reactivate cloud while LAN has unreplicated
+  confirmed business writes.
+- Define an exclusive writer/epoch transition and a signed trusted bootstrap
+  from the cloud into a newly provisioned LAN database.
+- Implement a transactionally recorded change stream for each approved ERP,
+  Factory and Retail mutation, plus idempotent cloud apply, receipts,
+  attachments, sequence reconciliation, conflict review, and stale permissions
+  handling. A generic HTTP replay is not safe for money or stock.
+- Validate the cutover and failback against disposable **real databases**,
+  simultaneous laptop users, WAN failure, LAN power failure, interrupted
+  uploads and restore, concurrent edits and financial invariants.
+- Obtain independent security/DB review and full CI before production.
+
+**Never set `OFFLINE_MODE_ENABLED=true` or `EDGE_WRITE_MODE=lan-primary` just
+because the checkpoint files reached the cloud.** Cloud-to-factory bootstrap,
+operation-level cloud synchronization, and production acceptance are still
+outstanding Phase 4 requirements.
