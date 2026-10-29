@@ -30,6 +30,7 @@ import { registerProductionPlannerRoutes } from "./factory/factoryProductionPlan
 import { registerProductionPositionPlannerRoutes } from "./factory/productionPositionPlannerRoutes";
 import { registerFactoryContactRoutes } from "./factory/factoryContactRoutes";
 import { registerFactoryStaffTrackingRoutes } from "./factory/factoryStaffTrackingRoutes";
+import { registerFactoryTargetBonusPaymentRoutes } from "./factory/factoryTargetBonusPaymentRoutes";
 import { registerFactoryProductionWorkerLinkRoutes } from "./factory/factoryProductionWorkerLinkRoutes";
 import { registerFactoryTargetBonusRoutes } from "./factory/factoryTargetBonusRoutes";
 import { registerPerformanceReadMicrocache } from "./performance/readMicrocache";
@@ -231,6 +232,7 @@ export function registerFactoryRoutes(app: Express, requireAuth: RequestHandler,
   registerProductionPositionPlannerRoutes(app);
   registerFactoryContactRoutes(app);
   registerFactoryStaffTrackingRoutes(app);
+  registerFactoryTargetBonusPaymentRoutes(app);
   registerFactoryProductionWorkerLinkRoutes(app);
   registerFactoryTargetBonusRoutes(app);
 }
