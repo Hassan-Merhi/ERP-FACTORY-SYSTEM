@@ -14,7 +14,8 @@ Each drill must use a dedicated **nonproduction** factory tenant and an operator
 2. Obtain the Phase 5 conflict/resolution and permission-revocation implementation with explicit tests of duplicate retry and two-device concurrent edits. Do not label a manually shipped encrypted snapshot as automated reconciliation.
 3. With a real disposable factory deployment and an operator, run the acceptance drills above. Capture separate immutable proof files with SHA-256 digests and UTC timestamps at the **exact proposed release commit**. CI checks on another SHA are not transferable.
 4. Copy `deploy/lan/offline-phase6-evidence.example.json` **outside the repository** and replace placeholder fields with the real release SHA, LAN site UUID, exact HTTPS edge origin, expected writer mode, and a `drills` record for every key exported in `REQUIRED_DRILLS` from `scripts/edge/certify-offline-phase6.mjs`. Every record has `result: "pass"`, `releaseSha`, `recordedAt` in UTC, relative `file`, and `sha256` of the proof contents. Proofs expire after 14 days. Use one proof file per drill.
-5. Run:
+5. In `deploy/lan/.env`, set `EDGE_RELEASE_SHA` to the exact deployed 40-character release commit and rebuild/restart the **staging** LAN application from that same reviewed commit. The gate verifies the value exposed at `/api/build-info`. The value is operator-controlled, so retain independent built-image provenance evidence; an environment variable by itself cannot establish binary identity.
+6. Run:
 
 ```bash
 node --test tests/offline-phase6-certification.node.test.mjs
@@ -24,7 +25,7 @@ node scripts/edge/certify-offline-phase6.mjs \
   --output /private/phase6-report.json
 ```
 
-The verifier reads exactly two endpoints on the operator-configured LAN origin over verified HTTPS: `GET /api/edge/status` and `GET /api/health/ready`. Redirects, unauthenticated status errors, unprovisioned databases and any cloud replication state other than explicit `cloudReplication: "verified"` block certification. TLS verification is **not** disabled; no mutable HTTP requests are sent. `--no-network` is useful for checking local evidence but *always* returns a blocking `LIVE_PROBE_REQUIRED`. Reports are created only if the output path does not exist.
+The verifier reads exactly three endpoints on the operator-configured LAN origin over verified HTTPS: `GET /api/edge/status`, `GET /api/health/ready` and `GET /api/build-info`. Redirects, unauthenticated status errors, unprovisioned databases and any cloud replication state other than explicit `cloudReplication: "verified"` block certification. TLS verification is **not** disabled; no mutable HTTP requests are sent. `--no-network` is useful for checking local evidence but *always* returns a blocking `LIVE_PROBE_REQUIRED`. Reports are created only if the output path does not exist.
 
 ## External release gates (not automated by this tool)
 
