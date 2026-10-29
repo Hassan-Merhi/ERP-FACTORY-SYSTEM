@@ -227,12 +227,12 @@ export default function FactoryProductionTargets() {
     mutationFn: () => exportWeeklyProductionExcel(referenceDate),
     onSuccess: ({ start, through }) => {
       toast({
-        title: "Weekly Excel exported",
-        description: "Production targets and daily worker links: " + start + " to " + through,
+        title: tr("weeklyExcelExported"),
+        description: tr("weeklyExcelRange") + " " + start + " — " + through,
       });
     },
     onError: (error: Error) => {
-      toast({ title: "Weekly Excel export failed", description: error.message, variant: "destructive" });
+      toast({ title: tr("weeklyExcelExportFailed"), description: error.message, variant: "destructive" });
     },
   });
 
@@ -330,7 +330,7 @@ export default function FactoryProductionTargets() {
             ) : (
               <FileDown className="mr-2 h-4 w-4" />
             )}
-            {exportWeeklyMutation.isPending ? "Exporting Excel..." : "Export Weekly Excel"}
+            {exportWeeklyMutation.isPending ? tr("exportingWeeklyExcel") : tr("exportWeeklyExcel")}
           </Button>
 
           <Button
