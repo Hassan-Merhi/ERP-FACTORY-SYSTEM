@@ -75,6 +75,10 @@ Back up **both** the PostgreSQL database (the `postgres_data` volume) and durabl
 
 On every upgrade: back up, stop company writes, pin the reviewed image/source commit, use Compose `build`, restart, verify `/api/health/ready` and migration report, test authenticated factory operations, then resume. Rollback must restore an appropriate schema+data snapshot; merely swapping an older image may not reverse migrations. The app image carries the same baseline schema/route migrations as the cloud, but **not the cloud data**.
 
+### Encrypted backup
+
+Install the age CLI on the factory host, and store the **private age identity** offline on a separate recovery device. Put only its public age1 recipient in `EDGE_BACKUP_AGE_RECIPIENT`. Run `bash deploy/lan/backup-encrypted.sh`. It refuses invalid TLS/settings, streams PostgreSQL and uploaded files directly into encryption (no plaintext files on disk), deletes partial archives on failure, and prints completed encrypted archive paths. Copy encrypted files off the host and **test an isolated restore** before authorizing writes. The script does NOT certify successful recovery or perform destructive restores.
+
 ## Explicit limits
 
 Phase 3 delivers a guarded LAN runtime, **not** multi-site synchronization. The LAN is a separate authority. Client browser caches cannot confer login rights. Features dependent on third-party internet APIs, external document generation services, and cloud communications may remain unavailable without WAN. Production go-live still needs real factory hardware acceptance, signed/verified data provisioning, safe writer fencing, encrypted backup/restore drills, and Phase 4 synchronization.
