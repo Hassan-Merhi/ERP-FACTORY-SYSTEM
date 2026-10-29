@@ -14,6 +14,13 @@ import {
 
 const RELEASE_SHA = "a".repeat(40);
 const NOW = Date.parse("2026-10-30T09:00:00Z");
+const READY = {
+  status: "ready",
+  listening: true,
+  shuttingDown: false,
+  environmentValid: true,
+  database: { ok: true, schema: { ok: true }, edgeDataProvisioned: true },
+};
 function response(status, body) {
   return {
     status,
@@ -131,7 +138,7 @@ test("LAN status and health probes must be healthy and replicated", async () => 
             databaseProvisioned: true,
             cloudReplication: "verified",
           }
-        : { status: "ready" }
+        : READY
     );
   assert.deepEqual(await probeEdge("https://erp.factory.internal", { ...config, fetcher: healthy }), []);
   const incomplete = async (url) =>
@@ -145,7 +152,7 @@ test("LAN status and health probes must be healthy and replicated", async () => 
             databaseProvisioned: true,
             cloudReplication: "not-configured",
           }
-        : {}
+        : READY
     );
   const blocked = await probeEdge("https://erp.factory.internal", { ...config, fetcher: incomplete });
   assert.deepEqual(
@@ -165,13 +172,37 @@ test("LAN status and health probes must be healthy and replicated", async () => 
               databaseProvisioned: true,
               cloudReplication: "error",
             }
-          : {}
+          : READY
       ),
   });
   assert.deepEqual(
     unknown.map((x) => x.code),
     ["EDGE_PROBE_UNSAFE_STATE"]
   );
+});
+
+test("a successful HTTP status does not override failed readiness conditions", async () => {
+  const base = { siteId: "factory", expectedWriteMode: "read-only" };
+  const status = {
+    mode: "lan", siteId: "factory", writeMode: "read-only",
+    databaseProvisioned: true, cloudReplication: "verified",
+  };
+  for (const faulty of [
+    { ...READY, status: "not_ready" },
+    { ...READY, listening: false },
+    { ...READY, shuttingDown: true },
+    { ...READY, environmentValid: false },
+    { ...READY, database: { ok: false, schema: { ok: true } } },
+    { ...READY, database: { ok: true, schema: { ok: false } } },
+    { ...READY, database: { ok: true, schema: { ok: true }, edgeDataProvisioned: false } },
+  ]) {
+    const result = await probeEdge("https://erp.factory.internal", {
+      ...base,
+      fetcher: async (url) => response(200, url.endsWith("/api/edge/status") ? status : faulty),
+    });
+    assert.deepEqual(result.map((x) => x.code), ["EDGE_PROBE_UNSAFE_STATE"]);
+    assert.equal(result[0].endpoint, "/api/health/ready");
+  }
 });
 
 test("unreachable, HTTP error and redirects cannot pass the status probe", async () => {
