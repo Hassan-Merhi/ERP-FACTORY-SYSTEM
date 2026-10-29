@@ -38,6 +38,7 @@ export interface ProductionTargetBonusDayInput {
 
 export type ProductionTargetBonusIssue =
   | "NOT_FINALIZED"
+  | "EMPTY_FINALIZED_DAY"
   | "INVALID_PRODUCTION"
   | "LINK_MEMBER_MISSING"
   | "OVERLAPPING_LINKS"
@@ -244,6 +245,7 @@ export function calculateProductionTargetBonusDay(
   const warnings = [...new Set([
     ...grouped.warnings,
     ...(!day.finalized ? ["NOT_FINALIZED" as const] : []),
+    ...(day.finalized && day.workers.length === 0 ? ["EMPTY_FINALIZED_DAY" as const] : []),
   ])];
   // If the source is incomplete or ambiguous, do not let approval/posting
   // proceed on that day until a supervisor reconciles the evidence.
