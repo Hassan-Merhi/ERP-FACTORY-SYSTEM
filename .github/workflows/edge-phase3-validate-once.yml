@@ -1,0 +1,53 @@
+name: Factory edge one-time validation and formatting
+on:
+  push:
+    branches: [feat/offline-phase1-durable-foundation-20261029]
+    paths: [.github/workflows/edge-phase3-validate-once.yml]
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.1"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --bin-links=true
+      - name: Format changed source
+        shell: bash
+        run: |
+          git fetch origin main
+          mapfile -d '' -t files < <(git diff --name-only -z origin/main...HEAD -- '*.ts' '*.tsx' '*.mjs' '*.css')
+          if (( ${#files[@]} )); then
+            node node_modules/prettier/bin/prettier.cjs --write "${files[@]}"
+          fi
+      - name: Phase 3 unit, middleware, TLS and deployment contracts
+        run: >-
+          node node_modules/vitest/vitest.mjs run
+          tests/factory-edge-policy.test.ts
+          tests/factory-edge-boundary.test.ts
+          tests/factory-edge-installation.test.ts
+          tests/factory-edge-provisioning.test.ts
+          tests/factory-edge-deployment.test.ts
+      - name: Validate backup shell and Docker compose config
+        run: |
+          bash -n deploy/lan/backup-encrypted.sh
+          docker compose --env-file deploy/lan/.env.example -f deploy/lan/compose.yaml config -q
+      - name: Build application
+        run: npm run build
+      - name: Commit verified formatting changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -- client/src server tests scripts
+          if ! git diff --cached --quiet; then
+            git -c user.name="ERP Edge Validator" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "style(edge): format Phase 3 implementation and tests"
+            git push origin "HEAD:feat/offline-phase1-durable-foundation-20261029"
+          fi
