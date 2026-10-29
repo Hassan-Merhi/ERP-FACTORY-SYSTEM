@@ -418,7 +418,6 @@ export default function FactoryPriorityScan() {
                 <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
               )}
               <div className="min-w-0">
-                {feedback.type === "duplicate" && <div className="font-bold">Already scanned</div>}
                 <div className="font-semibold font-mono">{feedback.referenceNumber}</div>
                 <div className="text-sm">{feedback.message}</div>
               </div>
