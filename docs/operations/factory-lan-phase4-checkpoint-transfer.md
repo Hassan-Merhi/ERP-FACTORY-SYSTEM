@@ -129,6 +129,13 @@ A failed outbox insert rolls back the voucher transaction; the app never tells
 a user that a voucher succeeded if its LAN capture failed. Replayed vouchers
 do not generate a second record. In ordinary cloud mode no outbox is created.
 
+LAN-primary now **rejects** POST/PUT/PATCH/DELETE to other business endpoints
+with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION`. The only capture-eligible
+business HTTP write is `POST /api/vouchers/with-entries`. This strict
+allowlist prevents a seemingly successful local mutation from being omitted
+from this outbox. The eligible voucher still remains LOCAL until a cloud
+acceptance protocol is certified.
+
 **This is only one audited write path.** POS, inventory, factories, scanner
 queues, payments, many other voucher operations, and document attachment
 changes are *not* captured through this hook. There is currently no
