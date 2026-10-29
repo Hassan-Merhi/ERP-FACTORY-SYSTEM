@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, Loader2, CheckCircle2, Save, Trash2 } from "lucide-react";
+import { AlertTriangle, Loader2, CheckCircle2, Save, Trash2, BookmarkCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -36,10 +36,16 @@ interface ExistingLine {
 
 interface ProformaData {
   id: number;
+  companyId: number;
   name: string;
   isActive: boolean;
   customerId: number;
   lines: ExistingLine[];
+}
+
+interface AgreedPriceRow {
+  article_code: string;
+  price_per_bale: string;
 }
 
 interface BaleProduct {
@@ -74,7 +80,7 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
   const [showGarbageWipers, setShowGarbageWipers] = useState(false);
   const [catalogFilter, setCatalogFilter] = useState("__all__");
   const catalogCategories = Array.from(new Set(articleRows.map((r) => r.categoryName?.trim()).filter((v): v is string => Boolean(v)))).sort((a, b) => a.localeCompare(b));
-  const [appliedPrice, setAppliedPrice] = useState<"sell" | "prod" | null>(null);
+  const [appliedPrice, setAppliedPrice] = useState<"sell" | "prod" | "customer" | null>(null);
   const [initialized, setInitialized] = useState(false);
   const qtyRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -86,6 +92,18 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
       return res.json();
     },
     enabled: open && !!proformaId,
+  });
+
+  // Saved prices are scoped to the customer on this proforma, never to the last selected customer.
+  const customerId = proformaQuery.data?.customerId;
+  const customerPriceListQuery = useQuery<AgreedPriceRow[]>({
+    queryKey: ["/api/factory/customer-price-lists", customerId, proformaQuery.data?.companyId],
+    queryFn: async () => {
+      const res = await fetch(`/api/factory/customer-price-lists/${customerId}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load saved agreed prices");
+      return res.json();
+    },
+    enabled: open && !!customerId && !!proformaQuery.data?.companyId,
   });
 
   const productsQuery = useQuery<BaleProduct[]>({
@@ -261,6 +279,38 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
     }
     setPrices((prev) => ({ ...prev, ...next }));
     setAppliedPrice("prod");
+  }
+
+  function applySavedAgreedPrices() {
+    const availableCodes = new Set(articleRows.map((row) => row.articleCode));
+    const agreedPrices: Record<string, string> = {};
+    for (const row of customerPriceListQuery.data ?? []) {
+      if (availableCodes.has(row.article_code) && Number(row.price_per_bale) > 0) {
+        agreedPrices[row.article_code] = row.price_per_bale;
+      }
+    }
+    const matchedCodes = Object.keys(agreedPrices);
+    if (matchedCodes.length === 0) {
+      toast({
+        title: "No matching agreed prices",
+        description: "No saved customer prices match the articles in this allocation.",
+      });
+      return;
+    }
+
+    // Agreed prices are saved per bale. Switching matched rows to /bale ensures
+    // the new price is visible and persisted instead of keeping a stale /kg rate.
+    setPrices((prev) => ({ ...prev, ...agreedPrices }));
+    setPricingModes((prev) => {
+      const next = { ...prev };
+      for (const code of matchedCodes) next[code] = "per_bale";
+      return next;
+    });
+    setAppliedPrice("customer");
+    toast({
+      title: "Agreed prices applied",
+      description: `${matchedCodes.length} matching article price${matchedCodes.length === 1 ? "" : "s"} updated. Click Save Changes to save the proforma.`,
+    });
   }
 
   function handleQtyKeyDown(e: React.KeyboardEvent<HTMLInputElement>, rowIdx: number) {
@@ -492,6 +542,26 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
                 >
                   {appliedPrice === "prod" && <CheckCircle2 className="h-3.5 w-3.5 mr-1.5 text-primary" />}
                   Apply Prod Price
+                </Button>
+                <Button
+                  size="sm"
+                  variant={appliedPrice === "customer" ? "secondary" : "outline"}
+                  onClick={applySavedAgreedPrices}
+                  disabled={!initialized || customerPriceListQuery.isFetching || customerPriceListQuery.isError || !customerPriceListQuery.data?.length}
+                  data-testid="button-edit-v5-apply-customer-price"
+                  title={customerPriceListQuery.isError
+                    ? "Could not load saved agreed prices for this customer"
+                    : customerPriceListQuery.data?.length
+                      ? `Apply ${customerPriceListQuery.data.length} saved agreed price(s) for this customer`
+                      : "No agreed prices saved for this customer yet"}
+                  className={cn(appliedPrice === "customer" && "ring-2 ring-primary/40")}
+                >
+                  {appliedPrice === "customer" && <CheckCircle2 className="h-3.5 w-3.5 mr-1.5 text-primary" />}
+                  <BookmarkCheck className="h-3.5 w-3.5 mr-1.5" />
+                  Apply Saved Agreed Prices
+                  {customerPriceListQuery.data && customerPriceListQuery.data.length > 0 && (
+                    <span className="ml-1 text-[11px] opacity-70">({customerPriceListQuery.data.length})</span>
+                  )}
                 </Button>
               </div>
             </div>
