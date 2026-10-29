@@ -309,7 +309,7 @@ function addNote(sheet: ExcelJS.Worksheet, note: string, lastCol: number) {
   cell.value = note;
   cell.font = { name: "Aptos", size: 10, italic: true, color: { argb: INK } };
   cell.alignment = { vertical: "middle", wrapText: true };
-  sheet.getRow(rowIndex).height = 35;
+  sheet.getRow(rowIndex).height = 46;
 }
 
 function createWorkbook(
@@ -385,15 +385,15 @@ function createWorkbook(
     cell.font = { name: "Aptos", size: 11, bold: true, color: { argb: GREEN } };
   }
   enableFilter(workerSheet, 12, workerSheet.rowCount);
-  const total = workerSheet.addRow([
+  const workerTotal = workerSheet.addRow([
     "ALL WORKERS", "", "", "", "", "", "", "",
     data.workers.reduce((sum, worker) => sum + worker.soloProduced, 0),
     data.workers.reduce((sum, worker) => sum + worker.linkedProduced, 0),
     data.workers.reduce((sum, worker) => sum + worker.totalProduced, 0),
     "",
   ]);
-  total.height = 28;
-  total.eachCell({ includeEmpty: true }, (cell) => {
+  workerTotal.height = 28;
+  workerTotal.eachCell({ includeEmpty: true }, (cell) => {
     cell.font = { name: "Aptos", bold: true, size: 11, color: { argb: WHITE } };
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: NAVY } };
     if (typeof cell.value === "number") cell.numFmt = "0";
