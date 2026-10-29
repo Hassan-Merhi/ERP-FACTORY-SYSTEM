@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Factory, Layers3, Trash2 } from "lucide-react";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translatePressingUiText } from "@/i18n/pressingUiTranslations";
 
 export function formatDailyNum(val: number): string {
   if (val === 0) return "0";
@@ -20,6 +22,8 @@ export function normalizeDailySummaryRows(payload: unknown): DailyStockSummaryRo
 }
 
 export function DailyStockSummary({ date }: { date: string }) {
+  const { language } = useApplicationLanguage();
+  const t = (key: Parameters<typeof translatePressingUiText>[0]) => translatePressingUiText(key, language);
   const todayStr = new Date().toLocaleDateString("en-CA");
 
   const { data: summaryRows = [] } = useQuery<DailyStockSummaryRow[]>({
@@ -80,14 +84,14 @@ export function DailyStockSummary({ date }: { date: string }) {
             <div className="min-w-0">
               <div className="flex items-baseline gap-1.5">
                 <strong data-testid="text-entry-today-qty" className="text-2xl font-extrabold tabular-nums">{totalQty}</strong>
-                <span className="text-xs text-muted-foreground">Total bales</span>
+                <span className="text-xs text-muted-foreground">{t("totalBales")}</span>
               </div>
-              <span className="text-xs text-muted-foreground">Produced bales</span>
+              <span className="text-xs text-muted-foreground">{t("producedBales")}</span>
             </div>
           </div>
           <div className="shrink-0 border-l border-emerald-500/20 pl-4 text-right">
             <strong data-testid="text-entry-today-kg" className="block text-xl font-extrabold tabular-nums text-emerald-600 dark:text-emerald-300">{formatDailyNum(totalKg)} <span className="text-xs">KG</span></strong>
-            <span className="text-[11px] text-muted-foreground">Total weight</span>
+            <span className="text-[11px] text-muted-foreground">{t("totalWeight")}</span>
           </div>
         </div>
         <div className="flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-500/15 via-card to-card p-4 shadow-sm">
@@ -103,7 +107,7 @@ export function DailyStockSummary({ date }: { date: string }) {
           </div>
           <div className="shrink-0 border-l border-amber-500/20 pl-4 text-right">
             <strong data-testid="text-entry-today-garbage-kg" className="block text-xl font-extrabold tabular-nums text-amber-600 dark:text-amber-300">{formatDailyNum(garbageKg)} <span className="text-xs">KG</span></strong>
-            <span className="text-[11px] text-muted-foreground">Total weight</span>
+            <span className="text-[11px] text-muted-foreground">{t("totalWeight")}</span>
           </div>
         </div>
         <div className="flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-sky-500/25 bg-gradient-to-br from-sky-500/15 via-card to-card p-4 shadow-sm">
@@ -119,7 +123,7 @@ export function DailyStockSummary({ date }: { date: string }) {
           </div>
           <div className="shrink-0 border-l border-sky-500/20 pl-4 text-right">
             <strong data-testid="text-entry-today-wipers-kg" className="block text-xl font-extrabold tabular-nums text-sky-600 dark:text-sky-300">{formatDailyNum(wipersKg)} <span className="text-xs">KG</span></strong>
-            <span className="text-[11px] text-muted-foreground">Total weight</span>
+            <span className="text-[11px] text-muted-foreground">{t("totalWeight")}</span>
           </div>
         </div>
       </div>
