@@ -1,4 +1,5 @@
 import { Suspense, useEffect } from "react";
+import { OFFLINE_MODE_ENABLED } from "@/lib/featureFlags";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { useMobilePerformanceLifecycle } from "@/hooks/use-mobile-performance-lifecycle";
 import { useLocation, Redirect } from "wouter";
@@ -28,6 +29,7 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
   const selectedCompanyId = selectedCompany?.id ?? null;
   const authenticatedUserId = String(user.id);
   useEffect(() => {
+    if (!OFFLINE_MODE_ENABLED) return;
     let stopped = false;
     void import("@/lib/offline/offlineReadCache").then(async ({ revokeOfflineReadScope, verifyOfflineReadScope }) => {
       if (stopped) return;

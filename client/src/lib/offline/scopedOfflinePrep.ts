@@ -149,6 +149,12 @@ export async function runScopedOfflinePrep(
       }
     }
 
+    // A different tab can change the shared server session mid-download.
+    // Revalidate the server-owned identity before promoting any cached pages.
+    const finalActor = await verifyOfflineReadScope(companyId);
+    if (!finalActor || finalActor.userId !== actor.userId) {
+      throw new Error("OFFLINE_PREP_SCOPE_CHANGED");
+    }
     const verified = getVerifiedOfflineReadScope();
     if (!verified || verified.companyId !== companyId || verified.userId !== actor.userId) {
       throw new Error("OFFLINE_PREP_SCOPE_CHANGED");

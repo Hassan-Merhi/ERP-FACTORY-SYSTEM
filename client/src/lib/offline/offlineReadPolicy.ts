@@ -70,7 +70,7 @@ export function readPaginationPlan(payload: unknown, headers: Headers): Paginati
       ? intOrZero(headers.get("X-Total-Count"))
       : payload.length;
     const totalPages = headers.has("X-Total-Pages")
-      ? intOrZero(headers.get("X-Total-Pages"))
+      ? Math.max(1, intOrZero(headers.get("X-Total-Pages")))
       : 1;
     const pageSize = headers.has("X-Page-Size")
       ? intOrZero(headers.get("X-Page-Size"))
@@ -89,7 +89,7 @@ export function readPaginationPlan(payload: unknown, headers: Headers): Paginati
 
   const data = record.data;
   const total = intOrZero(record.total ?? data.length);
-  const totalPages = intOrZero(record.totalPages ?? 1);
+  const totalPages = Math.max(1, intOrZero(record.totalPages ?? 1));
   const pageSize = intOrZero(record.pageSize ?? data.length) || 1;
   if (!totalPages || totalPages > MAX_OFFLINE_PAGES || total < data.length) {
     throw new Error("OFFLINE_PAGINATION_UNBOUNDED");
