@@ -67,6 +67,22 @@ writable.** The API intentionally continues to report `cloudReplication:
 
 ## Restoring and verifying data
 
+On the isolated recovery machine, download one completed checkpoint's
+`edge-checkpoint-<timestamp>.json` and its two matching `.age` files into
+the same directory. Supply the expected site UUID and signing key from your
+recovery vault, then run:
+
+```sh
+EDGE_SYNC_SITE_ID=<approved-site-uuid> \\
+EDGE_SYNC_SIGNING_KEY=<vault-supplied-secret> \\
+node scripts/edge/verify-encrypted-checkpoint.mjs /recovery/edge-checkpoint-<timestamp>.json
+```
+
+The verifier checks site identity, HMAC provenance, both archive hashes and
+basic age v1 ciphertext headers. This is a *format and integrity precheck*,
+not proof of successful decryption or usable database restoration. Use the
+private age identity only during a separately reviewed isolated restore.
+
 No automatic restore/promotion command is supplied: it would be unsafe to
 overwrite the independently writable cloud ERP with a factory backup. A
 future importer must verify the HMAC manifest and ciphertext on a separate
