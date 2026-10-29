@@ -49,6 +49,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - uploads_data:/app/uploads
     expose:
       - "5000"
     networks:
@@ -93,5 +95,6 @@ networks:
 
 volumes:
   postgres_data:
+  uploads_data:
   caddy_data:
   caddy_config:

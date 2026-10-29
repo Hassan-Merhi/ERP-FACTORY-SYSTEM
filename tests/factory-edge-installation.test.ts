@@ -1,4 +1,3 @@
-import { createPrivateKey, generateKeyPairSync, X509Certificate } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   parseEdgeEnvironment,

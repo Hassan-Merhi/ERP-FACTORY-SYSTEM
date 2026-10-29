@@ -71,7 +71,7 @@ Then restart the LAN app in a maintenance window. This acknowledgment is a human
 
 ## 6. Backup, recovery and upgrades
 
-Back up **both** the PostgreSQL database and any durable uploaded file storage; validate encrypted backups on a separate device and regularly rehearse restore to a new isolated database. Record WAL/database version, schema migrations, site UUID and client versions. Do not place unencrypted backups on laptop shares or GitHub.
+Back up **both** the PostgreSQL database (the `postgres_data` volume) and durable uploaded files (the `uploads_data` volume); validate encrypted backups on a separate device and regularly rehearse restore to a new isolated database. Record WAL/database version, schema migrations, site UUID and client versions. Do not place unencrypted backups on laptop shares or GitHub.
 
 On every upgrade: back up, stop company writes, pin the reviewed image/source commit, use Compose `build`, restart, verify `/api/health/ready` and migration report, test authenticated factory operations, then resume. Rollback must restore an appropriate schema+data snapshot; merely swapping an older image may not reverse migrations. The app image carries the same baseline schema/route migrations as the cloud, but **not the cloud data**.
 
