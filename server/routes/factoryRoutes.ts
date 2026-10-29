@@ -31,6 +31,7 @@ import { registerProductionPositionPlannerRoutes } from "./factory/productionPos
 import { registerFactoryContactRoutes } from "./factory/factoryContactRoutes";
 import { registerFactoryStaffTrackingRoutes } from "./factory/factoryStaffTrackingRoutes";
 import { registerFactoryProductionWorkerLinkRoutes } from "./factory/factoryProductionWorkerLinkRoutes";
+import { registerFactoryTargetBonusRoutes } from "./factory/factoryTargetBonusRoutes";
 import { registerPerformanceReadMicrocache } from "./performance/readMicrocache";
 import { registerFactoryDaybookPaginationRoutes } from "./factory/factoryDaybookPaginationRoutes";
 import { registerFactoryStockEntryHistoryPaginationRoutes } from "./factory/factoryStockEntryHistoryPaginationRoutes";
@@ -231,4 +232,5 @@ export function registerFactoryRoutes(app: Express, requireAuth: RequestHandler,
   registerFactoryContactRoutes(app);
   registerFactoryStaffTrackingRoutes(app);
   registerFactoryProductionWorkerLinkRoutes(app);
+  registerFactoryTargetBonusRoutes(app);
 }
