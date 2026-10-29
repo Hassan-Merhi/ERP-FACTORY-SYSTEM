@@ -6,7 +6,7 @@ import { buildProductionBonusReportWorkbook } from "./productionBonusHistoryExce
 describe("production bonus formatted Excel report", () => {
   it("contains separate overview, workers, history and statement sheets with immutable award details", async () => {
     const report = buildProductionTargetBonusReport("2026-10-29", "2026-10-29", [{
-      id: 2, workerId: 12, workerNameSnapshot: "=2+2", workerCodeSnapshot: "A12",
+      id: 2, companyId: 100, workerId: 12, workerNameSnapshot: "=2+2", workerCodeSnapshot: "A12",
       productionDate: "2026-10-29", currency: "USD", targetBales: 7,
       creditedBales: 9, excessBales: 2, bonusPerExtraBale: "0.5000",
       amount: "1.00", status: "POSTED", approvedAt: "2026-10-29T16:00:00Z",
