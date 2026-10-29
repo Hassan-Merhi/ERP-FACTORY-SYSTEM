@@ -10,6 +10,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import type { CameraScanFeedback } from "@/components/MobileBarcodeScanner";
+import { translateCameraScanMessage } from "@/i18n/mobileCameraScanTranslations";
 import { queryClient } from "@/lib/queryClient";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
@@ -322,7 +323,7 @@ export function useFactoryContainerLoadingScanModel() {
       setCameraScanFeedback({
         type: "success",
         referenceNumber: variables.scanCode,
-        message: "Bale added to the loading.",
+        message: translateCameraScanMessage("loadingSuccess", language),
       });
       playScanBeep(SCAN_SUCCESS_TONE.frequency, SCAN_SUCCESS_TONE.durationMs);
       scheduleFlashReset(() => {
@@ -371,7 +372,7 @@ export function useFactoryContainerLoadingScanModel() {
         setCameraScanFeedback({
           type: "warn",
           referenceNumber: variables.scanCode,
-          message: "Quantity exceeded. Scan this bale again to confirm the override.",
+          message: translateCameraScanMessage("overload", language),
         });
         setScanFlash("error");
         playScanBeep(SCAN_OVERLOAD_TONE.frequency, SCAN_OVERLOAD_TONE.durationMs);
@@ -385,7 +386,7 @@ export function useFactoryContainerLoadingScanModel() {
         setCameraScanFeedback({
           type: "warn",
           referenceNumber: variables.scanCode,
-          message: "Item not requested on the proforma. Scan again to confirm the override.",
+          message: translateCameraScanMessage("notRequested", language),
         });
         setScanFlash("error");
         playScanBeep(SCAN_NOT_IN_PROFORMA_TONE.frequency, SCAN_NOT_IN_PROFORMA_TONE.durationMs);
@@ -400,7 +401,7 @@ export function useFactoryContainerLoadingScanModel() {
           ? "duplicate"
           : "error",
         referenceNumber: variables.scanCode,
-        message: error.message || "Unable to add this bale.",
+        message: error.message || translateCameraScanMessage("unableToAdd", language),
       });
       playScanErrorSweep();
       scheduleFlashReset(() => {
