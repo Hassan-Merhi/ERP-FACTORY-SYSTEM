@@ -282,9 +282,8 @@ export async function countLegacyOfflineOperations(): Promise<{
   indexedDb: number;
   localStorage: number;
 }> {
-  let indexedDb = 0;
+  const indexedDb = await db.syncQueue.count();
   let localStorageCount = 0;
-  indexedDb = await db.syncQueue.count();
   try {
     const stored: unknown = JSON.parse(localStorage.getItem("erp_offline_queue") || "[]");
     if (Array.isArray(stored)) localStorageCount = stored.length;
