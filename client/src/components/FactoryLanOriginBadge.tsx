@@ -5,7 +5,7 @@ import { applicationEnglishTranslations } from "@/i18n/applicationTranslations";
 interface EdgeStatus {
   mode: "lan" | "cloud";
   siteId: string | null;
-  writeMode: "read-only" | "lan-primary" | "cloud";
+  writeMode: "read-only" | "lan-primary" | "cloud" | "fenced";
   cloudReplication: string;
 }
 
@@ -58,7 +58,7 @@ export function FactoryLanOriginBadge() {
       <strong>{t("edge.lanServer")}</strong>
       <span className="ml-1">· {status.writeMode === "read-only" ? t("edge.readOnly") : t("edge.lanPrimary")}</span>
       <p className="text-muted-foreground">{t("edge.replicationNotConfigured")}</p>
-      <p className="font-mono text-muted-foreground">{status.siteId.slice(0, 8)}</p>
+      <p className="font-mono text-muted-foreground">{status.siteId?.slice(0, 8) ?? "unknown"}</p>
     </div>
   );
 }
