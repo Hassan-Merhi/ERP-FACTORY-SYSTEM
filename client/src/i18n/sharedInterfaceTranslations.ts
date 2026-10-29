@@ -8,6 +8,21 @@ type SharedEntry = Record<ApplicationLanguage, string>;
  * business values are intentionally absent and remain protected by the translator.
  */
 export const sharedInterfaceTranslations: SharedEntry[] = [
+  // Stock Allocation dashboard redesign (English, Arabic, French).
+  { en: "Monitor product stock, expected loading and available balances.", ar: "راقب مخزون المنتجات والكميات المتوقع تحميلها والأرصدة المتاحة.", fr: "Suivez les stocks des produits, les chargements prévus et les soldes disponibles." },
+  { en: "Total Products", ar: "إجمالي المنتجات", fr: "Total des produits" },
+  { en: "Stock Available", ar: "المخزون المتاح", fr: "Stock disponible" },
+  { en: "Expected to Load", ar: "المتوقع تحميله", fr: "Chargement prévu" },
+  { en: "Total Loaded", ar: "إجمالي المحمّل", fr: "Total chargé" },
+  { en: "Net Available Balance", ar: "صافي الرصيد المتاح", fr: "Solde disponible net" },
+  { en: "Action", ar: "إجراء", fr: "Action" },
+  { en: "Show Zero Rows", ar: "إظهار الصفوف الصفرية", fr: "Afficher les lignes à zéro" },
+  { en: "Negative Only", ar: "الأرصدة السالبة فقط", fr: "Soldes négatifs seulement" },
+  { en: "Show Garbage/Wipers", ar: "إظهار النفايات والخرق", fr: "Afficher déchets et chiffons" },
+  { en: "Search product name or code...", ar: "ابحث عن اسم المنتج أو رمزه...", fr: "Rechercher un produit par nom ou code..." },
+  { en: "Refresh stock allocation", ar: "تحديث تخصيص المخزون", fr: "Actualiser l'affectation du stock" },
+  { en: "Restore Cancelled", ar: "استعادة الملغى", fr: "Restaurer les éléments annulés" },
+  { en: "Create Proforma", ar: "إنشاء فاتورة أولية", fr: "Créer un proforma" },
   // Shared navigation and modules
   { en: "Dashboard", ar: "لوحة التحكم", fr: "Tableau de bord" },
   { en: "Overview", ar: "نظرة عامة", fr: "Aperçu" },
