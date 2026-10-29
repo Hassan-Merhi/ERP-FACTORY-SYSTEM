@@ -1,6 +1,7 @@
 /** Factory LAN edge: explicit opt-in, never inferred from network reachability. */
 const SAFE_EDGE_HOSTS = new Set(["postgres", "db", "localhost", "127.0.0.1", "::1"]);
 const PRIMARY_ACK = "CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED";
+const CLOUD_FENCE_ACK = "CLOUD_WRITES_DISABLED_FOR_FACTORY_HANDOFF";
 const SAFE_SESSION_PATHS = new Set(["/api/auth/login", "/api/auth/logout", "/api/auth/set-company", "/api/csp-report"]);
 
 function parseSite(value) {
@@ -26,7 +27,26 @@ export function readFactoryEdgeConfiguration(env = process.env) {
     if (env.FACTORY_EDGE_WRITE_MODE || env.FACTORY_EDGE_PRIMARY_ACK) {
       throw new Error("EDGE_CLOUD_MISCONFIGURED");
     }
-    return Object.freeze({ mode: "cloud", siteId: null, hostname: null, writeMode: "cloud", primary: false });
+    const cloudWriteMode = env.FACTORY_CLOUD_WRITE_MODE || "primary";
+    if (cloudWriteMode !== "primary" && cloudWriteMode !== "fenced") {
+      throw new Error("CLOUD_WRITE_MODE_INVALID");
+    }
+    if (cloudWriteMode === "fenced" && env.FACTORY_CLOUD_FENCE_ACK !== CLOUD_FENCE_ACK) {
+      throw new Error("CLOUD_FENCE_NOT_ACKNOWLEDGED");
+    }
+    if (cloudWriteMode === "primary" && env.FACTORY_CLOUD_FENCE_ACK) {
+      throw new Error("CLOUD_FENCE_ACK_WITHOUT_FENCE");
+    }
+    return Object.freeze({
+      mode: "cloud",
+      siteId: null,
+      hostname: null,
+      writeMode: cloudWriteMode === "fenced" ? "fenced" : "cloud",
+      primary: false,
+    });
+  }
+  if (env.FACTORY_CLOUD_WRITE_MODE || env.FACTORY_CLOUD_FENCE_ACK) {
+    throw new Error("EDGE_CLOUD_FENCE_MISCONFIGURED");
   }
 
   if (env.NODE_ENV !== "production") throw new Error("EDGE_REQUIRES_PRODUCTION");
@@ -68,8 +88,9 @@ export function readFactoryEdgeConfiguration(env = process.env) {
 }
 
 export function edgeBlocksWrite(config, method, path) {
-  if (config.mode !== "lan" || config.primary) return false;
-  if (["GET", "HEAD", "OPTIONS"].includes(String(method).toUpperCase())) return false;
+  const fenced = (config.mode === "cloud" && config.writeMode === "fenced") ||
+    (config.mode === "lan" && !config.primary);
+  if (!fenced || ["GET", "HEAD", "OPTIONS"].includes(String(method).toUpperCase())) return false;
   return !SAFE_SESSION_PATHS.has(path);
 }
 
@@ -85,8 +106,9 @@ export function edgeStatusPayload(config, databaseProvisioned = false) {
 }
 
 export const EDGE_PRIMARY_ACK = PRIMARY_ACK;
+export const CLOUD_WRITER_FENCE_ACK = CLOUD_FENCE_ACK;
 
 /** LAN edge must never run cloud-derived post-startup repair/cleanup jobs. */
 export function shouldStartEdgeBackgroundJobs(config) {
-  return config.mode !== "lan";
+  return config.mode === "cloud" && config.writeMode !== "fenced";
 }
