@@ -55,6 +55,7 @@ import type { VoucherFormData } from "@/pages/vouchers/voucherTypes";
 import { ErrorState } from "@/components/ui/page-state";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { isRetailManualVoucherTabHidden, isRetailManualVoucherTypeHidden } from "@/lib/retailVoucherPolicy";
+import { shouldShowFactoryVoucherTab } from "@/pages/vouchers/factoryVoucherPolicy";
 import type { ErpFeatureAccess } from "@/app/erpAccess";
 
 type VoucherTab = "payment" | "receipt" | "journal" | "transfer" | "transferorder" | "adjustment" | "creditnote";
@@ -136,7 +137,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
       ...group,
       items: group.items.filter(
         (item) =>
-          (!isFactoryMode || !factoryHiddenTabs.includes(FACTORY_VOUCHER_HIDDEN_KEYS[item.key as VoucherTab])) &&
+          (!isFactoryMode || shouldShowFactoryVoucherTab(item.key, factoryHiddenTabs, FACTORY_VOUCHER_HIDDEN_KEYS[item.key as VoucherTab])) &&
           (!isRetailCompany || !isRetailManualVoucherTabHidden(item.key))
       ),
     }))
