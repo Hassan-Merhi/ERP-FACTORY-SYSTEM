@@ -16,6 +16,8 @@ import {
 import PressingCorrectionReview from "./PressingCorrectionReview";
 import { approx40KgText } from "./pressing-scanner/pressingKpiFormatting";
 import PressingHourlyTargets from "./PressingHourlyTargets";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translatePressingUiText } from "@/i18n/pressingUiTranslations";
 
 const ROOT = "/api/factory/pressing-machines/report";
 const DETAIL_COLUMNS: PressingReportColumn[] = [
@@ -42,6 +44,8 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
   active: boolean; companyId: number; userId: string; simpleMode?: boolean;
 }) {
   const { toast } = useToast();
+  const { language } = useApplicationLanguage();
+  const t = (key: Parameters<typeof translatePressingUiText>[0]) => translatePressingUiText(key, language);
   const [filters, setFilters] = useState<PressingReportFilters>({
     from: simpleMode ? undefined : today(), to: simpleMode ? undefined : today(),
     status: "active", mode: "condensed", page: 1, limit: 50,
@@ -178,7 +182,7 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
                     <Weight className={"h-4 w-4 shrink-0 " + theme.icon} />
                     <strong className="text-sm tabular-nums">{kgText(worker.kg)} KG</strong>
                   </div>
-                  <div className="mt-1 text-[11px] text-muted-foreground">Total weight</div>
+                  <div className="mt-1 text-[11px] text-muted-foreground">{t("totalWeight")}</div>
                 </div>
                 <div className="min-w-0 border-l border-border/60 pl-3" data-testid={"pressing-kpi-approx-" + worker.slot.toLowerCase()}>
                   <div className="flex items-center gap-1.5">
@@ -209,7 +213,7 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
                 <Weight className="h-4 w-4 shrink-0 text-emerald-500" />
                 <strong className="text-sm tabular-nums">{kgText(allWorkerKg)} KG</strong>
               </div>
-              <div className="mt-1 text-[11px] text-muted-foreground">Total weight</div>
+              <div className="mt-1 text-[11px] text-muted-foreground">{t("totalWeight")}</div>
             </div>
             <div className="min-w-0 border-l border-border/60 pl-3" data-testid="pressing-kpi-approx-all">
               <div className="flex items-center gap-1.5">
