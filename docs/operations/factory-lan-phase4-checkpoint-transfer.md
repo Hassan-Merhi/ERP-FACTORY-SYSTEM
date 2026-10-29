@@ -37,7 +37,7 @@ writable.** The API intentionally continues to report `cloudReplication:
    with least-privilege access to a private encrypted-backup bucket. Prefer an
    object-store lifecycle policy and separate recovery credentials. Verify the
    cloud location, residency and retention policy with the data owner.
-2. Create `deploy/lan/.env` from `.env.example` (owner-readable only). Keep
+2. Create `deploy/lan/.env` from `factory-edge.env.sample` (owner-readable only). Keep
    the existing `EDGE_BACKUP_AGE_RECIPIENT` as the recipient public key; keep
    the age private identity off the factory host. Set
    `EDGE_SYNC_REMOTE=s3:your-private-backup-bucket/factory-edge` to the name
