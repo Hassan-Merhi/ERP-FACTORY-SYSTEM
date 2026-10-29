@@ -27,7 +27,7 @@ Generate a unique UUID for `EDGE_SITE_ID`. Establish a factory-only DNS name tha
 ## 2. Configure the factory server
 
 ```bash
-cp deploy/lan/.env.example deploy/lan/.env
+cp deploy/lan/factory-edge.env.sample deploy/lan/.env
 chmod 600 deploy/lan/.env
 mkdir -p deploy/lan/certs deploy/lan/backups
 chmod 700 deploy/lan/certs deploy/lan/backups
