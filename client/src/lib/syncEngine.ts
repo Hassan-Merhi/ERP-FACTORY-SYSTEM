@@ -225,7 +225,7 @@ export async function runSync(): Promise<void> {
     } catch (error) {
       emitSyncEvent({
         syncing: false,
-        error: getErrorDetails(error).optionalMessage || "Offline delivery failed",
+        error: getErrorDetails(error).optionalMessage || "OFFLINE_DELIVERY_FAILED",
       });
     } finally {
       syncInProgress = false;

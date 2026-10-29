@@ -50,26 +50,26 @@ function getDeviceId(): string {
  * never tell the user a write was saved if IndexedDB was blocked or out of space.
  */
 export async function queueOfflineOperation(input: QueueOfflineInput): Promise<OfflineOperation> {
-  if (!isValidOfflineActor(input.actor)) throw new Error("An authenticated company and user are required");
+  if (!isValidOfflineActor(input.actor)) throw new Error("OFFLINE_ACTOR_REQUIRED");
   if (!isAutoReplayAllowed(input.method, input.url)) {
-    throw new Error("This operation has no verified server-side replay guarantee");
+    throw new Error("OFFLINE_WRITE_UNVERIFIED");
   }
-  if (!validateOfflinePayload(input.payload)) throw new Error("Unsafe or non-JSON offline payload");
+  if (!validateOfflinePayload(input.payload)) throw new Error("OFFLINE_UNSAFE_PAYLOAD");
   if (!isVettedOfflineVoucherPayload(input.payload)) {
-    throw new Error("Voucher shape is not verified for offline central posting");
+    throw new Error("OFFLINE_VOUCHER_NOT_CENTRAL");
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.clientDate)) throw new Error("Original client date is required");
-  if (!input.entityType.trim()) throw new Error("An operation entity type is required");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.clientDate)) throw new Error("OFFLINE_CLIENT_DATE_REQUIRED");
+  if (!input.entityType.trim()) throw new Error("OFFLINE_ENTITY_TYPE_REQUIRED");
 
   const body = input.payload as Record<string, unknown>;
   const existingId = body.clientRequestId;
   const id = existingId === undefined ? crypto.randomUUID() : existingId;
   if (typeof id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-    throw new Error("An existing voucher request must carry a UUID identity");
+    throw new Error("OFFLINE_REQUEST_ID_INVALID");
   }
   // The posting engine reads the original body identity; match the header.
   const payload = JSON.stringify({ ...body, clientRequestId: id });
-  if (payload.length > MAX_PAYLOAD_BYTES) throw new Error("Offline operation exceeds the 1 MB limit");
+  if (payload.length > MAX_PAYLOAD_BYTES) throw new Error("OFFLINE_PAYLOAD_TOO_LARGE");
   const now = Date.now();
   const record: OfflineOperation = {
     schemaVersion: 1,
@@ -230,7 +230,7 @@ export async function deliverOfflineOperations(
           // Do not reorder dependent or noncommutative writes after rejection.
           break;
         } else if (outcome === "paused") {
-          await settleOperation(item.id, "pending", { lastError: "Authentication required" });
+          await settleOperation(item.id, "pending", { lastError: "OFFLINE_AUTH_REQUIRED" });
           summary.paused = true;
           break;
         } else {
@@ -248,7 +248,7 @@ export async function deliverOfflineOperations(
         await settleOperation(item.id, "pending", {
           attempts,
           nextAttemptAt: Date.now() + offlineRetryDelay(attempts),
-          lastError: error instanceof Error ? error.message : "Network failure",
+          lastError: error instanceof Error ? error.message : "OFFLINE_TRANSPORT_FAILED",
         });
         summary.retried++;
         break;

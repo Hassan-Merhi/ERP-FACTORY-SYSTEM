@@ -113,7 +113,7 @@ describe("durable outbox — capture before delivery", () => {
         clientDate: "2026-10-29",
         payload: { baleId: 1 },
       })
-    ).rejects.toThrow("replay guarantee");
+    ).rejects.toThrow("OFFLINE_WRITE_UNVERIFIED");
     expect(state.records.size).toBe(0);
   });
 
