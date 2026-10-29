@@ -63,5 +63,8 @@ describe("edge runtime write safety", () => {
       async () => true
     );
     expect((await request(app).post("/api/vouchers/with-entries")).body.ok).toBe(true);
+    const rejected = await request(app).post("/api/factory/bales");
+    expect(rejected.status).toBe(423);
+    expect(rejected.body.code).toBe("EDGE_SYNC_UNSUPPORTED_OPERATION");
   });
 });
