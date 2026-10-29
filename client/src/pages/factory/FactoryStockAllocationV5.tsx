@@ -25,7 +25,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { STATUS_LABELS } from "./factorystockallocationv5/utils";
 import { useFactoryStockAllocationV5Model } from "./factorystockallocationv5/useFactoryStockAllocationV5Model";
@@ -131,14 +130,14 @@ export default function FactoryStockAllocationV5() {
       {/* ── Row 2: Toolbar (search + filters + icon buttons) ──────────────── */}
       <div className="mx-3 flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-t-xl border bg-card/70 p-3 shadow-sm sm:mx-5">
         {/* Left: search + category */}
-        <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
-          <div className="relative w-full sm:w-auto">
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-2.5 xl:w-auto">
+          <div className="relative min-w-[180px] flex-1 xl:flex-none">
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search product name or code..."
-              className="h-10 w-full rounded-lg pl-8 text-sm sm:w-80"
+              className="h-10 w-full rounded-lg pl-8 text-sm xl:w-[320px]"
               data-testid="input-v5-search"
             />
             {searchQuery && (
@@ -155,11 +154,11 @@ export default function FactoryStockAllocationV5() {
 
           {/* Category multi-select */}
           {allCategories.length > 0 && (
-            <div ref={catDropRef} className="relative w-full sm:w-auto" data-testid="select-v5-category-filter">
+            <div ref={catDropRef} className="relative min-w-[150px] flex-1 sm:flex-none" data-testid="select-v5-category-filter">
               <button
                 onClick={() => setCatDropOpen((v) => !v)}
                 className={cn(
-                  "flex h-9 w-full min-w-0 items-center justify-between gap-2 rounded-md border px-3 text-sm font-medium transition-colors sm:min-w-[160px]",
+                  "flex h-10 w-full min-w-0 items-center justify-between gap-2 rounded-lg border px-3 text-sm font-medium transition-colors sm:min-w-[175px]",
                   catDropOpen || categoryFilter.length > 0
                     ? "border-primary bg-primary/10 text-primary"
                     : "border-input bg-background text-foreground hover:bg-accent"
@@ -233,85 +232,24 @@ export default function FactoryStockAllocationV5() {
           )}
         </div>
 
-        {/* Right: toggle pill group + icon buttons */}
-        <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
-          {/* Grouped toggle pills */}
-          <div className="grid w-full grid-cols-1 gap-1 rounded-lg border bg-background/60 p-1 min-[420px]:grid-cols-3 sm:flex sm:w-auto sm:items-center sm:gap-0.5">
-            <button
-              onClick={() => setHideZero((v) => !v)}
-              data-testid="button-v5-toggle-zero"
-              className={cn(
-                "rounded-md px-2 py-1.5 text-xs font-semibold transition-all sm:px-3",
-                !hideZero
-                  ? "bg-primary text-primary-foreground shadow-xs"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
-              )}
-            >
-              Show Zero Rows
-            </button>
-            <button
-              onClick={() => setShowNegativeOnly((v) => !v)}
-              data-testid="button-v5-toggle-negative-only"
-              className={cn(
-                "rounded-md px-2 py-1.5 text-xs font-semibold transition-all sm:px-3",
-                showNegativeOnly
-                  ? "bg-destructive text-destructive-foreground shadow-xs"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
-              )}
-            >
-              {showNegativeOnly ? `Negative Only (${rows.length})` : "Negative Only"}
-            </button>
-            <button
-              onClick={() => setShowGarbageWipers((v) => !v)}
-              data-testid="button-v5-toggle-garbage-wipers"
-              className={cn(
-                "rounded-md px-2 py-1.5 text-xs font-semibold transition-all sm:px-3",
-                showGarbageWipers
-                  ? "bg-secondary text-secondary-foreground shadow-xs"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
-              )}
-            >
-              {showGarbageWipers
-                ? `Hide Garbage/Wipers (${garbageWipersCount})`
-                : `Show Garbage/Wipers${garbageWipersCount > 0 ? ` (${garbageWipersCount})` : ""}`}
-            </button>
-          </div>
 
-          <div className="w-px h-5 bg-border hidden sm:block" />
-
-          <div className="flex items-center gap-2 self-end sm:self-auto">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-9 w-9"
-                  onClick={() => setExportDialogOpen(true)}
-                  disabled={rows.length === 0}
-                  data-testid="button-v5-export-excel"
-                >
-                  <FileDown className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Export Excel</TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={refreshFlash ? "secondary" : "outline"}
-                  size="icon"
-                  className={cn("h-9 w-9", refreshFlash && "ring-2 ring-primary/40")}
-                  onClick={handleRefresh}
-                  disabled={query.isFetching}
-                  data-testid="button-v5-refresh"
-                >
-                  {refreshFlash ? <CheckCircle2 className="h-4 w-4 text-primary" /> : <RefreshCw className="h-4 w-4" />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{refreshFlash ? "Refreshed" : "Refresh"}</TooltipContent>
-            </Tooltip>
-          </div>
+        {/* Compact, accessible filter switches. No duplicate export/refresh buttons. */}
+        <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 text-xs font-medium xl:w-auto">
+          <button type="button" onClick={() => setHideZero((v) => !v)} data-testid="button-v5-toggle-zero" aria-pressed={!hideZero} className="flex items-center gap-2 text-foreground hover:text-violet-500">
+            <span className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors", !hideZero ? "bg-violet-600" : "bg-muted-foreground/30")}>
+              <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all", !hideZero ? "left-[18px]" : "left-0.5")} />
+            </span>Show Zero Rows
+          </button>
+          <button type="button" onClick={() => setShowNegativeOnly((v) => !v)} data-testid="button-v5-toggle-negative-only" aria-pressed={showNegativeOnly} className="flex items-center gap-2 text-foreground hover:text-violet-500">
+            <span className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors", showNegativeOnly ? "bg-violet-600" : "bg-muted-foreground/30")}>
+              <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all", showNegativeOnly ? "left-[18px]" : "left-0.5")} />
+            </span>Negative Only
+          </button>
+          <button type="button" onClick={() => setShowGarbageWipers((v) => !v)} data-testid="button-v5-toggle-garbage-wipers" aria-pressed={showGarbageWipers} className="flex items-center gap-2 text-foreground hover:text-violet-500">
+            <span className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors", showGarbageWipers ? "bg-violet-600" : "bg-muted-foreground/30")}>
+              <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all", showGarbageWipers ? "left-[18px]" : "left-0.5")} />
+            </span>Show Garbage/Wipers
+          </button>
         </div>
       </div>
 
@@ -355,16 +293,16 @@ export default function FactoryStockAllocationV5() {
                 <tr className="sticky top-0 z-30 bg-slate-100 text-slate-700 dark:bg-slate-800/95 dark:text-slate-200">
                   <th className="sticky left-0 z-20 border-b border-r bg-slate-100 px-4 py-3 text-left text-xs font-semibold dark:bg-slate-800/95">Product</th>
                   <th className="border-b border-r px-3 py-3 text-left text-xs font-semibold">Code</th>
-                  <th className="text-right px-2 py-3 text-center text-xs font-semibold border-b border-r whitespace-nowrap text-green-700 dark:text-green-400">
+                  <th className="px-2 py-3 text-center text-xs font-semibold border-b border-r whitespace-nowrap text-green-700 dark:text-green-400">
                     Stock Available
                   </th>
-                  <th className="text-right px-2 py-3 text-center text-xs font-semibold border-b border-r whitespace-nowrap text-amber-600 dark:text-amber-400">
+                  <th className="px-2 py-3 text-center text-xs font-semibold border-b border-r whitespace-nowrap text-amber-600 dark:text-amber-400">
                     Expected to Load
                   </th>
-                  <th className="text-right px-2 py-3 text-center text-xs font-semibold border-b border-r whitespace-nowrap text-blue-600 dark:text-blue-400">
+                  <th className="px-2 py-3 text-center text-xs font-semibold border-b border-r whitespace-nowrap text-blue-600 dark:text-blue-400">
                     Total Loaded
                   </th>
-                  <th className="text-right px-2 py-3 text-center text-xs font-semibold border-b border-r whitespace-nowrap">
+                  <th className="px-2 py-3 text-center text-xs font-semibold border-b border-r whitespace-nowrap">
                     Available Balance
                   </th>
                   <th className="text-center px-2 py-3 text-center text-xs font-semibold border-b whitespace-nowrap">
