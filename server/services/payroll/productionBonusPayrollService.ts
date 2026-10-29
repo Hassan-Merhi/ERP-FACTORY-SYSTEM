@@ -293,6 +293,7 @@ export async function attachProductionBonusesToPayroll(
   if (String(payroll.status) !== "DRAFT") return;
 
   const oldTotals = (await getProductionBonusTotalsForPayrollIds(executor, [payrollId])).get(payrollId) ?? EMPTY_TOTALS;
+  await executor.execute(sql`SELECT pg_advisory_xact_lock(84023, ${Number(payroll.companyId)})`);
   const paymentsExist = resultRows(await executor.execute(sql`
     SELECT to_regclass('public.factory_target_bonus_payments') IS NOT NULL AS "exists"
   `))[0]?.exists === true;
