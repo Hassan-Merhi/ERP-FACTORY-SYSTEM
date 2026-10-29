@@ -31,8 +31,8 @@ type DbRow = {
 };
 
 /** Finalized daily targets are the source of truth.
- * Linked workers display the entire group's output, so bonuses instead count
- * only each individual's attributed stock-entry bales at production closure.
+ * Linked workers display the team's shared total, which is split into integer
+ * shares; unlinked workers keep their individually attributed stock-entry count.
  * Approved/rejected rows keep an immutable, separately stored snapshot.
  */
 export async function loadTargetBonusRows(
@@ -80,14 +80,29 @@ export async function loadTargetBonusRows(
         AND (l.effective_to IS NULL OR l.effective_to > e.period_start)
       ORDER BY l.effective_from DESC, l.id DESC LIMIT 1
     ) links ON true
+    -- Finalization already captured stock-entry production in e.produced_bales.
+    -- Linked entries each store the TEAM total. Allocate that total to members
+    -- once, with any odd-bale remainder assigned by stable worker-id order.
+    -- Unlinked entries store their own worker's stock-entry total.
     LEFT JOIN LATERAL (
-      SELECT COUNT(*)::integer AS count
-      FROM factory_bales b
-      WHERE b.company_id = e.company_id
-        AND b.finalized_by = e.person_id
-        AND b.stock_entry_date = e.period_start
-        AND COALESCE(b.finalized_at, b.created_at) <= closure.ended_at
-    ) output ON true
+      SELECT
+        COUNT(*)::integer AS members,
+        COUNT(*) FILTER (WHERE lm.worker_id <= e.person_id)::integer AS member_order
+      FROM factory_worker_production_link_members lm
+      WHERE lm.company_id = e.company_id AND lm.link_id = links.id
+    ) assignment ON true
+    CROSS JOIN LATERAL (
+      SELECT CASE
+        WHEN links.id IS NULL THEN COALESCE(e.produced_bales, 0)::integer
+        ELSE (
+          FLOOR(COALESCE(e.produced_bales, 0)::numeric / GREATEST(assignment.members, 1))
+          + CASE
+              WHEN assignment.member_order <=
+                MOD(COALESCE(e.produced_bales, 0)::integer, GREATEST(assignment.members, 1))
+              THEN 1 ELSE 0 END
+        )::integer
+      END AS count
+    ) output
     LEFT JOIN LATERAL (
       SELECT r.rate_per_bale
       FROM factory_target_bonus_rates r
@@ -134,4 +149,14 @@ export function targetBonusIsValidDate(date: unknown): date is string {
 export function targetBonusValidRange(start: unknown, end: unknown): boolean {
   if (!targetBonusIsValidDate(start) || !targetBonusIsValidDate(end) || start > end) return false;
   return (Date.parse(end) - Date.parse(start)) / 86400000 <= 31;
+}
+
+/** Mirror the SQL linked-team split for validation and downstream exports. */
+export function allocateLinkedBales(totalBales: number, memberIds: number[], workerId: number): number {
+  const members = [...new Set(memberIds)].sort((a, b) => a - b);
+  const rank = members.indexOf(workerId);
+  if (!Number.isSafeInteger(totalBales) || totalBales < 0 || rank < 0 || members.length === 0) {
+    throw new Error("Invalid linked production allocation");
+  }
+  return Math.floor(totalBales / members.length) + (rank < totalBales % members.length ? 1 : 0);
 }
