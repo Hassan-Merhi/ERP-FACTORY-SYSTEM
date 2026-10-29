@@ -147,6 +147,9 @@ export function ProductionBonusesPanel({ initialDate }: { initialDate: string })
   );
   const selectedAmount = selectedRows.reduce((total, row) => total + row.proposedAmount, 0);
 
+  // Keep worker compensation information entirely out of non-admin UI.
+  if (data && !data.canDecide) return null;
+
   return (
     <Card className="overflow-hidden shadow-none" data-testid="production-bonuses-panel">
       <CardHeader className="space-y-1 border-b bg-muted/20 pb-4">
