@@ -19,6 +19,7 @@ export type ProductionTargetBonusStatus =
 
 export interface ProductionTargetBonusHistoryRow {
   id: number;
+  companyId: number; // mandatory active-company boundary for every award
   workerId: number;
   workerNameSnapshot: string;
   workerCodeSnapshot: string | null;
@@ -146,6 +147,7 @@ export function buildProductionTargetBonusReport(
   }
 
   const seen = new Set<number>();
+  let expectedCompanyId: number | null = null;
   const currencies = new Map<string, Accumulator>();
   const workers = new Map<string, { workerId: number; workerName: string; workerCode: string | null; currency: string; totals: Accumulator }>();
   const validated: ProductionTargetBonusHistoryRow[] = [];
@@ -155,6 +157,11 @@ export function buildProductionTargetBonusReport(
       throw new Error("Duplicate or invalid bonus award id");
     }
     seen.add(row.id);
+    if (!Number.isSafeInteger(row.companyId) || row.companyId <= 0 ||
+      (expectedCompanyId !== null && row.companyId !== expectedCompanyId)) {
+      throw new Error("Bonus history contains mixed or invalid company IDs");
+    }
+    expectedCompanyId = row.companyId;
     if (!Number.isSafeInteger(row.workerId) || row.workerId <= 0 || !row.workerNameSnapshot.trim()) {
       throw new Error("Bonus award has no valid worker snapshot");
     }
