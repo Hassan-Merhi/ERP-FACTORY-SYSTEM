@@ -31,7 +31,12 @@ interface MobileBarcodeScannerProps {
  * reads travel through exactly the same page-specific handler as manual scans.
  * The decoder is native when supported, with lazily loaded ZXing for iOS Safari.
  */
-export function MobileBarcodeScanner({ onScan, disabled = false, className, feedback = null }: MobileBarcodeScannerProps) {
+export function MobileBarcodeScanner({
+  onScan,
+  disabled = false,
+  className,
+  feedback = null,
+}: MobileBarcodeScannerProps) {
   const { language } = useApplicationLanguage();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -127,13 +132,17 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className, feed
           try {
             const capabilities = track.getCapabilities?.() as MediaTrackCapabilities & { torch?: boolean };
             setTorchAvailable(capabilities?.torch === true);
-          } catch { /* Flashlight capability is not available on all mobile browsers. */ }
+          } catch {
+            /* Flashlight capability is not available on all mobile browsers. */
+          }
           if (typeof track.applyConstraints === "function") {
             // Unsupported advanced focus hints are harmless; let the browser
             // retain its current camera settings instead of delaying reads.
-            void track.applyConstraints({
-              advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet],
-            }).catch(() => {});
+            void track
+              .applyConstraints({
+                advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet],
+              })
+              .catch(() => {});
           }
         }
         decoder = await createCameraDecoder();
@@ -152,7 +161,9 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className, feed
             ? "Camera permission denied. Allow access in your browser settings or enter the code manually."
             : name === "NotFoundError"
               ? "No camera was found on this device. Use manual entry."
-              : cause instanceof Error ? cause.message : "Unable to open camera. Use manual entry.",
+              : cause instanceof Error
+                ? cause.message
+                : "Unable to open camera. Use manual entry."
         );
       }
     };
@@ -214,7 +225,9 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className, feed
         <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md">
           <DialogHeader>
             <DialogTitle>Scan with camera</DialogTitle>
-            <DialogDescription>Point the rear camera at a barcode. The camera stays open for the next item.</DialogDescription>
+            <DialogDescription>
+              Point the rear camera at a barcode. The camera stays open for the next item.
+            </DialogDescription>
           </DialogHeader>
           <div className="relative overflow-hidden rounded-lg bg-black">
             <video
@@ -227,23 +240,36 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className, feed
             />
             <div className="pointer-events-none absolute inset-[18%] rounded-md border-2 border-emerald-400/80" />
             {visibleFeedback && (
-              <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10" role="status" aria-live="polite" data-testid="camera-scan-result-popup">
-                <div className={`rounded-xl border-2 p-3 text-white shadow-2xl ${ 
-                  visibleFeedback.type === "success"
-                    ? "border-emerald-300 bg-emerald-700"
-                    : visibleFeedback.type === "duplicate"
-                      ? "border-red-300 bg-red-700"
-                      : visibleFeedback.type === "warn"
-                        ? "border-amber-200 bg-amber-500 text-amber-950"
-                        : "border-red-300 bg-red-700"
-                }`}>
+              <div
+                className="pointer-events-none absolute inset-x-2 bottom-2 z-10"
+                role="status"
+                aria-live="polite"
+                data-testid="camera-scan-result-popup"
+              >
+                <div
+                  className={`rounded-xl border-2 p-3 text-white shadow-2xl ${
+                    visibleFeedback.type === "success"
+                      ? "border-emerald-300 bg-emerald-700"
+                      : visibleFeedback.type === "duplicate"
+                        ? "border-red-300 bg-red-700"
+                        : visibleFeedback.type === "warn"
+                          ? "border-amber-200 bg-amber-500 text-amber-950"
+                          : "border-red-300 bg-red-700"
+                  }`}
+                >
                   <div className="flex items-center gap-2 text-base font-black uppercase tracking-wide">
-                    {visibleFeedback.type === "success" ? <CheckCircle2 className="h-6 w-6 shrink-0" /> :
-                      visibleFeedback.type === "warn" ? <AlertTriangle className="h-6 w-6 shrink-0" /> :
-                        <XCircle className="h-6 w-6 shrink-0" />}
+                    {visibleFeedback.type === "success" ? (
+                      <CheckCircle2 className="h-6 w-6 shrink-0" />
+                    ) : visibleFeedback.type === "warn" ? (
+                      <AlertTriangle className="h-6 w-6 shrink-0" />
+                    ) : (
+                      <XCircle className="h-6 w-6 shrink-0" />
+                    )}
                     <span>{translateCameraScanTitle(visibleFeedback.type, language)}</span>
                   </div>
-                  <div className="mt-1 break-all font-mono text-sm font-semibold">{visibleFeedback.referenceNumber}</div>
+                  <div className="mt-1 break-all font-mono text-sm font-semibold">
+                    {visibleFeedback.referenceNumber}
+                  </div>
                   <div className="mt-1 text-sm font-medium leading-snug">{visibleFeedback.message}</div>
                 </div>
               </div>
@@ -255,9 +281,19 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className, feed
               {torchOn ? "Turn off light" : "Turn on light"}
             </Button>
           )}
-          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-          {lastDetected && <p role="status" className="break-all text-sm">Last detected: {lastDetected}</p>}
-          <p className="text-xs text-muted-foreground">Close this window to stop the camera. Manual and hardware scanners still work.</p>
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+          {lastDetected && (
+            <p role="status" className="break-all text-sm">
+              Last detected: {lastDetected}
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Close this window to stop the camera. Manual and hardware scanners still work.
+          </p>
         </DialogContent>
       </Dialog>
     </>

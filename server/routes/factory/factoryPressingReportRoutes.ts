@@ -39,13 +39,11 @@ class ReportPermissionError extends Error {
 }
 function handleError(res: Response, error: unknown) {
   if (error instanceof ZodError) {
-    return res
-      .status(400)
-      .json({
-        code: "PRESSING_INVALID_REPORT_FILTER",
-        message: "Invalid pressing history filter",
-        issues: error.issues,
-      });
+    return res.status(400).json({
+      code: "PRESSING_INVALID_REPORT_FILTER",
+      message: "Invalid pressing history filter",
+      issues: error.issues,
+    });
   }
   if (error instanceof ActiveCompanyPermissionContextError) {
     return res.status(error.status).json({ code: error.code, message: error.message });
@@ -538,12 +536,10 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
       const ctx = await context(req);
       const filters = pressingReportFiltersSchema.parse(req.query);
       if (invalidDateTimeRange(filters)) {
-        return res
-          .status(400)
-          .json({
-            code: "PRESSING_INVALID_DATES",
-            message: "Start date/time cannot exceed end date/time; time filters require a date",
-          });
+        return res.status(400).json({
+          code: "PRESSING_INVALID_DATES",
+          message: "Start date/time cannot exceed end date/time; time filters require a date",
+        });
       }
       return res.json(await report(ctx, filters));
     } catch (error) {
