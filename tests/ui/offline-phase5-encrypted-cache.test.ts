@@ -84,16 +84,35 @@ describe("Phase 5 encrypted read-cache integration", () => {
     grant.vaultSalt = "ZmFrZQ==";
     expect(await cache.readPreparedOfflineResponse("GET", source)).toBeNull();
     expect(await cache.unlockVerifiedOfflineReadVault(passphrase)).toBe(false);
-    const validSalt = (await api()).getOfflineReadGrant;
-    // Restore the valid salt from another authenticated, complete preparation.
+    // Restore a valid grant and salt with a fresh encrypted preparation.
     await cache.saveVerifiedOfflineReadBatch({ ...actor, snapshots: [{ url: source, body }], total: 1 }, passphrase);
-    expect(validSalt).toBeDefined();
     const currentRow = [...store.snapshots.values()][0];
     currentRow.body = JSON.stringify({ data: [{ batch: "FORGED-RESPONSE" }] });
     expect(await cache.readPreparedOfflineResponse("GET", source)).toBeNull();
     currentRow.body = row.body;
     const newGrant = [...store.grants.values()][0];
     newGrant.expiresAt = Date.now() - 1;
+    expect(await cache.readPreparedOfflineResponse("GET", source)).toBeNull();
+  });
+
+  it("refuses a plaintext overwrite once a scope was prepared with encryption", async () => {
+    const cache = await api();
+    cache.activateVerifiedOfflineReadScope(actor);
+    await cache.saveVerifiedOfflineReadBatch({ ...actor, snapshots: [{ url: source, body }], total: 1 }, passphrase);
+    const previous = [...store.snapshots.values()][0].body;
+    await expect(
+      cache.saveVerifiedOfflineReadBatch({ ...actor, snapshots: [{ url: source, body }], total: 1 })
+    ).rejects.toThrow("OFFLINE_VAULT_PROTECTION_REQUIRED");
+    expect([...store.snapshots.values()][0].body).toBe(previous);
+    expect([...store.grants.values()][0].protection).toBe("erp-offline-aes-gcm-v1");
+  });
+
+  it("does not mix a stale ciphertext generation with a newer valid grant", async () => {
+    const cache = await api();
+    cache.activateVerifiedOfflineReadScope(actor);
+    await cache.saveVerifiedOfflineReadBatch({ ...actor, snapshots: [{ url: source, body }], total: 1 }, passphrase);
+    const row = [...store.snapshots.values()][0];
+    row.cachedAt -= 1;
     expect(await cache.readPreparedOfflineResponse("GET", source)).toBeNull();
   });
 
