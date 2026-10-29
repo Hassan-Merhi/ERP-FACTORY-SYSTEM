@@ -12,7 +12,7 @@ export function makeFactoryEdgeWriteGuard(
   return async (req, res, next) => {
     const path = req.originalUrl.split("?")[0];
     if (edgeBlocksWrite(config, req.method, path)) {
-      const code = config.mode === "cloud" ? "CLOUD_WRITES_FENCED" : "EDGE_READ_ONLY";
+      const code = config.mode === "cloud" ? "CLOUD_WRITES_FENCED" : config.primary ? "EDGE_SYNC_UNSUPPORTED_OPERATION" : "EDGE_READ_ONLY";
       return res.status(423).json({ code, message: code });
     }
 
