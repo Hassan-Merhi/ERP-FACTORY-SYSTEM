@@ -91,6 +91,9 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [superpowers/plans/2026-10-29-offline-phase3.md](superpowers/plans/2026-10-29-offline-phase3.md) | Factory LAN architecture and guarded cutover |
 | [operations/factory-lan-edge.md](operations/factory-lan-edge.md) | Factory LAN server installation and safety |
 | [operations/factory-lan-phase6-certification.md](operations/factory-lan-phase6-certification.md) | Offline Phase 6 evidence-based acceptance and release blockers |
+| [global-force-refresh-all-users-2026-10-28.md](global-force-refresh-all-users-2026-10-28.md) | Global build refresh and authenticated forced reload |
+| [one-time-pwa-force-refresh-2026-10-28.md](one-time-pwa-force-refresh-2026-10-28.md) | One-time PWA refresh and cache update controls |
+| [pressing-scan-simple-mode.md](pressing-scan-simple-mode.md) | Factory pressing scanner simplified operation |
 | [operations/database-backup-rollback-recovery.md](operations/database-backup-rollback-recovery.md) | Backup and recovery runbook |
 | [operations/external-alerting-checklist.md](operations/external-alerting-checklist.md) | Wiring health signals to a monitor |
 | [monitoring/health-metrics.md](monitoring/health-metrics.md) | Health and internal metrics endpoints |
