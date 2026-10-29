@@ -1,0 +1,44 @@
+name: Temporary Phase 6 Prettier verification (remove after run)
+
+on:
+  push:
+    branches: [feat/offline-phase6-certification-20261030]
+    paths:
+      - ".github/workflows/offline-phase6-format-once.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  format-phase6:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout only Phase 6 branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: feat/offline-phase6-certification-20261030
+          persist-credentials: true
+      - name: Node 24
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.1"
+          cache: npm
+      - run: npm ci --no-audit --bin-links=true
+      - name: Format only Phase 6 and inherited CI unblock files
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write \
+            scripts/edge/certify-offline-phase6.mjs \
+            tests/offline-phase6-certification.node.test.mjs \
+            client/src/components/FactoryLanOriginBadge.tsx \
+            client/src/pages/factory/PressingHistoryReport.tsx \
+            server/routes/factory/factoryPressingReportRoutes.ts
+          git diff --check
+      - name: Commit formatting only to Phase 6 branch
+        run: |
+          set -euo pipefail
+          git add -- scripts/edge/certify-offline-phase6.mjs tests/offline-phase6-certification.node.test.mjs client/src/components/FactoryLanOriginBadge.tsx client/src/pages/factory/PressingHistoryReport.tsx server/routes/factory/factoryPressingReportRoutes.ts
+          if ! git diff --cached --quiet; then
+            git -c user.name="ERP Phase 6 Formatter" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "style(offline): format phase 6 and inherited verification fixes"
+            git push origin HEAD:feat/offline-phase6-certification-20261030
+          fi
