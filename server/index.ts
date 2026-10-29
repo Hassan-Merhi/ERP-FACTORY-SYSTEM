@@ -411,7 +411,7 @@ let migrationsDone = false;
         if (shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())) {
           runPostStartupJobs();
         } else {
-          logger.info("[FactoryEdge] Cloud-derived background startup jobs disabled on LAN edge");
+          logger.info("[FactoryEdge] Background startup jobs disabled by LAN mode or cloud writer fence");
         }
       });
     })
