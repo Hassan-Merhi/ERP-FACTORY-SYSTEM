@@ -38,6 +38,13 @@ describe("Phase 2 offline read policy", () => {
     expect(classifyOfflineReadFallback("GET", "/api/inventory", "sw-offline")).toBe(true);
   });
 
+  it("treats a genuinely empty inventory table as one complete page", () => {
+    expect(readPaginationPlan(
+      { data: [], page: 1, total: 0, totalPages: 0, pageSize: 100 },
+      new Headers()
+    )).toEqual({ field: "data", totalPages: 1, total: 0, pageSize: 100 });
+  });
+
   it("detects all remaining inventory pages rather than accepting page one", () => {
     expect(
       readPaginationPlan({ data: [{ id: 1 }], page: 1, pageSize: 1, total: 3, totalPages: 3 }, new Headers())
