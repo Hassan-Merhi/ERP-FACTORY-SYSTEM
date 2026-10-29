@@ -26,7 +26,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { useToast } from "@/hooks/use-toast";
 import { useConnectivity } from "@/contexts/ConnectivityContext";
 import { useCompany } from "@/contexts/CompanyContext";
-import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { applicationEnglishTranslations } from "@/i18n/applicationTranslations";
 import {
   buildPacks,
   type PrepProgress,
@@ -74,7 +75,8 @@ export function OfflinePrepPanel() {
 
 function OfflinePrepPanelContent() {
   const { isOnline } = useConnectivity();
-  const { t } = useApplicationLanguage();
+  const language = useOptionalApplicationLanguage();
+  const t = language?.t ?? ((key: keyof typeof applicationEnglishTranslations) => applicationEnglishTranslations[key]);
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
   const companyId: number = selectedCompany?.id ?? 0;
