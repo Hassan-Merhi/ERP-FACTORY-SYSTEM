@@ -124,6 +124,19 @@ describe("Phase 5 encrypted read-cache integration", () => {
     expect(store.grants.size).toBe(0);
   });
 
+  it("cancels an in-flight snapshot read if the actor logs out during IndexedDB access", async () => {
+    const cache = await api();
+    cache.activateVerifiedOfflineReadScope(actor);
+    await cache.saveVerifiedOfflineReadBatch({ ...actor, snapshots: [{ url: source, body }], total: 1 });
+    const originalGet = store.snapshots.get.bind(store.snapshots);
+    const spy = vi.spyOn(store.snapshots, "get").mockImplementationOnce((key) => {
+      cache.revokeOfflineReadScope();
+      return originalGet(key);
+    });
+    expect(await cache.readPreparedOfflineResponse("GET", source)).toBeNull();
+    spy.mockRestore();
+  });
+
   it("preserves legacy compatibility without treating legacy plaintext as a sealed record", async () => {
     const cache = await api();
     cache.activateVerifiedOfflineReadScope(actor);
