@@ -464,6 +464,7 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   // Production target/default/link/planner controls.
   if (
     hasPrefix(path, "/production-planner") ||
+    hasPrefix(path, "/production-target-bonuses") ||
     hasPrefix(path, "/production-position-planner") ||
     hasPrefix(path, "/production-positions") ||
     hasPrefix(path, "/staff-tracking/production-target-defaults") ||
