@@ -349,10 +349,6 @@ let migrationsDone = false;
           error: getErrorMessage(staffTrackingSchemaErr),
         });
       }
-      // Payments require the existing production bonus allocation table.
-      // Fail closed on missing accounting schema.
-      await ensureProductionTargetBonusPaymentSchema(pool);
-      logger.info("[startup] Production target bonus accounting schema ensured");
       // The Container Planner's registered migrations are never applied by
       // production's boot path, so ensure its tables here unconditionally. A
       // failure after retries is fatal: the previous deployment stays live rather
@@ -400,6 +396,10 @@ let migrationsDone = false;
           markStartupMigrationsComplete();
         }
       }
+      // Payments require the existing production bonus allocation table.
+      // Fail closed on missing accounting schema.
+      await ensureProductionTargetBonusPaymentSchema(pool);
+      logger.info("[startup] Production target bonus accounting schema ensured");
       // Initialize isolated GIT metadata before production accepts requests.
       // Financial SP containers and Goods OTW vouchers remain untouched.
       await ensureSpGitTracking();
