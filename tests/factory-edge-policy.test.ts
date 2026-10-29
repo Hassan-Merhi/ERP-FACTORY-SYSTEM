@@ -21,10 +21,12 @@ const safe = {
 describe("factory LAN edge deployment policy", () => {
   it("is cloud-only unless explicitly configured", () => {
     expect(readFactoryEdgeConfiguration({}).mode).toBe("cloud");
+    expect(shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration({}))).toBe(true);
     expect(() => readFactoryEdgeConfiguration({ FACTORY_EDGE_MODE: "true" })).toThrow("EDGE_MODE_INVALID");
   });
   it("accepts a private read-only LAN deployment", () => {
     expect(readFactoryEdgeConfiguration(safe)).toMatchObject({ mode: "lan", writeMode: "read-only", primary: false });
+    expect(shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration(safe))).toBe(false);
   });
   it.each([
     [{ PGHOST: "cloud.render.com" }, "EDGE_DATABASE_HOST_NOT_LOCAL"],

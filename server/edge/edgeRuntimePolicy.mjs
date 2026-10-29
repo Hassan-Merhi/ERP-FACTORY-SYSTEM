@@ -85,3 +85,8 @@ export function edgeStatusPayload(config, databaseProvisioned = false) {
 }
 
 export const EDGE_PRIMARY_ACK = PRIMARY_ACK;
+
+/** LAN edge must never run cloud-derived post-startup repair/cleanup jobs. */
+export function shouldStartEdgeBackgroundJobs(config) {
+  return config.mode !== "lan";
+}

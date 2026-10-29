@@ -3,6 +3,7 @@ FROM node:24-bookworm-slim AS builder
 WORKDIR /app
 ENV PUPPETEER_SKIP_DOWNLOAD=1
 COPY package.json package-lock.json ./
+COPY scripts/setup-git-hooks.mjs ./scripts/setup-git-hooks.mjs
 RUN npm ci --no-audit --bin-links=true
 COPY . .
 RUN npm run build

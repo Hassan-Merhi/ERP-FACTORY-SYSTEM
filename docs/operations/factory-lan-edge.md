@@ -50,7 +50,7 @@ docker compose --env-file deploy/lan/.env -f deploy/lan/compose.yaml up -d
 
 The Compose database is **empty on first boot**. Startup migrations alone do not import factory companies, users, accounts, inventory, supplier history, vouchers or balances. A separate audited **approved, consistent database snapshot** must be restored in an isolated maintenance window; Phase 4 will automate the verified snapshot-transfer/cutover workflow. DO NOT restore cloud backups into the active database without verifying privacy, signatures, schema version, company boundaries, sequence values, balance totals and journal hashes. Practice the process on a disposable clone.
 
-Remain in `EDGE_WRITE_MODE=read-only` while the cloud is primary. Session login and company switching are permitted, but business mutations intentionally return 423 `EDGE_READ_ONLY`. No automatic cloud fallback is provided.
+LAN mode suppresses the cloud-derived background cleanup and repair jobs as well as the main scheduler. Remain in `EDGE_WRITE_MODE=read-only` while the cloud is primary. Session login and company switching are permitted, but business mutations intentionally return 423 `EDGE_READ_ONLY`. No automatic cloud fallback is provided.
 
 ## 4. Connect factory laptops
 

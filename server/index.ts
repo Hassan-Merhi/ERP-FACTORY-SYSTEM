@@ -13,6 +13,7 @@
 import express from "express";
 import { createHttpApp } from "./httpApp";
 import { registerFactoryEdgeBoundary } from "./edge/edgeBoundary";
+import { readFactoryEdgeConfiguration, shouldStartEdgeBackgroundJobs } from "./edge/edgeRuntimePolicy.mjs";
 import compression from "compression";
 import { securityHeadersMiddleware } from "./security/securityHeaders";
 import { registerRoutes } from "./routes";
@@ -406,7 +407,13 @@ let migrationsDone = false;
       logger.info("[startup] ✓ Supplier Partner GIT tracking schema ensured");
     })
     .then(() => {
-      listenWithRetry(server, port, () => runPostStartupJobs());
+      listenWithRetry(server, port, () => {
+        if (shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())) {
+          runPostStartupJobs();
+        } else {
+          logger.info("[FactoryEdge] Cloud-derived background startup jobs disabled on LAN edge");
+        }
+      });
     })
     .catch((err: unknown) => {
       logger.error("Fatal startup error:", { error: getErrorMessage(err) ?? err });
