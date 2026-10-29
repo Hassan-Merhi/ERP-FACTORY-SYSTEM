@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { edgeBlocksWrite, edgeStatusPayload, readFactoryEdgeConfiguration } from "../server/edge/edgeRuntimePolicy.mjs";
+import { edgeBlocksWrite, edgeStatusPayload, readFactoryEdgeConfiguration, shouldStartEdgeBackgroundJobs } from "../server/edge/edgeRuntimePolicy.mjs";
 
 const safe = {
   FACTORY_EDGE_MODE: "lan",

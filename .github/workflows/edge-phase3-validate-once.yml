@@ -104,3 +104,5 @@ jobs:
           fi
 
 # Re-run after Dockerfile npm prepare-layer fix.
+
+# Repeat after adding the background-job policy export to the test import.
