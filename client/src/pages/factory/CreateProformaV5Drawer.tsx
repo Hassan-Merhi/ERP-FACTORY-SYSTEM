@@ -210,7 +210,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
 
           {/* Row 2 — view filters + price actions (only shown when relevant) */}
           {(zeroItemCount > 0 || nonPositiveCount > 0 || negativeCount > 0 || productsQuery.data) && (
-            <div className="flex items-center gap-1.5 flex-wrap pt-1">
+            <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
               <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
 
               {zeroItemCount > 0 && (
@@ -219,6 +219,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                   variant={showZeroItems ? "secondary" : "outline"}
                   onClick={() => setShowZeroItems((v) => !v)}
                   data-testid="button-v5-toggle-zero"
+                  className="h-9 rounded-full px-4 text-xs font-semibold"
                 >
                   {showZeroItems ? `Hide 0-stock (${zeroItemCount})` : `Show 0-stock (${zeroItemCount})`}
                 </Button>
@@ -233,6 +234,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                     setShowNegativeOnly(false);
                   }}
                   data-testid="button-v5-hide-non-positive"
+                  className="h-9 rounded-full px-4 text-xs font-semibold"
                 >
                   {hideNonPositive ? `Show all (${nonPositiveCount} hidden)` : `Hide 0 & neg (${nonPositiveCount})`}
                 </Button>
@@ -247,6 +249,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                     setHideNonPositive(false);
                   }}
                   data-testid="button-v5-show-negative-only"
+                  className="h-9 rounded-full px-4 text-xs font-semibold"
                 >
                   {showNegativeOnly ? `Negative Only (${negativeCount})` : `Negative Only (${negativeCount})`}
                 </Button>
@@ -258,6 +261,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                   variant={showGarbageWipers ? "secondary" : "outline"}
                   onClick={() => setShowGarbageWipers((v) => !v)}
                   data-testid="button-v5-toggle-garbage-wipers"
+                  className="h-9 rounded-full px-4 text-xs font-semibold"
                 >
                   {showGarbageWipers
                     ? `Hide Garbage/Wipers (${garbageWipersCount})`
@@ -276,7 +280,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                 }}
                 disabled={!productsQuery.data}
                 data-testid="button-v5-apply-sell-price"
-                className={cn(appliedPrice === "sell" && "ring-2 ring-primary/40")}
+                className={cn("h-9 rounded-full px-4 text-xs font-semibold", appliedPrice === "sell" && "ring-2 ring-violet-500/40")}
               >
                 {appliedPrice === "sell" && <CheckCircle2 className="h-3.5 w-3.5 mr-1.5 text-primary" />}
                 Sell Price
@@ -290,7 +294,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                 }}
                 disabled={!productsQuery.data}
                 data-testid="button-v5-apply-prod-price"
-                className={cn(appliedPrice === "prod" && "ring-2 ring-primary/40")}
+                className={cn("h-9 rounded-full px-4 text-xs font-semibold", appliedPrice === "prod" && "ring-2 ring-violet-500/40")}
               >
                 {appliedPrice === "prod" && <CheckCircle2 className="h-3.5 w-3.5 mr-1.5 text-primary" />}
                 Prod Price
@@ -323,7 +327,7 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                       ? `Apply ${customerPriceListQuery.data.length} agreed price(s) for this customer`
                       : "No agreed prices saved for this customer yet"
                   }
-                  className={cn((appliedPrice as string) === "customer" && "ring-2 ring-primary/40")}
+                  className={cn("h-9 rounded-full px-4 text-xs font-semibold", (appliedPrice as string) === "customer" && "ring-2 ring-violet-500/40")}
                 >
                   {(appliedPrice as string) === "customer" && (
                     <CheckCircle2 className="h-3.5 w-3.5 mr-1.5 text-primary" />
