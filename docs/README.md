@@ -85,6 +85,12 @@ failure, so a correct document cannot quietly become undiscoverable.
 |---|---|
 | [deployment.md](deployment.md) | Local and production deployment |
 | [production-deployment-checklist.md](production-deployment-checklist.md) | Pre-release checklist |
+| [offline-phase2-read-coverage.md](offline-phase2-read-coverage.md) | Prepared offline reads, coverage and security boundaries |
+| [superpowers/plans/2026-10-29-offline-phase1.md](superpowers/plans/2026-10-29-offline-phase1.md) | Offline write-intent foundation and safety policy |
+| [superpowers/plans/2026-10-29-offline-phase2.md](superpowers/plans/2026-10-29-offline-phase2.md) | Offline data preparation and identity scope |
+| [superpowers/plans/2026-10-29-offline-phase3.md](superpowers/plans/2026-10-29-offline-phase3.md) | Factory LAN architecture and guarded cutover |
+| [operations/factory-lan-edge.md](operations/factory-lan-edge.md) | Factory LAN server installation and safety |
+| [operations/factory-lan-phase6-certification.md](operations/factory-lan-phase6-certification.md) | Offline Phase 6 evidence-based acceptance and release blockers |
 | [operations/database-backup-rollback-recovery.md](operations/database-backup-rollback-recovery.md) | Backup and recovery runbook |
 | [operations/external-alerting-checklist.md](operations/external-alerting-checklist.md) | Wiring health signals to a monitor |
 | [monitoring/health-metrics.md](monitoring/health-metrics.md) | Health and internal metrics endpoints |
