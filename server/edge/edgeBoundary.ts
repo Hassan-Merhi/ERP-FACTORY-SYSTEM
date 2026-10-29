@@ -12,7 +12,8 @@ export function makeFactoryEdgeWriteGuard(
   return async (req, res, next) => {
     const path = req.originalUrl.split("?")[0];
     if (edgeBlocksWrite(config, req.method, path)) {
-      return res.status(423).json({ code: "EDGE_READ_ONLY", message: "EDGE_READ_ONLY" });
+      const code = config.mode === "cloud" ? "CLOUD_WRITES_FENCED" : "EDGE_READ_ONLY";
+      return res.status(423).json({ code, message: code });
     }
 
     // When operator cutover was explicitly acknowledged, still reject writes
