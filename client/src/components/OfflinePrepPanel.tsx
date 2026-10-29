@@ -310,8 +310,8 @@ function OfflinePrepPanelContent() {
           disabled={running}
         />
         <p className="text-xs text-muted-foreground">
-          Required to encrypt each new preparation and unlock saved data. The passphrase is never saved.
-          Losing it requires preparing again online. This does not enable offline sign-in.
+          Required to encrypt each new preparation and unlock saved data. The passphrase is never saved. Losing it
+          requires preparing again online. This does not enable offline sign-in.
         </p>
         {readiness?.ready && protectedSnapshot && (
           <div className="flex flex-wrap items-center gap-2">

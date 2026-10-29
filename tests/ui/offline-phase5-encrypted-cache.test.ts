@@ -9,7 +9,9 @@ const store = vi.hoisted(() => ({
 vi.mock("../../client/src/lib/db", () => {
   const table = (map: Map<string, any>) => ({
     get: async (key: string) => map.get(key),
-    put: async (row: any) => { map.set(row.key, { ...row }); },
+    put: async (row: any) => {
+      map.set(row.key, { ...row });
+    },
     bulkPut: async (rows: any[]) => {
       for (const row of rows) map.set(row.key, { ...row });
     },
@@ -42,10 +44,7 @@ describe("Phase 5 encrypted read-cache integration", () => {
   it("atomically stores sealed snapshots and requires the live session plus unlock", async () => {
     const cache = await api();
     cache.activateVerifiedOfflineReadScope(actor);
-    await cache.saveVerifiedOfflineReadBatch(
-      { ...actor, snapshots: [{ url: source, body }], total: 1 },
-      passphrase
-    );
+    await cache.saveVerifiedOfflineReadBatch({ ...actor, snapshots: [{ url: source, body }], total: 1 }, passphrase);
     const row = [...store.snapshots.values()][0];
     const grant = [...store.grants.values()][0];
     expect(row.body).not.toContain("CONFIDENTIAL-001");
@@ -132,7 +131,9 @@ describe("Phase 5 encrypted read-cache integration", () => {
     expect(await (await cache.readPreparedOfflineResponse("GET", source))?.json()).toEqual(JSON.parse(body));
     cache.lockVerifiedOfflineReadVault();
     store.snapshots.values().next().value.body = JSON.stringify({
-      format: "erp-offline-aes-gcm-v1", nonce: "AA==", ciphertext: "AA=="
+      format: "erp-offline-aes-gcm-v1",
+      nonce: "AA==",
+      ciphertext: "AA==",
     });
     expect(await cache.readPreparedOfflineResponse("GET", source)).toBeNull();
   });

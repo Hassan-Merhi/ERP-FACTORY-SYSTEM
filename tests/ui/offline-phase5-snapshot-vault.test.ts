@@ -59,7 +59,11 @@ describe("Phase 5 AES-GCM offline snapshot vault", () => {
     await expect(openOfflineVaultBody(payload, vault, actor)).rejects.toThrow("OFFLINE_VAULT_FORMAT_INVALID");
     await expect(openOfflineVaultBody("{", vault, actor)).rejects.toThrow("OFFLINE_VAULT_FORMAT_INVALID");
     await expect(
-      openOfflineVaultBody(JSON.stringify({ format: "erp-offline-aes-gcm-v1", nonce: "none", ciphertext: "..." }), vault, actor)
+      openOfflineVaultBody(
+        JSON.stringify({ format: "erp-offline-aes-gcm-v1", nonce: "none", ciphertext: "..." }),
+        vault,
+        actor
+      )
     ).rejects.toThrow("OFFLINE_VAULT_FORMAT_INVALID");
   });
 

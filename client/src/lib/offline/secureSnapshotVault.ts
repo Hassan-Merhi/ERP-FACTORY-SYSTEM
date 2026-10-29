@@ -148,11 +148,7 @@ export async function sealOfflineVaultBody(body: string, vault: OfflineVaultKey,
   return JSON.stringify(envelope);
 }
 
-export async function openOfflineVaultBody(
-  sealed: string,
-  vault: OfflineVaultKey,
-  scope: VaultScope
-): Promise<string> {
+export async function openOfflineVaultBody(sealed: string, vault: OfflineVaultKey, scope: VaultScope): Promise<string> {
   let envelope: unknown;
   try {
     envelope = JSON.parse(sealed);
@@ -179,7 +175,11 @@ export async function openOfflineVaultBody(
 }
 
 /** A separate authenticated sentry verifies an unlock without disclosing a business response. */
-export function vaultCheckScope(actor: { companyId: number; userId: string }, preparedAt: number, expiresAt: number): VaultScope {
+export function vaultCheckScope(
+  actor: { companyId: number; userId: string },
+  preparedAt: number,
+  expiresAt: number
+): VaultScope {
   return { ...actor, url: "erp-internal://offline-vault-check", cachedAt: preparedAt, expiresAt };
 }
 
