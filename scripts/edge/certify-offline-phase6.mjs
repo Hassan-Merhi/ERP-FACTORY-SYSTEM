@@ -102,7 +102,7 @@ export async function probeEdge(origin, { siteId, expectedWriteMode, fetcher = f
   for (const [endpoint, check] of [
     ['/api/edge/status', value => value.mode === 'lan' && value.siteId === siteId &&
       value.writeMode === expectedWriteMode && value.databaseProvisioned === true &&
-      value.cloudReplication !== 'not-configured' && typeof value.cloudReplication === 'string'],
+      value.cloudReplication === 'verified'],
     ['/api/health/ready', () => true],
   ]) {
     try {
