@@ -140,6 +140,44 @@ const FACTORY_WORKER_PRODUCTION_LINKS_SCHEMA_SQL = `
     ON factory_worker_production_link_target_defaults (company_id, link_id, effective_from DESC);
 `;
 
+
+const FACTORY_TARGET_BONUS_SCHEMA_SQL = `
+  -- Bonus proposals are audit records only. A separate payment phase will
+  -- deliberately select approved, unposted snapshots; no voucher is made here.
+  CREATE TABLE IF NOT EXISTS factory_target_bonus_rates (
+    id serial PRIMARY KEY,
+    company_id integer NOT NULL,
+    worker_id integer NOT NULL,
+    effective_from date NOT NULL,
+    rate_per_bale numeric(16,4) NOT NULL CHECK (rate_per_bale > 0),
+    created_by varchar(255),
+    created_at timestamp NOT NULL DEFAULT now(),
+    CONSTRAINT factory_target_bonus_rate_unique
+      UNIQUE (company_id, worker_id, effective_from)
+  );
+  CREATE INDEX IF NOT EXISTS factory_target_bonus_rate_history_idx
+    ON factory_target_bonus_rates (company_id, worker_id, effective_from DESC);
+
+  CREATE TABLE IF NOT EXISTS factory_target_bonus_reviews (
+    id serial PRIMARY KEY,
+    company_id integer NOT NULL,
+    production_date date NOT NULL,
+    worker_id integer NOT NULL,
+    target_bales numeric(12,2) NOT NULL CHECK (target_bales >= 0),
+    produced_bales integer NOT NULL CHECK (produced_bales >= 0),
+    extra_bales numeric(12,2) NOT NULL CHECK (extra_bales >= 0),
+    rate_per_bale numeric(16,4) NOT NULL CHECK (rate_per_bale >= 0),
+    bonus_amount numeric(18,2) NOT NULL CHECK (bonus_amount >= 0),
+    status varchar(12) NOT NULL CHECK (status IN ('approved', 'rejected')),
+    reviewed_by varchar(255) NOT NULL,
+    reviewed_at timestamp NOT NULL DEFAULT now(),
+    CONSTRAINT factory_target_bonus_review_unique
+      UNIQUE (company_id, production_date, worker_id)
+  );
+  CREATE INDEX IF NOT EXISTS factory_target_bonus_review_history_idx
+    ON factory_target_bonus_reviews (company_id, production_date DESC, status);
+`;
+
 export const factoryStaffTrackingSchema = [
   FACTORY_STAFF_TRACKING_TABLE_SQL,
   `CREATE UNIQUE INDEX IF NOT EXISTS factory_staff_tracking_unique_period_person
@@ -170,6 +208,9 @@ export async function ensureFactoryStaffTrackingSchema(database: StartupQueryabl
   // Linked production workers use effective-dated membership and one shared
   // target history, so unlinking never rewrites earlier production days.
   await database.query(FACTORY_WORKER_PRODUCTION_LINKS_SCHEMA_SQL);
+
+  // Production Targets review/rate tables are required even without bulk migrations.
+  await database.query(FACTORY_TARGET_BONUS_SCHEMA_SQL);
 
   // Production can run with RUN_STARTUP_MIGRATIONS=false. Supplier tracking
   // defaults are required by ordinary ERP requests, so ensure their idempotent
