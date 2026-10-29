@@ -345,7 +345,9 @@ let migrationsDone = false;
       } catch (err: unknown) {
         logger.error("[startup] Sheets & Sacks schema ensure failed", { error: String(err) });
       }
-      await bootstrapRecurringJournalFromEnvironment();
+      if (shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())) {
+        await bootstrapRecurringJournalFromEnvironment();
+      }
       try {
         // Factory Production Targets and Attendance Register must be available
         // even when production skips the bulk startup migration pass.
@@ -367,31 +369,35 @@ let migrationsDone = false;
       await ensureFactoryBaleOrderIntegrity(pool);
       // Explicitly owner-approved, one-time monetary correction. Disabled by
       // default and guarded against repeat execution or accounting cutover.
-      await runApprovedLegacyBaleUnitCostRepair(pool);
-      // Owner-approved (2026-10-17) follow-up for the remaining historical/sold bales.
-      await runApprovedLegacySoldBaleUnitCostRepair(pool);
-      // One-time owner-authorized, company-12 historical loading-date reconciliation.
-      // Atomic before-image audit and exact first-submission evidence are required.
-      await runApprovedCustomerLoadingDateRepair(pool);
-      // Restore the original date for a historically confirmed order returned to LOADING.
-      await runApprovedReturnedLoadingDateRepair(pool);
-      // Owner-approved, idempotent reclassification of 18 original factory import payables.
-      // No-op unless explicitly enabled on the verified production Render service.
-      await runApprovedFactoryPayableReclassification();
-      await runApprovedFactoryPayableUndo();
-      // One-time exact goods payable catch-up for ABO SOBHI container TCLU8160430.
-      await runApprovedAboSobhiGoods82();
-      // One-time, source-reviewed, owner-approved company-12 JABER liability reassignment.
-      await runApprovedAboJaberPayableFix();
-      // Exact-source, owner-requested UK BASMA supplier statement reconciliation.
-      await runApprovedUkBasma38();
-      // Owner-approved EUROGULF freight reclass; no-op without exact Render opt-in.
-      await runApprovedHmdEurogulfFreightRepair();
-      // Owner-approved Factory customer order destination spelling consolidation.
-      // Opt-in only; exact company, database, before-images and audit are verified.
-      await runApprovedFactoryDestinationNormalization(pool);
-      // One-time, audited destination label consolidation on the finalized MALI 53 order.
-      await runApprovedMali53DestinationNormalization(pool);
+      // Startup repair writers are forbidden on independently authoritative LAN
+      // databases and on a cloud explicitly fenced for factory handoff.
+      if (shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())) {
+        await runApprovedLegacyBaleUnitCostRepair(pool);
+        // Owner-approved (2026-10-17) follow-up for the remaining historical/sold bales.
+        await runApprovedLegacySoldBaleUnitCostRepair(pool);
+        // One-time owner-authorized, company-12 historical loading-date reconciliation.
+        // Atomic before-image audit and exact first-submission evidence are required.
+        await runApprovedCustomerLoadingDateRepair(pool);
+        // Restore the original date for a historically confirmed order returned to LOADING.
+        await runApprovedReturnedLoadingDateRepair(pool);
+        // Owner-approved, idempotent reclassification of 18 original factory import payables.
+        // No-op unless explicitly enabled on the verified production Render service.
+        await runApprovedFactoryPayableReclassification();
+        await runApprovedFactoryPayableUndo();
+        // One-time exact goods payable catch-up for ABO SOBHI container TCLU8160430.
+        await runApprovedAboSobhiGoods82();
+        // One-time, source-reviewed, owner-approved company-12 JABER liability reassignment.
+        await runApprovedAboJaberPayableFix();
+        // Exact-source, owner-requested UK BASMA supplier statement reconciliation.
+        await runApprovedUkBasma38();
+        // Owner-approved EUROGULF freight reclass; no-op without exact Render opt-in.
+        await runApprovedHmdEurogulfFreightRepair();
+        // Owner-approved Factory customer order destination spelling consolidation.
+        // Opt-in only; exact company, database, before-images and audit are verified.
+        await runApprovedFactoryDestinationNormalization(pool);
+        // One-time, audited destination label consolidation on the finalized MALI 53 order.
+        await runApprovedMali53DestinationNormalization(pool);
+      }
       if (migrationsEnabled) {
         try {
           await runMigrations();
