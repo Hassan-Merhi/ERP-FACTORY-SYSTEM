@@ -122,7 +122,7 @@ function OfflinePrepPanelContent() {
     });
 
     try {
-      const outcome = await runScopedOfflinePrep(companyId, (p) => setProgress({ ...p }));
+      const outcome = await runScopedOfflinePrep(companyId, (p) => setProgress({ ...p }), selectedCompany?.companyType ?? "properties");
       await loadReadiness();
       if (outcome.phase === "done") {
         toast({ title: t("offlineReads.preparedTitle"), description: t("offlineReads.preparedDetail") });

@@ -4,7 +4,7 @@ This implementation is on `feat/offline-phase1-durable-foundation-20261029` and 
 
 ## Exact prepared GET endpoints
 
-All successful responses below are stored under the authenticated user AND active server-selected company ID:
+The UI selects relevant packs based on the authenticated company's type: ERP = Shared + ERP; Factory and Factory V2 = Shared + ERP + Factory; Retail = Shared + POS. Properties and Supplier Partner are intentionally marked unsupported until their datasets are implemented; there is no false "ready" claim. All successful responses below are stored under the authenticated user AND active server-selected company ID:
 
 | Pack | Read endpoints |
 |---|---|

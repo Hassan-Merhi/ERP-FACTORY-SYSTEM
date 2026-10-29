@@ -1,3 +1,4 @@
+import type { CompanyType } from "@/contracts/sessionContracts";
 import { offlineError } from "./offlineError";
 import { getErrorDetails } from "@shared/errorUtils";
 import { buildPacks, type OfflineReadiness, type PrepProgress } from "../offlinePrep";
@@ -11,6 +12,17 @@ import {
 import { mergeOfflinePages, normalizeOfflineReadUrl, readPaginationPlan } from "./offlineReadPolicy";
 
 const activePreparations = new Set<number>();
+
+export function selectOfflinePrepPacks(companyType: CompanyType): string[] {
+  switch (companyType) {
+    case "erp": return ["shared", "erp"];
+    case "factory":
+    case "factory_v2": return ["shared", "erp", "factory"];
+    case "retail": return ["shared", "pos"];
+    default: return [];
+  }
+}
+
 
 /** Download every page, or refuse to promote an incomplete snapshot. */
 export async function downloadCompleteOfflineDataset(url: string, transport: typeof fetch = fetch): Promise<string> {
@@ -81,13 +93,15 @@ export async function getScopedOfflineReadiness(actor: OfflineReadActor): Promis
  */
 export async function runScopedOfflinePrep(
   companyId: number,
-  onProgress: (value: PrepProgress) => void
+  onProgress: (value: PrepProgress) => void,
+  companyType: CompanyType
 ): Promise<PrepProgress> {
   if (activePreparations.has(companyId)) throw offlineError("OFFLINE_PREP_ALREADY_RUNNING");
   activePreparations.add(companyId);
   const results: PrepProgress["results"] = [];
   const errors: string[] = [];
-  const datasets = buildPacks().flatMap((pack) =>
+  const allowedPacks = new Set(selectOfflinePrepPacks(companyType));
+  const datasets = buildPacks().filter((pack) => allowedPacks.has(pack.id)).flatMap((pack) =>
     pack.datasets
       .filter((dataset) => dataset.id !== "user" && dataset.id !== "companies")
       .map((dataset) => ({ ...dataset, packId: pack.id }))
@@ -111,6 +125,7 @@ export async function runScopedOfflinePrep(
   };
 
   try {
+    if (datasets.length === 0) throw offlineError("OFFLINE_PREP_COMPANY_TYPE_UNSUPPORTED");
     emit("preparing", "OFFLINE_PREP_AUTH_CHECK");
     const actor = await verifyOfflineReadScope(companyId);
     if (!actor) throw offlineError("OFFLINE_PREP_AUTH_REQUIRED");
