@@ -99,6 +99,8 @@ function OfflinePrepPanelContent() {
 
   useEffect(() => {
     void loadReadiness();
+    window.addEventListener("erp:offline-read-scope-verified", loadReadiness);
+    return () => window.removeEventListener("erp:offline-read-scope-verified", loadReadiness);
   }, [loadReadiness]);
 
   const handlePrepare = async () => {
@@ -300,20 +302,20 @@ function OfflinePrepPanelContent() {
           {(progress.phase === "done" || progress.phase === "error") && (
             <div
               className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm ${
-                progress.failedDatasets === 0
+                progress.phase === "done" && progress.failedDatasets === 0
                   ? "bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-300"
                   : "bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300"
               }`}
             >
-              {progress.failedDatasets === 0 ? (
+              {progress.phase === "done" && progress.failedDatasets === 0 ? (
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
               ) : (
                 <AlertCircle className="h-4 w-4 shrink-0" />
               )}
               <span>
-                {progress.failedDatasets === 0
-                  ? "Device is offline-ready. All datasets downloaded."
-                  : `${progress.completedDatasets} datasets OK · ${progress.failedDatasets} failed.`}
+                {progress.phase === "done" && progress.failedDatasets === 0
+                  ? t("offlineReads.preparedDetail")
+                  : t("offlineReads.incompleteDetail")}
               </span>
             </div>
           )}
@@ -387,11 +389,8 @@ function OfflinePrepPanelContent() {
         <CollapsibleContent>
           <div className="mt-2 rounded-md border bg-muted/30 p-3 space-y-3 text-xs text-muted-foreground">
             <div>
-              <p className="font-medium text-foreground mb-1">Forms &amp; write operations — work offline</p>
-              <p>
-                Recording payments, container entries, daybook entries, vouchers, and other form submissions are saved
-                locally and auto-synced the moment WiFi returns. The banner at the top shows how many are queued.
-              </p>
+              <p className="font-medium text-foreground mb-1">{t("offlineReads.writeLimitTitle")}</p>
+              <p>{t("offlineReads.writeLimitDetail")}</p>
             </div>
             <div>
               <p className="font-medium text-foreground mb-1">Features that truly require internet:</p>
@@ -402,7 +401,7 @@ function OfflinePrepPanelContent() {
                 <li>First login — a valid session must already exist</li>
               </ul>
             </div>
-            <p>Everything else — browsing, searching, and submitting forms — works fully offline.</p>
+            <p>{t("offlineReads.exactCoverageDetail")}</p>
           </div>
         </CollapsibleContent>
       </Collapsible>

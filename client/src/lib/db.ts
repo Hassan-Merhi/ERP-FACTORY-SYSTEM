@@ -107,6 +107,7 @@ export interface OfflineReadGrant {
   completed: number;
   total: number;
   errors: string;
+  packSummary?: string;
 }
 
 export interface OfflineMeta {

@@ -10,6 +10,7 @@ export interface OfflineReadActor {
 export interface ReadBatchInput extends OfflineReadActor {
   snapshots: Array<{ url: string; body: string }>;
   total: number;
+  packSummary?: Record<string, { label: string; count: number; completedAt: number }>;
 }
 
 const MAX_OFFLINE_READ_AGE = 8 * 60 * 60 * 1000;
@@ -71,6 +72,7 @@ export async function verifyOfflineReadScope(companyId: number): Promise<Offline
 
     const actor = { companyId, userId };
     activateVerifiedOfflineReadScope(actor);
+    if (typeof window !== "undefined") window.dispatchEvent(new Event("erp:offline-read-scope-verified"));
     return actor;
   } catch {
     // Never trust a previous verified scope after a failed verification attempt
@@ -117,6 +119,7 @@ export async function saveVerifiedOfflineReadBatch(input: ReadBatchInput): Promi
     completed: rows.length,
     total: input.total,
     errors: "[]",
+    packSummary: JSON.stringify(input.packSummary ?? {}),
   };
   await db.transaction("rw", db.offlineReadSnapshots, db.offlineReadGrants, async () => {
     await db.offlineReadSnapshots.bulkPut(rows);

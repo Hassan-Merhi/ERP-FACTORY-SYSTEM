@@ -73,7 +73,7 @@ export async function getScopedOfflineReadiness(actor: OfflineReadActor): Promis
       completedDatasets: grant.completed,
       totalDatasets: grant.total,
       errors: JSON.parse(grant.errors) as string[],
-      packSummary: {},
+      packSummary: grant.packSummary ? JSON.parse(grant.packSummary) : {},
     };
   } catch {
     return emptyReadiness();
@@ -120,6 +120,7 @@ export async function runScopedOfflinePrep(
     const actor = await verifyOfflineReadScope(companyId);
     if (!actor) throw offlineError("OFFLINE_PREP_AUTH_REQUIRED");
     const generation: Array<{ url: string; body: string }> = [];
+    const packSummary: Record<string, { label: string; count: number; completedAt: number }> = {};
     for (const dataset of datasets) {
       const url = dataset.endpoint;
       emit("preparing", dataset.label);
@@ -127,14 +128,21 @@ export async function runScopedOfflinePrep(
         const body = await downloadCompleteOfflineDataset(url);
         // The response must have the expected business wrapper. The offline
         // GET path replays this exact response, not legacy CachedEntity tables.
-        JSON.parse(body);
+        const parsed: unknown = JSON.parse(body);
+        const record = parsed && typeof parsed === "object" && !Array.isArray(parsed)
+          ? parsed as Record<string, unknown>
+          : null;
+        const count = Array.isArray(parsed) ? parsed.length : Array.isArray(record?.data) ? record.data.length : 1;
         generation.push({ url, body });
+        const pack = packSummary[dataset.packId] ?? { label: dataset.packId, count: 0, completedAt: Date.now() };
+        pack.count += count;
+        packSummary[dataset.packId] = pack;
         results.push({
           datasetId: dataset.id,
           label: dataset.label,
           packId: dataset.packId,
           success: true,
-          count: 1,
+          count,
         });
       } catch (error) {
         const reason = getErrorDetails(error).optionalMessage ?? "OFFLINE_PREP_FAILED";
@@ -165,7 +173,7 @@ export async function runScopedOfflinePrep(
     }
 
     emit("verifying", "OFFLINE_PREP_VERIFYING");
-    await saveVerifiedOfflineReadBatch({ ...actor, snapshots: generation, total });
+    await saveVerifiedOfflineReadBatch({ ...actor, snapshots: generation, total, packSummary });
     return emit("done", "OFFLINE_PREP_READY");
   } catch (error) {
     errors.push(getErrorDetails(error).optionalMessage ?? "OFFLINE_PREP_FAILED");
