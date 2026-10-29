@@ -326,7 +326,7 @@ function createWorkbook(
 export async function exportWeeklyProductionExcel(referenceDate: string): Promise<{ start: string; end: string; through: string }> {
   const { start, end } = periodFor("weekly", referenceDate);
   const today = factoryToday();
-  if (start > today) throw new Error("A future production week cannot be exported yet.");
+  if (start > today) throw new Error("FUTURE_PRODUCTION_WEEK");
   const through = end < today ? end : today;
   const dates: string[] = [];
   for (let date = start; date <= through; date = addIsoDays(date, 1)) dates.push(date);
