@@ -64,6 +64,13 @@ describe("Production Targets bonus core: worker-linked production", () => {
     expect(present.bonusUsd).toBe("3.50");
   });
 
+  it("blocks apparently finalized days that have no saved worker evidence", () => {
+    const day = preview("2026-10-29", []);
+    expect(day.finalized).toBe(true);
+    expect(day.payoutReady).toBe(false);
+    expect(day.warnings).toContain("EMPTY_FINALIZED_DAY");
+  });
+
   it("does not make a finalized-looking cash bonus from an open day", () => {
     const result = preview("2026-10-29", [worker(1, 7, 18)], [], false);
     expect(result.finalized).toBe(false);
