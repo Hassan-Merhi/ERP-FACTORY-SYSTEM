@@ -50,6 +50,7 @@ import { ProductionTargetDefaultsDialog } from "./productiontargets/ProductionTa
 import { ProductionTargetsEditorDialog } from "./productiontargets/ProductionTargetsEditorDialog";
 import { ProductionExcelRangeDialog, type ProductionExportDates } from "./productiontargets/ProductionExcelRangeDialog";
 import { ProductionBonusesPanel } from "./productiontargets/ProductionBonusesPanel";
+import { ProductionTargetBonusPaymentsPanel } from "./productiontargets/ProductionTargetBonusPaymentsPanel";
 import { exportWeeklyProductionExcel, ProductionDateRangeError } from "./productiontargets/productionWeeklyExcel";
 
 function SummaryTile({ label, value, icon }: { label: string; value: string | number; icon: React.ReactNode }) {
@@ -437,6 +438,7 @@ export default function FactoryProductionTargets() {
       </div>
 
       {periodType === "daily" && <ProductionBonusesPanel initialDate={referenceDate} />}
+      {periodType === "daily" && <ProductionTargetBonusPaymentsPanel initialDate={referenceDate} />}
 
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
