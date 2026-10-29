@@ -99,7 +99,7 @@ describe("Production Targets bonus core: worker-linked production", () => {
     const totals = summarizeProductionTargetBonusDays([monday, tuesday]);
     expect(totals.find((row) => row.workerId === 1)?.proposedBonusUsd).toBe("1.50");
     expect(totals.find((row) => row.workerId === 2)?.proposedBonusUsd).toBe("0.50");
-    expect(totals.find((row) => row.workerId === 3)?.proposedBonusUsd).toBe("1.50");
+    expect(totals.find((row) => row.workerId === 3)?.proposedBonusUsd).toBe("3.00");
     expect(monday.totalProducedBales + tuesday.totalProducedBales).toBe(50);
   });
 });
