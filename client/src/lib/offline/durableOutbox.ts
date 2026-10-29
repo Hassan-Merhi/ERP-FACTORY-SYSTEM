@@ -217,6 +217,8 @@ export async function deliverOfflineOperations(
             "Content-Type": "application/json",
             "X-Idempotency-Key": item.id,
             "X-Offline-Operation-Id": item.id,
+            "X-Offline-Company-Id": String(item.companyId),
+            "X-Offline-User-Id": item.userId,
             "X-Client-Date": item.clientDate,
           },
           credentials: "include",
