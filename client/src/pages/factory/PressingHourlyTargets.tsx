@@ -4,6 +4,8 @@ import { CalendarDays, Check, RefreshCw, Target, TrendingUp } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translatePressingUiText } from "@/i18n/pressingUiTranslations";
 
 const ENDPOINT = "/api/factory/pressing-machines/report/hourly-targets";
 const ZONE = "Asia/Beirut";
@@ -36,12 +38,12 @@ function resultStatus(kg: number, target: number, bales: number, started: boolea
   return kg > target ? "above" : "below";
 }
 const verdictStyle: Record<Verdict, { label: string; pill: string; bar: string }> = {
-  upcoming: { label: "Upcoming", pill: "bg-slate-500/10 text-slate-500", bar: "bg-slate-500" },
+  upcoming: { label: "upcoming", pill: "bg-slate-500/10 text-slate-500", bar: "bg-slate-500" },
   progress: { label: "In progress", pill: "bg-sky-500/15 text-sky-600 dark:text-sky-300", bar: "bg-sky-500" },
   none: { label: "No scans", pill: "bg-slate-500/15 text-muted-foreground", bar: "bg-slate-500" },
   met: { label: "Target met", pill: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", bar: "bg-emerald-500" },
-  above: { label: "Above target", pill: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", bar: "bg-emerald-500" },
-  below: { label: "Below target", pill: "bg-rose-500/15 text-rose-700 dark:text-rose-300", bar: "bg-rose-500" },
+  above: { label: "aboveTarget", pill: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", bar: "bg-emerald-500" },
+  below: { label: "belowTarget", pill: "bg-rose-500/15 text-rose-700 dark:text-rose-300", bar: "bg-rose-500" },
 };
 
 /** Confirmed scans only; editable date-scoped hour targets are shared by P1/P2/P3.
@@ -50,6 +52,8 @@ export default function PressingHourlyTargets({ active, companyId, serverToday }
   active: boolean; companyId: number; serverToday?: string;
 }) {
   const { toast } = useToast();
+  const { language } = useApplicationLanguage();
+  const t = (key: Parameters<typeof translatePressingUiText>[0]) => translatePressingUiText(key, language);
   const [day, setDay] = useState(serverToday || "");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [savingHour, setSavingHour] = useState<string | null>(null);
@@ -101,7 +105,7 @@ export default function PressingHourlyTargets({ active, companyId, serverToday }
     const targetKgPerHour = Number(raw);
     if (!raw.trim() || !Number.isFinite(targetKgPerHour) ||
         targetKgPerHour <= 0 || targetKgPerHour > 100000) {
-      toast({ title: "Invalid target", description: "Enter a target above 0 and at most 100,000 KG.", variant: "destructive" });
+      toast({ title: "Invalid target", description: t("invalidTargetDescription"), variant: "destructive" });
       return;
     }
     setSavingHour(hour);
@@ -159,9 +163,9 @@ export default function PressingHourlyTargets({ active, companyId, serverToday }
               <thead className="text-muted-foreground">
                 <tr className="bg-muted/50">
                   <th scope="col" className="rounded-l-lg px-3 py-3 font-semibold">Hour (Beirut)</th>
-                  <th scope="col" className="w-[178px] px-3 py-3 font-semibold">Target (per worker)</th>
+                  <th scope="col" className="w-[178px] px-3 py-3 font-semibold">{t("hourTargetHeader")}</th>
                   {data.workers.map(worker => <th scope="col" key={worker.userId} className="min-w-[200px] px-3 py-3 font-semibold">{worker.name}</th>)}
-                  {data.workers.length === 0 && <th className="rounded-r-lg px-3 py-3">No workers configured</th>}
+                  {data.workers.length === 0 && <th className="rounded-r-lg px-3 py-3">{t("noWorkersConfigured")}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -176,7 +180,7 @@ export default function PressingHourlyTargets({ active, companyId, serverToday }
                         <div className="relative">
                           <Input type="number" min="0.001" max="100000" step="0.001"
                             aria-label={"Hourly target for " + hourLabel(hour)}
-                            title="KG per worker for this hour on the selected day"
+                            title={t("hourTargetDescription")}
                             className="h-9 w-[105px] rounded-lg border-border/80 bg-background/75 pr-8 text-right font-bold tabular-nums"
                             placeholder="Mixed" value={valueForHour(hour)}
                             readOnly={!data.canEdit} disabled={savingHour === hour}
@@ -191,12 +195,12 @@ export default function PressingHourlyTargets({ active, companyId, serverToday }
                         </div>
                         {data.canEdit && <Button type="button" size="icon" variant={dirty(hour) ? "default" : "ghost"}
                           className={"h-8 w-8 shrink-0 rounded-lg " + (!dirty(hour) ? "opacity-30" : "")}
-                          aria-label={"Save target for " + hourLabel(hour)} title="Save target for this hour"
+                          aria-label={"Save target for " + hourLabel(hour)} title={t("saveHourTarget")}
                           disabled={!dirty(hour) || savingHour !== null}
                           onClick={() => void save(hour)}><Check className="h-4 w-4" /></Button>}
                       </div>
                       {hourTarget === undefined && uniformBaseline === null && (
-                        <span className="text-[10px] text-muted-foreground">Worker defaults</span>
+                        <span className="text-[10px] text-muted-foreground">{t("workerDefaults")}</span>
                       )}
                     </td>
                     {data.workers.map(worker => {
@@ -209,7 +213,7 @@ export default function PressingHourlyTargets({ active, companyId, serverToday }
                       return <td key={worker.userId} className="border-b border-border/50 px-3 py-2.5">
                         <div className="flex flex-wrap items-center justify-between gap-1.5">
                           <strong className="whitespace-nowrap tabular-nums">{formatKg(kg)} / {formatKg(target)} KG</strong>
-                          <span className={"rounded-full px-2 py-1 text-[10px] font-semibold " + style.pill}>{style.label}</span>
+                          <span className={"rounded-full px-2 py-1 text-[10px] font-semibold " + style.pill}>{verdict === "upcoming" || verdict === "above" || verdict === "below" ? t(style.label as "upcoming" | "aboveTarget" | "belowTarget") : style.label}</span>
                         </div>
                         <div className="mt-2 flex items-center gap-2">
                           <div role="progressbar" aria-label={worker.name + " at " + hourLabel(hour)}
@@ -230,7 +234,7 @@ export default function PressingHourlyTargets({ active, companyId, serverToday }
                   </tr>;
                 })}
                 {!hours.length && <tr><td colSpan={data.workers.length + 2}
-                  className="p-5 text-center text-muted-foreground">No production hours to show for this date.</td></tr>}
+                  className="p-5 text-center text-muted-foreground">{t("noProductionHours")}</td></tr>}
               </tbody>
             </table>
           </div>
