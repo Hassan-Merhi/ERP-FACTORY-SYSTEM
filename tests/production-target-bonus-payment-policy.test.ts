@@ -5,12 +5,12 @@ import {
 } from "../server/services/payroll/productionTargetBonusPaymentService";
 
 const valid = {
-  companyId: 12, allocationId: 123, cashAccountId: 456,
+  companyId: 12, reviewId: 123, cashAccountId: 456,
   paymentDate: "2026-10-29", currency: "USD",
   actorId: "admin", actorName: "Admin",
 };
 const eligible = {
-  decisionStatus: "APPROVED", finished: true,
+  decisionStatus: "approved", finished: true,
   payrollId: null, extraBales: 4, amount: "6.00",
 };
 
