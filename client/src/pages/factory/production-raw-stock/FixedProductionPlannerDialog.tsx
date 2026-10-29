@@ -129,12 +129,16 @@ export function FixedProductionPlannerDialog({
     refetchInterval: false,
   });
 
+  const { refetch: refetchPlan } = planQuery;
+  const { refetch: refetchOtw } = otwQuery;
+  const { refetch: refetchCategories } = categoryQuery;
+
   // Each opening starts a single fresh snapshot. Disabled React Query observers
   // never refetch due to Factory-wide invalidation, polling, or reconnect.
   useEffect(() => {
     if (!open) return;
-    void Promise.all([planQuery.refetch(), otwQuery.refetch(), categoryQuery.refetch()]);
-  }, [open, planQuery.refetch, otwQuery.refetch, categoryQuery.refetch]);
+    void Promise.all([refetchPlan(), refetchOtw(), refetchCategories()]);
+  }, [open, refetchPlan, refetchOtw, refetchCategories]);
 
   useEffect(() => {
     if (!open || stockSnapshot !== null) return;
