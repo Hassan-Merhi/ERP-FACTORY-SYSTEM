@@ -1,7 +1,6 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -251,7 +250,6 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
         },
       });
       toast({ title: "Proforma updated", description: "All changes saved." });
-      onClose();
       onSuccess();
     },
     onError: (e: ClientErrorLike) => {
@@ -409,28 +407,25 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
   const isLoading = proformaQuery.isLoading;
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(v) => {
-        if (!v) onClose();
-      }}
-    >
-      <DialogContent
-        className="max-w-[98vw] w-[98vw] h-[85dvh] sm:h-[96dvh] flex flex-col p-0 gap-0"
-        data-testid="dialog-edit-proforma-v5"
-      >
-        <DialogHeader className="px-5 py-4 border-b shrink-0">
-          <DialogTitle className="text-base flex items-center gap-2">
-            Edit Proforma
-            <Badge variant="secondary" className="text-[11px] font-semibold tracking-wide">
-              v5
-            </Badge>
-          </DialogTitle>
-        </DialogHeader>
+    <div className="flex h-full min-h-0 min-w-0 flex-col bg-background" data-testid="page-edit-proforma-v5">
+      <div className="border-b px-5 py-4 shrink-0">
+        <h1 className="text-base font-semibold flex items-center gap-2">
+          Edit Proforma
+          <Badge variant="secondary" className="text-[11px] font-semibold tracking-wide">
+            v5
+          </Badge>
+        </h1>
+      </div>
 
         {isLoading ? (
           <div className="flex-1 flex items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : proformaQuery.isError ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-5 text-center" role="alert">
+            <AlertTriangle className="h-6 w-6 text-destructive" />
+            <p className="text-sm text-destructive">Could not load this proforma: {proformaQuery.error.message}</p>
+            <Button variant="outline" onClick={() => proformaQuery.refetch()}>Retry</Button>
           </div>
         ) : (
           <>
@@ -859,7 +854,6 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
             </div>
           </>
         )}
-      </DialogContent>
-    </Dialog>
+    </div>
   );
 }
