@@ -358,6 +358,9 @@ export function useFactoryStockAllocationV5Model() {
       const params = new URLSearchParams();
       if (hideZero) params.set("hideZero", "true");
       if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
+      // The overview is a complete, naturally scrolling table. Bypass the legacy
+      // 50-row progressive fetch interceptor and allow the server to return all rows.
+      params.set("fullAction", "1");
       const res = await fetch(`/api/factory/v5/stock-allocation?${params}`, { credentials: "include" });
       if (!res.ok) {
         const e = await res.json();
