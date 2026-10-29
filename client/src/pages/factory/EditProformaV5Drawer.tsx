@@ -36,6 +36,7 @@ interface ExistingLine {
 
 interface ProformaData {
   id: number;
+  companyId: number;
   name: string;
   isActive: boolean;
   customerId: number;
@@ -96,13 +97,13 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
   // Saved prices are scoped to the customer on this proforma, never to the last selected customer.
   const customerId = proformaQuery.data?.customerId;
   const customerPriceListQuery = useQuery<AgreedPriceRow[]>({
-    queryKey: ["/api/factory/customer-price-lists", customerId],
+    queryKey: ["/api/factory/customer-price-lists", customerId, proformaQuery.data?.companyId],
     queryFn: async () => {
       const res = await fetch(`/api/factory/customer-price-lists/${customerId}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load saved agreed prices");
       return res.json();
     },
-    enabled: open && !!customerId,
+    enabled: open && !!customerId && !!proformaQuery.data?.companyId,
   });
 
   const productsQuery = useQuery<BaleProduct[]>({
@@ -546,7 +547,7 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
                   size="sm"
                   variant={appliedPrice === "customer" ? "secondary" : "outline"}
                   onClick={applySavedAgreedPrices}
-                  disabled={!initialized || !customerPriceListQuery.data?.length}
+                  disabled={!initialized || customerPriceListQuery.isFetching || customerPriceListQuery.isError || !customerPriceListQuery.data?.length}
                   data-testid="button-edit-v5-apply-customer-price"
                   title={customerPriceListQuery.isError
                     ? "Could not load saved agreed prices for this customer"
