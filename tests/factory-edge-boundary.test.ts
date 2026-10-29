@@ -1,6 +1,7 @@
 import express from "express";
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
+vi.mock("../server/db", () => ({ pool: { query: vi.fn() } }));
 import { makeFactoryEdgeWriteGuard } from "../server/edge/edgeBoundary";
 import { readFactoryEdgeConfiguration } from "../server/edge/edgeRuntimePolicy.mjs";
 
