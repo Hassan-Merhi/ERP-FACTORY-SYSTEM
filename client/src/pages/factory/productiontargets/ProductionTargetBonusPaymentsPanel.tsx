@@ -37,7 +37,7 @@ const isDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.is
   new Date(value + "T00:00:00Z").toISOString().slice(0, 10) === value;
 
 async function getJson<T>(url: string): Promise<T | null> {
-  const response = await fetch(url, { credentials: "include" });
+  const response = await factoryApiRequest("GET", url);
   if (response.status === 403) return null;
   if (!response.ok) throw new Error((await response.json().catch(() => null))?.message || "Unable to load bonus payments");
   return response.json() as Promise<T>;
