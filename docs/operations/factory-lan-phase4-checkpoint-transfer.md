@@ -73,9 +73,9 @@ the same directory. Supply the expected site UUID and signing key from your
 recovery vault, then run:
 
 ```sh
-EDGE_SYNC_SITE_ID=<approved-site-uuid> \\
-EDGE_SYNC_SIGNING_KEY=<vault-supplied-secret> \\
-node scripts/edge/verify-encrypted-checkpoint.mjs /recovery/edge-checkpoint-<timestamp>.json
+export EDGE_SYNC_SITE_ID="your-approved-site-uuid"
+# Inject EDGE_SYNC_SIGNING_KEY from your private secret manager; do not put it in shell history.
+node scripts/edge/verify-encrypted-checkpoint.mjs /recovery/edge-checkpoint-20261029T223001Z.json
 ```
 
 The verifier checks site identity, HMAC provenance, both archive hashes and
