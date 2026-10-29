@@ -46,7 +46,7 @@ export function enforceOfflineOperationScope(req: Request, res: Response, next: 
       sessionUserId: req.session?.userId,
     })
   ) {
-    res.status(409).json({ code: "OFFLINE_SCOPE_MISMATCH", message: "OFFLINE_SCOPE_MISMATCH" });
+    res.status(409).json({ code: "OFFLINE_SCOPE_MISMATCH", message: "offline.scopeMismatch" });
     return;
   }
   next();

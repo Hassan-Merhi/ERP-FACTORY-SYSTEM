@@ -1,3 +1,4 @@
+import { offlineError } from "./offline/offlineError";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
 import { QueryClient, QueryFunction, MutationCache, QueryCache } from "@tanstack/react-query";
@@ -545,7 +546,7 @@ export async function apiRequest(
     const user = queryClient.getQueryData<{ id?: string | number }>(["/api/auth/me"]);
     const companyId = Number(localStorage.getItem("selectedCompanyId"));
     if (!user?.id || !Number.isSafeInteger(companyId) || companyId <= 0) {
-      throw new Error("OFFLINE_ACTOR_NOT_PREPARED");
+      throw offlineError("OFFLINE_ACTOR_NOT_PREPARED");
     }
     const { submitDurableVoucherWithEntries } = await import("./offline/voucherCapture");
     return submitDurableVoucherWithEntries(

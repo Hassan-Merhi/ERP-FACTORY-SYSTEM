@@ -1,3 +1,4 @@
+import { offlineError } from "./offlineError";
 import { db } from "../db";
 import {
   classifyOfflineResponse,
@@ -50,26 +51,26 @@ function getDeviceId(): string {
  * never tell the user a write was saved if IndexedDB was blocked or out of space.
  */
 export async function queueOfflineOperation(input: QueueOfflineInput): Promise<OfflineOperation> {
-  if (!isValidOfflineActor(input.actor)) throw new Error("OFFLINE_ACTOR_REQUIRED");
+  if (!isValidOfflineActor(input.actor)) throw offlineError("OFFLINE_ACTOR_REQUIRED");
   if (!isAutoReplayAllowed(input.method, input.url)) {
-    throw new Error("OFFLINE_WRITE_UNVERIFIED");
+    throw offlineError("OFFLINE_WRITE_UNVERIFIED");
   }
-  if (!validateOfflinePayload(input.payload)) throw new Error("OFFLINE_UNSAFE_PAYLOAD");
+  if (!validateOfflinePayload(input.payload)) throw offlineError("OFFLINE_UNSAFE_PAYLOAD");
   if (!isVettedOfflineVoucherPayload(input.payload)) {
-    throw new Error("OFFLINE_VOUCHER_NOT_CENTRAL");
+    throw offlineError("OFFLINE_VOUCHER_NOT_CENTRAL");
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.clientDate)) throw new Error("OFFLINE_CLIENT_DATE_REQUIRED");
-  if (!input.entityType.trim()) throw new Error("OFFLINE_ENTITY_TYPE_REQUIRED");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.clientDate)) throw offlineError("OFFLINE_CLIENT_DATE_REQUIRED");
+  if (!input.entityType.trim()) throw offlineError("OFFLINE_ENTITY_TYPE_REQUIRED");
 
   const body = input.payload as Record<string, unknown>;
   const existingId = body.clientRequestId;
   const id = existingId === undefined ? crypto.randomUUID() : existingId;
   if (typeof id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-    throw new Error("OFFLINE_REQUEST_ID_INVALID");
+    throw offlineError("OFFLINE_REQUEST_ID_INVALID");
   }
   // The posting engine reads the original body identity; match the header.
   const payload = JSON.stringify({ ...body, clientRequestId: id });
-  if (payload.length > MAX_PAYLOAD_BYTES) throw new Error("OFFLINE_PAYLOAD_TOO_LARGE");
+  if (payload.length > MAX_PAYLOAD_BYTES) throw offlineError("OFFLINE_PAYLOAD_TOO_LARGE");
   const now = Date.now();
   const record: OfflineOperation = {
     schemaVersion: 1,

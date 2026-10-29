@@ -1,3 +1,4 @@
+import { offlineError } from "./offlineError";
 import { db } from "../db";
 import {
   queueOfflineOperation,
@@ -34,11 +35,11 @@ export async function submitDurableVoucherWithEntries(
     });
   }
   if (stored?.state === "conflict" || stored?.state === "rejected") {
-    const error = new Error("OFFLINE_VOUCHER_REVIEW_REQUIRED");
+    const error = offlineError("OFFLINE_VOUCHER_REVIEW_REQUIRED");
     error.name = "OfflineOperationRejected";
     throw error;
   }
-  const error = new Error("OFFLINE_VOUCHER_PENDING");
+  const error = offlineError("OFFLINE_VOUCHER_PENDING");
   error.name = "OfflineQueued";
   throw error;
 }
