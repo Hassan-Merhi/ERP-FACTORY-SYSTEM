@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   CalendarDays, ChevronDown, ChevronUp, Download, LayoutList, List,
-  PackageCheck, RefreshCw, ScanLine, ShieldCheck, SlidersHorizontal, Weight, TrendingUp, UsersRound,
+  PackageCheck, RefreshCw, ShieldCheck, SlidersHorizontal, Weight, TrendingUp, UsersRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
