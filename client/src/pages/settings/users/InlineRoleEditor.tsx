@@ -288,7 +288,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
       {role === "View Only" && (
         <p className="text-xs text-muted-foreground" data-testid="view-only-erp-factory-description">
           Read-only access for this company in both ERP and Factory (when app access is enabled).
-          The user can browse assigned pages but cannot create, edit, import, delete, or post transactions.
+          All ERP business-data pages are browseable except Dashboard, Settings, and Create Voucher. Factory access remains subject to its page permissions. Creating, editing, importing, deleting, and posting are blocked.
         </p>
       )}
 
