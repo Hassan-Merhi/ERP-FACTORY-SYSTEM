@@ -5,6 +5,7 @@ import { useLocation, useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { fetchAllV5AllocationData } from "@/lib/v5AllocationPaginationClient";
 import type { V5Data, V5Row } from "./types";
 
 function isGarbageOrWipers(row: V5Row) {
@@ -145,7 +146,21 @@ export function useFactoryStockAllocationV5Model() {
   } | null>(null);
   const [editDraftQtys, setEditDraftQtys] = useState<Record<string, number>>({});
 
-  function openEditDraft(proformaId: number, proformaName: string, currentRows: V5Row[]) {
+  async function openEditDraft(proformaId: number, proformaName: string, _currentRows: V5Row[]) {
+    // Always load the complete catalog, not only the stock-allocation rows
+    // currently displayed by progressive pagination.
+    let currentRows: V5Row[];
+    try {
+      const complete = await fetchAllV5AllocationData(new URLSearchParams());
+      currentRows = complete.rows as V5Row[];
+    } catch (error) {
+      toast({
+        title: "Unable to load draft products",
+        description: error instanceof Error ? error.message : "The complete stock allocation list could not be loaded.",
+        variant: "destructive",
+      });
+      return;
+    }
     const articles: EditDraftArticle[] = [];
     for (const row of currentRows) {
       const pd = row.proformaDetails.find((p) => p.proformaId === proformaId);
@@ -445,7 +460,27 @@ export function useFactoryStockAllocationV5Model() {
   async function handleExportExcel() {
     const XLSX = (await import("xlsx-js-style")).default;
 
-    const filtered = rows.filter((r) => {
+    // Export every matching article across pages, not just the visible grid.
+    const exportParams = new URLSearchParams();
+    if (hideZero) exportParams.set("hideZero", "true");
+    if (debouncedSearch.trim()) exportParams.set("search", debouncedSearch.trim());
+
+    let exportRows: V5Row[];
+    try {
+      const complete = await fetchAllV5AllocationData(exportParams);
+      exportRows = complete.rows as V5Row[];
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "The complete filtered allocation could not be loaded.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!showGarbageWipers) exportRows = exportRows.filter((row) => !isGarbageOrWipers(row));
+    if (showNegativeOnly) exportRows = exportRows.filter((row) => row.freeToPromise < 0);
+
+    const filtered = exportRows.filter((r) => {
       if (r.freeToPromise > 0) return exportIncludePositive;
       if (r.freeToPromise < 0) return exportIncludeNegative;
       return exportIncludeZero;
