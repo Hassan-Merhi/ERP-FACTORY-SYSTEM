@@ -96,8 +96,16 @@ export function AdvancedRestrictions({
   const hiddenFieldCount = isPrivileged
     ? 0
     : hiddenCostFields.filter((key) => !factoryTabKeys.has(key) && !FACTORY_TAB_GRANT_KEYS.has(key)).length;
+  // View Only ERP access is automatic, so legacy ERP selections do not count
+  // as active page restrictions in the user-management summary.
+  const erpPageKeys = new Set(ALL_ERP_PAGES.map((page) => page.key));
+  const relevantPageCount = isPrivileged
+    ? 0
+    : isViewOnly
+      ? [...pageAccess].filter((key) => !erpPageKeys.has(key)).length
+      : pageAccess.size;
   const restrictionCount =
-    (isPrivileged ? 0 : pageAccess.size) +
+    relevantPageCount +
     hiddenTabCount +
     hiddenFieldCount +
     (isPrivileged ? 0 : hiddenErpCostFields.length);
@@ -123,7 +131,7 @@ export function AdvancedRestrictions({
             </div>
             {!advancedOpen &&
               (() => {
-                const pageCount = isPrivileged ? 0 : pageAccess.size;
+                const pageCount = relevantPageCount;
                 const tabCount = hiddenTabCount;
                 const fieldCount = hiddenFieldCount;
                 const erpCount = isPrivileged ? 0 : hiddenErpCostFields.length;
@@ -134,7 +142,7 @@ export function AdvancedRestrictions({
                 if (erpCount > 0) parts.push(`${erpCount} ERP field${erpCount !== 1 ? "s" : ""} hidden`);
                 return (
                   <p className="text-xs text-muted-foreground font-normal mt-1">
-                    {parts.length > 0 ? parts.join(" · ") : "No restrictions active — full access"}
+                    {parts.length > 0 ? parts.join(" · ") : "No additional restrictions active"}
                   </p>
                 );
               })()}
