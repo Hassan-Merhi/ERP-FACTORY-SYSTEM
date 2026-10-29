@@ -46,6 +46,7 @@ interface BonusResponse {
   };
   canDecide: boolean;
 }
+const EMPTY_BONUS_ROWS: BonusRow[] = [];
 const rowKey = (row: BonusRow) => row.date + ":" + row.workerId;
 const money = (amount: number) => "$" + amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const count = (amount: number) => amount.toLocaleString("en-US", { maximumFractionDigits: 2 });
@@ -91,7 +92,7 @@ export function ProductionBonusesPanel({ initialDate }: { initialDate: string })
     enabled: rangeValid,
   });
 
-  const rows = data?.rows ?? [];
+  const rows = data?.rows ?? EMPTY_BONUS_ROWS;
   const visible = useMemo(() => rows.filter((row) => {
     const needle = search.trim().toLocaleLowerCase();
     const matchesName = !needle ||
@@ -113,12 +114,12 @@ export function ProductionBonusesPanel({ initialDate }: { initialDate: string })
   // days without counting the displayed linked-team production twice.
   const workerBreakdown = useMemo(() => {
     const grouped = new Map<number, {
-      name: string; target: number; produced: number; extra: number;
+      workerId: number; name: string; target: number; produced: number; extra: number;
       pending: number; approved: number;
     }>();
     for (const row of rows) {
       const current = grouped.get(row.workerId) ?? {
-        name: row.workerName, target: 0, produced: 0, extra: 0, pending: 0, approved: 0,
+        workerId: row.workerId, name: row.workerName, target: 0, produced: 0, extra: 0, pending: 0, approved: 0,
       };
       current.target += row.targetBales;
       current.produced += row.producedBales;
@@ -128,7 +129,7 @@ export function ProductionBonusesPanel({ initialDate }: { initialDate: string })
       grouped.set(row.workerId, current);
     }
     return [...grouped.values()].sort((a, b) => b.extra - a.extra || a.name.localeCompare(b.name));
-  }, [data?.rows]);
+  }, [rows]);
 
   const reviewMutation = useMutation({
     mutationFn: async (decision: Decision) =>
@@ -250,7 +251,7 @@ export function ProductionBonusesPanel({ initialDate }: { initialDate: string })
                 </TableHeader>
                 <TableBody>
                   {workerBreakdown.map((worker) => (
-                    <TableRow key={worker.name}>
+                    <TableRow key={worker.workerId}>
                       <TableCell className="font-medium">{worker.name}</TableCell>
                       <TableCell className="text-right tabular-nums">{count(worker.target)}</TableCell>
                       <TableCell className="text-right tabular-nums">{count(worker.produced)}</TableCell>
