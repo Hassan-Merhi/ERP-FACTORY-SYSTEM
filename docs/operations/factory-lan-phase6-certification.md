@@ -8,6 +8,30 @@ Phase 6 tests and records evidence for: exact-release-head CI, independent secur
 
 Each drill must use a dedicated **nonproduction** factory tenant and an operator-approved procedure; collect no customer exports, cookies, passwords, raw SQL backups, secret values, or encryption keys. Write a small de-identified evidence record per drill explaining environment, device count, exact commit, assertions, observations, reviewer and timestamp. Keep these private and under 2 MiB each; commit only the example manifest, never evidence data.
 
+## Required drill acceptance matrix
+
+The manifest keys below are mandatory. **A proof file is not a pass by itself**: reviewers must verify its assertions, device/tenant scope, timestamps, and deployment identity. Use disposable data only; each drill must be reproducible and must preserve real stock, bank and customer ledgers.
+
+| Manifest drill key | Nonproduction acceptance criteria (fail on any unexplained mismatch) |
+|---|---|
+| `exact-head-ci` | Full CI, security, schema, browser and release tests all pass on precisely the release SHA; no stale job or skipped mandatory check is accepted |
+| `independent-security-review` | Someone independent reviews LAN/cloud authorization, tenant separation, storage secrets, signature/key management, session/CSRF, raw DB access and deployment attack paths; records approval and blockers |
+| `phase4-sync-verified` | Real restored LAN and cloud databases use one audited write authority, transactionally durable change capture, idempotent cloud apply/receipts, sequence and file reconciliation; both copies agree at the recorded checkpoint |
+| `phase5-conflict-resolution` | Two laptops edit the same record, an older permission is revoked, a rejected financial operation is reviewed; no silent last-write-wins posting, cross-company replay or lost conflict |
+| `cloud-single-writer-fence` | During LAN primary, every cloud API instance, job, WebSocket writer, direct SQL writer and integration is stopped or durably fenced; intentionally attempted cloud mutations cannot commit |
+| `lan-single-writer-fence` | LAN is read-only before cutover; an unprovisioned database cannot post; operator-only cutover cannot create two simultaneous primary writers |
+| `two-laptop-wan-outage` | Two distinct factory laptops use trusted HTTPS, local DNS and local PostgreSQL while WAN is physically disconnected; allowed reads and preapproved LAN writes continue with no cloud fallback |
+| `offline-auth-permissions` | Authorized sessions, scope separation, logout and revoked roles remain safe; cold-start/expired-session behavior is documented and tested, and any unsupported login mode blocks the corresponding rollout |
+| `interrupted-sync-retry` | Break network mid-upload and after server commit but before acknowledgement; the same stable operation IDs complete with exactly one verified receipt and durable retry/review history |
+| `idempotent-posting-retry` | Retry voucher, stock, scanner and other approved write paths concurrently; confirmed ledger postings and stock movements occur exactly once for each logical operation |
+| `inventory-ledger-reconciliation` | Snapshot before/after inventory, factory production, daybook, vouchers and balances; all posted quantities and entries reconcile without unexplained variances |
+| `attachments-reconciliation` | Every approved uploaded file references the correct tenant/document and preserves content length and SHA-256 across checkpoint/cloud apply; no orphan or wrong-tenant access |
+| `power-loss-recovery` | Interrupt the LAN host with acknowledged writes and uploads in progress, reboot offline, verify database durability, outbox state, file consistency and absence of duplicate posting |
+| `encrypted-backup-isolated-restore` | Restore encrypted DB/files in a fresh isolated environment with independently held recovery keys; migrations, tenant/ledger/stock totals and evidence hashes match; never overwrite live cloud |
+| `cloud-failback-reconciliation` | Fence LAN writes, reconcile every LAN commit and document/sequence, prove cloud integrity and exclusive writer epoch, then enable cloud; failed reconciliation leaves both sides safely fenced |
+
+Capture the exact command, expected/actual outcome, relevant anonymized counts/hashes, implementation SHA, cloud/LAN writer state, and reviewer identity in each private proof. Reject any drill that was simulated with a mocked HTTP server when the matrix demands real PostgreSQL, independent laptops, or the actual edge deployment. Never edit evidence to claim a passing result for an unperformed drill.
+
 ## Run the non-destructive gate
 
 1. Obtain a signed-off Phase 4 cloud/app/DB exclusive-write policy and a verified transactionally consistent baseline. The Phase 4 archive uploader alone does not qualify. Prove an outbox or change stream and cloud-side idempotent apply with receipts, attachment and sequence reconciliation.
