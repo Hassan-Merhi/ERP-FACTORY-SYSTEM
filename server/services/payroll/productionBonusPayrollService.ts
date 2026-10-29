@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { sqlArray } from "../../lib/sqlArray";
-import { resultRows as rows } from "../../lib/queryResult";
+import { resultRows, resultRows as rows } from "../../lib/queryResult";
 import type { DatabaseOrTransaction } from "../../db";
 import { rebuildPayrollGenVoucher } from "../../routes/payroll/_payrollAccountingHelper";
 import { calculateProductionBonusPreview, type ProductionBonusMemberSnapshot } from "../factory/productionBonusPreview";
@@ -293,6 +293,17 @@ export async function attachProductionBonusesToPayroll(
   if (String(payroll.status) !== "DRAFT") return;
 
   const oldTotals = (await getProductionBonusTotalsForPayrollIds(executor, [payrollId])).get(payrollId) ?? EMPTY_TOTALS;
+  const paymentsExist = resultRows(await executor.execute(sql`
+    SELECT to_regclass('public.factory_target_bonus_payments') IS NOT NULL AS "exists"
+  `))[0]?.exists === true;
+  const directPaymentExclusion = paymentsExist
+    ? sql`AND NOT EXISTS (
+        SELECT 1 FROM factory_target_bonus_payments payment
+        WHERE payment.company_id = a.company_id
+          AND payment.worker_id = a.worker_id
+          AND payment.production_date = r.production_date
+      )`
+    : sql``;
   await executor.execute(sql`
     UPDATE factory_production_bonus_allocations a
     SET payroll_id = ${payrollId}, updated_at = NOW()
@@ -301,11 +312,7 @@ export async function attachProductionBonusesToPayroll(
       AND a.company_id = ${Number(payroll.companyId)}
       AND a.worker_id = ${Number(payroll.workerId)}
       AND a.payroll_id IS NULL
-      -- A separately paid (or reversed) bonus must never reattach to payroll.
-      AND NOT EXISTS (
-        SELECT 1 FROM factory_production_target_bonus_payments p
-        WHERE p.company_id = a.company_id AND p.allocation_id = a.id
-      )
+      ${directPaymentExclusion}
       AND r.production_date BETWEEN ${String(payroll.periodStart)}::date AND ${String(payroll.periodEnd)}::date
   `);
   const newTotals = (await getProductionBonusTotalsForPayrollIds(executor, [payrollId])).get(payrollId) ?? EMPTY_TOTALS;
