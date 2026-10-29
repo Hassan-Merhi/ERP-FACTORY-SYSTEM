@@ -3,13 +3,34 @@ import {
   addIsoDays,
   collapseLinkedProductionRows,
   fetchProduction,
-  periodFor,
+  localDateStr,
+  parseLocalDate,
   summarizeProductionRows,
   type ProductionResponse,
   type ProductionRow,
 } from "../factoryProductionTargetsModel";
 
-export class FutureProductionWeekError extends Error {}
+export class ProductionDateRangeError extends Error {
+  constructor(public readonly code: "invalid" | "future" | "tooLong") {
+    super(code);
+    this.name = "ProductionDateRangeError";
+  }
+}
+
+export function getProductionRangeDates(start: string, end: string, today: string = factoryProductionToday()): string[] {
+  const isDate = (value: string) =>
+    /^\\d{4}-\\d{2}-\\d{2}$/.test(value) &&
+    localDateStr(parseLocalDate(value)) === value;
+  if (!isDate(start) || !isDate(end) || start > end) throw new ProductionDateRangeError("invalid");
+  if (end > today) throw new ProductionDateRangeError("future");
+
+  const dates: string[] = [];
+  for (let date = start; date <= end; date = addIsoDays(date, 1)) {
+    if (dates.length >= 84) throw new ProductionDateRangeError("tooLong");
+    dates.push(date);
+  }
+  return dates;
+}
 
 export interface ProductionReportDay {
   date: string;
@@ -146,7 +167,7 @@ export function buildWeeklyProductionData(days: ProductionReportDay[]) {
   };
 }
 
-function factoryToday(): string {
+export function factoryProductionToday(): string {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Beirut", year: "numeric", month: "2-digit", day: "2-digit",
   }).formatToParts(new Date());
@@ -260,9 +281,9 @@ function createWorkbook(
   book.creator = "Factory Production Targets";
   book.created = new Date();
   book.calcProperties.fullCalcOnLoad = true;
-  const suffix = "Week " + start + " to " + end + (through < end ? " (through " + through + ")" : "");
+  const suffix = "Selected dates " + start + " to " + end;
 
-  const overview = book.addWorksheet("Weekly Overview");
+  const overview = book.addWorksheet("Period Overview");
   prepareSheet(overview, "WEEKLY PRODUCTION | OVERVIEW", suffix,
     ["Date", "Day", "Workers", "Absent", "Target", "Absent Target", "Expected", "Produced", "Difference", "Day Status"],
     [16, 16, 12, 12, 15, 17, 15, 15, 17, 18]);
@@ -275,7 +296,7 @@ function createWorkbook(
   }
   const lastDailyRow = overview.rowCount;
   enableFilter(overview, 10, lastDailyRow);
-  const total = overview.addRow(["WEEK TOTAL", "", "", "",
+  const total = overview.addRow(["PERIOD TOTAL", "", "", "",
     data.summary.reduce((sum, day) => sum + day.target, 0),
     data.summary.reduce((sum, day) => sum + day.absentTarget, 0),
     data.summary.reduce((sum, day) => sum + day.expected, 0),
@@ -311,8 +332,8 @@ function createWorkbook(
   enableFilter(historySheet, 11, historySheet.rowCount);
   addNote(historySheet, "*Shared Team Produced repeats the SAME team total for reference on each linked member. DO NOT sum this column. Use Daily Teams for accurate production totals.", 11);
 
-  const workerSheet = book.addWorksheet("Worker Weekly Targets");
-  prepareSheet(workerSheet, "WORKER TARGETS | WEEKLY", suffix,
+  const workerSheet = book.addWorksheet("Worker Totals");
+  prepareSheet(workerSheet, "WORKER TARGETS | SELECTED DATES", suffix,
     ["Worker", "Code", "Days", "Present / New", "Absent", "Target", "Absent Target", "Expected", "Solo Produced*", "Linked Days"],
     [30, 18, 12, 17, 13, 16, 17, 16, 19, 15]);
   for (const w of data.workers) {
@@ -324,39 +345,42 @@ function createWorkbook(
   return book;
 }
 
-export async function exportWeeklyProductionExcel(referenceDate: string): Promise<{ start: string; end: string; through: string }> {
-  const { start, end } = periodFor("weekly", referenceDate);
-  const today = factoryToday();
-  if (start > today) throw new FutureProductionWeekError();
-  const through = end < today ? end : today;
-  const dates: string[] = [];
-  for (let date = start; date <= through; date = addIsoDays(date, 1)) dates.push(date);
+export async function exportWeeklyProductionExcel(
+  start: string,
+  end: string,
+): Promise<{ start: string; end: string; through: string }> {
+  const dates = getProductionRangeDates(start, end);
 
-  // Two requests at a time avoid a seven-request burst against factory production.
+  // Two daily requests at a time keeps larger date ranges from overwhelming the factory API.
   const days: ProductionReportDay[] = [];
   for (let i = 0; i < dates.length; i += 2) {
-    const batch = await Promise.all(dates.slice(i, i + 2).map(async (date) => ({
-      date, snapshot: await fetchProduction("daily", date, date),
-    })));
+    const batch = await Promise.all(
+      dates.slice(i, i + 2).map(async (date) => ({
+        date,
+        snapshot: await fetchProduction("daily", date, date),
+      })),
+    );
     days.push(...batch);
   }
+
   const data = buildWeeklyProductionData(days);
   const excelModule = await import("exceljs");
   const runtime = excelModule.default ?? excelModule;
-  const workbook = createWorkbook(data, start, end, through, runtime.Workbook);
+  const workbook = createWorkbook(data, start, end, end, runtime.Workbook);
   const raw = await workbook.xlsx.writeBuffer();
-  const blob = new Blob([raw], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const blob = new Blob([raw], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
   const url = URL.createObjectURL(blob);
   try {
     const link = document.createElement("a");
     link.href = url;
-    link.download = "Production_Targets_Weekly_" + start + "_to_" + through + ".xlsx";
+    link.download = "Production_Targets_" + start + "_to_" + end + ".xlsx";
     document.body.appendChild(link);
     link.click();
     link.remove();
   } finally {
-    // Delay revocation until the browser has accepted the download.
     window.setTimeout(() => URL.revokeObjectURL(url), 1500);
   }
-  return { start, end, through };
+  return { start, end, through: end };
 }
