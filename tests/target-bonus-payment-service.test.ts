@@ -56,6 +56,8 @@ function fakeExecute(query: { parts: readonly string[]; values: unknown[] }) {
     return Promise.resolve({ rows: [{ id: 8, fullName: "Worker Eight" }] });
   if (source.includes("FROM factory_staff_tracking_period_closures"))
     return Promise.resolve({ rows: [{ ready: 1 }] });
+  if (source.includes("SELECT id, review_id AS") && source.includes("FROM factory_target_bonus_payments"))
+    return Promise.resolve({ rows: value("reversal") });
   if (source.includes("FROM factory_target_bonus_payments") && source.includes("FOR UPDATE"))
     return Promise.resolve({ rows: value("payment") });
   if (source.includes("FROM factory_production_bonus_allocations"))
