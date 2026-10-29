@@ -24,7 +24,7 @@ node scripts/edge/certify-offline-phase6.mjs \
   --output /private/phase6-report.json
 ```
 
-The verifier reads exactly two endpoints on the operator-configured LAN origin over verified HTTPS: `GET /api/edge/status` and `GET /api/health/ready`. Redirects, unauthenticated status errors, unprovisioned databases and `cloudReplication: "not-configured"` block certification. TLS verification is **not** disabled; no mutable HTTP requests are sent. `--no-network` is useful for checking local evidence but *always* returns a blocking `LIVE_PROBE_REQUIRED`. Reports are created only if the output path does not exist.
+The verifier reads exactly two endpoints on the operator-configured LAN origin over verified HTTPS: `GET /api/edge/status` and `GET /api/health/ready`. Redirects, unauthenticated status errors, unprovisioned databases and any cloud replication state other than explicit `cloudReplication: "verified"` block certification. TLS verification is **not** disabled; no mutable HTTP requests are sent. `--no-network` is useful for checking local evidence but *always* returns a blocking `LIVE_PROBE_REQUIRED`. Reports are created only if the output path does not exist.
 
 ## External release gates (not automated by this tool)
 
