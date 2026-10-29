@@ -213,10 +213,10 @@ export async function postProductionTargetBonusPayment(input: BonusPaymentPostin
       JOIN factory_production_bonus_runs run ON run.id = a.run_id AND run.company_id = a.company_id
       WHERE a.company_id = ${input.companyId} AND a.worker_id = ${review.workerId}
         AND run.production_date = ${review.productionDate}::date
-        AND a.decision_status = 'APPROVED'
+        AND (a.decision_status = 'APPROVED' OR a.payroll_id IS NOT NULL)
       LIMIT 1
     `));
-    if (oldBonus) throw new HttpError(409, "An older Production Planner bonus is approved for this worker/date; reconcile first");
+    if (oldBonus) throw new HttpError(409, "An older Production Planner bonus is assigned or approved for this worker/date; reconcile first");
     const amount = cents(review.amount);
     await ensureUsdCashBalanceTx(tx, input.companyId, input.cashAccountId, amount);
     const expenseAccountId = await depositExpenseAccountTx(tx, input.companyId);
