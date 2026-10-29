@@ -14,6 +14,7 @@ import { spawn } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseEdgeEnvironment } from "./verify-edge-configuration.mjs";
+import { assertAgeV1Header } from "./check-age-archive.mjs";
 import {
   createEncryptedSnapshotManifest,
   expectedEncryptedNames,
@@ -53,6 +54,7 @@ async function digestArchive(path, filename) {
   if (!metadata.isFile() || metadata.size < 1 || metadata.isSymbolicLink()) {
     throw new Error("EDGE_SYNC_ARCHIVE_NOT_REGULAR");
   }
+  await assertAgeV1Header(path);
   const hash = createHash("sha256");
   let bytes = 0;
   for await (const chunk of createReadStream(path, { flags: "r" })) {
