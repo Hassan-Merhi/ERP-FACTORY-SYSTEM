@@ -108,6 +108,10 @@ export interface OfflineReadGrant {
   total: number;
   errors: string;
   packSummary?: string;
+  /** Phase 5 opt-in encryption. Absent on legacy Phase 2 snapshots. */
+  protection?: "erp-offline-aes-gcm-v1";
+  vaultSalt?: string;
+  vaultCheck?: string;
 }
 
 export interface OfflineMeta {
