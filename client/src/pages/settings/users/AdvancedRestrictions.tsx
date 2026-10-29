@@ -26,6 +26,7 @@ import {
 interface AdvancedRestrictionsProps {
   user: SettingsUserRow;
   isPrivileged: boolean;
+  isViewOnly: boolean;
   hasFactoryAccess: boolean;
   hasErpAccess: boolean;
   pageAccess: Set<string>;
@@ -41,6 +42,7 @@ interface AdvancedRestrictionsProps {
 export function AdvancedRestrictions({
   user,
   isPrivileged,
+  isViewOnly,
   hasFactoryAccess,
   hasErpAccess,
   pageAccess,
@@ -234,7 +236,15 @@ export function AdvancedRestrictions({
                   </div>
                 )}
 
-                {hasErpAccess && (
+                {hasErpAccess && isViewOnly && (
+                  <div className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground" data-testid="view-only-all-erp-pages">
+                    View Only can browse all standard ERP business-data pages automatically. Older saved ERP page selections
+                    do not limit this role. Dashboard, Settings, Create Voucher, and privileged developer tools remain
+                    unavailable; all business write actions are blocked.
+                  </div>
+                )}
+
+                {hasErpAccess && !isViewOnly && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">ERP Pages</p>
