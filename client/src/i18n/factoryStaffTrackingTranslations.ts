@@ -357,6 +357,11 @@ const factoryStaffTrackingTranslations = {
     ar: "تم إنهاء الإنتاج، لكن لم يتم إرسال الصورة عبر واتساب",
     fr: "La production est terminée, mais l’image WhatsApp n’a pas été envoyée",
   },
+  exportWeeklyExcel: { en: "Export Weekly Excel", ar: "تصدير إكسل أسبوعي", fr: "Exporter l’Excel hebdomadaire" },
+  exportingWeeklyExcel: { en: "Exporting Excel...", ar: "جارٍ تصدير إكسل...", fr: "Export Excel en cours..." },
+  weeklyExcelExported: { en: "Weekly Excel exported", ar: "تم تصدير إكسل الأسبوع", fr: "Excel hebdomadaire exporté" },
+  weeklyExcelExportFailed: { en: "Weekly Excel export failed", ar: "فشل تصدير إكسل الأسبوع", fr: "Échec de l’export Excel hebdomadaire" },
+  weeklyExcelRange: { en: "Daily targets and worker links:", ar: "الأهداف اليومية وروابط العمال:", fr: "Objectifs quotidiens et liens des ouvriers :" },
   dailyTotal: { en: "Daily Total", ar: "الإجمالي اليومي", fr: "Total du jour" },
 } as const;
 
