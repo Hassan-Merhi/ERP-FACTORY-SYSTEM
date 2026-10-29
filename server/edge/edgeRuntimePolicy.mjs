@@ -87,11 +87,18 @@ export function readFactoryEdgeConfiguration(env = process.env) {
   });
 }
 
+// No module without atomic capture and validated replay is implicitly enabled
+// by a one-time operator primary acknowledgement. Add routes only after
+// end-to-end cloud acceptance tests, not when merely adding a UI queue.
+const LAN_PRIMARY_CAPTURE_ALLOWLIST = new Set(["POST /api/vouchers/with-entries"]);
+
 export function edgeBlocksWrite(config, method, path) {
-  const fenced = (config.mode === "cloud" && config.writeMode === "fenced") ||
-    (config.mode === "lan" && !config.primary);
-  if (!fenced || ["GET", "HEAD", "OPTIONS"].includes(String(method).toUpperCase())) return false;
-  return !SAFE_SESSION_PATHS.has(path);
+  const verb = String(method).toUpperCase();
+  if (["GET", "HEAD", "OPTIONS"].includes(verb)) return false;
+  if (SAFE_SESSION_PATHS.has(path)) return false;
+  if (config.mode === "cloud") return config.writeMode === "fenced";
+  if (!config.primary) return true;
+  return !LAN_PRIMARY_CAPTURE_ALLOWLIST.has(`${verb} ${path}`);
 }
 
 export function edgeStatusPayload(config, databaseProvisioned = false) {
