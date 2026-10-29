@@ -22,7 +22,6 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import EditProformaV5Drawer from "./EditProformaV5Drawer";
 import { PageHeader } from "@/components/PageHeader";
 import { STATUS_LABELS } from "./factorystockallocationv5/utils";
 import { useFactoryStockAllocationV5Model } from "./factorystockallocationv5/useFactoryStockAllocationV5Model";
@@ -42,8 +41,6 @@ export default function FactoryStockAllocationV5() {
   const {
     focusProformaId,
     firstMatchRef,
-    editDrawerProformaId,
-    setEditDrawerProformaId,
     expandedRows,
     hideZero,
     setHideZero,
@@ -72,7 +69,6 @@ export default function FactoryStockAllocationV5() {
     totals,
     handleRefresh,
     toggleRow,
-    drawerRows,
     catDropOpen,
     setCatDropOpen,
     catDropRef,
@@ -528,7 +524,7 @@ export default function FactoryStockAllocationV5() {
                                       variant="outline"
                                       className="h-5 px-2 text-[11px]"
                                       data-testid={`button-v5-edit-proforma-${proforma.proformaId}`}
-                                      onClick={() => setEditDrawerProformaId(proforma.proformaId)}
+                                      onClick={() => setLocation(`/factory/stock-allocation-v5/proformas/${proforma.proformaId}/edit`)}
                                     >
                                       <Pencil className="h-2.5 w-2.5 mr-1" />
                                       Edit Proforma
@@ -639,17 +635,6 @@ export default function FactoryStockAllocationV5() {
             </table>
           </div>
         </>
-      )}
-
-      {/* Edit Proforma drawer */}
-      {editDrawerProformaId !== null && (
-        <EditProformaV5Drawer
-          open={editDrawerProformaId !== null}
-          onClose={() => setEditDrawerProformaId(null)}
-          proformaId={editDrawerProformaId}
-          articleRows={drawerRows}
-          onSuccess={() => query.refetch()}
-        />
       )}
 
       {/* Add Containers dialog */}
