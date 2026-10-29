@@ -22,6 +22,7 @@ export function parseEdgeEnvironment(raw) {
     "EDGE_DB_PASSWORD", "EDGE_SESSION_SECRET",
     "EDGE_WRITE_MODE", "EDGE_PRIMARY_ACK",
     "EDGE_BACKUP_AGE_RECIPIENT",
+    "EDGE_SYNC_REMOTE", "EDGE_SYNC_SIGNING_KEY",
   ]);
   for (const line of raw.split(/\r?\n/)) {
     const trimmed = line.trim();
