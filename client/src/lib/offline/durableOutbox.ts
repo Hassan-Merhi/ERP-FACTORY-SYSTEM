@@ -215,7 +215,7 @@ export async function deliverOfflineOperations(
         const outcome = classifyOfflineResponse(response.status);
         if (outcome === "acknowledged") {
           await settleOperation(item.id, "acknowledged", {
-            response: raw.slice(0, 16384),
+            response: raw,
             acknowledgedAt: Date.now(),
             lastError: null,
           });

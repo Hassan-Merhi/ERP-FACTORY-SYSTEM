@@ -511,6 +511,22 @@ export async function apiRequest(
   _isRetry = false,
   timeoutMs = 300000
 ): Promise<Response> {
+  if (OFFLINE_MODE_ENABLED && method.toUpperCase() === "POST" && url === "/api/vouchers/with-entries") {
+    // The existing authenticated query cache holds the user identity. The
+    // selected company is only a proposed scope: the sync transport always
+    // revalidates it against the active server session before delivery.
+    const user = queryClient.getQueryData<{ id?: string | number }>(["/api/auth/me"]);
+    const companyId = Number(localStorage.getItem("selectedCompanyId"));
+    if (!user?.id || !Number.isSafeInteger(companyId) || companyId <= 0) {
+      throw new Error("OFFLINE_ACTOR_NOT_PREPARED");
+    }
+    const { submitDurableVoucherWithEntries } = await import("./offline/voucherCapture");
+    return submitDurableVoucherWithEntries(
+      { companyId, userId: String(user.id) },
+      data,
+      getAppDate()
+    );
+  }
   const prepared = await prepareApiRequest(method, url, data, timeoutMs);
 
   try {
