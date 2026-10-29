@@ -17,9 +17,14 @@ describe("ERP View Only company-role page access", () => {
     expect(pages).not.toContain("create");
   });
 
-  it("respects explicit View Only page restrictions", () => {
-    expect(effectiveErpPageKeys("View Only", ["accounts"])).toEqual(["accounts"]);
-    expect(effectiveErpPageKeys("View Only", ["settings", "create", "dashboard"])).toEqual([]);
+  it("does not let stale saved ERP page lists hide pages from View Only", () => {
+    const allReadPages = [...FEATURE_KEYS].filter(
+      (key) => key !== "dashboard" && key !== "settings" && key !== "create"
+    );
+    expect(effectiveErpPageKeys("View Only", ["accounts"])).toEqual(allReadPages);
+    expect(effectiveErpPageKeys("View Only", ["settings", "create", "dashboard"])).toEqual(allReadPages);
+    expect(effectiveErpPageKeys("View Only", ["accounts", "daybook"])).toContain("analytics");
+    expect(effectiveErpPageKeys("View Only", ["accounts"])).toContain("vouchers");
   });
 
   it("does not change page access defaults for other roles", () => {
