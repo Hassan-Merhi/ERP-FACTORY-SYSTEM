@@ -1,0 +1,47 @@
+name: Offline Phase 5 encrypted snapshot validation
+
+on:
+  push:
+    branches:
+      - feat/offline-phase5-secure-snapshots-20261030
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: offline-phase5-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  encrypted-snapshots:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.1"
+          cache: npm
+      - name: Install exact locked dependencies
+        run: npm ci --no-audit --bin-links=true
+      - name: Phase 2 and Phase 5 offline cache regression tests
+        run: >-
+          node node_modules/vitest/vitest.mjs run
+          --config vitest.config.frontend.ts
+          tests/ui/offline-read-cache.test.ts
+          tests/ui/offline-scoped-preparation.test.ts
+          tests/ui/offline-phase5-snapshot-vault.test.ts
+          tests/ui/offline-phase5-encrypted-cache.test.ts
+      - name: Frontend TypeScript integration check
+        run: npm run check
+      - name: Phase 5 changed source formatting
+        run: >-
+          node node_modules/prettier/bin/prettier.cjs --check
+          client/src/lib/offline/secureSnapshotVault.ts
+          client/src/lib/offline/offlineReadCache.ts
+          client/src/lib/offline/scopedOfflinePrep.ts
+          client/src/lib/db.ts
+          client/src/components/OfflinePrepPanel.tsx
+          tests/ui/offline-phase5-snapshot-vault.test.ts
+          tests/ui/offline-phase5-encrypted-cache.test.ts
