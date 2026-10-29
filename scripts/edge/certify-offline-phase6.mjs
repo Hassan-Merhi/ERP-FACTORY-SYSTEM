@@ -128,6 +128,30 @@ export async function probeEdge(origin, { siteId, expectedWriteMode, fetcher = f
   return issues;
 }
 
+/** Match the deployed version to the exact commit attested in every proof. */
+export async function probeReleaseVersion(origin, releaseSha, fetcher = fetch) {
+  if (!validateHttpsOrigin(origin) || !SHA.test(releaseSha ?? '')) {
+    return [{ code: 'INVALID_BUILD_PROBE_PARAMETERS' }];
+  }
+  const endpoint = '/api/build-info';
+  try {
+    const response = await fetcher(origin + endpoint, {
+      method: 'GET', redirect: 'manual', cache: 'no-store',
+      headers: { accept: 'application/json' }, signal: AbortSignal.timeout(5000),
+    });
+    if (response.status !== 200 || !response.headers.get('content-type')?.includes('application/json')) {
+      return [{ code: 'BUILD_VERSION_PROBE_FAILED', status: response.status, endpoint }];
+    }
+    const body = await response.text();
+    if (body.length > 8192 || JSON.parse(body)?.version !== releaseSha) {
+      return [{ code: 'BUILD_VERSION_MISMATCH', endpoint }];
+    }
+    return [];
+  } catch {
+    return [{ code: 'BUILD_VERSION_UNREACHABLE', endpoint }];
+  }
+}
+
 export async function certify(manifest, options = {}) {
   const report = await checkReleaseManifest(manifest, options);
   if (!report.ok) return report; // Never probe a potentially unvalidated URL.
@@ -136,6 +160,7 @@ export async function certify(manifest, options = {}) {
     siteId: manifest.siteId, expectedWriteMode: manifest.expectedWriteMode,
     fetcher: options.fetcher,
   });
+  blockers.push(...await probeReleaseVersion(manifest.edgeOrigin, manifest.releaseSha, options.fetcher));
   return { ok: blockers.length === 0, blockers };
 }
 
