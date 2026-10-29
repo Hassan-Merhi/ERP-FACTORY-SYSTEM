@@ -1,4 +1,9 @@
-# Factory LAN server secrets and certificates
-/deploy/lan/.env
-/deploy/lan/certs/
-/deploy/lan/backups/
+# Edge secrets are relative to this directory; never add them to Git.
+.env
+certs/
+backups/
+*.dump
+*.backup
+*.age
+*.key
+*.pem

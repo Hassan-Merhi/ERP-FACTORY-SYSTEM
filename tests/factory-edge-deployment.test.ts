@@ -32,7 +32,8 @@ describe("factory LAN deployment contract", () => {
     const proxy = load("deploy/lan/Caddyfile");
     expect(ignored).toContain("deploy/lan/certs");
     expect(ignored).toContain(".env");
-    expect(gitignore).toContain("/deploy/lan/certs/");
+    expect(gitignore).toContain("certs/");
+    expect(gitignore).toContain(".env");
     expect(proxy).toContain("tls /certs/server.pem /certs/server-key.pem");
     expect(proxy).toContain("reverse_proxy app:5000");
     expect(proxy).not.toContain("tls internal");
