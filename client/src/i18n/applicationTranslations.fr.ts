@@ -242,5 +242,11 @@ export const applicationFrenchTranslations = {
   "analytics.expenses.netExpense": "Dépense nette",
   "analytics.expenses.loadFailed": "Impossible de charger les dépenses pour cette période. Veuillez réessayer le filtre de dates.",
   "analytics.expenses.loadFailedShort": "Impossible de charger les dépenses pour la période sélectionnée",
+  "offlineReads.preparedTitle": "Données hors ligne préparées",
+  "offlineReads.preparedDetail": "Les données en lecture seule ont été enregistrées pour votre compte et votre société.",
+  "offlineReads.incompleteTitle": "Préparation hors ligne incomplète",
+  "offlineReads.incompleteDetail": "Certaines données n'ont pas pu être téléchargées. L'ancien instantané complet a été préservé.",
+  "offlineReads.readyLabel": "Données de lecture prêtes",
+  "offlineReads.intro": "Enregistrez des données en lecture seule vérifiées pour ce compte et cette société. La connexion hors ligne et les pages non mises en cache ne sont pas encore prises en charge.",
   "supplierPartner.postOpeningStock": "Enregistrer le stock d'ouverture",
 } as const satisfies ApplicationTranslationCatalog;

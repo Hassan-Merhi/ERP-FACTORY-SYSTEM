@@ -26,6 +26,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { useToast } from "@/hooks/use-toast";
 import { useConnectivity } from "@/contexts/ConnectivityContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import {
   buildPacks,
   type PrepProgress,
@@ -73,6 +74,7 @@ export function OfflinePrepPanel() {
 
 function OfflinePrepPanelContent() {
   const { isOnline } = useConnectivity();
+  const { t } = useApplicationLanguage();
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
   const companyId: number = selectedCompany?.id ?? 0;
@@ -123,9 +125,13 @@ function OfflinePrepPanelContent() {
       const outcome = await runScopedOfflinePrep(companyId, (p) => setProgress({ ...p }));
       await loadReadiness();
       if (outcome.phase === "done") {
-        toast({ title: "Offline read snapshot prepared", description: "Verified datasets are saved on this device." });
+        toast({ title: t("offlineReads.preparedTitle"), description: t("offlineReads.preparedDetail") });
       } else {
-        toast({ title: "Offline preparation incomplete", description: "Some datasets could not be downloaded; previous complete data was preserved.", variant: "destructive" });
+        toast({
+          title: t("offlineReads.incompleteTitle"),
+          description: t("offlineReads.incompleteDetail"),
+          variant: "destructive",
+        });
       }
     } catch (e) {
       toast({
@@ -158,7 +164,7 @@ function OfflinePrepPanelContent() {
       return (
         <Badge className="gap-1 bg-green-600 dark:bg-green-700 text-white">
           <CheckCircle2 className="h-3 w-3" />
-          Read snapshots ready
+          {t("offlineReads.readyLabel")}
         </Badge>
       );
     if (readiness.partial)
@@ -183,7 +189,7 @@ function OfflinePrepPanelContent() {
         <div>
           <h3 className="font-semibold text-base">Offline Device Preparation</h3>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Prepare verified read-only snapshots for this user and company. Offline login, uncached pages and server posting are not yet supported.
+            {t("offlineReads.intro")}
           </p>
         </div>
         {statusBadge()}
