@@ -54,7 +54,13 @@ function authTag(unsigned, key) {
     .digest("hex");
 }
 
-export function createEncryptedSnapshotManifest({ siteId, backupId, files, signingKey, createdAt = new Date().toISOString() }) {
+export function createEncryptedSnapshotManifest({
+  siteId,
+  backupId,
+  files,
+  signingKey,
+  createdAt = new Date().toISOString(),
+}) {
   const unsigned = canonicalUnsigned({ protocol: SNAPSHOT_PROTOCOL, siteId, backupId, createdAt, files });
   return { ...unsigned, auth: authTag(unsigned, signingKey) };
 }
