@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { edgeBlocksWrite, readFactoryEdgeConfiguration, shouldStartEdgeBackgroundJobs } from "../server/edge/edgeRuntimePolicy.mjs";
+import {
+  edgeBlocksWrite,
+  readFactoryEdgeConfiguration,
+  shouldStartEdgeBackgroundJobs,
+} from "../server/edge/edgeRuntimePolicy.mjs";
 
 describe("Phase 4 safe writer handoff", () => {
   it("keeps the existing cloud default", () => {
