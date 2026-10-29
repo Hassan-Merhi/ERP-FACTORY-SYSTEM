@@ -49,6 +49,7 @@ export interface DailyTeamRecord {
   produced: number;
   difference: number;
   attendance: string;
+  creditedBreakdown: string;
   dayStatus: string;
 }
 
@@ -62,9 +63,33 @@ export interface WorkerDayRecord {
   team: string;
   target: number | null;
   status: string;
-  soloProduced: number | null;
+  soloProduced: number;
+  linkedProduced: number;
+  totalProduced: number;
   sharedTeamProduced: number | null;
   dayStatus: string;
+}
+
+export function splitTeamBales(
+  producedBales: number,
+  members: Array<Pick<ProductionRow, "personId" | "status">>,
+): Map<number, number> {
+  // A bale is indivisible. Keep the exact team count by allocating any
+  // remainder in stable worker-ID order, never assigning 7.5 physical bales.
+  // Absent workers are excluded when at least one member is present.
+  const eligible = members.filter((member) => member.status !== "Absent");
+  const recipients = (eligible.length ? eligible : members)
+    .slice()
+    .sort((left, right) => left.personId - right.personId);
+  const shares = new Map(members.map((member) => [member.personId, 0]));
+  if (!recipients.length) return shares;
+  const quantity = Math.max(0, Math.round(producedBales));
+  const base = Math.floor(quantity / recipients.length);
+  const extra = quantity % recipients.length;
+  recipients.forEach((member, index) => {
+    shares.set(member.personId, base + (index < extra ? 1 : 0));
+  });
+  return shares;
 }
 
 export function buildWeeklyProductionData(days: ProductionReportDay[]) {
@@ -75,7 +100,7 @@ export function buildWeeklyProductionData(days: ProductionReportDay[]) {
     workerId: number; name: string; code: string;
     days: number; present: number; absent: number;
     target: number; absentTarget: number; expected: number;
-    soloProduced: number; linkedDays: number;
+    soloProduced: number; linkedProduced: number; totalProduced: number; linkedDays: number;
   }>();
 
   for (const { date, snapshot } of [...days].sort((a, b) => a.date.localeCompare(b.date))) {
@@ -90,6 +115,7 @@ export function buildWeeklyProductionData(days: ProductionReportDay[]) {
     // Rebuild links from EACH day's date-effective API result, not the current
     // on-screen state. A team gets one produced count, never one per member.
     const memberRows = new Map<number, ProductionRow[]>();
+    const linkedCredits = new Map<number, number>();
     for (const row of snapshot.rows) {
       if (row.linkGroupId == null) continue;
       const group = memberRows.get(row.linkGroupId) ?? [];
@@ -110,6 +136,12 @@ export function buildWeeklyProductionData(days: ProductionReportDay[]) {
       );
       const expected = (target ?? 0) - absentTarget;
       const produced = group.producedBales ?? 0;
+      const credited = group.linkGroupId == null
+        ? new Map([[group.personId, produced]])
+        : splitTeamBales(produced, members);
+      if (group.linkGroupId != null) {
+        for (const [workerId, share] of credited) linkedCredits.set(workerId, share);
+      }
       teams.push({
         date,
         category: group.category || "Uncategorized",
@@ -122,6 +154,9 @@ export function buildWeeklyProductionData(days: ProductionReportDay[]) {
         produced,
         difference: produced - expected,
         attendance: members.map((member) => member.name + ": " + member.status).join("; "),
+        creditedBreakdown: members
+          .map((member) => member.name + ": " + (credited.get(member.personId) ?? 0))
+          .join("; "),
         dayStatus,
       });
     }
@@ -129,6 +164,9 @@ export function buildWeeklyProductionData(days: ProductionReportDay[]) {
     for (const row of snapshot.rows) {
       const linkMembers = row.linkGroupId == null ? [] : memberRows.get(row.linkGroupId) ?? [row];
       const partners = linkMembers.filter((member) => member.personId !== row.personId);
+      const soloProduced = row.linkGroupId == null ? row.producedBales ?? 0 : 0;
+      const linkedProduced = linkedCredits.get(row.personId) ?? 0;
+      const totalProduced = soloProduced + linkedProduced;
       history.push({
         date, workerId: row.personId, name: row.name, code: row.code || "",
         category: row.category || "Uncategorized",
@@ -136,7 +174,9 @@ export function buildWeeklyProductionData(days: ProductionReportDay[]) {
         team: row.linkGroupId == null ? "Individual" : "Linked #" + row.linkGroupId,
         target: row.targetBales,
         status: row.status,
-        soloProduced: row.linkGroupId == null ? row.producedBales ?? 0 : null,
+        soloProduced,
+        linkedProduced,
+        totalProduced,
         // This is shown as a REFERENCE only and is never totaled per worker.
         sharedTeamProduced: row.linkGroupId == null ? null : row.producedBales ?? 0,
         dayStatus,
@@ -144,7 +184,7 @@ export function buildWeeklyProductionData(days: ProductionReportDay[]) {
       const stats = workerTotals.get(row.personId) ?? {
         workerId: row.personId, name: row.name, code: row.code || "",
         days: 0, present: 0, absent: 0, target: 0, absentTarget: 0,
-        expected: 0, soloProduced: 0, linkedDays: 0,
+        expected: 0, soloProduced: 0, linkedProduced: 0, totalProduced: 0, linkedDays: 0,
       };
       const assignedTarget = row.targetBales ?? 0;
       stats.days += 1;
@@ -153,7 +193,9 @@ export function buildWeeklyProductionData(days: ProductionReportDay[]) {
       stats.target += assignedTarget;
       stats.absentTarget += row.status === "Absent" ? assignedTarget : 0;
       stats.expected += row.status === "Absent" ? 0 : assignedTarget;
-      stats.soloProduced += row.linkGroupId == null ? row.producedBales ?? 0 : 0;
+      stats.soloProduced += soloProduced;
+      stats.linkedProduced += linkedProduced;
+      stats.totalProduced += totalProduced;
       stats.linkedDays += row.linkGroupId == null ? 0 : 1;
       workerTotals.set(row.personId, stats);
     }
@@ -236,13 +278,13 @@ function appendBody(
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: alternating ? WHITE : PALE } };
     cell.alignment = { vertical: "middle", wrapText: col === 3 || col === 4 || col === 11 };
     cell.border = { bottom: { style: "hair", color: { argb: "FFDCE3ED" } } };
-    if (typeof cell.value === "number") cell.numFmt = "#,##0.##";
+    if (typeof cell.value === "number") cell.numFmt = "0";
   });
   if (differenceColumn) {
     const cell = row.getCell(differenceColumn);
     if (typeof cell.value === "number") {
       cell.font = { name: "Aptos", size: 10, bold: true, color: { argb: cell.value < 0 ? RED : GREEN } };
-      cell.numFmt = '+#,##0.##;-#,##0.##;0';
+      cell.numFmt = '+0;-0;0';
     }
   }
   if (statusColumn) {
@@ -282,6 +324,8 @@ function createWorkbook(
   book.calcProperties.fullCalcOnLoad = true;
   const suffix = "Selected dates " + start + " to " + end;
 
+  // Put the per-worker totals first: this is the primary purpose of the export.
+  const workerSheet = book.addWorksheet("Worker Totals");
   const overview = book.addWorksheet("Period Overview");
   prepareSheet(overview, "WEEKLY PRODUCTION | OVERVIEW", suffix,
     ["Date", "Day", "Workers", "Absent", "Target", "Absent Target", "Expected", "Produced", "Difference", "Day Status"],
@@ -305,42 +349,56 @@ function createWorkbook(
   total.eachCell({ includeEmpty: true }, (cell) => {
     cell.font = { name: "Aptos", bold: true, size: 11, color: { argb: WHITE } };
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: NAVY } };
-    if (typeof cell.value === "number") cell.numFmt = "#,##0.##";
+    if (typeof cell.value === "number") cell.numFmt = "0";
   });
   addNote(overview, "Each date is calculated independently. Linked teams count production ONCE. Open days are live and may change; finalized days use saved daily production.", 10);
 
   const teamSheet = book.addWorksheet("Daily Teams");
   prepareSheet(teamSheet, "DAILY PRODUCTION | UNIQUE TEAMS", suffix,
-    ["Date", "Category", "Worker(s)", "Code(s)", "Link On Date", "Target", "Absent Target", "Expected", "Produced", "Difference", "Attendance", "Day Status"],
-    [16, 22, 45, 21, 20, 14, 16, 14, 15, 16, 48, 18]);
+    ["Date", "Category", "Worker(s)", "Code(s)", "Link On Date", "Target", "Absent Target", "Expected", "Produced", "Difference", "Attendance", "Credited to Workers", "Day Status"],
+    [16, 22, 45, 21, 20, 14, 16, 14, 15, 16, 48, 48, 18]);
   for (const t of data.teams) {
     appendBody(teamSheet, [t.date, t.category, t.people, t.codes, t.team,
-      t.target, t.absentTarget, t.expected, t.produced, t.difference, t.attendance, t.dayStatus], 10, 12);
+      t.target, t.absentTarget, t.expected, t.produced, t.difference, t.attendance, t.creditedBreakdown, t.dayStatus], 10, 13);
   }
-  enableFilter(teamSheet, 12, teamSheet.rowCount);
-  addNote(teamSheet, "One row represents one individual or linked production team on that date. Produced is never repeated per linked member.", 12);
+  enableFilter(teamSheet, 13, teamSheet.rowCount);
+  addNote(teamSheet, "One row represents one individual or linked production team on that date. Credited shares add up to team production exactly; odd remaining bales go by worker ID order.", 13);
 
   const historySheet = book.addWorksheet("Worker Daily History");
   prepareSheet(historySheet, "WORKER ASSIGNMENTS | DAY BY DAY", suffix,
-    ["Date", "Worker", "Code", "Category", "Linked With That Day", "Link On Date", "Individual Target", "Attendance", "Solo Produced", "Shared Team Produced*", "Day Status"],
-    [16, 29, 17, 24, 42, 19, 19, 17, 18, 24, 18]);
+    ["Date", "Worker", "Code", "Category", "Linked With That Day", "Link On Date", "Individual Target", "Attendance", "Solo Produced", "Linked Credit", "Total Produced", "Shared Team Reference*", "Day Status"],
+    [16, 29, 17, 24, 42, 19, 19, 17, 18, 18, 19, 24, 18]);
   for (const h of data.history) {
     appendBody(historySheet, [h.date, h.name, h.code, h.category, h.linkedWith,
-      h.team, h.target, h.status, h.soloProduced, h.sharedTeamProduced, h.dayStatus], undefined, 11);
+      h.team, h.target, h.status, h.soloProduced, h.linkedProduced, h.totalProduced, h.sharedTeamProduced, h.dayStatus], undefined, 13);
   }
-  enableFilter(historySheet, 11, historySheet.rowCount);
-  addNote(historySheet, "*Shared Team Produced repeats the SAME team total for reference on each linked member. DO NOT sum this column. Use Daily Teams for accurate production totals.", 11);
+  enableFilter(historySheet, 13, historySheet.rowCount);
+  addNote(historySheet, "*Shared Team Reference repeats the team total and must NOT be added. Solo Produced + Linked Credit = Total Produced for each worker on each date.", 13);
 
-  const workerSheet = book.addWorksheet("Worker Totals");
-  prepareSheet(workerSheet, "WORKER TARGETS | SELECTED DATES", suffix,
-    ["Worker", "Code", "Days", "Present / New", "Absent", "Target", "Absent Target", "Expected", "Solo Produced*", "Linked Days"],
-    [30, 18, 12, 17, 13, 16, 17, 16, 19, 15]);
+  prepareSheet(workerSheet, "WORKER TOTAL BALES | SELECTED DATES", suffix,
+    ["Worker", "Code", "Days", "Present / New", "Absent", "Target", "Absent Target", "Expected", "Unlinked Bales", "Linked Bales Credit", "TOTAL PRODUCED", "Linked Days"],
+    [30, 18, 12, 17, 13, 16, 17, 16, 19, 21, 21, 15]);
   for (const w of data.workers) {
     appendBody(workerSheet, [w.name, w.code, w.days, w.present, w.absent,
-      w.target, w.absentTarget, w.expected, w.soloProduced, w.linkedDays]);
+      w.target, w.absentTarget, w.expected, w.soloProduced, w.linkedProduced, w.totalProduced, w.linkedDays]);
+    const cell = workerSheet.getRow(workerSheet.rowCount).getCell(11);
+    cell.font = { name: "Aptos", size: 11, bold: true, color: { argb: GREEN } };
   }
-  enableFilter(workerSheet, 10, workerSheet.rowCount);
-  addNote(workerSheet, "*Solo Produced excludes shared team production. Linked days are shown separately to avoid incorrectly crediting the full team output to each person. See Daily Teams.", 10);
+  enableFilter(workerSheet, 12, workerSheet.rowCount);
+  const total = workerSheet.addRow([
+    "ALL WORKERS", "", "", "", "", "", "", "",
+    data.workers.reduce((sum, worker) => sum + worker.soloProduced, 0),
+    data.workers.reduce((sum, worker) => sum + worker.linkedProduced, 0),
+    data.workers.reduce((sum, worker) => sum + worker.totalProduced, 0),
+    "",
+  ]);
+  total.height = 28;
+  total.eachCell({ includeEmpty: true }, (cell) => {
+    cell.font = { name: "Aptos", bold: true, size: 11, color: { argb: WHITE } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: NAVY } };
+    if (typeof cell.value === "number") cell.numFmt = "0";
+  });
+  addNote(workerSheet, "TOTAL PRODUCED = bales finalized under the worker on unlinked days + an equal whole-bale share of each linked team's output on that date. Team production is never counted twice. For odd totals, remaining bales go to the lowest worker ID; absent workers are excluded when another member is present.", 12);
   return book;
 }
 
