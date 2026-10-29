@@ -103,7 +103,10 @@ export async function probeEdge(origin, { siteId, expectedWriteMode, fetcher = f
     ['/api/edge/status', value => value.mode === 'lan' && value.siteId === siteId &&
       value.writeMode === expectedWriteMode && value.databaseProvisioned === true &&
       value.cloudReplication === 'verified'],
-    ['/api/health/ready', () => true],
+    ['/api/health/ready', value => value?.status === 'ready' && value.listening === true &&
+      value.shuttingDown === false && value.environmentValid === true &&
+      value.database?.ok === true && value.database.schema?.ok === true &&
+      value.database.edgeDataProvisioned !== false],
   ]) {
     try {
       const response = await fetcher(origin + endpoint, {
