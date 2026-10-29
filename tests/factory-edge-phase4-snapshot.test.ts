@@ -4,7 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { verifyLocalEncryptedCheckpoint } from "../scripts/edge/verify-encrypted-checkpoint.mjs";
 import { describe, expect, it } from "vitest";
-import { createEncryptedSnapshotManifest, expectedEncryptedNames, verifyEncryptedSnapshotManifest } from "../server/edge/edgeSnapshotManifest.mjs";
+import {
+  createEncryptedSnapshotManifest,
+  expectedEncryptedNames,
+  verifyEncryptedSnapshotManifest,
+} from "../server/edge/edgeSnapshotManifest.mjs";
 import { checkCheckpointRemote, identifyBackupPairs } from "../scripts/edge/transfer-encrypted-snapshots.mjs";
 
 const siteId = "027d7472-4a29-4bb3-a4aa-5b30e4ad631f";
@@ -19,7 +23,9 @@ describe("Phase 4 authenticated encrypted checkpoint", () => {
     expect(verifyEncryptedSnapshotManifest(m, { siteId, files, signingKey }).backupId).toBe(backupId);
     expect(() => verifyEncryptedSnapshotManifest({ ...m, backupId: "20261030T223001Z" }, { siteId, signingKey }))
       .toThrow();
-    expect(() => verifyEncryptedSnapshotManifest(m, { siteId, files: [{ ...files[0], bytes: 50 }, files[1]], signingKey }))
+    expect(() =>
+      verifyEncryptedSnapshotManifest(m, { siteId, files: [{ ...files[0], bytes: 50 }, files[1]], signingKey })
+    )
       .toThrow("EDGE_SYNC_MANIFEST_ARCHIVE_MISMATCH");
   });
   it("requires complete ciphertext pairs and safe rclone destinations", () => {
@@ -47,9 +53,13 @@ describe("isolated checkpoint verification", () => {
       const signed = createEncryptedSnapshotManifest({ siteId, backupId, files: evidence, signingKey });
       const manifestPath = join(dir, "edge-checkpoint-" + backupId + ".json");
       await writeFile(manifestPath, JSON.stringify(signed));
-      await expect(verifyLocalEncryptedCheckpoint(manifestPath, { siteId, signingKey })).resolves.toMatchObject({ backupId });
+      await expect(verifyLocalEncryptedCheckpoint(manifestPath, { siteId, signingKey })).resolves.toMatchObject({
+        backupId,
+      });
       await writeFile(join(dir, names[0]), Buffer.from("a non-encrypted replacement"));
-      await expect(verifyLocalEncryptedCheckpoint(manifestPath, { siteId, signingKey })).rejects.toThrow("EDGE_SYNC_AGE_HEADER_INVALID");
+      await expect(verifyLocalEncryptedCheckpoint(manifestPath, { siteId, signingKey })).rejects.toThrow(
+        "EDGE_SYNC_AGE_HEADER_INVALID"
+      );
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
