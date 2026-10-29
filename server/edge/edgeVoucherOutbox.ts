@@ -55,8 +55,8 @@ export interface EdgeVoucherEvidence {
   actorUserId: string;
   localVoucherId: number;
   requestId?: string | null;
-  voucher: Record<string, unknown>;
-  entries: Record<string, unknown>[];
+  voucher: unknown;
+  entries: readonly unknown[];
 }
 
 export async function captureEdgeVoucherTx(tx: DbTransaction, evidence: EdgeVoucherEvidence): Promise<void> {
