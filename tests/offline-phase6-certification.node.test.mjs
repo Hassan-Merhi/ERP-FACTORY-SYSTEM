@@ -185,8 +185,11 @@ test("LAN status and health probes must be healthy and replicated", async () => 
 test("a successful HTTP status does not override failed readiness conditions", async () => {
   const base = { siteId: "factory", expectedWriteMode: "read-only" };
   const status = {
-    mode: "lan", siteId: "factory", writeMode: "read-only",
-    databaseProvisioned: true, cloudReplication: "verified",
+    mode: "lan",
+    siteId: "factory",
+    writeMode: "read-only",
+    databaseProvisioned: true,
+    cloudReplication: "verified",
   };
   for (const faulty of [
     { ...READY, status: "not_ready" },
@@ -201,7 +204,10 @@ test("a successful HTTP status does not override failed readiness conditions", a
       ...base,
       fetcher: async (url) => response(200, url.endsWith("/api/edge/status") ? status : faulty),
     });
-    assert.deepEqual(result.map((x) => x.code), ["EDGE_PROBE_UNSAFE_STATE"]);
+    assert.deepEqual(
+      result.map((x) => x.code),
+      ["EDGE_PROBE_UNSAFE_STATE"]
+    );
     assert.equal(result[0].endpoint, "/api/health/ready");
   }
 });
@@ -213,8 +219,11 @@ test("the deployed build SHA must exactly match every release-proof SHA", async 
     seen.push({ url, options });
     if (url.endsWith("/api/edge/status")) {
       return response(200, {
-        mode: "lan", siteId: manifest.siteId, writeMode: manifest.expectedWriteMode,
-        databaseProvisioned: true, cloudReplication: "verified",
+        mode: "lan",
+        siteId: manifest.siteId,
+        writeMode: manifest.expectedWriteMode,
+        databaseProvisioned: true,
+        cloudReplication: "verified",
       });
     }
     if (url.endsWith("/api/health/ready")) return response(200, READY);
@@ -229,16 +238,27 @@ test("the deployed build SHA must exactly match every release-proof SHA", async 
   );
   assert(seen.every((x) => x.options.method === "GET" && x.options.redirect === "manual"));
   const mismatch = await certify(manifest, {
-    evidenceRoot: root, now: NOW, fetcher: network("b".repeat(40)),
+    evidenceRoot: root,
+    now: NOW,
+    fetcher: network("b".repeat(40)),
   });
-  assert.deepEqual(mismatch.blockers.map((x) => x.code), ["BUILD_VERSION_MISMATCH"]);
+  assert.deepEqual(
+    mismatch.blockers.map((x) => x.code),
+    ["BUILD_VERSION_MISMATCH"]
+  );
   assert.equal(mismatch.ok, false);
   const missing = await probeReleaseVersion(manifest.edgeOrigin, RELEASE_SHA, async () => response(404, {}));
-  assert.deepEqual(missing.map((x) => x.code), ["BUILD_VERSION_PROBE_FAILED"]);
+  assert.deepEqual(
+    missing.map((x) => x.code),
+    ["BUILD_VERSION_PROBE_FAILED"]
+  );
   const unreachable = await probeReleaseVersion(manifest.edgeOrigin, RELEASE_SHA, async () => {
     throw new Error("Network disconnected");
   });
-  assert.deepEqual(unreachable.map((x) => x.code), ["BUILD_VERSION_UNREACHABLE"]);
+  assert.deepEqual(
+    unreachable.map((x) => x.code),
+    ["BUILD_VERSION_UNREACHABLE"]
+  );
 });
 
 test("unreachable, HTTP error and redirects cannot pass the status probe", async () => {
