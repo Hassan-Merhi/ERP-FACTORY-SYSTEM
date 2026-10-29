@@ -7,3 +7,8 @@ backups/
 *.age
 *.key
 *.pem
+
+# Private Phase 6 acceptance data (never commit credentials, logs or snapshots)
+evidence/
+phase6-evidence.json
+phase6-report.json
