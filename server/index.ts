@@ -52,6 +52,7 @@ import { listenWithRetry, registerGracefulShutdown } from "./startup/listenWithR
 import { registerProcessErrorHandlers } from "./startup/registerProcessErrorHandlers";
 import { runStartupMigrations, warmupDb } from "./startup/runServerStartupMigrations";
 import { ensureFactoryStaffTrackingSchema } from "./startup/factoryStaffTrackingSchema";
+import { ensureProductionTargetBonusPaymentSchema } from "./startup/ensureProductionTargetBonusPaymentSchema";
 import { ensureSupplierTrackingShopDutyDefaults } from "./startup/ensureSupplierTrackingShopDutyDefaults";
 import { ensureZambiaHistoricalPurchaseCost } from "./startup/ensureZambiaHistoricalPurchaseCost";
 import { ensureFactoryContainerPlannerSchemaOnBoot } from "./startup/factoryContainerPlannerSchema";
@@ -348,6 +349,10 @@ let migrationsDone = false;
           error: getErrorMessage(staffTrackingSchemaErr),
         });
       }
+      // Payments require the existing production bonus allocation table.
+      // Fail closed on missing accounting schema.
+      await ensureProductionTargetBonusPaymentSchema(pool);
+      logger.info("[startup] Production target bonus accounting schema ensured");
       // The Container Planner's registered migrations are never applied by
       // production's boot path, so ensure its tables here unconditionally. A
       // failure after retries is fatal: the previous deployment stays live rather
