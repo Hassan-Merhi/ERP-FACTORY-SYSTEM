@@ -19,6 +19,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -29,7 +30,13 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { applicationEnglishTranslations } from "@/i18n/applicationTranslations";
 import { buildPacks, type PrepProgress, type OfflineReadiness } from "@/lib/offlinePrep";
-import { getVerifiedOfflineReadScope } from "@/lib/offline/offlineReadCache";
+import {
+  getOfflineReadGrant,
+  getVerifiedOfflineReadScope,
+  isVerifiedOfflineReadVaultUnlocked,
+  lockVerifiedOfflineReadVault,
+  unlockVerifiedOfflineReadVault,
+} from "@/lib/offline/offlineReadCache";
 import { getScopedOfflineReadiness, runScopedOfflinePrep } from "@/lib/offline/scopedOfflinePrep";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -82,15 +89,28 @@ function OfflinePrepPanelContent() {
   const [progress, setProgress] = useState<PrepProgress | null>(null);
   const [running, setRunning] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [vaultPassphrase, setVaultPassphrase] = useState("");
+  const [protectedSnapshot, setProtectedSnapshot] = useState(false);
+  const [vaultUnlocked, setVaultUnlocked] = useState(false);
+
+  useEffect(() => {
+    setVaultPassphrase("");
+    setVaultUnlocked(false);
+    setProtectedSnapshot(false);
+  }, [companyId]);
 
   const loadReadiness = useCallback(async () => {
     const actor = getVerifiedOfflineReadScope();
     if (!actor || actor.companyId !== companyId) {
       setReadiness(null);
+      setProtectedSnapshot(false);
+      setVaultUnlocked(false);
       return;
     }
-    const r = await getScopedOfflineReadiness(actor);
+    const [r, grant] = await Promise.all([getScopedOfflineReadiness(actor), getOfflineReadGrant(actor)]);
     setReadiness(r);
+    setProtectedSnapshot(grant?.protection === "erp-offline-aes-gcm-v1");
+    setVaultUnlocked(isVerifiedOfflineReadVaultUnlocked(actor));
   }, [companyId]);
 
   useEffect(() => {
@@ -100,6 +120,14 @@ function OfflinePrepPanelContent() {
   }, [loadReadiness]);
 
   const handlePrepare = async () => {
+    if (vaultPassphrase.length < 12) {
+      toast({
+        title: "Encryption passphrase required",
+        description: "Use a unique passphrase of at least 12 characters before preparing this device.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (!isOnline) {
       toast({
         title: "You're offline",
@@ -125,7 +153,8 @@ function OfflinePrepPanelContent() {
       const outcome = await runScopedOfflinePrep(
         companyId,
         (p) => setProgress({ ...p }),
-        selectedCompany?.companyType ?? "properties"
+        selectedCompany?.companyType ?? "properties",
+        vaultPassphrase
       );
       await loadReadiness();
       if (outcome.phase === "done") {
@@ -144,8 +173,22 @@ function OfflinePrepPanelContent() {
         variant: "destructive",
       });
     } finally {
+      setVaultPassphrase("");
       setRunning(false);
     }
+  };
+
+  const handleUnlock = async () => {
+    const unlocked = await unlockVerifiedOfflineReadVault(vaultPassphrase);
+    setVaultPassphrase("");
+    setVaultUnlocked(unlocked);
+    toast({
+      title: unlocked ? "Offline snapshots unlocked" : "Unlock failed",
+      description: unlocked
+        ? "Prepared data is available only while your verified session remains active."
+        : "Check your passphrase and your verified session. No saved data was changed.",
+      variant: unlocked ? "default" : "destructive",
+    });
   };
 
   // Summarise readiness
@@ -162,6 +205,13 @@ function OfflinePrepPanelContent() {
         <Badge variant="outline" className="gap-1 text-muted-foreground">
           <WifiOff className="h-3 w-3" />
           Not prepared
+        </Badge>
+      );
+    if (readiness.ready && protectedSnapshot && !vaultUnlocked)
+      return (
+        <Badge variant="outline" className="gap-1">
+          <Shield className="h-3 w-3" />
+          Prepared · Locked
         </Badge>
       );
     if (readiness.ready)
@@ -244,6 +294,46 @@ function OfflinePrepPanelContent() {
           })}
         </div>
       )}
+
+      {/* Encrypted snapshot vault: never store the passphrase or bypass live auth. */}
+      <div className="rounded-md border p-3 space-y-2">
+        <label htmlFor="offline-vault-passphrase" className="text-sm font-medium">
+          Device snapshot encryption passphrase
+        </label>
+        <Input
+          id="offline-vault-passphrase"
+          type="password"
+          autoComplete="new-password"
+          value={vaultPassphrase}
+          onChange={(event) => setVaultPassphrase(event.target.value)}
+          placeholder="At least 12 characters"
+          disabled={running}
+        />
+        <p className="text-xs text-muted-foreground">
+          Required to encrypt each new preparation and unlock saved data. The passphrase is never saved.
+          Losing it requires preparing again online. This does not enable offline sign-in.
+        </p>
+        {readiness?.ready && protectedSnapshot && (
+          <div className="flex flex-wrap items-center gap-2">
+            {vaultUnlocked ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  lockVerifiedOfflineReadVault();
+                  setVaultUnlocked(false);
+                }}
+              >
+                Lock prepared data
+              </Button>
+            ) : (
+              <Button size="sm" variant="outline" disabled={vaultPassphrase.length < 12} onClick={handleUnlock}>
+                Unlock prepared data
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Action button */}
       <Button
