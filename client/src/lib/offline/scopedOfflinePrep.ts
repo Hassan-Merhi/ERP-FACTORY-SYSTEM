@@ -15,14 +15,17 @@ const activePreparations = new Set<number>();
 
 export function selectOfflinePrepPacks(companyType: CompanyType): string[] {
   switch (companyType) {
-    case "erp": return ["shared", "erp"];
+    case "erp":
+      return ["shared", "erp"];
     case "factory":
-    case "factory_v2": return ["shared", "erp", "factory"];
-    case "retail": return ["shared", "pos"];
-    default: return [];
+    case "factory_v2":
+      return ["shared", "erp", "factory"];
+    case "retail":
+      return ["shared", "pos"];
+    default:
+      return [];
   }
 }
-
 
 /** Download every page, or refuse to promote an incomplete snapshot. */
 export async function downloadCompleteOfflineDataset(url: string, transport: typeof fetch = fetch): Promise<string> {
@@ -101,11 +104,13 @@ export async function runScopedOfflinePrep(
   const results: PrepProgress["results"] = [];
   const errors: string[] = [];
   const allowedPacks = new Set(selectOfflinePrepPacks(companyType));
-  const datasets = buildPacks().filter((pack) => allowedPacks.has(pack.id)).flatMap((pack) =>
-    pack.datasets
-      .filter((dataset) => dataset.id !== "user" && dataset.id !== "companies")
-      .map((dataset) => ({ ...dataset, packId: pack.id }))
-  );
+  const datasets = buildPacks()
+    .filter((pack) => allowedPacks.has(pack.id))
+    .flatMap((pack) =>
+      pack.datasets
+        .filter((dataset) => dataset.id !== "user" && dataset.id !== "companies")
+        .map((dataset) => ({ ...dataset, packId: pack.id }))
+    );
   const total = datasets.length;
   const emit = (phase: PrepProgress["phase"], label: string): PrepProgress => {
     const complete = results.filter((entry) => entry.success).length;
