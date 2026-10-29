@@ -26,6 +26,7 @@ function fixture(override: Record<string, string>, provisioned: () => Promise<bo
   const app = express();
   app.use("/api", makeFactoryEdgeWriteGuard(config, provisioned));
   app.post("/api/vouchers/with-entries", (_req, res) => res.json({ ok: true }));
+  app.post("/api/factory/bales", (_req, res) => res.json({ unsafe: true }));
   app.post("/api/auth/login", (_req, res) => res.json({ ok: true }));
   app.get("/api/inventory", (_req, res) => res.json([]));
   return app;
