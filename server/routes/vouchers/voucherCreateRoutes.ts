@@ -1,4 +1,5 @@
 import { assertApprovedZmwVoucherRate } from "../../services/accounting/zambiaVoucherRatePolicy";
+import { captureEdgeVoucherTx } from "../../edge/edgeVoucherOutbox";
 import { infrastructurePostingIdentity } from "../../services/accounting/infrastructureVoucherIdentity";
 import type { Express } from "express";
 import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
@@ -389,6 +390,17 @@ export function registerVoucherCreateRoutes(app: Express) {
           },
           tx
         );
+
+        // Atomic source evidence for the LAN voucher synchronization program.
+        // Never tell the user this has been posted to the cloud.
+        await captureEdgeVoucherTx(tx, {
+          companyId: req.session.currentCompanyId!,
+          actorUserId: String(req.session.userId),
+          localVoucherId: txVoucher.id,
+          requestId: idempotencyHeader || null,
+          voucher: txVoucher,
+          entries: txEntries,
+        });
 
         return { createdVoucher: txVoucher, createdEntries: txEntries };
       });
