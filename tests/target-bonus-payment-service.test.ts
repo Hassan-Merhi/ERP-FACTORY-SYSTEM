@@ -62,6 +62,8 @@ function fakeExecute(query: { parts: readonly string[]; values: unknown[] }) {
     return Promise.resolve({ rows: value("payment") });
   if (source.includes("FROM factory_production_bonus_allocations"))
     return Promise.resolve({ rows: value("payroll") });
+  if (source.includes("FROM factory_payrolls fp"))
+    return Promise.resolve({ rows: value("salary") });
   if (source.includes("INSERT INTO factory_target_bonus_payments"))
     return Promise.resolve({ rows: [{ id: 304 }] });
   if (source.includes("FROM factory_target_bonus_payments") && source.includes("WHERE company_id"))
@@ -115,6 +117,12 @@ describe("Production Targets payout transaction", () => {
 
   it("rejects duplicate payroll allocation for same worker/date", async () => {
     harness.responses.set("payroll", [{ blocked: 1 }]);
+    await expect(postTargetBonusPayments(3, command, actor)).rejects.toThrow(/payroll/);
+    expect(harness.voucher).not.toHaveBeenCalled();
+  });
+
+  it("rejects payout on a finalized salary payroll for same worker/day", async () => {
+    harness.responses.set("salary", [{ blocked: 1 }]);
     await expect(postTargetBonusPayments(3, command, actor)).rejects.toThrow(/payroll/);
     expect(harness.voucher).not.toHaveBeenCalled();
   });
