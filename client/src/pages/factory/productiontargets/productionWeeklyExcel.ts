@@ -19,7 +19,7 @@ export class ProductionDateRangeError extends Error {
 
 export function getProductionRangeDates(start: string, end: string, today: string = factoryProductionToday()): string[] {
   const isDate = (value: string) =>
-    /^\\d{4}-\\d{2}-\\d{2}$/.test(value) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(value) &&
     localDateStr(parseLocalDate(value)) === value;
   if (!isDate(start) || !isDate(end) || start > end) throw new ProductionDateRangeError("invalid");
   if (end > today) throw new ProductionDateRangeError("future");
@@ -274,7 +274,6 @@ function createWorkbook(
   data: ReturnType<typeof buildWeeklyProductionData>,
   start: string,
   end: string,
-  through: string,
   WorkbookCtor: new () => ExcelJS.Workbook,
 ) {
   const book = new WorkbookCtor();
@@ -366,7 +365,7 @@ export async function exportWeeklyProductionExcel(
   const data = buildWeeklyProductionData(days);
   const excelModule = await import("exceljs");
   const runtime = excelModule.default ?? excelModule;
-  const workbook = createWorkbook(data, start, end, end, runtime.Workbook);
+  const workbook = createWorkbook(data, start, end, runtime.Workbook);
   const raw = await workbook.xlsx.writeBuffer();
   const blob = new Blob([raw], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
