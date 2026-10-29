@@ -215,3 +215,17 @@ New phase documents are written straight into `archive/`. Only material that
 describes lasting behaviour gets promoted out, and promoting one means
 reclassifying it in `config/doc-index.json` — which is the moment to check that
 it is actually still true.
+
+## Offline mode and factory LAN (development only)
+
+The following references document **unmerged, production-disabled** work.
+Encrypted checkpoint transfer is not automatic database reconciliation.
+
+| Doc | What it covers |
+|---|---|
+| [offline-phase2-read-coverage.md](offline-phase2-read-coverage.md) | Exact offline GET allowlist and release limits |
+| [operations/factory-lan-edge.md](operations/factory-lan-edge.md) | Phase 3 LAN server setup, trusted TLS, database cutover controls |
+| [operations/factory-lan-phase4-checkpoint-transfer.md](operations/factory-lan-phase4-checkpoint-transfer.md) | Phase 4 cloud write fence and encrypted staging; remaining sync blockers |
+| [superpowers/plans/2026-10-29-offline-phase1.md](superpowers/plans/2026-10-29-offline-phase1.md) | Phase 1 outbox scope and acceptance |
+| [superpowers/plans/2026-10-29-offline-phase2.md](superpowers/plans/2026-10-29-offline-phase2.md) | Phase 2 prepared reads and identity requirements |
+| [superpowers/plans/2026-10-29-offline-phase3.md](superpowers/plans/2026-10-29-offline-phase3.md) | Phase 3 factory server safety and acceptance |
