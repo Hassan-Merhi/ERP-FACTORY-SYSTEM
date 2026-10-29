@@ -7,7 +7,6 @@ import {
   AlertTriangle,
   Plus,
   ChevronDown,
-  ChevronRight,
   Container,
   CheckCircle2,
   Pencil,
@@ -278,7 +277,7 @@ export default function FactoryStockAllocationV5() {
         <>
           <FactoryStockAllocationV5MobileList model={model} />
 
-          <div data-horizontal-scroll="true" className="mx-3 hidden overflow-x-auto rounded-b-xl border border-t-0 bg-card shadow-sm md:block phone-land:hidden sm:mx-5">
+          <div data-horizontal-scroll="true" className="hidden overflow-x-auto md:block phone-land:hidden mx-3 rounded-b-xl border border-t-0 bg-card shadow-sm sm:mx-5">
             <table className="w-full min-w-[1080px] table-fixed border-collapse text-sm">
               <colgroup>
                 <col style={{ width: "29%" }} />
@@ -305,7 +304,7 @@ export default function FactoryStockAllocationV5() {
                   <th className="px-2 py-3 text-center text-xs font-semibold border-b border-r whitespace-nowrap">
                     Available Balance
                   </th>
-                  <th className="text-center px-2 py-3 text-center text-xs font-semibold border-b whitespace-nowrap">
+                  <th className="border-b px-2 py-3 text-center text-xs font-semibold whitespace-nowrap">
                     Action
                   </th>
                 </tr>
