@@ -1,21 +1,29 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation, useParams } from "wouter";
+import { useLocation, useParams, useSearch } from "wouter";
 import { AlertTriangle, ArrowLeft, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
 import EditProformaV5Drawer from "./EditProformaV5Drawer";
 import { fetchAllV5AllocationData, type V5AllocationData } from "@/lib/v5AllocationPaginationClient";
+import { invoicingProformaReturnPath } from "@/lib/factoryProformaEditRoutes";
 
 /** Full-page V5 proforma editor, using the complete unfiltered allocation snapshot. */
 export default function FactoryStockAllocationV5EditProforma() {
   const { id } = useParams<{ id: string }>();
   const proformaId = Number(id);
   const validId = /^[1-9]\d*$/.test(id ?? "") && Number.isSafeInteger(proformaId);
-  const [, navigate] = useLocation();
-  const back = () => navigate(validId
-    ? `/factory/stock-allocation-v5?proformaId=${proformaId}`
-    : "/factory/stock-allocation-v5");
+  const [location, navigate] = useLocation();
+  const search = useSearch();
+  const fromInvoicing = location.startsWith("/factory/invoicing/proformas/");
+  const customerId = new URLSearchParams(search).get("customerId");
+  const back = () => navigate(
+    fromInvoicing
+      ? invoicingProformaReturnPath(validId ? proformaId : null, customerId)
+      : validId
+        ? `/factory/stock-allocation-v5?proformaId=${proformaId}`
+        : "/factory/stock-allocation-v5"
+  );
 
   const query = useQuery<V5AllocationData>({
     queryKey: ["/api/factory/v5/stock-allocation/all-for-edit", proformaId],
@@ -47,7 +55,7 @@ export default function FactoryStockAllocationV5EditProforma() {
       <div className="flex h-full flex-col gap-4 p-4" data-testid="page-v5-edit-error">
         <div className="flex flex-wrap items-center gap-3">
           <Button variant="outline" size="sm" onClick={back}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Stock Allocation
+            <ArrowLeft className="mr-2 h-4 w-4" /> {fromInvoicing ? "Back to Invoicing" : "Back to Stock Allocation"}
           </Button>
           <PageHeader title="Edit Proforma" />
         </div>
@@ -76,7 +84,7 @@ export default function FactoryStockAllocationV5EditProforma() {
     <div className="flex h-full min-h-0 min-w-0 flex-col">
       <div className="border-b px-4 py-2">
         <Button variant="ghost" size="sm" onClick={back} data-testid="button-v5-edit-back">
-          <ArrowLeft className="mr-2 h-4 w-4" /> Stock Allocation
+          <ArrowLeft className="mr-2 h-4 w-4" /> {fromInvoicing ? "Invoicing / Proformas" : "Stock Allocation"}
         </Button>
       </div>
       <div className="min-h-0 flex-1">
