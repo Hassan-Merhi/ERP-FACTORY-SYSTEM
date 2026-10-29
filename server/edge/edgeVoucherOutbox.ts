@@ -50,6 +50,23 @@ export async function ensureEdgeVoucherOutboxSchema(queryable: Pick<Pool, "query
   `);
 }
 
+/** Stable object-key order for comparing a JSONB record after remote transport. */
+export function canonicalEdgeVoucherPayload(voucher: unknown, entries: readonly unknown[]): string {
+  const source: unknown = JSON.parse(JSON.stringify({ voucher, entries }));
+  const sort = (input: unknown): unknown => {
+    if (Array.isArray(input)) return input.map(sort);
+    if (input !== null && typeof input === "object") {
+      return Object.fromEntries(
+        Object.entries(input)
+          .sort(([left], [right]) => left.localeCompare(right, "en"))
+          .map(([key, value]) => [key, sort(value)])
+      );
+    }
+    return input;
+  };
+  return JSON.stringify(sort(source));
+}
+
 export interface EdgeVoucherEvidence {
   companyId: number;
   actorUserId: string;
@@ -71,7 +88,7 @@ export async function captureEdgeVoucherTx(tx: DbTransaction, evidence: EdgeVouc
     evidence.requestId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(evidence.requestId)
       ? evidence.requestId
       : randomUUID();
-  const payload = JSON.stringify({ voucher: evidence.voucher, entries: evidence.entries });
+  const payload = canonicalEdgeVoucherPayload(evidence.voucher, evidence.entries);
   const hash = createHash("sha256").update(payload, "utf8").digest("hex");
   // Ordered captures serialize to commit in the same order as sequence
   // allocation. A future relay must still use acknowledgements, not simply
