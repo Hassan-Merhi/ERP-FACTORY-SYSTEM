@@ -303,12 +303,24 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
         [ctx.companyId],
       );
       const settings = await pool.query(
-        "SELECT extra_settings->'pressingWorkerTargetsKg' AS targets FROM factory_settings WHERE company_id=$1",
-        [ctx.companyId],
+        "SELECT extra_settings->'pressingWorkerTargetsKg' AS targets, " +
+        "extra_settings->'pressingHourlyTargetsByDateKg'->($2::text) AS \"hourlyTargets\" " +
+        "FROM factory_settings WHERE company_id=$1",
+        [ctx.companyId, day],
       );
       const raw = settings.rows[0]?.targets;
       const targets = raw && typeof raw === "object" && !Array.isArray(raw)
         ? raw as Record<string, unknown> : {};
+      const rawHourly = settings.rows[0]?.hourlyTargets;
+      const hourlyTargetsKg: Record<string, number> = {};
+      if (rawHourly && typeof rawHourly === "object" && !Array.isArray(rawHourly)) {
+        for (let hour = 7; hour < 17; hour++) {
+          const value = Number((rawHourly as Record<string, unknown>)[String(hour)]);
+          if (Number.isFinite(value) && value > 0 && value <= 100000) {
+            hourlyTargetsKg[String(hour)] = value;
+          }
+        }
+      }
       const workers = workersResult.rows.map(row => {
         const configured = Number(targets[String(row.userId)]);
         return {
@@ -341,7 +353,7 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
       );
       res.set("Cache-Control", "private, no-store");
       return res.json({ day, serverNow: new Date().toISOString(), canEdit: ctx.canCorrect,
-        workers, hours: result.rows });
+        workers, hours: result.rows, hourlyTargetsKg });
     } catch (error) { return handleError(res, error); }
   });
 
@@ -352,10 +364,39 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
     try {
       const ctx = await context(req);
       if (!ctx.canCorrect) throw new ReportPermissionError(403, "PRESSING_TARGET_FORBIDDEN", "Only Admin or Owner may edit pressing targets");
-      const input = z.object({
-        userId: z.string().trim().min(1).max(255),
-        targetKgPerHour: z.number().finite().positive().max(100000),
-      }).strict().parse(req.body);
+      const kgSchema = z.number().finite().positive().max(100000);
+      const input = z.union([
+        z.object({
+          day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(date =>
+            !Number.isNaN(Date.parse(date + "T00:00:00Z")) &&
+            new Date(date + "T00:00:00Z").toISOString().slice(0, 10) === date),
+          hour: z.number().int().min(7).max(16),
+          targetKgPerHour: kgSchema,
+        }).strict(),
+        z.object({
+          userId: z.string().trim().min(1).max(255),
+          targetKgPerHour: kgSchema,
+        }).strict(),
+      ]).parse(req.body);
+      if ("hour" in input) {
+        // Date-scoped hourly targets preserve historical comparisons. Each
+        // hour applies to all three workers and overrides their legacy defaults.
+        // A single atomic JSONB upsert preserves unrelated settings and dates.
+        await pool.query(
+          "INSERT INTO factory_settings (company_id,extra_settings,updated_at) " +
+          "VALUES ($1,jsonb_build_object('pressingHourlyTargetsByDateKg'," +
+          "jsonb_build_object($2::text,jsonb_build_object($3::text,$4::numeric))),now()) " +
+          "ON CONFLICT (company_id) DO UPDATE SET " +
+          "extra_settings=COALESCE(factory_settings.extra_settings,'{}'::jsonb) || " +
+          "jsonb_build_object('pressingHourlyTargetsByDateKg'," +
+          "COALESCE(factory_settings.extra_settings->'pressingHourlyTargetsByDateKg','{}'::jsonb) || " +
+          "jsonb_build_object($2::text," +
+          "COALESCE(factory_settings.extra_settings->'pressingHourlyTargetsByDateKg'->($2::text),'{}'::jsonb) || " +
+          "jsonb_build_object($3::text,$4::numeric))),updated_at=now()",
+          [ctx.companyId, input.day, String(input.hour), input.targetKgPerHour],
+        );
+        return res.json({ saved: true, day: input.day, hour: input.hour, targetKgPerHour: input.targetKgPerHour });
+      }
       const eligible = await pool.query(
         "SELECT 1 FROM users u WHERE u.id=$2 AND UPPER(BTRIM(u.username)) IN ('P1','P2','P3') " +
         "AND EXISTS (SELECT 1 FROM user_company_roles r WHERE r.company_id=$1 AND r.user_id=u.id " +

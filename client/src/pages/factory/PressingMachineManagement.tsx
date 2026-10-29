@@ -13,6 +13,8 @@ import PressingOfflineQueueStatus from "./PressingOfflineQueueStatus";
 import PressingHistoryReport from "./PressingHistoryReport";
 import PressingWorkerTotals from "./PressingWorkerTotals";
 import PressingHourlyTargets from "./PressingHourlyTargets";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translatePressingUiText } from "@/i18n/pressingUiTranslations";
 
 const ROOT = "/api/factory/pressing-machines";
 type Assignment = {
@@ -27,11 +29,14 @@ const problem = (error: unknown) => error instanceof Error ? error.message : "Un
 export default function PressingMachineManagement({ active }: { active: boolean }) {
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
+  const { language } = useApplicationLanguage();
+  const t = (key: Parameters<typeof translatePressingUiText>[0]) => translatePressingUiText(key, language);
   const [barcode, setBarcode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [last, setLast] = useState<{ barcode: string; outcome: PressingScanOutcome } | null>(null);
   const [showCamera, setShowCamera] = useState(false);
   const [showSync, setShowSync] = useState(false);
+  const [scanMode, setScanMode] = useState<"barcode" | "manual">("barcode");
   const [activationError, setActivationError] = useState("");
   const activating = useRef<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -122,11 +127,13 @@ export default function PressingMachineManagement({ active }: { active: boolean 
   const outstanding = scanner.snapshot.pending + scanner.snapshot.syncing;
 
   return (
-    <div className="min-w-0 space-y-4" data-testid="pressing-machine-management">
-      <div className="flex flex-wrap items-center gap-2">
-        <ScanLine className="h-5 w-5 text-emerald-500" />
-        <h2 className="text-lg font-semibold">Pressing Scan</h2>
-        {fullControls && <Badge variant="secondary">Recorded by logged-in user</Badge>}
+    <div className="min-w-0 space-y-5" data-testid="pressing-machine-management">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-2.5 text-emerald-500">
+          <ScanLine className="h-5 w-5" />
+        </span>
+        <h2 className="text-lg font-bold tracking-tight">Pressing Scan</h2>
+        {fullControls && <Badge variant="secondary" className="rounded-lg bg-muted/70 px-2.5 py-1 font-medium">Recorded by logged-in user</Badge>}
       </div>
 
       {access.isLoading && <p className="text-sm">Checking pressing access…</p>}
@@ -145,22 +152,37 @@ export default function PressingMachineManagement({ active }: { active: boolean 
         </div>
       )}
 
-      <div className="rounded-lg border bg-card p-3 space-y-3">
+      <div className="space-y-3 rounded-2xl border border-border/70 bg-gradient-to-br from-card via-card to-sky-500/[0.045] p-3 shadow-[0_14px_38px_-28px_rgba(14,165,233,0.55)] sm:p-4">
+        {fullControls && (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="inline-flex rounded-xl border border-border/70 bg-background/45 p-1">
+              <Button type="button" size="sm" variant={scanMode === "barcode" ? "default" : "ghost"}
+                className={"h-9 rounded-lg px-4 text-xs font-semibold " + (scanMode === "barcode" ? "bg-blue-600 text-white hover:bg-blue-500" : "")}
+                onClick={() => { setScanMode("barcode"); inputRef.current?.focus(); }}>{t("barcodeScan")}</Button>
+              <Button type="button" size="sm" variant={scanMode === "manual" ? "default" : "ghost"}
+                className={"h-9 rounded-lg px-4 text-xs font-semibold " + (scanMode === "manual" ? "bg-blue-600 text-white hover:bg-blue-500" : "")}
+                onClick={() => { setScanMode("manual"); inputRef.current?.focus(); }}>Manual Entry</Button>
+            </div>
+            <span className="text-[11px] text-muted-foreground">
+              {scanMode === "barcode" ? "Ready for USB or Bluetooth barcode scanner" : "Type a bale reference and press Scan"}
+            </span>
+          </div>
+        )}
         <div className="flex flex-col gap-2 sm:flex-row">
           {fullControls && <><div className="relative min-w-0 flex-1">
             <ScanLine className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input ref={inputRef} autoComplete="off" data-testid="input-pressing-scan"
-              className="h-11 pl-10 font-mono" placeholder="Scan bale reference / barcode..."
+              className="h-11 rounded-lg border-border/80 bg-background/80 pl-10 font-mono shadow-inner focus-visible:ring-blue-500/40" placeholder="Scan bale reference / barcode..."
               value={barcode} onChange={e => setBarcode(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); void scanOne(barcode); } }}
               disabled={!assignment || !active || submitting} />
           </div>
-          <Button data-testid="button-pressing-scan" className="h-11" disabled={!barcode.trim() || !assignment || submitting}
+          <Button data-testid="button-pressing-scan" className="h-11 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-5 font-semibold text-white shadow-sm hover:from-blue-500 hover:to-indigo-500" disabled={!barcode.trim() || !assignment || submitting}
             onClick={() => void scanOne(barcode)}>
             <ScanLine className="mr-2 h-4 w-4" />
             {submitting ? "Saving…" : "Scan"}
           </Button></>}
-          <Button data-testid="button-pressing-camera" className={fullControls ? "h-11" : "h-12 w-full sm:w-auto"} variant={showCamera ? "destructive" : "default"} onClick={() => setShowCamera(v => !v)}
+          <Button data-testid="button-pressing-camera" className={fullControls ? "h-11 rounded-lg border-blue-500/50 bg-blue-500/10 px-5 font-semibold text-blue-600 hover:bg-blue-500/20 dark:text-blue-200" : "h-12 w-full sm:w-auto"} variant={showCamera ? "destructive" : "outline"} onClick={() => setShowCamera(v => !v)}
             disabled={!assignment}>
             <Camera className="mr-2 h-4 w-4" />{showCamera ? "Close Camera" : "Open Camera"}
           </Button>

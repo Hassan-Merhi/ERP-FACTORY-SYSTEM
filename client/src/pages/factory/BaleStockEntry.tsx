@@ -117,9 +117,9 @@ export default function BaleStockEntry() {
             <ScanLine className="h-5 w-5 text-emerald-500" />
           </div>
           <div className="min-w-0">
-            <h1 className="wrap-break-word text-lg font-bold leading-tight sm:text-xl">Bale Stock Entry</h1>
+            <h1 className="wrap-break-word text-lg font-bold leading-tight sm:text-xl">{activeTab === "pressing-machines" ? "Pressing Machines" : "Bale Stock Entry"}</h1>
             <p className="mt-0.5 wrap-break-word text-sm leading-snug text-muted-foreground">
-              Scan and record bale production
+              {activeTab === "pressing-machines" ? "Scan and record bale production from pressing machines" : "Scan and record bale production"}
             </p>
           </div>
         </div>
@@ -146,7 +146,7 @@ export default function BaleStockEntry() {
         className="min-w-0"
       >
         <div className="erp-mobile-scroll-tabs pb-1">
-          <TabsList aria-label="Bale stock entry sections" className="w-max min-w-full sm:min-w-0 sm:w-fit">
+          <TabsList aria-label="Bale stock entry sections" className="w-max min-w-full rounded-2xl border border-border/70 bg-card/70 p-1 sm:min-w-0 sm:w-fit">
             {showEntry && (
               <TabsTrigger value="entry" data-testid="tab-stock-entry">
                 <ScanLine className="mr-1 h-4 w-4" />
@@ -166,7 +166,7 @@ export default function BaleStockEntry() {
               </TabsTrigger>
             )}
             {showPressingMachines && (
-              <TabsTrigger value="pressing-machines" data-testid="tab-pressing-machines">
+              <TabsTrigger value="pressing-machines" data-testid="tab-pressing-machines" className="rounded-xl px-4 data-[state=active]:bg-blue-600 data-[state=active]:font-bold data-[state=active]:text-white">
                 <Cog className="mr-1 h-4 w-4" />
                 Pressing Machines
               </TabsTrigger>

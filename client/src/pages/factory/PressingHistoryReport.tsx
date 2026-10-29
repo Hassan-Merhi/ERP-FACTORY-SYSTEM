@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   CalendarDays, ChevronDown, ChevronUp, Download, LayoutList, List,
-  PackageCheck, RefreshCw, ScanLine, ShieldCheck, SlidersHorizontal, Weight,
+  PackageCheck, RefreshCw, ScanLine, ShieldCheck, SlidersHorizontal, Weight, TrendingUp, UsersRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,8 @@ import {
 import PressingCorrectionReview from "./PressingCorrectionReview";
 import { approx40KgText } from "./pressing-scanner/pressingKpiFormatting";
 import PressingHourlyTargets from "./PressingHourlyTargets";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translatePressingUiText } from "@/i18n/pressingUiTranslations";
 
 const ROOT = "/api/factory/pressing-machines/report";
 const DETAIL_COLUMNS: PressingReportColumn[] = [
@@ -42,6 +44,8 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
   active: boolean; companyId: number; userId: string; simpleMode?: boolean;
 }) {
   const { toast } = useToast();
+  const { language } = useApplicationLanguage();
+  const t = (key: Parameters<typeof translatePressingUiText>[0]) => translatePressingUiText(key, language);
   const [filters, setFilters] = useState<PressingReportFilters>({
     from: simpleMode ? undefined : today(), to: simpleMode ? undefined : today(),
     status: "active", mode: "condensed", page: 1, limit: 50,
@@ -122,17 +126,19 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
   return (
     <section className="min-w-0 space-y-4" data-testid="pressing-history-report">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <PackageCheck className="h-5 w-5 text-emerald-500" />
-            <h3 className="text-lg font-bold tracking-tight">Pressing Overview</h3>
+        <div className="flex items-start gap-3">
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-2.5 text-emerald-500">
+            <PackageCheck className="h-5 w-5" />
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Confirmed bales and KG · totals cover the complete selected period
-          </p>
+          <div>
+            <h3 className="text-lg font-bold tracking-tight">Pressing Overview</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Confirmed bales and KG · totals cover the complete selected period
+            </p>
+          </div>
         </div>
         {!simpleMode && (
-          <Button type="button" size="sm" variant="outline"
+          <Button type="button" size="sm" variant="outline" className="h-9 rounded-lg"
             disabled={report.isFetching}
             onClick={() => {
               void queryClient.invalidateQueries({ queryKey: key });
@@ -144,57 +150,78 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4" aria-label="Pressing production KPIs">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Pressing production KPIs">
         {workers.map((worker, index) => {
           const selected = !!worker.userId && filters.userId === worker.userId;
-          const accent = [
-            "bg-sky-500/10 text-sky-600 dark:text-sky-400",
-            "bg-violet-500/10 text-violet-600 dark:text-violet-400",
-            "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-          ][index];
+          const theme = [
+            { card: "border-sky-500/35 bg-gradient-to-br from-sky-500/15 via-card to-card shadow-[0_12px_30px_-22px_rgba(14,165,233,0.5)]", tag: "bg-sky-500/15 text-sky-600 dark:text-sky-300", icon: "text-sky-500" },
+            { card: "border-violet-500/30 bg-gradient-to-br from-violet-500/15 via-card to-card shadow-[0_12px_30px_-22px_rgba(168,85,247,0.5)]", tag: "bg-violet-500/15 text-violet-600 dark:text-violet-300", icon: "text-violet-500" },
+            { card: "border-amber-500/30 bg-gradient-to-br from-amber-500/15 via-card to-card shadow-[0_12px_30px_-22px_rgba(245,158,11,0.45)]", tag: "bg-amber-500/15 text-amber-700 dark:text-amber-300", icon: "text-amber-500" },
+          ][index] || { card: "border-border bg-card", tag: "bg-muted text-foreground", icon: "text-muted-foreground" };
           return (
             <button type="button" key={worker.slot}
               data-testid={"pressing-kpi-" + worker.slot.toLowerCase()}
               disabled={!canSeeEveryone || !worker.userId}
               aria-pressed={selected}
               onClick={() => selectWorker(worker.userId)}
-              className={"min-w-0 rounded-xl border bg-card p-3 text-left shadow-sm transition-colors sm:p-4 " +
-                (selected ? "border-primary ring-1 ring-primary/50" :
-                  "border-border/80 hover:border-primary/40") +
+              className={"group min-w-0 rounded-2xl border p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg " +
+                theme.card + (selected ? " ring-2 ring-primary/60" : "") +
                 (!canSeeEveryone || !worker.userId ? " cursor-default" : " cursor-pointer")}>
               <div className="flex items-center justify-between gap-2">
-                <span className={"min-w-0 break-words rounded-lg px-2.5 py-1 text-xs font-bold sm:text-sm " + accent}
-                   data-testid={"pressing-kpi-display-name-" + worker.slot.toLowerCase()}>{worker.label}</span>
-                <ScanLine className="h-4 w-4 text-muted-foreground/60" />
+                <span className={"min-w-0 break-words rounded-lg px-2.5 py-1 text-xs font-bold sm:text-sm " + theme.tag}
+                  data-testid={"pressing-kpi-display-name-" + worker.slot.toLowerCase()}>{worker.label}</span>
+                <TrendingUp className={"h-4 w-4 " + theme.icon} />
               </div>
-              <div className="mt-3 text-2xl font-bold leading-none tabular-nums sm:text-3xl">{countText(worker.bales)}</div>
-              <div className="mt-1 text-xs text-muted-foreground">Total bales</div>
-              <div className="mt-3 flex items-center gap-1.5 border-t pt-2.5">
-                <Weight className="h-3.5 w-3.5 text-muted-foreground" />
-                <strong className="text-sm tabular-nums">{kgText(worker.kg)} KG</strong>
+              <div className="mt-4 flex items-baseline gap-2">
+                <strong className="text-3xl font-extrabold leading-none tracking-tight tabular-nums">{countText(worker.bales)}</strong>
+                <span className="text-xs text-muted-foreground">Total bales</span>
               </div>
-              <div className="mt-1.5 text-sm text-muted-foreground" data-testid={"pressing-kpi-approx-" + worker.slot.toLowerCase()}>
-                Approx. (KG ÷ 40): <span className="font-semibold tabular-nums text-foreground">{approx40KgText(worker.kg)}</span>
+              <div className="mt-4 grid grid-cols-2 gap-2 border-t border-border/60 pt-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <Weight className={"h-4 w-4 shrink-0 " + theme.icon} />
+                    <strong className="text-sm tabular-nums">{kgText(worker.kg)} KG</strong>
+                  </div>
+                  <div className="mt-1 text-[11px] text-muted-foreground">{t("totalWeight")}</div>
+                </div>
+                <div className="min-w-0 border-l border-border/60 pl-3" data-testid={"pressing-kpi-approx-" + worker.slot.toLowerCase()}>
+                  <div className="flex items-center gap-1.5">
+                    <TrendingUp className={"h-4 w-4 shrink-0 " + theme.icon} />
+                    <strong className="text-sm tabular-nums">{approx40KgText(worker.kg)}</strong>
+                  </div>
+                  <div className="mt-1 text-[11px] text-muted-foreground">Approx. (KG ÷ 40)</div>
+                </div>
               </div>
             </button>
           );
         })}
         <button type="button" data-testid="pressing-kpi-all" aria-pressed={!filters.userId}
           onClick={() => update({ userId: undefined })}
-          className={"min-w-0 rounded-xl border bg-linear-to-br from-emerald-500/10 via-card to-card p-3 text-left shadow-sm transition-colors sm:p-4 " +
-            (!filters.userId ? "border-emerald-500/50" : "border-border/80 hover:border-emerald-500/50")}>
+          className={"group min-w-0 rounded-2xl border border-emerald-500/40 bg-gradient-to-br from-emerald-500/15 via-card to-card p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg " +
+            (!filters.userId ? "ring-1 ring-emerald-500/35" : "")}>
           <div className="flex items-center justify-between gap-2">
-            <span className="rounded-lg bg-emerald-500/15 px-2.5 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-400">All pressing workers</span>
-            <PackageCheck className="h-4 w-4 text-emerald-500" />
+            <span className="rounded-lg bg-emerald-500/15 px-2.5 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-300">All pressing workers</span>
+            <UsersRound className="h-4 w-4 text-emerald-500" />
           </div>
-          <div className="mt-3 text-2xl font-bold leading-none tabular-nums sm:text-3xl">{countText(allWorkerBales)}</div>
-          <div className="mt-1 text-xs text-muted-foreground">Total bales</div>
-          <div className="mt-3 flex items-center gap-1.5 border-t pt-2.5">
-            <Weight className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-            <strong className="text-sm tabular-nums">{kgText(allWorkerKg)} KG</strong>
+          <div className="mt-4 flex items-baseline gap-2">
+            <strong className="text-3xl font-extrabold leading-none tracking-tight tabular-nums">{countText(allWorkerBales)}</strong>
+            <span className="text-xs text-muted-foreground">Total bales</span>
           </div>
-          <div className="mt-1.5 text-sm text-muted-foreground" data-testid="pressing-kpi-approx-all">
-            Approx. (KG ÷ 40): <span className="font-semibold tabular-nums text-foreground">{approx40KgText(allWorkerKg)}</span>
+          <div className="mt-4 grid grid-cols-2 gap-2 border-t border-border/60 pt-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <Weight className="h-4 w-4 shrink-0 text-emerald-500" />
+                <strong className="text-sm tabular-nums">{kgText(allWorkerKg)} KG</strong>
+              </div>
+              <div className="mt-1 text-[11px] text-muted-foreground">{t("totalWeight")}</div>
+            </div>
+            <div className="min-w-0 border-l border-border/60 pl-3" data-testid="pressing-kpi-approx-all">
+              <div className="flex items-center gap-1.5">
+                <TrendingUp className="h-4 w-4 shrink-0 text-emerald-500" />
+                <strong className="text-sm tabular-nums">{approx40KgText(allWorkerKg)}</strong>
+              </div>
+              <div className="mt-1 text-[11px] text-muted-foreground">Approx. (KG ÷ 40)</div>
+            </div>
           </div>
         </button>
       </div>
