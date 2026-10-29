@@ -180,7 +180,7 @@ export async function deliverOfflineOperations(
     retried: 0,
     paused: false,
   };
-  if (processing) return summary;
+  if (processing) return { ...summary, paused: true };
   processing = true;
   try {
     const actor = await getAuthenticatedActor(transport);

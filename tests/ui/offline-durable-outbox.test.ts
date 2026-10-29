@@ -177,10 +177,13 @@ describe("durable outbox — capture before delivery", () => {
     const conflictRow = await queue();
     await deliverOfflineOperations(transportFor(409).transport);
     expect(state.records.get(conflictRow.id)).toMatchObject({ state: "conflict" });
+    // A conflict intentionally blocks later writes, so test rejection as
+    // a separate delivery chain rather than pretending the conflict cleared.
+    state.records.clear();
     const rejectedRow = await queue();
     await deliverOfflineOperations(transportFor(422).transport);
     expect(state.records.get(rejectedRow.id)).toMatchObject({ state: "rejected" });
-    expect(state.records.size).toBe(2);
+    expect(state.records.size).toBe(1);
   });
 
   it("blocks later writes until an earlier rejection is reviewed", async () => {
