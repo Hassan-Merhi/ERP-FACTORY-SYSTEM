@@ -235,7 +235,7 @@ class ERPDatabase extends Dexie {
 
     // v7 — durable operation outbox. Legacy queues are preserved, never auto-migrated.
     this.version(7).stores({
-      offlineOperations: "&id, state, [companyId+userId+state], [state+nextAttemptAt], createdAt",
+      offlineOperations: "&id, companyId, state, [companyId+userId+state], [state+nextAttemptAt], createdAt",
     });
   }
 }

@@ -1,7 +1,6 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
 import { QueryClient, QueryFunction, MutationCache, QueryCache } from "@tanstack/react-query";
-import { isSafeToQueue, enqueueRequest, getDescriptionForRequest, containsSensitiveCredentials } from "./offlineQueue";
 import { OFFLINE_MODE_ENABLED } from "@/lib/featureFlags";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -534,12 +533,14 @@ export async function apiRequest(
       });
     }
     const networkFail = getErrorDetails(error).name === "AbortError" ? true : isNetworkError(error);
-    if (OFFLINE_MODE_ENABLED && networkFail && !containsSensitiveCredentials(data) && isSafeToQueue(method, url)) {
-      const description = getDescriptionForRequest(url);
-      const body = data ? JSON.stringify(data) : "";
-      enqueueRequest(url, method, body, description, getAppDate());
-      const offlineError = Object.assign(new Error(`Saved offline — will sync when connected`), { description });
-      offlineError.name = "OfflineQueued";
+    if (OFFLINE_MODE_ENABLED && networkFail) {
+      // Phase 1: a generic failed request cannot be made safe by replaying its
+      // raw HTTP body. Only explicitly registered operations saved BEFORE
+      // transport may use the durable outbox; never fall back to localStorage.
+      const offlineError = new Error("Request not saved offline — this action is not registered for durable replay", {
+        cause: error,
+      });
+      offlineError.name = "OfflineWriteNotRegistered";
       throw offlineError;
     }
     throw error;
