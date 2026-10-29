@@ -42,6 +42,57 @@ jobs:
           docker compose --env-file deploy/lan/.env.example -f deploy/lan/compose.yaml config -q
       - name: Build application
         run: npm run build
+      - name: Build and smoke-test full factory LAN Docker stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          lan_ip="$(ip -4 route get 1.1.1.1 | sed -n 's/.* src \([0-9.]*\).*/\1/p' | head -n1)"
+          if [[ -z "$lan_ip" ]]; then echo "No LAN IPv4 found"; exit 1; fi
+          mkdir -p deploy/lan/certs
+          openssl req -newkey rsa:2048 -nodes -x509 -sha256 -days 14 \
+            -subj "/CN=erp.factory.internal" \
+            -addext "subjectAltName=DNS:erp.factory.internal" \
+            -keyout deploy/lan/certs/server-key.pem -out deploy/lan/certs/server.pem
+          chmod 600 deploy/lan/certs/server-key.pem
+          {
+            printf 'EDGE_SITE_ID=027d7472-4a29-4bb3-a4aa-5b30e4ad631f\n'
+            printf 'EDGE_HOSTNAME=erp.factory.internal\n'
+            printf 'EDGE_BIND_IP=%s\n' "$lan_ip"
+            printf 'EDGE_DB_PASSWORD=%s\n' "$(openssl rand -hex 32)"
+            printf 'EDGE_SESSION_SECRET=%s\n' "$(openssl rand -hex 48)"
+            printf 'EDGE_WRITE_MODE=read-only\nEDGE_PRIMARY_ACK=\n'
+          } > deploy/lan/.env
+          chmod 600 deploy/lan/.env
+          node scripts/edge/verify-edge-configuration.mjs deploy/lan/.env
+          docker compose --env-file deploy/lan/.env -f deploy/lan/compose.yaml config -q
+          docker compose --env-file deploy/lan/.env -f deploy/lan/compose.yaml build app
+          docker compose --env-file deploy/lan/.env -f deploy/lan/compose.yaml up -d
+          url="https://erp.factory.internal"
+          ready=0
+          for attempt in $(seq 1 60); do
+            if curl --silent --show-error --max-time 4 \
+              --cacert deploy/lan/certs/server.pem \
+              --resolve "erp.factory.internal:443:$lan_ip" \
+              "$url/api/edge/status" -o /tmp/edge-status.json; then
+              ready=1
+              break
+            fi
+            sleep 5
+          done
+          if [[ "$ready" != 1 ]]; then
+            docker compose --env-file deploy/lan/.env -f deploy/lan/compose.yaml logs --tail=100 app https postgres
+            echo 'Edge application did not boot from a fresh database' >&2
+            exit 1
+          fi
+          cat /tmp/edge-status.json
+          node -e "let j=require('/tmp/edge-status.json');if(j.mode!=='lan'||j.writeMode!=='read-only'||j.cloudReplication!=='not-configured')process.exit(1)"
+          code="$(curl --silent --output /tmp/edge-write.json --write-out '%{http_code}' \
+            --cacert deploy/lan/certs/server.pem \
+            --resolve "erp.factory.internal:443:$lan_ip" \
+            -H "Origin: $url" -X POST "$url/api/vouchers/with-entries")"
+          if [[ "$code" != 423 ]]; then cat /tmp/edge-write.json; echo "Expected 423, got $code"; exit 1; fi
+          echo "HTTPS factory edge identity and read-only write guard PASSED"
+          docker compose --env-file deploy/lan/.env -f deploy/lan/compose.yaml down
       - name: Commit verified formatting changes
         shell: bash
         run: |
