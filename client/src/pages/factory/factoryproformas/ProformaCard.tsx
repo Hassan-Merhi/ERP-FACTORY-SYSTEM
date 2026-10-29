@@ -263,7 +263,7 @@ export function ProformaCard(props: ProformaCardProps) {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => navigate(`/factory/stock-allocation-v5?proformaId=${proforma.id}&openEdit=true`)}
+                onClick={() => navigate(`/factory/stock-allocation-v5/proformas/${proforma.id}/edit`)}
                 data-testid={`button-edit-in-allocation-${proforma.id}`}
               >
                 <Pencil className="mr-1.5 h-3.5 w-3.5" />
