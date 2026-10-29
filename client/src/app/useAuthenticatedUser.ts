@@ -21,6 +21,11 @@ export function useAuthenticatedUser() {
   const handleLogout = async (): Promise<void> => {
     revokeOfflineReadScope();
     try {
+      localStorage.setItem("erp_offline_logout_broadcast", String(Date.now()));
+    } catch {
+      // Browsers can disable localStorage; the current tab is already revoked.
+    }
+    try {
       // Stop active query traffic before destroying the server session. This
       // reduces the chance of an in-flight request racing the logout response.
       await queryClient.cancelQueries();

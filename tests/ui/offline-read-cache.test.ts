@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { OfflineReadSnapshot, OfflineReadGrant } from "../../client/src/lib/db";
 
 const state = vi.hoisted(() => ({
   rows: new Map<string, any>(),

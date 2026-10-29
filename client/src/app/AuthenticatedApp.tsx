@@ -45,10 +45,23 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
         .then(({ verifyOfflineReadScope }) => verifyOfflineReadScope(selectedCompanyId))
         .catch(() => {});
     };
+    const onOtherTabIdentityChanged = (event: StorageEvent) => {
+      if (
+        event.key === "erp_offline_logout_broadcast" ||
+        event.key === "selectedCompanyId" ||
+        event.key === null
+      ) {
+        void import("@/lib/offline/offlineReadCache")
+          .then(({ revokeOfflineReadScope }) => revokeOfflineReadScope())
+          .catch(() => {});
+      }
+    };
     window.addEventListener("online", restoreVerification);
+    window.addEventListener("storage", onOtherTabIdentityChanged);
     return () => {
       stopped = true;
       window.removeEventListener("online", restoreVerification);
+      window.removeEventListener("storage", onOtherTabIdentityChanged);
       void import("@/lib/offline/offlineReadCache")
         .then(({ revokeOfflineReadScope }) => revokeOfflineReadScope())
         .catch(() => {});
