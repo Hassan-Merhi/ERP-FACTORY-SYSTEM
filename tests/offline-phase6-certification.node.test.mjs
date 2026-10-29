@@ -8,6 +8,7 @@ import {
   certify,
   checkReleaseManifest,
   probeEdge,
+  probeReleaseVersion,
   validateHttpsOrigin,
   REQUIRED_DRILLS,
 } from "../scripts/edge/certify-offline-phase6.mjs";
@@ -203,6 +204,41 @@ test("a successful HTTP status does not override failed readiness conditions", a
     assert.deepEqual(result.map((x) => x.code), ["EDGE_PROBE_UNSAFE_STATE"]);
     assert.equal(result[0].endpoint, "/api/health/ready");
   }
+});
+
+test("the deployed build SHA must exactly match every release-proof SHA", async (t) => {
+  const { root, manifest } = await makeFixture(t);
+  const seen = [];
+  const network = (version) => async (url, options) => {
+    seen.push({ url, options });
+    if (url.endsWith("/api/edge/status")) {
+      return response(200, {
+        mode: "lan", siteId: manifest.siteId, writeMode: manifest.expectedWriteMode,
+        databaseProvisioned: true, cloudReplication: "verified",
+      });
+    }
+    if (url.endsWith("/api/health/ready")) return response(200, READY);
+    if (url.endsWith("/api/build-info")) return response(200, { version });
+    throw new Error("Unexpected endpoint: " + url);
+  };
+  const success = await certify(manifest, { evidenceRoot: root, now: NOW, fetcher: network(RELEASE_SHA) });
+  assert.deepEqual(success, { ok: true, blockers: [] });
+  assert.deepEqual(
+    seen.map((x) => new URL(x.url).pathname),
+    ["/api/edge/status", "/api/health/ready", "/api/build-info"]
+  );
+  assert(seen.every((x) => x.options.method === "GET" && x.options.redirect === "manual"));
+  const mismatch = await certify(manifest, {
+    evidenceRoot: root, now: NOW, fetcher: network("b".repeat(40)),
+  });
+  assert.deepEqual(mismatch.blockers.map((x) => x.code), ["BUILD_VERSION_MISMATCH"]);
+  assert.equal(mismatch.ok, false);
+  const missing = await probeReleaseVersion(manifest.edgeOrigin, RELEASE_SHA, async () => response(404, {}));
+  assert.deepEqual(missing.map((x) => x.code), ["BUILD_VERSION_PROBE_FAILED"]);
+  const unreachable = await probeReleaseVersion(manifest.edgeOrigin, RELEASE_SHA, async () => {
+    throw new Error("Network disconnected");
+  });
+  assert.deepEqual(unreachable.map((x) => x.code), ["BUILD_VERSION_UNREACHABLE"]);
 });
 
 test("unreachable, HTTP error and redirects cannot pass the status probe", async () => {
