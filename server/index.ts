@@ -236,7 +236,7 @@ let migrationsDone = false;
   // Valid websocket upgrades are handled by the upgrade path. Plain HTTP GET
   // requests to /ws should fail explicitly instead of falling through to the SPA.
   registerWebSocketHttpFallback(app);
-  if (process.env.ENABLE_SCHEDULERS !== "false") {
+  if (process.env.ENABLE_SCHEDULERS !== "false" && shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())) {
     startScheduler();
     logger.info("[Schedulers] Started (ENABLE_SCHEDULERS != false)");
   } else {
