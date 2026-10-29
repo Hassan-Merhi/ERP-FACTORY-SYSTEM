@@ -1,3 +1,8 @@
+import { createHash } from "node:crypto";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { verifyLocalEncryptedCheckpoint } from "../scripts/edge/verify-encrypted-checkpoint.mjs";
 import { describe, expect, it } from "vitest";
 import { createEncryptedSnapshotManifest, expectedEncryptedNames, verifyEncryptedSnapshotManifest } from "../server/edge/edgeSnapshotManifest.mjs";
 import { checkCheckpointRemote, identifyBackupPairs } from "../scripts/edge/transfer-encrypted-snapshots.mjs";
@@ -22,5 +27,31 @@ describe("Phase 4 authenticated encrypted checkpoint", () => {
     expect(() => identifyBackupPairs([names[0]])).toThrow("EDGE_SYNC_INCOMPLETE_BACKUP_PAIR");
     expect(() => checkCheckpointRemote("s3:bucket/../other")).toThrow("EDGE_SYNC_REMOTE_INVALID");
     expect(checkCheckpointRemote("s3:factory-backups/archive")).toBe("s3:factory-backups/archive");
+  });
+});
+
+describe("isolated checkpoint verification", () => {
+  it("accepts matching encrypted-format archives and refuses altered bytes", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "edge-phase4-"));
+    try {
+      const originals = names.map((name, i) => ({
+        name,
+        body: Buffer.from("age-encryption.org/v1\\nfixture-" + i),
+      }));
+      for (const item of originals) await writeFile(join(dir, item.name), item.body);
+      const evidence = originals.map(({ name, body }) => ({
+        name,
+        bytes: body.length,
+        sha256: createHash("sha256").update(body).digest("hex"),
+      }));
+      const signed = createEncryptedSnapshotManifest({ siteId, backupId, files: evidence, signingKey });
+      const manifestPath = join(dir, "edge-checkpoint-" + backupId + ".json");
+      await writeFile(manifestPath, JSON.stringify(signed));
+      await expect(verifyLocalEncryptedCheckpoint(manifestPath, { siteId, signingKey })).resolves.toMatchObject({ backupId });
+      await writeFile(join(dir, names[0]), Buffer.from("a non-encrypted replacement"));
+      await expect(verifyLocalEncryptedCheckpoint(manifestPath, { siteId, signingKey })).rejects.toThrow("EDGE_SYNC_AGE_HEADER_INVALID");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
