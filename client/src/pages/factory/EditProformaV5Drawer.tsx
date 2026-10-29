@@ -499,7 +499,7 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
               )}
 
               {nonPositiveCount > 0 && (
-                <div className={zeroItemCount === 0 ? "" : ""}>
+                <div className="">
                   <Button
                     size="default"
                     variant={hideNonPositive ? "default" : "outline"}
