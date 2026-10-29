@@ -73,7 +73,7 @@ export function CostCenterEntryEditor({
   const { toast } = useToast();
   const companyId = selectedCompany?.id;
   const role = selectedCompany?.role || "";
-  const canEdit = ["Admin", "Owner", "Developer"].includes(role);
+  const canEdit = role === "Developer";
   const [draft, setDraft] = useState<DraftSplit[]>([]);
   const [reason, setReason] = useState("Allocate cost center");
   const [dirty, setDirty] = useState(false);
@@ -352,8 +352,9 @@ export function VoucherCostCenters({ voucherId }: { voucherId: number }) {
   const apiBase = isFactory ? "/api/factory/cost-centers" : "/api/cost-centers";
   const companyId = selectedCompany?.id;
   const role = selectedCompany?.role || "";
-  const canEdit = ["Admin", "Owner", "Developer"].includes(role);
-  const canRead = canEdit || role === "Manager";
+  const canEdit = role === "Developer";
+  // Inline voucher allocations are an advanced developer-only view.
+  const canRead = role === "Developer";
   const [selected, setSelected] = useState<VoucherExpenseEntry | null>(null);
   const key = [apiBase, companyId, "voucher", voucherId, "entries"];
   const { data, isLoading, isError, error, refetch } = useQuery<VoucherExpenseEntries>({
