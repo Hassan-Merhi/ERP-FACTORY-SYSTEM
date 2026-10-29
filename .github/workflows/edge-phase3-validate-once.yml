@@ -71,7 +71,7 @@ jobs:
           ready=0
           for attempt in $(seq 1 60); do
             if curl --silent --show-error --max-time 4 \
-              --cacert deploy/lan/certs/server.pem \
+              --noproxy '*' --cacert deploy/lan/certs/server.pem \
               --resolve "erp.factory.internal:443:$lan_ip" \
               "$url/api/edge/status" -o /tmp/edge-status.json; then
               ready=1
@@ -102,3 +102,5 @@ jobs:
             git -c user.name="ERP Edge Validator" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "style(edge): format Phase 3 implementation and tests"
             git push origin "HEAD:feat/offline-phase1-durable-foundation-20261029"
           fi
+
+# Re-run after Dockerfile npm prepare-layer fix.
