@@ -48,6 +48,42 @@ export function isAutoReplayAllowed(method: string, url: string): boolean {
   return method.toUpperCase() === "POST" && url === "/api/vouchers/with-entries";
 }
 
+/** Only central-posting-compatible voucher inputs may replay automatically. */
+export function isVettedOfflineVoucherPayload(input: unknown): boolean {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return false;
+  const data = input as Record<string, unknown>;
+  if (!data.voucher || typeof data.voucher !== "object" || Array.isArray(data.voucher)) return false;
+  const voucher = data.voucher as Record<string, unknown>;
+  if (voucher.optional === true || String(voucher.currency ?? "USD").toUpperCase() !== "USD") return false;
+  if (!Array.isArray(data.entries) || data.entries.length < 2) return false;
+  const dualCurrencyFields = [
+    "transactionCurrency",
+    "transactionDebitAmount",
+    "transactionCreditAmount",
+    "baseDebitAmount",
+    "baseCreditAmount",
+    "historicalExchangeRate",
+    "rateConvention",
+  ];
+  return data.entries.every((entry: unknown) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
+    const row = entry as Record<string, unknown>;
+    if (dualCurrencyFields.some((field) => row[field] != null)) return false;
+    const debit = Number(row.debitAmount ?? 0);
+    const credit = Number(row.creditAmount ?? 0);
+    if (!Number.isFinite(debit) || !Number.isFinite(credit) || debit < 0 || credit < 0) return false;
+    const debitCents = debit * 100;
+    const creditCents = credit * 100;
+    return (
+      Number.isSafeInteger(Math.round(debitCents)) &&
+      Number.isSafeInteger(Math.round(creditCents)) &&
+      Math.abs(debitCents - Math.round(debitCents)) < 1e-7 &&
+      Math.abs(creditCents - Math.round(creditCents)) < 1e-7 &&
+      (debit === 0) !== (credit === 0)
+    );
+  });
+}
+
 const SENSITIVE_KEY =
   /^(?:password|passwd|pwd|oldPassword|currentPassword|newPassword|confirmPassword|managerPassword|supervisorPassword|passwordHash|authorization|apiKey|apiToken|accessToken|refreshToken|clientSecret|secret|cvv|cardNumber|pin)$/i;
 

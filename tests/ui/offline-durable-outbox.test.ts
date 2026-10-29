@@ -32,7 +32,13 @@ vi.mock("@/lib/db", () => ({
 }));
 
 const actor = { companyId: 6, userId: "operator-1" };
-const payload = { voucher: { narration: "Test" }, entries: [{ debitAmount: "20", creditAmount: "0" }] };
+const payload = {
+  voucher: { narration: "Test", currency: "USD" },
+  entries: [
+    { debitAmount: "20", creditAmount: "0" },
+    { debitAmount: "0", creditAmount: "20" },
+  ],
+};
 
 beforeEach(() => {
   vi.resetModules();
@@ -83,7 +89,7 @@ describe("durable outbox — capture before delivery", () => {
       companyId: 6,
       userId: "operator-1",
       state: "pending",
-      payload: JSON.stringify(payload),
+      payload: JSON.stringify({ ...payload, clientRequestId: item.id }),
       attempts: 0,
     });
     expect(item.deviceId).toMatch(/^00000000-0000-4000-/);
@@ -124,7 +130,7 @@ describe("durable outbox — capture before delivery", () => {
     const sent = calls.find((call) => call.url === "/api/vouchers/with-entries");
     expect(new Headers(sent?.init?.headers).get("X-Idempotency-Key")).toBe(row.id);
     expect(new Headers(sent?.init?.headers).get("X-Client-Date")).toBe("2026-10-29");
-    expect(sent?.init?.body).toBe(JSON.stringify(payload));
+    expect(sent?.init?.body).toBe(JSON.stringify({ ...payload, clientRequestId: row.id }));
     expect(calls).toHaveLength(3);
   });
 

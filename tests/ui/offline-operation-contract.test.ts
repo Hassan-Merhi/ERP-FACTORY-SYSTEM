@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyOfflineResponse,
   isAutoReplayAllowed,
+  isVettedOfflineVoucherPayload,
   offlineRetryDelay,
   validateOfflinePayload,
 } from "@/lib/offline/operationContract";
@@ -15,6 +16,14 @@ describe("offline phase 1 operation contract", () => {
     expect(isAutoReplayAllowed("DELETE", "/api/vouchers/1")).toBe(false);
     expect(isAutoReplayAllowed("POST", "//evil.example/api/vouchers/with-entries")).toBe(false);
     expect(isAutoReplayAllowed("POST", "/api/vouchers/with-entries?companyId=2")).toBe(false);
+  });
+
+  it("rejects legacy voucher payloads that fall through central posting", () => {
+    expect(isVettedOfflineVoucherPayload({ voucher: { currency: "USD" }, entries: [] })).toBe(false);
+    expect(isVettedOfflineVoucherPayload({ voucher: { optional: true }, entries: [{}, {}] })).toBe(false);
+    expect(isVettedOfflineVoucherPayload({ voucher: { currency: "EUR" }, entries: [{}, {}] })).toBe(false);
+    expect(isVettedOfflineVoucherPayload({ voucher: {}, entries: [{ debitAmount: "1.001" }, { creditAmount: "1.001" }] })).toBe(false);
+    expect(isVettedOfflineVoucherPayload({ voucher: {}, entries: [{ debitAmount: 1 }, { creditAmount: 1 }] })).toBe(true);
   });
 
   it("does not persist credentials as queued JSON", () => {

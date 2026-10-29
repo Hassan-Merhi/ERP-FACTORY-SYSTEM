@@ -3,6 +3,7 @@ import {
   classifyOfflineResponse,
   isAutoReplayAllowed,
   isValidOfflineActor,
+  isVettedOfflineVoucherPayload,
   offlineRetryDelay,
   validateOfflinePayload,
   type OfflineActor,
@@ -54,15 +55,25 @@ export async function queueOfflineOperation(input: QueueOfflineInput): Promise<O
     throw new Error("This operation has no verified server-side replay guarantee");
   }
   if (!validateOfflinePayload(input.payload)) throw new Error("Unsafe or non-JSON offline payload");
+  if (!isVettedOfflineVoucherPayload(input.payload)) {
+    throw new Error("Voucher shape is not verified for offline central posting");
+  }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.clientDate)) throw new Error("Original client date is required");
   if (!input.entityType.trim()) throw new Error("An operation entity type is required");
 
-  const payload = JSON.stringify(input.payload);
+  const body = input.payload as Record<string, unknown>;
+  const existingId = body.clientRequestId;
+  const id = existingId === undefined ? crypto.randomUUID() : existingId;
+  if (typeof id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    throw new Error("An existing voucher request must carry a UUID identity");
+  }
+  // The posting engine reads the original body identity; match the header.
+  const payload = JSON.stringify({ ...body, clientRequestId: id });
   if (payload.length > MAX_PAYLOAD_BYTES) throw new Error("Offline operation exceeds the 1 MB limit");
   const now = Date.now();
   const record: OfflineOperation = {
     schemaVersion: 1,
-    id: crypto.randomUUID(),
+    id,
     deviceId: getDeviceId(),
     companyId: input.actor.companyId,
     userId: input.actor.userId,
