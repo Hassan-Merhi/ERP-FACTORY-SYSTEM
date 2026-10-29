@@ -1,7 +1,7 @@
 import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { useSearch } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -15,6 +15,7 @@ function isGarbageOrWipers(row: V5Row) {
 
 export function useFactoryStockAllocationV5Model() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const searchString = useSearch();
   const focusProformaId = useMemo(() => {
     const p = new URLSearchParams(searchString).get("proformaId");
@@ -32,7 +33,6 @@ export function useFactoryStockAllocationV5Model() {
   const autoScrolledProformaIdRef = useRef<number | null>(null);
 
   const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
-  const [editDrawerProformaId, setEditDrawerProformaId] = useState<number | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [hideZero, setHideZero] = useState(true);
   const [showNegativeOnly, setShowNegativeOnly] = useState(false);
@@ -418,13 +418,12 @@ export function useFactoryStockAllocationV5Model() {
     return () => window.clearTimeout(scrollTimer);
   }, [focusProformaId, rows]);
 
-  // Auto-open edit drawer when navigated here with openEdit=true
-  const editOpenedRef = useRef(false);
+  // Preserve older "Edit in Allocation" bookmarked links without opening a popup.
   useEffect(() => {
-    if (!openEditOnLoad || !focusProformaId || rows.length === 0 || editOpenedRef.current) return;
-    editOpenedRef.current = true;
-    setEditDrawerProformaId(focusProformaId);
-  }, [openEditOnLoad, focusProformaId, rows.length]);
+    if (openEditOnLoad && focusProformaId !== null && Number.isSafeInteger(focusProformaId) && focusProformaId > 0) {
+      navigate(`/factory/stock-allocation-v5/proformas/${focusProformaId}/edit`, { replace: true });
+    }
+  }, [openEditOnLoad, focusProformaId, navigate]);
 
   const handleRefresh = useCallback(() => {
     query.refetch().then(() => {
@@ -579,21 +578,6 @@ export function useFactoryStockAllocationV5Model() {
     setExportDialogOpen(false);
   }
 
-  /* ── Article rows for the drawer ──────────────────────────────────────── */
-  const drawerRows = useMemo(
-    () =>
-      allRows.map((r) => ({
-        articleCode: r.articleCode,
-        productName: r.productName,
-        categoryName: r.categoryName,
-        stockAvailable: r.stockAvailable,
-        totalLoaded: r.totalLoaded,
-        expectedToLoad: r.expectedToLoad,
-        freeToPromise: r.freeToPromise,
-      })),
-    [allRows]
-  );
-
   /* ── Category multi-select helpers ───────────────────────────────────── */
   const [catDropOpen, setCatDropOpen] = useState(false);
   const catDropRef = useRef<HTMLDivElement>(null);
@@ -619,8 +603,6 @@ export function useFactoryStockAllocationV5Model() {
     firstMatchRef,
     createDrawerOpen,
     setCreateDrawerOpen,
-    editDrawerProformaId,
-    setEditDrawerProformaId,
     expandedRows,
     hideZero,
     setHideZero,
@@ -683,7 +665,6 @@ export function useFactoryStockAllocationV5Model() {
     handleRefresh,
     toggleRow,
     handleExportExcel,
-    drawerRows,
     catDropOpen,
     setCatDropOpen,
     catDropRef,
