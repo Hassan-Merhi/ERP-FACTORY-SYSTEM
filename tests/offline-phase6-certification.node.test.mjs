@@ -94,6 +94,11 @@ test('LAN status and health probes must be healthy and replicated', async () => 
     : {});
   const blocked = await probeEdge('https://erp.factory.internal', { ...config, fetcher: incomplete });
   assert.deepEqual(blocked.map(x => x.code), ['EDGE_PROBE_UNSAFE_STATE']);
+  const unknown = await probeEdge('https://erp.factory.internal', { ...config,
+    fetcher: async url => response(200, url.endsWith('/api/edge/status')
+      ? { mode: 'lan', siteId: config.siteId, writeMode: 'read-only', databaseProvisioned: true, cloudReplication: 'error' }
+      : {}) });
+  assert.deepEqual(unknown.map(x => x.code), ['EDGE_PROBE_UNSAFE_STATE']);
 });
 
 test('unreachable, HTTP error and redirects cannot pass the status probe', async () => {
