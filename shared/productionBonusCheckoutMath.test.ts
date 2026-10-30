@@ -1,5 +1,5 @@
 import {describe,expect,it} from "vitest";
-import {allocateWeeklyExtraBales,splitExtraBalesByCategory,workerCategoryCredits} from "./productionBonusCheckoutMath";
+import {allocateWeeklyExtraBales,splitExtraBalesByCategory,workerCategoryCredits,linkedWorkerBaleShares} from "./productionBonusCheckoutMath";
 
 describe("Production Targets bonus category allocation",()=>{
   it("credits 14 linked bales exactly once, seven to each worker",()=>{
@@ -12,19 +12,28 @@ describe("Production Targets bonus category allocation",()=>{
     expect(second.reduce((n,r)=>n+r.count,0)).toBe(7);
     expect(first[0].count+second[0].count).toBe(14);
   });
-  it("keeps unequal linked worker output exactly as recorded in Stock Entry",()=>{
+  it("shares a linked table's 14 recorded bales despite uneven scanner finalizers",()=>{
     const bales=[
       ...Array.from({length:11},(_,i)=>({id:i+1,worker:10,category:i<8?"Bags":"Toys"})),
       ...Array.from({length:3},(_,i)=>({id:i+12,worker:11,category:"Shoes"})),
     ];
     expect(workerCategoryCredits(bales,[10,11],10)).toEqual([
-      {category:"Bags",count:8},{category:"Toys",count:3},
+      {category:"Bags",count:4},{category:"Shoes",count:1},{category:"Toys",count:2},
     ]);
     expect(workerCategoryCredits(bales,[10,11],11)).toEqual([
-      {category:"Shoes",count:3},
+      {category:"Bags",count:4},{category:"Shoes",count:2},{category:"Toys",count:1},
     ]);
     expect(workerCategoryCredits(bales,[10,11],10).reduce((n,r)=>n+r.count,0)+
       workerCategoryCredits(bales,[10,11],11).reduce((n,r)=>n+r.count,0)).toBe(14);
+  });
+  it("splits 42 linked bales as 21 each, and 41 as 21/20",()=>{
+    expect([...linkedWorkerBaleShares([{workerId:119,bales:42}],[119,245])]).toEqual([
+      [119,21],[245,21],
+    ]);
+    expect([...linkedWorkerBaleShares([{workerId:119,bales:41}],[119,245])]).toEqual([
+      [119,21],[245,20],
+    ]);
+    expect([...linkedWorkerBaleShares([{workerId:119,bales:42}],[119])]).toEqual([[119,42]]);
   });
   it("preserves category switches without counting the same linked bale twice",()=>{
     const bales=Array.from({length:10},(_,i)=>({
