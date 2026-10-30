@@ -28,10 +28,17 @@ afterEach(() => {
 
 describe.skipIf(!databaseUrl)("Phase 9 pressing outbox, disposable PostgreSQL 17", () => {
   it("commits source + event together; enforces source tenant FK, UUID and immutability", async () => {
-    const client = new Client({ connectionString: databaseUrl, ssl: false });
-    await client.connect();
-    await client.query("BEGIN");
+    const admin = new Client({ connectionString: databaseUrl, ssl: false });
+    const isolatedUrl = new URL(databaseUrl!);
+    isolatedUrl.pathname = "/phase9_pressing_capture_test";
+    const client = new Client({ connectionString: isolatedUrl.toString(), ssl: false });
+    await admin.connect();
     try {
+      // Phase 8's DBA fence experiment uses a different disposable DB.
+      // Keep both suites isolated even if their workflows share a container.
+      await admin.query("CREATE DATABASE phase9_pressing_capture_test");
+      await client.connect();
+      await client.query("BEGIN");
       // Minimal source fixture only; never install into live factory records.
       await client.query(`
         CREATE TABLE factory_pressing_confirmations (
@@ -92,7 +99,9 @@ describe.skipIf(!databaseUrl)("Phase 9 pressing outbox, disposable PostgreSQL 17
         .rejects.toMatchObject({ code: "23503" });
     } finally {
       await client.query("ROLLBACK").catch(() => undefined);
-      await client.end();
+      await client.end().catch(() => undefined);
+      await admin.query("DROP DATABASE IF EXISTS phase9_pressing_capture_test WITH (FORCE)").catch(() => undefined);
+      await admin.end();
     }
   });
 });
