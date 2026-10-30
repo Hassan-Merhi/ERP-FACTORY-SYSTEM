@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
 import { localDateStr } from "../factoryProductionTargetsModel";
+import { ProductionTargetWeeklyBonusPaymentsPanel } from "./ProductionTargetWeeklyBonusPaymentsPanel";
 
 type Account = { id: number; name: string; code: string; accountType: string; openingCurrency: string | null };
 type PaymentRow = {
@@ -152,6 +153,7 @@ export function ProductionTargetBonusPaymentsPanel({ initialDate }: { initialDat
   if (!canViewPayments) return null;
 
   return (
+    <>
     <Card className="overflow-hidden shadow-none" data-testid="production-target-bonus-payments">
       <CardHeader className="border-b bg-muted/20">
         <div className="flex items-center gap-2">
@@ -324,5 +326,7 @@ export function ProductionTargetBonusPaymentsPanel({ initialDate }: { initialDat
         </DialogContent>
       </Dialog>
     </Card>
+    <ProductionTargetWeeklyBonusPaymentsPanel initialDate={initialDate} />
+    </>
   );
 }
