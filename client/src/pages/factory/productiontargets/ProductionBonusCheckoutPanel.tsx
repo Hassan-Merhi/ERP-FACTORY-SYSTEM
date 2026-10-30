@@ -24,7 +24,7 @@ type Line = { category: string; produced: number; extra: number; rate: string; b
 type Offer = {
   date: string; workerId: number; workerName: string; target: number; produced: number;
   extra: number; method: Method; lines: Line[]; amount: string; token: string;
-  status: "pending" | "approved" | "paid" | "reversed" | "no_bonus" | "needs_setup" | "blocked" | "rejected";
+  status: "pending" | "approved" | "paid" | "reversed" | "no_bonus" | "needs_setup" | "blocked" | "rejected" | "weekly";
   issue: string | null;
 };
 type Preview = { from: string; to: string; method: Method; currency: "USD"; offers: Offer[] };
@@ -47,14 +47,14 @@ const startOfRange=(date:string)=>{
 };
 const payableStatus=(row:Offer)=>row.status==="pending"||row.status==="approved";
 type WorkerGroup={workerId:number;workerName:string;days:Offer[];target:number;produced:number;
-  extra:number;amount:number;readyDays:number;paidDays:number;needsSetup:number;blockedDays:number};
+  extra:number;amount:number;readyDays:number;paidDays:number;needsSetup:number;blockedDays:number;weeklyDays:number};
 function summarizeByWorker(offers:Offer[]):WorkerGroup[]{
   const map=new Map<number,WorkerGroup>();
   for(const row of offers){
     let group=map.get(row.workerId);
     if(!group){
       group={workerId:row.workerId,workerName:row.workerName,days:[],target:0,
-        produced:0,extra:0,amount:0,readyDays:0,paidDays:0,needsSetup:0,blockedDays:0};
+        produced:0,extra:0,amount:0,readyDays:0,paidDays:0,needsSetup:0,blockedDays:0,weeklyDays:0};
       map.set(row.workerId,group);
     }
     group.days.push(row);
@@ -68,6 +68,7 @@ function summarizeByWorker(offers:Offer[]):WorkerGroup[]{
     if(row.status==="paid")group.paidDays++;
     if(row.status==="needs_setup")group.needsSetup++;
     if(row.status==="blocked")group.blockedDays++;
+    if(row.status==="weekly")group.weeklyDays++;
   }
   return [...map.values()].map(g=>({...g,amount:g.amount/100,
     days:g.days.sort((a,b)=>a.date.localeCompare(b.date))}))
@@ -270,7 +271,8 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
             {!isLoading&&visibleGroups.map(group=>{
               const ready=group.readyDays>0;
               const label=ready?t("ready"):group.needsSetup>0?t("needsSetup"):
-                group.blockedDays>0?t("needsReview"):group.paidDays>0?t("paidStatus"):t("noBonus");
+                group.blockedDays>0?t("needsReview"):group.paidDays>0?t("paidStatus"):
+                group.weeklyDays>0?t("weeklyStatus"):t("noBonus");
               return <TableRow key={group.workerId} className="align-top">
                 <TableCell>
                   <Checkbox aria-label={t("selectBonus")+" "+group.workerName}
@@ -328,6 +330,8 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
                     {group.needsSetup} {t("daysNeedSetup")}</p>}
                   {group.blockedDays>0&&<p className="mt-1 text-xs text-destructive">
                     {group.blockedDays} {t("daysNeedReview")}</p>}
+                  {group.weeklyDays>0&&<p className="mt-1 text-xs text-muted-foreground">
+                    {group.weeklyDays} {t("daysWeekly")}</p>}
                   {group.needsSetup>0&&group.days.some(day=>day.issue?.startsWith("Save a positive"))&&
                     <Button variant="outline" size="sm" className="mt-1 h-7"
                       onClick={()=>navigate("/factory/stock-entry?tab=production-targets")}>

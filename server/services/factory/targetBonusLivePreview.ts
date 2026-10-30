@@ -95,7 +95,7 @@ export async function loadLiveTargetBonusRows(
       AND saved.period_type='daily' AND saved.period_start=d.work_date
       AND saved.period_end=d.work_date
     LEFT JOIN LATERAL (
-      SELECT x.target_bales, x.category FROM factory_worker_production_target_defaults x
+      SELECT TRUE AS found, x.target_bales, x.category FROM factory_worker_production_target_defaults x
       WHERE x.company_id=w.company_id AND x.worker_id=w.id
         AND x.effective_from<=d.work_date
       ORDER BY x.effective_from DESC,x.id DESC LIMIT 1
@@ -114,23 +114,14 @@ export async function loadLiveTargetBonusRows(
         AND x.effective_from<=d.work_date
       ORDER BY x.effective_from DESC,x.id DESC LIMIT 1
     ) link_default ON TRUE
-    LEFT JOIN LATERAL (
-      SELECT TRUE AS found,e.target_bales
-      FROM factory_worker_production_link_members lm
-      JOIN factory_staff_tracking_entries e
-        ON e.company_id=lm.company_id AND e.person_id=lm.worker_id
-        AND e.person_type='worker' AND e.page_type='production'
-        AND e.period_type='daily' AND e.period_start=d.work_date
-        AND e.period_end=d.work_date AND e.target_overridden=TRUE
-      WHERE lm.company_id=w.company_id AND lm.link_id=link.id
-      ORDER BY e.person_id LIMIT 1
-    ) link_override ON TRUE
+    -- Daily overrides and worker defaults are individual even when workers
+    -- share a table. Another link member must never replace this worker's target.
     CROSS JOIN LATERAL (
       SELECT CASE
-        WHEN link_override.found THEN link_override.target_bales
         WHEN saved.target_overridden THEN saved.target_bales
+        WHEN defaults.found THEN defaults.target_bales
         WHEN link.id IS NOT NULL THEN link_default.target_bales
-        ELSE COALESCE(defaults.target_bales,saved.target_bales)
+        ELSE saved.target_bales
       END AS target
     ) resolved
     LEFT JOIN LATERAL (
@@ -165,7 +156,17 @@ export async function loadLiveTargetBonusRows(
     LEFT JOIN factory_target_bonus_reviews review
       ON review.company_id=w.company_id AND review.production_date=d.work_date
       AND review.worker_id=w.id
-    WHERE NOT EXISTS (
+    WHERE EXISTS (
+      -- Production Targets only lists workers assigned to a saved Production
+      -- Planner group; other Stock Entry workers are not bonus candidates.
+      SELECT 1 FROM factory_worker_categories planner
+      WHERE planner.company_id=w.company_id
+        AND (
+          planner.worker_ids @> jsonb_build_array(w.id)
+          OR planner.worker_ids @> jsonb_build_array(w.id::text)
+        )
+    )
+      AND NOT EXISTS (
       SELECT 1 FROM factory_staff_tracking_period_closures c
       WHERE c.company_id=w.company_id AND c.page_type='production'
         AND c.period_type='daily' AND c.period_start=d.work_date
