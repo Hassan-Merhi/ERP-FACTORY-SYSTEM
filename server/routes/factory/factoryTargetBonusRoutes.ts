@@ -37,6 +37,8 @@ function sendError(res: Response, error: unknown): Response {
 type BonusDecision = {
   date: string; workerId: number; decision: "approved" | "rejected";
   expectedAmount: number;
+  expectedProducedBales?: number;
+  expectedTargetBales?: number;
 };
 function parseDecision(raw: unknown): BonusDecision | null {
   if (!raw || typeof raw !== "object") return null;
@@ -44,13 +46,22 @@ function parseDecision(raw: unknown): BonusDecision | null {
   const date = value.date;
   const workerId = Number(value.workerId);
   const expectedAmount = Number(value.expectedAmount);
+  const expectedProducedBales = value.expectedProducedBales === undefined
+    ? undefined : Number(value.expectedProducedBales);
+  const expectedTargetBales = value.expectedTargetBales === undefined
+    ? undefined : Number(value.expectedTargetBales);
   if (
     !targetBonusIsValidDate(date) ||
     !Number.isSafeInteger(workerId) || workerId <= 0 ||
     (value.decision !== "approved" && value.decision !== "rejected") ||
-    !Number.isFinite(expectedAmount) || expectedAmount < 0
+    !Number.isFinite(expectedAmount) || expectedAmount < 0 ||
+    (expectedProducedBales !== undefined &&
+      (!Number.isSafeInteger(expectedProducedBales) || expectedProducedBales < 0)) ||
+    (expectedTargetBales !== undefined &&
+      (!Number.isFinite(expectedTargetBales) || expectedTargetBales < 0))
   ) return null;
-  return { date, workerId, decision: value.decision, expectedAmount };
+  return { date, workerId, decision: value.decision, expectedAmount,
+    expectedProducedBales, expectedTargetBales };
 }
 function decisionKey(date: string, workerId: number): string {
   return date + ":" + workerId;
@@ -154,7 +165,7 @@ export function registerFactoryTargetBonusRoutes(app: Express): void {
             if (weeklyReview.length)
               throw httpError(409, "This worker/week already has a weekly flat bonus review");
             const item = index.get(decisionKey(choice.date, choice.workerId));
-            if (!item) throw httpError(409, "This worker/date is not a finalized production record");
+            if (!item) throw httpError(409, "No production record for this worker/date");
             if (item.status !== "pending") {
               if (item.status === choice.decision) {
                 unchanged++;
@@ -177,9 +188,17 @@ export function registerFactoryTargetBonusRoutes(app: Express): void {
             }
             if (method === 'weekly_flat')
               throw httpError(409, 'Weekly flat bonus is selected for this week; daily per-bale reviews are disabled');
+            if ((choice.expectedProducedBales !== undefined &&
+                item.producedBales !== choice.expectedProducedBales) ||
+                (choice.expectedTargetBales !== undefined &&
+                Math.round(item.targetBales * 100) !== Math.round(choice.expectedTargetBales * 100))) {
+              throw httpError(409, "Worker production or target changed since review; refresh before approving");
+            }
             if (Math.round(item.proposedAmount * 100) !== Math.round(choice.expectedAmount * 100)) {
               throw httpError(409, "Bonus amount changed since review; refresh and review again");
             }
+            if (choice.decision === "approved" && item.targetConfigured === false)
+              throw httpError(409, "Set a valid production target before approving this live bonus");
             if (choice.decision === "approved" && (item.ratePerBale == null || item.ratePerBale <= 0 || item.extraBales <= 0)) {
               throw httpError(409, "Set a positive rate and verify extra bales before approving");
             }

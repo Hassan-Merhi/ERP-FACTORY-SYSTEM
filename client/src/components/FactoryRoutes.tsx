@@ -120,6 +120,7 @@ import {
 
 const AccountGroups = lazy(() => import("@/pages/AccountGroups"));
 const FactoryInvoiceDetailBilingual = lazy(() => import("@/pages/factory/FactoryInvoiceDetailBilingual"));
+const FactoryProductionBonuses = lazy(() => import("@/pages/factory/FactoryProductionBonuses"));
 const WasteDispatchPage = lazy(() => import("@/pages/factory/WasteDispatchOptimized"));
 const FactoryStockAllocationV5CreateProforma = lazy(() => import("@/pages/factory/FactoryStockAllocationV5CreateProforma"));
 const FactoryStockAllocationV5EditProforma = lazy(() => import("@/pages/factory/FactoryStockAllocationV5EditProforma"));
@@ -166,6 +167,10 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       <Route path="/factory/finalize">
         <Redirect replace to="/factory/stock-entry" />
       </Route>
+      {(user?.role === "Admin" || user?.role === "Owner") &&
+        !myAccess?.hiddenCostFields?.includes("hide_tab_stockentry_production_targets") && (
+          <Route path="/factory/production-bonuses" component={FactoryProductionBonuses} />
+        )}
       <Route path="/factory/stock-entry" component={BaleStockEntry} />
       <Route path="/factory/bales-history" component={BalesHistory} />
       <Route path="/factory/bales-hub" component={FactoryBalesHub} />
