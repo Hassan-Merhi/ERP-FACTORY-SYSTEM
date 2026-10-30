@@ -1,3 +1,5 @@
+import { OFFLINE_MODE_ENABLED } from "./featureFlags";
+
 const QUEUE_KEY = "erp_offline_queue";
 const LAST_SYNCED_KEY = "erp_last_synced";
 const QUEUE_WARN_THRESHOLD = 50;
@@ -40,6 +42,11 @@ export function enqueueRequest(
   description: string,
   clientDate?: string
 ): string {
+  // Phase 9: the legacy localStorage format has no immutable request ID,
+  // verified actor or tenant scope, and no safe replay proof. While the new
+  // offline system is active, refuse to persist new writes into this format.
+  // Old records remain untouched for supervised recovery.
+  if (OFFLINE_MODE_ENABLED) throw new Error("OFFLINE_LEGACY_QUEUE_BLOCKED");
   const queue = readQueue();
   const upperMethod = method.toUpperCase();
 
