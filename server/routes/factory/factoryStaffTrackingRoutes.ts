@@ -14,6 +14,7 @@ import { registerProductionBonusCategoryReviewRoutes } from "./productionBonusCa
 import { registerProductionBonusCheckoutRoutes } from "./productionBonusCheckoutRoutes";
 import { freezeProductionBonusCategoryEvidence, BONUS_CATEGORY_COUNTED_BALE_STATUSES, type CategoryCaptureCarry } from "../../services/factory/productionBonusCategoryCapture";
 import { factoryStaffTrackingMessages } from "../../i18n/factoryStaffTrackingMessages";
+import { isProductionTargetsRosterWorker } from "../../services/factory/productionTargetsRoster";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { resultRows } from "../../lib/queryResult";
 import { sqlArray } from "../../lib/sqlArray";
@@ -307,15 +308,15 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
       const includedWorkers = workers.filter((person) => {
         const savedForPeriod = savedMap.has(`worker:${person.id}`);
         if (query.page === "production") {
-          if (finalized) return savedForPeriod;
-          return (
-            workerGroupNames.has(person.id) &&
-            (
-              savedForPeriod ||
-              productionLinkByWorker.has(person.id) ||
-              (person.active && joinedByPeriodEnd(person.dateJoined, query.periodEnd))
-            )
-          );
+          // Keep today's Production Targets table and bonus checkout on the
+          // exact same per-day membership contract.
+          return isProductionTargetsRosterWorker({
+            finalized, savedForPeriod,
+            plannerAssigned: workerGroupNames.has(person.id),
+            linkedForPeriod: productionLinkByWorker.has(person.id),
+            active: person.active,
+            joinedByPeriodEnd: joinedByPeriodEnd(person.dateJoined, query.periodEnd),
+          });
         }
 
         // Attendance must include every factory worker, regardless of Production Planner group membership.
