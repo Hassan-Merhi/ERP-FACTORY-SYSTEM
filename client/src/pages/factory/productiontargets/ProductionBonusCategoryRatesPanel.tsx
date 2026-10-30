@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectContent, SelectValue, SelectItem } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { bonusText } from "@/i18n/factoryProductionBonusCheckoutTranslations";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
 import { localDateStr } from "../factoryProductionTargetsModel";
@@ -40,6 +42,7 @@ async function api<T>(method: "GET" | "POST", url: string, body?: unknown): Prom
  */
 export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate: string }) {
   const { toast } = useToast();
+  const { language } = useApplicationLanguage();
   const [asOf, setAsOf] = useState(initialDate);
   const [editing, setEditing] = useState(false);
   const [category, setCategory] = useState("");
@@ -71,7 +74,7 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
     }),
     onSuccess: () => {
       setEditing(false);
-      toast({ title: "Category rate saved", description: "Unpaid bonus weeks now use the new rate. Paid and reversed bonuses keep their original amounts." });
+      toast({ title: "Category rate saved", description: bonusText("categorySavedToast",language) });
       void queryClient.invalidateQueries({ queryKey: [endpoint] });
       void queryClient.invalidateQueries({ queryKey: ["/api/factory/production-target-bonuses/category-preview"] });
       void queryClient.invalidateQueries({ queryKey: ["/api/factory/production-target-bonuses/checkout"] });
@@ -90,8 +93,7 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
       </summary>
       <div className="space-y-3 border-t px-4 py-4">
         <p className="text-xs text-muted-foreground">
-          The latest saved rate applies immediately to every unpaid bonus week, even previous dates.
-          Paid or reversed bonuses stay locked. Saving a rate never posts a payment.
+          {bonusText("categoryLatestHint",language)}
         </p>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <label className="space-y-1 text-xs text-muted-foreground">
@@ -160,8 +162,7 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
             <DialogHeader>
               <DialogTitle>Category bonus rate</DialogTitle>
               <DialogDescription>
-                Saving updates the bonus calculation for every unpaid week, including previous dates.
-                Paid or reversed bonuses retain their original amount.
+                {bonusText("categoryEditHelp",language)}
               </DialogDescription>
             </DialogHeader>
             <label className="space-y-1 text-sm">Category
