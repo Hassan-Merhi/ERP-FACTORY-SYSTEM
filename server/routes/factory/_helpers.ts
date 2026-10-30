@@ -123,6 +123,17 @@ export async function recalculateOrderTotals(dbConn: DatabaseOrTransaction, orde
         });
       }
     }
+    // Supplements are scoped to this order, and override per-kg pricing
+    // only here. The master proforma stays untouched for sibling loadings.
+    const extras = resultRows<{ article_code: string }>(await dbConn.execute(sql`
+      SELECT article_code FROM customer_order_extra_expected_lines WHERE order_id = ${orderId}
+    `));
+    for (const extra of extras) {
+      proformaPricing.set(extra.article_code.trim().toLowerCase(), {
+        pricingMode: "per_bale",
+        pricePerKg: null,
+      });
+    }
   }
 
   await dbConn.delete(customerOrderLines).where(eq(customerOrderLines.orderId, orderId));
