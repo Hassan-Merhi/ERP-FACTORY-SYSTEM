@@ -102,6 +102,17 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     landing: true,
   },
   {
+    // The Production Targets workspace links here; keep it out of standalone menus.
+    // FactoryRoutes permits Admin/Owner only and applies the same hidden-tab flag.
+    key: "factory/production-bonuses",
+    label: "Production Bonuses",
+    group: "Production",
+    route: "/factory/production-bonuses",
+    settingsVisible: false,
+    accessLevel: "admin",
+    hideKey: "hide_tab_stockentry_production_targets",
+  },
+  {
     key: "factory/raw-materials",
     label: "Raw Materials",
     group: "Production",
@@ -605,6 +616,9 @@ export function resolveFactoryPageKey(path: string): string | null {
 }
 
 export function factoryPageAllowsRole(page: FactoryPageDefinition, role?: string | null): boolean {
+  // The bonus checkout route is Admin/Owner-only (not Developer); do not widen it
+  // through the general "admin" registry classification.
+  if (page.key === "factory/production-bonuses") return role === "Admin" || role === "Owner";
   const level = page.accessLevel ?? "user";
   if (level === "developer") return role === "Developer";
   // Account Groups is also routed to Owners in FactoryRoutes; keep the
