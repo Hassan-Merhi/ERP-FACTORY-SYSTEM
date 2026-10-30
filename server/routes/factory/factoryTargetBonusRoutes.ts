@@ -142,6 +142,15 @@ export function registerFactoryTargetBonusRoutes(app: Express): void {
             `));
             if (categoryReview.length)
               throw httpError(409, "Category-weighted bonus was already reviewed for this worker/day");
+            // Reverse guard: a weekly review locks all source days for that worker.
+            // This shares company advisory lock 84023 with the weekly decision route.
+            const weeklyReview = resultRows(await tx.execute(sql`
+              SELECT id FROM factory_target_bonus_weekly_reviews
+              WHERE company_id = ${companyId} AND worker_id = ${choice.workerId}
+                AND ${choice.date}::date BETWEEN week_start AND week_end LIMIT 1
+            `));
+            if (weeklyReview.length)
+              throw httpError(409, "This worker/week already has a weekly flat bonus review");
             const item = index.get(decisionKey(choice.date, choice.workerId));
             if (!item) throw httpError(409, "This worker/date is not a finalized production record");
             if (item.status !== "pending") {
