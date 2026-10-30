@@ -310,6 +310,9 @@ const SAFE_PATTERNS: Array<{ method: string; pattern: RegExp }> = [
 ];
 
 export function isSafeToQueue(method: string, url: string): boolean {
+  // The old SAFE_PATTERNS list described convenience caching, not exactly-once
+  // LAN -> cloud business replay. It MUST NOT advertise safety under Phase 9.
+  if (OFFLINE_MODE_ENABLED) return false;
   const path = url.split("?", 1)[0];
   if (NEVER_QUEUE_PATTERNS.some((pattern) => pattern.test(path))) return false;
   return SAFE_PATTERNS.some((p) => p.method === method.toUpperCase() && p.pattern.test(path));
