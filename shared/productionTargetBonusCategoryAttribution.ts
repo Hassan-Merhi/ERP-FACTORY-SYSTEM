@@ -108,7 +108,7 @@ export function buildCategoryEvidence(
   // A linked table's total may be finalized under just one scanner/operator.
   // Attribute the team's physical bales once to all effective link members in
   // stable bale-ID order. This matches live and finalized bonus SQL allocation.
-  const groupMembers = new Map(links.map(link => [
+  const groupMembers = new Map<number, number[]>(links.map((link): [number,number[]] => [
     link.id, [...new Set(link.workerIds)].sort((a,b)=>a-b),
   ]));
   const groupOffsets = new Map<number, number>();
