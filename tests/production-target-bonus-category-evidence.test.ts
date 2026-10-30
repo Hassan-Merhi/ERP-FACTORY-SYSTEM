@@ -34,7 +34,7 @@ describe("Phase 9 frozen bale attribution by worker/day/category",()=>{
       {categoryKey:"toys",targetBales:8},
     ])).toMatch(/sum/i);
   });
-  it("credits linked production to its real finalizer, not an equal split",()=>{
+  it("shares linked production between members instead of crediting one scanner",()=>{
     const result=buildCategoryEvidence([worker(1,7,4),worker(2,7,4)],[
       {id:55,workerIds:[1,2]},
     ],[
@@ -44,11 +44,11 @@ describe("Phase 9 frozen bale attribution by worker/day/category",()=>{
     expect(result.readyForTargetAllocation).toBe(true);
     expect(result.sourceBales).toBe(4);
     expect(result.creditedBales).toBe(4);
-    expect(result.workers.map(w=>w.creditedBales)).toEqual([3,1]);
+    expect(result.workers.map(w=>w.creditedBales)).toEqual([2,2]);
     expect(result.workers[0].categories.map(c=>[c.categoryKey,c.creditedBales]))
-      .toEqual([["bags",3]]);
+      .toEqual([["bags",2]]);
     expect(result.workers[1].categories.map(c=>[c.categoryKey,c.creditedBales]))
-      .toEqual([["toys",1]]);
+      .toEqual([["bags",1],["toys",1]]);
   });
   it("blocks missing capture, unknown categories, duplicate bale IDs and mismatched frozen totals",()=>{
     const rows=[worker(1,6,2)];
