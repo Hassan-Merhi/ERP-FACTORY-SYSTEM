@@ -45,6 +45,14 @@ Committed on the unified branch, not on `main`:
 - The read-only manifest audit `node scripts/edge/audit-phase9-write-coverage.mjs` classifies **every unique API write** into approved voucher capture, narrow session-only action, or blocked. It compares the manifest to the actual LAN-primary write guard and fails if a new endpoint escapes without an explicitly reviewed capture policy. `--require-complete` intentionally exits nonzero until unsupported business routes are implemented. Dedicated contract tests exercise scope, mismatch, and policy drift. The remaining categories include inventory, factory, purchasing, POS, payments, and attachments.
 - This slice adds **no new business mutation allowlist**, no attachment uploads/replication, no background cloud apply, no production data migration, and no LAN-primary cutover. Phase 9 as a whole remains OPEN. Before each new write path can be approved, deliver an atomic local capture, typed protocol, tenant/auth checks, safe cloud posting, immutable applied receipts and real PostgreSQL finance/stock/file reconciliation. The Phase 7/8 external release gates still apply.
 
+### Phase 9 continuation — strict admission and authorization (development only)
+
+- Hardened `/api/edge/status?operationId=...` to call the application's live `requireAuth` session/credential guard, then assert current company membership. The public no-operation LAN health/status probe remains unchanged. Stale or revoked actors receive no receipt proof.
+- Narrowed the LAN read-only session exemption to reviewed **POST + exact path**, not any mutating verb on a session path. The Phase 9 manifest audit uses that same method/path policy.
+- Browser durable outbox admission now matches the approved Phase 8 USD, balanced Journal, ledger-only and no-attachment contract. Stored records are revalidated before each actual HTTP replay and poisoned or legacy inputs enter a retained `needs_review` state without a network business write. The LAN server also rejects unknown top-level voucher payload keys and impossible calendar days.
+- Expanded Node/HTTP/Vitest tests and Phase 8/9 workflows for stale sessions, revoked company access, false cloud-applied receipts, unsupported write guards, invalid voucher dates, payload drift, and saved device tampering. Full CI on the exact latest head is required before any green claim.
+- **No new business route was approved.** This is risk reduction, not a claim that Phase 9 production/stock/POS/attachments coverage is finished. Existing Phase 7/8 and security/factory sign-offs remain blockers.
+
 ## Phase 10 — Offline identity, conflicts, secure storage and server controls
 - Implement reviewed local-session/cold-start policy, encrypted legacy-cache migration, authorization/role revocation, and scoped credentials and browser/device protections.
 - Add deterministic multi-device conflict review with no silent financial/stock overwrites.
