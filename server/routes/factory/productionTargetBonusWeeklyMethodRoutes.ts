@@ -74,8 +74,8 @@ export function registerProductionTargetBonusWeeklyMethodRoutes(app: Express): v
             effectiveWeek: null, default: true,
           },
           history, historyTruncated: history.length >= 1000,
-          configuredForPayments: false,
-          note: "Method settings are not applied to any reviewed or posted bonus until later phases.",
+          configuredForPayments: true,
+          note: "Effective method settings control new weekly or daily reviews. Approval and Cash/Bank payment remain separate; previously posted entries are not rewritten.",
         });
       } catch (error) {
         logger.error("Failed to load Production Targets weekly bonus method", { error });
@@ -152,7 +152,7 @@ export function registerProductionTargetBonusWeeklyMethodRoutes(app: Express): v
         res.setHeader("Cache-Control", "private, no-store");
         return res.status(saved.status).json({
           ...saved, currency: "USD", method, effectiveWeek, flatBonusUsd: amount,
-          configuredForPayments: false, historicalReviewsUnaffected: true,
+          configuredForPayments: true, historicalReviewsUnaffected: true,
         });
       } catch (error) {
         logger.error("Failed to save Production Targets weekly bonus method", { error });
