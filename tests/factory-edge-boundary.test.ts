@@ -21,10 +21,14 @@ const env = {
   ENABLE_SCHEDULERS: "false",
   RUN_STARTUP_MIGRATIONS: "true",
 };
-function fixture(override: Record<string, string>, provisioned: () => Promise<boolean>) {
+function fixture(
+  override: Record<string, string>,
+  provisioned: () => Promise<boolean>,
+  hasAuthority: () => Promise<boolean> = async () => false
+) {
   const config = readFactoryEdgeConfiguration({ ...env, ...override });
   const app = express();
-  app.use("/api", makeFactoryEdgeWriteGuard(config, provisioned));
+  app.use("/api", makeFactoryEdgeWriteGuard(config, provisioned, hasAuthority));
   app.post("/api/vouchers/with-entries", (_req, res) => res.json({ ok: true }));
   app.post("/api/factory/bales", (_req, res) => res.json({ unsafe: true }));
   app.post("/api/auth/login", (_req, res) => res.json({ ok: true }));
@@ -48,10 +52,24 @@ describe("edge runtime write safety", () => {
       {
         FACTORY_EDGE_WRITE_MODE: "lan-primary",
         FACTORY_EDGE_PRIMARY_ACK: "CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED",
+        FACTORY_EDGE_WRITER_EPOCH: "2",
+        FACTORY_EDGE_BASELINE_SHA256: "a".repeat(64),
       },
       async () => false
     );
     expect((await request(app).post("/api/vouchers/with-entries")).body.code).toBe("EDGE_DATABASE_NOT_PROVISIONED");
+  });
+
+  it("rejects even a populated database when its Phase 7 PostgreSQL fence is missing", async () => {
+    const app = fixture({
+      FACTORY_EDGE_WRITE_MODE: "lan-primary",
+      FACTORY_EDGE_PRIMARY_ACK: "CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED",
+      FACTORY_EDGE_WRITER_EPOCH: "2",
+      FACTORY_EDGE_BASELINE_SHA256: "a".repeat(64),
+    }, async () => true);
+    const res = await request(app).post("/api/vouchers/with-entries");
+    expect(res.status).toBe(503);
+    expect(res.body.code).toBe("EDGE_PHASE7_WRITER_AUTHORITY_UNVERIFIED");
   });
 
   it("permits primary writes to pass through to existing auth/CSRF/route guards", async () => {
@@ -59,7 +77,10 @@ describe("edge runtime write safety", () => {
       {
         FACTORY_EDGE_WRITE_MODE: "lan-primary",
         FACTORY_EDGE_PRIMARY_ACK: "CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED",
+        FACTORY_EDGE_WRITER_EPOCH: "2",
+        FACTORY_EDGE_BASELINE_SHA256: "a".repeat(64),
       },
+      async () => true,
       async () => true
     );
     expect((await request(app).post("/api/vouchers/with-entries")).body.ok).toBe(true);
