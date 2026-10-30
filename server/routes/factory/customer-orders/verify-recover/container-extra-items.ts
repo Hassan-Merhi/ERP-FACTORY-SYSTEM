@@ -61,7 +61,7 @@ function validateExtraItems(raw: unknown): ExtraInput[] {
     seen.add(code);
     if (item?.pricePerBale !== undefined && item.pricePerBale !== null && item.pricePerBale !== "") {
       const price = Number(item.pricePerBale);
-      if (!Number.isFinite(price) || price < 0 || price > 99999999 || !/^\\d+(?:\\.\\d{1,4})?$/.test(String(item.pricePerBale)))
+      if (!Number.isFinite(price) || price < 0 || price > 99999999 || !/^\d+(?:\.\d{1,4})?$/.test(String(item.pricePerBale)))
         throw new HttpError(400, `Row ${index + 1}: price must be a non-negative amount with at most four decimals`);
       return { articleCode: code, quantity: qty, pricePerBale: price };
     }
