@@ -9,6 +9,7 @@ import { reconcileHistoricalPosition, sumPositionRows } from "../../../services/
 import { assertHistoricalReportIntegrity } from "../../../services/factory/netPositionHistoricalIntegrity";
 import type { FactoryHistoricalCoverage } from "../../../services/factory/netPositionHistoryCoverage";
 import { applyHistoricalOperationalCorrection } from "./netPositionHistoricalCorrection";
+import { loadFactoryRowHistoryCoverage } from "../../../services/factory/netPositionRowHistoryCoverage";
 
 const HISTORICAL_WARNING_TEXT: Record<string, string> = {
   HISTORICAL_RAW_UNPRICED_RECEIPT: "Some older raw-material receipts have no confirmed historical USD unit cost.",
@@ -130,12 +131,26 @@ export async function finishFactoryNetPosition<T extends NetPositionBody>(input:
   dated.supplierOverpayments = sumPositionRows(dated.forUs.accounts.filter((row) => row.code === "SUPPLIER_OVERPAID"));
   assertHistoricalReportIntegrity(dated);
   const inventoryWarnings = (dated as T & { inventoryHistoryWarnings?: string[] }).inventoryHistoryWarnings ?? [];
+  const rowHistoryCoverage = await loadFactoryRowHistoryCoverage(scope);
+  const recorderWarnings: string[] = [];
+  if (rowHistoryCoverage.unavailableTables.length > 0) {
+    recorderWarnings.push(
+      `Recorded row history is not installed for ${rowHistoryCoverage.unavailableTables.length} of ${rowHistoryCoverage.trackedTables} tracked tables; those categories use provisional legacy reconstruction.`
+    );
+  }
+  if (rowHistoryCoverage.preBaselineTables.length > 0) {
+    recorderWarnings.push(
+      `The selected day precedes the baseline for ${rowHistoryCoverage.preBaselineTables.length} tracked tables; older values cannot be recovered from later snapshots.`
+    );
+  }
   const text = (code: string) => HISTORICAL_WARNING_TEXT[code] ?? code;
   return {
     ...dated,
     ...dateFields,
+    rowHistoryCoverage,
     historyCompleteness: "partial" as const,
     historyWarnings: [
+      ...recorderWarnings,
       "Historical category reconstruction remains partial until all operational and financial events are reconciled.",
       ...inventoryWarnings.map(text),
       ...input.pipelineWarnings.map(text),

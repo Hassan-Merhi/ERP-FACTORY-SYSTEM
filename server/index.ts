@@ -43,6 +43,7 @@ import { ensureFactoryCostBasisSchema } from "./services/factory/factoryCostBasi
 import { ensureVoucherBalanceGuard } from "./services/accounting/voucherBalanceGuard";
 import { ensureAuditLogAppendOnlyGuard } from "./services/audit/auditLogAppendOnlyGuard";
 import { ensureVoucherAuditTrigger } from "./services/audit/voucherAuditTrigger";
+import { ensureFactoryRowHistory } from "./services/audit/factoryRowHistory";
 import { ensureOpeningBalanceLock } from "./services/accounting/openingBalanceLock";
 import { ensureCurrencyNormalizationGuard } from "./services/accounting/currencyNormalizationGuard";
 import { ensureRequiredSystemAccountsForAllCompanies } from "./services/accounting/systemAccounts";
@@ -319,6 +320,9 @@ let migrationsDone = false;
       await ensureAuditLogAppendOnlyGuard(pool);
       // Phase 21 (A): voucher/line audit trigger, actor columns, audit_log hash chain; fatal on failure.
       await ensureVoucherAuditTrigger(pool);
+      // Factory row history and its baseline snapshot (historical Net Position);
+      // a table it cannot lock is retried on the next boot, never fatal.
+      await ensureFactoryRowHistory(pool);
       await ensureRequiredSystemAccountsForAllCompanies().catch((error: unknown) => {
         logger.error("[startup] ✗ System account provisioning failed", { error: getErrorMessage(error) });
       });
