@@ -1,7 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "../../db";
 import { resultRows } from "../../lib/queryResult";
-import { loadActiveProductionWorkerLinks } from "./productionWorkerLinks";
 
 type ProductionTargetDefaultRow = {
   workerId: number | string;
@@ -36,16 +35,6 @@ export async function loadProductionTargetDefaults(
       category: row.category,
       targetBales: row.targetBales === null || row.targetBales === undefined ? null : Number(row.targetBales),
     });
-  }
-
-  // A worker link owns one repeating shared target while every worker keeps
-  // their own category default.
-  const activeLinks = await loadActiveProductionWorkerLinks(companyId, asOf);
-  for (const link of activeLinks) {
-    for (const member of link.members) {
-      const existing = defaults.get(member.workerId) ?? { category: null, targetBales: null };
-      defaults.set(member.workerId, { ...existing, targetBales: link.sharedTargetBales });
-    }
   }
 
   return defaults;
