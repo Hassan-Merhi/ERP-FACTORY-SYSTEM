@@ -31,7 +31,7 @@ export async function submitDurableVoucherWithEntries(
       headers: { "Content-Type": "application/json" },
     });
   }
-  if (stored?.state === "conflict" || stored?.state === "rejected") {
+  if (stored?.state === "conflict" || stored?.state === "rejected" || stored?.state === "needs_review") {
     const error = offlineError("OFFLINE_VOUCHER_REVIEW_REQUIRED");
     error.name = "OfflineOperationRejected";
     throw error;
