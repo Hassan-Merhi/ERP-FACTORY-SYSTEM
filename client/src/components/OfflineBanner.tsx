@@ -1,360 +1,186 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AlertTriangle, Clock, RefreshCw, ShieldAlert, WifiOff } from "lucide-react";
 import { OFFLINE_MODE_ENABLED } from "@/lib/featureFlags";
-import { WifiOff, RefreshCw, Trash2, RotateCcw, Clock } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { SyncStatusBadge } from "@/components/SyncStatusBadge";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { useToast } from "@/hooks/use-toast";
-import {
-  getQueue,
-  removeFromQueue,
-  updateItemStatus,
-  setLastSynced,
-  getLastSynced,
-  onQueueSizeWarning,
-  type QueueItem,
-} from "@/lib/offlineQueue";
-import { queryClient } from "@/lib/queryClient";
 import { useConnectivity } from "@/contexts/ConnectivityContext";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { db } from "@/lib/db";
+import { getQueue } from "@/lib/offlineQueue";
+import { getVerifiedOfflineReadScope } from "@/lib/offline/offlineReadCache";
+import { listOfflineOperations } from "@/lib/offline/durableOutbox";
+import { runSync } from "@/lib/syncEngine";
+import type { OfflineOperation } from "@/lib/offline/operationContract";
 
-function formatRelativeTime(ts: number): string {
-  const diff = Math.floor((Date.now() - ts) / 1000);
-  if (diff < 60) return "Just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  const d = new Date(ts);
-  return (
-    d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) +
-    " " +
-    d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
-  );
+interface VisibleQueue {
+  operations: OfflineOperation[];
+  legacyCount: number;
+  scoped: boolean;
 }
 
+const EMPTY: VisibleQueue = { operations: [], legacyCount: 0, scoped: false };
+const UNRESOLVED = new Set(["pending", "sending"]);
+const REVIEW = new Set(["conflict", "rejected", "needs_review"]);
+
+function operationSummary(state: OfflineOperation["state"]): string {
+  switch (state) {
+    case "pending": return "On this device · not yet accepted by LAN";
+    case "sending": return "Delivery uncertain · original request retained";
+    case "acknowledged": return "LAN acknowledged · cloud posting NOT verified";
+    case "conflict": return "Conflict · operator review required";
+    case "rejected": return "Blocked · server rejected the request";
+    case "needs_review": return "Quarantined · never automatically retried";
+  }
+}
+
+/**
+ * The legacy localStorage and IndexedDB queues were not actor-scoped or
+ * transactionally idempotent. Phase 9 MUST NEVER replay them from this panel.
+ * The only delivery action uses the versioned, validated durable outbox.
+ */
 export function OfflineBanner() {
   if (!OFFLINE_MODE_ENABLED) return null;
   return <OfflineBannerInner />;
 }
 
 function OfflineBannerInner() {
-  const { isOnline, isSyncing: globalSyncing, lastSyncedAt, refreshCounts } = useConnectivity();
-
-  const [localSyncing, setLocalSyncing] = useState(false);
-  const [queue, setQueue] = useState<QueueItem[]>(() => getQueue());
-  const [lastSynced, setLastSyncedState] = useState<number | null>(() => getLastSynced());
+  const { isOnline, isSyncing, refreshCounts } = useConnectivity();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [discardTarget, setDiscardTarget] = useState<string | null>(null);
-  const { toast } = useToast();
-  const syncingRef = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [snapshot, setSnapshot] = useState<VisibleQueue>(EMPTY);
+  const revision = useRef(0);
 
-  const isSyncing = localSyncing || globalSyncing;
-
-  const refreshQueue = () => setQueue(getQueue());
-
-  // Sync lastSynced from global context
-  useEffect(() => {
-    if (lastSyncedAt) {
-      setLastSyncedState(lastSyncedAt);
-    }
-  }, [lastSyncedAt]);
-
-  useEffect(() => {
-    const unsubWarn = onQueueSizeWarning((count) => {
-      toast({
-        title: "Many pending offline actions",
-        description: `You have ${count}+ actions queued. Connect to the internet soon to sync.`,
-        variant: "destructive",
-      });
-    });
-    return unsubWarn;
-  }, [toast]);
-
-  const replayQueue = useCallback(async () => {
-    if (syncingRef.current) return;
-    const pending = getQueue().filter((i) => i.status === "pending");
-    if (pending.length === 0) {
-      setLastSynced();
-      setLastSyncedState(getLastSynced());
-      return;
-    }
-
-    syncingRef.current = true;
-    setLocalSyncing(true);
-
-    let succeeded = 0;
-    let failed = 0;
-
-    for (const item of pending) {
-      try {
-        const res = await fetch(item.url, {
-          method: item.method,
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: item.body || undefined,
-        });
-
-        if (res.status === 401) {
-          syncingRef.current = false;
-          setLocalSyncing(false);
-          refreshQueue();
-          const remaining = getQueue().filter((i) => i.status === "pending").length;
-          toast({
-            title: "Session expired",
-            description: `Please log in again. Your ${remaining} pending action(s) are saved and will sync after login.`,
-            variant: "destructive",
-          });
-          window.location.href = "/login";
-          return;
-        }
-
-        if (res.ok) {
-          removeFromQueue(item.id);
-          succeeded++;
-        } else {
-          const errText = await res.text().catch(() => `HTTP ${res.status}`);
-          let errMsg = errText;
-          try {
-            errMsg = JSON.parse(errText)?.message || errText;
-          } catch {
-            // Malformed or absent payload — fall through to the default rather than surface a parse error.
-          }
-          updateItemStatus(item.id, "failed", errMsg);
-          failed++;
-        }
-      } catch {
-        updateItemStatus(item.id, "failed", "Network error during sync");
-        failed++;
+  const refresh = useCallback(async () => {
+    const current = ++revision.current;
+    const actor = getVerifiedOfflineReadScope();
+    try {
+      const [legacyIdb, operations] = await Promise.all([
+        db.syncQueue.count(),
+        actor ? listOfflineOperations(actor) : Promise.resolve([] as OfflineOperation[]),
+      ]);
+      const latest = getVerifiedOfflineReadScope();
+      if (current !== revision.current) return;
+      // The verified user/company may have changed during an IndexedDB read.
+      if (!actor || !latest || actor.companyId !== latest.companyId || actor.userId !== latest.userId) {
+        setSnapshot({ operations: [], legacyCount: legacyIdb + getQueue().length, scoped: false });
+        return;
       }
-    }
-
-    setLastSynced();
-    setLastSyncedState(getLastSynced());
-    refreshQueue();
-    void refreshCounts();
-    queryClient.invalidateQueries();
-    syncingRef.current = false;
-    setLocalSyncing(false);
-
-    if (succeeded > 0) {
-      toast({ title: `${succeeded} action(s) synced`, description: "Your offline data has been saved." });
-    }
-    if (failed > 0) {
-      toast({
-        title: `${failed} action(s) failed to sync`,
-        description: "Tap the offline banner to review and retry.",
-        variant: "destructive",
+      setSnapshot({
+        operations,
+        legacyCount: legacyIdb + getQueue().length,
+        scoped: true,
       });
+    } catch {
+      if (current === revision.current) setSnapshot(EMPTY);
     }
-  }, [refreshCounts, toast]);
-
-  // Auto-sync when coming back online
-  useEffect(() => {
-    if (isOnline) {
-      const pending = getQueue().filter((i) => i.status === "pending");
-      if (pending.length > 0) {
-        void replayQueue();
-      }
-    }
-    refreshQueue();
-  }, [isOnline, replayQueue]);
+  }, []);
 
   useEffect(() => {
-    refreshQueue();
-  }, [drawerOpen]);
+    void refresh();
+    const onRefresh = () => { void refresh(); };
+    window.addEventListener("erp:sync", onRefresh);
+    window.addEventListener("erp:offline-read-scope-verified", onRefresh);
+    window.addEventListener("erp:offline-queue-changed", onRefresh);
+    window.addEventListener("focus", onRefresh);
+    window.addEventListener("storage", onRefresh);
+    return () => {
+      revision.current++;
+      window.removeEventListener("erp:sync", onRefresh);
+      window.removeEventListener("erp:offline-read-scope-verified", onRefresh);
+      window.removeEventListener("erp:offline-queue-changed", onRefresh);
+      window.removeEventListener("focus", onRefresh);
+      window.removeEventListener("storage", onRefresh);
+    };
+  }, [refresh]);
 
-  const pendingCount = queue.filter((i) => i.status === "pending").length;
-  const failedCount = queue.filter((i) => i.status === "failed").length;
-  const totalCount = queue.length;
-
-  const handleDiscard = (id: string) => setDiscardTarget(id);
-
-  const confirmDiscard = () => {
-    if (discardTarget) {
-      removeFromQueue(discardTarget);
-      refreshQueue();
-      void refreshCounts();
-      setDiscardTarget(null);
+  const pending = snapshot.operations.filter((item) => UNRESOLVED.has(item.state)).length;
+  const review = snapshot.operations.filter((item) => REVIEW.has(item.state)).length;
+  const acknowledged = snapshot.operations.filter((item) => item.state === "acknowledged").length;
+  const legacy = snapshot.legacyCount;
+  const visible = !isOnline || pending > 0 || review > 0 || legacy > 0 || (drawerOpen && acknowledged > 0);
+  const retry = async () => {
+    if (busy || isSyncing || !isOnline || !snapshot.scoped || pending === 0) return;
+    setBusy(true);
+    try {
+      await runSync();
+    } finally {
+      await refresh();
+      await refreshCounts();
+      setBusy(false);
     }
   };
 
-  const handleRetry = async (item: QueueItem) => {
-    updateItemStatus(item.id, "pending");
-    refreshQueue();
-    if (isOnline) {
-      await replayQueue();
-    } else {
-      toast({ title: "Still offline", description: "Cannot retry — no connection." });
-      updateItemStatus(item.id, "failed", item.failReason);
-      refreshQueue();
-    }
-  };
-
-  const handleManualSync = async () => {
-    if (!isOnline) {
-      toast({ title: "No connection", description: "Cannot sync — still offline.", variant: "destructive" });
-      return;
-    }
-    await replayQueue();
-  };
-
-  const isOffline = !isOnline;
-
-  if (!isOffline && totalCount === 0) return null;
-
+  if (!visible) return null;
   return (
     <>
-      <div
-        className={`w-full px-3 py-1.5 flex items-center gap-2 cursor-pointer text-sm font-medium transition-colors ${
-          isOffline
-            ? "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-b border-amber-500/30"
-            : failedCount > 0
-              ? "bg-red-500/10 text-red-700 dark:text-red-400 border-b border-red-500/20"
-              : "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-b border-blue-500/20"
-        }`}
+      <button
+        type="button"
+        className="w-full px-3 py-2 flex items-center gap-2 text-sm border-b bg-amber-500/10 text-amber-800 dark:text-amber-300 text-left"
         onClick={() => setDrawerOpen(true)}
         data-testid="offline-banner"
       >
-        {isSyncing ? (
-          <RefreshCw className="h-3.5 w-3.5 animate-spin shrink-0" />
-        ) : (
-          <WifiOff className="h-3.5 w-3.5 shrink-0" />
-        )}
-        <span className="flex-1 min-w-0 truncate">
-          {isSyncing
-            ? `Syncing ${pendingCount} action(s)...`
-            : isOffline
-              ? pendingCount > 0
-                ? `Offline — ${pendingCount} action(s) pending sync`
-                : "You are offline"
-              : failedCount > 0
-                ? `${failedCount} action(s) failed to sync — tap to review`
-                : `${pendingCount} action(s) pending sync`}
+        {isOnline ? <ShieldAlert className="h-4 w-4 shrink-0" /> : <WifiOff className="h-4 w-4 shrink-0" />}
+        <span className="flex-1">
+          {!isOnline ? "Connection unavailable" : "Offline work requires review"}
+          {pending > 0 ? ` · ${pending} device-pending` : ""}
+          {review > 0 ? ` · ${review} needing review` : ""}
+          {legacy > 0 ? ` · ${legacy} blocked legacy records` : ""}
         </span>
-        {totalCount > 0 && (
-          <Badge variant="outline" className="text-xs shrink-0" data-testid="badge-offline-count">
-            {totalCount}
-          </Badge>
-        )}
-      </div>
-
+      </button>
       <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
         <SheetContent side="right" className="w-full sm:max-w-md flex flex-col">
-          <SheetHeader className="shrink-0">
-            <SheetTitle>Pending Actions</SheetTitle>
+          <SheetHeader>
+            <SheetTitle>Offline delivery evidence</SheetTitle>
             <SheetDescription>
-              {isOffline
-                ? "These will sync automatically when you reconnect."
-                : "Tap Sync Now to retry all pending actions."}
+              A saved request is not server confirmation. A LAN acknowledgement is not proof of cloud posting.
             </SheetDescription>
           </SheetHeader>
-
-          {!isOffline && pendingCount > 0 && (
-            <div className="shrink-0 pt-2">
-              <Button size="sm" onClick={handleManualSync} disabled={isSyncing} data-testid="button-sync-now">
-                {isSyncing ? (
-                  <RefreshCw className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                ) : (
-                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                )}
-                Sync Now
-              </Button>
-            </div>
-          )}
-
-          <div className="flex-1 overflow-y-auto py-2 space-y-2">
-            {queue.length === 0 ? (
-              <div className="text-center text-muted-foreground py-10 text-sm">No pending actions</div>
-            ) : (
-              queue.map((item) => (
-                <div
-                  key={item.id}
-                  className="rounded-md border p-3 flex flex-col gap-1"
-                  data-testid={`queue-item-${item.id}`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex flex-col gap-0.5 min-w-0">
-                      <span className="font-medium text-sm truncate">{item.description}</span>
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {formatRelativeTime(item.timestamp)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <SyncStatusBadge status={item.status === "failed" ? "failed" : "pending"} />
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => handleDiscard(item.id)}
-                        data-testid={`button-discard-${item.id}`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                      </Button>
-                    </div>
-                  </div>
-                  {item.status === "failed" && item.failReason && (
-                    <p className="text-xs text-destructive mt-0.5">{item.failReason}</p>
-                  )}
-                  {item.status === "failed" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="mt-1 self-start"
-                      onClick={() => handleRetry(item)}
-                      data-testid={`button-retry-${item.id}`}
-                    >
-                      <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-                      Retry
-                    </Button>
-                  )}
-                </div>
-              ))
+          <div className="space-y-3 overflow-y-auto flex-1 py-3">
+            {legacy > 0 && (
+              <div role="alert" className="border rounded-md p-3 space-y-1" data-testid="offline-legacy-blocked">
+                <p className="font-medium text-sm flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  {legacy} legacy records blocked
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Old browser queues lack verified user/company identity and atomic replay evidence.
+                  They are preserved on this device for supervised recovery, NOT sent, retried, or deleted.
+                </p>
+              </div>
             )}
+            {!snapshot.scoped && (
+              <p role="status" className="text-sm text-muted-foreground">
+                Verify your current account and company before viewing or delivering saved vouchers.
+              </p>
+            )}
+            {snapshot.scoped && snapshot.operations.length === 0 && (
+              <p className="text-sm text-muted-foreground">No durable voucher requests for this account.</p>
+            )}
+            {snapshot.scoped && snapshot.operations.slice(-30).reverse().map((item) => (
+              <div key={item.id} className="border rounded-md p-3 space-y-1" data-testid="offline-durable-record">
+                <p className="font-mono text-xs flex items-center gap-2">
+                  <Clock className="h-3 w-3" /> {item.id.slice(0, 8)} · {item.clientDate}
+                </p>
+                <p className="text-xs">{operationSummary(item.state)}</p>
+              </div>
+            ))}
           </div>
-
-          <div className="shrink-0 border-t pt-3 text-xs text-muted-foreground">
-            {lastSynced ? (
-              <span className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                Last synced {formatRelativeTime(lastSynced)}
-              </span>
-            ) : (
-              <span>Not yet synced this session</span>
-            )}
+          <div className="border-t pt-3 space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Only vetted durable Journal requests are eligible for retry. Inventory, POS, production,
+              payments and attachments remain blocked pending reconciliation.
+            </p>
+            <Button
+              variant="outline"
+              onClick={() => void retry()}
+              disabled={!isOnline || busy || isSyncing || !snapshot.scoped || pending === 0}
+              data-testid="offline-safe-retry"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              {busy || isSyncing ? "Checking verified outbox…" : "Retry vetted saved vouchers"}
+            </Button>
           </div>
         </SheetContent>
       </Sheet>
-
-      <AlertDialog
-        open={!!discardTarget}
-        onOpenChange={(open) => {
-          if (!open) setDiscardTarget(null);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Discard this action?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently remove it from the queue. It will not be saved to the server.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDiscard} data-testid="button-confirm-discard">
-              Discard
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }
