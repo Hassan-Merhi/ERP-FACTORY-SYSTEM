@@ -227,6 +227,7 @@ Encrypted checkpoint transfer is not automatic database reconciliation.
 | [operations/factory-lan-edge.md](operations/factory-lan-edge.md) | Phase 3 LAN server setup, trusted TLS, database cutover controls |
 | [operations/factory-lan-phase4-checkpoint-transfer.md](operations/factory-lan-phase4-checkpoint-transfer.md) | Phase 4 cloud write fence and encrypted staging; remaining sync blockers |
 | [operations/factory-lan-phase6-certification.md](operations/factory-lan-phase6-certification.md) | Phase 6 independent release gate; not yet certified |
+| [operations/factory-offline-operations-runbook.md](operations/factory-offline-operations-runbook.md) | Phases 9–11 offline workflows, authority handover, conflicts, backup/restore, monitoring and verification evidence |
 | [superpowers/plans/2026-10-30-offline-phase5.md](superpowers/plans/2026-10-30-offline-phase5.md) | Phase 5 browser snapshot encryption and limitations |
 | [superpowers/plans/2026-10-30-offline-integrated-roadmap.md](superpowers/plans/2026-10-30-offline-integrated-roadmap.md) | Remaining offline work planned for Phases 7–11 |
 | [superpowers/plans/2026-10-29-offline-phase1.md](superpowers/plans/2026-10-29-offline-phase1.md) | Phase 1 outbox scope and acceptance |

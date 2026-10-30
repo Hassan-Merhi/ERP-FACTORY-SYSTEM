@@ -34,6 +34,7 @@ import { EDGE_EVENT_STAGE_PATH, validatePhase9Event } from "../server/edge/phase
 import { EVENT_STAGE_SIGNATURE_DOMAIN, verifyStageSignature } from "../server/edge/edgeSyncStageProtocol.mjs";
 import { phase9PressingApplyHandler } from "../server/edge/phase9PressingApply";
 import { ensurePhase10SyncControlSchema, recordPhase10SyncControl } from "../server/edge/phase10SyncControl.mjs";
+import { summarizeLanEvidence } from "../scripts/edge/factory-handover-preflight.mjs";
 import {
   eventEnvelope,
   relayEventStreamOnce,
@@ -366,6 +367,14 @@ describe.skipIf(!adminUrl)("Phase 9 pressing sync drill (disposable PostgreSQL)"
     expect(again).toMatchObject({ staged: 0, receipts: 0 });
     const staged = await cloudAdmin.query("SELECT count(*)::int AS n FROM factory_edge_staged_events");
     expect(staged.rows[0].n).toBe(12);
+    const preflight = await summarizeLanEvidence(lan, SITE);
+    expect(preflight.handoverReady).toBe(false);
+    expect(preflight.streams.find((s) => s.stream === "pressing")).toMatchObject({
+      captured: 12,
+      notStaged: 0,
+      stagedNotApplied: 12,
+      pending: 12,
+    });
   });
 
   it("resumes from a restored LAN backup copy without re-staging or diverging", async () => {
@@ -534,5 +543,12 @@ describe.skipIf(!adminUrl)("Phase 9 pressing sync drill (disposable PostgreSQL)"
       "SELECT count(*)::int AS n FROM audit_log WHERE table_name = 'factory_pressing_confirmations'"
     );
     expect(audits.rows[0].n).toBe(10);
+    const handover = await summarizeLanEvidence(lan, SITE);
+    expect(handover).toMatchObject({ handoverReady: true, pendingTotal: 0, relayPaused: false });
+    expect(handover.streams.find((s) => s.stream === "pressing")).toMatchObject({
+      applied: 10,
+      rejectedByOperator: 2,
+      pending: 0,
+    });
   });
 });

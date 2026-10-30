@@ -57,7 +57,7 @@ export async function readPhase9OperationStatus(queryable, scope) {
     [scope.siteId, scope.operationId, scope.companyId, scope.actorUserId]
   );
   const row = rows[0];
-  if (!row) return null;
+  if (!row) return readPhase9PressingOperationStatus(queryable, scope);
   // A mismatched or impossible receipt is a conflict, NEVER proof of apply.
   const originalValid =
     String(row.operation_id).toLowerCase() === scope.operationId.toLowerCase() &&
@@ -106,5 +106,88 @@ export async function readPhase9OperationStatus(queryable, scope) {
           : state === "conflict"
             ? "receipt-mismatch"
             : "lan-outbox",
+  };
+}
+
+/**
+ * Same projection for the Phase 9 pressing event stream. A cloud
+ * "rejected-conflict" receipt is shown as a conflict with an explicit
+ * operator resolution; it is never reported as applied.
+ */
+async function readPhase9PressingOperationStatus(queryable, scope) {
+  let result;
+  try {
+    result = await queryable.query(
+      [
+        "SELECT o.sequence::text AS sequence, o.operation_id::text AS operation_id, o.company_id,",
+        "o.local_confirmation_id, btrim(o.payload_sha256) AS payload_sha256,",
+        "o.payload->>'productionDate' AS business_date,",
+        "s.operation_id::text AS stage_operation_id, btrim(s.payload_sha256) AS stage_payload_sha256,",
+        "s.state AS stage_state,",
+        "a.operation_id::text AS applied_operation_id, btrim(a.payload_sha256) AS applied_payload_sha256,",
+        "a.company_id AS applied_company_id, a.local_ref AS applied_local_ref,",
+        "a.business_date::text AS applied_business_date, a.cloud_ref, a.outcome AS applied_outcome",
+        "FROM factory_edge_pressing_outbox o",
+        "LEFT JOIN factory_edge_event_stage_receipts s",
+        "ON s.site_id=o.site_id AND s.stream='pressing' AND s.sequence=o.sequence",
+        "LEFT JOIN factory_edge_event_applied_receipts a",
+        "ON a.site_id=o.site_id AND a.stream='pressing' AND a.sequence=o.sequence",
+        "WHERE o.site_id=$1::uuid AND o.operation_id=$2::uuid",
+        "AND o.company_id=$3 AND o.actor_user_id=$4",
+        "LIMIT 1",
+      ].join("\n"),
+      [scope.siteId, scope.operationId, scope.companyId, scope.actorUserId]
+    );
+  } catch (error) {
+    // The pressing capture schema is a separate, DBA-installed step.
+    if (error && typeof error === "object" && error.code === "42P01") return null;
+    throw error;
+  }
+  const row = result.rows[0];
+  if (!row) return null;
+  const sameOperation = (value) => String(value).toLowerCase() === scope.operationId.toLowerCase();
+  const originalValid =
+    sameOperation(row.operation_id) &&
+    Number(row.company_id) === scope.companyId &&
+    Number(row.local_confirmation_id) > 0 &&
+    SHA.test(String(row.payload_sha256 ?? ""));
+  const stagePresent = row.stage_operation_id != null || row.stage_state != null;
+  const stageValid =
+    !stagePresent ||
+    (row.stage_state === "staged-not-applied" &&
+      sameOperation(row.stage_operation_id) &&
+      row.stage_payload_sha256 === row.payload_sha256);
+  const appliedPresent = row.applied_operation_id != null || row.applied_outcome != null;
+  const rejected = row.applied_outcome === "rejected-conflict";
+  const appliedValid =
+    !appliedPresent ||
+    (stagePresent &&
+      stageValid &&
+      sameOperation(row.applied_operation_id) &&
+      row.applied_payload_sha256 === row.payload_sha256 &&
+      Number(row.applied_company_id) === scope.companyId &&
+      Number(row.applied_local_ref) === Number(row.local_confirmation_id) &&
+      (rejected
+        ? row.cloud_ref === null && row.applied_business_date === null
+        : ["cloud-applied", "already-present"].includes(row.applied_outcome) &&
+          Number(row.cloud_ref) > 0 &&
+          ISO_DATE.test(String(row.business_date ?? "")) &&
+          String(row.applied_business_date).slice(0, 10) === String(row.business_date)));
+  const valid = originalValid && stageValid && appliedValid;
+  const state =
+    !valid || rejected ? "conflict" : appliedPresent ? "cloud-applied" : stagePresent ? "staged" : "local-only";
+  return {
+    operationId: scope.operationId,
+    companyId: scope.companyId,
+    state,
+    evidence:
+      state === "cloud-applied"
+        ? "verified-local-cloud-receipt"
+        : state === "staged"
+          ? "lan-staging-receipt"
+          : state === "conflict"
+            ? "receipt-mismatch"
+            : "lan-outbox",
+    ...(valid && rejected ? { resolution: "rejected-by-operator" } : {}),
   };
 }

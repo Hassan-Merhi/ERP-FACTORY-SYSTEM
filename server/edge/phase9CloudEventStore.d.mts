@@ -53,8 +53,7 @@ export function stagePhase9Events(
   events: { sequence: string; operationId: string; payloadSha256: string; state: "staged-not-applied" }[];
 }>;
 // Handlers are typed per event kind by their own modules.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type Phase9HandlerMap = Record<string, Phase9EventHandler<any>>;
+export type Phase9HandlerMap = Record<string, Phase9EventHandler>;
 export function applyStagedEventOnce(
   queryable: Queryable,
   input: Phase9ApplyInput,

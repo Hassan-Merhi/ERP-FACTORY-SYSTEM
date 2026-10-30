@@ -97,3 +97,80 @@ test("invalid actor and UUID cannot reach the database", async () => {
   );
   assert.equal(calls.length, 0);
 });
+
+test("pressing operations project local, staged, applied, rejected and forged states", async () => {
+  const pressing = {
+    sequence: "3",
+    operation_id: scope.operationId,
+    company_id: 42,
+    local_confirmation_id: 55,
+    payload_sha256: "c".repeat(64),
+    business_date: "2026-10-30",
+    stage_operation_id: null,
+    stage_payload_sha256: null,
+    stage_state: null,
+    applied_operation_id: null,
+    applied_payload_sha256: null,
+    applied_company_id: null,
+    applied_local_ref: null,
+    applied_business_date: null,
+    cloud_ref: null,
+    applied_outcome: null,
+  };
+  const staged = {
+    stage_operation_id: scope.operationId,
+    stage_payload_sha256: "c".repeat(64),
+    stage_state: "staged-not-applied",
+  };
+  const applied = {
+    applied_operation_id: scope.operationId,
+    applied_payload_sha256: "c".repeat(64),
+    applied_company_id: 42,
+    applied_local_ref: 55,
+    applied_business_date: "2026-10-30",
+    cloud_ref: 900,
+    applied_outcome: "cloud-applied",
+  };
+  // First query is the voucher stream (no row), second the pressing stream.
+  const read = (row) => {
+    const calls = [];
+    const queryable = {
+      query: async (sql, values) => {
+        calls.push({ sql, values });
+        return { rows: calls.length === 1 ? [] : row ? [row] : [] };
+      },
+    };
+    return readPhase9OperationStatus(queryable, scope).then((result) => ({ result, calls }));
+  };
+  const local = await read(pressing);
+  assert.equal(local.result.state, "local-only");
+  assert.match(local.calls[1].sql, /factory_edge_pressing_outbox/);
+  assert.deepEqual(local.calls[1].values, [scope.siteId, scope.operationId, 42, "worker-7"]);
+  assert.equal((await read({ ...pressing, ...staged })).result.state, "staged");
+  assert.equal((await read({ ...pressing, ...staged, ...applied })).result.state, "cloud-applied");
+  const rejected = (
+    await read({
+      ...pressing,
+      ...staged,
+      ...applied,
+      cloud_ref: null,
+      applied_business_date: null,
+      applied_outcome: "rejected-conflict",
+    })
+  ).result;
+  assert.deepEqual([rejected.state, rejected.resolution], ["conflict", "rejected-by-operator"]);
+  const forged = (await read({ ...pressing, ...staged, ...applied, applied_payload_sha256: "d".repeat(64) })).result;
+  assert.equal(forged.state, "conflict");
+  assert.equal(forged.resolution, undefined);
+  assert.equal((await read({ ...pressing, ...applied })).result.state, "conflict");
+  assert.equal((await read(null)).result, null);
+  const missingSchema = {
+    calls: 0,
+    query: async () => {
+      missingSchema.calls++;
+      if (missingSchema.calls === 1) return { rows: [] };
+      throw Object.assign(new Error("relation does not exist"), { code: "42P01" });
+    },
+  };
+  assert.equal(await readPhase9OperationStatus(missingSchema, scope), null);
+});

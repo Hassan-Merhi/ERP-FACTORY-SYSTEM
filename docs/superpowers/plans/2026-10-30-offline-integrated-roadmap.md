@@ -1,6 +1,6 @@
 # Unified offline mode — remaining release phases (draft)
 
-**Branch:** `feat/offline-mode-integration` — contains development work for Phases 1–6, including two separate Phase 5 slices. **Not production certified.** `main` is unchanged. Keep `OFFLINE_MODE_ENABLED=false`, `FACTORY_EDGE_WRITE_MODE=read-only`, and do not authorize LAN-primary until a verified cutover.
+**Branch:** `feat/offline-mode-integration` — contains development work for Phases 1–9 plus partial Phases 10–11 (see the status sections and the resume checklist at the end). **Not production certified.** `main` is unchanged. Keep `OFFLINE_MODE_ENABLED=false`, `FACTORY_EDGE_WRITE_MODE=read-only`, and do not authorize LAN-primary until a verified cutover.
 
 The existing Phase 4 cloud transport **stages evidence only**; it does not apply business transactions to the cloud. Existing Phases 1–6 are development milestones, not approved release gates. Complete the following phases sequentially where dependencies require it.
 
@@ -76,10 +76,34 @@ Committed on the unified branch, not on `main`:
 - Added envelope, transaction-sharing, rollback and disposable PostgreSQL 17 tests to the Phase 8/9 contract workflows. Schema installation still requires a reviewed DBA migration.
 - **Not an approved offline route:** The LAN writer guard still rejects `POST /api/factory/pressing-machines/confirm`. A typed authenticated cloud staging receiver, exclusive-fence-proven exactly-once posting, applied receipts, source-to-cloud mappings, scan corrections/voids and tenant/hardware reconciliation must all be implemented and verified before the route can be unblocked. The overall remaining business write backlog stays open.
 
+### Phase 9 continuation — pressing cloud pipeline and reusable event streams (2026-10-30)
+
+- **Pressing scans are now an approved LAN-primary write**, end to end: atomic LAN capture → signed staging (`/api/edge/sync/events/stage`, own HMAC domain) → operator-only exactly-once cloud apply (`server/edge/phase9OperatorApply.ts`) → signed read-only receipts → LAN-verified receipt log. The route is admitted only for LAN-primary, behind the Phase 7 epoch and provisioned-data proofs, and only when the DBA-installed capture tables **and** immutability triggers exist (else 503).
+- Reusable framework (`phase9EventProtocol.mjs`, `phase9CloudEventStore.mjs`): per-stream registry of event kinds, canonical payload rebuild, gapless per-stream staging and apply cursors, stored-receipt replay after lost ACK, divergent-replay refusal, shared Phase 7 cloud-writer proof (extracted from Phase 8 unchanged).
+- Deterministic conflicts: a cloud disagreement (bale already scanned, missing machine/assignment/bale, revoked or view-only actor) rolls back, is recorded in an append-only register and blocks the stream until a named DBA `reject-event` decision produces an auditable `rejected-conflict` receipt. Nothing is overwritten or skipped silently.
+- `GET /api/edge/status?operationId=` now also projects pressing operations.
+- Evidence: `tests/offline-phase9-pressing-sync-drill.test.ts` (separate LAN and cloud PostgreSQL databases, real fence, restricted role) plus protocol and boundary tests; wired into the Phase 8/9 workflows.
+- Coverage now: 2 approved captures (USD Journal vouchers, pressing scans), 3 session-only, 1,164 blocked. Remaining workflows and the reason each is still online-only are listed in [factory-offline-operations-runbook.md](../../operations/factory-offline-operations-runbook.md) §2. `--require-complete` stays red by design.
+
 ## Phase 10 — Offline identity, conflicts, secure storage and server controls
 - Implement reviewed local-session/cold-start policy, encrypted legacy-cache migration, authorization/role revocation, and scoped credentials and browser/device protections.
 - Add deterministic multi-device conflict review with no silent financial/stock overwrites.
 - Provide operator controls to pause/resume sync and safely stop the factory server only when local pending writes and restore/recovery state are visible and protected.
+
+### Phase 10 development status — 2026-10-30 (PARTIAL)
+
+Done on the branch:
+- Operator pause/resume of LAN→cloud delivery: append-only `factory_edge_sync_control_log` with operator name and reason; both relays honour it (`server/edge/phase10SyncControl.mjs`).
+- Deterministic multi-device conflict review with no silent financial/stock overwrite: Phase 8 divergent-replay refusal; Phase 9 conflict register + named DBA decisions.
+- Permission revocation after capture: cloud apply re-checks the actor's CURRENT access (Phase 8 Admin/Owner + DBA approval; Phase 9 active user and non-view-only company role).
+- Tenant isolation: tenant-scoped source FKs on capture, envelope/payload identity binding, approved-company check at apply.
+- Safe server stop/handover visibility: `scripts/edge/factory-handover-preflight.mjs` (status / handover gate).
+- Reviewed DBA schema installer with explicit acknowledgement (`server/edge/offlineSchemaInstall.ts`).
+
+Still open (not started or needs external review):
+- Reviewed local-session/cold-start policy for laptops that cannot reach the LAN server (browser-only offline beyond the Phase 5 encrypted read cache and the narrow voucher outbox).
+- Encrypted migration of legacy localStorage/IndexedDB queue entries (currently quarantined, never replayed).
+- Operator UI for pause/resume, conflicts and handover (currently CLI/SQL).
 
 ## Phase 11 — End-to-end factory certification and rollout
 - Integrate Phases 7–10 and run full repository CI, schema/migration, security and release tests on the exact integration release SHA.
@@ -87,3 +111,19 @@ Committed on the unified branch, not on `main`:
 - Obtain independent security/database review and explicit operator/owner sign-off; only then choose a staged production rollout.
 
 **Do not merge to `main`, install on the live factory server, or enable offline mode until these gates are passed.**
+
+### Phase 11 development status — 2026-10-30 (PARTIAL)
+
+- Operations runbook with authority-handover, conflict, backup/restore, DR and monitoring procedures plus a scenario-to-evidence matrix: [factory-offline-operations-runbook.md](../../operations/factory-offline-operations-runbook.md).
+- Database-level drills cover concurrency, failed transactions, WAN loss, lost ACKs, duplicates, restore, interrupted apply, conflicts, revocation, stale epochs and reconciliation.
+- Branch CI repairs: merged `main`, fixed `main`-introduced TypeScript errors, the `drizzle-kit push` BigInt default crash, the pressing PostgreSQL SQLSTATE assertion, the Phase 4 fixture, formatting, env documentation and runtime-table declarations for every offline table.
+- Known `main`-side failure: `tests/runtime-only-tables-ratchet.test.ts` lists 16 production-bonus/destination-audit tables created by `main`'s startup DDL but not declared in `shared/schema`. It must be fixed on `main` by declaring them in lockstep with their DDL.
+- Still open: real hardware drills (Phase 6 matrix), independent security/DBA review, owner sign-off, and full CI on the exact release SHA.
+
+## Resume checklist (next session)
+
+1. Check PR #2613 CI on the latest head; fix anything red that this branch owns.
+2. Next workflow candidates for the event framework, in order: stock adjustments (needs an expected-prior-quantity conflict model), POS cash sales, supplier receiving. Each needs capture + kind + handler + drill before its route joins the allowlist.
+3. Phase 10 UI for pause/resume, conflicts and handover status.
+4. Phase 6 hardware drills, security/DBA review and owner sign-off — external.
+

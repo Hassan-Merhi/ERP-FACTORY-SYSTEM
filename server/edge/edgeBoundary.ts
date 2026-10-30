@@ -160,9 +160,16 @@ export function registerFactoryEdgeBoundary(app: Express): void {
     const now = Date.now();
     if (pressingCheck && now - pressingCheck.at < 3_000) return pressingCheck.value;
     const { rows } = await pool.query(
-      `SELECT to_regclass('public.factory_edge_pressing_outbox') IS NOT NULL
-          AND to_regclass('public.factory_edge_event_stage_receipts') IS NOT NULL
-          AND to_regclass('public.factory_edge_event_applied_receipts') IS NOT NULL AS installed`
+      // Tables alone (e.g. from drizzle-kit push) are not a reviewed install:
+      // the immutable-evidence triggers must be present and enabled too.
+      `SELECT count(*) = 3 AS installed
+         FROM pg_trigger t
+        WHERE t.tgenabled = 'O' AND NOT t.tgisinternal
+          AND (t.tgrelid, t.tgname) IN (
+            ('public.factory_edge_pressing_outbox'::regclass, 'factory_edge_pressing_outbox_no_mutation'),
+            ('public.factory_edge_event_stage_receipts'::regclass, 'factory_edge_event_stage_receipts_no_mutation'),
+            ('public.factory_edge_event_applied_receipts'::regclass, 'factory_edge_event_applied_receipts_no_mutation')
+          )`
     );
     const value = rows[0]?.installed === true;
     pressingCheck = { value, at: now };

@@ -403,6 +403,7 @@
     "docs/operations/database-backup-rollback-recovery.md": "reference",
     "docs/operations/external-alerting-checklist.md": "reference",
     "docs/operations/factory-lan-edge.md": "reference",
+    "docs/operations/factory-offline-operations-runbook.md": "reference",
     "docs/operations/factory-lan-phase4-checkpoint-transfer.md": "reference",
     "docs/operations/factory-lan-phase6-certification.md": "reference",
     "docs/performance-phase9.md": "reference",

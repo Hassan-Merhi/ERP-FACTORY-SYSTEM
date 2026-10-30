@@ -17,4 +17,6 @@ export function readPhase9OperationStatus(
   companyId: number;
   state: Phase9OperationState;
   evidence: "verified-local-cloud-receipt" | "lan-staging-receipt" | "receipt-mismatch" | "lan-outbox";
+  /** Pressing stream only: a valid cloud receipt recording an operator rejection. */
+  resolution?: "rejected-by-operator";
 } | null>;

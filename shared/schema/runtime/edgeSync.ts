@@ -5,6 +5,7 @@
  * application's voucher/ledger schema. "Staged" must never mean "applied".
  * Keep columns in exact lockstep with server/edge runtime DDL.
  */
+import { sql } from "drizzle-orm";
 import {
   bigint,
   char,
@@ -58,7 +59,10 @@ export const factoryEdgeStageReceipts = pgTable(
 
 export const factoryEdgeStageCursor = pgTable("factory_edge_stage_cursor", {
   siteId: uuid("site_id").primaryKey().notNull(),
-  lastSequence: bigint("last_sequence", { mode: "bigint" }).notNull().default(0n),
+  // drizzle-kit cannot serialize a BigInt literal default; keep it in SQL.
+  lastSequence: bigint("last_sequence", { mode: "bigint" })
+    .notNull()
+    .default(sql`0`),
 });
 
 export const factoryEdgeStagedVouchers = pgTable(
