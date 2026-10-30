@@ -14,7 +14,7 @@ import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { bonusText, type ProductionBonusTranslationKey } from "@/i18n/factoryProductionBonusCheckoutTranslations";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
-import { localDateStr } from "../factoryProductionTargetsModel";
+import { fetchProduction, localDateStr } from "../factoryProductionTargetsModel";
 import { ProductionBonusCategoryRatesPanel } from "./ProductionBonusCategoryRatesPanel";
 import { ProductionBonusWeeklyMethodPanel } from "./ProductionBonusWeeklyMethodPanel";
 
@@ -65,6 +65,12 @@ export function ProductionBonusCheckoutPanel({
     enabled:canUse&&Boolean(date),
   });
   const canUse=access?.canDecide===true;
+  const {data:productionForDate}=useQuery({
+    queryKey:["/api/factory/staff-tracking","production","daily",date,date],
+    queryFn:()=>fetchProduction("daily",date,date),
+    enabled:canUse&&Boolean(date),
+  });
+  const availableCategories=productionForDate?.rows.map(row=>row.category)??productionCategories;
   const {data,error,isLoading}=useQuery<Preview>({
     queryKey:[endpoint,date,method],
     queryFn:()=>request("GET",endpoint+"?"+new URLSearchParams({date,method})),
@@ -174,7 +180,7 @@ export function ProductionBonusCheckoutPanel({
         <summary className="cursor-pointer px-4 py-3 text-sm font-medium">{t("settings")}</summary>
         <div className="space-y-3 border-t p-3">
           <p className="text-xs text-muted-foreground">{t("settingsHint")}</p>
-          <ProductionBonusCategoryRatesPanel initialDate={date} productionCategories={productionCategories}/>
+          <ProductionBonusCategoryRatesPanel initialDate={date} productionCategories={availableCategories}/>
           <details className="rounded-lg border">
             <summary className="cursor-pointer px-3 py-2 text-xs">{t("legacy")}</summary>
             <ProductionBonusWeeklyMethodPanel initialDate={date}/>
@@ -184,10 +190,10 @@ export function ProductionBonusCheckoutPanel({
       {error&&<p role="alert" className="text-sm text-destructive">{(error as Error).message}</p>}
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
         {([
-          ["Workers with extra bales",String(offers.filter(row=>row.extra>0).length)],
-          ["Ready to pay",String(payable.length)],
-          ["Selected workers",String(chosen.length)],
-          ["Total to pay",usd(total)],
+          [t("workersExtra"),String(offers.filter(row=>row.extra>0).length)],
+          [t("ready"),String(payable.length)],
+          [t("selected"),String(chosen.length)],
+          [t("totalPay"),usd(total)],
         ] as const).map(([label,value])=><div key={label} className="rounded-lg border p-3">
           <div className="text-xs text-muted-foreground">{label}</div>
           <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
@@ -196,7 +202,7 @@ export function ProductionBonusCheckoutPanel({
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="outline" size="sm" disabled={!payable.length}
           onClick={()=>setSelected(allSelected?[]:payable.map(row=>row.workerId))}>
-          {allSelected?"Clear selection":"Select all payable"}
+          {allSelected?t("clear"):t("selectAll")}
         </Button>
         <span className="ml-auto text-sm font-semibold">{chosen.length} selected · {usd(total)}</span>
         <Button disabled={!chosen.length||!accountId||!paymentDate||pay.isPending}
