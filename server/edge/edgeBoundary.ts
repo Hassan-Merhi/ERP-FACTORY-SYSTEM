@@ -4,6 +4,7 @@ import { edgeBlocksWrite, edgeStatusPayload, readFactoryEdgeConfiguration } from
 import { hasFactoryEdgeData } from "./edgeDatabaseProof.mjs";
 import { hasVerifiedPhase7WriterAuthority } from "./phase7WriterGate.mjs";
 import { supportsPhase8LanVoucherCapture } from "./phase8CapturePolicy.mjs";
+import { Phase9StatusRefusal, readPhase9OperationStatus } from "./phase9OperationStatus.mjs";
 import { registerCloudEdgeSyncReceiver } from "./edgeSyncReceiver";
 
 type EdgeConfiguration = ReturnType<typeof readFactoryEdgeConfiguration>;
@@ -67,8 +68,37 @@ export function registerFactoryEdgeBoundary(app: Express): void {
     return value;
   }
 
-  app.get("/api/edge/status", async (_req, res) => {
+  app.get("/api/edge/status", async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
+    // Phase 9: an optional per-operation projection; never expose another
+    // actor's vouchers or infer cloud application from a browser 2xx/stage ACK.
+    // Kept on the existing status route to preserve the route manifest.
+    if (req.query.operationId !== undefined) {
+      if (config.mode !== "lan") return res.status(404).json({ code: "EDGE_OPERATION_NOT_FOUND" });
+      const userId = req.session?.userId;
+      const companyId = req.session?.currentCompanyId;
+      if (!userId || !Number.isSafeInteger(companyId) || Number(companyId) <= 0) {
+        return res.status(401).json({ code: "EDGE_OPERATION_AUTH_REQUIRED" });
+      }
+      if (typeof req.query.operationId !== "string") {
+        return res.status(400).json({ code: "PHASE9_STATUS_SCOPE_INVALID" });
+      }
+      try {
+        const status = await readPhase9OperationStatus(pool, {
+          siteId: config.siteId,
+          operationId: req.query.operationId,
+          companyId: Number(companyId),
+          actorUserId: userId,
+        });
+        if (!status) return res.status(404).json({ code: "EDGE_OPERATION_NOT_FOUND" });
+        return res.json(status);
+      } catch (error) {
+        if (error instanceof Phase9StatusRefusal) {
+          return res.status(400).json({ code: "PHASE9_STATUS_SCOPE_INVALID" });
+        }
+        return res.status(503).json({ code: "EDGE_OPERATION_STATUS_UNAVAILABLE" });
+      }
+    }
     if (config.mode !== "lan") return res.json(edgeStatusPayload(config));
     return res.json(edgeStatusPayload(config, await provisioned()));
   });
