@@ -18,16 +18,34 @@ describe("offline phase 1 operation contract", () => {
     expect(isAutoReplayAllowed("POST", "/api/vouchers/with-entries?companyId=2")).toBe(false);
   });
 
-  it("rejects legacy voucher payloads that fall through central posting", () => {
-    expect(isVettedOfflineVoucherPayload({ voucher: { currency: "USD" }, entries: [] })).toBe(false);
-    expect(isVettedOfflineVoucherPayload({ voucher: { optional: true }, entries: [{}, {}] })).toBe(false);
-    expect(isVettedOfflineVoucherPayload({ voucher: { currency: "EUR" }, entries: [{}, {}] })).toBe(false);
-    expect(
-      isVettedOfflineVoucherPayload({ voucher: {}, entries: [{ debitAmount: "1.001" }, { creditAmount: "1.001" }] })
-    ).toBe(false);
-    expect(isVettedOfflineVoucherPayload({ voucher: {}, entries: [{ debitAmount: 1 }, { creditAmount: 1 }] })).toBe(
-      true
-    );
+  it("accepts only balanced USD Journal ledger requests supported by LAN capture", () => {
+    const valid = {
+      voucher: { voucherType: "Journal", voucherDate: "2026-10-29", currency: "USD" },
+      entries: [
+        { ledgerAccountId: 11, debitAmount: "10.00", creditAmount: "0" },
+        { ledgerAccountId: 12, debitAmount: "0", creditAmount: "10.00" },
+      ],
+    };
+    expect(isVettedOfflineVoucherPayload(valid)).toBe(true);
+    const rejected = [
+      { voucher: { ...valid.voucher, voucherType: "Payment" } },
+      { voucher: { ...valid.voucher, currency: "ZMW" } },
+      { voucher: { ...valid.voucher, optional: true } },
+      { voucher: { ...valid.voucher, locationId: 9 } },
+      { voucher: { ...valid.voucher, voucherDate: "2026-02-30" } },
+      { voucher: { ...valid.voucher, attachmentId: 2 } },
+      { entries: [{ ...valid.entries[0], supplierId: 2 }, valid.entries[1]] },
+      { entries: [{ ...valid.entries[0], transactionDebitAmount: "10.00" }, valid.entries[1]] },
+      { entries: [valid.entries[0], { ...valid.entries[1], creditAmount: "9.99" }] },
+      { entries: [valid.entries[0], { ...valid.entries[1], ledgerAccountId: 0 }] },
+      { entries: [valid.entries[0], { ...valid.entries[1], creditAmount: "10.001" }] },
+      { file: { name: "receipt.pdf" } },
+      { clientRequestId: "not-a-uuid" },
+    ];
+    for (const change of rejected) {
+      expect(isVettedOfflineVoucherPayload({ ...valid, ...change })).toBe(false);
+    }
+    expect(isVettedOfflineVoucherPayload({ voucher: {}, entries: [] })).toBe(false);
   });
 
   it("does not persist credentials as queued JSON", () => {
