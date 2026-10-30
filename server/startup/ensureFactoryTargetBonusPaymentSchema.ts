@@ -42,6 +42,59 @@ export async function ensureFactoryTargetBonusPaymentSchema(pool: Pick<Pool, "qu
     CREATE INDEX IF NOT EXISTS factory_target_bonus_payments_date
       ON factory_target_bonus_payments(company_id, payment_date DESC)
   `);
+  // Paid daily bonuses retain their chosen rate method and frozen category
+  // breakdown. Reviews/payments remain the canonical immutable financial claims.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS factory_target_bonus_checkout_details (
+      id BIGSERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      review_id INTEGER NOT NULL REFERENCES factory_target_bonus_reviews(id) ON DELETE RESTRICT,
+      method VARCHAR(12) NOT NULL CHECK (method IN ('standard','category')),
+      breakdown JSONB NOT NULL CHECK (jsonb_typeof(breakdown)='array'),
+      calculation_hash CHAR(64) NOT NULL CHECK (calculation_hash ~ '^[a-f0-9]{64}
+  // Reversed payments retain the claim and cannot be automatically repaid.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS factory_target_bonus_weekly_payments (
+      id BIGSERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      review_id BIGINT NOT NULL REFERENCES factory_target_bonus_weekly_reviews(id) ON DELETE RESTRICT,
+      worker_id INTEGER NOT NULL REFERENCES factory_workers(id) ON DELETE RESTRICT,
+      week_start DATE NOT NULL,
+      week_end DATE NOT NULL,
+      bonus_amount NUMERIC(18,2) NOT NULL CHECK (bonus_amount > 0),
+      currency_code VARCHAR(3) NOT NULL DEFAULT 'USD' CHECK (currency_code = 'USD'),
+      payment_date DATE NOT NULL,
+      cash_ledger_account_id INTEGER NOT NULL REFERENCES ledger_accounts(id) ON DELETE RESTRICT,
+      expense_ledger_account_id INTEGER NOT NULL REFERENCES ledger_accounts(id) ON DELETE RESTRICT,
+      payment_voucher_id INTEGER NOT NULL REFERENCES vouchers(id) ON DELETE RESTRICT,
+      status VARCHAR(12) NOT NULL DEFAULT 'POSTED' CHECK (status IN ('POSTED','REVERSED')),
+      posted_by VARCHAR(255) NOT NULL,
+      posted_at TIMESTAMP NOT NULL DEFAULT now(),
+      reversal_voucher_id INTEGER REFERENCES vouchers(id) ON DELETE RESTRICT,
+      reversed_by VARCHAR(255),
+      reversed_at TIMESTAMP,
+      reversal_reason TEXT,
+      CONSTRAINT factory_bonus_weekly_payment_review_unique UNIQUE (company_id, review_id),
+      CONSTRAINT factory_bonus_weekly_payment_worker_week_unique UNIQUE (company_id, week_start, worker_id),
+      CONSTRAINT factory_bonus_weekly_payment_voucher_unique UNIQUE (payment_voucher_id),
+      CONSTRAINT factory_bonus_weekly_payment_end CHECK (week_end = week_start + 6),
+      CONSTRAINT factory_bonus_weekly_payment_reversal CHECK (
+        (status = 'POSTED' AND reversal_voucher_id IS NULL AND reversed_at IS NULL)
+        OR (status = 'REVERSED' AND reversal_voucher_id IS NOT NULL AND reversed_at IS NOT NULL)
+      )
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS factory_bonus_weekly_payments_date_idx
+    ON factory_target_bonus_weekly_payments (company_id, payment_date DESC, worker_id)
+  `);
+}
+),
+      created_by VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      CONSTRAINT factory_target_bonus_checkout_review_unique UNIQUE (company_id,review_id)
+    )
+  `);
   // Phase 15: distinct one-time claim for an immutable worker/week review.
   // Reversed payments retain the claim and cannot be automatically repaid.
   await pool.query(`
