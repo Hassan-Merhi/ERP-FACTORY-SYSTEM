@@ -1,0 +1,54 @@
+name: Offline Phase 8 apply + receipt contracts
+
+on:
+  push:
+    branches:
+      - feat/offline-mode-integration
+    paths:
+      - 'server/edge/phase8*.mjs'
+      - 'server/edge/phase8*.d.mts'
+      - 'server/edge/phase8*.ts'
+      - 'server/edge/edgeBoundary.ts'
+      - 'server/edge/edgeSyncReceiver.ts'
+      - 'server/edge/edgeVoucherOutbox.ts'
+      - 'server/routes/vouchers/centralGenericVoucherCreateRoute.ts'
+      - 'scripts/edge/fetch-applied-receipts.mjs'
+      - 'tests/offline-phase8*.mjs'
+      - '.github/workflows/offline-phase8-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  phase8-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-bookworm
+        env:
+          POSTGRES_PASSWORD: phase8-test-admin-pass
+          POSTGRES_DB: postgres
+        ports:
+          - 55433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '24'
+      - name: Install exact locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Verify Phase 8 pure rejection and receipt contracts
+        run: node --test tests/offline-phase8-contract.test.mjs
+      - name: Exercise exactly-once posting on disposable PostgreSQL 17
+        env:
+          PHASE8_TEST_DATABASE_URL: postgresql://postgres:phase8-test-admin-pass@127.0.0.1:55433/postgres
+        run: node --test tests/offline-phase8-postgres.test.mjs
+      - name: Validate TypeScript on unified branch
+        run: npm run check
