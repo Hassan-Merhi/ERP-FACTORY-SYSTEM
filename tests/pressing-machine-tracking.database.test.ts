@@ -188,7 +188,7 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
     await db.execute(sql`UPDATE factory_bales SET product_id=${priorityProductId}
       WHERE company_id=${companies.a} AND id=${bales.priority.id}`);
     await db.execute(sql`UPDATE factory_settings
-      SET extra_settings=jsonb_set(extra_settings,'{nonBalePriorityProductIds}',jsonb_build_array(${priorityProductId}))
+      SET extra_settings=jsonb_set(extra_settings,'{nonBalePriorityProductIds}',jsonb_build_array(${priorityProductId}::integer))
       WHERE company_id=${companies.a}`);
     const [count] = await rows(sql`SELECT COUNT(*)::int AS total FROM vouchers`);
     voucherCountBefore = count.total;
