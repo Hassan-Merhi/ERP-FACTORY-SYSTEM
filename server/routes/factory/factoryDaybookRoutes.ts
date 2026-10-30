@@ -125,14 +125,14 @@ export function registerFactoryDaybookRoutes(app: Express) {
           'CONTRACT_REACTIVATED',
           'CONTRACT_ENDED'
         )`,
-        // Deleted bonus payments are reversed, never erased. Hide the original
-        // positive payment from the active Daybook while retaining it in audit.
+        // Deleted bonus payments are reversed, never erased. Hide the offsetting payment and reversal entries from the active Daybook
+        // as a net-zero deletion; preserve both in audit history.
         sql`NOT (
-          (${factoryDaybookEntries.txType} = 'PRODUCTION_TARGET_BONUS_PAYMENT'
+          (${factoryDaybookEntries.txType} IN ('PRODUCTION_TARGET_BONUS_PAYMENT','PRODUCTION_TARGET_BONUS_REVERSAL')
             AND EXISTS (SELECT 1 FROM factory_target_bonus_payments p
               WHERE p.company_id = ${companyId} AND p.id = ${factoryDaybookEntries.referenceId}
                 AND p.status = 'REVERSED'))
-          OR (${factoryDaybookEntries.txType} = 'PRODUCTION_TARGET_WEEKLY_BONUS_PAYMENT'
+          OR (${factoryDaybookEntries.txType} IN ('PRODUCTION_TARGET_WEEKLY_BONUS_PAYMENT','PRODUCTION_TARGET_WEEKLY_BONUS_REVERSAL')
             AND EXISTS (SELECT 1 FROM factory_target_bonus_weekly_payments p
               WHERE p.company_id = ${companyId} AND p.id = ${factoryDaybookEntries.referenceId}
                 AND p.status = 'REVERSED'))
