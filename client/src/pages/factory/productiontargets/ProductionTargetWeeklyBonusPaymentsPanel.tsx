@@ -28,6 +28,11 @@ type WeeklyHistory = { start:string; end:string; currency:"USD"; payments:Weekly
 type Account = { id:number; name:string; code:string; accountType:string; openingCurrency:string|null };
 type Accounts = { accounts:Account[] };
 type PostResult = { posted:number; replayed:number };
+type WeeklyReconciliation = {
+  paymentCount:number;passed:number;failed:number;
+  discrepancies:Array<{paymentId:number;workerId:number;weekStart:string;issues:string[]}>;
+  note:string;
+};
 const base="/api/factory/production-target-bonuses/weekly-payments";
 async function api<T>(method:"GET"|"POST",url:string,body?:unknown):Promise<T>{
   const response=await factoryApiRequest(method,url,body);
@@ -51,9 +56,10 @@ export function ProductionTargetWeeklyBonusPaymentsPanel({initialDate}:{initialD
   const [reversalDate,setReversalDate]=useState(()=>localDateStr(new Date()));
   const [reason,setReason]=useState("");
   const [exporting,setExporting]=useState(false);
+  const [audit,setAudit]=useState<WeeklyReconciliation|null>(null);
   useEffect(()=>{
     const day=mondayOfProductionBonusWeek(initialDate)??initialDate;
-    setStart(day);setEnd(day);setSelected([]);
+    setStart(day);setEnd(day);setSelected([]);setAudit(null);
   },[initialDate]);
   const valid=Boolean(mondayOfProductionBonusWeek(start)===start &&
     mondayOfProductionBonusWeek(end)===end && start<=end &&
@@ -78,6 +84,16 @@ export function ProductionTargetWeeklyBonusPaymentsPanel({initialDate}:{initialD
   const allSelected=payable.length>0&&payable.every(r=>selected.includes(Number(r.reviewId)));
   const total=chosen.reduce((sum,r)=>sum+Number(r.approvedAmount),0);
   const canPay=chosen.length>0&&Boolean(accountId)&&Boolean(paymentDate)&&!isLoading;
+  const reconcile=useMutation({
+    mutationFn:()=>api<WeeklyReconciliation>("GET",
+      "/api/factory/production-target-bonuses/weekly-reconciliation?"+
+      new URLSearchParams({start,end}).toString()),
+    onSuccess:data=>setAudit(data),
+    onError:(error:Error)=>toast({
+      title:"Could not reconcile weekly bonuses",
+      description:error.message,variant:"destructive",
+    }),
+  });
   const payment=useMutation({
     mutationFn:()=>api<PostResult>("POST",base+"/post",{
       confirm:true,currency:"USD",paymentDate,cashAccountId:Number(accountId),
@@ -136,12 +152,12 @@ export function ProductionTargetWeeklyBonusPaymentsPanel({initialDate}:{initialD
         <label className="space-y-1 text-xs text-muted-foreground">
           From week (Monday)
           <Input type="date" aria-label="Weekly bonus from Monday" className="w-[168px]"
-            value={start} onChange={e=>{setStart(e.target.value);setSelected([]);}} />
+            value={start} onChange={e=>{setStart(e.target.value);setSelected([]);setAudit(null);}} />
         </label>
         <label className="space-y-1 text-xs text-muted-foreground">
           To week (Monday)
           <Input type="date" aria-label="Weekly bonus to Monday" className="w-[168px]"
-            value={end} onChange={e=>{setEnd(e.target.value);setSelected([]);}} />
+            value={end} onChange={e=>{setEnd(e.target.value);setSelected([]);setAudit(null);}} />
         </label>
         <label className="space-y-1 text-xs text-muted-foreground">
           Payment date
@@ -176,6 +192,11 @@ export function ProductionTargetWeeklyBonusPaymentsPanel({initialDate}:{initialD
         <Button type="button" size="sm" variant="outline"
           disabled={!data||!rows.length||exporting} onClick={()=>{void download();}}>
           <Download className="mr-1 h-4 w-4"/> {exporting?"Exporting…":"Export Excel"}
+        </Button>
+        <Button type="button" size="sm" variant="outline"
+          disabled={!valid||reconcile.isPending}
+          onClick={()=>reconcile.mutate()}>
+          {reconcile.isPending?"Checking ledger…":"Verify accounting"}
         </Button>
         <Button type="button" disabled={!canPay||payment.isPending}
           onClick={()=>setConfirmOpen(true)}>
@@ -247,6 +268,23 @@ export function ProductionTargetWeeklyBonusPaymentsPanel({initialDate}:{initialD
           </tbody>
         </table>
       </div>
+      {audit&&<div className="rounded-md border p-3 text-sm" data-testid="weekly-bonus-reconciliation">
+        <p className="font-medium">Accounting reconciliation: {audit.passed} passed,
+          {" "}{audit.failed} exceptions across {audit.paymentCount} posted/reversed claims.
+        </p>
+        {audit.paymentCount===0&&<p className="mt-1 text-xs text-muted-foreground">
+          No payments exist in the selected weeks; a zero-claim check does not certify posting.
+        </p>}
+        {audit.discrepancies.length>0&&<div className="mt-2 max-h-36 overflow-y-auto text-xs text-destructive">
+          {audit.discrepancies.map(x=><p key={x.paymentId}>
+            Payment #{x.paymentId} · worker #{x.workerId} · {x.weekStart}: {x.issues.join(", ")}
+          </p>)}
+        </div>}
+        <p className="mt-1 text-xs text-muted-foreground">
+          Read-only validation; anomalies require manual investigation. CI and live database
+          integration tests are separate certification requirements.
+        </p>
+      </div>}
       <p className="text-xs text-muted-foreground">
         Payment is a separate financial confirmation after immutable weekly approval.
         A reversed worker/week can never be automatically paid again.
