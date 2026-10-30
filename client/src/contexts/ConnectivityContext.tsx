@@ -116,19 +116,32 @@ function FullConnectivityProvider({ children }: Props) {
 
   const refreshCounts = useCallback(async () => {
     try {
-      const { getSyncQueueCount, getConflictCount } = await import("@/lib/db");
+      const { db, getConflictCount } = await import("@/lib/db");
       const { getQueue } = await import("@/lib/offlineQueue");
-      const [{ pending: idbPending, failed: idbFailed }, conflicts] = await Promise.all([
-        getSyncQueueCount(),
+      const { getVerifiedOfflineReadScope } = await import("@/lib/offline/offlineReadCache");
+      const { listOfflineOperations } = await import("@/lib/offline/durableOutbox");
+      const actor = getVerifiedOfflineReadScope();
+      const [legacyIdbCount, conflicts, durable] = await Promise.all([
+        db.syncQueue.count(),
         getConflictCount(),
+        actor ? listOfflineOperations(actor) : Promise.resolve([]),
       ]);
-      const legacyQueue = getQueue();
-      const legacyPending = legacyQueue.filter((item) => item.status === "pending").length;
-      const legacyFailed = legacyQueue.filter((item) => item.status === "failed").length;
+      const currentActor = getVerifiedOfflineReadScope();
+      // Discard stale async counts if a company switch or logout occurred.
+      const sameScope = !!actor && !!currentActor &&
+        actor.companyId === currentActor.companyId && actor.userId === currentActor.userId;
+      const owned = sameScope ? durable : [];
+      const pending = owned.filter((item) => item.state === "pending" || item.state === "sending").length;
+      const review = owned.filter((item) =>
+        item.state === "conflict" || item.state === "rejected" || item.state === "needs_review").length;
+      const blockedLegacy = legacyIdbCount + getQueue().length;
       if (isMountedRef.current) {
-        setPendingCount(idbPending + legacyPending);
-        setFailedCount(idbFailed + legacyFailed);
-        setConflictCount(conflicts);
+        // Legacy records must NEVER appear as "pending sync": only the vetted
+        // actor-scoped outbox is auto-replayable. Keep the old count visible as
+        // blocked for supervised recovery, without exposing record content.
+        setPendingCount(pending);
+        setFailedCount(review + blockedLegacy);
+        setConflictCount(conflicts + owned.filter((item) => item.state === "conflict").length);
       }
     } catch {
       // Offline queue counts are advisory and must never block the app shell.
