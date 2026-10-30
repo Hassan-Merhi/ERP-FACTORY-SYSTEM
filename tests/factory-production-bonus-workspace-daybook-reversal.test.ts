@@ -20,7 +20,7 @@ describe("Production Bonuses dedicated page and audited Daybook deletion", () =>
     expect(workspace).not.toContain("<ProductionTargetBonusPaymentsPanel");
     const checkout = source("client/src/pages/factory/productiontargets/ProductionBonusCheckoutPanel.tsx");
     expect(checkout).toContain("<ProductionBonusCategoryRatesPanel");
-    expect(checkout).toContain("Review");
+    expect(checkout).toContain('t("reviewPay")');
     expect(checkout).toContain("/checkout");
     expect(checkout).toContain('method==="category"');
     expect(workspace).toContain('/factory/stock-entry?tab=production-targets');
