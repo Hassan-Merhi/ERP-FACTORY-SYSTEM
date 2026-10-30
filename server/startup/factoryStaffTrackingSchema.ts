@@ -235,6 +235,55 @@ const FACTORY_PRODUCTION_TARGET_BONUS_CATEGORY_RATES_SQL = `
       (company_id, category_key, effective_from DESC, id DESC);
 `;
 
+
+/** Phase 12: versioned company-wide bonus method per Monday-Sunday production week.
+ * This is configuration only. Existing per-bale approval and payment paths are
+ * unchanged until weekly claim, review and accounting integration is certified.
+ */
+const FACTORY_PRODUCTION_TARGET_BONUS_WEEKLY_METHOD_SQL = `
+  CREATE TABLE IF NOT EXISTS factory_production_target_bonus_weekly_methods (
+    id BIGSERIAL PRIMARY KEY,
+    company_id INTEGER NOT NULL,
+    effective_week DATE NOT NULL,
+    method VARCHAR(20) NOT NULL CHECK (method IN ('per_extra_bale', 'weekly_flat')),
+    flat_bonus_usd NUMERIC(20,2) NOT NULL DEFAULT 0
+      CHECK (flat_bonus_usd >= 0 AND flat_bonus_usd <= 100000),
+    note VARCHAR(500),
+    request_key VARCHAR(128) NOT NULL,
+    created_by VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    CONSTRAINT factory_bonus_weekly_method_amount_check CHECK (
+      (method = 'per_extra_bale' AND flat_bonus_usd = 0) OR
+      (method = 'weekly_flat' AND flat_bonus_usd > 0)
+    ),
+    CONSTRAINT factory_bonus_weekly_method_monday_check
+      CHECK (EXTRACT(ISODOW FROM effective_week) = 1),
+    CONSTRAINT factory_bonus_weekly_method_request_unique UNIQUE (company_id, request_key)
+  );
+  CREATE INDEX IF NOT EXISTS factory_bonus_weekly_method_history_idx
+    ON factory_production_target_bonus_weekly_methods (company_id, effective_week DESC, id DESC);
+  CREATE OR REPLACE FUNCTION prevent_bonus_weekly_method_mutation()
+    RETURNS trigger LANGUAGE plpgsql AS $
+    BEGIN
+      RAISE EXCEPTION 'Production bonus weekly method versions are immutable';
+    END;
+    $;
+  DO $
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_trigger
+      WHERE tgname = 'factory_bonus_weekly_method_immutable'
+        AND tgrelid = 'factory_production_target_bonus_weekly_methods'::regclass
+        AND NOT tgisinternal
+    ) THEN
+      CREATE TRIGGER factory_bonus_weekly_method_immutable
+        BEFORE UPDATE OR DELETE ON factory_production_target_bonus_weekly_methods
+        FOR EACH ROW EXECUTE FUNCTION prevent_bonus_weekly_method_mutation();
+    END IF;
+  END
+  $;
+`;
+
 /** Phase 9: frozen physical-bale category evidence and one target claim per
  * worker/day. Captured in the same transaction that locks End Production.
  * Historical days never gain fabricated evidence by re-reading changed bales.
@@ -374,6 +423,9 @@ export async function ensureFactoryStaffTrackingSchema(database: StartupQueryabl
 
   // Category settings are created on every boot but do not affect payable bonus rows.
   await database.query(FACTORY_PRODUCTION_TARGET_BONUS_CATEGORY_RATES_SQL);
+
+  // Company weekly method settings are append-only and never trigger payouts.
+  await database.query(FACTORY_PRODUCTION_TARGET_BONUS_WEEKLY_METHOD_SQL);
 
   // Immutable bale evidence and explicit daily target splits for Phase 9.
   await database.query(FACTORY_BONUS_CATEGORY_EVIDENCE_SQL);
