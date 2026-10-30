@@ -49,6 +49,7 @@ import {
 import { ProductionTargetDefaultsDialog } from "./productiontargets/ProductionTargetDefaultsDialog";
 import { ProductionTargetsEditorDialog } from "./productiontargets/ProductionTargetsEditorDialog";
 import { ProductionExcelRangeDialog, type ProductionExportDates } from "./productiontargets/ProductionExcelRangeDialog";
+import { ProductionTargetsDateRangeDialog, type ProductionTargetsDateRange } from "./productiontargets/ProductionTargetsDateRangeDialog";
 import { Coins } from "lucide-react";
 import { useLocation } from "wouter";
 import type { AuthMe } from "@shared/apiTypes";
@@ -120,13 +121,17 @@ export default function FactoryProductionTargets() {
   const tr = (key: FactoryStaffTrackingTranslationKey) => translateFactoryStaffTrackingText(key, language);
   const [periodType, setPeriodType] = useState<PeriodType>("daily");
   const [referenceDate, setReferenceDate] = useState(() => localDateStr(new Date()));
+  const [customRange, setCustomRange] = useState<ProductionTargetsDateRange | null>(null);
+  const [dateRangeOpen, setDateRangeOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<ProductionRow[]>([]);
   const [editorOpen, setEditorOpen] = useState(false);
   const [defaultsEditorOpen, setDefaultsEditorOpen] = useState(false);
   const [excelRangeOpen, setExcelRangeOpen] = useState(false);
   const productionReportRef = useRef<HTMLDivElement>(null);
-  const period = useMemo(() => periodFor(periodType, referenceDate), [periodType, referenceDate]);
+  const period = useMemo(() =>
+    periodType === "daily" ? periodFor("daily", referenceDate) : (customRange ?? periodFor(periodType, referenceDate)),
+  [periodType, referenceDate, customRange]);
 
   const { data, isLoading } = useQuery<ProductionResponse>({
     queryKey: ["/api/factory/staff-tracking", "production", periodType, period.start, period.end],
@@ -308,7 +313,10 @@ export default function FactoryProductionTargets() {
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground">{tr("period")}</p>
-            <Select value={periodType} onValueChange={(value) => setPeriodType(value as PeriodType)} disabled={busy}>
+            <Select value={periodType} onValueChange={(value) => {
+              setPeriodType(value as PeriodType);
+              setCustomRange(null);
+            }} disabled={busy}>
               <SelectTrigger className="w-[130px]" data-testid="select-production-period-type">
                 <SelectValue />
               </SelectTrigger>
@@ -321,13 +329,43 @@ export default function FactoryProductionTargets() {
           </div>
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground">{tr("referenceDate")}</p>
-            <Input
-              type="date"
-              value={referenceDate}
-              onChange={(event) => setReferenceDate(event.target.value)}
-              className="w-[155px]"
-              disabled={busy}
-            />
+            {periodType === "daily" ? (
+              <Input
+                type="date"
+                value={referenceDate}
+                onChange={(event) => setReferenceDate(event.target.value)}
+                className="w-[155px]"
+                disabled={busy}
+              />
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9 gap-2 tabular-nums"
+                  onClick={() => setDateRangeOpen(true)}
+                  disabled={busy}
+                  title="Choose start and end dates from the calendar"
+                  data-testid="button-production-targets-date-range"
+                >
+                  <CalendarDays className="h-4 w-4" />
+                  {period.start} — {period.end}
+                </Button>
+                {customRange && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setCustomRange(null)}
+                    disabled={busy}
+                    data-testid="button-reset-production-targets-date-range"
+                    title={periodType === "weekly" ? "Restore full week" : "Restore full month"}
+                  >
+                    Reset
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
 
           {periodType === "daily" && (
@@ -618,6 +656,18 @@ export default function FactoryProductionTargets() {
           </TableBody>
         </Table>
       </div>
+
+      {periodType !== "daily" && (
+        <ProductionTargetsDateRangeDialog
+          open={dateRangeOpen}
+          onOpenChange={setDateRangeOpen}
+          range={period}
+          onApply={(nextRange) => {
+            setCustomRange(nextRange);
+            setDateRangeOpen(false);
+          }}
+        />
+      )}
 
       <ProductionExcelRangeDialog
         open={excelRangeOpen}
