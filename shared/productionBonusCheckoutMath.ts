@@ -1,24 +1,50 @@
 import { productionBonusCheckoutErrors as errors } from "./i18n/productionBonusCheckoutErrors";
 import Decimal from "decimal.js";
 import { isProductionWorkday, mondayOfProductionBonusWeek } from "./productionTargetBonusWeeklyMethod";
-/** Attribute each Stock Entry bale to the worker who finalized it.
- * Linking workers at the same table does not transfer or split their bonus
- * credits; category totals must match the individual preview exactly.
+/** A linked production table is one shared output pool for the work date.
+ * Every physical bale is assigned to exactly one linked member, in a stable
+ * sorted order by bale ID and worker ID. Unlinked output remains individually
+ * credited. Do not overwrite historically approved/paid bonus snapshots.
+ */
+export function linkedWorkerBaleShares(
+  totals: readonly {workerId: number; bales: number}[],
+  members: readonly number[],
+): Map<number, number> {
+  const ids = [...new Set(members)].sort((a,b)=>a-b);
+  if (!ids.length || ids.some(id=>!Number.isSafeInteger(id)||id<=0) ||
+      totals.some(row=>!ids.includes(row.workerId)||
+        !Number.isSafeInteger(row.bales)||row.bales<0)) throw new Error(errors.invalidQuantities);
+  const total = totals.reduce((sum,row)=>sum+row.bales,0);
+  if (!Number.isSafeInteger(total)) throw new Error(errors.invalidQuantities);
+  const base = Math.floor(total / ids.length);
+  const remainder = total % ids.length;
+  return new Map(ids.map((id,index)=>[id,base+(index<remainder?1:0)]));
+}
+
+/** Share category credits using one deterministic assignment per physical bale.
+ * For a single worker (no active link) the worker keeps their own stock credit.
  */
 export function workerCategoryCredits(
   bales: ReadonlyArray<{id:number;worker:number|null;category:string|null}>,
   members: readonly number[],
   workerId: number,
 ): Array<{category:string;count:number}> {
-  const ids=[...new Set(members)];
-  if(!ids.includes(workerId))throw new Error(errors.missingLink);
+  const ids=[...new Set(members)].sort((a,b)=>a-b);
+  if (!ids.includes(workerId)) throw new Error(errors.missingLink);
+  const seen=new Set<number>();
   const group=new Map<string,number>();
-  for(const bale of bales){
-    if(bale.worker!==workerId)continue;
-    const name=(bale.category??"").normalize("NFC").trim().replace(/\s+/gu," ");
+  const source=[...bales].sort((a,b)=>a.id-b.id);
+  source.forEach((bale,index)=>{
+    if(!Number.isSafeInteger(bale.id)||bale.id<=0||seen.has(bale.id) ||
+       bale.worker===null || !ids.includes(bale.worker)) throw new Error(errors.invalidQuantities);
+    seen.add(bale.id);
+    // Linked members share their joint output; solo workers keep their own.
+    const assignee=ids.length===1 ? bale.worker : ids[index%ids.length];
+    if(assignee!==workerId)return;
+    const name=(bale.category??"").normalize("NFC").trim().replace(/\\s+/gu," ");
     if(!name)throw new Error(errors.missingCategory);
     group.set(name,(group.get(name)??0)+1);
-  }
+  });
   return [...group].map(([category,count])=>({category,count}))
     .sort((a,b)=>a.category.localeCompare(b.category));
 }
