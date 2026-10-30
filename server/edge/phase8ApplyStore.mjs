@@ -46,7 +46,7 @@ export async function ensurePhase8ApplySchema(queryable) {
       company_id INTEGER NOT NULL CHECK(company_id > 0),
       actor_user_id TEXT NOT NULL,
       local_voucher_id INTEGER NOT NULL CHECK(local_voucher_id > 0),
-      cloud_voucher_id INTEGER NOT NULL CHECK(cloud_voucher_id > 0),
+      cloud_voucher_id INTEGER NOT NULL REFERENCES vouchers(id) ON DELETE RESTRICT CHECK(cloud_voucher_id > 0),
       payload_sha256 CHAR(64) NOT NULL,
       business_date DATE NOT NULL,
       applied_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
