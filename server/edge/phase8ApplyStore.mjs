@@ -214,7 +214,9 @@ export async function applyStagedVoucherOnce(queryable, input, applyPosting) {
       WHERE a.site_id=$1::uuid AND a.company_id=$2
         AND a.actor_user_id=$3 AND a.baseline_sha256=$4
         AND a.approved_until > clock_timestamp()
-        AND role.role NOT IN ('View Only', 'POS', 'POS - Salesman')
+        -- Initial Phase 8 replay deliberately requires a real Admin/Owner
+        -- company membership IN ADDITION to the DBA-approved actor grant.
+        AND role.role IN ('Admin', 'Owner')
       LIMIT 1
     `, [approved.siteId, approved.companyId, event.actorUserId, approved.baselineSha256]);
     if (actor.rows.length !== 1) throw new Phase8ApplyRefusal("PHASE8_ACTOR_NOT_AUTHORIZED");
