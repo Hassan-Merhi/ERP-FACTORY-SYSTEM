@@ -22,6 +22,12 @@ on:
       - 'client/src/components/OfflineWriteStatusPanel.tsx'
       - 'client/src/components/OfflinePrepPanel.tsx'
       - 'client/src/lib/offline/phase9Status.ts'
+      - 'client/src/lib/offline/operationContract.ts'
+      - 'client/src/lib/offline/durableOutbox.ts'
+      - 'server/edge/phase8CapturePolicy.mjs'
+      - 'tests/ui/offline-operation-contract.test.ts'
+      - 'tests/ui/offline-durable-outbox.test.ts'
+      - 'tests/factory-edge-policy.test.ts'
       - 'scripts/edge/audit-phase9-write-coverage.mjs'
       - 'tests/offline-phase9*.mjs'
       - 'tests/offline-phase9*.ts'
@@ -70,6 +76,8 @@ jobs:
         env:
           PHASE8_TEST_DATABASE_URL: postgresql://postgres:phase8-test-admin-pass@127.0.0.1:55433/postgres
         run: node --test tests/offline-phase8-postgres.test.mjs
+      - name: Verify narrow device capture and legacy queue quarantine
+        run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-operation-contract.test.ts tests/ui/offline-durable-outbox.test.ts
       - name: Test Phase 9 status live-session and membership gating
         run: node node_modules/vitest/vitest.mjs run tests/offline-phase9-status-http.test.ts
       - name: Validate TypeScript on unified branch
