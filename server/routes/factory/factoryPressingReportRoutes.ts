@@ -14,7 +14,7 @@ import { pressingReportFiltersSchema, pressingSavedViewSchema, type PressingRepo
 import { factoryLocalDate } from "../../services/factory/pressingShiftTime";
 import { PRESSING_TIME_ZONE } from "@shared/pressingTimeZone";
 
-// Individual worker history stays scoped; Admin, Owner and Developer can view company reports.
+// Individual worker history stays scoped. View Only can read company-wide reports but never correct scans.
 const MANAGER_ROLES = new Set(["Admin", "Owner", "Developer"]);
 type QueryCtx = { companyId: number; userId: string; supervisor: boolean; canCorrect: boolean };
 type Param = string | number;
@@ -44,7 +44,7 @@ function handleError(res: Response, error: unknown) {
 async function context(req: Request): Promise<QueryCtx> {
   const ctx = await getActiveCompanyPermissionContext(req);
   return { companyId: ctx.companyId, userId: ctx.userId,
-    supervisor: MANAGER_ROLES.has(ctx.role) && !ctx.posViewOnly,
+    supervisor: (MANAGER_ROLES.has(ctx.role) && !ctx.posViewOnly) || ctx.role === "View Only",
     canCorrect: (ctx.role === "Admin" || ctx.role === "Owner") && !ctx.posViewOnly };
 }
 function escapeLike(text: string): string {
@@ -98,7 +98,7 @@ function conditions(ctx: QueryCtx, filters: PressingReportFilters) {
   }
   return { args, where };
 }
-function invalidDateTimeRange(filters: PressingReportFilters): boolean {
+function invalidDateTimeRange(filters: Pick<PressingReportFilters, "from" | "to" | "fromTime" | "toTime">): boolean {
   return Boolean(
     (filters.fromTime && !filters.from) ||
     (filters.toTime && !filters.to) ||
@@ -206,7 +206,7 @@ async function report(ctx: QueryCtx, filters: PressingReportFilters) {
   }
   // Resolve current company-scoped display names for every historical row and
   // summary, so renamed workers are shown correctly without rewriting evidence.
-  const operatorIds = [...new Set([
+  const operatorIds = [...new Set<string>([
     ...rows.rows.map(row => row.operatorUserId),
     ...filteredSummary.byOperator.map(row => row.userId),
     ...overview.byOperator.map(row => row.userId),

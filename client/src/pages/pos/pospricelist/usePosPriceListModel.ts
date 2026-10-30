@@ -65,6 +65,10 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
   }, [editingItem]);
   const lastSavedRef = useRef<{ stockItemId: number; locationId: number } | null>(null);
   const skipBlurSaveRef = useRef(false);
+  // A navigation blur may be ignored once, but a later manual blur must still save.
+  useEffect(() => {
+    skipBlurSaveRef.current = false;
+  }, [editingItem?.stockItemId, editingItem?.locationId]);
 
   const { data: currentUser } = useQuery<{ role?: string }>({ queryKey: ["/api/auth/me"] });
   const isPrivileged = PRIVILEGED_ROLES.includes(currentUser?.role || "");
@@ -368,12 +372,12 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     }
   };
 
-  const commitEdit = () => {
-    if (!editingItem) return;
+  const commitEdit = (): boolean => {
+    if (!editingItem || updatePriceMutation.isPending) return false;
     const val = editingItem.value.trim();
-    if (!val || isNaN(parseFloat(val))) {
+    if (!val || !Number.isFinite(Number(val)) || Number(val) < 0) {
       toast({ title: "Invalid price", description: "Enter a valid number.", variant: "destructive" });
-      return;
+      return false;
     }
     lastSavedRef.current = { stockItemId: editingItem.stockItemId, locationId: editingItem.locationId };
     updatePriceMutation.mutate({
@@ -381,6 +385,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
       locationId: editingItem.locationId,
       sellingPrice: val,
     });
+    return true;
   };
 
   const cancelEdit = () => setEditingItem(null);
@@ -388,7 +393,11 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
   const handleKeyDown = (e: ReactKeyboardEvent) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      commitEdit();
+      // Save first, then move right to the next location price (or down
+      // to the next product when there is only one editable price column).
+      skipBlurSaveRef.current = true;
+      if (commitEdit()) navigateHorizontal("right");
+      else skipBlurSaveRef.current = false;
       return;
     }
     if (e.key === "Escape") {

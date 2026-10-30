@@ -15,7 +15,8 @@ import {
   factoryContainerCommissions,
   factoryOffloadAdditionalCharges,
 } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
+import { resultRows } from "../../lib/queryResult";
 import { verifyPasswordBcryptOnly } from "../helpers/passwordHelpers";
 import { resolveStoredFxRate, UnresolvedExchangeRateError } from "../../services/factory/currencyConversion";
 import type { DbTransaction, DatabaseOrTransaction } from "../../db";
@@ -122,6 +123,17 @@ export async function recalculateOrderTotals(dbConn: DatabaseOrTransaction, orde
           pricePerKg: pl.pricePerKg ?? null,
         });
       }
+    }
+    // Supplements are scoped to this order, and override per-kg pricing
+    // only here. The master proforma stays untouched for sibling loadings.
+    const extras = resultRows<{ article_code: string }>(await dbConn.execute(sql`
+      SELECT article_code FROM customer_order_extra_expected_lines WHERE order_id = ${orderId}
+    `));
+    for (const extra of extras) {
+      proformaPricing.set(extra.article_code.trim().toLowerCase(), {
+        pricingMode: "per_bale",
+        pricePerKg: null,
+      });
     }
   }
 

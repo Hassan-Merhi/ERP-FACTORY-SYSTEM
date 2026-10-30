@@ -1,6 +1,7 @@
 /**
- * Intercompany transfer legs are not edited through the generic voucher
- * editors (accounting audit phase 19 C, MC-2; decision).
+ * Intercompany transfer legs reject generic financial edits (accounting audit
+ * phase 19 C, MC-2). A narrowly scoped account-only Payment/Receipt correction
+ * may reclassify an existing ledger line without changing the transfer amounts.
  *
  * An intercompany transfer is two vouchers, one in each company, and the
  * `inter_company_transfers` row linking them with the amount and the date.
@@ -23,7 +24,7 @@
  * (centralJournalLifecycleRoute.ts, wave 18 B) keeps its in-transaction,
  * Decimal, normalized counterpart rescale with the access check, unchanged.
  *
- * Every generic edit path of a voucher named by an `inter_company_transfers`
+ * Every other generic edit path of a voucher named by an `inter_company_transfers`
  * row calls `assertNotIntercompanyTransferLeg` before writing: PUT
  * /api/vouchers/:id/with-entries, PATCH /api/vouchers/:id/journal (legacy,
  * non-Journal or draft), PATCH /api/vouchers/:id/payment-receipt (central and
@@ -40,7 +41,7 @@ import { HttpError } from "../../lib/httpError";
 
 export const INTERCOMPANY_TRANSFER_LEG_EDIT_REFUSED = "INTERCOMPANY_TRANSFER_LEG_EDIT_REFUSED" as const;
 export const INTERCOMPANY_TRANSFER_LEG_EDIT_REFUSED_MESSAGE =
-  "This voucher is one side of an intercompany transfer. It cannot be edited here: delete the transfer (both companies' vouchers are removed together) and record it again.";
+  "This voucher is one side of an intercompany transfer. Only its ledger account can be changed here; to change its amount, date or currency, delete the transfer (both companies' vouchers are removed together) and record it again.";
 
 export class IntercompanyTransferLegEditRefused extends HttpError {
   readonly code = INTERCOMPANY_TRANSFER_LEG_EDIT_REFUSED;

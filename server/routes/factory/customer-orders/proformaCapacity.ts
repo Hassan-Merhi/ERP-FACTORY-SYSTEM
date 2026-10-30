@@ -338,6 +338,11 @@ export async function getProformaCapacitySnapshot(
                   )
                 )
               )
+            UNION ALL
+            SELECT extra.article_code AS "articleCode", extra.expected_qty AS quantity
+            FROM customer_order_extra_expected_lines extra
+            WHERE extra.company_id = ${options.companyId}
+              AND extra.order_id = ${options.currentOrderId}
           `
     )
   );

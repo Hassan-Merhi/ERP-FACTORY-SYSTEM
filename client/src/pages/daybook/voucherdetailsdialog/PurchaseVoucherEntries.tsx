@@ -6,6 +6,7 @@
  */
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { compareItemNamesAZ } from "@/lib/itemNameSort";
 import type { ViewVoucherEntry } from ".././types";
 import type { PurchaseOrderDialogData } from "./types";
 
@@ -26,7 +27,9 @@ export function PurchaseVoucherEntries({
   onOpenChange: (open: boolean) => void;
   navigate: (path: string) => void;
 }) {
-  const purchaseItems = viewVoucherEntries.filter((e) => e.isPurchaseItem);
+  const purchaseItems = viewVoucherEntries
+    .filter((e) => e.isPurchaseItem)
+    .sort((a, b) => compareItemNamesAZ(a.stockItemName || a.accountName, b.stockItemName || b.accountName));
   const totalQty = purchaseItems.reduce((sum: number, e) => sum + parseFloat(e.quantity || "0"), 0);
   const charges = purchaseOrderData
     ? [

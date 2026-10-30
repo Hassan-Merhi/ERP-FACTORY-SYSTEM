@@ -52,10 +52,12 @@ import { listenWithRetry, registerGracefulShutdown } from "./startup/listenWithR
 import { registerProcessErrorHandlers } from "./startup/registerProcessErrorHandlers";
 import { runStartupMigrations, warmupDb } from "./startup/runServerStartupMigrations";
 import { ensureFactoryStaffTrackingSchema } from "./startup/factoryStaffTrackingSchema";
+import { ensureFactoryTargetBonusPaymentSchema } from "./startup/ensureFactoryTargetBonusPaymentSchema";
 import { ensureSupplierTrackingShopDutyDefaults } from "./startup/ensureSupplierTrackingShopDutyDefaults";
 import { ensureZambiaHistoricalPurchaseCost } from "./startup/ensureZambiaHistoricalPurchaseCost";
 import { ensureFactoryContainerPlannerSchemaOnBoot } from "./startup/factoryContainerPlannerSchema";
 import { ensurePriorityScanSchema } from "./startup/priorityScanSchema";
+import { ensureContainerExtraExpectedLines } from "./startup/ensureContainerExtraExpectedLines";
 import { ensureFactoryBaleOrderIntegrity } from "./startup/ensureFactoryBaleOrderIntegrity";
 import { runApprovedLegacyBaleUnitCostRepair } from "./startup/runApprovedLegacyBaleUnitCostRepair";
 import { runApprovedLegacySoldBaleUnitCostRepair } from "./startup/runApprovedLegacySoldBaleUnitCostRepair";
@@ -329,6 +331,8 @@ let migrationsDone = false;
       await ensureRecurringJournalSchema(pool);
       await ensurePriorityScanSchema(pool);
       logger.info("[startup] ✓ Priority Scan schema ensured");
+      // Loading-only expected items must exist even when bulk migrations are disabled.
+      await ensureContainerExtraExpectedLines(pool);
       await ensureFactoryInvoiceDocumentSnapshotStore(pool);
       logger.info("[startup] ✓ Factory invoice document snapshot store ensured");
       try {
@@ -348,6 +352,9 @@ let migrationsDone = false;
           error: getErrorMessage(staffTrackingSchemaErr),
         });
       }
+      // Financial payout table must exist before any posting route becomes reachable.
+      // Fatal on error: never serve a deployment with accounting schema missing.
+      await ensureFactoryTargetBonusPaymentSchema(pool);
       // The Container Planner's registered migrations are never applied by
       // production's boot path, so ensure its tables here unconditionally. A
       // failure after retries is fatal: the previous deployment stays live rather

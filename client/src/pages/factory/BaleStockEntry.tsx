@@ -26,8 +26,10 @@ export default function BaleStockEntry() {
   const tr = (key: Parameters<typeof translateFactoryStaffTrackingText>[0]) =>
     translateFactoryStaffTrackingText(key, language);
   // Track which tabs have ever been activated so we only mount heavy components on demand.
-  const [mountedTabs, setMountedTabs] = useState<Set<string>>(() => new Set(["entry"]));
-  const [activeTab, setActiveTab] = useState("entry");
+  const requestedProductionTargets = new URLSearchParams(window.location.search).get("tab") === "production-targets";
+  const [mountedTabs, setMountedTabs] = useState<Set<string>>(() =>
+    new Set([requestedProductionTargets ? "production-targets" : "entry"]));
+  const [activeTab, setActiveTab] = useState(requestedProductionTargets ? "production-targets" : "entry");
 
   const handleTabChange = (tab: string) => setMountedTabs((prev) => (prev.has(tab) ? prev : new Set([...prev, tab])));
 
