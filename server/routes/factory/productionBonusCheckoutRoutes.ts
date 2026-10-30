@@ -365,6 +365,59 @@ export function registerProductionBonusCheckoutRoutes(app:Express):void {
                 VALUES (${id},${Number(inserted[0].id)},${method},
                         ${JSON.stringify(quote.lines)}::jsonb,${quote.token},${actor(req).userId})
               `);
+            } else if (quote.status==="approved") {
+              // The payment has not been posted. Reprice only in the SAME
+              // atomic approval/payment transaction; save the old reviewed
+              // amount to an append-only audit table before changing it.
+              const original=rows(await tx.execute(sql`
+                SELECT rv.id,rv.bonus_amount::text AS amount,
+                  rv.rate_per_bale::text AS rate,
+                  details.breakdown AS breakdown
+                FROM factory_target_bonus_reviews rv
+                LEFT JOIN factory_target_bonus_checkout_details details
+                  ON details.company_id=rv.company_id AND details.review_id=rv.id
+                WHERE rv.company_id=${id} AND rv.production_date=${date}::date
+                  AND rv.worker_id=${quote.workerId} AND rv.status='approved'
+                  AND NOT EXISTS (
+                    SELECT 1 FROM factory_target_bonus_payments p
+                    WHERE p.company_id=rv.company_id AND p.review_id=rv.id
+                  )
+                FOR UPDATE OF rv
+              `))[0];
+              if(!original)fail(409,"Previously approved bonus was paid or changed; refresh");
+              const oldAmount=usd(String(original.amount));
+              const oldLines=Array.isArray(original.breakdown)?original.breakdown:null;
+              const newLines=JSON.stringify(quote.lines);
+              const oldLinesJson=oldLines===null?null:JSON.stringify(oldLines);
+              const repricedRate=quote.extra>0 ?
+                new Decimal(quote.amount).div(quote.extra)
+                  .toDecimalPlaces(4,Decimal.ROUND_HALF_UP).toFixed(4):"0.0000";
+              if(oldAmount!==quote.amount ||
+                 (oldLinesJson!==null && oldLinesJson!==newLines)) {
+                await tx.execute(sql`
+                  INSERT INTO factory_target_bonus_unpaid_rate_revisions
+                    (company_id,review_id,worker_id,production_date,method,
+                     old_amount,new_amount,old_rate,new_rate,old_breakdown,
+                     new_breakdown,repriced_by)
+                  VALUES (${id},${Number(original.id)},${quote.workerId},
+                    ${date}::date,${method},${oldAmount},${quote.amount},
+                    ${String(original.rate)},${repricedRate},
+                    ${oldLinesJson}::jsonb,${newLines}::jsonb,${actor(req).userId})
+                `);
+                await tx.execute(sql`
+                  UPDATE factory_target_bonus_reviews
+                  SET bonus_amount=${quote.amount}::numeric,rate_per_bale=${repricedRate}::numeric
+                  WHERE id=${Number(original.id)} AND company_id=${id}
+                `);
+              }
+              await tx.execute(sql`
+                INSERT INTO factory_target_bonus_checkout_details
+                  (company_id,review_id,method,breakdown,calculation_hash,created_by)
+                VALUES (${id},${Number(original.id)},${method},
+                  ${newLines}::jsonb,${quote.token},${actor(req).userId})
+                ON CONFLICT (company_id,review_id) DO UPDATE
+                  SET breakdown=EXCLUDED.breakdown,calculation_hash=EXCLUDED.calculation_hash
+              `);
             }
           }
           return postTargetBonusPaymentsInTransaction(tx,id,command,actor(req));
