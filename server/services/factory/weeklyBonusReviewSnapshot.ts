@@ -39,7 +39,7 @@ function canonicalJson(value: unknown): string {
     return "{" + Object.keys(record).sort().map(key =>
       JSON.stringify(key) + ":" + canonicalJson(record[key])).join(",") + "}";
   }
-  return JSON.stringify(value);
+  return JSON.stringify(value) ?? "null";
 }
 export function weeklyBonusReviewToken(snapshot: ReturnType<typeof weeklyBonusReviewSnapshot>): string {
   return createHash("sha256").update(canonicalJson(snapshot)).digest("hex");
