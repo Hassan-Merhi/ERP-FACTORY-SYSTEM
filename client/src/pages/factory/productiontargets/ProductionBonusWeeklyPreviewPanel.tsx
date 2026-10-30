@@ -42,7 +42,7 @@ async function load(weekOf: string): Promise<PreviewResponse> {
 }
 const formatReason = (issue: string) => issue.replaceAll("_", " ").toLowerCase();
 
-/** Read-only Phase 13 eligibility preview; no approval or posting controls. */
+/** Phase 14 immutable review decisions; payments and posting are intentionally unavailable. */
 export function ProductionBonusWeeklyPreviewPanel({ initialDate }: { initialDate: string }) {
   const [weekOf, setWeekOf] = useState(initialDate);
   const [decision, setDecision] = useState<{ workerId: number; status: Decision } | null>(null);
@@ -94,7 +94,7 @@ export function ProductionBonusWeeklyPreviewPanel({ initialDate }: { initialDate
   return (
     <details className="rounded-lg border bg-muted/10" data-testid="production-bonus-weekly-preview">
       <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
-        <CalendarRange className="mr-2 inline h-4 w-4" /> Weekly flat bonus eligibility — preview only
+        <CalendarRange className="mr-2 inline h-4 w-4" /> Weekly flat bonus — eligibility and review
       </summary>
       <div className="space-y-3 border-t px-4 py-4">
         <p className="text-xs text-muted-foreground">
