@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
+import { registerProductionTargetBonusCoreRoutes } from "./productionTargetBonusCoreRoutes";
 import { factoryStaffTrackingMessages } from "../../i18n/factoryStaffTrackingMessages";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { resultRows } from "../../lib/queryResult";
@@ -224,6 +225,7 @@ async function loadProducedByWorker(
 }
 
 export function registerFactoryStaffTrackingRoutes(app: Express): void {
+  registerProductionTargetBonusCoreRoutes(app);
   app.get("/api/factory/staff-tracking", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = getFactoryCompanyId(req);
