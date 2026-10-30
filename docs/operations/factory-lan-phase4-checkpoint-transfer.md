@@ -170,3 +170,70 @@ database after approved review. A passing rehearsal is not permission to turn
 on LAN-primary. Production provisioning also requires verified uploaded
 files, ledger/stock/inventory totals, schema and sequence compatibility,
 role isolation and documented operator cutover.
+
+## Optional LAN-to-cloud signed voucher staging (Phase 4 development)
+
+The factory can now transmit **evidence** of vouchers created through the one
+approved LAN route to a durable cloud-side inbox. Staging is not the same as
+posting the voucher to the cloud ledger. Every positive receiver acknowledgement
+is named `staged-not-applied`; neither the receiver nor relay updates cloud
+vouchers, stock, customer balances, or accounting journals. The source outbox
+remains append-only, and separately stored stage receipts allow retries after
+interrupted connectivity. The sender runs only if explicitly enabled.
+
+### Cloud operator setup (no cloud posting)
+
+1. Deploy the SAME reviewed build to factory and cloud. Independently confirm
+   cloud writers, background jobs, existing replicas, direct database clients
+   and integrations are stopped before any primary handoff; the HTTP fence
+   by itself is insufficient.
+2. Configure `FACTORY_CLOUD_WRITE_MODE=fenced` and
+   `FACTORY_CLOUD_FENCE_ACK=CLOUD_WRITES_DISABLED_FOR_FACTORY_HANDOFF`
+   on **every cloud application instance**.
+3. Set `FACTORY_SYNC_RECEIVE_ENABLED=1`,
+   `FACTORY_SYNC_SITE_ID` to the factory's UUID, and
+   `FACTORY_SYNC_HMAC_KEY` to an independent random shared key of at
+   least 48 characters. Store the key in a restricted secret manager. The
+   service refuses to start the receiver unless the cloud is fenced.
+4. The cloud's `POST /api/edge/sync/stage` endpoint requires HTTPS and
+   timestamped HMAC-SHA256 over the exact JSON request bytes. No user session
+   or browser CSRF cookie is accepted as a substitute. Requests are restricted
+   to one configured site, the voucher-evidence schema and at most 25 events,
+   and reject changed hashes or invalid sequences. A replay of the same event
+   can return an identical staged receipt; a changed replay is rejected.
+
+### Factory relay setup (off by default)
+
+1. Put the **same** site-specific HMAC key in `EDGE_SYNC_API_KEY` within the
+   protected `deploy/lan/.env`. Configure `EDGE_SYNC_CLOUD_URL` as the
+   cloud's trusted HTTPS **origin**, without a path, for example
+   `https://erp.example.com`. Do not disable TLS validation.
+2. Ensure factory data has an approved, matching cloud baseline. Keep the
+   local writes restricted to the audited voucher route.
+3. Start the optional relay using
+   `docker compose --env-file deploy/lan/.env -f deploy/lan/compose.yaml
+   --profile sync up -d relay`. It attempts transmission immediately and
+   again approximately every minute. It can restart safely after outages:
+   cloud-side stage records are idempotent, and the LAN receipts are separate
+   from accounting vouchers.
+4. Shut down the relay at any time with
+   `docker compose --env-file deploy/lan/.env -f deploy/lan/compose.yaml
+   --profile sync stop relay`. The factory database keeps its durable
+   outbox and resumes from the staged receipts on re-enable.
+5. Cloud rejects missing earlier sequence numbers, duplicate operation IDs
+   with conflicting contents, and different payload hashes. The LAN sender
+   refuses a forged cloud response that claims `applied`. A 409 means the
+   operator must investigate—**never** skip missing or divergent evidence.
+
+The sequence allocator is transactionally updated along with each LAN voucher
+and rolls back if the voucher fails, avoiding identity-sequence gaps that could
+otherwise permanently stall a strict cloud receiver. The cloud inbox writes
+only to `factory_edge_staged_vouchers` and its cursor; LAN receipts write
+only to `factory_edge_stage_receipts`.
+
+**Not implemented:** cloud business ledger posting, idempotent application
+receipts, row-ID remapping, stale permissions, cross-company authority,
+document/stock/production mutations, dual-writer conflict resolution, live
+failover, and automatic cloud-to-factory ERP data merging. The sender is a
+staging-only, deliberately limited Phase 4 building block; do not interpret
+the relay running as the factory being fully synchronized.
