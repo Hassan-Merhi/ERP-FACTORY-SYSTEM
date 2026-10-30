@@ -172,7 +172,7 @@ export function ProductionBonusWeeklyPreviewPanel({ initialDate }: { initialDate
                       {recorded ? (
                         <div>
                           <Badge variant="secondary">{recorded.status === "approved"
-                            ? "Approved · not paid" : "Rejected"}</Badge>
+                            ? "Approved · see Payments" : "Rejected"}</Badge>
                           <p className="mt-1 text-xs text-muted-foreground">
                             {recorded.reviewedBy} · {new Date(recorded.reviewedAt).toLocaleString()}
                           </p>
@@ -209,7 +209,7 @@ export function ProductionBonusWeeklyPreviewPanel({ initialDate }: { initialDate
             {reviewed && reviewed.reviews.length > 0 && (
               <p className="text-xs text-muted-foreground">
                 {reviewed.reviews.length} immutable weekly review(s) recorded for this week.
-                Approved means authorized but not paid.
+                Approved means authorized; payment status is shown in Weekly Flat Bonus Payments.
               </p>
             )}
             <p className="text-xs text-muted-foreground">{data.note}</p>
