@@ -860,6 +860,10 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
 
       await db.transaction(async (tx) => {
         if (finalize) {
+          // Serialize closing the production day with bonus approval/payment
+          // (84023). An in-flight live bonus decision cannot race the immutable
+          // finalized source at the same company.
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(84023, ${companyId})`);
           // Recheck inside the serialized close transaction, not just before
           // calculating the daily matrix; conflicting closes must roll back.
           await tx.execute(sql`SELECT pg_advisory_xact_lock(7643, ${companyId})`);
