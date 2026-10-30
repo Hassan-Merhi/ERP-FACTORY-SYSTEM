@@ -258,6 +258,11 @@ export function ProductionTargetWeeklyBonusPaymentsPanel({initialDate}:{initialD
                   {r.voucherId&&<p>Voucher #{r.voucherId}</p>}
                 </td>
                 <td className="px-3 py-2 text-right">
+                  {unpaid&&<Button type="button" size="sm"
+                    data-testid={"pay-weekly-production-bonus-"+r.reviewId}
+                    onClick={()=>{setSelected([Number(r.reviewId)]);setConfirmOpen(true);}}>
+                    <Banknote className="mr-1 h-3.5 w-3.5"/> Pay
+                  </Button>}
                   {r.paymentStatus==="POSTED"&&<Button type="button" size="sm" variant="outline"
                     onClick={()=>{setReverseRow(r);setReversalDate(localDateStr(new Date()));setReason("");}}>
                     <RotateCcw className="mr-1 h-3.5 w-3.5"/> Reverse
@@ -302,11 +307,35 @@ export function ProductionTargetWeeklyBonusPaymentsPanel({initialDate}:{initialD
             These payments are permanent claims; a reversal will not allow another automatic payout.
           </AlertDialogDescription>
         </AlertDialogHeader>
+        <div className="max-h-56 space-y-2 overflow-y-auto rounded-md border p-3 text-sm">
+          <p className="font-semibold">Approved weekly calculation</p>
+          {chosen.map(r=><div key={String(r.reviewId)} className="border-t pt-2">
+            <p className="font-medium">{r.workerName} · {r.weekStart} – {r.weekEnd}</p>
+            <p className="text-xs text-muted-foreground">
+              Weekly target {r.targetBales} · credited {r.creditedBales} · extra {r.extraBales}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {(r.snapshot?.categories??[]).map(c=>c.categoryLabel+" "+c.creditedBales).join(" · ")}
+            </p>
+            <p className="font-semibold">Approved fixed weekly bonus: {usd(r.approvedAmount)}</p>
+          </div>)}
+        </div>
+        <label className="space-y-1 text-sm">
+          Pay from Cash / Bank (USD)
+          <Select value={accountId} onValueChange={setAccountId}>
+            <SelectTrigger aria-label="Confirm weekly bonus paying account">
+              <SelectValue placeholder="Choose paying account"/>
+            </SelectTrigger>
+            <SelectContent>{cashAccounts.map(a=><SelectItem key={a.id} value={String(a.id)}>
+              {a.name} ({a.code})
+            </SelectItem>)}</SelectContent>
+          </Select>
+        </label>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={payment.isPending}>Cancel</AlertDialogCancel>
           <AlertDialogAction disabled={!canPay||payment.isPending}
             onClick={e=>{e.preventDefault();payment.mutate();}}>
-            {payment.isPending?"Posting…":"Confirm and Post"}
+            {payment.isPending?"Posting…":"Approve Payment & Pay"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
