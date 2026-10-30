@@ -8,6 +8,7 @@ import { requireFactoryTabAccess } from "../../lib/factoryAccessControl";
 import { isBonusCategoryDate } from "@shared/productionTargetBonusCategoryRates";
 import { validateCategoryTargetSplit } from "@shared/productionTargetBonusCategoryAttribution";
 import { loadProductionBonusCategoryEvidence } from "../../services/factory/productionBonusCategoryEvidenceService";
+import { previewProductionBonusCategories } from "../../services/factory/productionBonusCategoryCalculator";
 
 const guard=requireFactoryTabAccess("factory/stock-entry","hide_tab_stockentry_production_targets");
 const authorized=(req:Request)=>["Admin","Owner"].includes(String(req.session.currentRole || req.user?.role || ""));
@@ -27,6 +28,22 @@ function fail(status:number,message:string):never {
 }
 
 export function registerProductionBonusCategoryEvidenceRoutes(app:Express):void {
+  // Phase 10: company-scoped, no-store, read-only category-weighted proposal.
+  // Never approve, post or mutate accounting from this endpoint.
+  app.get("/api/factory/production-target-bonuses/category-preview",
+    requireAuth,guard,async(req:Request,res:Response)=>{
+      if(!authorized(req))return res.status(403).json({message:"Admin or Owner required"});
+      const companyId=companyFor(req);
+      if(!companyId)return res.status(400).json({message:"Factory company required"});
+      const date=req.query.date;
+      if(!isBonusCategoryDate(date))return res.status(400).json({message:"Valid production date required"});
+      try {
+        res.setHeader("Cache-Control","private, no-store");
+        return res.json(await previewProductionBonusCategories(companyId,date));
+      }catch(error){return safeError(res,error);}
+    },
+  );
+
   app.get("/api/factory/production-target-bonuses/category-evidence",
     requireAuth,guard,async(req:Request,res:Response)=>{
       if(!authorized(req))return res.status(403).json({message:"Admin or Owner required"});

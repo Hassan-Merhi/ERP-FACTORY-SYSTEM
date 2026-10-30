@@ -29,6 +29,7 @@ export type CategoryEvidenceIssue =
   | "INVALID_BALE";
 export interface CategoryWorkerEvidence {
   workerId: number;
+  status: "Present" | "Absent" | "New";
   workerName?: string;
   dailyTargetBales: number | null;
   savedProducedBales: number;
@@ -146,7 +147,7 @@ export function buildCategoryEvidence(
     const issues: CategoryEvidenceIssue[]=[];
     if (w.savedProducedBales !== expected) { issues.push("SAVED_TOTAL_MISMATCH"); global.add("SAVED_TOTAL_MISMATCH"); }
     return {
-      workerId: w.workerId, workerName: w.workerName, dailyTargetBales: w.targetBales,
+      workerId: w.workerId, workerName: w.workerName, status: w.status, dailyTargetBales: w.targetBales,
       savedProducedBales: w.savedProducedBales, creditedBales,
       categories, issues,
     };
