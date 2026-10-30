@@ -10,6 +10,8 @@ on:
       - 'deploy/lan/phase7-install-writer-fence.sql'
       - 'tests/offline-phase7-writer-gate.test.mjs'
       - 'tests/offline-phase7-postgres-fence.sh'
+      - 'scripts/edge/audit-phase7-baseline.mjs'
+      - 'tests/offline-phase7-baseline.test.mjs'
       - '.github/workflows/offline-phase7-contract.yml'
   workflow_dispatch:
 
@@ -26,6 +28,6 @@ jobs:
         with:
           node-version: '24'
       - name: Verify Phase 7 fail-closed contracts
-        run: node --test tests/offline-phase7-writer-gate.test.mjs
+        run: node --test tests/offline-phase7-writer-gate.test.mjs tests/offline-phase7-baseline.test.mjs
       - name: Exercise fenced writes against isolated PostgreSQL 17
         run: bash tests/offline-phase7-postgres-fence.sh
