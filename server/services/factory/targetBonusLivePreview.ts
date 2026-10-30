@@ -161,7 +161,10 @@ export async function loadLiveTargetBonusRows(
       -- Planner group; other Stock Entry workers are not bonus candidates.
       SELECT 1 FROM factory_worker_categories planner
       WHERE planner.company_id=w.company_id
-        AND planner.worker_ids @> jsonb_build_array(w.id)
+        AND (
+          planner.worker_ids @> jsonb_build_array(w.id)
+          OR planner.worker_ids @> jsonb_build_array(w.id::text)
+        )
     )
       AND NOT EXISTS (
       SELECT 1 FROM factory_staff_tracking_period_closures c
