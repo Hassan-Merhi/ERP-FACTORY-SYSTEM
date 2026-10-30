@@ -148,7 +148,7 @@ export function FactoryPendingInvoiceVerifyDetailCard({ model }: { model: Model 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div>
                 <h3 className="font-semibold text-sm mb-3" data-testid="text-proforma-header">
-                  Proforma Expected <span className="text-muted-foreground font-normal">(mismatches only)</span>
+                  Container Expected <span className="text-muted-foreground font-normal">(including container-only additions · mismatches only)</span>
                 </h3>
                 {allLeftRows.length > 0 ? (
                   <Table mobileLayout="cards" wrapperClassName="max-h-[50vh] overflow-auto">
@@ -266,7 +266,7 @@ export function FactoryPendingInvoiceVerifyDetailCard({ model }: { model: Model 
                   </Table>
                 ) : (
                   <p className="text-sm text-muted-foreground" data-testid="text-no-proforma-mismatches">
-                    All proforma items matched - no mismatches
+                    All expected container items matched - no mismatches
                   </p>
                 )}
               </div>
