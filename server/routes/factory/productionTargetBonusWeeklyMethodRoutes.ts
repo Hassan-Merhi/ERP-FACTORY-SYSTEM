@@ -7,7 +7,7 @@ import { logger } from "../../lib/logger";
 import { resultRows } from "../../lib/queryResult";
 import {
   mondayOfProductionBonusWeek, parseWeeklyFlatBonusUsd,
-  resolveProductionBonusWeeklyMethod, type ProductionBonusWeeklyMethodVersion,
+  type ProductionBonusWeeklyMethodVersion,
   type ProductionBonusMethod,
 } from "@shared/productionTargetBonusWeeklyMethod";
 import { isBonusCategoryDate } from "@shared/productionTargetBonusCategoryRates";
@@ -37,6 +37,20 @@ async function readVersions(companyId: number): Promise<WeeklyVersion[]> {
   return (resultRows(result) as VersionRow[]).map(row => ({ ...row, id: Number(row.id) }));
 }
 
+async function readEffective(companyId: number, weekStart: string): Promise<WeeklyVersion | null> {
+  const result = await db.execute(sql`
+    SELECT id, effective_week::text AS "effectiveWeek", method,
+           flat_bonus_usd::text AS "flatBonusUsd", note,
+           created_by AS "createdBy", created_at::text AS "createdAt"
+    FROM factory_production_target_bonus_weekly_methods
+    WHERE company_id = ${companyId} AND effective_week <= ${weekStart}::date
+    ORDER BY effective_week DESC, id DESC
+    LIMIT 1
+  `);
+  const row = (resultRows(result) as VersionRow[])[0];
+  return row ? { ...row, id: Number(row.id) } : null;
+}
+
 /** Phase 12 ONLY: no weekly bonus calculations, approvals, vouchers or payroll claims. */
 export function registerProductionTargetBonusWeeklyMethodRoutes(app: Express): void {
   app.get("/api/factory/production-target-bonuses/weekly-method",
@@ -48,12 +62,14 @@ export function registerProductionTargetBonusWeeklyMethodRoutes(app: Express): v
       if (!isBonusCategoryDate(asOf))
         return res.status(400).json({ message: "Valid asOf production date required" });
       try {
-        const history = await readVersions(companyId);
+        const weekStart = mondayOfProductionBonusWeek(asOf)!;
+        const [history, current] = await Promise.all([
+          readVersions(companyId), readEffective(companyId, weekStart),
+        ]);
         res.setHeader("Cache-Control", "private, no-store");
         return res.json({
-          currency: "USD", weekStartsOn: "Monday", asOf,
-          weekStart: mondayOfProductionBonusWeek(asOf),
-          effective: resolveProductionBonusWeeklyMethod(asOf, history) ?? {
+          currency: "USD", weekStartsOn: "Monday", asOf, weekStart,
+          effective: current ?? {
             id: null, method: "per_extra_bale", flatBonusUsd: "0.00",
             effectiveWeek: null, default: true,
           },
