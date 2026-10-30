@@ -42,40 +42,64 @@ export function isAutoReplayAllowed(method: string, url: string): boolean {
   return method.toUpperCase() === "POST" && url === "/api/vouchers/with-entries";
 }
 
-/** Only central-posting-compatible voucher inputs may replay automatically. */
+/**
+ * Phase 9: match the LAN's narrow Phase 8 capture contract BEFORE storing an
+ * offline request. Unsupported attachments, party/stock fields or unbalanced
+ * entries must not poison the durable queue and block later valid writes.
+ * The server remains authoritative and revalidates independently.
+ */
+const OFFLINE_JOURNAL_HEADER = new Set([
+  "voucherType", "voucherDate", "currency", "optional", "voucherNumber",
+  "description", "exchangeRate", "locationId", "effectiveDate",
+]);
+const OFFLINE_JOURNAL_LINE = new Set([
+  "ledgerAccountId", "debitAmount", "creditAmount", "narration",
+]);
+const OFFLINE_JOURNAL_TOP = new Set(["voucher", "entries", "clientRequestId"]);
+const OFFLINE_JOURNAL_MONEY = /^(?:0|[1-9][0-9]{0,14})(?:\\.[0-9]{1,2})?$/;
+
+function offlineJournalCents(value: unknown): bigint | null {
+  const text = String(value ?? "0");
+  if (!OFFLINE_JOURNAL_MONEY.test(text)) return null;
+  const [whole, fractional = ""] = text.split(".");
+  return BigInt(whole) * 100n + BigInt((fractional + "00").slice(0, 2));
+}
+
 export function isVettedOfflineVoucherPayload(input: unknown): boolean {
   if (!input || typeof input !== "object" || Array.isArray(input)) return false;
   const data = input as Record<string, unknown>;
+  if (Object.keys(data).some((key) => !OFFLINE_JOURNAL_TOP.has(key))) return false;
+  if (data.clientRequestId !== undefined &&
+      (typeof data.clientRequestId !== "string" ||
+       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.clientRequestId))) return false;
   if (!data.voucher || typeof data.voucher !== "object" || Array.isArray(data.voucher)) return false;
   const voucher = data.voucher as Record<string, unknown>;
-  if (voucher.optional === true || String(voucher.currency ?? "USD").toUpperCase() !== "USD") return false;
-  if (!Array.isArray(data.entries) || data.entries.length < 2) return false;
-  const dualCurrencyFields = [
-    "transactionCurrency",
-    "transactionDebitAmount",
-    "transactionCreditAmount",
-    "baseDebitAmount",
-    "baseCreditAmount",
-    "historicalExchangeRate",
-    "rateConvention",
-  ];
-  return data.entries.every((entry: unknown) => {
+  if (Object.keys(voucher).some((key) => !OFFLINE_JOURNAL_HEADER.has(key)) ||
+      voucher.voucherType !== "Journal" || voucher.optional === true ||
+      String(voucher.currency ?? "USD") !== "USD" ||
+      voucher.locationId != null || voucher.effectiveDate != null ||
+      typeof voucher.voucherDate !== "string" ||
+      !/^\\d{4}-\\d{2}-\\d{2}$/.test(voucher.voucherDate)) return false;
+  const parsedDate = new Date(voucher.voucherDate + "T00:00:00Z");
+  if (!Number.isFinite(parsedDate.getTime()) ||
+      parsedDate.toISOString().slice(0, 10) !== voucher.voucherDate) return false;
+  if (!Array.isArray(data.entries) || data.entries.length < 2 || data.entries.length > 100) return false;
+
+  let debits = 0n;
+  let credits = 0n;
+  for (const entry of data.entries) {
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
     const row = entry as Record<string, unknown>;
-    if (dualCurrencyFields.some((field) => row[field] != null)) return false;
-    const debit = Number(row.debitAmount ?? 0);
-    const credit = Number(row.creditAmount ?? 0);
-    if (!Number.isFinite(debit) || !Number.isFinite(credit) || debit < 0 || credit < 0) return false;
-    const debitCents = debit * 100;
-    const creditCents = credit * 100;
-    return (
-      Number.isSafeInteger(Math.round(debitCents)) &&
-      Number.isSafeInteger(Math.round(creditCents)) &&
-      Math.abs(debitCents - Math.round(debitCents)) < 1e-7 &&
-      Math.abs(creditCents - Math.round(creditCents)) < 1e-7 &&
-      (debit === 0) !== (credit === 0)
-    );
-  });
+    if (Object.keys(row).some((key) => !OFFLINE_JOURNAL_LINE.has(key))) return false;
+    const account = Number(row.ledgerAccountId);
+    if (!Number.isSafeInteger(account) || account <= 0) return false;
+    const debit = offlineJournalCents(row.debitAmount);
+    const credit = offlineJournalCents(row.creditAmount);
+    if (debit === null || credit === null || (debit === 0n) === (credit === 0n)) return false;
+    debits += debit;
+    credits += credit;
+  }
+  return debits > 0n && debits === credits;
 }
 
 const SENSITIVE_KEY =
