@@ -10,6 +10,11 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const REF = /^[A-Z0-9][A-Z0-9._/-]{0,99}$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+const INPUT_FIELDS = new Set([
+  "companyId", "localConfirmationId", "baleId", "machineId",
+  "assignmentId", "actorUserId", "requestId", "referenceNumber",
+  "confirmedAt", "deviceCapturedAt", "productionDate", "timezoneName",
+]);
 
 export class Phase9PressingRefusal extends Error {
   constructor(code) {
@@ -33,7 +38,9 @@ function validDay(date) {
  * Never substitute device-provided machine, operator, weight or timestamps.
  */
 export function phase9PressingEnvelope(evidence) {
-  if (!evidence || !positive(evidence.companyId) ||
+  if (!evidence || typeof evidence !== "object" || Array.isArray(evidence) ||
+      Object.keys(evidence).some((key) => !INPUT_FIELDS.has(key)) ||
+      !positive(evidence.companyId) ||
       !positive(evidence.localConfirmationId) || !positive(evidence.baleId) ||
       !positive(evidence.machineId) || !positive(evidence.assignmentId) ||
       typeof evidence.actorUserId !== "string" ||
