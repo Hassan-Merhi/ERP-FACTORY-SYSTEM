@@ -4,13 +4,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { PressingQueueSnapshot } from "./pressing-scanner/usePressingOfflineSync";
 import type { PressingQueuedScan } from "./pressing-scanner/pressingOfflineQueue";
+import { PRESSING_TIME_ZONE } from "@shared/pressingTimeZone";
 
 function timeLabel(row: PressingQueuedScan): string {
   const recorded = row.receipt?.confirmedAt || row.payload.deviceCapturedAt;
   try {
-    return new Date(recorded).toLocaleString(undefined, {
+    return new Date(recorded).toLocaleString("en-GB", {
       year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+      hourCycle: "h23", timeZone: PRESSING_TIME_ZONE,
     });
   } catch {
     return recorded;
@@ -105,7 +107,7 @@ export default function PressingOfflineQueueStatus({
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {timeLabel(row)}
+                    {timeLabel(row)} (Beirut)
                     {row.receipt ? " · " + row.receipt.weightKg + " KG" : ""}
                   </p>
                   {row.lastError && <p className="text-xs text-muted-foreground">{row.lastError}</p>}

@@ -14,6 +14,9 @@ const [main, client, server, plugin, source] = await Promise.all([
   read("build/viteHeavyListPaginationPlugin.ts"),
   read("client/src/pages/factory/FactoryStockAllocationV5.tsx"),
 ]);
+const createPage = await read("client/src/pages/factory/FactoryStockAllocationV5CreateProforma.tsx");
+const editPage = await read("client/src/pages/factory/FactoryStockAllocationV5EditProforma.tsx");
+const model = await read("client/src/pages/factory/factorystockallocationv5/useFactoryStockAllocationV5Model.tsx");
 
 assert.match(main, /import "\.\/lib\/v5AllocationPaginationClient";/, "main.tsx must install V5 pagination");
 assert.match(client, /const ENDPOINT = "\/api\/factory\/v5\/stock-allocation";/, "V5 endpoint must be targeted");
@@ -57,23 +60,23 @@ assert.match(
   /V5_ALLOCATION_MODEL_SUFFIX|V5_ALLOCATION_COMPONENT_SEGMENT/,
   "Vite plugin must target the split V5 allocation screen"
 );
-assert.match(plugin, /fetchAllV5AllocationData/, "V5 transform must import the complete-data loader");
-assert.match(plugin, /openCreateDrawerWithAllRows/, "create drawer must wait for complete rows");
-assert.match(plugin, /openEditDrawerWithAllRows/, "edit drawer must wait for complete rows");
-assert.match(plugin, /const currentRows = actionRows \?\? \(await loadAllActionRows\(\)\)/, "draft quantity editing must use complete rows");
-assert.match(plugin, /const complete = await fetchAllV5AllocationData\(exportParams\)/, "Excel must load all filtered pages");
-assert.match(plugin, /setActionRows\(null\)/, "drawer completion must release complete row references");
+assert.match(model, /fetchAllV5AllocationData/, "V5 model must import the complete-data loader");
+assert.match(createPage, /fetchAllV5AllocationData\(\)/, "create page must load every V5 allocation page");
+assert.match(source, /\/factory\/stock-allocation-v5\/proformas\/new/, "create must navigate to a new page");
+assert.match(source, /proformas\/\$\{proforma\.proformaId\}\/edit/, "Edit Proforma must open the dedicated route");
+assert.match(editPage, /fetchAllV5AllocationData\(\)/, "edit page must load the complete catalog");
+assert.match(model, /const complete = await fetchAllV5AllocationData\(new URLSearchParams\(\)\)/, "draft editing must load complete rows");
+assert.match(model, /const complete = await fetchAllV5AllocationData\(exportParams\)/, "Excel must load all filtered pages");
+assert.match(plugin, /V5_ALLOCATION_MODEL_SUFFIX/, "obsolete build-time V5 transformations must be skipped");
+assert.doesNotMatch(plugin, /openEditDrawerWithAllRows/, "build plugin must not reinstate removed popup state");
 assert.match(plugin, /Missing transform target/, "source drift must fail loudly");
 assert.match(plugin, /Ambiguous transform target/, "ambiguous replacements must fail loudly");
 
 const exactSourceMarkers = [
-  'import { apiRequest, queryClient } from "@/lib/queryClient";',
-  'function openEditDraft(proformaId: number, proformaName: string, currentRows: V5Row[]) {',
-  'const filtered = rows.filter((r) => {',
-  'onClick={() => setCreateDrawerOpen(true)}',
-  'onClick={() => setEditDrawerProformaId(proforma.proformaId)}',
-  'onClose={() => setCreateDrawerOpen(false)}',
-  'onClose={() => setEditDrawerProformaId(null)}',
+  'import { fetchAllV5AllocationData } from "@/lib/v5AllocationPaginationClient";',
+  'async function openEditDraft(proformaId: number, proformaName: string, _currentRows: V5Row[]) {',
+  'const filtered = exportRows.filter((r) => {',
+  'onClick={() => setLocation(`/factory/stock-allocation-v5/proformas/${proforma.proformaId}/edit`)}',
 ];
 const sourceWithModel = `${source}\n${await read("client/src/pages/factory/factorystockallocationv5/useFactoryStockAllocationV5Model.tsx")}`;
 for (const marker of exactSourceMarkers) {
@@ -102,10 +105,12 @@ console.log(
         "focused deep-link bypass",
         "global Negative Only preservation",
         "route-state reset",
-        "complete create/edit/draft rows",
+        "full-page create with complete catalog rows",
+        "full-page editing with complete catalog",
+        "complete draft rows",
         "complete filtered Excel export",
-        "large action-reference cleanup",
-        "fail-loud source transforms",
+        "removed obsolete edit-drawer transform",
+        "fail-loud remaining source transforms",
       ],
     },
     null,

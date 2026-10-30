@@ -11,7 +11,7 @@ import { requireAuth } from "../../auth";
 import {
   factoryBales, factoryPressingMachines, factoryPressingAssignments,
   factoryPressingSessions, factoryPressingConfirmations, factorySettings,
-  factoryPressingCorrections,
+  factoryPressingCorrections, factoryUserProfiles,
   users,
 } from "@shared/schema";
 import {
@@ -19,7 +19,8 @@ import {
 } from "../../services/security/activeCompanyPermissionContext";
 import { logAudit } from "../helpers/auditHelpers";
 import { logger } from "../../lib/logger";
-import { factoryLocalDate, settingsTimezone } from "../../services/factory/pressingShiftTime";
+import { factoryLocalDate } from "../../services/factory/pressingShiftTime";
+import { PRESSING_TIME_ZONE } from "@shared/pressingTimeZone";
 
 const confirmSchema = z.object({
   barcode: z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9][A-Za-z0-9._/-]*$/),
@@ -137,8 +138,13 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
         if (!assignment) {
           throw new ConfirmationError(409, "PRESSING_ASSIGNMENT_CHANGED", "Your assigned machine has changed. Refresh before scanning.");
         }
-        const [operator] = await tx.select({ active: users.active, username: users.username })
-          .from(users).where(eq(users.id, userId)).limit(1);
+        const [operator] = await tx.select({
+          active: users.active, username: users.username,
+          displayName: factoryUserProfiles.displayName,
+        }).from(users).leftJoin(factoryUserProfiles, and(
+          eq(factoryUserProfiles.userId, users.id),
+          eq(factoryUserProfiles.companyId, companyId),
+        )).where(eq(users.id, userId)).limit(1);
         if (!operator?.active) {
           throw new ConfirmationError(403, "PRESSING_USER_INACTIVE", "Your user account is inactive");
         }
@@ -174,28 +180,32 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
             eq(factoryPressingConfirmations.baleId, bale.id),
             isNull(factoryPressingConfirmations.voidedAt))).limit(1);
         if (alreadyPressed) {
+          const [priorProfile] = await tx.select({ displayName: factoryUserProfiles.displayName })
+            .from(factoryUserProfiles).where(and(
+              eq(factoryUserProfiles.companyId, companyId),
+              eq(factoryUserProfiles.userId, alreadyPressed.userId),
+            )).limit(1);
           throw new ConfirmationError(409, "PRESSING_ALREADY_CONFIRMED",
             "Already confirmed on " + alreadyPressed.machineNameSnapshot + " at " + alreadyPressed.confirmedAt.toISOString(),
             { previous: {
               confirmedAt: alreadyPressed.confirmedAt.toISOString(),
               machineName: alreadyPressed.machineNameSnapshot,
               operatorUserId: alreadyPressed.userId,
+              operatorName: priorProfile?.displayName?.trim() || "Display name not set",
               referenceNumber: alreadyPressed.referenceNumber,
             } });
         }
 
-        // Stock finalization is intentionally independent: do not re-confirm
-        // any bale already finalized, sold or dispatched, even if no earlier
-        // machine scan was recorded.
-        if (bale.status !== "PENDING_PRESSING") {
-          throw new ConfirmationError(422, "PRESSING_BALE_NOT_PENDING", "Only pending-pressing bales can be confirmed");
-        }
+        // Physical pressing is independent of inventory lifecycle. Every
+        // active, non-deleted factory bale is eligible for its first pressing
+        // confirmation, including stocked, reserved, sold and dispatched bales.
+        // The company/bale checks and lifetime duplicate guard above still apply.
 
         // The logged-in user is the production operator. No configured
         // shifts, machine downtime or performance targets participate.
         const now = new Date();
         const shiftId = null;
-        const timezoneName = settingsTimezone(settings?.extraSettings);
+        const timezoneName = PRESSING_TIME_ZONE;
         const productionDate = factoryLocalDate(now, timezoneName);
         const deviceCapturedAt = safeDeviceTimestamp(parsed.deviceCapturedAt);
         let session: typeof factoryPressingSessions.$inferSelect | undefined;
@@ -229,7 +239,7 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
           .values({
             companyId, baleId: bale.id, machineId: machine.id,
             assignmentId: assignment.id, sessionId: session.id, shiftId,
-            userId, userNameSnapshot: operator.username, machineNameSnapshot: machine.name,
+            userId, userNameSnapshot: operator.displayName?.trim() || "Display name not set", machineNameSnapshot: machine.name,
             referenceNumber: bale.referenceNumber, articleCode: bale.articleCode,
             productName: bale.productName, weightKg: bale.weightKg,
             requestId: parsed.requestId, deviceCapturedAt, confirmedAt: now,
@@ -249,11 +259,17 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
               eq(factoryPressingConfirmations.baleId, bale.id),
               isNull(factoryPressingConfirmations.voidedAt))).limit(1);
           if (other) {
+            const [otherProfile] = await tx.select({ displayName: factoryUserProfiles.displayName })
+              .from(factoryUserProfiles).where(and(
+                eq(factoryUserProfiles.companyId, companyId),
+                eq(factoryUserProfiles.userId, other.userId),
+              )).limit(1);
             throw new ConfirmationError(409, "PRESSING_ALREADY_CONFIRMED",
               "Already confirmed on " + other.machineNameSnapshot + " at " + other.confirmedAt.toISOString(), { previous: {
                 confirmedAt: other.confirmedAt.toISOString(),
                 machineName: other.machineNameSnapshot,
                 operatorUserId: other.userId,
+                operatorName: otherProfile?.displayName?.trim() || "Display name not set",
                 referenceNumber: other.referenceNumber,
               } });
           }

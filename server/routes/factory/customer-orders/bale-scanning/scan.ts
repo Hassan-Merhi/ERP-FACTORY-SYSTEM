@@ -76,7 +76,7 @@ export function registerOrderBaleScanRoutes(app: Express) {
         .select()
         .from(customerOrders)
         .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)));
-      if (!order) return res.status(404).json({ message: "Order not found" });
+      if (!order || order.deletedAt) return res.status(404).json({ message: "Order not found" });
       if (!["DRAFT", "LOADING", "PENDING_VERIFICATION"].includes(order.status)) {
         return res
           .status(400)
@@ -149,11 +149,11 @@ export function registerOrderBaleScanRoutes(app: Express) {
         // Re-read the order under the lock: the checks above ran before it was
         // held, so a finalization or cancellation could have landed in between.
         const [currentOrder] = await tx
-          .select({ status: customerOrders.status, proformaIdUsed: customerOrders.proformaIdUsed })
+          .select({ status: customerOrders.status, proformaIdUsed: customerOrders.proformaIdUsed, deletedAt: customerOrders.deletedAt })
           .from(customerOrders)
           .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))
           .for("update");
-        if (!currentOrder) {
+        if (!currentOrder || currentOrder.deletedAt) {
           return { ok: false, httpStatus: 404, body: { message: "Order not found" } };
         }
         if (!["DRAFT", "LOADING", "PENDING_VERIFICATION"].includes(currentOrder.status)) {
@@ -300,6 +300,8 @@ export function registerOrderBaleScanRoutes(app: Express) {
               FROM customer_order_bales cob
               JOIN customer_orders co ON co.id = cob.order_id
               WHERE cob.bale_id = ${bale.id}
+                AND co.company_id = ${companyId}
+                AND co.deleted_at IS NULL
                 AND co.status != 'CANCELLED'
               ORDER BY CASE WHEN cob.order_id = ${orderId} THEN 0 ELSE 1 END, cob.order_id
               LIMIT 1`

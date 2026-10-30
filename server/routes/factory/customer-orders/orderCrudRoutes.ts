@@ -17,7 +17,7 @@ import {
   customers,
   insertCustomerOrderSchema,
 } from "@shared/schema";
-import { eq, and, or, desc, sql, isNull, gte, lte } from "drizzle-orm";
+import { eq, and, or, desc, sql, isNull, gte, lte, inArray } from "drizzle-orm";
 import { parseListPagination, setListPaginationHeaders } from "../../../lib/listPagination";
 import { resultRows } from "../../../lib/queryResult";
 import { getProformaCapacitySnapshot } from "./proformaCapacity";
@@ -588,7 +588,8 @@ export function registerOrderCrudRoutes(app: Express) {
               eq(customerOrders.companyId, companyId),
               isNull(customerOrders.deletedAt)
             )
-          );
+          )
+          .for("update");
         // Both conditions are caller errors, and throwing plain Errors from
         // inside the transaction meant the catch reported them as 500s. The
         // checks stay inside the transaction so the row stays locked between
@@ -603,18 +604,38 @@ export function registerOrderCrudRoutes(app: Express) {
         // but preserve order/lines/charges/bale links so the order can be
         // restored from Settings → Deleted Items (note: bales currently in
         // stock will need to be re-reserved manually after restore).
-        const bales = await tx.select().from(customerOrderBales).where(eq(customerOrderBales.orderId, orderId));
-        for (const b of bales) {
+        const bales = await tx
+          .select({ baleId: customerOrderBales.baleId })
+          .from(customerOrderBales)
+          .where(eq(customerOrderBales.orderId, orderId));
+        const baleIds = [...new Set(bales.map((b) => b.baleId).filter((id): id is number => Number.isSafeInteger(id) && id > 0))];
+        // A soft-deleted loading is no longer an active allocation. Release its
+        // physical bales, but never make a bale available when a different
+        // non-deleted order still owns it (e.g. an already verified invoice).
+        if (baleIds.length > 0) {
           await tx
             .update(factoryBales)
             .set({ status: "IN_STOCK", updatedAt: new Date() })
-            .where(eq(factoryBales.id, b.baleId));
+            .where(and(
+              eq(factoryBales.companyId, companyId),
+              isNull(factoryBales.deletedAt),
+              inArray(factoryBales.id, baleIds),
+              sql`NOT EXISTS (
+                SELECT 1 FROM customer_order_bales cob
+                JOIN customer_orders co ON co.id = cob.order_id
+                WHERE cob.bale_id = ${factoryBales.id}
+                  AND co.company_id = ${companyId}
+                  AND co.id <> ${orderId}
+                  AND co.deleted_at IS NULL
+                  AND co.status <> 'CANCELLED'
+              )`
+            ));
         }
 
         await tx
           .update(customerOrders)
           .set({ deletedAt: new Date(), updatedAt: new Date() })
-          .where(eq(customerOrders.id, orderId));
+          .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId), isNull(customerOrders.deletedAt)));
         await logAudit(
           {
             userId: req.session.userId!,
@@ -630,7 +651,7 @@ export function registerOrderCrudRoutes(app: Express) {
         );
       });
 
-      res.json({ success: true, message: "Invoice moved to Deleted Items" });
+      res.json({ success: true, message: "Order moved to Deleted Items; eligible bales returned to stock" });
     } catch (error: unknown) {
       logger.error("Error deleting customer order:", { error: error });
       sendHttpError(res, error);

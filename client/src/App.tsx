@@ -23,6 +23,7 @@ import { AuthenticatedApp } from "@/app/AuthenticatedApp";
 import { AppLoadingState } from "@/app/AppLoadingState";
 import { useAuthenticatedUser } from "@/app/useAuthenticatedUser";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
+import { applyGlobalForceRefresh, shouldApplyGlobalForceRefresh } from "@/lib/globalForceRefresh";
 
 const Login = lazy(() => import("@/pages/Login"));
 const ChatWidget = lazy(() => import("@/components/ChatWidget").then((module) => ({ default: module.ChatWidget })));
@@ -64,15 +65,30 @@ function UpdateBanner() {
   const { toast } = useToast();
   const notifiedRef = useRef(false);
   const initialVersionRef = useRef<string | null>(null);
+  const checkingRef = useRef(false);
 
   useEffect(() => {
     if (import.meta.env.DEV) return;
 
     async function checkVersion() {
+      // An unauthenticated login page is not a target of the admin command.
+      if (window.location.pathname === "/login" || window.location.pathname.startsWith("/login/")) return;
+      if (checkingRef.current) return;
+      checkingRef.current = true;
       try {
-        const res = await fetch("/api/build-info", { credentials: "same-origin" });
+        const res = await fetch("/api/build-info", { credentials: "same-origin", cache: "no-store" });
         if (!res.ok) return;
         const data = await res.json();
+        // The server provides the current session's role-scoped refresh token
+        // (regular users OR admins/owners/developers). Each tab watches only its
+        // own group and shows the five-second notice when that token changes.
+        if (
+          typeof data.forceRefreshToken === "string" &&
+          shouldApplyGlobalForceRefresh(data.forceRefreshToken)
+        ) {
+          void applyGlobalForceRefresh(data.forceRefreshToken);
+          return;
+        }
         const ver: string = data.version ?? "";
         if (!ver || ver === "dev") return;
 
@@ -111,6 +127,8 @@ function UpdateBanner() {
         }
       } catch {
         /* network error — ignore, will retry next interval */
+      } finally {
+        checkingRef.current = false;
       }
     }
 
@@ -119,11 +137,24 @@ function UpdateBanner() {
     };
 
     void checkVersion();
-    const id = setInterval(checkVersion, 5 * 60 * 1000);
+    // Visible desktop/mobile sessions react within 15 seconds. Browsers may
+    // suspend background tabs; checking on focus/visibility catches them on return.
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") void checkVersion();
+    }, 15_000);
+    const checkOnResume = () => {
+      if (document.visibilityState === "visible") void checkVersion();
+    };
     window.addEventListener("erp:service-worker-updated", handleServiceWorkerUpdate);
+    window.addEventListener("erp:check-build-info", handleServiceWorkerUpdate);
+    window.addEventListener("focus", checkOnResume);
+    document.addEventListener("visibilitychange", checkOnResume);
     return () => {
       clearInterval(id);
       window.removeEventListener("erp:service-worker-updated", handleServiceWorkerUpdate);
+      window.removeEventListener("erp:check-build-info", handleServiceWorkerUpdate);
+      window.removeEventListener("focus", checkOnResume);
+      document.removeEventListener("visibilitychange", checkOnResume);
     };
   }, [toast]);
 

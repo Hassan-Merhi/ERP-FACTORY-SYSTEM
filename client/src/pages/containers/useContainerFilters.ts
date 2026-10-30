@@ -110,6 +110,16 @@ export function useContainerFilters(allContainers: Container[], soldContainers: 
     return true;
   });
 
+  // The Offloaded screen lists container numbers A–Z (with natural number ordering).
+  if (statusFilter === "OFFLOADED") {
+    containers.sort((a, b) =>
+      (a.containerNumber ?? "").localeCompare(b.containerNumber ?? "", undefined, {
+        numeric: true,
+        sensitivity: "base",
+      })
+    );
+  }
+
   return {
     // Search terms
     searchTerm,

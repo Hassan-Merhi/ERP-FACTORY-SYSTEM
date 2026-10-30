@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertTriangle, History, ShieldCheck, Undo2 } from "lucide-react";
+import { History, RotateCcw, ShieldCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { PressingDetailRow } from "./pressing-scanner/pressingReportClient";
+import { PRESSING_TIME_ZONE } from "@shared/pressingTimeZone";
+import {
+  fetchPressingReport, type PressingDetailRow, type PressingReportResponse,
+} from "./pressing-scanner/pressingReportClient";
 
 const ROOT = "/api/factory/pressing-machines";
 type CorrectionEvent = {
@@ -17,21 +20,23 @@ type CorrectionEvent = {
   action: "VOID" | "RECONFIRM";
   reason: string;
   supervisorUserId: string;
+  supervisorDisplayName?: string;
   createdAt: string;
 };
 function explanation(error: unknown): string {
-  return error instanceof Error ? error.message : "Could not save correction";
+  return error instanceof Error ? error.message : "Could not update pressing scan";
 }
 function dateTime(raw: string): string {
   return new Date(raw).toLocaleString("en-GB", {
     year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+    timeZone: PRESSING_TIME_ZONE,
   });
 }
 
 /**
- * Supervisor-only interface. API independently checks supervisor role and
- * current company, so removing the UI button is NOT the authorization rule.
+ * Supervisor-only interface. Server enforces company scope, role and
+ * single active pressing confirmation per bale independently of this UI.
  */
 export default function PressingCorrectionReview({
   companyId, userId, rows,
@@ -41,14 +46,28 @@ export default function PressingCorrectionReview({
   rows: PressingDetailRow[];
 }) {
   const { toast } = useToast();
-  const [selected, setSelected] = useState<PressingDetailRow | null>(null);
-  const [reason, setReason] = useState("");
-  const [confirmationText, setConfirmationText] = useState("");
   const [filterRef, setFilterRef] = useState("");
   const [showAudit, setShowAudit] = useState(false);
-  const queryKey = [ROOT, "corrections", companyId, userId, filterRef];
+  const [tab, setTab] = useState<"active" | "voided">("active");
+  const correctionKey = [ROOT, "corrections", companyId, userId];
+  // Voided bales remain directly returnable even when the main list is
+  // filtered to active scans. Include them without requiring a status change.
+  const active = useQuery<PressingReportResponse>({
+    queryKey: [ROOT, "active", companyId, userId],
+    queryFn: () => fetchPressingReport({
+      mode: "detailed", status: "active", page: 1, limit: 100,
+    }),
+    staleTime: Infinity, refetchOnWindowFocus: false,
+  });
+  const voided = useQuery<PressingReportResponse>({
+    queryKey: [ROOT, "voided", companyId, userId],
+    queryFn: () => fetchPressingReport({
+      mode: "detailed", status: "voided", page: 1, limit: 100,
+    }),
+    staleTime: Infinity, refetchOnWindowFocus: false,
+  });
   const corrections = useQuery<CorrectionEvent[]>({
-    queryKey,
+    queryKey: [...correctionKey, filterRef],
     enabled: showAudit,
     queryFn: async () => {
       const p = new URLSearchParams({ limit: "100" });
@@ -61,126 +80,121 @@ export default function PressingCorrectionReview({
     },
     staleTime: 0, refetchOnWindowFocus: false,
   });
-  const voidMutation = useMutation({
-    mutationFn: async ({ id, explanation }: { id: number; explanation: string }) => {
-      const response = await apiRequest("POST", ROOT + "/confirmations/" + id + "/void", {
-        reason: explanation,
-      });
-      if (!response.ok) throw new Error("Server did not accept correction");
-      return response.json() as Promise<{ correctionId: number; confirmationId: number }>;
+  const mutation = useMutation({
+    mutationFn: async ({ id, action }: { id: number; action: "void" | "restore" }) => {
+      const response = await apiRequest("POST", ROOT + "/confirmations/" + id + "/" + action, {});
+      if (!response.ok) throw new Error("Server did not accept pressing change");
+      return { action, data: await response.json() as { confirmationId: number; referenceNumber: string } };
     },
-    onSuccess: async result => {
-      setSelected(null);
-      setReason("");
-      setConfirmationText("");
-      // A void immediately removes its bale and KG from active totals.
+    onSuccess: async ({ action }) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: [ROOT + "/report"] }),
+        queryClient.invalidateQueries({ queryKey: [ROOT, "data", companyId, userId] }),
+        queryClient.invalidateQueries({ queryKey: [ROOT, "voided", companyId, userId] }),
+        queryClient.invalidateQueries({ queryKey: [ROOT, "active", companyId, userId] }),
+        queryClient.invalidateQueries({ queryKey: [ROOT, "options", companyId, userId] }),
         queryClient.invalidateQueries({ queryKey: [ROOT, "analytics"] }),
-        queryClient.invalidateQueries({ queryKey: [ROOT, "corrections", companyId, userId] }),
+        queryClient.invalidateQueries({ queryKey: correctionKey }),
       ]);
       toast({
-        title: "Pressing correction recorded",
-        description: "Record #" + result.confirmationId +
-          " voided. Its original scan and reason remain in permanent audit history.",
+        title: action === "void" ? "Scan deleted from totals" : "Bale returned",
+        description: action === "void"
+          ? "Removed from active bales and KG. Audit history is preserved."
+          : "Original bale, KG, worker and scan time are back in active totals.",
       });
     },
-    onError: error => toast({
-      title: "Correction was not accepted", description: explanation(error), variant: "destructive",
-    }),
+    onError: error => {
+      // A stale record may have been changed from another device.
+      void queryClient.invalidateQueries({ queryKey: [ROOT, "data", companyId, userId] });
+      void queryClient.invalidateQueries({ queryKey: [ROOT, "voided", companyId, userId] });
+      void queryClient.invalidateQueries({ queryKey: [ROOT, "active", companyId, userId] });
+      toast({ title: "Pressing change failed", description: explanation(error), variant: "destructive" });
+    },
   });
-  const ready = selected &&
-    reason.trim().length >= 10 &&
-    reason.trim().length <= 1000 &&
-    confirmationText.trim().toUpperCase() === selected.referenceNumber.toUpperCase();
+  const archivedRows = (voided.data?.rows || []).filter(
+    (row): row is PressingDetailRow => "id" in row,
+  );
+  const recentActiveRows = (active.data?.rows || []).filter(
+    (row): row is PressingDetailRow => "id" in row,
+  );
+  const seen = new Set<number>();
+  const currentRows = rows.filter(row => tab === "voided"
+    ? !!row.voidedAt && row.canReturn !== false : !row.voidedAt);
+  const recentRows = tab === "voided"
+    ? archivedRows.filter(row => row.canReturn !== false) : recentActiveRows;
+  const visibleRows = [...currentRows, ...recentRows].filter(row => {
+    if (seen.has(row.id)) return false;
+    seen.add(row.id);
+    return true;
+  });
 
   return (
     <Card data-testid="pressing-correction-review" className="mt-4">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-base">
-          <ShieldCheck className="h-5 w-5" />Supervisor Corrections & Audit
+          <ShieldCheck className="h-5 w-5" />Manage Pressing Scans
         </CardTitle>
         <p className="text-xs text-muted-foreground">
-          Void a mistaken physical pressing confirmation with a mandatory reason.
-          Original machine, operator, time and KG remain in immutable history.
-          Only a new valid scan can restore active pressing status.
+          Click X to remove a scan, or open Voided and click Return to bring it back.
+          No explanation or rescanning required. Original history stays in the audit.
         </p>
       </CardHeader>
       <CardContent className="space-y-3">
+        <div className="flex flex-wrap gap-2" aria-label="Pressing scan status">
+          <Button type="button" size="sm" variant={tab === "active" ? "secondary" : "outline"}
+            aria-pressed={tab === "active"} onClick={() => setTab("active")}>Active scans</Button>
+          <Button type="button" size="sm" variant={tab === "voided" ? "secondary" : "outline"}
+            aria-pressed={tab === "voided"} onClick={() => setTab("voided")}>Voided bales</Button>
+        </div>
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full min-w-[540px] text-sm">
             <thead className="bg-muted text-left"><tr>
               <th className="p-2">Reference</th><th className="p-2">Record</th>
-              <th className="p-2">Machine</th><th className="p-2">Server time</th>
+              <th className="p-2">Machine</th><th className="p-2">Server time (Beirut)</th>
               <th className="p-2">Action</th>
             </tr></thead>
             <tbody>
-              {rows.map(r => (
+              {visibleRows.map(r => (
                 <tr key={r.id} className="border-t">
                   <td className="p-2">{r.referenceNumber}</td>
                   <td className="p-2">#{r.id}</td>
                   <td className="p-2">{r.machineName}</td>
                   <td className="p-2">{dateTime(r.confirmedAt)}</td>
                   <td className="p-2">
-                    {r.voidedAt ?
-                      <span className="text-muted-foreground">Voided — preserved</span> :
-                      <Button size="sm" variant="outline" disabled={voidMutation.isPending}
-                        onClick={() => {
-                          setSelected(r); setReason(""); setConfirmationText("");
-                        }}>
-                        <Undo2 className="mr-1 h-4 w-4" />Review void
-                      </Button>}
+                    {r.voidedAt ? (
+                      <Button size="sm" variant="outline" disabled={mutation.isPending}
+                        aria-label={"Return voided bale " + r.referenceNumber}
+                        onClick={() => mutation.mutate({ id: r.id, action: "restore" })}>
+                        <RotateCcw className="mr-1 h-4 w-4" />Return
+                      </Button>
+                    ) : (
+                      <Button type="button" size="icon" variant="ghost"
+                        className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        disabled={mutation.isPending} title={"Delete scan " + r.referenceNumber}
+                        aria-label={"Delete pressing scan " + r.referenceNumber}
+                        onClick={() => mutation.mutate({ id: r.id, action: "void" })}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))}
-              {rows.length === 0 && <tr><td className="p-3 text-center text-muted-foreground" colSpan={5}>
-                Select Detailed mode to review pressing confirmations on this page.
+              {visibleRows.length === 0 && <tr><td className="p-3 text-center text-muted-foreground" colSpan={5}>
+                No pressing scans to manage.
               </td></tr>}
             </tbody>
           </table>
         </div>
-        {selected && (
-          <div role="region" aria-label="Confirm pressing correction" className="rounded-lg border border-amber-400/70 p-3 space-y-3">
-            <p className="flex items-center gap-2 text-sm font-semibold">
-              <AlertTriangle className="h-4 w-4 text-amber-600" />Correct confirmation #{selected.id}
-            </p>
-            <p className="text-sm">
-              {selected.referenceNumber} · {selected.machineName} · {Number(selected.weightKg)} KG
-              · {dateTime(selected.confirmedAt)}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              This subtracts this confirmation from active pressing analytics.
-              It does NOT undo stock finalization, inventory movements or vouchers.
-              An eligible bale may subsequently be scanned again.
-            </p>
-            <label className="block space-y-1 text-sm">
-              <span>Mandatory explanation (at least 10 characters)</span>
-              <textarea className="min-h-[90px] w-full rounded-md border bg-background p-2 text-sm"
-                maxLength={1000} value={reason} onChange={event => setReason(event.target.value)}
-                placeholder="Explain why this pressing confirmation is incorrect" />
-            </label>
-            <label className="block space-y-1 text-sm">
-              <span>Type <strong>{selected.referenceNumber}</strong> to confirm</span>
-              <Input value={confirmationText} autoComplete="off" maxLength={100}
-                onChange={event => setConfirmationText(event.target.value)}
-                placeholder="Re-enter bale reference" />
-            </label>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="destructive" size="sm"
-                disabled={!ready || voidMutation.isPending}
-                onClick={() => voidMutation.mutate({ id: selected.id, explanation: reason.trim() })}>
-                Void pressing confirmation
-              </Button>
-              <Button size="sm" variant="outline" disabled={voidMutation.isPending}
-                onClick={() => { setSelected(null); setReason(""); setConfirmationText(""); }}>
-                Cancel
-              </Button>
-            </div>
-          </div>
-        )}
+        {(active.isLoading || voided.isLoading) && <p className="text-xs text-muted-foreground">Loading recent bales…</p>}
+        {(active.isError || voided.isError) && <p role="alert" className="text-xs text-destructive">
+          Some pressing scans could not load. Try Refresh or use the Detailed status filter.
+        </p>}
+        <p className="text-xs text-muted-foreground">
+          Showing up to 100 recent scans for the selected status, plus matching detailed records.
+          X removes a scan from pressing results only; it does not delete inventory or accounting records.
+        </p>
         <div className="flex flex-wrap gap-2 items-center">
           <Button size="sm" variant="outline" onClick={() => setShowAudit(x => !x)}>
-            <History className="mr-2 h-4 w-4" />{showAudit ? "Hide" : "Show"} correction audit
+            <History className="mr-2 h-4 w-4" />{showAudit ? "Hide" : "Show"} audit
           </Button>
           {showAudit && <Input className="max-w-[250px]" value={filterRef}
             placeholder="Filter by bale reference"
@@ -194,18 +208,18 @@ export default function PressingCorrectionReview({
             </p>}
             {corrections.data?.map(entry => (
               <div key={entry.id} className="rounded-md border p-2 text-sm">
-                <p><strong>{entry.action}</strong> · Original #{entry.confirmationId}
+                <p><strong>{entry.action === "VOID" ? "Deleted from totals" : "Returned / re-scanned"}</strong>
+                  {" · Original #" + entry.confirmationId}
                   {entry.replacementConfirmationId && " → Replacement #" + entry.replacementConfirmationId}</p>
                 <p className="text-xs text-muted-foreground">{dateTime(entry.createdAt)}
-                  {" · Supervisor " + entry.supervisorUserId}</p>
+                  {" · Supervisor " + (entry.supervisorDisplayName?.trim() || "Display name not set")}</p>
                 <p className="text-sm">{entry.reason}</p>
               </div>
             ))}
             {corrections.data?.length === 0 &&
               <p className="text-sm text-muted-foreground">No correction records match this filter.</p>}
             <p className="text-xs text-muted-foreground">
-              Showing the latest 100 immutable correction events.
-              Original voids and later replacements are linked in the audit trail.
+              Latest 100 permanent audit events. Returned scans preserve their original worker and time.
             </p>
           </div>
         )}

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Camera, Flashlight } from "lucide-react";
+import { AlertTriangle, Camera, CheckCircle2, Flashlight, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translateCameraScanTitle } from "@/i18n/mobileCameraScanTranslations";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   createCameraDecoder,
@@ -9,7 +11,15 @@ import {
 } from "@/pages/factory/pressing-scanner/cameraDecoder";
 import { ContinuousScanGate } from "@/pages/factory/pressing-scanner/continuousScanGate";
 
+export interface CameraScanFeedback {
+  type: "success" | "duplicate" | "warn" | "error";
+  referenceNumber: string;
+  message: string;
+}
+
 interface MobileBarcodeScannerProps {
+  /** Server-confirmed result, displayed above the camera preview. */
+  feedback?: CameraScanFeedback | null;
   onScan: (barcode: string) => void;
   disabled?: boolean;
   /** A page's existing manual/hardware handler is always the authority. */
@@ -21,10 +31,13 @@ interface MobileBarcodeScannerProps {
  * reads travel through exactly the same page-specific handler as manual scans.
  * The decoder is native when supported, with lazily loaded ZXing for iOS Safari.
  */
-export function MobileBarcodeScanner({ onScan, disabled = false, className }: MobileBarcodeScannerProps) {
+export function MobileBarcodeScanner({ onScan, disabled = false, className, feedback = null }: MobileBarcodeScannerProps) {
+  const { language } = useApplicationLanguage();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastDetected, setLastDetected] = useState("");
+  const [visibleFeedback, setVisibleFeedback] = useState<CameraScanFeedback | null>(null);
+  const seenFeedbackRef = useRef<CameraScanFeedback | null>(null);
   const [torchAvailable, setTorchAvailable] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
   const trackRef = useRef<MediaStreamTrack | null>(null);
@@ -33,6 +46,17 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className }: Mo
   const disabledRef = useRef(disabled);
   scanHandler.current = onScan;
   disabledRef.current = disabled;
+
+  // Page-level banners/toasts sit behind the camera dialog. Surface the latest
+  // server result inside that dialog, without closing or pausing the camera.
+  // An old result from manual scanning is never replayed when the camera opens.
+  useEffect(() => {
+    if (!open || !feedback || seenFeedbackRef.current === feedback) return;
+    seenFeedbackRef.current = feedback;
+    setVisibleFeedback(feedback);
+    const timer = setTimeout(() => setVisibleFeedback(null), 2700);
+    return () => clearTimeout(timer);
+  }, [open, feedback]);
 
   useEffect(() => {
     if (!open) return;
@@ -185,6 +209,8 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className }: Mo
         onClick={() => {
           setError(null);
           setLastDetected("");
+          setVisibleFeedback(null);
+          seenFeedbackRef.current = feedback;
           setTorchOn(false);
           setTorchAvailable(false);
           setOpen(true);
@@ -210,6 +236,28 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className }: Mo
               className="aspect-[4/3] w-full object-cover"
             />
             <div className="pointer-events-none absolute inset-[18%] rounded-md border-2 border-emerald-400/80" />
+            {visibleFeedback && (
+              <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10" role="status" aria-live="polite" data-testid="camera-scan-result-popup">
+                <div className={`rounded-xl border-2 p-3 text-white shadow-2xl ${ 
+                  visibleFeedback.type === "success"
+                    ? "border-emerald-300 bg-emerald-700"
+                    : visibleFeedback.type === "duplicate"
+                      ? "border-red-300 bg-red-700"
+                      : visibleFeedback.type === "warn"
+                        ? "border-amber-200 bg-amber-500 text-amber-950"
+                        : "border-red-300 bg-red-700"
+                }`}>
+                  <div className="flex items-center gap-2 text-base font-black uppercase tracking-wide">
+                    {visibleFeedback.type === "success" ? <CheckCircle2 className="h-6 w-6 shrink-0" /> :
+                      visibleFeedback.type === "warn" ? <AlertTriangle className="h-6 w-6 shrink-0" /> :
+                        <XCircle className="h-6 w-6 shrink-0" />}
+                    <span>{translateCameraScanTitle(visibleFeedback.type, language)}</span>
+                  </div>
+                  <div className="mt-1 break-all font-mono text-sm font-semibold">{visibleFeedback.referenceNumber}</div>
+                  <div className="mt-1 text-sm font-medium leading-snug">{visibleFeedback.message}</div>
+                </div>
+              </div>
+            )}
           </div>
           {torchAvailable && !error && (
             <Button type="button" variant="outline" size="sm" onClick={() => void toggleTorch()}>

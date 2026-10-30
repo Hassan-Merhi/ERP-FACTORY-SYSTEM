@@ -32,7 +32,7 @@ type DetectorConstructor = {
 };
 
 /** Longest edge handed to the bundled decoder; larger frames cost CPU without helping 1D reads. */
-const ZXING_MAX_EDGE = 1280;
+const ZXING_MAX_EDGE = 1024;
 
 export function hasCameraAccess(): boolean {
   return typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getUserMedia === "function";

@@ -1,4 +1,5 @@
 import * as XLSX from "@/lib/excelHelper";
+import { PRESSING_TIME_ZONE } from "@shared/pressingTimeZone";
 import {
   PRESSING_COLUMN_LABELS, type PressingReportColumn, type PressingReportFilters,
 } from "@shared/pressingReportContracts";
@@ -18,6 +19,7 @@ export interface PressingDetailRow {
   confirmedAt: string;
   deviceCapturedAt: string | null;
   voidedAt: string | null;
+  canReturn?: boolean;
   timezoneName: string;
   secondsSincePrevious: string | null;
 }
@@ -29,6 +31,7 @@ export interface PressingCondensedRow {
   operatorName: string | null;
   shiftId: number | null;
   articleCode: string | null;
+  productName: string | null;
   voided: boolean;
   timezoneName: string;
   bales: number;
@@ -39,7 +42,9 @@ export interface PressingCondensedRow {
 export interface PressingReportResponse {
   rows: Array<PressingDetailRow | PressingCondensedRow>;
   total: number;
-  summary: { totalBales: number; totalKg: string; voidedBales: number };
+  summary: { totalBales: number; totalKg: string; voidedBales: number;
+    byOperator: Array<{ userId: string; name: string | null; totalBales: number; totalKg: string }> };
+  overview: PressingReportResponse["summary"];
   page: number;
   limit: number;
   mode: "detailed" | "condensed";
@@ -58,8 +63,34 @@ export interface PressingReportOptions {
   serverToday: string;
   timeZone: string;
   machines: Array<{ id: number; code: string; name: string; active: boolean }>;
-  operators: Array<{ userId: string; name: string }>;
+  operators: Array<{ userId: string; name: string; displayName?: string | null; username?: string; isPressingWorker?: boolean }>;
+  weightsKg: string[];
+  canCorrect: boolean;
 }
+/**
+ * P1/P2/P3 are account identifiers, never the KPI labels. Show the current
+ * company-scoped Factory display name and attach totals by stable user ID.
+ * Operators with no confirmations still appear with zero bales and KG.
+ */
+export function pressingKpiWorkers(
+  operators: PressingReportOptions["operators"],
+  byOperator: PressingReportResponse["summary"]["byOperator"],
+) {
+  return (["P1", "P2", "P3"] as const).map((slot, index) => {
+    const operator = operators.find(item =>
+      item.isPressingWorker === true && item.username?.trim().toUpperCase() === slot
+    );
+    const workerTotals = byOperator.find(item => item.userId === operator?.userId);
+    return {
+      slot,
+      label: operator?.displayName?.trim() || `Worker ${index + 1} (display name not set)`,
+      userId: operator?.userId,
+      bales: Number(workerTotals?.totalBales || 0),
+      kg: Number(workerTotals?.totalKg || 0),
+    };
+  });
+}
+
 export function pressingParams(filters: PressingReportFilters): URLSearchParams {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) {
@@ -75,22 +106,16 @@ export async function fetchPressingReport(filters: PressingReportFilters): Promi
   if (!response.ok) throw new Error("Could not load pressing history (" + response.status + ")");
   return response.json() as Promise<PressingReportResponse>;
 }
-export function pressingDisplayDateTime(time: string | null | undefined, timeZone?: string) {
+export function pressingDisplayDateTime(time: string | null | undefined, _recordedTimeZone?: string) {
   if (!time) return "—";
   const date = new Date(time);
   if (!Number.isFinite(date.getTime())) return "—";
-  try {
-    return date.toLocaleString("en-GB", {
-      day: "2-digit", month: "2-digit", year: "numeric",
-      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
-      ...(timeZone ? { timeZone } : {}),
-    });
-  } catch {
-    return date.toLocaleString("en-GB", {
-      day: "2-digit", month: "2-digit", year: "numeric",
-      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
-    });
-  }
+  // Even older confirmations recorded as UTC must display in Beirut.
+  return date.toLocaleString("en-GB", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+    timeZone: PRESSING_TIME_ZONE,
+  });
 }
 export function pressingCell(
   row: PressingDetailRow | PressingCondensedRow, key: PressingReportColumn
@@ -99,10 +124,10 @@ export function pressingCell(
   switch (key) {
     case "referenceNumber": return detailed ? row.referenceNumber : "—";
     case "articleCode": return row.articleCode || "";
-    case "productName": return detailed ? row.productName || "" : "";
+    case "productName": return row.productName || "";
     case "weightKg": return Number(row.weightKg);
     case "machineName": return row.machineName;
-    case "operatorName": return row.operatorName || row.operatorUserId;
+    case "operatorName": return row.operatorName?.trim() || "Display name not set";
     case "shiftId": return row.shiftId ?? "—";
     case "productionDate": return row.productionDate.split("-").reverse().join("/");
     case "confirmedAt": return detailed ? pressingDisplayDateTime(row.confirmedAt, row.timezoneName) : "—";
@@ -152,8 +177,10 @@ export async function exportPressingReport(
   ws.getCell(1, 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF182638" } };
   ws.getRow(1).height = 28;
   ws.mergeCells(2, 1, 2, safeColumnCount);
-  ws.getCell(2, 1).value = "Period: " + (filters.from || "All time") + " to " +
-    (filters.to || "All time") + " | As of " + pressingDisplayDateTime(first.asOf);
+  ws.getCell(2, 1).value = "Period (Beirut): " +
+    (filters.from ? filters.from + (filters.fromTime ? " " + filters.fromTime : "") : "All time") +
+    " to " + (filters.to ? filters.to + (filters.toTime ? " " + filters.toTime : "") : "All time") +
+    " | As of " + pressingDisplayDateTime(first.asOf);
   ws.mergeCells(3, 1, 3, safeColumnCount);
   ws.getCell(3, 1).value = "Accepted bales: " + first.summary.totalBales +
     " | Accepted KG: " + first.summary.totalKg + " | Voided: " + first.summary.voidedBales;

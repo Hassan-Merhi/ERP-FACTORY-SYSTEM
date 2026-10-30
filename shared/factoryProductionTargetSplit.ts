@@ -25,6 +25,27 @@ export function isValidBaleTarget(value: number): boolean {
   );
 }
 
+/**
+ * Linked fixed targets are stored and displayed per worker. The production
+ * table sums member targets to show the team's combined bale target. Convert
+ * that per-worker value to the same combined total before unlinking; splitting
+ * the per-worker value again would incorrectly turn 7 + 7 into 4 + 3.
+ */
+export function linkedTotalBalesFromPerWorker(perWorker: number | null, workerCount: number): number | null {
+  if (!Number.isSafeInteger(workerCount) || workerCount < 1) {
+    throw new ProductionTargetSplitError("Linked worker count is invalid");
+  }
+  if (perWorker === null) return null;
+  if (!isValidBaleTarget(perWorker)) {
+    throw new ProductionTargetSplitError("Shared target must be a non-negative number with at most two decimals");
+  }
+  const cents = Math.round(perWorker * 100) * workerCount;
+  if (!Number.isSafeInteger(cents)) {
+    throw new ProductionTargetSplitError("Linked target exceeds the supported range");
+  }
+  return cents / 100;
+}
+
 export function evenSplitBales(total: number, workerIds: number[]): WorkerBaleAllocation[] {
   if (!isValidBaleTarget(total)) {
     throw new ProductionTargetSplitError("Shared target must be a non-negative number with at most two decimals");

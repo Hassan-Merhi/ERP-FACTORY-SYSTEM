@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   pressingParams, pressingCell, fetchPressingReport,
-  pressingDisplayDateTime, exportPressingReport,
+  pressingDisplayDateTime, exportPressingReport, pressingKpiWorkers,
   type PressingDetailRow, type PressingCondensedRow,
 } from "./pressingReportClient";
 import * as XLSX from "@/lib/excelHelper";
@@ -34,7 +34,7 @@ const detailed: PressingDetailRow = {
 const condensed: PressingCondensedRow = {
   productionDate: "2026-10-27", machineId: 4, machineName: "Press 04",
   operatorUserId: "user-12", operatorName: "Operator A", shiftId: null,
-  articleCode: "HMD11476", voided: false, timezoneName: "UTC",
+  articleCode: "HMD11476", productName: "Wipers", voided: false, timezoneName: "UTC",
   bales: 3, weightKg: "135.375", firstScanAt: detailed.confirmedAt,
   lastScanAt: detailed.confirmedAt,
 };
@@ -45,6 +45,34 @@ afterEach(() => {
 });
 
 describe("pressing history client", () => {
+  it("shows the saved Factory display name on each KPI while using login only for identity", () => {
+    const operators = [
+      { userId: "p1-id", username: "P1", name: "Amir Darwish", displayName: "Amir Darwish", isPressingWorker: true },
+      { userId: "p2-id", username: "p2", name: "Maya H.", displayName: "Maya H.", isPressingWorker: true },
+      { userId: "p3-id", username: " P3 ", name: "Rami", displayName: " Rami ", isPressingWorker: true },
+      { userId: "admin", username: "ADMIN", name: "Administrator", displayName: "Administrator", isPressingWorker: false },
+    ];
+    const aggregate = [
+      { userId: "p1-id", name: "P1", totalBales: 12, totalKg: "600.000" },
+      { userId: "p2-id", name: "P2", totalBales: 8, totalKg: "440.500" },
+      { userId: "admin", name: "ADMIN", totalBales: 999, totalKg: "90000.000" },
+    ];
+    const workers = pressingKpiWorkers(operators, aggregate);
+    expect(workers.map(worker => worker.label)).toEqual(["Amir Darwish", "Maya H.", "Rami"]);
+    expect(workers.map(worker => worker.userId)).toEqual(["p1-id", "p2-id", "p3-id"]);
+    expect(workers.map(worker => worker.bales)).toEqual([12, 8, 0]);
+    expect(workers.map(worker => worker.kg)).toEqual([600, 440.5, 0]);
+    expect(workers.reduce((sum, worker) => sum + worker.bales, 0)).toBe(20);
+  });
+
+  it("never substitutes a username for a missing Factory display name", () => {
+    const workers = pressingKpiWorkers([
+      { userId: "p1-id", username: "P1", name: "P1", displayName: null, isPressingWorker: true },
+    ], []);
+    expect(workers[0].label).toBe("Worker 1 (display name not set)");
+    expect(workers[1].userId).toBeUndefined();
+  });
+
   it("preserves date, selected machine, operator, status and pagination", () => {
     const params = pressingParams({
       from: "2026-10-01", to: "2026-10-27", machineId: 4, userId: "user-12",
@@ -62,11 +90,18 @@ describe("pressing history client", () => {
     expect(pressingCell(detailed, "weightKg")).toBe(45.125);
     expect(pressingCell(detailed, "productionDate")).toBe("27/10/2026");
     expect(pressingCell(detailed, "status")).toBe("Confirmed");
-    expect(pressingDisplayDateTime(detailed.confirmedAt, "UTC")).toContain("08:20:13");
+    // A stored UTC timestamp must display as Beirut's winter UTC+2.
+    expect(pressingDisplayDateTime(detailed.confirmedAt, "UTC")).toContain("10:20:13");
+    // IANA timezone automatically observes Beirut's summer UTC+3.
+    expect(pressingDisplayDateTime("2026-07-28T08:20:13.000Z", "UTC")).toContain("11:20:13");
+    // History created under older UTC settings still belongs to Beirut's next day.
+    expect(pressingDisplayDateTime("2026-10-27T22:30:00.000Z", "UTC"))
+      .toMatch(/28\/10\/2026.*00:30:00/);
   });
 
   it("keeps condensed totals numeric and distinguishes voided records", () => {
     expect(pressingCell(condensed, "bales")).toBe(3);
+    expect(pressingCell(condensed, "productName")).toBe("Wipers");
     expect(pressingCell(condensed, "weightKg")).toBe(135.375);
     expect(pressingCell({ ...condensed, voided: true }, "status")).toBe("Voided");
   });

@@ -38,7 +38,9 @@ export const securityRuntimeConfig = Object.freeze({
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "SAMEORIGIN",
     "Referrer-Policy": "strict-origin-when-cross-origin",
-    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    // Workers scan factory and retail barcodes using getUserMedia on our own HTTPS origin.
+    // Deny microphone and geolocation; never allow third-party frames camera access.
+    "Permissions-Policy": "camera=(self), microphone=(), geolocation=()",
   }),
 });
 

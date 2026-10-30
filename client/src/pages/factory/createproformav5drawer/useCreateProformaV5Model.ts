@@ -30,6 +30,8 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
   const [showNegativeOnly, setShowNegativeOnly] = useState(false);
   const [showGarbageWipers, setShowGarbageWipers] = useState(false);
   const [articleSearch, setArticleSearch] = useState("");
+  const [catalogFilter, setCatalogFilter] = useState("__all__");
+  const catalogCategories = Array.from(new Set(articleRows.map((r) => r.categoryName?.trim()).filter((v): v is string => Boolean(v)))).sort((a, b) => a.localeCompare(b));
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const qtyRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -55,6 +57,7 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
       setShowNegativeOnly(false);
       setShowGarbageWipers(false);
       setArticleSearch("");
+      setCatalogFilter("__all__");
     }
   }, [open]);
 
@@ -450,6 +453,7 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
         const q = articleSearch.toLowerCase();
         base = base.filter((r) => r.productName.toLowerCase().includes(q) || r.articleCode.toLowerCase().includes(q));
       }
+      if (catalogFilter !== "__all__") base = base.filter((r) => (r.categoryName?.trim() || "__uncategorized__") === catalogFilter);
       return base;
     }
     let base = showZeroItems ? articleRows : articleRows.filter((r) => r.stockAvailable > 0 || r.expectedToLoad > 0);
@@ -462,6 +466,7 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
       const q = articleSearch.toLowerCase();
       base = base.filter((r) => r.productName.toLowerCase().includes(q) || r.articleCode.toLowerCase().includes(q));
     }
+    if (catalogFilter !== "__all__") base = base.filter((r) => (r.categoryName?.trim() || "__uncategorized__") === catalogFilter);
     return base;
   })();
 
@@ -502,6 +507,9 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
     setShowGarbageWipers,
     articleSearch,
     setArticleSearch,
+    catalogFilter,
+    setCatalogFilter,
+    catalogCategories,
     qtyRefs,
     customersQuery,
     productsQuery,

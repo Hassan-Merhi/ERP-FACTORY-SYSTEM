@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { Factory } from "lucide-react";
+import { Factory, Layers3, Trash2 } from "lucide-react";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translatePressingUiText } from "@/i18n/pressingUiTranslations";
 
 export function formatDailyNum(val: number): string {
   if (val === 0) return "0";
@@ -20,6 +22,8 @@ export function normalizeDailySummaryRows(payload: unknown): DailyStockSummaryRo
 }
 
 export function DailyStockSummary({ date }: { date: string }) {
+  const { language } = useApplicationLanguage();
+  const t = (key: Parameters<typeof translatePressingUiText>[0]) => translatePressingUiText(key, language);
   const todayStr = new Date().toLocaleDateString("en-CA");
 
   const { data: summaryRows = [] } = useQuery<DailyStockSummaryRow[]>({
@@ -67,83 +71,60 @@ export function DailyStockSummary({ date }: { date: string }) {
   const isToday = date === todayStr;
 
   return (
-    <section
-      aria-label={isToday ? "Today's factory production" : "Factory production summary"}
-      data-factory-daily-summary="true"
-      className="grid min-w-0 grid-cols-1 gap-2 min-[420px]:grid-cols-2 lg:grid-cols-4"
-    >
-      <div className="flex min-h-11 items-center rounded-lg border border-dashed px-3 py-2">
-        <span className="wrap-break-word text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          {isToday ? "Today" : "Production"}
-        </span>
+    <section aria-label={isToday ? "Today's factory production" : "Factory production summary"}
+      data-factory-daily-summary="true" className="min-w-0 space-y-2">
+      <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+        {isToday ? "Today" : "Production"}
       </div>
-
-      <div className="flex min-w-0 items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2">
-        <Factory className="h-4 w-4 shrink-0 text-emerald-500" />
-        <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-          <span
-            className="text-base font-bold tabular-nums text-emerald-600 dark:text-emerald-400"
-            data-testid="text-entry-today-qty"
-          >
-            {totalQty}
-          </span>
-          <span className="text-xs text-emerald-600/70 dark:text-emerald-400/70">bales</span>
-          <span className="text-muted-foreground" aria-hidden="true">
-            ·
-          </span>
-          <span
-            className="text-base font-bold tabular-nums text-emerald-600 dark:text-emerald-400"
-            data-testid="text-entry-today-kg"
-          >
-            {formatDailyNum(totalKg)}
-          </span>
-          <span className="text-xs text-emerald-600/70 dark:text-emerald-400/70">kg</span>
+      <div className="grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3">
+        <div className="flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-emerald-500/25 bg-gradient-to-br from-emerald-500/15 via-card to-card p-4 shadow-sm">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="rounded-xl bg-emerald-500/15 p-3 text-emerald-500"><Factory className="h-5 w-5" /></span>
+            <div className="min-w-0">
+              <div className="flex items-baseline gap-1.5">
+                <strong data-testid="text-entry-today-qty" className="text-2xl font-extrabold tabular-nums">{totalQty}</strong>
+                <span className="text-xs text-muted-foreground">{t("totalBales")}</span>
+              </div>
+              <span className="text-xs text-muted-foreground">{t("producedBales")}</span>
+            </div>
+          </div>
+          <div className="shrink-0 border-l border-emerald-500/20 pl-4 text-right">
+            <strong data-testid="text-entry-today-kg" className="block text-xl font-extrabold tabular-nums text-emerald-600 dark:text-emerald-300">{formatDailyNum(totalKg)} <span className="text-xs">KG</span></strong>
+            <span className="text-[11px] text-muted-foreground">{t("totalWeight")}</span>
+          </div>
         </div>
-      </div>
-
-      <div className="flex min-w-0 items-center gap-2 rounded-lg border border-orange-500/20 bg-orange-500/10 px-3 py-2">
-        <span className="shrink-0 text-xs font-semibold text-orange-500">Garbage</span>
-        <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-          <span
-            className="text-base font-bold tabular-nums text-orange-600 dark:text-orange-400"
-            data-testid="text-entry-today-garbage-qty"
-          >
-            {garbageQty}
-          </span>
-          <span className="text-xs text-orange-600/70 dark:text-orange-400/70">bales</span>
-          <span className="text-muted-foreground" aria-hidden="true">
-            ·
-          </span>
-          <span
-            className="text-base font-bold tabular-nums text-orange-600 dark:text-orange-400"
-            data-testid="text-entry-today-garbage-kg"
-          >
-            {formatDailyNum(garbageKg)}
-          </span>
-          <span className="text-xs text-orange-600/70 dark:text-orange-400/70">kg</span>
+        <div className="flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-500/15 via-card to-card p-4 shadow-sm">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="rounded-xl bg-amber-500/15 p-3 text-amber-500"><Trash2 className="h-5 w-5" /></span>
+            <div className="min-w-0">
+              <div className="flex items-baseline gap-1.5">
+                <strong data-testid="text-entry-today-garbage-qty" className="text-2xl font-extrabold tabular-nums text-amber-600 dark:text-amber-300">{garbageQty}</strong>
+                <span className="text-xs text-muted-foreground">bales</span>
+              </div>
+              <span className="text-xs text-muted-foreground">Garbage</span>
+            </div>
+          </div>
+          <div className="shrink-0 border-l border-amber-500/20 pl-4 text-right">
+            <strong data-testid="text-entry-today-garbage-kg" className="block text-xl font-extrabold tabular-nums text-amber-600 dark:text-amber-300">{formatDailyNum(garbageKg)} <span className="text-xs">KG</span></strong>
+            <span className="text-[11px] text-muted-foreground">{t("totalWeight")}</span>
+          </div>
         </div>
-      </div>
-
-      <div className="flex min-w-0 items-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2">
-        <span className="shrink-0 text-xs font-semibold text-blue-500">Wipers</span>
-        <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-          <span
-            className="text-base font-bold tabular-nums text-blue-600 dark:text-blue-400"
-            data-testid="text-entry-today-wipers-qty"
-          >
-            {wipersQty}
-          </span>
-          <span className="text-xs text-blue-600/70 dark:text-blue-400/70">bales</span>
-          <span className="text-muted-foreground" aria-hidden="true">
-            ·
-          </span>
-          <span
-            className="text-base font-bold tabular-nums text-blue-600 dark:text-blue-400"
-            data-testid="text-entry-today-wipers-kg"
-          >
-            {formatDailyNum(wipersKg)}
-          </span>
-          <span className="text-xs text-blue-600/70 dark:text-blue-400/70">kg</span>
+        <div className="flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-sky-500/25 bg-gradient-to-br from-sky-500/15 via-card to-card p-4 shadow-sm">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="rounded-xl bg-sky-500/15 p-3 text-sky-500"><Layers3 className="h-5 w-5" /></span>
+            <div className="min-w-0">
+              <div className="flex items-baseline gap-1.5">
+                <strong data-testid="text-entry-today-wipers-qty" className="text-2xl font-extrabold tabular-nums text-sky-600 dark:text-sky-300">{wipersQty}</strong>
+                <span className="text-xs text-muted-foreground">bales</span>
+              </div>
+              <span className="text-xs text-muted-foreground">Wipers</span>
+            </div>
+          </div>
+          <div className="shrink-0 border-l border-sky-500/20 pl-4 text-right">
+            <strong data-testid="text-entry-today-wipers-kg" className="block text-xl font-extrabold tabular-nums text-sky-600 dark:text-sky-300">{formatDailyNum(wipersKg)} <span className="text-xs">KG</span></strong>
+            <span className="text-[11px] text-muted-foreground">{t("totalWeight")}</span>
+          </div>
         </div>
       </div>
     </section>

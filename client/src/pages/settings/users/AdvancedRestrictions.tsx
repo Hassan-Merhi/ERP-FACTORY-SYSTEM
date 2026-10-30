@@ -26,6 +26,7 @@ import {
 interface AdvancedRestrictionsProps {
   user: SettingsUserRow;
   isPrivileged: boolean;
+  isViewOnly: boolean;
   hasFactoryAccess: boolean;
   hasErpAccess: boolean;
   pageAccess: Set<string>;
@@ -41,6 +42,7 @@ interface AdvancedRestrictionsProps {
 export function AdvancedRestrictions({
   user,
   isPrivileged,
+  isViewOnly,
   hasFactoryAccess,
   hasErpAccess,
   pageAccess,
@@ -94,8 +96,16 @@ export function AdvancedRestrictions({
   const hiddenFieldCount = isPrivileged
     ? 0
     : hiddenCostFields.filter((key) => !factoryTabKeys.has(key) && !FACTORY_TAB_GRANT_KEYS.has(key)).length;
+  // View Only ERP access is automatic, so legacy ERP selections do not count
+  // as active page restrictions in the user-management summary.
+  const erpPageKeys = new Set(ALL_ERP_PAGES.map((page) => page.key));
+  const relevantPageCount = isPrivileged
+    ? 0
+    : isViewOnly
+      ? [...pageAccess].filter((key) => !erpPageKeys.has(key)).length
+      : pageAccess.size;
   const restrictionCount =
-    (isPrivileged ? 0 : pageAccess.size) +
+    relevantPageCount +
     hiddenTabCount +
     hiddenFieldCount +
     (isPrivileged ? 0 : hiddenErpCostFields.length);
@@ -121,7 +131,7 @@ export function AdvancedRestrictions({
             </div>
             {!advancedOpen &&
               (() => {
-                const pageCount = isPrivileged ? 0 : pageAccess.size;
+                const pageCount = relevantPageCount;
                 const tabCount = hiddenTabCount;
                 const fieldCount = hiddenFieldCount;
                 const erpCount = isPrivileged ? 0 : hiddenErpCostFields.length;
@@ -132,7 +142,7 @@ export function AdvancedRestrictions({
                 if (erpCount > 0) parts.push(`${erpCount} ERP field${erpCount !== 1 ? "s" : ""} hidden`);
                 return (
                   <p className="text-xs text-muted-foreground font-normal mt-1">
-                    {parts.length > 0 ? parts.join(" · ") : "No restrictions active — full access"}
+                    {parts.length > 0 ? parts.join(" · ") : "No additional restrictions active"}
                   </p>
                 );
               })()}
@@ -234,7 +244,15 @@ export function AdvancedRestrictions({
                   </div>
                 )}
 
-                {hasErpAccess && (
+                {hasErpAccess && isViewOnly && (
+                  <div className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground" data-testid="view-only-all-erp-pages">
+                    View Only can browse all standard ERP business-data pages automatically. Older saved ERP page selections
+                    do not limit this role. Dashboard, Settings, Create Voucher, and privileged developer tools remain
+                    unavailable; all business write actions are blocked.
+                  </div>
+                )}
+
+                {hasErpAccess && !isViewOnly && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">ERP Pages</p>

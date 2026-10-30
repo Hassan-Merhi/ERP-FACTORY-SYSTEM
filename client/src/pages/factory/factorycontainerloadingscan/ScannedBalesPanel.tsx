@@ -136,7 +136,12 @@ function ScanControls({ model }: { model: FactoryContainerLoadingScanModel }) {
           data-testid="input-scan-code"
         />
         </div>
-        <MobileBarcodeScanner onScan={model.submitScannedCode} disabled={!model.orderId || !model.orderDetail || !model.selectedLocationId || model.addBaleMutation.isPending} className="h-14 w-14 shrink-0" />
+        <MobileBarcodeScanner
+          onScan={model.submitScannedCode}
+          feedback={model.cameraScanFeedback}
+          disabled={!model.orderId || !model.orderDetail || !model.selectedLocationId || model.addBaleMutation.isPending}
+          className="h-14 w-14 shrink-0"
+        />
       </div>
     </div>
   );

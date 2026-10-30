@@ -47,11 +47,11 @@ The response additionally includes company-scoped bale, machine, assignment, use
 - **409 PRESSING_ASSIGNMENT_CHANGED / PRESSING_SESSION_STALE:** User's assignment changed, or their prior session no longer matches.
 - **403 PRESSING_WRITE_DENIED / PRESSING_USER_INACTIVE:** Read-only users or inactive accounts cannot confirm pressing.
 - **404 PRESSING_BALE_NOT_FOUND:** Unknown, company-mismatched, or deleted bale.
-- **422 PRESSING_BALE_NOT_PENDING / PRESSING_NON_BALE_ITEM / PRESSING_MACHINE_INACTIVE:** Not eligible for physical pressing.
+- **422 PRESSING_NON_BALE_ITEM / PRESSING_MACHINE_INACTIVE:** Non-bale product or inactive machine; inventory lifecycle status never blocks a valid pressing scan.
 
 ### Concurrency and authoritative evidence
 
-The same company+user transaction advisory lock as Phase 2 serializes assignment changes and new sessions. Machine and assignment rows are locked; pending bale is locked. An accepted session is automatically opened for the employee (initially with `shift_id=NULL`; Phase 7 adds configured shift assignment). The partial unique DB index `(company_id, bale_id) WHERE voided_at IS NULL` prevents two active confirmations across machines for the entire lifetime of the bale, even if racing requests reach the same database from different servers. The unique `(company_id, request_id)` gives retry idempotency.
+The same company+user transaction advisory lock as Phase 2 serializes assignment changes and new sessions. Machine and assignment rows are locked; the non-deleted bale is locked irrespective of stock status. An accepted session is automatically opened for the employee (initially with `shift_id=NULL`; Phase 7 adds configured shift assignment). The partial unique DB index `(company_id, bale_id) WHERE voided_at IS NULL` prevents two active confirmations across machines for the entire lifetime of the bale, even if racing requests reach the same database from different servers. The unique `(company_id, request_id)` gives retry idempotency.
 
 A created completion and its audit record commit within one transaction; they roll back together if anything fails. Unknown network errors are **not** shown as success. Phase 5 will implement durable local retry preserving the same `requestId`.
 
@@ -63,10 +63,14 @@ A created completion and its audit record commit within one transaction; they ro
 - **No shift scheduling** yet. Phase 7 will link supervisor-defined shifts.
 - **No supervisor void endpoint** yet. Phase 8 will implement corrections and audit-safe reconfirmations.
 
-## Executed verification (2026-10-27, isolated PostgreSQL 16.15)
+## Eligibility update (2026-10-27)
+
+The pressing confirmation endpoint accepts any active, company-owned factory bale for its first physical pressing confirmation, including IN_STOCK, RESERVED_FOR_ORDER, FINALIZED, SOLD and DISPATCHED. Deleted/soft-deleted references, non-bale products and previously confirmed bales remain ineligible. No inventory or accounting mutation is performed. The status matrix has been added to the database integration test, and the static contract now checks this policy.
+
+## Prior executed verification (before eligibility update; isolated PostgreSQL 16.15)
 
 `tests/pressing-machine-tracking.database.test.ts`: first scan returns 201 with reference, KG, machine, operator, assignment, session, shift, server time, factory-local date and request ID; the same request ID replays as 200 `replayed: true` with one stored row; the same ID with another barcode is `PRESSING_REQUEST_ID_REUSED`; the same bale from a second operator on another machine is `PRESSING_ALREADY_CONFIRMED` with the original machine/operator; finalized (`IN_STOCK`), soft-deleted, unknown and other-company references are refused; View Only is `PRESSING_WRITE_DENIED`; another operator cannot use this operator's assignment; four racing confirmations of one bale from two operators on two machines yield exactly one 201 and three 409s; six concurrent retries of one request ID yield one row. After every write the source bale is still `PENDING_PRESSING` with its original weight and the voucher count is unchanged.
 
 ## Verification required before merge or deploy
 
-Run `npx vitest run tests/pressing-machine-phase4-contract.test.ts` and `npm run test:frontend -- client/src/pages/factory/pressing-scanner/pressingConfirmClient.test.ts` on a checked-out branch, plus existing Phases 1–3 tests, TypeScript checking and migration validation. Against isolated Postgres, race two workers on different presses confirming the same bale and ensure exactly one 201; repeat the same request ID and expect original 200 with no new rows; alter identity with same ID and expect 409; attempt inactive, cross-company, non-bale, deleted and finalized bales; assert no stock, voucher or mix changes.
+Run `npx vitest run tests/pressing-machine-phase4-contract.test.ts` and `npm run test:frontend -- client/src/pages/factory/pressing-scanner/pressingConfirmClient.test.ts` on a checked-out branch, plus existing Phases 1–3 tests, TypeScript checking and migration validation. Against isolated Postgres, race two workers on different presses confirming the same bale and ensure exactly one 201; repeat the same request ID and expect original 200 with no new rows; alter identity with same ID and expect 409; attempt inactive, cross-company, non-bale and deleted bales; verify finalized and other non-deleted statuses are accepted once; assert no stock, voucher or mix changes.

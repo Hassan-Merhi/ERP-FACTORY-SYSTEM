@@ -81,6 +81,8 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
       VALUES(${id},${key+suffix},'x',${options.active??true})`);
     await db.execute(sql`INSERT INTO user_company_roles(user_id,company_id,role,pos_view_only)
       VALUES(${id},${companyId},${role},${options.posViewOnly??false})`);
+    await db.execute(sql`INSERT INTO factory_user_profiles(company_id,user_id,display_name)
+      VALUES(${companyId},${id},${"Display "+key})`);
     actors[key]={userId:id,companyId,username:key+suffix};
   }
   async function fixtureBale(key:string,companyId:number,status="PENDING_PRESSING",deleted=false){
@@ -100,11 +102,11 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
         deviceCapturedAt:new Date().toISOString()},
     });
   }
-  async function baleUnchanged(key:string){
+  async function baleUnchanged(key:string, expectedStatus="PENDING_PRESSING"){
     const [bale]=await rows(sql`SELECT status,weight_kg::text AS weight,pressed_at,finalized_at
       FROM factory_bales WHERE id=${bales[key].id}`);
     expect(bale).toMatchObject({
-      status:"PENDING_PRESSING",weight:"45.500",pressed_at:null,finalized_at:null,
+      status:expectedStatus,weight:"45.500",pressed_at:null,finalized_at:null,
     });
     const [count]=await rows(sql`SELECT COUNT(*)::int AS total FROM vouchers`);
     expect(count.total).toBe(voucherCountBefore);
@@ -117,12 +119,13 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
       VALUES(${"PRB"+suffix},'Pressing B','factory') RETURNING id`);
     await db.execute(sql`INSERT INTO factory_settings(company_id,extra_settings)
       VALUES(${companies.a},${JSON.stringify({pressingTimezone:"Africa/Lubumbashi"})}::jsonb)`);
-    await fixtureUser("supA",companies.a,"Manager");
+    await fixtureUser("supA",companies.a,"Admin");
     await fixtureUser("opA1",companies.a,"Worker");
     await fixtureUser("opA2",companies.a,"Worker");
+    await fixtureUser("managerA",companies.a,"Manager");
     await fixtureUser("viewA",companies.a,"View Only");
     await fixtureUser("posA",companies.a,"Manager",{posViewOnly:true});
-    await fixtureUser("supB",companies.b,"Manager");
+    await fixtureUser("supB",companies.b,"Admin");
     await fixtureUser("opB1",companies.b,"Worker");
     for(const [key,company,status,deleted] of [
       ["one",companies.a,"PENDING_PRESSING",false],
@@ -130,6 +133,11 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
       ["race",companies.a,"PENDING_PRESSING",false],
       ["void",companies.a,"PENDING_PRESSING",false],
       ["done",companies.a,"IN_STOCK",false],
+      ["reserved",companies.a,"RESERVED_FOR_ORDER",false],
+      ["final",companies.a,"FINALIZED",false],
+      ["sold",companies.a,"SOLD",false],
+      ["dispatched",companies.a,"DISPATCHED",false],
+      ["deleted",companies.a,"DELETED",false],
       ["gone",companies.a,"PENDING_PRESSING",true],
       ["other",companies.b,"PENDING_PRESSING",false],
     ] as Array<[string,number,string,boolean]>){
@@ -153,7 +161,7 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
         "factory_pressing_downtime","factory_pressing_sessions",
         "factory_pressing_assignments","factory_pressing_shifts",
         "factory_pressing_saved_views","factory_pressing_machines",
-        "factory_bales","factory_settings","user_company_roles",
+        "factory_bales","factory_settings","factory_user_profiles","user_company_roles",
       ]){
         await conn.query("DELETE FROM "+table+" WHERE company_id = ANY($1::int[])",[ids]);
       }
@@ -215,7 +223,12 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
     });
     expect(Date.parse(response.body.confirmedAt)).not.toBeNaN();
     expect(response.body.productionDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(response.body.timezoneName).toBe("Africa/Lubumbashi");
+    // A prior company setting must not shift pressing away from Beirut.
+    expect(response.body.timezoneName).toBe("Asia/Beirut");
+    const expectedBeirutDay = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Beirut", year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(new Date(response.body.confirmedAt));
+    expect(response.body.productionDate).toBe(expectedBeirutDay);
     const [record]=await rows(sql`SELECT * FROM factory_pressing_confirmations
       WHERE company_id=${companies.a} AND bale_id=${bales.one.id}`);
     expect(record.shift_id).toBeNull();
@@ -232,18 +245,63 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
     const duplicate=await scan(actors.opA2,"one");
     expect(duplicate.statusCode).toBe(409);
     expect(duplicate.body.code).toBe("PRESSING_ALREADY_CONFIRMED");
+    expect(duplicate.body.previous).toMatchObject({
+      operatorName:"Display opA1",
+      operatorUserId:actors.opA1.userId,
+      referenceNumber:bales.one.ref,
+    });
     const a=assignments[actors.opA1.userId];
     const foreign=await call("POST /api/factory/pressing-machines/confirm",actors.opB1,{
       body:{barcode:bales.one.ref,assignmentId:a.assignmentId,machineId:a.machineId,
         requestId:randomUUID()},
     });
     expect(foreign.statusCode).toBeGreaterThanOrEqual(400);
-    expect((await scan(actors.opA1,"done")).body.code).toBe("PRESSING_BALE_NOT_PENDING");
+    expect((await scan(actors.opA1,"deleted")).statusCode).toBe(404);
     expect((await scan(actors.opA1,"gone")).statusCode).toBe(404);
     const unauthorized=await scan(actors.viewA,"two",randomUUID(),a);
     expect(unauthorized.body.code).toBe("PRESSING_WRITE_DENIED");
     const stolen=await scan(actors.opA2,"two",randomUUID(),a);
     expect(stolen.body.code).toBe("PRESSING_ASSIGNMENT_CHANGED");
+  });
+
+  it("shows updated Factory display names in old history, totals, and duplicate alerts",async()=>{
+    await db.execute(sql`UPDATE factory_user_profiles SET display_name=${"Updated Operator One"}
+      WHERE company_id=${companies.a} AND user_id=${actors.opA1.userId}`);
+    const history=await call("GET /api/factory/pressing-machines/report",actors.supA,{
+      query:{mode:"detailed",status:"active"},
+    });
+    expect(history.statusCode).toBe(200);
+    const entry=history.body.rows.find((row:any)=>row.operatorUserId===actors.opA1.userId);
+    expect(entry.operatorName).toBe("Updated Operator One");
+    expect(history.body.summary.byOperator.find((row:any)=>row.userId===actors.opA1.userId).name)
+      .toBe("Updated Operator One");
+    const duplicate=await scan(actors.opA2,"one");
+    expect(duplicate.statusCode).toBe(409);
+    expect(duplicate.body.previous.operatorName).toBe("Updated Operator One");
+    await db.execute(sql`UPDATE factory_user_profiles SET display_name=${"Display opA1"}
+      WHERE company_id=${companies.a} AND user_id=${actors.opA1.userId}`);
+  });
+
+  it("records a first pressing scan at every non-deleted inventory stage without stock writes",async()=>{
+    for (const [key,status] of [
+      ["done","IN_STOCK"],
+      ["reserved","RESERVED_FOR_ORDER"],
+      ["final","FINALIZED"],
+      ["sold","SOLD"],
+      ["dispatched","DISPATCHED"],
+    ] as const) {
+      const first=await scan(actors.opA1,key);
+      expect(first.statusCode).toBe(201);
+      expect(first.body).toMatchObject({
+        status:"PRESSING_COMPLETED",
+        referenceNumber:bales[key].ref,
+        inventoryFinalized:false,
+      });
+      await baleUnchanged(key,status);
+      const second=await scan(actors.opA2,key);
+      expect(second.statusCode).toBe(409);
+      expect(second.body.code).toBe("PRESSING_ALREADY_CONFIRMED");
+    }
   });
 
   it("allows one and only one accepted scan in simultaneous user races",async()=>{
@@ -280,10 +338,19 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
     const other=await call("GET /api/factory/pressing-machines/report",actors.supB);
     expect(other.body.total).toBe(0);
     const options=await call("GET /api/factory/pressing-machines/report/options",actors.supA);
-    expect(options.body.timeZone).toBe("Africa/Lubumbashi");
+    expect(options.body.timeZone).toBe("Asia/Beirut");
     expect(options.body.operators.map((x:any)=>x.userId)).toContain(actors.opA1.userId);
     expect(options.body.machines).toBeUndefined();
     expect((await call("GET /api/factory/pressing-machines/report/options",actors.opA1)).body.canViewAll).toBe(false);
+    // Manager is not an Admin/Owner: their report and correction access must
+    // remain restricted even if they can use other Factory management pages.
+    const managerHistory=await call("GET /api/factory/pressing-machines/report",actors.managerA,{
+      query:{userId:actors.opA2.userId},
+    });
+    expect(managerHistory.statusCode).toBe(403);
+    expect((await call("GET /api/factory/pressing-machines/report/options",actors.managerA)).body.canViewAll).toBe(false);
+    expect((await call("GET /api/factory/pressing-machines/me",actors.managerA)).body.canManage).toBe(false);
+    expect((await call("GET /api/factory/pressing-machines/me",actors.supA)).body.canManage).toBe(true);
   });
 
   it("requires a supervisor reason, leaves an immutable void, then links the replacement",async()=>{
@@ -292,6 +359,7 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
     const route="POST /api/factory/pressing-machines/confirmations/:id/void";
     const options={params:{id:String(first.body.id)},body:{reason:"Wrong bale reference confirmed in error"}};
     expect((await call(route,actors.opA1,options)).statusCode).toBe(403);
+    expect((await call(route,actors.managerA,options)).statusCode).toBe(403);
     expect((await call(route,actors.posA,options)).statusCode).toBe(403);
     expect((await call(route,actors.supB,options)).statusCode).toBe(404);
     expect((await call(route,actors.supA,{...options,body:{reason:"short"}})).statusCode).toBe(400);
