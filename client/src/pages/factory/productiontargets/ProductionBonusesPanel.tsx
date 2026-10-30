@@ -185,8 +185,7 @@ export function ProductionBonusesPanel({ initialDate }: { initialDate: string })
           <CardTitle className="text-lg">Production Bonuses</CardTitle>
         </div>
         <p className="text-sm text-muted-foreground">
-          Review finalized days only. Bonuses are based on each worker's own attributed bales above their target,
-          including their individual share when workers are linked. Approval locks the amount; it does not make a payment.
+          Review finalized daily and weekly production. The per-bale method uses each worker's credited extra bales; the optional weekly-flat method locks a fixed amount after the weekly target is exceeded. Approval does not make a payment.
         </p>
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
