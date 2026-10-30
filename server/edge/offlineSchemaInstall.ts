@@ -16,16 +16,17 @@ import { ensurePhase8ApplySchema } from "./phase8ApplyStore.mjs";
 import { ensurePhase9CloudEventSchema } from "./phase9CloudEventStore.mjs";
 import { ensurePhase9PressingOutboxSchema } from "./phase9PressingOutbox";
 import { ensurePhase10SyncControlSchema } from "./phase10SyncControl.mjs";
+import { EdgeRefusal } from "./edgeRefusal";
 
 export const OFFLINE_SCHEMA_INSTALL_ACK = "DBA_REVIEWED_MAINTENANCE_WINDOW";
 
 export async function installOfflineSchema(target: string, env: NodeJS.ProcessEnv = process.env) {
   if (env.FACTORY_OFFLINE_SCHEMA_INSTALL_ACK !== OFFLINE_SCHEMA_INSTALL_ACK) {
-    throw new Error("OFFLINE_SCHEMA_INSTALL_NOT_ACKNOWLEDGED");
+    throw new EdgeRefusal("OFFLINE_SCHEMA_INSTALL_NOT_ACKNOWLEDGED");
   }
   const edge = readFactoryEdgeConfiguration(env);
   if ((target === "lan") !== (edge.mode === "lan") || !["cloud", "lan"].includes(target)) {
-    throw new Error("OFFLINE_SCHEMA_TARGET_MISMATCH");
+    throw new EdgeRefusal("OFFLINE_SCHEMA_TARGET_MISMATCH");
   }
   const client = await pool.connect();
   try {

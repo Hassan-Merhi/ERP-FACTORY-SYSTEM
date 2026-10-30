@@ -1,4 +1,5 @@
 import { OFFLINE_MODE_ENABLED } from "./featureFlags";
+import { offlineError } from "@/lib/offline/offlineError";
 
 const QUEUE_KEY = "erp_offline_queue";
 const LAST_SYNCED_KEY = "erp_last_synced";
@@ -46,7 +47,7 @@ export function enqueueRequest(
   // verified actor or tenant scope, and no safe replay proof. While the new
   // offline system is active, refuse to persist new writes into this format.
   // Old records remain untouched for supervised recovery.
-  if (OFFLINE_MODE_ENABLED) throw new Error("OFFLINE_LEGACY_QUEUE_BLOCKED");
+  if (OFFLINE_MODE_ENABLED) throw offlineError("OFFLINE_LEGACY_QUEUE_BLOCKED");
   const queue = readQueue();
   const upperMethod = method.toUpperCase();
 

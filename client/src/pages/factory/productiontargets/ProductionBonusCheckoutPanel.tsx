@@ -126,7 +126,7 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
   });
   const cashAccounts=(accounts?.accounts??[]).filter(a=>
     !a.openingCurrency||a.openingCurrency.toUpperCase()==="USD");
-  const offers=data?.offers??[];
+  const offers=useMemo(()=>data?.offers??[],[data]);
   const groups=useMemo(()=>summarizeByWorker(offers),[offers]);
   const payable=offers.filter(payableStatus);
   const chosen=useMemo(()=>offers.filter(row=>

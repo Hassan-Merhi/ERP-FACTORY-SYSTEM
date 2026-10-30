@@ -244,6 +244,24 @@ export const applicationEnglishTranslations = {
   "edge.lanPrimary": "LAN primary",
   "edge.replicationNotConfigured": "Cloud synchronization is not configured.",
   "offlineReads.writeLimitTitle": "Offline write limits",
+  "offlineVault.passphraseRequiredTitle": "Encryption passphrase required",
+  "offlineVault.passphraseRequiredDetail":
+    "Use a unique passphrase of at least 12 characters before preparing this device.",
+  "offlineVault.passphraseLabel": "Device snapshot encryption passphrase",
+  "offlineVault.passphrasePlaceholder": "At least 12 characters",
+  "offlineVault.passphraseHelp":
+    "Required to encrypt each new preparation and unlock saved data. The passphrase is never saved. Losing it requires preparing again online. This does not enable offline sign-in.",
+  "offlineVault.lock": "Lock prepared data",
+  "offlineVault.unlock": "Unlock prepared data",
+  "offlineDelivery.evidenceTitle": "Offline delivery evidence",
+  "offlineDelivery.evidenceDetail":
+    "A saved request is not server confirmation. A LAN acknowledgement is not proof of cloud posting.",
+  "offlineDelivery.verifyScope": "Verify your current account and company before viewing or delivering saved vouchers.",
+  "offlineDelivery.noRequests": "No durable voucher requests for this account.",
+  "offlineDelivery.panelLabel": "Offline write delivery",
+  "offlineDelivery.panelTitle": "Offline voucher delivery",
+  "offlineDelivery.panelDetail":
+    "A saved device request or LAN acknowledgement is not cloud posting. Staged means cloud evidence only; cloud-applied requires a verified receipt. Inventory, POS, payments and attachments remain blocked.",
   "offlineReads.writeLimitDetail":
     "Only explicitly supported operations can be saved for later sync. Factory stock allocation, payments, and arbitrary forms still require the server.",
   "offlineReads.exactCoverageDetail":

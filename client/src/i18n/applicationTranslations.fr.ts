@@ -248,6 +248,25 @@ export const applicationFrenchTranslations = {
   "edge.lanPrimary": "Serveur local principal",
   "edge.replicationNotConfigured": "La synchronisation cloud n'est pas configurée.",
   "offlineReads.writeLimitTitle": "Limites des écritures hors ligne",
+  "offlineVault.passphraseRequiredTitle": "Phrase secrète de chiffrement requise",
+  "offlineVault.passphraseRequiredDetail":
+    "Utilisez une phrase secrète unique d'au moins 12 caractères avant de préparer cet appareil.",
+  "offlineVault.passphraseLabel": "Phrase secrète de chiffrement de l'instantané de l'appareil",
+  "offlineVault.passphrasePlaceholder": "Au moins 12 caractères",
+  "offlineVault.passphraseHelp":
+    "Requise pour chiffrer chaque nouvelle préparation et déverrouiller les données enregistrées. La phrase secrète n'est jamais enregistrée. Si elle est perdue, il faut préparer à nouveau en ligne. Cela n'active pas la connexion hors ligne.",
+  "offlineVault.lock": "Verrouiller les données préparées",
+  "offlineVault.unlock": "Déverrouiller les données préparées",
+  "offlineDelivery.evidenceTitle": "Preuves de livraison hors ligne",
+  "offlineDelivery.evidenceDetail":
+    "Une demande enregistrée n'est pas une confirmation du serveur. Un accusé de réception du réseau local ne prouve pas la comptabilisation dans le cloud.",
+  "offlineDelivery.verifyScope":
+    "Vérifiez votre compte et votre société actuels avant de consulter ou de livrer les pièces enregistrées.",
+  "offlineDelivery.noRequests": "Aucune demande de pièce enregistrée pour ce compte.",
+  "offlineDelivery.panelLabel": "Livraison des écritures hors ligne",
+  "offlineDelivery.panelTitle": "Livraison des pièces hors ligne",
+  "offlineDelivery.panelDetail":
+    "Une demande enregistrée sur l'appareil ou un accusé du réseau local n'est pas une comptabilisation dans le cloud. « Transmis » signifie une preuve dans le cloud uniquement ; « appliqué dans le cloud » exige un reçu vérifié. Le stock, le point de vente, les paiements et les pièces jointes restent bloqués.",
   "offlineReads.writeLimitDetail":
     "Seules les opérations explicitement prises en charge peuvent être enregistrées pour synchronisation ultérieure. Les mouvements de stock, les paiements et les autres formulaires nécessitent encore le serveur.",
   "offlineReads.exactCoverageDetail":

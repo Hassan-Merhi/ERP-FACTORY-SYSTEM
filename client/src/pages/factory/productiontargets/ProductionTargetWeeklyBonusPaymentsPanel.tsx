@@ -75,7 +75,7 @@ export function ProductionTargetWeeklyBonusPaymentsPanel({initialDate}:{initialD
   });
   const cashAccounts=(accountData?.accounts??[]).filter(a=>
     !a.openingCurrency||a.openingCurrency.toUpperCase()==="USD");
-  const rows=data?.payments??[];
+  const rows=useMemo(()=>data?.payments??[],[data]);
   const payable=rows.filter(r=>r.decisionStatus==="approved"&&!r.paymentStatus &&
     Number(r.approvedAmount)>0);
   const chosen=useMemo(()=>rows.filter(r=>selected.includes(Number(r.reviewId))&&

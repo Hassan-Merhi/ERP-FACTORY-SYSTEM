@@ -109,12 +109,12 @@ jobs:
           node-version: '24.22.1'
       - name: Test actor-scoped, fail-closed status and route coverage
         run: node --test tests/offline-phase9-status.node.test.mjs tests/offline-phase9-write-coverage.node.test.mjs
-      - name: Test Phase 9 event-stream protocol, signatures and receipt verification
-        run: node --test tests/offline-phase9-event-protocol.node.test.mjs
       - name: Confirm complete write inventory (not production certification)
         run: node scripts/edge/audit-phase9-write-coverage.mjs
       - name: Install locked dependencies
         run: npm ci --ignore-scripts
+      - name: Test Phase 9 event-stream protocol, signatures and receipt verification
+        run: node --test tests/offline-phase9-event-protocol.node.test.mjs
       - name: Test browser-visible evidence states
         run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-phase9-status.test.ts
       - name: Test LAN write boundary

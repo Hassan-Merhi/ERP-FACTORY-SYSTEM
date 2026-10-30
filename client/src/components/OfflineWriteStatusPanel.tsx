@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { applicationEnglishTranslations } from "@/i18n/applicationTranslations";
 import { getVerifiedOfflineReadScope } from "@/lib/offline/offlineReadCache";
 import { listOfflineOperations } from "@/lib/offline/durableOutbox";
 import { PHASE9_STATE_LABELS, visiblePhase9Status, type Phase9VisibleState } from "@/lib/offline/phase9Status";
@@ -18,6 +20,8 @@ interface StatusRow {
 export function OfflineWriteStatusPanel() {
   const [rows, setRows] = useState<StatusRow[]>([]);
   const [available, setAvailable] = useState(false);
+  const language = useOptionalApplicationLanguage();
+  const t = language?.t ?? ((key: keyof typeof applicationEnglishTranslations) => applicationEnglishTranslations[key]);
 
   useEffect(() => {
     let active = true;
@@ -83,15 +87,11 @@ export function OfflineWriteStatusPanel() {
 
   if (!available) return null;
   return (
-    <section aria-label="Offline write delivery" className="rounded-md border p-3 space-y-2">
-      <h4 className="text-sm font-semibold">Offline voucher delivery</h4>
-      <p className="text-xs text-muted-foreground">
-        A saved device request or LAN acknowledgement is not cloud posting. Staged means cloud evidence only;
-        cloud-applied requires a verified receipt. Inventory, factory production, POS, payments and attachments remain
-        blocked.
-      </p>
+    <section aria-label={t("offlineDelivery.panelLabel")} className="rounded-md border p-3 space-y-2">
+      <h4 className="text-sm font-semibold">{t("offlineDelivery.panelTitle")}</h4>
+      <p className="text-xs text-muted-foreground">{t("offlineDelivery.panelDetail")}</p>
       {rows.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No durable voucher requests for this account.</p>
+        <p className="text-xs text-muted-foreground">{t("offlineDelivery.noRequests")}</p>
       ) : (
         <ul className="space-y-1 text-xs" data-testid="offline-write-delivery-status">
           {rows.map((row) => (

@@ -11,6 +11,7 @@ import {
   runWithDatabaseScopeRuntimeContext,
   createTenantDatabaseScope,
 } from "../services/security/databaseScopeRuntimeContext";
+import { EdgeRefusal } from "./edgeRefusal";
 
 const SHA = /^[0-9a-f]{64}$/;
 const POSITIVE = /^[1-9][0-9]{0,15}$/;
@@ -30,7 +31,7 @@ export function readPhase8OperatorConfig(env: NodeJS.ProcessEnv = process.env) {
     !POSITIVE.test(env.FACTORY_CLOUD_WRITER_EPOCH || "") ||
     !Number.isSafeInteger(Number(env.FACTORY_CLOUD_WRITER_EPOCH))
   ) {
-    throw new Error("PHASE8_OPERATOR_APPLICATION_DISABLED");
+    throw new EdgeRefusal("PHASE8_OPERATOR_APPLICATION_DISABLED");
   }
   return Object.freeze({
     siteId: env.FACTORY_SYNC_SITE_ID,
@@ -43,7 +44,7 @@ export function readPhase8OperatorConfig(env: NodeJS.ProcessEnv = process.env) {
 
 export async function runPhase8OperatorApply(sequence: string) {
   if (!POSITIVE.test(sequence) || BigInt(sequence) > 9223372036854775807n) {
-    throw new Error("PHASE8_SEQUENCE_INVALID");
+    throw new EdgeRefusal("PHASE8_SEQUENCE_INVALID");
   }
   const config = readPhase8OperatorConfig();
   return runWithDatabaseScopeRuntimeContext(createTenantDatabaseScope(config.companyId), async () => {

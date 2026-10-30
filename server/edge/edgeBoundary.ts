@@ -1,4 +1,5 @@
 import type { Express, RequestHandler } from "express";
+import rateLimit from "express-rate-limit";
 import { requireAuth } from "../auth";
 import {
   assertActiveCompanyAccess,
@@ -17,6 +18,7 @@ import { hasVerifiedPhase7WriterAuthority } from "./phase7WriterGate.mjs";
 import { supportsPhase8LanVoucherCapture } from "./phase8CapturePolicy.mjs";
 import { Phase9StatusRefusal, readPhase9OperationStatus } from "./phase9OperationStatus.mjs";
 import { registerCloudEdgeSyncReceiver } from "./edgeSyncReceiver";
+import { edgeStatusRateLimit } from "./edgeRateLimit";
 
 type EdgeConfiguration = ReturnType<typeof readFactoryEdgeConfiguration>;
 
@@ -25,8 +27,18 @@ export function makeFactoryEdgeWriteGuard(
   hasApprovedData: () => Promise<boolean>,
   hasWriterAuthority: () => Promise<boolean> = async () => false,
   hasPressingCapture: () => Promise<boolean> = async () => false
-): RequestHandler {
-  return async (req, res, next) => {
+): RequestHandler[] {
+  // Each LAN write runs database authority proofs; bound how often one client
+  // can trigger them. Reads and cloud-mode traffic are not counted.
+  const limiter = rateLimit({
+    windowMs: 60_000,
+    max: 600,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req) => config.mode !== "lan" || ["GET", "HEAD", "OPTIONS"].includes(req.method.toUpperCase()),
+    handler: (_req, res) => res.status(429).json({ code: "EDGE_WRITE_RATE_LIMITED" }),
+  });
+  const guard: RequestHandler = async (req, res, next) => {
     const path = req.originalUrl.split("?")[0];
     if (edgeBlocksWrite(config, req.method, path)) {
       const code =
@@ -92,6 +104,7 @@ export function makeFactoryEdgeWriteGuard(
     }
     next();
   };
+  return [limiter, guard];
 }
 
 /** Same-origin endpoint lets laptops confirm which independent server they use. */
@@ -108,6 +121,7 @@ export function registerFactoryEdgeBoundary(app: Express): void {
 
   app.get(
     "/api/edge/status",
+    edgeStatusRateLimit,
     (req, res, next) => {
       // Keep the LAN identity probe public. Receipt queries must pass current
       // credential-version, session-expiry and company-session enforcement.

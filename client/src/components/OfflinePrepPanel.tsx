@@ -123,8 +123,8 @@ function OfflinePrepPanelContent() {
   const handlePrepare = async () => {
     if (vaultPassphrase.length < 12) {
       toast({
-        title: "Encryption passphrase required",
-        description: "Use a unique passphrase of at least 12 characters before preparing this device.",
+        title: t("offlineVault.passphraseRequiredTitle"),
+        description: t("offlineVault.passphraseRequiredDetail"),
         variant: "destructive",
       });
       return;
@@ -299,7 +299,7 @@ function OfflinePrepPanelContent() {
       {/* Encrypted snapshot vault: never store the passphrase or bypass live auth. */}
       <div className="rounded-md border p-3 space-y-2">
         <label htmlFor="offline-vault-passphrase" className="text-sm font-medium">
-          Device snapshot encryption passphrase
+          {t("offlineVault.passphraseLabel")}
         </label>
         <Input
           id="offline-vault-passphrase"
@@ -307,13 +307,10 @@ function OfflinePrepPanelContent() {
           autoComplete="new-password"
           value={vaultPassphrase}
           onChange={(event) => setVaultPassphrase(event.target.value)}
-          placeholder="At least 12 characters"
+          placeholder={t("offlineVault.passphrasePlaceholder")}
           disabled={running}
         />
-        <p className="text-xs text-muted-foreground">
-          Required to encrypt each new preparation and unlock saved data. The passphrase is never saved. Losing it
-          requires preparing again online. This does not enable offline sign-in.
-        </p>
+        <p className="text-xs text-muted-foreground">{t("offlineVault.passphraseHelp")}</p>
         {readiness?.ready && protectedSnapshot && (
           <div className="flex flex-wrap items-center gap-2">
             {vaultUnlocked ? (
@@ -325,11 +322,11 @@ function OfflinePrepPanelContent() {
                   setVaultUnlocked(false);
                 }}
               >
-                Lock prepared data
+                {t("offlineVault.lock")}
               </Button>
             ) : (
               <Button size="sm" variant="outline" disabled={vaultPassphrase.length < 12} onClick={handleUnlock}>
-                Unlock prepared data
+                {t("offlineVault.unlock")}
               </Button>
             )}
           </div>

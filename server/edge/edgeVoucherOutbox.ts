@@ -8,6 +8,7 @@ import type { Pool } from "pg";
 import { sql } from "drizzle-orm";
 import type { DbTransaction } from "../db";
 import { readFactoryEdgeConfiguration } from "./edgeRuntimePolicy.mjs";
+import { EdgeRefusal } from "./edgeRefusal";
 
 export async function ensureEdgeVoucherOutboxSchema(queryable: Pick<Pool, "query">): Promise<void> {
   const config = readFactoryEdgeConfiguration();
@@ -137,7 +138,7 @@ export async function captureEdgeVoucherTx(tx: DbTransaction, evidence: EdgeVouc
     evidence.localVoucherId < 1 ||
     !evidence.actorUserId
   ) {
-    throw new Error("EDGE_OUTBOX_SCOPE_INVALID");
+    throw new EdgeRefusal("EDGE_OUTBOX_SCOPE_INVALID");
   }
   // Never invent a different operation ID after the voucher has posted:
   // a broken/missing request identity must roll back this SAME transaction.
@@ -145,7 +146,7 @@ export async function captureEdgeVoucherTx(tx: DbTransaction, evidence: EdgeVouc
     typeof evidence.requestId !== "string" ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(evidence.requestId)
   ) {
-    throw new Error("EDGE_OUTBOX_OPERATION_ID_INVALID");
+    throw new EdgeRefusal("EDGE_OUTBOX_OPERATION_ID_INVALID");
   }
   const operationId = evidence.requestId;
   const payload = canonicalEdgeVoucherPayload(evidence.voucher, evidence.entries);

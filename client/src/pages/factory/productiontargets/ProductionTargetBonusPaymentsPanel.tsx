@@ -99,7 +99,7 @@ export function ProductionTargetBonusPaymentsPanel({ initialDate }: { initialDat
     queryFn: () => api("GET", "/api/factory/staff-tracking/production-bonuses/payment-accounts"),
   });
 
-  const rows = data?.payments ?? [];
+  const rows = useMemo(() => data?.payments ?? [], [data]);
   const payable = rows.filter((row) =>
     row.decisionStatus === "approved" && !row.paymentStatus && Number(row.approvedAmount) > 0
   );

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Clock, RefreshCw, ShieldAlert, WifiOff } from "lucide-react";
 import { OFFLINE_MODE_ENABLED } from "@/lib/featureFlags";
 import { useConnectivity } from "@/contexts/ConnectivityContext";
+import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { applicationEnglishTranslations } from "@/i18n/applicationTranslations";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { db } from "@/lib/db";
@@ -50,6 +52,8 @@ export function OfflineBanner() {
 
 function OfflineBannerInner() {
   const { isOnline, isSyncing, refreshCounts } = useConnectivity();
+  const language = useOptionalApplicationLanguage();
+  const t = language?.t ?? ((key: keyof typeof applicationEnglishTranslations) => applicationEnglishTranslations[key]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [snapshot, setSnapshot] = useState<VisibleQueue>(EMPTY);
@@ -140,10 +144,8 @@ function OfflineBannerInner() {
       <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
         <SheetContent side="right" className="w-full sm:max-w-md flex flex-col">
           <SheetHeader>
-            <SheetTitle>Offline delivery evidence</SheetTitle>
-            <SheetDescription>
-              A saved request is not server confirmation. A LAN acknowledgement is not proof of cloud posting.
-            </SheetDescription>
+            <SheetTitle>{t("offlineDelivery.evidenceTitle")}</SheetTitle>
+            <SheetDescription>{t("offlineDelivery.evidenceDetail")}</SheetDescription>
           </SheetHeader>
           <div className="space-y-3 overflow-y-auto flex-1 py-3">
             {legacy > 0 && (
@@ -160,11 +162,11 @@ function OfflineBannerInner() {
             )}
             {!snapshot.scoped && (
               <p role="status" className="text-sm text-muted-foreground">
-                Verify your current account and company before viewing or delivering saved vouchers.
+                {t("offlineDelivery.verifyScope")}
               </p>
             )}
             {snapshot.scoped && snapshot.operations.length === 0 && (
-              <p className="text-sm text-muted-foreground">No durable voucher requests for this account.</p>
+              <p className="text-sm text-muted-foreground">{t("offlineDelivery.noRequests")}</p>
             )}
             {snapshot.scoped &&
               snapshot.operations

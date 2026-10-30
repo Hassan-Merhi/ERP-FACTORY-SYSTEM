@@ -26,6 +26,7 @@ import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,
 } from "../services/security/databaseScopeRuntimeContext";
+import { EdgeRefusal } from "./edgeRefusal";
 
 const SHA = /^[0-9a-f]{64}$/;
 const POSITIVE = /^[1-9][0-9]{0,15}$/;
@@ -49,7 +50,7 @@ export function readPhase9OperatorConfig(env: NodeJS.ProcessEnv = process.env) {
     !POSITIVE.test(env.FACTORY_CLOUD_WRITER_EPOCH || "") ||
     !Number.isSafeInteger(Number(env.FACTORY_CLOUD_WRITER_EPOCH))
   ) {
-    throw new Error("PHASE9_OPERATOR_APPLICATION_DISABLED");
+    throw new EdgeRefusal("PHASE9_OPERATOR_APPLICATION_DISABLED");
   }
   return Object.freeze({
     siteId: String(env.FACTORY_SYNC_SITE_ID),
@@ -61,7 +62,7 @@ export function readPhase9OperatorConfig(env: NodeJS.ProcessEnv = process.env) {
 }
 
 export async function runPhase9OperatorApply(stream: string) {
-  if (!isPhase9EventStream(stream)) throw new Error("PHASE9_STREAM_INVALID");
+  if (!isPhase9EventStream(stream)) throw new EdgeRefusal("PHASE9_STREAM_INVALID");
   const config = readPhase9OperatorConfig();
   return runWithDatabaseScopeRuntimeContext(createTenantDatabaseScope(config.companyId), async () => {
     const client = await pool.connect();
@@ -77,14 +78,14 @@ async function main(argv: string[]): Promise<unknown> {
   const [command, ...rest] = argv;
   if (command === "status" && rest.length === 0) {
     const siteId = process.env.FACTORY_SYNC_SITE_ID || "";
-    if (!UUID.test(siteId)) throw new Error("PHASE9_SITE_INVALID");
+    if (!UUID.test(siteId)) throw new EdgeRefusal("PHASE9_SITE_INVALID");
     return summarizePhase9CloudStreams(pool, siteId);
   }
   if (command === "apply" && rest.length === 1) return runPhase9OperatorApply(rest[0]);
   if (command === "reject" && rest.length >= 4) {
     const [stream, sequence, decidedBy, ...reason] = rest;
     const siteId = process.env.FACTORY_SYNC_SITE_ID || "";
-    if (!UUID.test(siteId)) throw new Error("PHASE9_SITE_INVALID");
+    if (!UUID.test(siteId)) throw new EdgeRefusal("PHASE9_SITE_INVALID");
     return recordPhase9ConflictDecision(pool, { siteId, stream, sequence, decidedBy, reason: reason.join(" ") });
   }
   throw new Error("PHASE9_USAGE");

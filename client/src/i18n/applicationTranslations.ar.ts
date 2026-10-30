@@ -243,6 +243,23 @@ export const applicationArabicTranslations = {
   "edge.lanPrimary": "الخادم المحلي الأساسي",
   "edge.replicationNotConfigured": "المزامنة مع السحابة غير مفعّلة.",
   "offlineReads.writeLimitTitle": "حدود الكتابة دون اتصال",
+  "offlineVault.passphraseRequiredTitle": "عبارة مرور التشفير مطلوبة",
+  "offlineVault.passphraseRequiredDetail": "استخدم عبارة مرور فريدة من 12 حرفًا على الأقل قبل تجهيز هذا الجهاز.",
+  "offlineVault.passphraseLabel": "عبارة مرور تشفير لقطة الجهاز",
+  "offlineVault.passphrasePlaceholder": "12 حرفًا على الأقل",
+  "offlineVault.passphraseHelp":
+    "مطلوبة لتشفير كل تجهيز جديد وفتح البيانات المحفوظة. لا تُحفظ عبارة المرور أبدًا. فقدانها يتطلب التجهيز مرة أخرى عبر الإنترنت. هذا لا يتيح تسجيل الدخول دون اتصال.",
+  "offlineVault.lock": "قفل البيانات المجهزة",
+  "offlineVault.unlock": "فتح البيانات المجهزة",
+  "offlineDelivery.evidenceTitle": "أدلة التسليم دون اتصال",
+  "offlineDelivery.evidenceDetail":
+    "الطلب المحفوظ ليس تأكيدًا من الخادم. إقرار الشبكة المحلية ليس دليلًا على الترحيل إلى السحابة.",
+  "offlineDelivery.verifyScope": "تحقق من حسابك وشركتك الحاليين قبل عرض القسائم المحفوظة أو تسليمها.",
+  "offlineDelivery.noRequests": "لا توجد طلبات قسائم محفوظة لهذا الحساب.",
+  "offlineDelivery.panelLabel": "تسليم الكتابات دون اتصال",
+  "offlineDelivery.panelTitle": "تسليم القسائم دون اتصال",
+  "offlineDelivery.panelDetail":
+    'الطلب المحفوظ على الجهاز أو إقرار الشبكة المحلية ليس ترحيلًا إلى السحابة. "مُجهَّز" يعني دليلًا في السحابة فقط؛ و"مطبَّق في السحابة" يتطلب إيصالًا موثقًا. المخزون ونقاط البيع والمدفوعات والمرفقات لا تزال محظورة.',
   "offlineReads.writeLimitDetail":
     "يمكن حفظ العمليات المدعومة صراحةً فقط للمزامنة لاحقاً. تخصيص مخزون المصنع والمدفوعات والنماذج الأخرى ما زالت تتطلب الاتصال بالخادم.",
   "offlineReads.exactCoverageDetail":

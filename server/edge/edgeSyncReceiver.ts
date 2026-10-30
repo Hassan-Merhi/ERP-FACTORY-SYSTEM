@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { pool } from "../db";
+import { edgeSyncRateLimit } from "./edgeRateLimit";
 import { EdgeStageConflict, stageVoucherEvents } from "./edgeCloudStaging";
 import { getAppliedCloudReceipts, PHASE8_RECEIPT_QUERY_PATH } from "./phase8AppliedReceipts.mjs";
 import {
@@ -10,6 +11,7 @@ import {
 } from "./edgeSyncStageProtocol.mjs";
 import { EDGE_EVENT_RECEIPT_QUERY_PATH, EDGE_EVENT_STAGE_PATH } from "./phase9EventProtocol.mjs";
 import { getPhase9AppliedReceipts, Phase9StageConflict, stagePhase9Events } from "./phase9CloudEventStore.mjs";
+import { EdgeRefusal } from "./edgeRefusal";
 
 /** HTTPS + exact event-domain HMAC; false means a response was already sent. */
 function acceptSignedEvent(req: Request, res: Response, secret: string): boolean {
@@ -19,7 +21,7 @@ function acceptSignedEvent(req: Request, res: Response, secret: string): boolean
     return false;
   }
   try {
-    if (!Buffer.isBuffer(req.rawBody)) throw new Error("EDGE_EVENT_RAW_BODY_MISSING");
+    if (!Buffer.isBuffer(req.rawBody)) throw new EdgeRefusal("EDGE_EVENT_RAW_BODY_MISSING");
     verifyStageSignature(
       req.rawBody,
       req.get("X-Factory-Sync-Timestamp") ?? "",
@@ -46,13 +48,13 @@ export function registerCloudEdgeSyncReceiver(app: Express): void {
   // Phase 8: a separately opt-in, READ-ONLY receipt lookup. It never
   // invokes posting and cannot convert "staged" to "applied" on its own.
   if (process.env.FACTORY_PHASE8_RECEIPTS_ENABLED === "1") {
-    app.post(PHASE8_RECEIPT_QUERY_PATH, async (req, res) => {
+    app.post(PHASE8_RECEIPT_QUERY_PATH, edgeSyncRateLimit, async (req, res) => {
       res.setHeader("Cache-Control", "no-store");
       if (process.env.NODE_ENV === "production" && !req.secure) {
         return res.status(403).json({ code: "EDGE_SYNC_HTTPS_REQUIRED" });
       }
       try {
-        if (!Buffer.isBuffer(req.rawBody)) throw new Error("PHASE8_RAW_BODY_MISSING");
+        if (!Buffer.isBuffer(req.rawBody)) throw new EdgeRefusal("PHASE8_RAW_BODY_MISSING");
         verifyStageSignature(
           req.rawBody,
           req.get("X-Factory-Sync-Timestamp") ?? "",
@@ -75,7 +77,7 @@ export function registerCloudEdgeSyncReceiver(app: Express): void {
 
   // Phase 9: generic business-event streams (pressing). Staging only; the
   // operator apply CLI is the single path that posts business effects.
-  app.post(EDGE_EVENT_STAGE_PATH, async (req, res) => {
+  app.post(EDGE_EVENT_STAGE_PATH, edgeSyncRateLimit, async (req, res) => {
     if (!acceptSignedEvent(req, res, config.secret)) return;
     try {
       return res.status(200).json(await stagePhase9Events(pool, req.body, config.siteId));
@@ -88,7 +90,7 @@ export function registerCloudEdgeSyncReceiver(app: Express): void {
     }
   });
   if (process.env.FACTORY_PHASE9_RECEIPTS_ENABLED === "1") {
-    app.post(EDGE_EVENT_RECEIPT_QUERY_PATH, async (req, res) => {
+    app.post(EDGE_EVENT_RECEIPT_QUERY_PATH, edgeSyncRateLimit, async (req, res) => {
       if (!acceptSignedEvent(req, res, config.secret)) return;
       try {
         return res.status(200).json(await getPhase9AppliedReceipts(pool, req.body, config.siteId));
@@ -101,7 +103,7 @@ export function registerCloudEdgeSyncReceiver(app: Express): void {
     });
   }
 
-  app.post(EDGE_SYNC_STAGE_PATH, async (req, res) => {
+  app.post(EDGE_SYNC_STAGE_PATH, edgeSyncRateLimit, async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     if (process.env.NODE_ENV === "production" && !req.secure) {
       return res.status(403).json({ code: "EDGE_SYNC_HTTPS_REQUIRED" });
