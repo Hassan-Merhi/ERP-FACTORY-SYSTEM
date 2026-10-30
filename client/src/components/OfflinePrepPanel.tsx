@@ -38,6 +38,7 @@ import {
   unlockVerifiedOfflineReadVault,
 } from "@/lib/offline/offlineReadCache";
 import { getScopedOfflineReadiness, runScopedOfflinePrep } from "@/lib/offline/scopedOfflinePrep";
+import { OfflineWriteStatusPanel } from "@/components/OfflineWriteStatusPanel";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -465,6 +466,8 @@ function OfflinePrepPanelContent() {
           )}
         </div>
       )}
+
+      <OfflineWriteStatusPanel />
 
       {/* Pages that still need server */}
       <Collapsible>
