@@ -51,7 +51,11 @@ export function validateStageEnvelope(body, expectedSiteId) {
         typeof e.actorUserId !== "string" || e.actorUserId.length < 1 || e.actorUserId.length > 255 ||
         e.kind !== "voucher.with-entries.v1" ||
         !e.payload || typeof e.payload !== "object" || Array.isArray(e.payload) ||
-        !e.payload.voucher || !Array.isArray(e.payload.entries) ||
+        !e.payload.voucher || typeof e.payload.voucher !== "object" ||
+        Array.isArray(e.payload.voucher) ||
+        e.payload.voucher.companyId !== e.companyId ||
+        e.payload.voucher.id !== e.localVoucherId ||
+        !Array.isArray(e.payload.entries) ||
         typeof e.payloadSha256 !== "string" || !HASH.test(e.payloadSha256) ||
         hashEvidence(e.payload) !== e.payloadSha256) {
       throw new Error("EDGE_SYNC_EVENT_INVALID");
