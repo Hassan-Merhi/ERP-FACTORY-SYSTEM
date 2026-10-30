@@ -131,6 +131,18 @@ describe("Production Targets category grouping", () => {
     });
   });
 
+  it("uses only absent workday targets in weekly KPI and credits linked workers separately", () => {
+    const worker1 = { ...row(1, "Worker A", "BLOUSE"),
+      targetBales: 70, absentTargetBales: 10, absentDays: 1, producedBales: 55 };
+    const worker2 = { ...row(2, "Worker B", "BLOUSE"),
+      targetBales: 84, absentTargetBales: 0, absentDays: 0, producedBales: 73 };
+    // Weekly credit is per worker. Grouping all 7 days under the last linked
+    // pair would double-count physical team output when membership changed.
+    expect(summarizeProductionRows([worker1, worker2])).toEqual({
+      target: 154, absentTarget: 10, expected: 144, produced: 128, difference: -16,
+    });
+  });
+
   it("counts a linked team's shared target and production once in factory totals", () => {
     const linkedA = {
       ...row(1, "Worker A", "BLOUSE"),
