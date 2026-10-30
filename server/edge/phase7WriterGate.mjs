@@ -26,7 +26,7 @@ export function isVerifiedPhase7WriterRow(row, { siteId, writerEpoch, baselineSh
   );
 }
 
-const AUTHORITY_QUERY = [
+export const PHASE7_AUTHORITY_SQL = [
   "WITH actor AS (",
   "  SELECT NOT (r.rolsuper OR r.rolbypassrls OR r.rolcreaterole)",
   "    AND NOT has_schema_privilege(current_user, 'public', 'CREATE')",
@@ -62,7 +62,7 @@ const AUTHORITY_QUERY = [
 export async function hasVerifiedPhase7WriterAuthority(queryable, config) {
   if (config?.mode !== "lan" || !config.primary) return false;
   try {
-    const { rows } = await queryable.query(AUTHORITY_QUERY);
+    const { rows } = await queryable.query(PHASE7_AUTHORITY_SQL);
     return rows?.length === 1 && isVerifiedPhase7WriterRow(rows[0], {
       siteId: config.siteId,
       writerEpoch: config.writerEpoch,
