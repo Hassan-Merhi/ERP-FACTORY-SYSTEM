@@ -438,7 +438,7 @@ export default function FactoryProductionTargets() {
         />
       </div>
 
-      {periodType === "daily" && <ProductionBonusesPanel initialDate={referenceDate} />}
+      {periodType === "daily" && <ProductionBonusesPanel initialDate={referenceDate} productionCategories={rows.map(row => row.category)} />}
       {periodType === "daily" && <ProductionTargetBonusPaymentsPanel initialDate={referenceDate} />}
       {periodType === "daily" && <ProductionBonusHistoryPanel />}
 
