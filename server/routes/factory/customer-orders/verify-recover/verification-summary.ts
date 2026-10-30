@@ -345,8 +345,14 @@ export function registerOrderVerificationSummaryRoutes(app: Express) {
           const pkgRate = toMoney(pl.price_per_kg ?? pl.pricePerKg).toNumber();
           const previous = proformaByArticle[articleCode];
           if (previous) {
-            // Duplicate article lines still represent one quantity bucket.
+            // The supplemental quantity adds to the master request, but this
+            // container uses its captured agreed price for the whole article.
             previous.expectedQty += Number(pl.quantity ?? 0);
+            if (extraPlanLines.includes(pl)) {
+              previous.pricePerBale = pl.price_per_bale ?? pl.pricePerBale ?? "0";
+              previous.pricingMode = pMode;
+              previous.pricePerKg = pkgRate;
+            }
           } else {
             proformaByArticle[articleCode] = {
               articleCode,
