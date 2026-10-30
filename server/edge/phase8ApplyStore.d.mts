@@ -1,5 +1,7 @@
 import type { PoolClient } from "pg";
-export class Phase8ApplyRefusal extends Error { constructor(code: string); }
+export class Phase8ApplyRefusal extends Error {
+  constructor(code: string);
+}
 export interface Phase8Approval {
   siteId: string;
   companyId: number;
@@ -34,5 +36,12 @@ export function ensurePhase8ApplySchema(queryable: Pick<PoolClient, "query">): P
 export function applyStagedVoucherOnce(
   queryable: Pick<PoolClient, "query">,
   input: Phase8Approval,
-  applyPosting: (client: PoolClient, event: Phase8StagedEvent) => Promise<{ cloudVoucherId: number; businessDate: string }>
+  applyPosting: (
+    client: PoolClient,
+    event: Phase8StagedEvent
+  ) => Promise<{ cloudVoucherId: number; businessDate: string }>
 ): Promise<Phase8AppliedReceipt>;
+export function hasVerifiedCloudWriterAuthority(
+  queryable: Pick<PoolClient, "query">,
+  approved: Pick<Phase8Approval, "cloudEpoch" | "baselineSha256">
+): Promise<boolean>;

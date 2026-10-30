@@ -92,6 +92,58 @@ export async function ensurePhase8ApplySchema(queryable) {
   `);
 }
 
+/**
+ * Read-only proof that THIS connection is the restricted cloud runtime role,
+ * under the exact DBA-installed cloud-primary epoch and baseline, with every
+ * public business table fenced. Shared by every LAN -> cloud apply stream.
+ * Must run inside the caller's transaction, after the apply cursor lock.
+ */
+export async function hasVerifiedCloudWriterAuthority(queryable, approved) {
+  const authority = await queryable.query(`
+    SELECT s.mode, s.site_id, s.epoch::text AS epoch,
+           s.baseline_sha256,
+           NOT (r.rolsuper OR r.rolbypassrls OR r.rolcreaterole)
+              AND NOT has_schema_privilege(current_user,'public','CREATE')
+              AND NOT has_database_privilege(current_user,current_database(),'CREATE')
+              AND NOT pg_has_role(current_user,'pg_write_all_data','MEMBER')
+              AND NOT has_table_privilege(current_user,
+                'factory_edge_apply_approvals','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+              AND NOT has_table_privilege(current_user,
+                'phase7_writer.state','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+              AND NOT EXISTS (
+                SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+                WHERE n.nspname='public' AND c.relkind IN ('r','p')
+                  AND pg_has_role(current_user,c.relowner,'MEMBER')
+              )
+              AND EXISTS (SELECT 1 FROM pg_event_trigger
+                          WHERE evtname='phase7_writer_guard_ddl' AND evtenabled='O')
+              AND NOT EXISTS (
+                SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+                WHERE n.nspname='public' AND c.relkind IN ('r','p')
+                  AND c.relname <> 'session'
+                  AND NOT EXISTS (SELECT 1 FROM pg_trigger t
+                    WHERE t.tgrelid=c.oid AND t.tgname='phase7_writer_fence'
+                      AND t.tgenabled='O' AND NOT t.tgisinternal)
+              )
+              AS restricted_role
+    FROM phase7_writer.state s
+    JOIN pg_roles r ON r.rolname=current_user
+    WHERE s.singleton IS TRUE
+    -- Read-only authority lookup: the restricted runtime login must NEVER
+    -- receive UPDATE privilege on phase7_writer.state. The PostgreSQL
+    -- business-table triggers hold the epoch lock through COMMIT instead.
+  `);
+  const state = authority.rows[0];
+  return !(
+    authority.rows.length !== 1 ||
+    state.mode !== "cloud-primary" ||
+    state.site_id !== "cloud" ||
+    String(state.epoch) !== String(approved.cloudEpoch) ||
+    String(state.baseline_sha256).trim() !== approved.baselineSha256 ||
+    state.restricted_role !== true
+  );
+}
+
 function receipt(row) {
   return {
     sequence: String(row.sequence),
@@ -180,49 +232,7 @@ export async function applyStagedVoucherOnce(queryable, input, applyPosting) {
     }
     if (old.rows.length) throw new Phase8ApplyRefusal("PHASE8_CURSOR_RECEIPT_DIVERGED");
 
-    const authority = await queryable.query(`
-      SELECT s.mode, s.site_id, s.epoch::text AS epoch,
-             s.baseline_sha256,
-             NOT (r.rolsuper OR r.rolbypassrls OR r.rolcreaterole)
-                AND NOT has_schema_privilege(current_user,'public','CREATE')
-                AND NOT has_database_privilege(current_user,current_database(),'CREATE')
-                AND NOT pg_has_role(current_user,'pg_write_all_data','MEMBER')
-                AND NOT has_table_privilege(current_user,
-                  'factory_edge_apply_approvals','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
-                AND NOT has_table_privilege(current_user,
-                  'phase7_writer.state','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
-                AND NOT EXISTS (
-                  SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-                  WHERE n.nspname='public' AND c.relkind IN ('r','p')
-                    AND pg_has_role(current_user,c.relowner,'MEMBER')
-                )
-                AND EXISTS (SELECT 1 FROM pg_event_trigger
-                            WHERE evtname='phase7_writer_guard_ddl' AND evtenabled='O')
-                AND NOT EXISTS (
-                  SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-                  WHERE n.nspname='public' AND c.relkind IN ('r','p')
-                    AND c.relname <> 'session'
-                    AND NOT EXISTS (SELECT 1 FROM pg_trigger t
-                      WHERE t.tgrelid=c.oid AND t.tgname='phase7_writer_fence'
-                        AND t.tgenabled='O' AND NOT t.tgisinternal)
-                )
-                AS restricted_role
-      FROM phase7_writer.state s
-      JOIN pg_roles r ON r.rolname=current_user
-      WHERE s.singleton IS TRUE
-      -- Read-only authority lookup: the restricted runtime login must NEVER
-      -- receive UPDATE privilege on phase7_writer.state. The PostgreSQL
-      -- business-table triggers hold the epoch lock through COMMIT instead.
-    `);
-    const state = authority.rows[0];
-    if (
-      authority.rows.length !== 1 ||
-      state.mode !== "cloud-primary" ||
-      state.site_id !== "cloud" ||
-      String(state.epoch) !== String(approved.cloudEpoch) ||
-      String(state.baseline_sha256).trim() !== approved.baselineSha256 ||
-      state.restricted_role !== true
-    ) {
+    if (!(await hasVerifiedCloudWriterAuthority(queryable, approved))) {
       throw new Phase8ApplyRefusal("PHASE8_CLOUD_WRITER_FENCE_UNVERIFIED");
     }
 

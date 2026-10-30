@@ -79,12 +79,10 @@ function sendFailure(res: Response, error: unknown): void {
     return;
   }
   logger.error("Factory pressing confirmation failed", { error });
-  res
-    .status(500)
-    .json({
-      code: "PRESSING_CONFIRMATION_FAILED",
-      message: "Could not confirm pressing. Please retry with the same request ID.",
-    });
+  res.status(500).json({
+    code: "PRESSING_CONFIRMATION_FAILED",
+    message: "Could not confirm pressing. Please retry with the same request ID.",
+  });
 }
 
 function receipt(row: typeof factoryPressingConfirmations.$inferSelect, replayed = false) {

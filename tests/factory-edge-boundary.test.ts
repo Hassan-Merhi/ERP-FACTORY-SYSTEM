@@ -33,12 +33,14 @@ const approvedJournal = {
 function fixture(
   override: Record<string, string>,
   provisioned: () => Promise<boolean>,
-  hasAuthority: () => Promise<boolean> = async () => false
+  hasAuthority: () => Promise<boolean> = async () => false,
+  hasPressingCapture: () => Promise<boolean> = async () => false
 ) {
   const config = readFactoryEdgeConfiguration({ ...env, ...override });
   const app = express();
   app.use(express.json());
-  app.use("/api", makeFactoryEdgeWriteGuard(config, provisioned, hasAuthority));
+  app.use("/api", makeFactoryEdgeWriteGuard(config, provisioned, hasAuthority, hasPressingCapture));
+  app.post("/api/factory/pressing-machines/confirm", (_req, res) => res.status(201).json({ ok: true }));
   app.post("/api/vouchers/with-entries", (_req, res) => res.json({ ok: true }));
   app.post("/api/factory/bales", (_req, res) => res.json({ unsafe: true }));
   app.post("/api/auth/login", (_req, res) => res.json({ ok: true }));
@@ -105,5 +107,34 @@ describe("edge runtime write safety", () => {
     const rejected = await request(app).post("/api/factory/bales");
     expect(rejected.status).toBe(423);
     expect(rejected.body.code).toBe("EDGE_SYNC_UNSUPPORTED_OPERATION");
+  });
+
+  it("admits LAN pressing capture only with the reviewed capture schema, epoch and data proof", async () => {
+    const primary = {
+      FACTORY_EDGE_WRITE_MODE: "lan-primary",
+      FACTORY_EDGE_PRIMARY_ACK: "CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED",
+      FACTORY_EDGE_WRITER_EPOCH: "2",
+      FACTORY_EDGE_BASELINE_SHA256: "a".repeat(64),
+    };
+    const ok = async () => true;
+    const missing = await request(fixture(primary, ok, ok, async () => false)).post(
+      "/api/factory/pressing-machines/confirm"
+    );
+    expect(missing.status).toBe(503);
+    expect(missing.body.code).toBe("EDGE_PHASE9_PRESSING_CAPTURE_NOT_INSTALLED");
+    const probeError = await request(
+      fixture(primary, ok, ok, async () => {
+        throw new Error("db down");
+      })
+    ).post("/api/factory/pressing-machines/confirm");
+    expect(probeError.status).toBe(503);
+    const unfenced = await request(fixture(primary, ok, async () => false, ok)).post(
+      "/api/factory/pressing-machines/confirm"
+    );
+    expect(unfenced.body.code).toBe("EDGE_PHASE7_WRITER_AUTHORITY_UNVERIFIED");
+    expect((await request(fixture(primary, ok, ok, ok)).post("/api/factory/pressing-machines/confirm")).status).toBe(
+      201
+    );
+    expect((await request(fixture({}, ok, ok, ok)).post("/api/factory/pressing-machines/confirm")).status).toBe(423);
   });
 });

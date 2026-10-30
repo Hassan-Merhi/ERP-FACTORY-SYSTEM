@@ -96,22 +96,36 @@ function checkKey(secret) {
   }
 }
 
-function computeSignature(raw, timestamp, secret) {
+// Each signed transport has its own domain string, so a request signed for
+// one endpoint can never authenticate against another with the same key.
+export const VOUCHER_STAGE_SIGNATURE_DOMAIN = "ERP_FACTORY_VOUCHER_STAGE_V1";
+export const EVENT_STAGE_SIGNATURE_DOMAIN = "ERP_FACTORY_EVENT_STAGE_V1";
+const SIGNATURE_DOMAINS = new Set([VOUCHER_STAGE_SIGNATURE_DOMAIN, EVENT_STAGE_SIGNATURE_DOMAIN]);
+
+function computeSignature(raw, timestamp, secret, domain) {
+  if (!SIGNATURE_DOMAINS.has(domain)) throw new Error("EDGE_SYNC_SIGNATURE_DOMAIN_INVALID");
   return createHmac("sha256", secret)
-    .update("ERP_FACTORY_VOUCHER_STAGE_V1\n" + timestamp + "\n", "utf8")
+    .update(domain + "\n" + timestamp + "\n", "utf8")
     .update(raw)
     .digest("hex");
 }
 
-export function makeStageSignature(bodyBytes, timestamp, secret) {
+export function makeStageSignature(bodyBytes, timestamp, secret, domain = VOUCHER_STAGE_SIGNATURE_DOMAIN) {
   checkKey(secret);
   if (!Buffer.isBuffer(bodyBytes) || bodyBytes.length === 0 || !/^[1-9][0-9]{9}$/.test(timestamp)) {
     throw new Error("EDGE_SYNC_SIGN_INPUT_INVALID");
   }
-  return computeSignature(bodyBytes, timestamp, secret);
+  return computeSignature(bodyBytes, timestamp, secret, domain);
 }
 
-export function verifyStageSignature(raw, timestamp, signature, secret, nowSeconds = Date.now() / 1000) {
+export function verifyStageSignature(
+  raw,
+  timestamp,
+  signature,
+  secret,
+  nowSeconds = Date.now() / 1000,
+  domain = VOUCHER_STAGE_SIGNATURE_DOMAIN
+) {
   checkKey(secret);
   if (
     !Buffer.isBuffer(raw) ||
@@ -126,7 +140,7 @@ export function verifyStageSignature(raw, timestamp, signature, secret, nowSecon
     throw new Error("EDGE_SYNC_SIGNATURE_INVALID");
   }
   const received = Buffer.from(signature, "hex");
-  const expected = Buffer.from(computeSignature(raw, timestamp, secret), "hex");
+  const expected = Buffer.from(computeSignature(raw, timestamp, secret, domain), "hex");
   if (!timingSafeEqual(received, expected)) throw new Error("EDGE_SYNC_SIGNATURE_INVALID");
 }
 

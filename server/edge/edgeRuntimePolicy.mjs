@@ -111,10 +111,17 @@ export function readFactoryEdgeConfiguration(env = process.env) {
   });
 }
 
+export const PHASE9_PRESSING_CONFIRM_ROUTE = "POST /api/factory/pressing-machines/confirm";
+
 // No module without atomic capture and validated replay is implicitly enabled
 // by a one-time operator primary acknowledgement. Add routes only after
 // end-to-end cloud acceptance tests, not when merely adding a UI queue.
-const LAN_PRIMARY_CAPTURE_ALLOWLIST = new Set(["POST /api/vouchers/with-entries"]);
+const LAN_PRIMARY_CAPTURE_ALLOWLIST = new Set([
+  "POST /api/vouchers/with-entries",
+  // Phase 9: atomic pressing.confirmation.v1 capture -> signed stage ->
+  // exactly-once cloud apply with conflict register -> verified LAN receipt.
+  PHASE9_PRESSING_CONFIRM_ROUTE,
+]);
 
 export function edgeBlocksWrite(config, method, path) {
   const verb = String(method).toUpperCase();

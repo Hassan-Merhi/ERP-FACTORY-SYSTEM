@@ -6,7 +6,12 @@ import {
   sendCompanyAccessError,
 } from "../security/companyAccessBoundary";
 import { pool } from "../db";
-import { edgeBlocksWrite, edgeStatusPayload, readFactoryEdgeConfiguration } from "./edgeRuntimePolicy.mjs";
+import {
+  edgeBlocksWrite,
+  edgeStatusPayload,
+  PHASE9_PRESSING_CONFIRM_ROUTE,
+  readFactoryEdgeConfiguration,
+} from "./edgeRuntimePolicy.mjs";
 import { hasFactoryEdgeData } from "./edgeDatabaseProof.mjs";
 import { hasVerifiedPhase7WriterAuthority } from "./phase7WriterGate.mjs";
 import { supportsPhase8LanVoucherCapture } from "./phase8CapturePolicy.mjs";
@@ -18,7 +23,8 @@ type EdgeConfiguration = ReturnType<typeof readFactoryEdgeConfiguration>;
 export function makeFactoryEdgeWriteGuard(
   config: EdgeConfiguration,
   hasApprovedData: () => Promise<boolean>,
-  hasWriterAuthority: () => Promise<boolean> = async () => false
+  hasWriterAuthority: () => Promise<boolean> = async () => false,
+  hasPressingCapture: () => Promise<boolean> = async () => false
 ): RequestHandler {
   return async (req, res, next) => {
     const path = req.originalUrl.split("?")[0];
@@ -43,6 +49,23 @@ export function makeFactoryEdgeWriteGuard(
       !supportsPhase8LanVoucherCapture(req.body)
     ) {
       return res.status(423).json({ code: "EDGE_PHASE8_CAPTURE_UNSUPPORTED" });
+    }
+
+    // Phase 9: the pressing route is approved ONLY where the reviewed,
+    // DBA-installed capture + receipt schema exists. Refuse up front rather
+    // than letting a scan fail inside its transaction.
+    if (
+      config.mode === "lan" &&
+      config.primary &&
+      `${req.method.toUpperCase()} ${path}` === PHASE9_PRESSING_CONFIRM_ROUTE
+    ) {
+      try {
+        if (!(await hasPressingCapture())) {
+          return res.status(503).json({ code: "EDGE_PHASE9_PRESSING_CAPTURE_NOT_INSTALLED" });
+        }
+      } catch {
+        return res.status(503).json({ code: "EDGE_PHASE9_PRESSING_CAPTURE_NOT_INSTALLED" });
+      }
     }
 
     // When operator cutover was explicitly acknowledged, still reject writes
@@ -132,8 +155,26 @@ export function registerFactoryEdgeBoundary(app: Express): void {
   );
   // Staging-only, HMAC-authenticated cloud receiver. No posted business effects.
   registerCloudEdgeSyncReceiver(app);
+  let pressingCheck: { value: boolean; at: number } | null = null;
+  async function pressingCaptureInstalled(): Promise<boolean> {
+    const now = Date.now();
+    if (pressingCheck && now - pressingCheck.at < 3_000) return pressingCheck.value;
+    const { rows } = await pool.query(
+      `SELECT to_regclass('public.factory_edge_pressing_outbox') IS NOT NULL
+          AND to_regclass('public.factory_edge_event_stage_receipts') IS NOT NULL
+          AND to_regclass('public.factory_edge_event_applied_receipts') IS NOT NULL AS installed`
+    );
+    const value = rows[0]?.installed === true;
+    pressingCheck = { value, at: now };
+    return value;
+  }
   app.use(
     "/api",
-    makeFactoryEdgeWriteGuard(config, provisioned, () => hasVerifiedPhase7WriterAuthority(pool, config))
+    makeFactoryEdgeWriteGuard(
+      config,
+      provisioned,
+      () => hasVerifiedPhase7WriterAuthority(pool, config),
+      pressingCaptureInstalled
+    )
   );
 }

@@ -17,6 +17,7 @@ import {
   hashEvidence,
   makeStageSignature,
 } from "../../server/edge/edgeSyncStageProtocol.mjs";
+import { readPhase10SyncControl } from "../../server/edge/phase10SyncControl.mjs";
 
 export function readSenderConfiguration(env = process.env) {
   if (env.FACTORY_EDGE_MODE !== "lan" || env.FACTORY_SYNC_SENDER_ENABLED !== "1") {
@@ -141,6 +142,12 @@ export async function sendVoucherOutboxOnce({
   await client.connect();
   let confirmed = 0;
   try {
+    // Phase 10: an operator pause stops transmission without touching evidence.
+    const control = await readPhase10SyncControl(client, config.siteId).catch((error) => {
+      if (error && error.code === "42P01") return { paused: false };
+      throw error;
+    });
+    if (control.paused) return { staged: 0, applied: 0, paused: true };
     for (let page = 0; page < maxBatches; page++) {
       const result = await client.query(
         `SELECT o.sequence::text AS sequence, o.operation_id::text AS operation_id,

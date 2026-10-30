@@ -18,10 +18,7 @@ export interface Phase8AppliedReceiptItem {
   businessDate: string;
   state: "cloud-applied";
 }
-export function validateAppliedReceiptQuery(
-  body: unknown,
-  expectedSite: string
-): Phase8AppliedReceiptQuery;
+export function validateAppliedReceiptQuery(body: unknown, expectedSite: string): Phase8AppliedReceiptQuery;
 export function getAppliedCloudReceipts(
   queryable: Pick<Pool, "query">,
   body: unknown,

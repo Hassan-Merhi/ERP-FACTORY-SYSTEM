@@ -18,6 +18,15 @@ on:
       - 'client/src/lib/offline/voucherCapture.ts'
       - 'server/edge/edgeVoucherOutbox.ts'
       - 'server/edge/phase9PressingOutbox.ts'
+      - 'server/edge/phase9PressingApply.ts'
+      - 'server/edge/phase9OperatorApply.ts'
+      - 'server/edge/phase10*.mjs'
+      - 'server/edge/phase8ApplyStore.mjs'
+      - 'server/edge/edgeSyncStageProtocol.mjs'
+      - 'server/edge/edgeSyncReceiver.ts'
+      - 'scripts/edge/relay-event-outbox.mjs'
+      - 'scripts/edge/send-voucher-outbox.mjs'
+      - 'tests/factory-edge-boundary.test.ts'
       - 'server/edge/phase9PressingEnvelope.mjs'
       - 'server/edge/phase9PressingEnvelope.d.mts'
       - 'server/routes/factory/factoryPressingConfirmationRoutes.ts'
@@ -55,6 +64,15 @@ on:
       - 'client/src/lib/offline/voucherCapture.ts'
       - 'server/edge/edgeVoucherOutbox.ts'
       - 'server/edge/phase9PressingOutbox.ts'
+      - 'server/edge/phase9PressingApply.ts'
+      - 'server/edge/phase9OperatorApply.ts'
+      - 'server/edge/phase10*.mjs'
+      - 'server/edge/phase8ApplyStore.mjs'
+      - 'server/edge/edgeSyncStageProtocol.mjs'
+      - 'server/edge/edgeSyncReceiver.ts'
+      - 'scripts/edge/relay-event-outbox.mjs'
+      - 'scripts/edge/send-voucher-outbox.mjs'
+      - 'tests/factory-edge-boundary.test.ts'
       - 'server/edge/phase9PressingEnvelope.mjs'
       - 'server/edge/phase9PressingEnvelope.d.mts'
       - 'server/routes/factory/factoryPressingConfirmationRoutes.ts'
@@ -91,6 +109,8 @@ jobs:
           node-version: '24.22.1'
       - name: Test actor-scoped, fail-closed status and route coverage
         run: node --test tests/offline-phase9-status.node.test.mjs tests/offline-phase9-write-coverage.node.test.mjs
+      - name: Test Phase 9 event-stream protocol, signatures and receipt verification
+        run: node --test tests/offline-phase9-event-protocol.node.test.mjs
       - name: Confirm complete write inventory (not production certification)
         run: node scripts/edge/audit-phase9-write-coverage.mjs
       - name: Install locked dependencies
@@ -98,7 +118,7 @@ jobs:
       - name: Test browser-visible evidence states
         run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-phase9-status.test.ts
       - name: Test LAN write boundary
-        run: node node_modules/vitest/vitest.mjs run tests/factory-edge-boundary.test.ts
+        run: node node_modules/vitest/vitest.mjs run tests/factory-edge-boundary.test.ts tests/factory-edge-policy.test.ts
       - name: Prove isolated physical pressing capture and LAN route fence
         run: |
           node --test tests/offline-phase9-pressing-envelope.test.mjs

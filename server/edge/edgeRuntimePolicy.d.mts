@@ -12,7 +12,10 @@ export type EdgeConfiguration = Readonly<
 >;
 export function readFactoryEdgeConfiguration(env?: Record<string, string | undefined>): EdgeConfiguration;
 export function edgeBlocksWrite(config: EdgeConfiguration, method: string, path: string): boolean;
-export function edgeStatusPayload(config: EdgeConfiguration, databaseProvisioned?: boolean): {
+export function edgeStatusPayload(
+  config: EdgeConfiguration,
+  databaseProvisioned?: boolean
+): {
   mode: "cloud" | "lan";
   siteId: string | null;
   writeMode: string;
@@ -22,3 +25,4 @@ export function edgeStatusPayload(config: EdgeConfiguration, databaseProvisioned
 export const EDGE_PRIMARY_ACK: string;
 export const CLOUD_WRITER_FENCE_ACK: string;
 export function shouldStartEdgeBackgroundJobs(config: EdgeConfiguration): boolean;
+export const PHASE9_PRESSING_CONFIRM_ROUTE: "POST /api/factory/pressing-machines/confirm";

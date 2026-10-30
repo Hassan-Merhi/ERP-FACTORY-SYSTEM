@@ -29,6 +29,12 @@ const SUPPORTED = new Map([
     policy: "voucher.with-entries.v1",
     limitations: "USD Journal ledger-only; staged is not cloud-applied",
   }],
+  ["POST /api/factory/pressing-machines/confirm", {
+    policy: "pressing.confirmation.v1",
+    limitations:
+      "Physical scan only (no stock/voucher/bale state); existing assignments only; " +
+      "voids/corrections and assignment changes stay cloud-only; conflicts block for a DBA decision",
+  }],
 ]);
 
 function moduleForPath(path) {
