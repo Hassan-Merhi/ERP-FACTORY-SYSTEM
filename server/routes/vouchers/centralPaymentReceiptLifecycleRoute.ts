@@ -73,6 +73,15 @@ export function buildLegacyPaymentReceiptEditTarget(
   return { [field]: accountId } as VoucherEntryInsertFields;
 }
 
+function safePositiveMoney(value: unknown): Decimal | null {
+  try {
+    const amount = new Decimal(String(value ?? ""));
+    return amount.isFinite() && amount.gt(0) ? amount : null;
+  } catch {
+    return null;
+  }
+}
+
 function isActivePaymentReceiptType(value: unknown): value is "Payment" | "Receipt" {
   return value === "Payment" || value === "Receipt";
 }
@@ -121,11 +130,12 @@ async function updateIntercompanyPaymentReceiptAccounts(params: {
     const requestedEffectiveDate = body.effectiveDate ? String(body.effectiveDate).slice(0, 10) : null;
     const originalCurrency = String(lockedVoucher.currency || "USD").toUpperCase();
     const requestedCurrency = String(body.currency || "USD").toUpperCase();
+    const suppliedRate = safePositiveMoney(body.exchangeRate);
     const sameRate =
       originalCurrency === "USD" ||
-      (body.exchangeRate != null &&
+      (suppliedRate !== null &&
         lockedVoucher.exchangeRate != null &&
-        new Decimal(String(body.exchangeRate)).eq(String(lockedVoucher.exchangeRate)));
+        suppliedRate.eq(String(lockedVoucher.exchangeRate)));
 
     if (
       !isActivePaymentReceiptType(lockedVoucher.voucherType) ||
@@ -172,9 +182,9 @@ async function updateIntercompanyPaymentReceiptAccounts(params: {
           ? contraLine.creditAmount
           : contraLine.debitAmount) || "0"
     );
-    const submittedAmount = new Decimal(String(body.entries[0]?.amount ?? "0"));
+    const submittedAmount = safePositiveMoney(body.entries[0]?.amount);
     if (
-      !submittedAmount.isFinite() || !originalAmount.gt(0) ||
+      !submittedAmount || !originalAmount.gt(0) ||
       !submittedAmount.eq(originalAmount) ||
       !new Decimal(debit!.debitAmount || "0").eq(credit!.creditAmount || "0")
     ) {
