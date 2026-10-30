@@ -48,6 +48,9 @@ function OfflineBannerInner() {
   const [busy, setBusy] = useState(false);
   const [snapshot, setSnapshot] = useState<VisibleQueue>(EMPTY);
   const revision = useRef(0);
+  const invalidatePendingReads = useCallback(() => {
+    revision.current += 1;
+  }, []);
 
   const refresh = useCallback(async () => {
     const current = ++revision.current;
@@ -83,14 +86,14 @@ function OfflineBannerInner() {
     window.addEventListener("focus", onRefresh);
     window.addEventListener("storage", onRefresh);
     return () => {
-      revision.current++;
+      invalidatePendingReads();
       window.removeEventListener("erp:sync", onRefresh);
       window.removeEventListener("erp:offline-read-scope-verified", onRefresh);
       window.removeEventListener("erp:offline-queue-changed", onRefresh);
       window.removeEventListener("focus", onRefresh);
       window.removeEventListener("storage", onRefresh);
     };
-  }, [refresh]);
+  }, [refresh, invalidatePendingReads]);
 
   const pending = snapshot.operations.filter((item) => UNRESOLVED.has(item.state)).length;
   const review = snapshot.operations.filter((item) => REVIEW.has(item.state)).length;
