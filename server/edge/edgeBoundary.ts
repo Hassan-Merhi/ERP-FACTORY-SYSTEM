@@ -2,6 +2,7 @@ import type { Express, RequestHandler } from "express";
 import { pool } from "../db";
 import { edgeBlocksWrite, edgeStatusPayload, readFactoryEdgeConfiguration } from "./edgeRuntimePolicy.mjs";
 import { hasFactoryEdgeData } from "./edgeDatabaseProof.mjs";
+import { registerCloudEdgeSyncReceiver } from "./edgeSyncReceiver";
 
 type EdgeConfiguration = ReturnType<typeof readFactoryEdgeConfiguration>;
 
@@ -48,5 +49,7 @@ export function registerFactoryEdgeBoundary(app: Express): void {
     if (config.mode !== "lan") return res.json(edgeStatusPayload(config));
     return res.json(edgeStatusPayload(config, await provisioned()));
   });
+  // Staging-only, HMAC-authenticated cloud receiver. No posted business effects.
+  registerCloudEdgeSyncReceiver(app);
   app.use("/api", makeFactoryEdgeWriteGuard(config, provisioned));
 }
