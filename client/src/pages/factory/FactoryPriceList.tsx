@@ -1,6 +1,6 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useAppMode } from "@/contexts/AppModeContext";
@@ -56,6 +56,13 @@ export default function FactoryPriceList() {
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Focus only when changing cells, not on every digit typed.
+  useEffect(() => {
+    if (!editingCell) return;
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, [editingCell?.productId, editingCell?.field]);
+
   const { data: products = [], isLoading } = useQuery<FactoryBaleProduct[]>({
     queryKey: ["/api/factory/bale-products"],
   });
@@ -65,7 +72,14 @@ export default function FactoryPriceList() {
   });
 
   const updatePriceMutation = useMutation({
-    mutationFn: async ({ id, field, value }: { id: number; field: string; value: string }) => {
+    mutationFn: async ({
+      id, field, value,
+    }: {
+      id: number;
+      field: "sellingPrice" | "productionPrice";
+      value: string;
+      nextCell?: { productId: number; field: "sellingPrice" | "productionPrice"; value: string };
+    }) => {
       const res = await modeApiRequest("PATCH", `/api/factory/bale-products/${id}`, { [field]: value });
       if (!res.ok) {
         const err = await res.json();
@@ -73,9 +87,13 @@ export default function FactoryPriceList() {
       }
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bale-products"] });
-      setEditingCell(null);
+      // Do not interrupt a different cell selected while the request was in flight.
+      setEditingCell((current) => {
+        if (!current || current.productId !== variables.id || current.field !== variables.field) return current;
+        return variables.nextCell ?? null;
+      });
       toast({ title: "Price Updated", description: "Price has been saved and will take effect everywhere." });
     },
     onError: (err: ClientErrorLike) => {
@@ -87,26 +105,51 @@ export default function FactoryPriceList() {
   const handleStartEdit = (product: FactoryBaleProduct, field: "sellingPrice" | "productionPrice") => {
     const currentValue = field === "sellingPrice" ? product.sellingPrice || "0" : product.productionPrice || "0";
     setEditingCell({ productId: product.id, field, value: currentValue });
-    setTimeout(() => inputRef.current?.select(), 30);
   };
 
-  const handleSave = () => {
-    if (!editingCell) return;
-    const val = parseFloat(editingCell.value);
-    if (isNaN(val) || val < 0) {
+  const handleSave = (advance = false) => {
+    if (!editingCell || updatePriceMutation.isPending) return;
+    const val = Number(editingCell.value.trim());
+    if (!Number.isFinite(val) || val < 0) {
       toast({ title: "Error", description: "Please enter a valid price.", variant: "destructive" });
       return;
     }
+
+    // Enter follows the editable cells in table order:
+    // Sell Price → Prod. Cost → next product's Sell Price.
+    // Prod. Cost is hidden on narrow screens, so skip it there.
+    let nextCell: { productId: number; field: "sellingPrice" | "productionPrice"; value: string } | undefined;
+    if (advance) {
+      const index = filteredProducts.findIndex((product) => product.id === editingCell.productId);
+      const currentProduct = filteredProducts[index];
+      if (editingCell.field === "sellingPrice" && currentProduct && window.innerWidth >= 640) {
+        nextCell = {
+          productId: currentProduct.id,
+          field: "productionPrice",
+          value: currentProduct.productionPrice || "0",
+        };
+      } else if (index >= 0 && index + 1 < filteredProducts.length) {
+        const nextProduct = filteredProducts[index + 1];
+        nextCell = { productId: nextProduct.id, field: "sellingPrice", value: nextProduct.sellingPrice || "0" };
+      }
+    }
+
     updatePriceMutation.mutate({
       id: editingCell.productId,
-      field: editingCell.field === "sellingPrice" ? "sellingPrice" : "productionPrice",
+      field: editingCell.field,
       value: val.toFixed(2),
+      nextCell,
     });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") handleSave();
-    if (e.key === "Escape") setEditingCell(null);
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSave(true);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setEditingCell(null);
+    }
   };
 
   const downloadTemplate = async () => {
@@ -391,13 +434,14 @@ export default function FactoryPriceList() {
                               value={editingCell.value}
                               onChange={(e) => setEditingCell({ ...editingCell, value: e.target.value })}
                               onKeyDown={handleKeyDown}
+                              disabled={updatePriceMutation.isPending}
                               className="w-24 text-right font-mono"
                               data-testid={`input-selling-price-${product.id}`}
                             />
                             <Button
                               size="icon"
                               variant="ghost"
-                              onClick={handleSave}
+                              onClick={() => handleSave()}
                               disabled={updatePriceMutation.isPending}
                               data-testid={`button-save-selling-${product.id}`}
                             >
@@ -444,13 +488,14 @@ export default function FactoryPriceList() {
                               value={editingCell.value}
                               onChange={(e) => setEditingCell({ ...editingCell, value: e.target.value })}
                               onKeyDown={handleKeyDown}
+                              disabled={updatePriceMutation.isPending}
                               className="w-24 text-right font-mono"
                               data-testid={`input-production-price-${product.id}`}
                             />
                             <Button
                               size="icon"
                               variant="ghost"
-                              onClick={handleSave}
+                              onClick={() => handleSave()}
                               disabled={updatePriceMutation.isPending}
                               data-testid={`button-save-production-${product.id}`}
                             >
