@@ -179,6 +179,12 @@ async function calculateOffers(
         const portions=splitExtraBalesByCategory(item.extraBales,counts);
         let total = new Decimal(0);
         for (const part of portions) {
+          // Categories with no extra bales remain visible but add no charge.
+          if (part.extra === 0) {
+            lines.push({category:part.category,produced:part.count,extra:0,
+              rate:"0.0000",bonus:"0.00"});
+            continue;
+          }
           const normalized=normalizeBonusCategory(part.category)!;
           const rateRow=rows(await tx.execute(sql`
             SELECT enabled,rate_per_extra_bale::text AS rate
@@ -192,10 +198,12 @@ async function calculateOffers(
             break;
           }
           const rate=new Decimal(String(rateRow.rate));
-          const partial=rate.times(part.extra);
-          total=total.plus(partial);
+          const partial=usd(rate.times(part.extra));
+          // Line-level cent rounding ensures the displayed category subtotals
+          // add up exactly to the worker's posted accounting amount.
+          total=total.plus(new Decimal(partial));
           lines.push({category:part.category,produced:part.count,extra:part.extra,
-            rate:rate.toFixed(4),bonus:usd(partial)});
+            rate:rate.toFixed(4),bonus:partial});
         }
         if(!issue)amount=usd(total);
       }
