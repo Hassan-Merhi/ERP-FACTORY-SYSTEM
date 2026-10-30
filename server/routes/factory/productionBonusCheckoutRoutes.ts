@@ -15,6 +15,7 @@ import { requireAuth } from "../../auth";
 import { requireFactoryTabAccess } from "../../lib/factoryAccessControl";
 import { resultRows } from "../../lib/queryResult";
 import { logger } from "../../lib/logger";
+import { errorStatus, translateDatabaseError } from "../../lib/httpHandlers";
 import { loadTargetBonusRows, targetBonusIsValidDate } from "../../services/factory/targetBonusReview";
 import { postTargetBonusPaymentsInTransaction } from "../../services/factory/targetBonusPaymentService";
 import { parseTargetBonusPaymentCommand } from "../../services/factory/targetBonusPaymentPolicy";
@@ -104,7 +105,7 @@ async function calculateOffers(
     tx.execute(sql`
       SELECT rv.worker_id AS "workerId", rv.status, rv.bonus_amount::text AS amount,
         p.status AS "paymentStatus", details.method AS "checkoutMethod",
-        details.breakdown AS breakdown
+        details.breakdown AS breakdown, details.calculation_hash AS "calculationHash"
       FROM factory_target_bonus_reviews rv
       LEFT JOIN factory_target_bonus_payments p
         ON p.company_id=rv.company_id AND p.review_id=rv.id
@@ -143,12 +144,18 @@ async function calculateOffers(
         if(line && typeof line==="object") lines.push(line as unknown as BonusLine);
       }
       amount=usd(String(claim.amount));
+      if (method === "standard" && lines.length === 0 && item.extraBales > 0 &&
+          item.ratePerBale != null) {
+        lines.push({category:"All categories", produced:item.producedBales,
+          extra:item.extraBales, rate:new Decimal(item.ratePerBale).toFixed(4),bonus:amount});
+      }
     } else if (weeklyFlat || weeklyClaims.has(item.workerId)) {
       issue="A weekly flat-bonus method/review already covers this worker";
     } else if (categoryClaims.has(item.workerId)) {
       issue="An older category-bonus review already exists; reconcile before paying";
-    } else if (item.targetBales <= 0 || !Number.isInteger(item.targetBales)) {
-      issue="Save a positive whole-bale Production Targets target first";
+    } else if (!item.targetConfigured || item.targetBales <= 0 ||
+               !Number.isFinite(item.targetBales)) {
+      issue="Save a positive Production Targets target first";
     } else if (item.extraBales <= 0) {
       issue="Target not exceeded";
     } else if (method==="standard") {
@@ -159,11 +166,14 @@ async function calculateOffers(
           extra:item.extraBales,rate:new Decimal(item.ratePerBale).toFixed(4),bonus:amount});
       }
     } else {
-      const counts = await creditedCategories(tx,companyId,date,item.workerId,item.linkGroupId);
+      if (!Number.isSafeInteger(item.extraBales)) {
+        issue="Category bonus needs a whole number of extra bales; verify the daily target";
+      }
+      const counts = issue ? [] : await creditedCategories(tx,companyId,date,item.workerId,item.linkGroupId);
       const credited = counts.reduce((sum,c)=>sum+c.count,0);
-      if (credited !== item.producedBales || credited===0)
+      if (!issue && (credited !== item.producedBales || credited===0))
         issue="Bale category evidence does not match worker production; reconcile stock entry";
-      else {
+      else if (!issue) {
         // Divide excess bales proportionally across the actual categories made.
         // Stable largest-remainder allocation prevents double-counting one bale.
         const portions=splitExtraBalesByCategory(item.extraBales,counts);
@@ -198,7 +208,9 @@ async function calculateOffers(
     const offerCore={date,workerId:item.workerId,workerName:item.workerName,
       target:item.targetBales,produced:item.producedBales,extra:item.extraBales,
       method,lines,amount};
-    result.push({...offerCore, token:hash(offerCore),status,issue});
+    result.push({...offerCore,
+      token:typeof claim?.calculationHash === "string" ? claim.calculationHash : hash(offerCore),
+      status,issue});
   }
   return result;
 }
@@ -243,7 +255,8 @@ export function registerProductionBonusCheckoutRoutes(app:Express):void {
             const received=input.find(q=>Number(q.workerId)===selection.workerId&&q.date===date);
             if(!quote || !received || quote.token!==received.token ||
                quote.amount!==selection.expectedAmount ||
-               (quote.status!=="pending" && quote.status!=="approved"))
+               (quote.status!=="pending" && quote.status!=="approved" &&
+                !(quote.status==="paid" && quote.issue===null && quote.method===method)))
               fail(409,"Bonus amount or eligibility changed; refresh before paying");
             if(quote.status==="pending") {
               const rate=quote.extra>0 ?
@@ -270,12 +283,14 @@ export function registerProductionBonusCheckoutRoutes(app:Express):void {
         res.setHeader("Cache-Control","private, no-store");
         return res.status(result.posted?201:200).json(result);
       }catch(error){
-        const status=typeof (error as {status?:number})?.status==="number"
-          ? (error as {status:number}).status : 500;
+        const translated=translateDatabaseError(error);
+        const status=translated ? translated.statusCode : errorStatus(error,
+          typeof (error as {status?:unknown})?.status==="number"
+            ? (error as {status:number}).status : 500);
         if(status===500)logger.error("Production bonus checkout payment failed",{error});
         return res.status(status).json({message:status===500?
           bonusServerText(req.headers["accept-language"],"paymentFailed"):
-          error instanceof Error?error.message:"Invalid bonus payment"});
+          translated?.message ?? (error instanceof Error?error.message:"Invalid bonus payment")});
       }
     });
 }
