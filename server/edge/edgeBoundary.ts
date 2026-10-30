@@ -1,4 +1,6 @@
 import type { Express, RequestHandler } from "express";
+import { requireAuth } from "../auth";
+import { assertActiveCompanyAccess, CompanyAccessError, sendCompanyAccessError } from "../security/companyAccessBoundary";
 import { pool } from "../db";
 import { edgeBlocksWrite, edgeStatusPayload, readFactoryEdgeConfiguration } from "./edgeRuntimePolicy.mjs";
 import { hasFactoryEdgeData } from "./edgeDatabaseProof.mjs";
@@ -68,7 +70,12 @@ export function registerFactoryEdgeBoundary(app: Express): void {
     return value;
   }
 
-  app.get("/api/edge/status", async (req, res) => {
+  app.get("/api/edge/status", (req, res, next) => {
+    // Keep the LAN identity probe public. Receipt queries must pass current
+    // credential-version, session-expiry and company-session enforcement.
+    if (req.query.operationId === undefined) return next();
+    return void requireAuth(req, res, next);
+  }, async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     // Phase 9: an optional per-operation projection; never expose another
     // actor's vouchers or infer cloud application from a browser 2xx/stage ACK.
@@ -84,6 +91,9 @@ export function registerFactoryEdgeBoundary(app: Express): void {
         return res.status(400).json({ code: "PHASE9_STATUS_SCOPE_INVALID" });
       }
       try {
+        // Membership can be revoked after the session selected its company.
+        // Never trust the session's company ID as membership proof by itself.
+        await assertActiveCompanyAccess(req);
         const status = await readPhase9OperationStatus(pool, {
           siteId: config.siteId,
           operationId: req.query.operationId,
@@ -96,6 +106,7 @@ export function registerFactoryEdgeBoundary(app: Express): void {
         if (error instanceof Phase9StatusRefusal) {
           return res.status(400).json({ code: "PHASE9_STATUS_SCOPE_INVALID" });
         }
+        if (error instanceof CompanyAccessError) return sendCompanyAccessError(res, error);
         return res.status(503).json({ code: "EDGE_OPERATION_STATUS_UNAVAILABLE" });
       }
     }
