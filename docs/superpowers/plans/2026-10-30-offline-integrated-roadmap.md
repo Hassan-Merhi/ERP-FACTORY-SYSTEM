@@ -61,6 +61,13 @@ Committed on the unified branch, not on `main`:
 - Strengthened atomic LAN voucher outbox capture: missing/invalid request UUID now throws inside the source transaction rather than minting a fresh unrelated operation ID. Entry admission and HTTP capture already require matching UUIDs. Added targeted frontend and server tests plus workflow triggers.
 - **Release gate unchanged:** This does not approve or implement inventory, production, scanning, purchasing, POS, payments, documents or file attachments. Existing factory capture/apply and cross-site reconciliation is incomplete. The feature flag remains disabled and Phase 9 remains open.
 
+### Phase 9 continuation — unverified 2xx and cloud-time safeguards
+
+- Legacy replay eligibility now reports false under the new offline mode even for endpoints historically considered `SAFE_PATTERNS`; the old queue schema remains untouched for supervised recovery.
+- Durable vouchers require response identity, tenant, date and ledger line/money evidence to match the immutable request before a browser accepts a 2xx. An ambiguous receipt stays `needs_review` and is shown as review-required to the operator rather than eligible to retry.
+- The Phase 9 sync engine no longer advances the global `lastSyncedAt` timestamp on LAN/server acknowledgement. A distinct verified cloud-applied receipt is required before claiming cloud sync. CI includes explicit regression checks for this separation.
+- **Status: Phase 9 still incomplete, not certified.** Only the existing constrained voucher route has a transactional LAN capture/apply development path; no stock, scan, POS, factory, financial payment or document/attachment route was enabled. Do not turn on the feature flag, LAN-primary, or merge the PR.
+
 ## Phase 10 — Offline identity, conflicts, secure storage and server controls
 - Implement reviewed local-session/cold-start policy, encrypted legacy-cache migration, authorization/role revocation, and scoped credentials and browser/device protections.
 - Add deterministic multi-device conflict review with no silent financial/stock overwrites.
