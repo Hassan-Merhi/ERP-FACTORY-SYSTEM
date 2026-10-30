@@ -49,7 +49,7 @@ async function reviewedWeekTx(tx: DbTransaction, companyId: number, weekStart: s
       saved.amount !== approvedAmount || saved.targetBales !== row.targetBales ||
       saved.creditedBales !== Number(row.creditedBales) ||
       saved.extraBales !== row.extraBales ||
-      weeklyBonusReviewToken(saved as Parameters<typeof weeklyBonusReviewToken>[0]) !== row.snapshotHash)
+      weeklyBonusReviewToken(saved) !== row.snapshotHash)
     conflict("Weekly review snapshot integrity check failed");
   const method = first(await tx.execute(sql`
     SELECT id, method FROM factory_production_target_bonus_weekly_methods
