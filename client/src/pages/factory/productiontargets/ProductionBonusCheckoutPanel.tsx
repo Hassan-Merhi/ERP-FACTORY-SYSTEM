@@ -14,7 +14,7 @@ import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { bonusText, type ProductionBonusTranslationKey } from "@/i18n/factoryProductionBonusCheckoutTranslations";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
-import { fetchProduction, localDateStr } from "../factoryProductionTargetsModel";
+import { localDateStr } from "../factoryProductionTargetsModel";
 import { ProductionBonusCategoryRatesPanel } from "./ProductionBonusCategoryRatesPanel";
 import { ProductionBonusWeeklyMethodPanel } from "./ProductionBonusWeeklyMethodPanel";
 
@@ -41,9 +41,7 @@ async function request<T>(method:"GET"|"POST",path:string,body?:unknown):Promise
   return data as T;
 }
 /** A single checkout: select workers, verify locked amounts, then approve and post. */
-export function ProductionBonusCheckoutPanel({
-  initialDate,productionCategories,
-}: { initialDate:string;productionCategories:string[] }) {
+export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}) {
   const {toast}=useToast();
   const {language}=useApplicationLanguage();
   const t=(key:ProductionBonusTranslationKey)=>bonusText(key,language);
@@ -62,15 +60,9 @@ export function ProductionBonusCheckoutPanel({
     queryKey:["/api/factory/staff-tracking/production-bonuses",date,date],
     queryFn:()=>request("GET","/api/factory/staff-tracking/production-bonuses?"+
       new URLSearchParams({start:date,end:date})),
-    enabled:canUse&&Boolean(date),
+    enabled:Boolean(date),
   });
   const canUse=access?.canDecide===true;
-  const {data:productionForDate}=useQuery({
-    queryKey:["/api/factory/staff-tracking","production","daily",date,date],
-    queryFn:()=>fetchProduction("daily",date,date),
-    enabled:canUse&&Boolean(date),
-  });
-  const availableCategories=productionForDate?.rows.map(row=>row.category)??productionCategories;
   const {data,error,isLoading}=useQuery<Preview>({
     queryKey:[endpoint,date,method],
     queryFn:()=>request("GET",endpoint+"?"+new URLSearchParams({date,method})),
@@ -85,7 +77,7 @@ export function ProductionBonusCheckoutPanel({
     queryKey:["/api/factory/staff-tracking/production-bonuses/payments",date,date],
     queryFn:()=>request("GET","/api/factory/staff-tracking/production-bonuses/payments?"+
       new URLSearchParams({start:date,end:date})),
-    enabled:Boolean(date),
+    enabled:canUse&&Boolean(date),
   });
   const cashAccounts=(accounts?.accounts??[]).filter(a=>
     !a.openingCurrency||a.openingCurrency.toUpperCase()==="USD");
@@ -180,7 +172,7 @@ export function ProductionBonusCheckoutPanel({
         <summary className="cursor-pointer px-4 py-3 text-sm font-medium">{t("settings")}</summary>
         <div className="space-y-3 border-t p-3">
           <p className="text-xs text-muted-foreground">{t("settingsHint")}</p>
-          <ProductionBonusCategoryRatesPanel initialDate={date} productionCategories={availableCategories}/>
+          <ProductionBonusCategoryRatesPanel initialDate={date}/>
           <details className="rounded-lg border">
             <summary className="cursor-pointer px-3 py-2 text-xs">{t("legacy")}</summary>
             <ProductionBonusWeeklyMethodPanel initialDate={date}/>
