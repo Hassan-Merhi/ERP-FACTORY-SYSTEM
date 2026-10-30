@@ -75,10 +75,11 @@ export async function recalculateOrderTotalsForScannedArticle(
         tg.total_weight,
         tg.bale_name,
         tg.bale_name_ar,
-        COALESCE(cpl.pricing_mode, 'per_bale') AS pricing_mode,
-        cpl.price_per_kg,
+        CASE WHEN extra.article_code IS NOT NULL THEN 'per_bale'
+          ELSE COALESCE(cpl.pricing_mode, 'per_bale') END AS pricing_mode,
+        CASE WHEN extra.article_code IS NOT NULL THEN NULL ELSE cpl.price_per_kg END AS price_per_kg,
         CASE
-          WHEN COALESCE(cpl.pricing_mode, 'per_bale') = 'per_kg'
+          WHEN extra.article_code IS NULL AND COALESCE(cpl.pricing_mode, 'per_bale') = 'per_kg'
             AND COALESCE(cpl.price_per_kg, 0) > 0
             AND tg.total_weight > 0
           THEN tg.total_weight * cpl.price_per_kg
@@ -94,6 +95,13 @@ export async function recalculateOrderTotalsForScannedArticle(
         ORDER BY cpl.id DESC
         LIMIT 1
       ) cpl ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT extra.article_code
+        FROM customer_order_extra_expected_lines extra
+        WHERE extra.order_id = ${orderId} AND extra.company_id = co.company_id
+          AND UPPER(TRIM(extra.article_code)) = UPPER(TRIM(tg.article_code))
+        LIMIT 1
+      ) extra ON TRUE
     ),
     deleted_target AS (
       DELETE FROM customer_order_lines
