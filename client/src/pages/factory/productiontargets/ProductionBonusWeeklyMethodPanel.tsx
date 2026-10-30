@@ -92,7 +92,7 @@ export function ProductionBonusWeeklyMethodPanel({ initialDate }: { initialDate:
           Choose how future Production Targets bonuses should work. The weekly flat method pays
           once per eligible worker per week when credited bales exceed that worker's weekly target,
           regardless of whether the worker made 1 or 30 extra bales.
-          Phase 12 stores settings only; weekly calculations, approvals and payments are not activated.
+          Weekly eligibility and immutable approvals are available below. Payment posting is not activated.
         </p>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <label className="space-y-1 text-xs text-muted-foreground">
@@ -121,7 +121,7 @@ export function ProductionBonusWeeklyMethodPanel({ initialDate }: { initialDate:
               </p>
             </div>
             <span className="rounded-full border px-2 py-1 text-xs text-muted-foreground">
-              Configuration only · not payable yet
+              Settings · no payment posting
             </span>
           </div>
         )}
@@ -147,8 +147,7 @@ export function ProductionBonusWeeklyMethodPanel({ initialDate }: { initialDate:
             <DialogHeader>
               <DialogTitle>Weekly Production Targets bonus method</DialogTitle>
               <DialogDescription>
-                Saved by Monday–Sunday week. Choosing the flat method here does not yet change bonus
-                reviews, previously approved amounts, payments or vouchers.
+                Saved by Monday–Sunday week. This choice determines which new bonus review method is allowed for that week. Previously approved amounts, payments and vouchers remain unchanged.
               </DialogDescription>
             </DialogHeader>
             <label className="space-y-1 text-sm">
@@ -176,7 +175,7 @@ export function ProductionBonusWeeklyMethodPanel({ initialDate }: { initialDate:
             )}
             <p className="text-xs text-muted-foreground">
               Example: target 56, produced 57 or 90 = same fixed weekly bonus.
-              Exactly 56 does not qualify. Weekly eligibility will be connected in Phase 13.
+              Exactly 56 does not qualify. The weekly approval flow does not post a payment.
             </p>
             <label className="space-y-1 text-sm">
               Change note (optional)
