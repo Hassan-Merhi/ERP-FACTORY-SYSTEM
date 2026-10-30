@@ -61,6 +61,20 @@ describe("Phase 14 immutable weekly review fingerprint", () => {
     })).not.toBe(hash);
   });
 
+  it("keeps the hash identical after PostgreSQL jsonb-style object-key reordering", () => {
+    const original = fingerprint().payload;
+    const reverseKeys = (value: unknown): unknown => {
+      if (Array.isArray(value)) return value.map(reverseKeys);
+      if (value && typeof value === "object") {
+        const entries = Object.entries(value).reverse().map(([key, part]) => [key, reverseKeys(part)]);
+        return Object.fromEntries(entries);
+      }
+      return value;
+    };
+    const reordered = reverseKeys(original) as typeof original;
+    expect(JSON.stringify(reordered)).not.toBe(JSON.stringify(original));
+    expect(weeklyBonusReviewToken(reordered)).toBe(weeklyBonusReviewToken(original));
+  });
   it("sorts canonical frozen category and day lines deterministically", () => {
     const p = proposal();
     const source = p.workers[0];
