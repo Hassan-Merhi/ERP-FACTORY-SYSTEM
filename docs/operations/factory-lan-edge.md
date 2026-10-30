@@ -101,6 +101,44 @@ The comparator reports **only** matching fingerprints, never approval. It cannot
 
 This Phase 7 implementation is a **fail-closed development foundation**, not a certified cross-site lease or a production-ready active factory restore. Until the role split, independent cloud fence, audited data baseline and live two-site tests exist, keep LAN read-only and `OFFLINE_MODE_ENABLED=false`.
 
+## Phase 8 development: supervised voucher replay (no continuous sync yet)
+
+The unified development branch contains an **operator-only** cloud apply path for immutable staged `voucher.with-entries.v1` evidence, and a separately signed **read-only** endpoint `POST /api/edge/sync/applied-receipts`. Stage receipts remain `staged-not-applied`. A voucher becomes `cloud-applied` only when one PostgreSQL transaction commits the central accounting posting, source-sequence cursor, immutable receipt, source-to-cloud voucher ID mapping and business date. A lost network acknowledgement returns the original mapping on a retry; no second business posting is authorized.
+
+This initial scope is **only active USD Journal vouchers with two or more balanced, ledger-account-only lines**, no linked party/employee, non-USD, POS, inventory, files, or stock side effects. The LAN write boundary now rejects unsupported with-entries requests rather than promising sync for them. The protected central generic route captures vouchers in the same transaction as the local accounting posting. Other modules remain blocked for Phase 9.
+
+**Default is OFF.** The cloud-apply CLI `server/edge/phase8OperatorApply.ts` has no HTTP apply endpoint, no scheduler and no automatic invocation. It refuses without a separately approved company/baseline/positive cloud epoch, the exact `LAN_FROZEN_AND_CLOUD_EPOCH_APPROVED` acknowledgment, an already-installed `phase7_writer` PostgreSQL fence, restricted (non-owner, non-DDL) runtime database role, signed staging receiver, DBA-controlled time-limited actor approval, active user/company role and committed immutable staging evidence. A DBA must explicitly install the Phase 8 tables using `ensurePhase8ApplySchema` during a reviewed **fenced cloud maintenance window**; never let the restricted runtime role create or own those objects. It must have SELECT but **no modification privileges** on `factory_edge_apply_approvals` or `phase7_writer.state`, and only the narrow table privileges needed for the posting and cursor.
+
+Only in a **disposable rehearsal with independent cutover oversight**, after freezing LAN writes and verifying no in-flight writers, the authorized operator can set these cloud process variables:
+
+```ini
+FACTORY_EDGE_MODE=cloud
+FACTORY_CLOUD_WRITE_MODE=fenced
+FACTORY_CLOUD_FENCE_ACK=CLOUD_WRITES_DISABLED_FOR_FACTORY_HANDOFF
+FACTORY_CLOUD_WRITER_EPOCH=<reviewed-positive-cloud-epoch>
+FACTORY_SYNC_RECEIVE_ENABLED=1
+FACTORY_SYNC_SITE_ID=<approved-factory-site-uuid>
+FACTORY_SYNC_HMAC_KEY=<staging-only-shared-key-from-secret-manager>
+FACTORY_PHASE8_RECEIPTS_ENABLED=1
+FACTORY_PHASE8_APPLY_ENABLED=1
+FACTORY_PHASE8_APPLY_ACK=LAN_FROZEN_AND_CLOUD_EPOCH_APPROVED
+FACTORY_PHASE8_BASELINE_SHA256=<approved-pre-cutover-baseline-hash>
+FACTORY_PHASE8_COMPANY_ID=<approved-single-company-id>
+```
+
+Then, using that environment on an isolated operator host with the exact audited build and its restricted PostgreSQL connection, run one sequence at a time:
+
+```bash
+node --import tsx server/edge/phase8OperatorApply.ts 1
+# Verify the returned cloud voucher ID and ledger rows independently.
+# On the factory LAN, after signed staging and successful cloud COMMIT:
+node scripts/edge/fetch-applied-receipts.mjs
+```
+
+The cloud remains HTTP-fenced and its ordinary schedulers disabled throughout the handoff; only the supervised replay process runs against the approved DB epoch. The LAN receipt downloader compares the cloud receipt to the local immutable outbox identity, SHA-256, company, actor, voucher ID and source business date before adding an append-only local `cloud-applied` receipt. No stage ACK, missing DB row, 5xx, WAN error, invalid TLS, mismatch or partial transaction is treated as applied. Repeat a sequence only to retrieve a **durable committed** receipt.
+
+**Not certified:** A manual env acknowledgment cannot prove two independent PostgreSQL servers are not simultaneously writable. This development path is suitable only for a frozen-LAN failback rehearsal, not live concurrent LAN writes with cloud replication. It does not install/approve the source cloud dataset, transfer uploaded files or test actual production ERP accounting. The full program still needs a reviewed Phase 7 restricted-role rollout, full PostgreSQL posting fixture, independently signed baseline and authority review, real hardware and WAN/restore drills, plus Phases 9–11. Keep production offline mode and LAN-primary disabled.
+
 ## 6. Backup, recovery and upgrades
 
 Back up **both** the PostgreSQL database (the `postgres_data` volume) and durable uploaded files (the `uploads_data` volume); validate encrypted backups on a separate device and regularly rehearse restore to a new isolated database. Record WAL/database version, schema migrations, site UUID and client versions. Do not place unencrypted backups on laptop shares or GitHub.
