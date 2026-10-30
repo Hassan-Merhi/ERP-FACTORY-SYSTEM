@@ -33,7 +33,8 @@ describe("Production Bonuses dedicated page and audited Daybook deletion", () =>
     const editor = source("client/src/pages/factory/productiontargets/ProductionBonusCategoryRatesPanel.tsx");
     const page = source("client/src/pages/factory/FactoryProductionBonuses.tsx");
     expect(rates).toContain("FROM factory_worker_production_target_defaults");
-    expect(rates).toContain("SELECT category FROM factory_staff_tracking_entries");
+    expect(rates).toContain("FROM factory_staff_tracking_entries e");
+    expect(rates).toContain("latest_defaults");
     expect(rates).not.toContain("SELECT name AS category FROM factory_worker_categories");
     expect(rates).toContain("Select an existing category from Production Targets");
     expect(editor).toContain('aria-label="Production Targets category"');
