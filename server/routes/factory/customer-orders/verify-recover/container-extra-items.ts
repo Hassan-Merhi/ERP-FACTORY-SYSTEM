@@ -120,22 +120,16 @@ export function registerContainerExtraExpectedLineRoutes(app: Express) {
                     expected_qty AS "expectedQty", price_per_bale::text AS "pricePerBale"
         `))[0];
 
-        // Existing out-of-proforma bales must receive this customer's agreed
-        // price too; the order total/daybook mirror are recalculated atomically.
-        const masterMatch = resultRows<{ id: number }>(await tx.execute(sql`
-          SELECT id FROM customer_proforma_lines WHERE proforma_id = ${order.proforma_id_used}
-            AND UPPER(TRIM(article_code)) = ${storedCode} LIMIT 1
+        // Previously scanned bales in THIS loading also adopt the saved agreed
+        // rate. Recalculate the one article and order/daybook totals atomically.
+        const repriced = resultRows<{ id: number }>(await tx.execute(sql`
+          UPDATE customer_order_bales SET price_used = ${agreedPrice}
+          WHERE order_id = ${orderId}
+            AND UPPER(TRIM(article_code)) = ${storedCode}
+            AND price_used IS DISTINCT FROM ${agreedPrice}::numeric
+          RETURNING id
         `));
-        if (!masterMatch.length) {
-          const repriced = resultRows<{ id: number }>(await tx.execute(sql`
-            UPDATE customer_order_bales SET price_used = ${agreedPrice}
-            WHERE order_id = ${orderId}
-              AND UPPER(TRIM(article_code)) = ${storedCode}
-              AND price_used IS DISTINCT FROM ${agreedPrice}::numeric
-            RETURNING id
-          `));
-          if (repriced.length > 0) await recalculateOrderTotalsForScannedArticle(tx, orderId, product.article_code);
-        }
+        if (repriced.length > 0) await recalculateOrderTotalsForScannedArticle(tx, orderId, product.article_code);
         return row;
       });
       return res.json(saved);
