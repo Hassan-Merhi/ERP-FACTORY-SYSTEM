@@ -160,6 +160,8 @@ export function FactoryDaybookEntryRow({
           {isAdminOrOwner &&
             entry.id > 0 &&
             entry.txType !== "SUPPLIER_FX_TRANSFER" &&
+            entry.txType !== "PRODUCTION_TARGET_BONUS_REVERSAL" &&
+            entry.txType !== "PRODUCTION_TARGET_WEEKLY_BONUS_REVERSAL" &&
             !(isVoucherBacked && VOIDABLE_TX_TYPES.includes(entry.txType)) && (
               <Button
                 size="icon"
