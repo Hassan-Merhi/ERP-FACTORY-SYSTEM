@@ -9,6 +9,7 @@ on:
       - 'server/edge/phase7WriterGate.d.mts'
       - 'server/edge/edgeRuntimePolicy.d.mts'
       - 'server/edge/edgeBoundary.ts'
+      - 'server/edge/edgeSyncReceiver.ts'
       - 'server/db.ts'
       - 'server/edge/edgeRuntimePolicy.mjs'
       - 'deploy/lan/phase7-install-writer-fence.sql'
