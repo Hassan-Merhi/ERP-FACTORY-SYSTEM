@@ -144,7 +144,7 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
   const tooMany=chosen.length>100;
   const pay=useMutation({
     mutationFn:()=>request<{posted:number;replayed:number}>("POST",endpoint+"/pay",{ // data-no-translate: TypeScript generic, not user-visible JSX
-      method,confirm:true,currency:"USD",paymentDate,cashAccountId:Number(accountId),
+      method,rosterDate:to,confirm:true,currency:"USD",paymentDate,cashAccountId:Number(accountId),
       selections:chosen.map(row=>({date:row.date,workerId:row.workerId,
         expectedAmount:row.amount,token:row.token})),
     }),
