@@ -18,7 +18,8 @@ export type WeeklyFlatBonusIssue =
   | "ABSENT_WITH_PRODUCTION"
   | "DUPLICATE_WORKER_DAY"
   | "EXISTING_DAILY_BONUS_REVIEW"
-  | "EXISTING_PAYROLL_BONUS_CLAIM";
+  | "EXISTING_PAYROLL_BONUS_CLAIM"
+  | "DUPLICATE_SOURCE_BALE";
 
 export interface WeeklyFlatDayWorker {
   workerId: number;
@@ -50,6 +51,7 @@ export interface WeeklyFlatBonusInput {
   days: WeeklyFlatDayEvidence[];
   /** Saved but not finalized dates must block the whole week. */
   unfinalizedDates: string[];
+  repeatedBaleInWeek?: boolean;
   /** All existing legacy/category reviews including rejections, by worker/day. */
   previouslyReviewedWorkerDays?: ReadonlySet<string>;
   /** Previously committed payroll production bonus claims, by worker/day. */
@@ -129,6 +131,7 @@ export function calculateWeeklyFlatBonus(input: WeeklyFlatBonusInput): WeeklyFla
   if (input.unfinalizedDates.some(date => !isBonusCategoryDate(date) || date < input.weekStart || date > weekEnd))
     throw new Error("Unfinalized source outside selected production week");
   if (input.unfinalizedDates.length) global.add("UNFINALIZED_DAY");
+  if (input.repeatedBaleInWeek) global.add("DUPLICATE_SOURCE_BALE");
 
   const seenDates = new Set<string>();
   const workers = new Map<number, {
