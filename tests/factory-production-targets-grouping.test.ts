@@ -68,6 +68,36 @@ describe("Production Targets category grouping", () => {
     ]);
   });
 
+  it("sums two different linked targets without averaging either worker", () => {
+    const ali = {
+      ...row(1, "Ali", "BLOUSE"),
+      linkGroupId: 77,
+      linkedWorkerIds: [1, 2],
+      targetBales: 10,
+      producedBales: 22,
+    };
+    const mohammad = {
+      ...row(2, "Mohammad", "BLOUSE"),
+      linkGroupId: 77,
+      linkedWorkerIds: [1, 2],
+      targetBales: 12,
+      producedBales: 22,
+    };
+
+    expect([ali.targetBales, mohammad.targetBales]).toEqual([10, 12]);
+    const collapsed = collapseLinkedProductionRows([ali, mohammad]);
+    expect(collapsed).toHaveLength(1);
+    expect(collapsed[0].targetBales).toBe(22);
+    expect(collapsed[0].producedBales).toBe(22);
+    expect(summarizeProductionRows([ali, mohammad])).toEqual({
+      target: 22,
+      absentTarget: 0,
+      expected: 22,
+      produced: 22,
+      difference: 0,
+    });
+  });
+
   it("subtracts a linked unit's shared target once when a member is absent", () => {
     const linkedA = {
       ...row(1, "Worker A", "BLOUSE"),

@@ -21,7 +21,6 @@ import { employees, factoryAttendance, factoryUserProfiles, factoryWorkers } fro
 import {
   indexProductionWorkerLinks,
   loadActiveProductionWorkerLinks,
-  saveProductionLinkTargetDefault,
 } from "../../services/factory/productionWorkerLinks";
 import {
   loadProductionTargetDefaults,
@@ -363,21 +362,6 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           ? await loadProductionTargetDefaults(companyId, query.periodStart)
           : new Map<number, ProductionTargetDefault>();
 
-      const linkedDailyOverrides = new Map<number, number | null>();
-      if (query.page === "production" && query.periodType === "daily") {
-        for (const link of activeProductionLinks) {
-          const override = link.members
-            .map((member) => savedMap.get(`worker:${member.workerId}`))
-            .find((row) => row?.targetBalesOverridden === true);
-          if (override) {
-            linkedDailyOverrides.set(
-              link.id,
-              override.targetBales === null || override.targetBales === undefined ? null : Number(override.targetBales)
-            );
-          }
-        }
-      }
-
       const workerRows = includedWorkers.map((worker) => {
         const savedRow = savedMap.get(`worker:${worker.id}`);
         const attendanceStatus = workerAttendance.get(worker.id);
@@ -415,21 +399,17 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
             ? (productionDefault?.targetBales ?? null)
             : null;
         const productionLink = productionLinkByWorker.get(worker.id);
-        const linkedOverrideExists = productionLink ? linkedDailyOverrides.has(productionLink.id) : false;
-        const linkedOverrideTarget = productionLink ? (linkedDailyOverrides.get(productionLink.id) ?? null) : null;
         const targetBalesOverridden =
           query.page === "production" &&
           query.periodType === "daily" &&
           !finalized &&
-          (linkedOverrideExists || savedRow?.targetBalesOverridden === true);
+          savedRow?.targetBalesOverridden === true;
         const targetBales = finalized
           ? savedTargetBales
           : query.page === "production" && query.periodType === "daily"
-            ? linkedOverrideExists
-              ? linkedOverrideTarget
-              : targetBalesOverridden
-                ? savedTargetBales
-                : defaultTargetBales
+            ? targetBalesOverridden
+              ? savedTargetBales
+              : defaultTargetBales
             : savedTargetBales;
         const linkedProducedBales =
           productionLink && query.page === "production" && !finalized
@@ -560,29 +540,6 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
 
         seen.add(workerId);
         normalized.push({ workerId, category, targetBales });
-      }
-
-      const activeLinks = await loadActiveProductionWorkerLinks(companyId, effectiveFrom);
-      const linkByWorker = indexProductionWorkerLinks(activeLinks);
-      const linkTargets = new Map<number, number | null>();
-
-      for (const row of normalized) {
-        const link = linkByWorker.get(row.workerId);
-        if (!link) continue;
-        if (linkTargets.has(link.id) && linkTargets.get(link.id) !== row.targetBales) {
-          return res.status(400).json({ message: "Linked workers must share one target" });
-        }
-        linkTargets.set(link.id, row.targetBales);
-      }
-
-      for (const [linkId, targetBales] of linkTargets) {
-        await saveProductionLinkTargetDefault({
-          companyId,
-          linkId,
-          effectiveFrom,
-          targetBales,
-          createdBy: req.session.userId || null,
-        });
       }
 
       const values = normalized.map(
@@ -779,29 +736,6 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           producedBales,
           status,
         });
-      }
-
-      if (page === "production") {
-        for (const link of activeProductionLinks) {
-          const memberIds = new Set(link.members.map((member) => member.workerId));
-          const linkedRows = normalizedRecords.filter(
-            (row) => row.personType === "worker" && memberIds.has(row.personId)
-          );
-          if (linkedRows.length === 0) continue;
-
-          const overrideRows = linkedRows.filter((row) => row.targetBalesOverridden);
-          const overrideTargets = new Set(overrideRows.map((row) => String(row.targetBales)));
-          if (overrideTargets.size > 1) {
-            return res.status(400).json({ message: "Linked workers must share one target" });
-          }
-
-          const sharedOverride = overrideRows.length > 0;
-          const sharedTarget = sharedOverride ? overrideRows[0].targetBales : link.sharedTargetBales;
-          for (const row of linkedRows) {
-            row.targetBales = sharedTarget;
-            row.targetBalesOverridden = sharedOverride;
-          }
-        }
       }
 
       let finalizeCarryFrom: CategoryCaptureCarry | null = null;
