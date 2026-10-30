@@ -54,14 +54,22 @@ export function ProductionBonusCheckoutPanel({
   const [reverse,setReverse]=useState<PaymentRow|null>(null);
   const [reverseReason,setReverseReason]=useState("");
   useEffect(()=>{setDate(initialDate);setSelected([]);},[initialDate]);
+  const {data:access}=useQuery<{canDecide:boolean}>({
+    queryKey:["/api/factory/staff-tracking/production-bonuses",date,date],
+    queryFn:()=>request("GET","/api/factory/staff-tracking/production-bonuses?"+
+      new URLSearchParams({start:date,end:date})),
+    enabled:canUse&&Boolean(date),
+  });
+  const canUse=access?.canDecide===true;
   const {data,error,isLoading}=useQuery<Preview>({
     queryKey:[endpoint,date,method],
     queryFn:()=>request("GET",endpoint+"?"+new URLSearchParams({date,method})),
-    enabled:Boolean(date),
+    enabled:canUse&&Boolean(date),
   });
   const {data:accounts}=useQuery<{accounts:Account[]}>({
     queryKey:["/api/factory/staff-tracking/production-bonuses/payment-accounts"],
     queryFn:()=>request("GET","/api/factory/staff-tracking/production-bonuses/payment-accounts"),
+    enabled:canUse,
   });
   const {data:payments}=useQuery<{payments:PaymentRow[]}>({
     queryKey:["/api/factory/staff-tracking/production-bonuses/payments",date,date],
@@ -120,6 +128,7 @@ export function ProductionBonusCheckoutPanel({
     },
     onError:(error:Error)=>toast({title:"Reversal failed",description:error.message,variant:"destructive"}),
   });
+  if(!canUse)return null;
   return <Card data-testid="production-bonus-checkout" className="overflow-hidden shadow-none">
     <CardHeader className="border-b bg-muted/20">
       <CardTitle className="flex items-center gap-2 text-lg"><Banknote className="h-5 w-5 text-primary"/>Production Bonus Payroll</CardTitle>
