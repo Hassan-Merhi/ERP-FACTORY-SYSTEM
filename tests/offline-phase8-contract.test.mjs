@@ -28,6 +28,9 @@ test("LAN captures only explicitly supported USD ledger-only journals", () => {
     { entries: [...journal.entries, { employeeId: 4 }] },
     { entries: journal.entries.map((x) => ({ ...x, customerId: 5 })) },
     { clientRequestId: "" },
+    { file: { name: "receipt.pdf" } },
+    { attachmentId: 23 },
+    { upload: "untracked" },
   ]) {
     assert.equal(supportsPhase8LanVoucherCapture({ ...journal, ...changed }), false);
   }
