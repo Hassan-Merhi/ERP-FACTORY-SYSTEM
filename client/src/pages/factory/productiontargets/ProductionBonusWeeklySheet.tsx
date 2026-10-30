@@ -1,11 +1,11 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { bonusText } from "@/i18n/factoryProductionBonusCheckoutTranslations";
 
 /**
- * A read-only production ledger: exactly the same offer rows and worker
- * selections used by checkout, never an independent bonus calculation.
+ * A production ledger using the same offer rows and worker selections as
+ * checkout, with optional inline actions for payment corrections.
  */
 export type BonusSheetDay = {
   date: string;
@@ -37,6 +37,7 @@ type Props = {
   workers: BonusSheetWorker[];
   selected: number[];
   onToggle: (workerId: number, checked: boolean) => void;
+  renderDayActions?: (workerId: number, date: string) => ReactNode;
   loading: boolean;
 };
 
@@ -68,7 +69,7 @@ const dollars = (amount: number) => amount.toLocaleString("en-US", {
 });
 
 export function ProductionBonusWeeklySheet({
-  from, to, workers, selected, onToggle, loading,
+  from, to, workers, selected, onToggle, renderDayActions, loading,
 }: Props) {
   const { language } = useApplicationLanguage();
   const t = (key: Parameters<typeof bonusText>[0]) => bonusText(key, language);
@@ -153,6 +154,10 @@ export function ProductionBonusWeeklySheet({
                       (achieved ? "text-white" : "text-emerald-600 dark:text-emerald-400")}>
                       +{day.extra} {t("extra")}
                     </div>}
+                    {day.issue && <div className={"max-w-[145px] truncate text-[11px] " +
+                      (achieved ? "text-white/85" : "text-muted-foreground")}
+                      title={day.issue}>{day.issue}</div>}
+                    {renderDayActions?.(worker.workerId, date)}
                   </div> : <span className="text-muted-foreground/60">—</span>}
                 </td>;
               })}
