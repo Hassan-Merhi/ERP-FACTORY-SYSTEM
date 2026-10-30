@@ -14,13 +14,15 @@ describe("Production Bonuses dedicated page and audited Daybook deletion", () =>
     expect(targets).not.toContain("<ProductionTargetBonusPaymentsPanel");
     expect(routes).toContain('path="/factory/production-bonuses"');
     expect(routes).toContain('user?.role === "Admin" || user?.role === "Owner"');
-    for (const tab of ["setup", "review", "pay", "history"]) {
-      expect(workspace).toContain(`key: "${tab}"`);
-    }
-    expect(workspace).toContain("<ProductionBonusWeeklyMethodPanel");
-    expect(workspace).toContain("<ProductionBonusCategoryRatesPanel");
-    expect(workspace).toContain("<ProductionBonusesPanel");
-    expect(workspace).toContain("<ProductionTargetBonusPaymentsPanel");
+    expect(workspace).toContain("<ProductionBonusCheckoutPanel");
+    expect(workspace).toContain("<ProductionBonusHistoryPanel");
+    expect(workspace).not.toContain("<ProductionBonusesPanel");
+    expect(workspace).not.toContain("<ProductionTargetBonusPaymentsPanel");
+    const checkout = source("client/src/pages/factory/productiontargets/ProductionBonusCheckoutPanel.tsx");
+    expect(checkout).toContain("<ProductionBonusCategoryRatesPanel");
+    expect(checkout).toContain("Review");
+    expect(checkout).toContain("/checkout");
+    expect(checkout).toContain('method==="category"');
     expect(workspace).toContain('/factory/stock-entry?tab=production-targets');
     expect(source("client/src/pages/factory/BaleStockEntry.tsx"))
       .toContain('get("tab") === "production-targets"');
