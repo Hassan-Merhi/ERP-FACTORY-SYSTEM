@@ -21,6 +21,7 @@ import { postTargetBonusPaymentsInTransaction } from "../../services/factory/tar
 import { parseTargetBonusPaymentCommand } from "../../services/factory/targetBonusPaymentPolicy";
 import { normalizeBonusCategory } from "@shared/productionTargetBonusCategoryRates";
 import { splitExtraBalesByCategory, workerCategoryCredits } from "@shared/productionBonusCheckoutMath";
+import { latestUnpaidWorkerRate, rateChangeMayRepriceReview } from "@shared/productionBonusUnpaidRatePolicy";
 import { mondayOfProductionBonusWeek } from "@shared/productionTargetBonusWeeklyMethod";
 
 const guard = requireFactoryTabAccess("factory/stock-entry", "hide_tab_stockentry_production_targets");
@@ -153,10 +154,8 @@ async function calculateOffers(
   const categoryClaims=new Set(rows(categoryReviewsResult).map(row=>String(row.date).slice(0,10)+":"+Number(row.id)));
   const activeStandardRates=rows(standardRatesResult);
   const rateForWorker=(workerId:number)=>{
-    const version=activeStandardRates.find(row=>row.scope==="worker"&&Number(row.workerId)===workerId)
-      ?? activeStandardRates.find(row=>row.scope==="company");
-    return version?.enabled===true && Number(version.rate)>0
-      ? new Decimal(String(version.rate)) : null;
+    const rate=latestUnpaidWorkerRate(activeStandardRates,workerId);
+    return rate===null?null:new Decimal(rate);
   };
   const categoryRates=new Map<string,Decimal|null>();
   const rateForCategory=async(key:string)=>{
@@ -192,8 +191,7 @@ async function calculateOffers(
         if(line && typeof line==="object") lines.push(line as unknown as BonusLine);
       }
       amount=usd(String(claim.amount));
-      if (claim.paymentStatus === "POSTED" || claim.paymentStatus === "REVERSED" ||
-          claim.status === "rejected") {
+      if (!rateChangeMayRepriceReview(claim.status,claim.paymentStatus)) {
         // Once a payment claim exists, neither reversal nor later edits can
         // rewrite its originally reviewed amount and category breakdown.
         if(method==="standard" && lines.length===0 && item.extraBales>0)
