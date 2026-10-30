@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
 import {
-  mondayOfProductionBonusWeek, parseWeeklyFlatBonusUsd,
+  mondayOfProductionBonusWeek, parseTypedProductionBonusDate, parseWeeklyFlatBonusUsd,
   type ProductionBonusMethod,
 } from "@shared/productionTargetBonusWeeklyMethod";
 import { isBonusCategoryDate } from "@shared/productionTargetBonusCategoryRates";
@@ -63,7 +63,7 @@ export function ProductionBonusWeeklyMethodPanel({ initialDate }: { initialDate:
   }
   const save = useMutation({
     mutationFn: () => api("POST", endpoint, {
-      effectiveWeek, method,
+      effectiveWeek: mondayOfProductionBonusWeek(parseTypedProductionBonusDate(effectiveWeek)), method,
       flatBonusUsd: method === "per_extra_bale" ? "0.00" : flatBonusUsd,
       note, requestKey,
     }),
@@ -77,8 +77,9 @@ export function ProductionBonusWeeklyMethodPanel({ initialDate }: { initialDate:
       toast({ title: "Weekly method not saved", description: cause.message, variant: "destructive" }),
   });
   const parsedAmount = parseWeeklyFlatBonusUsd(flatBonusUsd);
-  const canSave = isBonusCategoryDate(effectiveWeek) &&
-    mondayOfProductionBonusWeek(effectiveWeek) === effectiveWeek &&
+  const enteredWeekDate = parseTypedProductionBonusDate(effectiveWeek);
+  const beginningMonday = mondayOfProductionBonusWeek(enteredWeekDate);
+  const canSave = beginningMonday !== null &&
     (method === "per_extra_bale" || (parsedAmount !== null && Number(parsedAmount) > 0)) &&
     !save.isPending;
 
@@ -150,11 +151,25 @@ export function ProductionBonusWeeklyMethodPanel({ initialDate }: { initialDate:
                 Saved by Monday–Sunday week. This choice determines which new bonus review method is allowed for that week. Previously approved amounts, payments and vouchers remain unchanged.
               </DialogDescription>
             </DialogHeader>
-            <label className="space-y-1 text-sm">
-              Week beginning (Monday)
-              <Input aria-label="Bonus method effective Monday" type="date" value={effectiveWeek}
-                onChange={event => setEffectiveWeek(mondayOfProductionBonusWeek(event.target.value) ?? "")} />
-            </label>
+            <div className="space-y-1 text-sm">
+              <label htmlFor="bonus-week-manual-date">Week beginning (Monday)</label>
+              <div className="flex items-center gap-2">
+                <Input id="bonus-week-manual-date" aria-label="Type bonus week date"
+                  type="text" inputMode="numeric" maxLength={10}
+                  placeholder="YYYY-MM-DD or MM/DD/YYYY" value={effectiveWeek}
+                  onChange={event => setEffectiveWeek(event.target.value)}
+                  onBlur={() => {
+                    if (beginningMonday) setEffectiveWeek(beginningMonday);
+                  }} />
+                <Input aria-label="Choose bonus week date from calendar"
+                  type="date" className="w-[155px] shrink-0"
+                  value={enteredWeekDate ?? ""}
+                  onChange={event => setEffectiveWeek(event.target.value)} />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Type YYYY-MM-DD or MM/DD/YYYY, or choose a date. The week begins on Monday.
+              </p>
+            </div>
             <label className="space-y-1 text-sm">
               Bonus calculation method
               <Select value={method} onValueChange={value => setMethod(value as ProductionBonusMethod)}>
