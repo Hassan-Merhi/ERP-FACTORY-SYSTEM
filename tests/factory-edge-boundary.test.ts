@@ -67,7 +67,9 @@ describe("edge runtime write safety", () => {
       },
       async () => false
     );
-    expect((await request(app).post("/api/vouchers/with-entries").send(approvedJournal)).body.code).toBe("EDGE_DATABASE_NOT_PROVISIONED");
+    expect((await request(app).post("/api/vouchers/with-entries").send(approvedJournal)).body.code).toBe(
+      "EDGE_DATABASE_NOT_PROVISIONED"
+    );
   });
 
   it("rejects even a populated database when its Phase 7 PostgreSQL fence is missing", async () => {
