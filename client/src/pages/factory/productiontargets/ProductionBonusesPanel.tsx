@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { ProductionBonusCategoryRatesPanel } from "./ProductionBonusCategoryRatesPanel";
+import { ProductionBonusCategoryEvidencePanel } from "./ProductionBonusCategoryEvidencePanel";
 import { queryClient } from "@/lib/queryClient";
 
 type Decision = "approved" | "rejected";
@@ -187,6 +188,7 @@ export function ProductionBonusesPanel({ initialDate }: { initialDate: string })
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
         {data?.canDecide && <ProductionBonusCategoryRatesPanel initialDate={initialDate} />}
+        {data?.canDecide && <ProductionBonusCategoryEvidencePanel initialDate={initialDate} />}
         <div className="flex flex-wrap items-end gap-3">
           <label className="space-y-1 text-xs text-muted-foreground">
             From

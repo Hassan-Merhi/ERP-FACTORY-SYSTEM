@@ -235,6 +235,64 @@ const FACTORY_PRODUCTION_TARGET_BONUS_CATEGORY_RATES_SQL = `
       (company_id, category_key, effective_from DESC, id DESC);
 `;
 
+/** Phase 9: frozen physical-bale category evidence and one target claim per
+ * worker/day. Captured in the same transaction that locks End Production.
+ * Historical days never gain fabricated evidence by re-reading changed bales.
+ */
+const FACTORY_BONUS_CATEGORY_EVIDENCE_SQL = `
+  CREATE TABLE IF NOT EXISTS factory_target_bonus_category_day_captures (
+    company_id INTEGER NOT NULL,
+    production_date DATE NOT NULL,
+    captured_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    captured_by VARCHAR(255),
+    PRIMARY KEY (company_id, production_date)
+  );
+  CREATE TABLE IF NOT EXISTS factory_target_bonus_category_bale_snapshots (
+    id BIGSERIAL PRIMARY KEY,
+    company_id INTEGER NOT NULL,
+    production_date DATE NOT NULL,
+    bale_id INTEGER NOT NULL,
+    worker_id INTEGER NOT NULL,
+    category_label TEXT,
+    finalized_at TIMESTAMP,
+    source_stock_date DATE NOT NULL,
+    captured_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT factory_bonus_bale_once_per_day UNIQUE (company_id, production_date, bale_id),
+    CONSTRAINT factory_bonus_bale_capture_fk
+      FOREIGN KEY (company_id, production_date)
+      REFERENCES factory_target_bonus_category_day_captures(company_id, production_date)
+      ON DELETE RESTRICT
+  );
+  CREATE INDEX IF NOT EXISTS factory_bonus_category_bale_worker_idx
+    ON factory_target_bonus_category_bale_snapshots
+      (company_id, production_date, worker_id);
+  CREATE TABLE IF NOT EXISTS factory_target_bonus_category_allocation_sets (
+    id BIGSERIAL PRIMARY KEY,
+    company_id INTEGER NOT NULL,
+    production_date DATE NOT NULL,
+    worker_id INTEGER NOT NULL,
+    daily_target_bales NUMERIC(12,2) NOT NULL CHECK (daily_target_bales >= 0),
+    allocated_by VARCHAR(255) NOT NULL,
+    allocated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT factory_bonus_category_set_unique
+      UNIQUE (company_id, production_date, worker_id),
+    CONSTRAINT factory_bonus_category_set_capture_fk
+      FOREIGN KEY (company_id, production_date)
+      REFERENCES factory_target_bonus_category_day_captures(company_id, production_date)
+      ON DELETE RESTRICT
+  );
+  CREATE TABLE IF NOT EXISTS factory_target_bonus_category_allocations (
+    id BIGSERIAL PRIMARY KEY,
+    allocation_set_id BIGINT NOT NULL REFERENCES factory_target_bonus_category_allocation_sets(id)
+      ON DELETE RESTRICT,
+    category_key VARCHAR(100) NOT NULL,
+    category_label VARCHAR(100) NOT NULL,
+    credited_bales INTEGER NOT NULL CHECK (credited_bales >= 0),
+    target_bales NUMERIC(12,2) NOT NULL CHECK (target_bales >= 0),
+    CONSTRAINT factory_bonus_category_once_per_set UNIQUE (allocation_set_id, category_key)
+  );
+`;
+
 export const factoryStaffTrackingSchema = [
   FACTORY_STAFF_TRACKING_TABLE_SQL,
   `CREATE UNIQUE INDEX IF NOT EXISTS factory_staff_tracking_unique_period_person
@@ -271,6 +329,9 @@ export async function ensureFactoryStaffTrackingSchema(database: StartupQueryabl
 
   // Category settings are created on every boot but do not affect payable bonus rows.
   await database.query(FACTORY_PRODUCTION_TARGET_BONUS_CATEGORY_RATES_SQL);
+
+  // Immutable bale evidence and explicit daily target splits for Phase 9.
+  await database.query(FACTORY_BONUS_CATEGORY_EVIDENCE_SQL);
 
   // Production Targets review tables are required even without bulk migrations.
   await database.query(FACTORY_TARGET_BONUS_SCHEMA_SQL);
