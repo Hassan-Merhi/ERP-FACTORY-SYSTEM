@@ -104,7 +104,9 @@ export function registerContainerExtraExpectedLineRoutes(app: Express) {
         if (agreedPrice == null || !Number.isFinite(Number(agreedPrice)) || Number(agreedPrice) <= 0)
           throw new HttpError(409, "No saved agreed price for this customer and article. Save the price first.");
 
-        const storedCode = product.article_code.trim().toUpperCase();
+        // Preserve catalog spelling, so verification joins the extra quantity
+        // with existing master/loaded rows using the same exact article code.
+        const storedCode = product.article_code.trim();
         const itemName = product.name?.trim() || storedCode;
         const row = resultRows<ExtraLineRow>(await tx.execute(sql`
           INSERT INTO customer_order_extra_expected_lines
@@ -122,14 +124,17 @@ export function registerContainerExtraExpectedLineRoutes(app: Express) {
 
         // Previously scanned bales in THIS loading also adopt the saved agreed
         // rate. Recalculate the one article and order/daybook totals atomically.
-        const repriced = resultRows<{ id: number }>(await tx.execute(sql`
+        const repriced = resultRows<{ article_code: string }>(await tx.execute(sql`
           UPDATE customer_order_bales SET price_used = ${agreedPrice}
           WHERE order_id = ${orderId}
-            AND UPPER(TRIM(article_code)) = ${storedCode}
+            AND UPPER(TRIM(article_code)) = ${requestedCode}
             AND price_used IS DISTINCT FROM ${agreedPrice}::numeric
-          RETURNING id
+          RETURNING article_code
         `));
-        if (repriced.length > 0) await recalculateOrderTotalsForScannedArticle(tx, orderId, product.article_code);
+        for (const articleCode of new Set(repriced.map((r) => r.article_code))) {
+          // Source bale codes can differ in case from their product code.
+          await recalculateOrderTotalsForScannedArticle(tx, orderId, articleCode);
+        }
         return row;
       });
       return res.json(saved);
