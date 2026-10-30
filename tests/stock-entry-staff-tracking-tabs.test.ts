@@ -90,7 +90,8 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(defaultsEditor).toContain('queryKey: ["/api/factory/staff-tracking/production-target-defaults"]');
     expect(route).toContain("factory_worker_production_target_defaults");
     expect(targetDefaultsService).toContain("effective_from <=");
-    expect(targetDefaultsService).not.toContain("loadActiveProductionWorkerLinks");
+    expect(targetDefaultsService).toContain("loadActiveProductionWorkerLinks");
+    expect(targetDefaultsService).toContain("!defaults.has(member.workerId)");
     expect(route).toContain('category_overridden AS "categoryOverridden"');
     expect(route).toContain('target_overridden AS "targetBalesOverridden"');
     expect(route).toContain("defaultCategory");
