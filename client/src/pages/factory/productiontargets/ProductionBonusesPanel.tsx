@@ -39,6 +39,8 @@ interface BonusRow {
   reviewedBy: string | null;
   reviewedAt: string | null;
   lockedAmount: number | null;
+  targetConfigured?: boolean;
+  sourceFinalized?: boolean;
 }
 interface BonusResponse {
   start: string;
@@ -105,12 +107,12 @@ export function ProductionBonusesPanel({ initialDate }: { initialDate: string })
       row.category.toLocaleLowerCase().includes(needle) ||
       row.date.includes(needle);
     if (!matchesName) return false;
-    if (filter === "eligible") return row.status === "pending" && row.extraBales > 0;
+    if (filter === "eligible") return row.status === "pending" && row.extraBales > 0 && row.targetConfigured !== false;
     return filter === "all" || row.status === filter;
   }), [rows, search, filter]);
-  const eligible = visible.filter((row) => row.status === "pending" && row.extraBales > 0);
+  const eligible = visible.filter((row) => row.status === "pending" && row.extraBales > 0 && row.targetConfigured !== false);
   const selectedRows = rows.filter((row) =>
-    selected.includes(rowKey(row)) && row.status === "pending" && row.extraBales > 0
+    selected.includes(rowKey(row)) && row.status === "pending" && row.extraBales > 0 && row.targetConfigured !== false
   );
   const allVisibleSelected = eligible.length > 0 &&
     eligible.every((row) => selected.includes(rowKey(row)));
@@ -170,7 +172,7 @@ export function ProductionBonusesPanel({ initialDate }: { initialDate: string })
       toast({ title: "Rate not saved", description: err.message, variant: "destructive" }),
   });
   const canApproveSelected = selectedRows.length > 0 && selectedRows.every((row) =>
-    row.extraBales > 0 && row.ratePerBale != null && row.ratePerBale > 0
+    row.extraBales > 0 && row.targetConfigured !== false && row.ratePerBale != null && row.ratePerBale > 0
   );
   const selectedAmount = selectedRows.reduce((total, row) => total + row.proposedAmount, 0);
 
@@ -315,7 +317,7 @@ export function ProductionBonusesPanel({ initialDate }: { initialDate: string })
                   No finalized worker production in this range.
                 </TableCell></TableRow>
               ) : visible.map((row) => {
-                const actionable = row.status === "pending" && row.extraBales > 0;
+                const actionable = row.status === "pending" && row.extraBales > 0 && row.targetConfigured !== false;
                 return (
                   <TableRow key={rowKey(row)}>
                     {data?.canDecide && <TableCell>
@@ -330,7 +332,7 @@ export function ProductionBonusesPanel({ initialDate }: { initialDate: string })
                     <TableCell>
                       <p className="font-medium">{row.workerName}</p>
                       <p className="text-xs text-muted-foreground">
-                        {row.date}{row.linkGroupId != null && " · linked worker"}
+                        {row.date}{row.linkGroupId != null && " · linked worker"}{row.sourceFinalized === false && " · Live production"}
                       </p>
                     </TableCell>
                     <TableCell>{row.category || "—"}</TableCell>
@@ -355,6 +357,7 @@ export function ProductionBonusesPanel({ initialDate }: { initialDate: string })
                     <TableCell>
                       <Badge variant={row.status === "approved" ? "default" : "secondary"}>
                         {row.status === "pending" && row.extraBales === 0 ? "No extra bales" :
+                          row.status === "pending" && row.targetConfigured === false ? "Target needed" :
                           row.status === "pending" && row.ratePerBale == null ? "Rate needed" : row.status}
                       </Badge>
                       {row.reviewedAt && <p className="mt-1 text-[11px] text-muted-foreground">
@@ -369,8 +372,9 @@ export function ProductionBonusesPanel({ initialDate }: { initialDate: string })
           </Table>
         </div>
         <p className="text-xs text-muted-foreground">
-          Decisions are permanent audit records. Rejected bonuses pay $0. Select a payment account and post the
-          approved expense only in the separate payment workflow.
+          Live counts update until you approve. Approval freezes the worker/day target and credited bales
+          immediately, even without End Production. Bales scanned afterward are not added to the approved amount.
+          Approved payments are posted only from the separate Pay Bonuses step.
         </p>
       </CardContent>
 
