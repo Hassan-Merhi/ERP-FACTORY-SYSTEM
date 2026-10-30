@@ -8,8 +8,8 @@ import { ProductionBonusHistoryPanel } from "./productiontargets/ProductionBonus
 import { ProductionBonusWeeklyMethodPanel } from "./productiontargets/ProductionBonusWeeklyMethodPanel";
 import { ProductionBonusWeeklyPreviewPanel } from "./productiontargets/ProductionBonusWeeklyPreviewPanel";
 import { ProductionBonusCategoryRatesPanel } from "./productiontargets/ProductionBonusCategoryRatesPanel";
-import { ProductionBonusCategoryEvidencePanel } from "./productiontargets/ProductionBonusCategoryEvidencePanel";
-import { ProductionBonusCategoryPreviewPanel } from "./productiontargets/ProductionBonusCategoryPreviewPanel";
+
+
 import { localDateStr } from "./factoryProductionTargetsModel";
 
 type BonusTab = "setup" | "review" | "pay" | "history";
@@ -78,7 +78,6 @@ export default function FactoryProductionBonuses() {
         </div>
         <ProductionBonusWeeklyMethodPanel initialDate={initialDate} />
         <ProductionBonusCategoryRatesPanel initialDate={initialDate} />
-        <ProductionBonusCategoryEvidencePanel initialDate={initialDate} />
       </>}
       {active === "review" && <>
         <div className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
@@ -88,7 +87,6 @@ export default function FactoryProductionBonuses() {
         </div>
         <ProductionBonusesPanel initialDate={initialDate} />
         <ProductionBonusWeeklyPreviewPanel initialDate={initialDate} />
-        <ProductionBonusCategoryPreviewPanel initialDate={initialDate} />
       </>}
       {active === "pay" && <>
         <div className="rounded-lg border bg-card p-4 text-sm">
