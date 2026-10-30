@@ -133,6 +133,15 @@ export function registerFactoryTargetBonusRoutes(app: Express): void {
           let unchanged = 0;
 
           for (const choice of valid) {
+            // Category and legacy worker/day bonus reviews are mutually exclusive.
+            // Both routes hold advisory lock 84023 for the company.
+            const categoryReview = resultRows(await tx.execute(sql`
+              SELECT id FROM factory_target_bonus_category_reviews
+              WHERE company_id = ${companyId} AND production_date = ${choice.date}::date
+                AND worker_id = ${choice.workerId} LIMIT 1
+            `));
+            if (categoryReview.length)
+              throw httpError(409, "Category-weighted bonus was already reviewed for this worker/day");
             const item = index.get(decisionKey(choice.date, choice.workerId));
             if (!item) throw httpError(409, "This worker/date is not a finalized production record");
             if (item.status !== "pending") {

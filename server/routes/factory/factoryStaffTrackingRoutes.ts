@@ -5,6 +5,7 @@ import { requireAuth } from "../../auth";
 import { registerProductionTargetBonusCoreRoutes } from "./productionTargetBonusCoreRoutes";
 import { registerProductionTargetBonusCategoryRateRoutes } from "./productionTargetBonusCategoryRateRoutes";
 import { registerProductionBonusCategoryEvidenceRoutes } from "./productionBonusCategoryEvidenceRoutes";
+import { registerProductionBonusCategoryReviewRoutes } from "./productionBonusCategoryReviewRoutes";
 import { freezeProductionBonusCategoryEvidence, BONUS_CATEGORY_COUNTED_BALE_STATUSES, type CategoryCaptureCarry } from "../../services/factory/productionBonusCategoryCapture";
 import { factoryStaffTrackingMessages } from "../../i18n/factoryStaffTrackingMessages";
 import { getErrorMessage } from "../../lib/httpHandlers";
@@ -231,6 +232,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
   registerProductionTargetBonusCoreRoutes(app);
   registerProductionTargetBonusCategoryRateRoutes(app);
   registerProductionBonusCategoryEvidenceRoutes(app);
+  registerProductionBonusCategoryReviewRoutes(app);
   app.get("/api/factory/staff-tracking", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = getFactoryCompanyId(req);

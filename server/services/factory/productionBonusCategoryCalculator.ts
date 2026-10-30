@@ -1,4 +1,6 @@
 import { sql } from "drizzle-orm";
+import { categoryReviewSnapshotPayload, categoryReviewSnapshotToken } from "./categoryBonusReviewSnapshot";
+import type { DatabaseOrTransaction } from "../../db";
 import { db } from "../../db";
 import { resultRows } from "../../lib/queryResult";
 import {
@@ -24,13 +26,13 @@ type ReviewRow = { workerId: number | string; status: "approved" | "rejected" };
  * both rate versions and existing reviews are explicitly company-scoped.
  */
 export async function previewProductionBonusCategories(
-  companyId: number, date: string,
+  companyId: number, date: string, executor: DatabaseOrTransaction = db,
 ): Promise<CategoryBonusDayProposal> {
-  const evidence = await loadProductionBonusCategoryEvidence(db, companyId, date);
+  const evidence = await loadProductionBonusCategoryEvidence(executor, companyId, date);
   const keys = [...new Set(evidence.workers.flatMap(worker =>
     worker.categories.map(category => category.categoryKey)))];
   const [ratesResult, existingResult] = await Promise.all([
-    keys.length ? db.execute(sql`
+    keys.length ? executor.execute(sql`
       SELECT DISTINCT ON (category_key)
         id, category_key AS "categoryKey",
         category_label AS "categoryLabel", effective_from::text AS "effectiveFrom",
@@ -40,7 +42,7 @@ export async function previewProductionBonusCategories(
         AND category_key IN (${sql.join(keys.map(key => sql`${key}`), sql`, `)})
       ORDER BY category_key, effective_from DESC, id DESC
     `) : Promise.resolve({ rows: [] }),
-    db.execute(sql`
+    executor.execute(sql`
       SELECT worker_id AS "workerId", status
       FROM factory_target_bonus_reviews
       WHERE company_id = ${companyId} AND production_date = ${date}::date
@@ -58,5 +60,12 @@ export async function previewProductionBonusCategories(
   const legacyReviews = new Map<number, "approved" | "rejected">(
     (resultRows(existingResult) as ReviewRow[]).map(row => [Number(row.workerId), row.status]),
   );
-  return calculateCategoryBonusDay(evidence, rates, legacyReviews);
+  const proposal = calculateCategoryBonusDay(evidence, rates, legacyReviews);
+  for (const worker of proposal.workers) {
+    worker.reviewToken = categoryReviewSnapshotToken(
+      categoryReviewSnapshotPayload(proposal.calculationVersion, worker),
+    );
+  }
+  return proposal;
 }
+

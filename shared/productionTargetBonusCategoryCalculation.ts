@@ -59,6 +59,8 @@ export interface CategoryBonusWorkerProposal {
   blocked: boolean;
   reasons: CategoryBonusBlockReason[];
   legacyReviewStatus: "approved" | "rejected" | null;
+  /** Opaque SHA-256 of frozen proposal, rechecked before accepting a review. */
+  reviewToken?: string;
 }
 
 export interface CategoryBonusDayProposal {

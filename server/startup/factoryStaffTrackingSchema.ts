@@ -293,6 +293,117 @@ const FACTORY_BONUS_CATEGORY_EVIDENCE_SQL = `
   );
 `;
 
+/**
+ * Phase 11: immutable category-weighted worker/day review.
+ * Category approvals cannot be paid by legacy worker/day voucher posting.
+ * A separate Phase 12 payment adapter must reconcile both review sources.
+ */
+const FACTORY_BONUS_CATEGORY_REVIEW_SQL = `
+  CREATE TABLE IF NOT EXISTS factory_target_bonus_category_reviews (
+    id BIGSERIAL PRIMARY KEY,
+    company_id INTEGER NOT NULL,
+    production_date DATE NOT NULL,
+    worker_id INTEGER NOT NULL REFERENCES factory_workers(id) ON DELETE RESTRICT,
+    allocation_set_id BIGINT NOT NULL
+      REFERENCES factory_target_bonus_category_allocation_sets(id) ON DELETE RESTRICT,
+    calculation_version VARCHAR(80) NOT NULL,
+    currency_code VARCHAR(3) NOT NULL DEFAULT 'USD'
+      CHECK (currency_code = 'USD'),
+    target_bales NUMERIC(12,2) NOT NULL CHECK (target_bales > 0),
+    credited_bales INTEGER NOT NULL CHECK (credited_bales >= 0),
+    extra_bales NUMERIC(12,2) NOT NULL CHECK (extra_bales >= 0),
+    bonus_amount NUMERIC(18,2) NOT NULL CHECK (bonus_amount > 0),
+    status VARCHAR(12) NOT NULL CHECK (status IN ('approved','rejected')),
+    snapshot_json JSONB NOT NULL CHECK (jsonb_typeof(snapshot_json) = 'object'),
+    snapshot_hash CHAR(64) NOT NULL,
+    reviewed_by VARCHAR(255) NOT NULL,
+    reviewed_at TIMESTAMP NOT NULL DEFAULT now(),
+    review_note VARCHAR(500),
+    CONSTRAINT factory_bonus_category_review_one_worker_day
+      UNIQUE (company_id, production_date, worker_id),
+    CONSTRAINT factory_bonus_category_review_hash_format
+      CHECK (snapshot_hash ~ '^[a-f0-9]{64}
+  FACTORY_STAFF_TRACKING_TABLE_SQL,
+  `CREATE UNIQUE INDEX IF NOT EXISTS factory_staff_tracking_unique_period_person
+   ON factory_staff_tracking_entries
+     (company_id, page_type, period_type, period_start, period_end, person_type, person_id)`,
+  `CREATE INDEX IF NOT EXISTS factory_staff_tracking_company_period_idx
+   ON factory_staff_tracking_entries (company_id, page_type, period_start, period_end)`,
+];
+
+type StartupQueryable = {
+  query: (queryText: string) => Promise<unknown>;
+};
+
+export async function ensureFactoryStaffTrackingSchema(database: StartupQueryable): Promise<void> {
+  for (const statement of factoryStaffTrackingSchema) {
+    await database.query(statement);
+  }
+
+  // Keep the pinned startupMigrations array stable while still applying the
+  // production-day locking schema on every boot. Production calls this ensure
+  // path unconditionally even when the bulk startup migration pass is disabled.
+  await database.query(FACTORY_STAFF_TRACKING_LOCK_SCHEMA_SQL);
+
+  // Daily worker targets are versioned by effective date. A new default applies
+  // to that day and future days without rewriting any historical day snapshots.
+  await database.query(FACTORY_WORKER_PRODUCTION_TARGET_DEFAULTS_SCHEMA_SQL);
+
+  // Linked production workers use effective-dated membership and one shared
+  // target history, so unlinking never rewrites earlier production days.
+  await database.query(FACTORY_WORKER_PRODUCTION_LINKS_SCHEMA_SQL);
+
+  // Core effective-dated bonus rates are ensured before approvals and payments.
+  await database.query(FACTORY_PRODUCTION_TARGET_BONUS_RATES_SQL);
+
+  // Category settings are created on every boot but do not affect payable bonus rows.
+  await database.query(FACTORY_PRODUCTION_TARGET_BONUS_CATEGORY_RATES_SQL);
+
+  // Immutable bale evidence and explicit daily target splits for Phase 9.
+  await database.query(FACTORY_BONUS_CATEGORY_EVIDENCE_SQL);
+
+  // Production Targets review tables are required even without bulk migrations.
+  await database.query(FACTORY_TARGET_BONUS_SCHEMA_SQL);
+
+  // Category reviews are separate immutable decisions, never direct payment claims.
+  await database.query(FACTORY_BONUS_CATEGORY_REVIEW_SQL);
+
+  // Production can run with RUN_STARTUP_MIGRATIONS=false. Supplier tracking
+  // defaults are required by ordinary ERP requests, so ensure their idempotent
+  // table/index/function/trigger stage here as part of the same unconditional
+  // startup path instead of requiring a manual SQL deploy.
+  for (const statement of supplierTrackingDefaultsSchema) {
+    await database.query(statement);
+  }
+}
+)
+  );
+  CREATE INDEX IF NOT EXISTS factory_bonus_category_reviews_history_idx
+    ON factory_target_bonus_category_reviews(company_id, production_date DESC, worker_id);
+
+  -- Protect the locked decision, category lines and rates even from an
+  -- accidentally added generic update/delete route. No silent edits.
+  CREATE OR REPLACE FUNCTION prevent_category_bonus_review_mutation()
+    RETURNS trigger LANGUAGE plpgsql AS $
+    BEGIN
+      RAISE EXCEPTION 'Category bonus reviews are immutable';
+    END;
+    $;
+  DO $
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_trigger WHERE tgname = 'factory_bonus_category_review_immutable'
+        AND tgrelid = 'factory_target_bonus_category_reviews'::regclass
+        AND NOT tgisinternal
+    ) THEN
+      CREATE TRIGGER factory_bonus_category_review_immutable
+        BEFORE UPDATE OR DELETE ON factory_target_bonus_category_reviews
+        FOR EACH ROW EXECUTE FUNCTION prevent_category_bonus_review_mutation();
+    END IF;
+  END
+  $;
+`;
+
 export const factoryStaffTrackingSchema = [
   FACTORY_STAFF_TRACKING_TABLE_SQL,
   `CREATE UNIQUE INDEX IF NOT EXISTS factory_staff_tracking_unique_period_person
