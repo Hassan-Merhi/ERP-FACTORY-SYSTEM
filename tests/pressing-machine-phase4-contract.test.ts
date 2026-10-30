@@ -34,9 +34,10 @@ describe("Pressing machine Phase 4 transaction safety", () => {
     expect(route).toContain("isNull(factoryBales.deletedAt)");
     expect(route).toContain('bale.status === "DELETED"');
     expect(route).not.toContain("PRESSING_BALE_NOT_PENDING");
-    expect(route).toContain("nonBalePriorityProductIds");
     expect(route).toContain("PRESSING_BALE_NOT_FOUND");
-    expect(route).toContain("PRESSING_NON_BALE_ITEM");
+    expect(route).not.toContain("PRESSING_NON_BALE_ITEM");
+    expect(route).not.toContain("isNonBalePriorityProduct");
+    expect(route).toContain("Non-bale Priority products");
   });
 
   it("enforces one active confirmation across all machines and a unique request ID", () => {

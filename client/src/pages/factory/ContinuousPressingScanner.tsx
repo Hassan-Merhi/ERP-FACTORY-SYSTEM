@@ -210,7 +210,7 @@ export function ContinuousPressingScanner({
     } catch {
       if (sequence === latestCaptureRef.current) setLast({
         barcode, at: deviceCapturedAt, outcome: "rejected",
-        message: "Unable to validate barcode. This bale has NOT been confirmed.", intervalSeconds,
+        message: "Unable to validate barcode. This item has NOT been confirmed.", intervalSeconds,
       });
       feedback("rejected");
     } finally {
@@ -405,7 +405,7 @@ export function ContinuousPressingScanner({
         {!simpleControls && running && (
           <form onSubmit={submitManual} className="flex flex-wrap items-center gap-2">
             <Keyboard className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <Input aria-label="Manual bale barcode" placeholder="Manual barcode entry" autoComplete="off"
+            <Input aria-label="Manual item barcode" placeholder="Manual barcode entry" autoComplete="off"
               className="min-w-[150px] flex-1" maxLength={120}
               value={manualCode} onChange={event => setManualCode(event.target.value)} />
             <Button type="submit" variant="secondary" disabled={!manualCode.trim()}>

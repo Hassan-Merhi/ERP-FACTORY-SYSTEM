@@ -107,7 +107,7 @@ export default function PressingMachineManagement({ active }: { active: boolean 
       setLast({ barcode: value, outcome });
       if (outcome.kind === "confirmed") {
         void queryClient.invalidateQueries({ queryKey: [ROOT + "/report"] });
-        toast({ title: "Bale scanned", description: value + " — pressing recorded" });
+        toast({ title: "Item scanned", description: value + " — pressing recorded" });
       } else if (outcome.kind === "duplicate" || outcome.kind === "rejected") {
         toast({ title: "Scan not accepted", description: outcome.message, variant: "destructive" });
       }
@@ -164,7 +164,7 @@ export default function PressingMachineManagement({ active }: { active: boolean 
                 onClick={() => { setScanMode("manual"); inputRef.current?.focus(); }}>Manual Entry</Button>
             </div>
             <span className="text-[11px] text-muted-foreground">
-              {scanMode === "barcode" ? "Ready for USB or Bluetooth barcode scanner" : "Type a bale reference and press Scan"}
+              {scanMode === "barcode" ? "Ready for USB or Bluetooth barcode scanner" : "Type a bale or priority product reference and press Scan"}
             </span>
           </div>
         )}
@@ -172,7 +172,7 @@ export default function PressingMachineManagement({ active }: { active: boolean 
           {fullControls && <><div className="relative min-w-0 flex-1">
             <ScanLine className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input ref={inputRef} autoComplete="off" data-testid="input-pressing-scan"
-              className="h-11 rounded-lg border-border/80 bg-background/80 pl-10 font-mono shadow-inner focus-visible:ring-blue-500/40" placeholder="Scan bale reference / barcode..."
+              className="h-11 rounded-lg border-border/80 bg-background/80 pl-10 font-mono shadow-inner focus-visible:ring-blue-500/40" placeholder="Scan bale or priority product barcode..."
               value={barcode} onChange={e => setBarcode(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); void scanOne(barcode); } }}
               disabled={!assignment || !active || submitting} />
