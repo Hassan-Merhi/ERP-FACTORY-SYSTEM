@@ -45,7 +45,22 @@ describe("weekly and monthly Production Targets rollup",()=>{
     const summary=aggregateProductionPeriodDays([
       day("2026-10-26",9,null),day("2026-10-27",9,null),
     ],[{date:"2026-10-26",workerId:9,producedBales:3}]);
-    expect(summary.get(9)).toMatchObject({targetBales:null,producedBales:3,days:2});
+    expect(summary.get(9)).toMatchObject({targetBales:null,producedBales:3,days:2,missingTargetDays:2});
+  });
+
+  it("marks an incomplete custom period without treating zero targets as missing",()=>{
+    const summary=aggregateProductionPeriodDays([
+      day("2026-10-27",4,8),
+      day("2026-10-28",4,null),
+      day("2026-10-29",4,0,"Absent"),
+    ],[
+      {date:"2026-10-27",workerId:4,producedBales:9},
+      {date:"2026-10-28",workerId:4,producedBales:6},
+    ]);
+    expect(summary.get(4)).toMatchObject({
+      targetBales:8,absentTargetBales:0,producedBales:15,
+      missingTargetDays:1,absentDays:1,days:3,
+    });
   });
 
   it("separates months and workers in the given day range",()=>{

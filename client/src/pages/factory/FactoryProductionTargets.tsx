@@ -49,6 +49,7 @@ import {
 import { ProductionTargetDefaultsDialog } from "./productiontargets/ProductionTargetDefaultsDialog";
 import { ProductionTargetsEditorDialog } from "./productiontargets/ProductionTargetsEditorDialog";
 import { ProductionExcelRangeDialog, type ProductionExportDates } from "./productiontargets/ProductionExcelRangeDialog";
+import { ProductionTargetsDateRangeDialog, type ProductionTargetsDateRange } from "./productiontargets/ProductionTargetsDateRangeDialog";
 import { Coins } from "lucide-react";
 import { useLocation } from "wouter";
 import type { AuthMe } from "@shared/apiTypes";
@@ -120,13 +121,17 @@ export default function FactoryProductionTargets() {
   const tr = (key: FactoryStaffTrackingTranslationKey) => translateFactoryStaffTrackingText(key, language);
   const [periodType, setPeriodType] = useState<PeriodType>("daily");
   const [referenceDate, setReferenceDate] = useState(() => localDateStr(new Date()));
+  const [customRange, setCustomRange] = useState<ProductionTargetsDateRange | null>(null);
+  const [dateRangeOpen, setDateRangeOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<ProductionRow[]>([]);
   const [editorOpen, setEditorOpen] = useState(false);
   const [defaultsEditorOpen, setDefaultsEditorOpen] = useState(false);
   const [excelRangeOpen, setExcelRangeOpen] = useState(false);
   const productionReportRef = useRef<HTMLDivElement>(null);
-  const period = useMemo(() => periodFor(periodType, referenceDate), [periodType, referenceDate]);
+  const period = useMemo(() =>
+    periodType === "daily" ? periodFor("daily", referenceDate) : (customRange ?? periodFor(periodType, referenceDate)),
+  [periodType, referenceDate, customRange]);
 
   const { data, isLoading } = useQuery<ProductionResponse>({
     queryKey: ["/api/factory/staff-tracking", "production", periodType, period.start, period.end],
@@ -279,6 +284,12 @@ export default function FactoryProductionTargets() {
   const productionReportGroups = useMemo(() => groupProductionRows(collapsedRows), [collapsedRows]);
 
   const totals = useMemo(() => summarizeProductionRows(rows), [rows]);
+  const missingTargetDays = useMemo(
+    () => periodType === "daily"
+      ? 0
+      : rows.reduce((sum, row) => sum + (row.missingTargetDays ?? 0), 0),
+    [rows, periodType],
+  );
   const workerTotals = useMemo(
     () => ({
       total: rows.length,
@@ -308,7 +319,10 @@ export default function FactoryProductionTargets() {
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground">{tr("period")}</p>
-            <Select value={periodType} onValueChange={(value) => setPeriodType(value as PeriodType)} disabled={busy}>
+            <Select value={periodType} onValueChange={(value) => {
+              setPeriodType(value as PeriodType);
+              setCustomRange(null);
+            }} disabled={busy}>
               <SelectTrigger className="w-[130px]" data-testid="select-production-period-type">
                 <SelectValue />
               </SelectTrigger>
@@ -320,14 +334,44 @@ export default function FactoryProductionTargets() {
             </Select>
           </div>
           <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">{tr("referenceDate")}</p>
-            <Input
-              type="date"
-              value={referenceDate}
-              onChange={(event) => setReferenceDate(event.target.value)}
-              className="w-[155px]"
-              disabled={busy}
-            />
+            <p className="text-xs text-muted-foreground">{periodType === "daily" ? tr("referenceDate") : "Date range"}</p>
+            {periodType === "daily" ? (
+              <Input
+                type="date"
+                value={referenceDate}
+                onChange={(event) => setReferenceDate(event.target.value)}
+                className="w-[155px]"
+                disabled={busy}
+              />
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9 gap-2 tabular-nums"
+                  onClick={() => setDateRangeOpen(true)}
+                  disabled={busy}
+                  title="Choose start and end dates from the calendar"
+                  data-testid="button-production-targets-date-range"
+                >
+                  <CalendarDays className="h-4 w-4" />
+                  {period.start} — {period.end}
+                </Button>
+                {customRange && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setCustomRange(null)}
+                    disabled={busy}
+                    data-testid="button-reset-production-targets-date-range"
+                    title={periodType === "weekly" ? "Restore full week" : "Restore full month"}
+                  >
+                    Reset
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
 
           {periodType === "daily" && (
@@ -415,6 +459,14 @@ export default function FactoryProductionTargets() {
           : "Targets and attendance are summed from each date in this period; edit individual days in Daily view."}</span>
       </div>
 
+      {periodType !== "daily" && missingTargetDays > 0 && !isLoading && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300" role="status">
+          {missingTargetDays} worker-day targets are not configured in this range.
+          The target and expected totals include only recorded daily targets;
+          differences are withheld until the missing targets are set.
+        </div>
+      )}
+
       {finalized && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
           <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
@@ -451,7 +503,7 @@ export default function FactoryProductionTargets() {
         />
         <SummaryTile
           label={tr("diff")}
-          value={totals.difference > 0 ? `+${totals.difference}` : totals.difference}
+          value={missingTargetDays > 0 ? "—" : totals.difference > 0 ? `+${totals.difference}` : totals.difference}
           icon={<UserX className="h-5 w-5" />}
         />
       </div>
@@ -545,7 +597,9 @@ export default function FactoryProductionTargets() {
                       : members.some((member) => member.status === FACTORY_TRACKING_STATUSES.absent);
                     const comparisonTarget = periodType === "daily"
                       ? row.targetBales
-                      : row.targetBales == null ? null : row.targetBales - (row.absentTargetBales ?? 0);
+                      : (row.missingTargetDays ?? 0) > 0 || row.targetBales == null
+                        ? null
+                        : row.targetBales - (row.absentTargetBales ?? 0);
                     return (
                       <TableRow
                         key={row.linkGroupId != null ? `link-${row.linkGroupId}` : `worker-${row.personId}`}
@@ -618,6 +672,18 @@ export default function FactoryProductionTargets() {
           </TableBody>
         </Table>
       </div>
+
+      {periodType !== "daily" && (
+        <ProductionTargetsDateRangeDialog
+          open={dateRangeOpen}
+          onOpenChange={setDateRangeOpen}
+          range={period}
+          onApply={(nextRange) => {
+            setCustomRange(nextRange);
+            setDateRangeOpen(false);
+          }}
+        />
+      )}
 
       <ProductionExcelRangeDialog
         open={excelRangeOpen}

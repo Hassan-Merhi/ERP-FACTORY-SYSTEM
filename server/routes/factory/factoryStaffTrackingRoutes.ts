@@ -15,7 +15,6 @@ import { registerProductionBonusCheckoutRoutes } from "./productionBonusCheckout
 import { freezeProductionBonusCategoryEvidence, BONUS_CATEGORY_COUNTED_BALE_STATUSES, type CategoryCaptureCarry } from "../../services/factory/productionBonusCategoryCapture";
 import { factoryStaffTrackingMessages } from "../../i18n/factoryStaffTrackingMessages";
 import { isProductionTargetsRosterWorker } from "../../services/factory/productionTargetsRoster";
-import { loadProductionTargetsRosterIds } from "../../services/factory/productionTargetsRoster";
 import { loadProductionPeriodSummary } from "../../services/factory/productionPeriodSummary";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { resultRows } from "../../lib/queryResult";
@@ -104,6 +103,14 @@ function parseTrackingQuery(req: Request): {
   const periodEnd = String(req.query.periodEnd || "");
   if (!PAGE_TYPES.has(page) || !PERIOD_TYPES.has(periodType)) return null;
   if (!ISO_DATE.test(periodStart) || !ISO_DATE.test(periodEnd) || periodEnd < periodStart) return null;
+  if (page === "production" && periodType !== "daily") {
+    const from = new Date(periodStart + "T00:00:00Z");
+    const to = new Date(periodEnd + "T00:00:00Z");
+    const dayCount = (to.getTime() - from.getTime()) / 86400000 + 1;
+    if (!Number.isInteger(dayCount) || dayCount < 1 || dayCount > 31 ||
+        from.toISOString().slice(0, 10) !== periodStart ||
+        to.toISOString().slice(0, 10) !== periodEnd) return null;
+  }
   return { page, periodType, periodStart, periodEnd };
 }
 
@@ -330,11 +337,13 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
       // targets, attendance and physical bale credits. A saved weekly row
       // does not contain the worker's date-effective daily target.
       if (query.page === "production" && query.periodType !== "daily") {
-        const rosterIds = await loadProductionTargetsRosterIds(db, companyId, query.periodEnd);
-        const periodWorkers = includedWorkers.filter(worker => rosterIds.has(worker.id));
+        // Use the union of workers actually present on ANY date in the range.
+        // Restricting to the roster at periodEnd loses workers removed or
+        // reassigned before the last day, along with their daily target totals.
         const rollup = await loadProductionPeriodSummary(
-          companyId, query.periodStart, query.periodEnd, periodWorkers.map(worker => worker.id),
+          companyId, query.periodStart, query.periodEnd, workers.map(worker => worker.id),
         );
+        const periodWorkers = workers.filter(worker => rollup.has(worker.id));
         const periodRows = periodWorkers.map(worker => {
           const total = rollup.get(worker.id);
           return {
@@ -348,6 +357,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
             status: total?.status ?? "Present",
             absentDays: total?.absentDays ?? 0,
             periodDays: total?.days ?? 0,
+            missingTargetDays: total?.missingTargetDays ?? 0,
             notes: "", active: worker.active,
             // A link can change in the middle of the week/month. Credited
             // worker totals are already distributed by day, so do not
