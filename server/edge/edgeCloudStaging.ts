@@ -72,7 +72,7 @@ export async function stageVoucherEvents(pool: Pool, body: unknown, siteId: stri
       const index = BigInt(e.sequence);
       const existing = await client.query(
         `SELECT operation_id::text AS operation_id, company_id, local_voucher_id,
-                operation_kind, payload_sha256
+                operation_kind, actor_user_id, payload_sha256
            FROM factory_edge_staged_vouchers
           WHERE site_id = $1::uuid AND sequence = $2::bigint`,
         [siteId, e.sequence]
@@ -83,6 +83,7 @@ export async function stageVoucherEvents(pool: Pool, body: unknown, siteId: stri
             Number(old.company_id) !== e.companyId ||
             Number(old.local_voucher_id) !== e.localVoucherId ||
             String(old.operation_kind) !== e.kind ||
+            String(old.actor_user_id) !== e.actorUserId ||
             String(old.payload_sha256).trim() !== e.payloadSha256) {
           throw new EdgeStageConflict("EDGE_SYNC_DIVERGENT_REPLAY");
         }
