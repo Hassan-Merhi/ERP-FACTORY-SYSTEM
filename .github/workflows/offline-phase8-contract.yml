@@ -35,6 +35,8 @@ on:
       - 'tests/ui/offline-phase9*.tsx'
       - 'client/src/components/OfflineBanner.tsx'
       - 'client/src/contexts/ConnectivityContext.tsx'
+      - 'client/src/lib/offlineQueue.ts'
+      - 'client/src/lib/db.ts'
       - 'client/src/components/PendingSyncIndicator.tsx'
       - '.github/workflows/offline-phase8-contract.yml'
   workflow_dispatch:
@@ -80,6 +82,8 @@ jobs:
         env:
           PHASE8_TEST_DATABASE_URL: postgresql://postgres:phase8-test-admin-pass@127.0.0.1:55433/postgres
         run: node --test tests/offline-phase8-postgres.test.mjs
+      - name: Refuse new unverified legacy browser queue entries
+        run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-phase9-legacy-queue.test.ts
       - name: Test legacy banner cannot replay unverified writes
         run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-phase9-legacy-banner.test.tsx
       - name: Verify narrow device capture and legacy queue quarantine
