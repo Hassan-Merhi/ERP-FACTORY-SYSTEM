@@ -1,7 +1,17 @@
 import type { ApplicationLanguage } from "@shared/applicationLanguageContract";
 
 const translations = {
-  title: { en: "Production Bonus Payroll", ar: "رواتب مكافآت الإنتاج", fr: "Primes de production" },
+  payWorkers: { en: "Pay workers", ar: "دفع مكافآت العمال", fr: "Payer les ouvriers" },
+  payIntro: { en: "Select who gets a bonus, review the total, and pay.", ar: "اختر العمال المستحقين، راجع الإجمالي ثم ادفع.", fr: "Sélectionnez les primes, vérifiez le total puis payez." },
+  worker: { en: "Worker", ar: "العامل", fr: "Ouvrier" },
+  totalWorkers: { en: "workers in this period", ar: "عمال خلال هذه الفترة", fr: "ouvriers sur cette période" },
+  searchWorkers: { en: "Search workers...", ar: "البحث عن عامل...", fr: "Rechercher un ouvrier..." },
+  showPayable: { en: "Ready", ar: "الجاهزون", fr: "À payer" },
+  showEveryone: { en: "All workers", ar: "جميع العمال", fr: "Tous les ouvriers" },
+  productionSummary: { en: "Production", ar: "الإنتاج", fr: "Production" },
+  noMatches: { en: "No matching workers. Try another name.", ar: "لا يوجد عمال مطابقون. جرّب اسماً آخر.", fr: "Aucun ouvrier correspondant. Essayez un autre nom." },
+  noPayable: { en: "No bonuses ready to pay in this period. View all workers to see why.", ar: "لا توجد مكافآت جاهزة للدفع لهذه الفترة. اعرض جميع العمال لمعرفة السبب.", fr: "Aucune prime à payer pour cette période. Affichez tous les ouvriers pour en connaître la raison." },
+  title: { en: "Production Bonuses", ar: "مكافآت الإنتاج", fr: "Primes de production" },
   intro: { en: "Select workers, verify the target and extra-bale calculation, then Pay. Approval and payment are one confirmed transaction. A saved open Production Targets day can be paid without End Production.", ar: "حدّد العمال وراجع حساب الهدف والبالات الإضافية ثم ادفع. تتم الموافقة والدفع في معاملة واحدة، حتى قبل إنهاء الإنتاج عند حفظ الأهداف.", fr: "Sélectionnez les ouvriers, vérifiez les calculs puis payez. L’approbation et le paiement sont effectués ensemble, même avant la clôture de production si les objectifs sont enregistrés." },
   fromDate: { en: "From", ar: "من تاريخ", fr: "Du" },
   toDate: { en: "To", ar: "إلى تاريخ", fr: "Au" },
