@@ -90,13 +90,8 @@ async function getReviewTx(tx: DbTransaction, companyId: number, date: string, w
     FROM factory_workers WHERE id = ${workerId} AND company_id = ${companyId}
   `));
   if (!worker) conflict("Worker no longer belongs to this factory");
-  const finalized = first(await tx.execute(sql`
-    SELECT 1 AS ready FROM factory_staff_tracking_period_closures
-    WHERE company_id = ${companyId} AND page_type='production' AND period_type='daily'
-      AND period_start = ${date}::date AND period_end = ${date}::date
-    LIMIT 1
-  `));
-  if (!finalized) conflict("Production must be finalized before paying a bonus");
+  // Approved reviews are immutable snapshots of saved targets and live stock
+  // evidence. Production closure is not a prerequisite for those snapshots.
   return {
     id: Number(review.id),
     workerId,
@@ -151,7 +146,15 @@ export async function postTargetBonusPayments(
 ) {
   if (!positiveId(companyId)) throw new HttpError(400, "Factory company required");
   if (!actor.userId) throw new HttpError(401, "A signed-in approver is required");
-  return db.transaction(async (tx) => {
+  return db.transaction(tx => postTargetBonusPaymentsInTransaction(tx, companyId, command, actor));
+}
+
+/** Shared with checkout's review+pay transaction, rolling back every action on
+ * error. The company lock serializes concurrent bonus writers. */
+export async function postTargetBonusPaymentsInTransaction(
+  tx: DbTransaction, companyId: number, command: TargetBonusPaymentCommand,
+  actor: TargetBonusPaymentActor,
+) {
     // Same company lock used by Phase 4 decision endpoint. Prevents two
     // administrators choosing incompatible payouts for the same worker/day.
     await tx.execute(sql`SELECT pg_advisory_xact_lock(84023, ${companyId})`);
@@ -247,7 +250,6 @@ export async function postTargetBonusPayments(
       cashAccountId: cashId, results,
       posted: results.filter((row) => !row.replayed).length,
       replayed: results.filter((row) => row.replayed).length };
-  });
 }
 
 export async function reverseTargetBonusPayment(
