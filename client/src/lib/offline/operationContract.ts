@@ -56,7 +56,7 @@ const OFFLINE_JOURNAL_LINE = new Set([
   "ledgerAccountId", "debitAmount", "creditAmount", "narration",
 ]);
 const OFFLINE_JOURNAL_TOP = new Set(["voucher", "entries", "clientRequestId"]);
-const OFFLINE_JOURNAL_MONEY = /^(?:0|[1-9][0-9]{0,14})(?:\\.[0-9]{1,2})?$/;
+const OFFLINE_JOURNAL_MONEY = /^(?:0|[1-9][0-9]{0,14})(?:\.[0-9]{1,2})?$/;
 
 function offlineJournalCents(value: unknown): bigint | null {
   const text = String(value ?? "0");
@@ -79,7 +79,7 @@ export function isVettedOfflineVoucherPayload(input: unknown): boolean {
       String(voucher.currency ?? "USD") !== "USD" ||
       voucher.locationId != null || voucher.effectiveDate != null ||
       typeof voucher.voucherDate !== "string" ||
-      !/^\\d{4}-\\d{2}-\\d{2}$/.test(voucher.voucherDate)) return false;
+      !/^\d{4}-\d{2}-\d{2}$/.test(voucher.voucherDate)) return false;
   const parsedDate = new Date(voucher.voucherDate + "T00:00:00Z");
   if (!Number.isFinite(parsedDate.getTime()) ||
       parsedDate.toISOString().slice(0, 10) !== voucher.voucherDate) return false;
