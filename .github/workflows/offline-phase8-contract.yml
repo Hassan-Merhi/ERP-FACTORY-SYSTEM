@@ -17,6 +17,14 @@ on:
       - 'scripts/edge/fetch-applied-receipts.mjs'
       - 'tests/offline-phase8*.mjs'
 
+      - 'server/edge/phase9*.mjs'
+      - 'server/edge/phase9*.d.mts'
+      - 'client/src/components/OfflineWriteStatusPanel.tsx'
+      - 'client/src/components/OfflinePrepPanel.tsx'
+      - 'client/src/lib/offline/phase9Status.ts'
+      - 'scripts/edge/audit-phase9-write-coverage.mjs'
+      - 'tests/offline-phase9*.mjs'
+      - 'tests/ui/offline-phase9*.ts'
       - '.github/workflows/offline-phase8-contract.yml'
   workflow_dispatch:
 
@@ -51,6 +59,12 @@ jobs:
         run: node --test tests/offline-phase8-contract.test.mjs
       - name: Refuse unsafe initial voucher source shapes
         run: node --test tests/offline-phase8-posting-shape.test.mjs
+      - name: Verify Phase 9 scoped status + full write inventory safety
+        run: node --test tests/offline-phase9-status.node.test.mjs tests/offline-phase9-write-coverage.node.test.mjs
+      - name: Audit all registered business writes (unapproved paths remain blocked)
+        run: node scripts/edge/audit-phase9-write-coverage.mjs
+      - name: Verify Phase 9 client receipt/status separation
+        run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-phase9-status.test.ts
       - name: Exercise exactly-once posting on disposable PostgreSQL 17
         env:
           PHASE8_TEST_DATABASE_URL: postgresql://postgres:phase8-test-admin-pass@127.0.0.1:55433/postgres
