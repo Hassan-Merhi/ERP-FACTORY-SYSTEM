@@ -108,6 +108,8 @@ export function registerProductionTargetBonusWeeklyMethodRoutes(app: Express): v
       }
       try {
         const saved = await db.transaction(async tx => {
+          // Order locks consistently with weekly and daily award decisions.
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(84023, ${companyId})`);
           await tx.execute(sql`SELECT pg_advisory_xact_lock(7643, ${companyId})`);
           const existing = resultRows(await tx.execute(sql`
             SELECT id, method, effective_week::text AS "effectiveWeek",
@@ -126,6 +128,16 @@ export function registerProductionTargetBonusWeeklyMethodRoutes(app: Express): v
               return { status: 409, message: "requestKey was already used for another change" };
             return { status: 200, versionId: Number(previous.id), replayed: true };
           }
+          // A backdated method version could retroactively change an already
+          // reviewed week's choice. Require a future week instead.
+          const lockedWeeks = resultRows(await tx.execute(sql`
+            SELECT 1 FROM factory_target_bonus_weekly_reviews
+            WHERE company_id = ${companyId}
+              AND week_start >= ${effectiveWeek}::date LIMIT 1
+          `));
+          if (lockedWeeks.length)
+            return { status: 409, message: "A reviewed weekly bonus exists on or after this date; choose a later effective Monday" };
+
           const created = resultRows(await tx.execute(sql`
             INSERT INTO factory_production_target_bonus_weekly_methods (
               company_id, effective_week, method, flat_bonus_usd, note, request_key, created_by
