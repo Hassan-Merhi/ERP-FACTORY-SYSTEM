@@ -17,7 +17,7 @@ const enabled = Boolean(process.env.DATABASE_URL);
     }),
   };
   const operationId = randomUUID();
-  const payload = { voucher: { id: 88, totalAmount: "12.00" }, entries: [{ debitAmount: "12.00" }] };
+  const payload = { voucher: { id: 88, companyId: 6, totalAmount: "12.00" }, entries: [{ debitAmount: "12.00" }] };
   const event = {
     sequence: "1",
     operationId,
