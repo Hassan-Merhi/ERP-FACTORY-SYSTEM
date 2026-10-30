@@ -5,6 +5,7 @@ import {
   isAutoReplayAllowed,
   isValidOfflineActor,
   isVettedOfflineVoucherPayload,
+  matchesOfflineVoucherAcknowledgement,
   offlineRetryDelay,
   validateOfflinePayload,
   type OfflineActor,
@@ -52,7 +53,8 @@ function getDeviceId(): string {
  */
 export async function queueOfflineOperation(input: QueueOfflineInput): Promise<OfflineOperation> {
   if (!isValidOfflineActor(input.actor)) throw offlineError("OFFLINE_ACTOR_REQUIRED");
-  if (!isAutoReplayAllowed(input.method, input.url)) {
+  if (input.mode !== "erp" || input.entityType !== "voucher-with-entries" ||
+      !isAutoReplayAllowed(input.method, input.url)) {
     throw offlineError("OFFLINE_WRITE_UNVERIFIED");
   }
   if (!validateOfflinePayload(input.payload)) throw offlineError("OFFLINE_UNSAFE_PAYLOAD");
@@ -254,6 +256,18 @@ export async function deliverOfflineOperations(transport: typeof fetch = fetch):
         const raw = await response.text().catch(() => "");
         const outcome = classifyOfflineResponse(response.status);
         if (outcome === "acknowledged") {
+          // A 2xx might be the wrong route, company or voucher. Do NOT retry
+          // automatically when the response is ambiguous: the ledger may
+          // have committed even though its proof did not reach this device.
+          if (!matchesOfflineVoucherAcknowledgement(item, raw)) {
+            await settleOperation(item.id, "needs_review", {
+              response: raw.slice(0, 16384),
+              lastError: "OFFLINE_RECEIPT_UNVERIFIED",
+              attempts: item.attempts + 1,
+            });
+            summary.rejected++;
+            break;
+          }
           await settleOperation(item.id, "acknowledged", {
             response: raw,
             acknowledgedAt: Date.now(),
