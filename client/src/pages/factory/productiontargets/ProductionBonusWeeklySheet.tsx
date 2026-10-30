@@ -24,6 +24,9 @@ export type BonusSheetWorker = {
   produced: number;
   extra: number;
   amount: number;
+  weeklyAmount: number;
+  weeklyProjected: boolean;
+  weeklyApproved: boolean;
   readyDays: number;
   paidDays: number;
   needsSetup: number;
@@ -81,7 +84,9 @@ export function ProductionBonusWeeklySheet({
   const totalProduced = workers.reduce((total, worker) => total + worker.produced, 0);
   const totalTarget = workers.reduce((total, worker) => total + worker.target, 0);
   const totalExtra = workers.reduce((total, worker) => total + worker.extra, 0);
-  const payableTotal = workers.reduce((total, worker) => total + Math.round(worker.amount * 100), 0) / 100;
+  const displayedTotal = workers.reduce((total, worker) =>
+    total + Math.round(worker.amount * 100) + Math.round(worker.weeklyAmount * 100), 0) / 100;
+  const includesWeekly = workers.some(worker => worker.weeklyAmount > 0);
 
   return <section className="overflow-hidden rounded-xl border border-border/70"
     aria-label={t("sheetView")} data-testid="production-bonus-daily-sheet">
@@ -118,6 +123,8 @@ export function ProductionBonusWeeklySheet({
             const byDate = new Map(worker.days.map(day => [day.date, day]));
             const status = ready ? t("ready") :
               worker.paidDays ? t("paidStatus") :
+              worker.weeklyProjected ? "Weekly bonus · projected" :
+              worker.weeklyApproved ? "Weekly bonus · approved" :
               worker.weeklyDays ? t("weeklyStatus") :
               worker.needsSetup ? t("needsSetup") :
               worker.blockedDays ? t("needsReview") : t("sheetNoExtra");
@@ -167,8 +174,12 @@ export function ProductionBonusWeeklySheet({
               </td>
               <td className="border-b px-3 py-2 text-right align-middle tabular-nums">
                 <strong className={ready ? "text-primary" : "text-muted-foreground"}>
-                  {dollars(worker.amount)}
+                  {dollars(worker.amount + worker.weeklyAmount)}
                 </strong>
+                {worker.weeklyAmount > 0 && <span className="mt-1 block text-[11px] font-normal text-amber-600 dark:text-amber-400">
+                  {worker.weeklyProjected ? "Projected · complete week before approval" : "Weekly review approved"}
+                  {" · paid separately"}
+                </span>}
               </td>
             </tr>;
           })}
@@ -185,7 +196,11 @@ export function ProductionBonusWeeklySheet({
                 {t("target")}: {totalTarget} · +{totalExtra} {t("extra")}
               </span>
             </td>
-            <td className="px-3 py-3 text-right">{dollars(payableTotal)}</td>
+            <td className="px-3 py-3 text-right">{dollars(displayedTotal)}
+              {includesWeekly && <span className="block text-[11px] font-normal text-muted-foreground">
+                Includes weekly bonuses · not in this payment checkout
+              </span>}
+            </td>
           </tr>
         </tfoot>}
       </table>
