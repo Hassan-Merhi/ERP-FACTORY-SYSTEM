@@ -63,6 +63,9 @@ export function registerOrderCrudRoutes(app: Express) {
         await tx.execute(
           sql`DELETE FROM customer_order_expected_lines WHERE company_id = ${companyId} AND order_id = ${orderId}`
         );
+        // Extras are priced for the old customer; never carry them to a new one.
+        await tx.execute(sql`DELETE FROM customer_order_extra_expected_lines
+          WHERE company_id = ${companyId} AND order_id = ${orderId}`);
         const [written] = await tx
           .update(customerOrders)
           .set({

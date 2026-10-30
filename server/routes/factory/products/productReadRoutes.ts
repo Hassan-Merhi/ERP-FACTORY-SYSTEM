@@ -44,6 +44,7 @@ export function registerFactoryProductReadRoutes(app: Express) {
             weightPerBaleKg: factoryBaleProducts.weightPerBaleKg,
             categoryId: factoryBaleProducts.categoryId,
             active: factoryBaleProducts.active,
+            sellingPrice: factoryBaleProducts.sellingPrice,
           })
           .from(factoryBaleProducts)
           .where(where)

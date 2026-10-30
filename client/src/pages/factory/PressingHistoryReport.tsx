@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   CalendarDays, ChevronDown, ChevronUp, Download, LayoutList, List,
-  PackageCheck, RefreshCw, ScanLine, ShieldCheck, SlidersHorizontal, Weight, TrendingUp, UsersRound,
+  PackageCheck, RefreshCw, ShieldCheck, SlidersHorizontal, Weight, TrendingUp, UsersRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -133,7 +133,7 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
           <div>
             <h3 className="text-lg font-bold tracking-tight">Pressing Overview</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Confirmed bales and KG · totals cover the complete selected period
+              Confirmed items and KG · totals cover the complete selected period
             </p>
           </div>
         </div>
@@ -174,7 +174,7 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
               </div>
               <div className="mt-4 flex items-baseline gap-2">
                 <strong className="text-3xl font-extrabold leading-none tracking-tight tabular-nums">{countText(worker.bales)}</strong>
-                <span className="text-xs text-muted-foreground">Total bales</span>
+                <span className="text-xs text-muted-foreground">Total items</span>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-2 border-t border-border/60 pt-3">
                 <div className="min-w-0">
@@ -205,7 +205,7 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
           </div>
           <div className="mt-4 flex items-baseline gap-2">
             <strong className="text-3xl font-extrabold leading-none tracking-tight tabular-nums">{countText(allWorkerBales)}</strong>
-            <span className="text-xs text-muted-foreground">Total bales</span>
+            <span className="text-xs text-muted-foreground">Total items</span>
           </div>
           <div className="mt-4 grid grid-cols-2 gap-2 border-t border-border/60 pt-3">
             <div className="min-w-0">
@@ -288,7 +288,7 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
                 </select>
               </label>
             )}
-            <label className="space-y-1 text-xs font-medium text-muted-foreground">Bale weight
+            <label className="space-y-1 text-xs font-medium text-muted-foreground">Item weight
               <select aria-label="Pressing KG filter"
                 value={filters.weightKg === undefined ? "" : String(filters.weightKg)}
                 className="h-10 w-full rounded-md border bg-background px-2 text-sm text-foreground"
@@ -322,7 +322,7 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
           {invalidDates && <p role="alert" className="mt-2 text-sm text-destructive">From date/time cannot exceed To date/time.</p>}
           {filters.status !== "active" && (
             <p className="mt-2 text-xs text-muted-foreground">
-              KPI totals count confirmed bales only. The history below follows your selected status.
+              KPI totals count confirmed items only. The history below follows your selected status.
             </p>
           )}
           {Number(summary?.voidedBales || 0) > 0 && (
@@ -342,7 +342,7 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
               <LayoutList className="h-4 w-4 text-muted-foreground" />
             </span>
             <span className="min-w-0">
-              <span className="block font-semibold">Scanned Bales</span>
+              <span className="block font-semibold">Scanned Items</span>
               <span className="block text-xs text-muted-foreground">
                 {countText(report.data?.total)} {filters.mode === "condensed" ? "groups" : "scans"} · {historyExpanded ? "Collapse history" : "Open history to view scans"}
               </span>
@@ -383,7 +383,7 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
                   <>
                     <thead className="bg-muted/70">
                       <tr>
-                        <th className="p-3">Bale Ref</th><th className="p-3">Article</th>
+                        <th className="p-3">Reference</th><th className="p-3">Article</th>
                         <th className="p-3">Product</th><th className="p-3 text-right">KG</th>
                         <th className="p-3">Scanned by</th><th className="p-3">Date &amp; Time (Beirut)</th>
                       </tr>
@@ -400,7 +400,7 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
                         </tr>
                       ))}
                       {!detail.length && !report.isFetching && (
-                        <tr><td colSpan={6} className="p-5 text-center text-muted-foreground">No scanned bales for these filters.</td></tr>
+                        <tr><td colSpan={6} className="p-5 text-center text-muted-foreground">No scanned items for these filters.</td></tr>
                       )}
                     </tbody>
                   </>
@@ -409,7 +409,7 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
                     <thead className="bg-muted/70">
                       <tr>
                         <th className="p-3">Day</th><th className="p-3">Worker</th>
-                        <th className="p-3">Bale name</th><th className="p-3 text-right">Bales</th>
+                        <th className="p-3">Product name</th><th className="p-3 text-right">Items</th>
                         <th className="p-3 text-right">KG</th>
                         <th className="p-3">First scan (Beirut)</th><th className="p-3">Last scan (Beirut)</th>
                       </tr>
@@ -428,7 +428,7 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
                         </tr>
                       ))}
                       {!condensed.length && !report.isFetching && (
-                        <tr><td colSpan={7} className="p-5 text-center text-muted-foreground">No scanned bales for these filters.</td></tr>
+                        <tr><td colSpan={7} className="p-5 text-center text-muted-foreground">No scanned items for these filters.</td></tr>
                       )}
                     </tbody>
                   </>

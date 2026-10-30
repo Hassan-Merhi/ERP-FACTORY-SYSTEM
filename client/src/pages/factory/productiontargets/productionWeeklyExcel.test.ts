@@ -78,12 +78,17 @@ describe("production Excel calendar range validation", () => {
   it("allows one day, arbitrary days, and ranges spanning several calendar weeks", () => {
     expect(getProductionRangeDates("2026-10-29", "2026-10-29", today)).toEqual(["2026-10-29"]);
     expect(getProductionRangeDates("2026-10-30", "2026-11-02", "2026-11-02")).toEqual([
-      "2026-10-30", "2026-10-31", "2026-11-01", "2026-11-02",
+      "2026-10-30", "2026-10-31", "2026-11-02",
     ]);
     const result = getProductionRangeDates("2026-09-01", "2026-10-29", today);
     expect(result[0]).toBe("2026-09-01");
     expect(result.at(-1)).toBe(today);
-    expect(result).toHaveLength(59);
+    expect(result).toHaveLength(51); // 59 calendar days minus eight Sundays
+  });
+
+  it("does not export a Sunday-only range", () => {
+    expect(() => getProductionRangeDates("2026-11-01", "2026-11-01", "2026-11-01"))
+      .toThrow(ProductionDateRangeError);
   });
 
   it("rejects reversed dates, impossible dates and future dates", () => {
@@ -96,13 +101,22 @@ describe("production Excel calendar range validation", () => {
   });
 
   it("caps exports at twelve weeks to protect daily factory API calls", () => {
-    expect(getProductionRangeDates("2026-08-07", "2026-10-29", today)).toHaveLength(84);
+    expect(getProductionRangeDates("2026-08-07", "2026-10-29", today)).toHaveLength(72);
     expect(() => getProductionRangeDates("2026-08-06", "2026-10-29", today))
       .toThrow(ProductionDateRangeError);
   });
 });
 
 describe("individual bale credits and integer Excel totals", () => {
+  it("does not count a Sunday worker even when a saved Sunday snapshot has production", () => {
+    const report = buildWeeklyProductionData([
+      day("2026-10-31", [worker(4, "Sam", null, 10, 12)]),
+      day("2026-11-01", [worker(4, "Sam", null, 40, 40)]),
+    ]);
+    expect(report.summary.map(row => row.date)).toEqual(["2026-10-31"]);
+    expect(report.workers[0].target).toBe(10);
+    expect(report.workers[0].totalProduced).toBe(12);
+  });
   it("adds the linked team's equal credit to each worker's individually recorded unlinked production", () => {
     const result = buildWeeklyProductionData([
       day("2026-10-27", [

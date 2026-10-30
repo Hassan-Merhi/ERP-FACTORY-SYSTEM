@@ -15,7 +15,7 @@
  *   M3  one shared daybook writer stores a missing rate as unresolved (0);
  *       deduct-received refuses with no recorded rate and is dated by the
  *       company's business date.
- *   MC-2 an intercompany transfer leg is refused (409) by every generic editor.
+ *   MC-2 transfer legs refuse generic financial edits; the Payment/Receipt\n *        editor allows only audited, amount-neutral ledger-account corrections.
  */
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -609,7 +609,7 @@ describe("MC-2: intercompany transfer legs", () => {
         `INSERT INTO inter_company_transfers (transfer_type, from_company_id, to_company_id, transfer_date, amount,
                                               from_ledger_account_id, to_ledger_account_id, from_voucher_id, to_voucher_id)
          VALUES ('Cash', $1, $2, '2026-06-10', 100, $3, $4, $5, $6)`,
-        [ctx.companyId, companyB, ctx.salesAccountId, ids.B_OTHER, from, to]
+        [ctx.companyId, companyB, ctx.cashAccountId, ids.B_CASH, from, to]
       );
       return { from, to };
     });
@@ -655,6 +655,89 @@ describe("MC-2: intercompany transfer legs", () => {
       [[legs.from, legs.to]]
     );
     expect(Number(amounts.rows[0].d)).toBe(200);
+
+    // Account-only correction is safe: the debit and credit totals stay intact,
+    // the original transfer keeps both linked vouchers, and the cash account
+    // on the transfer record follows a changed payment-side ledger account.
+    const replacementAccount = await insertId(
+      `INSERT INTO ledger_accounts (company_id, code, name, account_type, opening_balance, opening_balance_side)
+       VALUES ($1, $2, 'Intercompany corrected cash', 'Cash', 0, 'Dr') RETURNING id`,
+      [ctx.companyId, `${PREFIX}-ICT-NEW-${ctx.companyId}`]
+    );
+    const correctionPayload = {
+      voucherType: "Payment",
+      voucherDate: "2026-06-10",
+      paymentAccountType: "ledger",
+      paymentAccountId: replacementAccount,
+      entries: [{ accountType: "ledger", accountId: ctx.salesAccountId, amount: "100" }],
+      notes: "",
+      optional: false,
+      currency: "USD",
+      effectiveDate: null,
+    };
+    const corrected = await agent.patch(`/api/vouchers/${legs.from}/payment-receipt`).send(correctionPayload);
+    expect(corrected.status).toBe(200);
+    const correctedLines = await pool.query(
+      `SELECT ledger_account_id, debit_amount::numeric AS debit, credit_amount::numeric AS credit
+         FROM voucher_entries WHERE voucher_id = $1 ORDER BY id`,
+      [legs.from]
+    );
+    expect(correctedLines.rows.map((line) => [line.ledger_account_id, Number(line.debit), Number(line.credit)])).toEqual([
+      [replacementAccount, 0, 100],
+      [ctx.salesAccountId, 100, 0],
+    ]);
+    const linkAfter = await pool.query(
+      `SELECT from_ledger_account_id, amount::numeric AS amount
+         FROM inter_company_transfers WHERE from_voucher_id = $1`,
+      [legs.from]
+    );
+    expect(Number(linkAfter.rows[0].amount)).toBe(100);
+    expect(linkAfter.rows[0].from_ledger_account_id).toBe(replacementAccount);
+    const opposite = await pool.query(
+      `SELECT SUM(debit_amount)::numeric AS debit, SUM(credit_amount)::numeric AS credit
+         FROM voucher_entries WHERE voucher_id = $1`,
+      [legs.to]
+    );
+    expect(Number(opposite.rows[0].debit)).toBe(100);
+    expect(Number(opposite.rows[0].credit)).toBe(100);
+
+    // Changing the selected opposite-side ledger account (the account row
+    // highlighted in the voucher editor) must work as well.
+    const replacementContra = await insertId(
+      `INSERT INTO ledger_accounts (company_id, code, name, account_type, opening_balance, opening_balance_side)
+       VALUES ($1, $2, 'Intercompany corrected contra', 'Liability', 0, 'Cr') RETURNING id`,
+      [ctx.companyId, `${PREFIX}-ICT-CONTRA-${ctx.companyId}`]
+    );
+    const correctedContra = await agent.patch(`/api/vouchers/${legs.from}/payment-receipt`).send({
+      ...correctionPayload,
+      entries: [{ accountType: "ledger", accountId: replacementContra, amount: "100" }],
+    });
+    expect(correctedContra.status).toBe(200);
+    const reclassifiedContra = await pool.query(
+      `SELECT ledger_account_id, debit_amount::numeric AS debit, credit_amount::numeric AS credit
+         FROM voucher_entries WHERE voucher_id = $1 ORDER BY id`,
+      [legs.from]
+    );
+    expect(reclassifiedContra.rows.map((line) => [line.ledger_account_id, Number(line.debit), Number(line.credit)])).toEqual([
+      [replacementAccount, 0, 100],
+      [replacementContra, 100, 0],
+    ]);
+
+    // The same editor must still refuse a transfer amount change or a
+    // replacement account owned by another company.
+    const amountChanged = await agent.patch(`/api/vouchers/${legs.from}/payment-receipt`).send({
+      ...correctionPayload,
+      entries: [{ accountType: "ledger", accountId: replacementContra, amount: "101" }],
+    });
+    expect(amountChanged.status).toBe(409);
+    expect(amountChanged.body.code).toBe("INTERCOMPANY_TRANSFER_LEG_EDIT_REFUSED");
+    const foreignAccount = await agent.patch(`/api/vouchers/${legs.from}/payment-receipt`).send({
+      ...correctionPayload,
+      paymentAccountId: ids.B_CASH,
+      entries: [{ accountType: "ledger", accountId: replacementContra, amount: "100" }],
+    });
+    expect(foreignAccount.status).toBe(400);
+    expect(foreignAccount.body.code).toBe("POSTING_TARGET_INVALID");
 
     // A description-only edit is not a financial change.
     const described = await agent.patch(`/api/vouchers/${legs.from}`).send({ description: "P19C note" });

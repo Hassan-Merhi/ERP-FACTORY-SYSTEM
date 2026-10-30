@@ -128,6 +128,8 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           mixBatchId: factoryBales.mixBatchId,
           articleCode: factoryBales.articleCode,
           productName: factoryBales.productName,
+          catalogArticleCode: factoryBaleProducts.articleCode,
+          catalogProductName: factoryBaleProducts.name,
           weightKg: factoryBales.weightKg,
           stockEntryDate: factoryBales.stockEntryDate,
           productionPrice: factoryBaleProducts.productionPrice,
@@ -235,6 +237,21 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           totalValue: number;
         }
       >();
+      // Keep the existing subtype totals, but retain real catalogue products
+      // so Production Overview can expand Wipers & Garbage like regular categories.
+      const wgProductMap = new Map<
+        string,
+        {
+          articleCode: string;
+          productName: string;
+          categoryName: string;
+          qty: number;
+          totalWeightKg: number;
+          costPricePerBale: number;
+          pricePerBale: number;
+          totalValue: number;
+        }
+      >();
 
       let totalSellingValue = 0;
       let totalProductionCostValue = 0;
@@ -270,6 +287,28 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
             existing.totalValue += value;
           } else {
             wgMap.set(catName, { subType, qty: 1, totalWeightKg: wt, totalValue: value });
+          }
+
+          const wgCode = bale.catalogArticleCode || code;
+          const wgName = bale.catalogProductName || name;
+          const wgKey = bale.productId != null ? `product:${bale.productId}` : `code:${wgCode}`;
+          const existingProduct = wgProductMap.get(wgKey);
+          if (existingProduct) {
+            existingProduct.qty += 1;
+            existingProduct.totalWeightKg += wt;
+            existingProduct.totalValue += value;
+            existingProduct.pricePerBale = existingProduct.totalValue / existingProduct.qty;
+          } else {
+            wgProductMap.set(wgKey, {
+              articleCode: wgCode,
+              productName: wgName,
+              categoryName: "Wipers & Garbage",
+              qty: 1,
+              totalWeightKg: wt,
+              costPricePerBale: costPrice,
+              pricePerBale: price,
+              totalValue: value,
+            });
           }
         } else {
           // Track both catalog values; the active valuation mode decides which one
@@ -335,6 +374,9 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
 
       // ── Wipers/garbage totals ──
       const wgRows = [...wgMap.entries()].map(([catName, v]) => ({ categoryName: catName, ...v }));
+      const wgProductRows = [...wgProductMap.values()].sort(
+        (a, b) => a.productName.localeCompare(b.productName) || a.articleCode.localeCompare(b.articleCode)
+      );
       const totalWipersQty = wgRows.filter((r) => r.subType === "wiper").reduce((s, r) => s + r.qty, 0);
       const totalWipersKg = wgRows.filter((r) => r.subType === "wiper").reduce((s, r) => s + r.totalWeightKg, 0);
       const totalGarbageQty = wgRows
@@ -603,6 +645,14 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
             totalValue: 0,
           }))
         : wgRows;
+      const safeWgProductRows = hideReportCosts
+        ? wgProductRows.map((row) => ({
+            ...row,
+            costPricePerBale: 0,
+            pricePerBale: 0,
+            totalValue: 0,
+          }))
+        : wgProductRows;
       const safeBatchRows = hideReportCosts
         ? correctedBatchRows.map((row) => ({
             ...row,
@@ -645,6 +695,7 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           totalWeightKg: totalWgWeightKg,
           totalValue: hideReportCosts ? 0 : totalWgValue,
           rows: safeWgRows,
+          products: safeWgProductRows,
         },
         rawMaterial: {
           totalBatches: correctedBatchRows.length,

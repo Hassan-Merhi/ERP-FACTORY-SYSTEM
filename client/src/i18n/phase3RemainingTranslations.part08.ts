@@ -509,4 +509,114 @@ export const phase3RemainingTranslationsPart08: readonly Phase3SharedUiEntry[] =
     ar: "الرعب الذي يخلق صحافة",
     fr: "Erreur lors de la création du tableur",
   },
+  {
+    en: "1. Set up",
+    ar: "١. الإعداد",
+    fr: "1. Configuration",
+  },
+  {
+    en: "2. Verify & approve",
+    ar: "٢. التحقق والموافقة",
+    fr: "2. Vérifier et approuver",
+  },
+  {
+    en: "3. Pay bonuses",
+    ar: "٣. دفع المكافآت",
+    fr: "3. Verser les primes",
+  },
+  {
+    en: "4. History",
+    ar: "٤. السجل",
+    fr: "4. Historique",
+  },
+  {
+    en: "Back to Production Targets",
+    ar: "العودة إلى أهداف الإنتاج",
+    fr: "Retour aux objectifs de production",
+  },
+  {
+    en: "Bonus setup",
+    ar: "إعداد المكافآت",
+    fr: "Configuration des primes",
+  },
+  {
+    en: "Confirm the worker's credited production, assigned target, extra bales and USD amount.",
+    ar: "تحقق من إنتاج العامل المحتسب وهدفه والبالات الإضافية والمبلغ بالدولار الأمريكي.",
+    fr: "Vérifiez la production attribuée à l'ouvrier, son objectif, les balles supplémentaires et le montant en USD.",
+  },
+  {
+    en: "Pay bonuses",
+    ar: "دفع المكافآت",
+    fr: "Verser les primes",
+  },
+  {
+    en: "Pay reviewed bonuses",
+    ar: "دفع المكافآت التي تمت مراجعتها",
+    fr: "Verser les primes vérifiées",
+  },
+  {
+    en: "Production Bonuses",
+    ar: "مكافآت الإنتاج",
+    fr: "Primes de production",
+  },
+  {
+    en: "Production bonus workflow",
+    ar: "سير عمل مكافآت الإنتاج",
+    fr: "Processus des primes de production",
+  },
+  {
+    en: "when ready.",
+    ar: "عندما تكون جاهزًا.",
+    fr: "lorsque vous êtes prêt.",
+  },
+  {
+    en: "Open Production Bonuses",
+    ar: "فتح مكافآت الإنتاج",
+    fr: "Ouvrir les primes de production",
+  },
+  {
+    en: "Set rates, review calculations, approve worker bonuses and pay from Cash / Bank.",
+    ar: "حدد المعدلات وراجع الحسابات ووافق على مكافآت العمال وادفع من الصندوق أو البنك.",
+    fr: "Définissez les taux, vérifiez les calculs, approuvez les primes et payez depuis la caisse ou la banque.",
+  },
+  {
+    en: "Cash / Bank and Deposit Expense were offset. Original and reversal vouchers remain in audit history; this bonus cannot be paid again.",
+    ar: "تمت تسوية الصندوق أو البنك وحساب مصروف الوديعة. تظل سندات الدفع والعكس في سجل التدقيق ولا يمكن دفع هذه المكافأة مجددًا.",
+    fr: "Les comptes caisse ou banque et charges de dépôt ont été contrepassés. Les pièces initiales et d'annulation restent dans l'historique d'audit ; cette prime ne peut pas être payée à nouveau.",
+  },
+  {
+    en: "Loading production bonuses...",
+    ar: "جارٍ تحميل مكافآت الإنتاج...",
+    fr: "Chargement des primes de production...",
+  },
+  {
+    en: "No production bonus records for the selected dates.",
+    ar: "لا توجد سجلات لمكافآت الإنتاج في التواريخ المحددة.",
+    fr: "Aucune prime de production pour les dates sélectionnées.",
+  },
+  {
+    en: "Choose paying account",
+    ar: "اختر حساب الدفع",
+    fr: "Choisir le compte de paiement",
+  },
+  {
+    en: "Confirm daily bonus paying account",
+    ar: "تأكيد حساب دفع المكافأة اليومية",
+    fr: "Confirmer le compte de paiement de la prime quotidienne",
+  },
+  {
+    en: "Pay from Cash / Bank (USD)",
+    ar: "الدفع من الصندوق أو البنك (دولار أمريكي)",
+    fr: "Payer depuis la caisse ou la banque (USD)",
+  },
+  {
+    en: "Approved weekly calculation",
+    ar: "حساب المكافأة الأسبوعية المعتمد",
+    fr: "Calcul hebdomadaire approuvé",
+  },
+  {
+    en: "Confirm weekly bonus paying account",
+    ar: "تأكيد حساب دفع المكافأة الأسبوعية",
+    fr: "Confirmer le compte de paiement de la prime hebdomadaire",
+  },
 ];

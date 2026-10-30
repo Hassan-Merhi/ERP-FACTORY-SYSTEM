@@ -19,6 +19,7 @@ import { ProformaProgressPanel } from "./factorycontainerloadingscan/ProformaPro
 import { ImportBalesDialog } from "./factorycontainerloadingscan/ImportBalesDialog";
 import { FinalizeLoadingDialog } from "./factorycontainerloadingscan/FinalizeLoadingDialog";
 import { LoadingScanDialogs } from "./factorycontainerloadingscan/LoadingScanDialogs";
+import { ContainerExtraItemsDialog } from "./ContainerExtraItemsDialog";
 
 export default function FactoryContainerLoadingScan() {
   const model = useFactoryContainerLoadingScanModel();
@@ -64,6 +65,13 @@ export default function FactoryContainerLoadingScan() {
 
           {orderId && (
             <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+              {model.orderDetail?.proformaIdUsed && (
+                <ContainerExtraItemsDialog
+                  orderId={orderId}
+                  customerId={model.orderDetail.customerId}
+                  status={model.orderDetail.status}
+                />
+              )}
               <div className="flex items-center gap-2 rounded-xl border bg-muted/20 px-3 py-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-background">
                   <Package className="h-4 w-4 text-muted-foreground" />

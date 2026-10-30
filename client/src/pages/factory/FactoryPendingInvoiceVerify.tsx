@@ -84,6 +84,7 @@ export default function FactoryPendingInvoiceVerify() {
     setShowProformaDialog,
     showViewProformaDialog,
     setShowViewProformaDialog,
+    viewedMasterProforma,
     setSelectedProformaId,
     setShowRecoverDialog,
     verification,
@@ -693,9 +694,10 @@ export default function FactoryPendingInvoiceVerify() {
       {(() => {
         const activeProformaId = verification?.order?.proformaIdUsed ?? null;
         const activeProformaName =
+          viewedMasterProforma?.name ??
           proformas.find((p) => p.id === activeProformaId)?.name ??
           (activeProformaId ? `Proforma #${activeProformaId}` : null);
-        const proformaLines = verification?.proformaLines ?? [];
+        const proformaLines = viewedMasterProforma?.lines ?? [];
         return (
           <Dialog open={showViewProformaDialog} onOpenChange={setShowViewProformaDialog}>
             <DialogContent className="max-w-lg" data-testid="dialog-view-proforma">
@@ -706,6 +708,8 @@ export default function FactoryPendingInvoiceVerify() {
                 <p className="text-sm text-muted-foreground italic" data-testid="text-no-proforma-linked">
                   No proforma is linked to this order.
                 </p>
+              ) : !viewedMasterProforma ? (
+                <p className="text-sm text-muted-foreground italic">Loading original proforma...</p>
               ) : proformaLines.length === 0 ? (
                 <p className="text-sm text-muted-foreground italic" data-testid="text-proforma-no-lines">
                   This proforma has no lines.
@@ -726,7 +730,7 @@ export default function FactoryPendingInvoiceVerify() {
                         <TableRow key={idx} data-testid={`row-view-proforma-${line.articleCode}`}>
                           <TableCell className="font-mono text-sm">{line.articleCode}</TableCell>
                           <TableCell className="text-sm">{line.productName}</TableCell>
-                          <TableCell className="text-right text-sm">{line.expectedQty}</TableCell>
+                          <TableCell className="text-right text-sm">{line.quantity}</TableCell>
                           <TableCell className="text-right text-sm font-medium">
                             ${fmtNum(parseFloat(line.pricePerBale) || 0)}
                           </TableCell>

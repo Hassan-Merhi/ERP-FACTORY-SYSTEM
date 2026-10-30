@@ -106,6 +106,7 @@ export function registerFactoryProductionBonusRoutes(app: Express, requireAuth: 
       const decidedBy = req.session?.userId ? String(req.session.userId) : null;
 
       const result = await db.transaction(async (tx: DbTransaction) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(84023, ${companyId})`);
         const payrollResult = await tx.execute<RawQueryRow<PayrollLockRow>>(sql`
           SELECT id, company_id AS "companyId", worker_id AS "workerId",
                  period_start::text AS "periodStart", period_end::text AS "periodEnd", status
@@ -155,8 +156,23 @@ export function registerFactoryProductionBonusRoutes(app: Express, requireAuth: 
             SET decision_status = ${decision}, decided_by = ${decidedBy}, decided_at = NOW(),
                 decision_note = ${note}, updated_at = NOW()
             WHERE payroll_id = ${id} AND run_id = ${item.runId} AND worker_id = ${item.workerId}
+              AND (
+                ${decision} <> 'APPROVED'
+                OR NOT EXISTS (
+                  SELECT 1 FROM factory_target_bonus_payments paid
+                  JOIN factory_target_bonus_reviews review ON review.id = paid.review_id
+                  JOIN factory_production_bonus_runs run ON run.id = ${item.runId}
+                  WHERE paid.company_id = ${companyId}
+                    AND review.company_id = ${companyId}
+                    AND paid.worker_id = ${item.workerId}
+                    AND review.production_date = run.production_date
+                )
+              )
             RETURNING run_id
           `);
+          if (!updateResult.rows[0] && decision === "APPROVED") {
+            throw new Error("Production Targets bonus already paid for this worker/day; payroll approval blocked");
+          }
           if (updateResult.rows[0]) affectedRunIds.push(item.runId);
         }
         await updateProductionBonusRunStatuses(tx, affectedRunIds);
