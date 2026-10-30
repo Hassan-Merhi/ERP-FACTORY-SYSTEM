@@ -23,6 +23,10 @@ export interface ProductionRow {
   defaultCategory?: string;
   categoryOverridden?: boolean;
   targetBales: number | null;
+  // Period rollups sum each day's individual target and attendance separately.
+  absentTargetBales?: number;
+  absentDays?: number;
+  periodDays?: number;
   defaultTargetBales?: number | null;
   targetBalesOverridden?: boolean;
   producedBales: number | null;
@@ -181,7 +185,8 @@ export function summarizeProductionRows(sourceRows: ProductionRow[]) {
     const rowTarget = row.targetBales ?? 0;
     target += rowTarget;
     produced += row.producedBales ?? 0;
-    if (row.status === FACTORY_TRACKING_STATUSES.absent) absentTarget += rowTarget;
+    absentTarget += row.absentTargetBales ??
+      (row.status === FACTORY_TRACKING_STATUSES.absent ? rowTarget : 0);
   }
 
   for (const members of linkedRows.values()) {
@@ -200,9 +205,8 @@ export function summarizeProductionRows(sourceRows: ProductionRow[]) {
     // their own target. Only absent members' targets are removed from expected output.
     absentTarget += members.reduce(
       (sum, member) =>
-        member.status === FACTORY_TRACKING_STATUSES.absent
-          ? sum + (member.targetBales ?? 0)
-          : sum,
+        sum + (member.absentTargetBales ??
+          (member.status === FACTORY_TRACKING_STATUSES.absent ? (member.targetBales ?? 0) : 0)),
       0
     );
   }
