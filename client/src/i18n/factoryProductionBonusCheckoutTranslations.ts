@@ -1,6 +1,11 @@
 import type { ApplicationLanguage } from "@shared/applicationLanguageContract";
 
 const translations = {
+  listView: { en: "Payment list", ar: "قائمة الدفع", fr: "Liste des paiements" },
+  sheetView: { en: "Daily production sheet", ar: "جدول الإنتاج اليومي", fr: "Tableau de production quotidien" },
+  sheetHint: { en: "Each worker's saved category, daily made/target and selected-period totals. Extra bales come from the full Monday–Sunday target calculation; only ready workers can be paid.", ar: "فئة كل عامل وإنتاجه وهدفه يومياً والإجماليات للفترة. تُحسب البالات الإضافية على أساس هدف الأسبوع الكامل من الاثنين إلى الأحد؛ لا يُدفع إلا للمستحقين.", fr: "Catégorie, production/objectif par jour et totaux de la période. Les balles supplémentaires reposent sur l'objectif complet du lundi au dimanche ; seuls les ouvriers admissibles sont payables." },
+  sheetTotal: { en: "Period total", ar: "إجمالي الفترة", fr: "Total de la période" },
+  sheetNoExtra: { en: "Weekly target not exceeded", ar: "لم يتجاوز الهدف الأسبوعي", fr: "Objectif hebdomadaire non dépassé" },
   payWorkers: { en: "Pay workers", ar: "دفع مكافآت العمال", fr: "Payer les ouvriers" },
   payIntro: { en: "Select who gets a bonus, review the total, and pay.", ar: "اختر العمال المستحقين، راجع الإجمالي ثم ادفع.", fr: "Sélectionnez les primes, vérifiez le total puis payez." },
   worker: { en: "Worker", ar: "العامل", fr: "Ouvrier" },
