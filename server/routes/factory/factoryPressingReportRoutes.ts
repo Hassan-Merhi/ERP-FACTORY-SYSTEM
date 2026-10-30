@@ -98,7 +98,7 @@ function conditions(ctx: QueryCtx, filters: PressingReportFilters) {
   }
   return { args, where };
 }
-function invalidDateTimeRange(filters: PressingReportFilters): boolean {
+function invalidDateTimeRange(filters: Pick<PressingReportFilters, "from" | "to" | "fromTime" | "toTime">): boolean {
   return Boolean(
     (filters.fromTime && !filters.from) ||
     (filters.toTime && !filters.to) ||
@@ -206,7 +206,7 @@ async function report(ctx: QueryCtx, filters: PressingReportFilters) {
   }
   // Resolve current company-scoped display names for every historical row and
   // summary, so renamed workers are shown correctly without rewriting evidence.
-  const operatorIds = [...new Set([
+  const operatorIds = [...new Set<string>([
     ...rows.rows.map(row => row.operatorUserId),
     ...filteredSummary.byOperator.map(row => row.userId),
     ...overview.byOperator.map(row => row.userId),

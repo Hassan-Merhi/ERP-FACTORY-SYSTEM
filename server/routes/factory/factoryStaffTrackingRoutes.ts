@@ -2,6 +2,16 @@ import type { Express, Request, Response } from "express";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
+import { registerProductionTargetBonusCoreRoutes } from "./productionTargetBonusCoreRoutes";
+import { registerProductionTargetBonusCategoryRateRoutes } from "./productionTargetBonusCategoryRateRoutes";
+import { registerProductionTargetBonusWeeklyMethodRoutes } from "./productionTargetBonusWeeklyMethodRoutes";
+import { registerProductionTargetBonusWeeklyPreviewRoutes } from "./productionTargetBonusWeeklyPreviewRoutes";
+import { registerProductionTargetBonusWeeklyReviewRoutes } from "./productionTargetBonusWeeklyReviewRoutes";
+import { registerProductionTargetBonusWeeklyPaymentRoutes } from "./productionTargetBonusWeeklyPaymentRoutes";
+import { registerProductionTargetBonusWeeklyReconciliationRoutes } from "./productionTargetBonusWeeklyReconciliationRoutes";
+import { registerProductionBonusCategoryEvidenceRoutes } from "./productionBonusCategoryEvidenceRoutes";
+import { registerProductionBonusCategoryReviewRoutes } from "./productionBonusCategoryReviewRoutes";
+import { freezeProductionBonusCategoryEvidence, BONUS_CATEGORY_COUNTED_BALE_STATUSES, type CategoryCaptureCarry } from "../../services/factory/productionBonusCategoryCapture";
 import { factoryStaffTrackingMessages } from "../../i18n/factoryStaffTrackingMessages";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { resultRows } from "../../lib/queryResult";
@@ -52,7 +62,7 @@ const PAGE_TYPES = new Set<TrackingPage>(["production", "attendance"]);
 const PERIOD_TYPES = new Set<PeriodType>(["daily", "weekly", "monthly"]);
 const STATUSES = new Set<TrackingStatus>(["Present", "Absent", "New"]);
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-const COUNTED_PRODUCTION_BALE_STATUSES = ["IN_STOCK", "SOLD", "RESERVED_FOR_ORDER", "DISPATCHED", "FINALIZED"] as const;
+const COUNTED_PRODUCTION_BALE_STATUSES = BONUS_CATEGORY_COUNTED_BALE_STATUSES;
 
 function getFactoryCompanyId(req: Request): number | undefined {
   return req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -224,6 +234,15 @@ async function loadProducedByWorker(
 }
 
 export function registerFactoryStaffTrackingRoutes(app: Express): void {
+  registerProductionTargetBonusCoreRoutes(app);
+  registerProductionTargetBonusCategoryRateRoutes(app);
+  registerProductionTargetBonusWeeklyMethodRoutes(app);
+  registerProductionTargetBonusWeeklyPreviewRoutes(app);
+  registerProductionTargetBonusWeeklyReviewRoutes(app);
+  registerProductionTargetBonusWeeklyPaymentRoutes(app);
+  registerProductionTargetBonusWeeklyReconciliationRoutes(app);
+  registerProductionBonusCategoryEvidenceRoutes(app);
+  registerProductionBonusCategoryReviewRoutes(app);
   app.get("/api/factory/staff-tracking", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = getFactoryCompanyId(req);
@@ -783,11 +802,14 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         }
       }
 
+      let finalizeCarryFrom: CategoryCaptureCarry | null = null;
+      let finalizedSourceCount: number | null = null;
       if (finalize) {
         const finalizeWorkerIds = normalizedRecords
           .filter((row) => row.personType === "worker")
           .map((row) => row.personId);
         const carryFrom = await loadPreviousDailyCarry(companyId, periodStart);
+        finalizeCarryFrom = carryFrom;
         const producedByWorker = await loadProducedByWorker(
           companyId,
           periodStart,
@@ -795,6 +817,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           finalizeWorkerIds,
           carryFrom
         );
+        finalizedSourceCount = [...producedByWorker.values()].reduce((total, count) => total + count, 0);
         for (const row of normalizedRecords) {
           if (row.personType === "worker") row.producedBales = producedByWorker.get(row.personId) ?? 0;
         }
@@ -836,6 +859,18 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
       );
 
       await db.transaction(async (tx) => {
+        if (finalize) {
+          // Recheck inside the serialized close transaction, not just before
+          // calculating the daily matrix; conflicting closes must roll back.
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(7643, ${companyId})`);
+          const locked = resultRows(await tx.execute(sql`
+            SELECT 1 FROM factory_staff_tracking_period_closures
+            WHERE company_id = ${companyId} AND page_type = 'production'
+              AND period_type = 'daily' AND period_start = ${periodStart}::date
+              AND period_end = ${periodEnd}::date LIMIT 1
+          `));
+          if (locked.length) throw new Error("Production already finalized; category evidence is immutable");
+        }
         if (page === "production") {
           const currentWorkerIds = normalizedRecords.map((row) => row.personId);
           await tx.execute(sql`
@@ -870,6 +905,13 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         `);
 
         if (finalize) {
+          const frozenBales = await freezeProductionBonusCategoryEvidence(
+            tx, companyId, periodStart,
+            normalizedRecords.filter(row => row.personType === "worker").map(row => row.personId),
+            String(req.session.userId || ""), finalizeCarryFrom,
+          );
+          if (frozenBales !== finalizedSourceCount)
+            throw new Error("Production changed while finalizing; bale category evidence and totals disagree");
           await tx.execute(sql`
             INSERT INTO factory_staff_tracking_period_closures (
               company_id, page_type, period_type, period_start, period_end, ended_by, ended_at
