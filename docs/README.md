@@ -229,3 +229,11 @@ Encrypted checkpoint transfer is not automatic database reconciliation.
 | [superpowers/plans/2026-10-29-offline-phase1.md](superpowers/plans/2026-10-29-offline-phase1.md) | Phase 1 outbox scope and acceptance |
 | [superpowers/plans/2026-10-29-offline-phase2.md](superpowers/plans/2026-10-29-offline-phase2.md) | Phase 2 prepared reads and identity requirements |
 | [superpowers/plans/2026-10-29-offline-phase3.md](superpowers/plans/2026-10-29-offline-phase3.md) | Phase 3 factory server safety and acceptance |
+
+## Additional operations and factory UI references
+
+| Doc | What it covers |
+|---|---|
+| [global-force-refresh-all-users-2026-10-28.md](global-force-refresh-all-users-2026-10-28.md) | Operator-controlled role-scoped device refresh |
+| [one-time-pwa-force-refresh-2026-10-28.md](one-time-pwa-force-refresh-2026-10-28.md) | One-time PWA update behavior and recovery record |
+| [pressing-scan-simple-mode.md](pressing-scan-simple-mode.md) | Dedicated pressing-worker camera and production totals |
