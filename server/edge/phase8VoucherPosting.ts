@@ -79,9 +79,10 @@ export async function postApprovedPhase8Journal(
     // without the receipt is ambiguous and must NOT be silently acknowledged.
     throw new Phase8ApplyRefusal("PHASE8_ORPHANED_POSTING_IDENTITY");
   }
-  const cloudDate = posted.voucher.voucherDate instanceof Date
-    ? posted.voucher.voucherDate.toISOString().slice(0, 10)
-    : String(posted.voucher.voucherDate).slice(0, 10);
+  const postedDate: unknown = posted.voucher.voucherDate;
+  const cloudDate = postedDate instanceof Date
+    ? postedDate.toISOString().slice(0, 10)
+    : String(postedDate).slice(0, 10);
   if (cloudDate !== shape.date || posted.voucher.companyId !== event.companyId ||
       posted.entries.length !== shape.entries.length) {
     throw new Phase8ApplyRefusal("PHASE8_POSTING_RECONCILIATION_FAILED");
