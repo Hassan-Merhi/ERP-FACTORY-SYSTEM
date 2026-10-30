@@ -55,13 +55,11 @@ export function registerProductionTargetBonusCategoryRateRoutes(app: Express): v
           readVersions(companyId),
           db.execute(sql`
             SELECT category FROM (
-              SELECT name AS category FROM factory_worker_categories WHERE company_id = ${companyId}
-              UNION
               SELECT category FROM factory_staff_tracking_entries
                 WHERE company_id = ${companyId} AND page_type = 'production'
               UNION
-              SELECT category_label AS category
-                FROM factory_production_target_bonus_category_rates WHERE company_id = ${companyId}
+              SELECT category FROM factory_worker_production_target_defaults
+                WHERE company_id = ${companyId}
             ) categories
             WHERE category IS NOT NULL AND BTRIM(category) <> ''
             ORDER BY category LIMIT 1000
@@ -71,10 +69,6 @@ export function registerProductionTargetBonusCategoryRateRoutes(app: Express): v
         for (const row of resultRows(known) as Array<{ category: string }>) {
           const parsed = normalizeBonusCategory(row.category);
           if (parsed && !catalog.has(parsed.key)) catalog.set(parsed.key, parsed.label);
-        }
-        // If the known-category query is capped, preserve all configured rate labels too.
-        for (const version of versions) {
-          if (!catalog.has(version.categoryKey)) catalog.set(version.categoryKey, version.categoryLabel);
         }
         const categories = [...catalog].map(([key, label]) => ({
           categoryKey: key, categoryLabel: label,
@@ -113,6 +107,18 @@ export function registerProductionTargetBonusCategoryRateRoutes(app: Express): v
       try {
         const result = await db.transaction(async tx => {
           await tx.execute(sql`SELECT pg_advisory_xact_lock(7642, ${companyId})`);
+          // Category rates may only be set for categories explicitly used by
+          // Production Targets. Worker groups and arbitrary new labels are not rates.
+          const knownCategories = resultRows(await tx.execute(sql`
+            SELECT category FROM factory_staff_tracking_entries
+            WHERE company_id=${companyId} AND page_type='production'
+              AND category IS NOT NULL AND BTRIM(category)<>''
+            UNION
+            SELECT category FROM factory_worker_production_target_defaults
+            WHERE company_id=${companyId} AND category IS NOT NULL AND BTRIM(category)<>''
+          `)) as Array<{category:string}>;
+          if (!knownCategories.some(row => normalizeBonusCategory(row.category)?.key === category.key))
+            return {status:409,message:"Select an existing category from Production Targets"};
           const prior = resultRows(await tx.execute(sql`
             SELECT id, category_key AS "categoryKey",
                    effective_from::text AS "effectiveFrom", enabled,
