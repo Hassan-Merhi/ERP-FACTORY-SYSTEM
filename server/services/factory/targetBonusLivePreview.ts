@@ -113,12 +113,27 @@ export async function loadLiveTargetBonusRows(
         ELSE saved.target_bales
       END AS target
     ) resolved
-    -- Link membership only affects table/roster metadata, NEVER bonus credit.
-    -- Stock Entry already records the worker who finalized each physical bale.
+    -- Link membership takes the combined table output for the date, then
+    -- assigns each member a unique whole-bale share. Without an active link,
+    -- physical Stock Entry credits belong to the original finalizer.
     LEFT JOIN credited_bales single_bales
       ON single_bales.work_date=d.work_date AND single_bales.worker_id=w.id
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*)::integer AS member_count,
+        COUNT(*) FILTER (WHERE m.worker_id<=w.id)::integer AS member_rank,
+        COALESCE(SUM(COALESCE(team_bales.bales,0)),0)::integer AS team_bales
+      FROM factory_worker_production_link_members m
+      LEFT JOIN credited_bales team_bales
+        ON team_bales.work_date=d.work_date AND team_bales.worker_id=m.worker_id
+      WHERE m.company_id=w.company_id AND m.link_id=link.id
+    ) table_output ON link.id IS NOT NULL
     CROSS JOIN LATERAL (
-      SELECT COALESCE(single_bales.bales,0)::integer AS credited
+      SELECT CASE WHEN link.id IS NOT NULL AND table_output.member_count>0
+        THEN (table_output.team_bales / table_output.member_count)
+          + CASE WHEN table_output.member_rank <=
+              MOD(table_output.team_bales,table_output.member_count) THEN 1 ELSE 0 END
+        ELSE COALESCE(single_bales.bales,0)
+      END::integer AS credited
     ) credit
     LEFT JOIN LATERAL (
       SELECT CASE WHEN r.enabled THEN r.rate_per_extra_bale ELSE NULL END AS rate_per_bale
