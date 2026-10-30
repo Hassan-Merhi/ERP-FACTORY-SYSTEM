@@ -42,7 +42,7 @@ const translations = {
   bonus: { en: "Bonus", ar: "المكافأة", fr: "Prime" },
   statusAction: { en: "Status / Action", ar: "الحالة / الإجراء", fr: "Statut / action" },
   loading: { en: "Calculating bonus…", ar: "جارٍ حساب المكافأة…", fr: "Calcul de la prime…" },
-  noRows: { en: "No saved Production Targets workers for this date. Save the targets to calculate bonuses.", ar: "لا توجد أهداف إنتاج محفوظة لهذا التاريخ. احفظ الأهداف أولاً.", fr: "Aucun objectif enregistré pour cette date. Enregistrez les objectifs d’abord." },
+  noRows: { en: "No production targets or worker-day records in this period. Select another date range or save Production Targets.", ar: "لا توجد أهداف إنتاج أو سجلات عمل للعمال في هذه الفترة. اختر فترة أخرى أو احفظ أهداف الإنتاج.", fr: "Aucun objectif ni relevé journalier de production sur cette période. Choisissez d’autres dates ou enregistrez les objectifs." },
   showCalc: { en: "Show calculation", ar: "عرض الحساب", fr: "Afficher le calcul" },
   editRate: { en: "Edit rate", ar: "تعديل السعر", fr: "Modifier le tarif" },
   reverse: { en: "Reverse", ar: "عكس العملية", fr: "Annuler le paiement" },
