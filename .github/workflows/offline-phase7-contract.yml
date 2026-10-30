@@ -42,5 +42,7 @@ jobs:
         run: bash tests/offline-phase7-postgres-fence.sh
       - name: Install locked dependencies for TypeScript safety
         run: npm ci --ignore-scripts
+      - name: Verify LAN edge operator preflight
+        run: node node_modules/vitest/vitest.mjs run tests/factory-edge-installation.test.ts
       - name: Verify TypeScript contracts
         run: npm run check
