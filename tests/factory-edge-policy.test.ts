@@ -50,11 +50,31 @@ describe("factory LAN edge deployment policy", () => {
       ...safe,
       FACTORY_EDGE_WRITE_MODE: "lan-primary",
       FACTORY_EDGE_PRIMARY_ACK: "CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED",
+      FACTORY_EDGE_WRITER_EPOCH: "2",
+      FACTORY_EDGE_BASELINE_SHA256: "a".repeat(64),
     });
     expect(p.primary).toBe(true);
     expect(edgeBlocksWrite(p, "POST", "/api/vouchers/with-entries")).toBe(false);
     expect(edgeBlocksWrite(p, "POST", "/api/factory/bales")).toBe(true);
     expect(edgeBlocksWrite(p, "PATCH", "/api/inventory/1")).toBe(true);
+  });
+  it("does not accept a manual ACK without the Phase 7 database identity", () => {
+    expect(() => readFactoryEdgeConfiguration({
+      ...safe,
+      FACTORY_EDGE_WRITE_MODE: "lan-primary",
+      FACTORY_EDGE_PRIMARY_ACK: "CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED",
+    })).toThrow("EDGE_PHASE7_WRITER_EPOCH_REQUIRED");
+    expect(() => readFactoryEdgeConfiguration({
+      ...safe,
+      FACTORY_EDGE_WRITE_MODE: "lan-primary",
+      FACTORY_EDGE_PRIMARY_ACK: "CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED",
+      FACTORY_EDGE_WRITER_EPOCH: "2",
+      FACTORY_EDGE_BASELINE_SHA256: "invalid",
+    })).toThrow("EDGE_PHASE7_BASELINE_DIGEST_REQUIRED");
+    expect(() => readFactoryEdgeConfiguration({
+      ...safe,
+      FACTORY_EDGE_WRITER_EPOCH: "2",
+    })).toThrow("EDGE_PHASE7_EPOCH_WITHOUT_PRIMARY");
   });
   it("only admits session traffic in read-only mode", () => {
     const p = readFactoryEdgeConfiguration(safe);
