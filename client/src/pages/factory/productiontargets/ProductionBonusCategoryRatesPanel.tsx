@@ -113,7 +113,7 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
               <tr>
                 <th className="px-3 py-2">Category</th>
                 <th className="px-3 py-2">Rate / extra bale</th>
-                <th className="px-3 py-2">Effective from</th>
+                <th className="px-3 py-2">Version date</th>
                 <th className="px-3 py-2">Status</th>
                 <th className="px-3 py-2 text-right">Edit</th>
               </tr>
@@ -151,7 +151,7 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
             <summary className="cursor-pointer text-muted-foreground">Rate change history ({data.history.length}{data.historyTruncated ? "+" : ""})</summary>
             <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
               {data.history.map(version => <div key={version.id} className="flex flex-wrap justify-between gap-3 border-b py-1">
-                <span>{version.categoryLabel} · from {version.effectiveFrom}</span>
+                <span>{version.categoryLabel} · {version.effectiveFrom}</span>
                 <span className="tabular-nums">{version.enabled ? "$" + version.ratePerExtraBale : "Disabled"}</span>
               </div>)}
             </div>
@@ -178,10 +178,6 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
                 </SelectContent>
               </Select>
             </label>
-            <label className="space-y-1 text-sm">Effective from
-              <Input aria-label="Category rate change recorded on" type="date" value={effectiveFrom}
-                onChange={event => setEffectiveFrom(event.target.value)} />
-            </label>
             <label className="space-y-1 text-sm">Amount per extra bale (USD)
               <Input aria-label="Category rate USD per extra bale" type="number"
                 min="0" max="10000" step="0.0001" value={rate}
@@ -199,7 +195,7 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
               <Button type="button" variant="outline" onClick={() => setEditing(false)}>Cancel</Button>
               <Button type="button" disabled={!canSave} onClick={() => save.mutate()}>
                 {save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save dated rate
+                Save rate
               </Button>
             </DialogFooter>
           </DialogContent>
