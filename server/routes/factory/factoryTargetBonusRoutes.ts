@@ -224,8 +224,8 @@ export function registerFactoryTargetBonusRoutes(app: Express): void {
     }
   );
 
-  // Effective-dated per-worker rate. Existing approved/rejected snapshots
-  // cannot be retroactively altered by editing the rate history.
+  // Rate versions are append-only. The latest saved version immediately
+  // reprices UNPAID bonus offers; payment claims always remain immutable.
   app.post(
     "/api/factory/staff-tracking/production-bonuses/rate",
     requireAuth, requireProductionTargets,
@@ -250,12 +250,9 @@ export function registerFactoryTargetBonusRoutes(app: Express): void {
             SELECT id FROM factory_workers WHERE id = ${workerId} AND company_id = ${companyId} LIMIT 1
           `);
           if (!resultRows(worker).length) throw httpError(404, "Worker not found in this factory");
-          const locked = await tx.execute(sql`
-            SELECT 1 FROM factory_target_bonus_reviews
-            WHERE company_id = ${companyId} AND worker_id = ${workerId}
-              AND production_date >= ${effectiveFrom}::date LIMIT 1
-          `);
-          if (resultRows(locked).length) throw httpError(409, "A reviewed bonus exists on or after this rate date; use a later effective date");
+          // Rates change the UNPAID preview immediately, even when an older
+          // week has already been reviewed. Actual paid/reversed claims stay
+          // frozen and cannot be repriced or paid again.
           // Append-only effective-dated rate history; no parallel rate table.
           await tx.execute(sql`
             INSERT INTO factory_production_target_bonus_rates (
