@@ -263,12 +263,12 @@ const FACTORY_PRODUCTION_TARGET_BONUS_WEEKLY_METHOD_SQL = `
   CREATE INDEX IF NOT EXISTS factory_bonus_weekly_method_history_idx
     ON factory_production_target_bonus_weekly_methods (company_id, effective_week DESC, id DESC);
   CREATE OR REPLACE FUNCTION prevent_bonus_weekly_method_mutation()
-    RETURNS trigger LANGUAGE plpgsql AS $
+    RETURNS trigger LANGUAGE plpgsql AS $bonus_method_fn$
     BEGIN
       RAISE EXCEPTION 'Production bonus weekly method versions are immutable';
     END;
-    $;
-  DO $
+    $bonus_method_fn$;
+  DO $bonus_method_block$
   BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_trigger
@@ -281,7 +281,7 @@ const FACTORY_PRODUCTION_TARGET_BONUS_WEEKLY_METHOD_SQL = `
         FOR EACH ROW EXECUTE FUNCTION prevent_bonus_weekly_method_mutation();
     END IF;
   END
-  $;
+  $bonus_method_block$;
 `;
 
 /** Phase 9: frozen physical-bale category evidence and one target claim per
@@ -476,12 +476,12 @@ export async function ensureFactoryStaffTrackingSchema(database: StartupQueryabl
   CREATE INDEX IF NOT EXISTS factory_bonus_weekly_review_history_idx
     ON factory_target_bonus_weekly_reviews (company_id, week_start DESC, worker_id);
   CREATE OR REPLACE FUNCTION prevent_weekly_bonus_review_mutation()
-    RETURNS trigger LANGUAGE plpgsql AS $
+    RETURNS trigger LANGUAGE plpgsql AS $weekly_review_fn$
     BEGIN
       RAISE EXCEPTION 'Production bonus weekly reviews are immutable';
     END;
-    $;
-  DO $
+    $weekly_review_fn$;
+  DO $weekly_review_block$
   BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_trigger WHERE tgname = 'factory_bonus_weekly_review_immutable'
@@ -492,7 +492,7 @@ export async function ensureFactoryStaffTrackingSchema(database: StartupQueryabl
         FOR EACH ROW EXECUTE FUNCTION prevent_weekly_bonus_review_mutation();
     END IF;
   END
-  $;
+  $weekly_review_block$;
 `;
 
 export const factoryStaffTrackingSchema = [
