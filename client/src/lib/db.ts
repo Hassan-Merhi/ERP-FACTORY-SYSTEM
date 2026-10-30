@@ -1,4 +1,5 @@
 import Dexie, { type Table } from "dexie";
+import { OFFLINE_MODE_ENABLED } from "./featureFlags";
 import type { OfflineOperation } from "./offline/operationContract";
 
 // ─── Schema Types ─────────────────────────────────────────────────────────────
@@ -282,6 +283,9 @@ export const db = new ERPDatabase();
 export async function addToSyncQueue(
   item: Omit<SyncQueueItem, "id" | "createdAt" | "retryCount" | "nextRetryAt" | "status" | "lastError">
 ): Promise<number> {
+  // Legacy rows have no verified per-user identity or universal exactly-once
+  // handling. Never create additional legacy rows under the new offline mode.
+  if (OFFLINE_MODE_ENABLED) throw new Error("OFFLINE_LEGACY_IDB_QUEUE_BLOCKED");
   const id = await db.syncQueue.add({
     ...item,
     createdAt: Date.now(),
