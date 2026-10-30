@@ -21,6 +21,15 @@ const env = {
   ENABLE_SCHEDULERS: "false",
   RUN_STARTUP_MIGRATIONS: "true",
 };
+const approvedJournal = {
+  clientRequestId: "e53cdbd1-7c4b-4b5c-9a60-b4f9de710b8c",
+  voucher: { voucherType: "Journal", voucherDate: "2026-10-30", currency: "USD", optional: false },
+  entries: [
+    { ledgerAccountId: 11, debitAmount: "10.00", creditAmount: "0" },
+    { ledgerAccountId: 12, debitAmount: "0", creditAmount: "10.00" },
+  ],
+};
+
 function fixture(
   override: Record<string, string>,
   provisioned: () => Promise<boolean>,
@@ -28,6 +37,7 @@ function fixture(
 ) {
   const config = readFactoryEdgeConfiguration({ ...env, ...override });
   const app = express();
+  app.use(express.json());
   app.use("/api", makeFactoryEdgeWriteGuard(config, provisioned, hasAuthority));
   app.post("/api/vouchers/with-entries", (_req, res) => res.json({ ok: true }));
   app.post("/api/factory/bales", (_req, res) => res.json({ unsafe: true }));
@@ -57,7 +67,7 @@ describe("edge runtime write safety", () => {
       },
       async () => false
     );
-    expect((await request(app).post("/api/vouchers/with-entries")).body.code).toBe("EDGE_DATABASE_NOT_PROVISIONED");
+    expect((await request(app).post("/api/vouchers/with-entries").send(approvedJournal)).body.code).toBe("EDGE_DATABASE_NOT_PROVISIONED");
   });
 
   it("rejects even a populated database when its Phase 7 PostgreSQL fence is missing", async () => {
@@ -67,7 +77,7 @@ describe("edge runtime write safety", () => {
       FACTORY_EDGE_WRITER_EPOCH: "2",
       FACTORY_EDGE_BASELINE_SHA256: "a".repeat(64),
     }, async () => true);
-    const res = await request(app).post("/api/vouchers/with-entries");
+    const res = await request(app).post("/api/vouchers/with-entries").send(approvedJournal);
     expect(res.status).toBe(503);
     expect(res.body.code).toBe("EDGE_PHASE7_WRITER_AUTHORITY_UNVERIFIED");
   });
@@ -83,7 +93,9 @@ describe("edge runtime write safety", () => {
       async () => true,
       async () => true
     );
-    expect((await request(app).post("/api/vouchers/with-entries")).body.ok).toBe(true);
+    expect((await request(app).post("/api/vouchers/with-entries").send(approvedJournal)).body.ok).toBe(true);
+    expect((await request(app).post("/api/vouchers/with-entries").send({ voucher: {} })).body.code)
+      .toBe("EDGE_PHASE8_CAPTURE_UNSUPPORTED");
     const rejected = await request(app).post("/api/factory/bales");
     expect(rejected.status).toBe(423);
     expect(rejected.body.code).toBe("EDGE_SYNC_UNSUPPORTED_OPERATION");
