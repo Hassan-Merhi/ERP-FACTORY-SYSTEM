@@ -55,14 +55,13 @@ export function registerProductionTargetBonusCategoryRateRoutes(app: Express): v
           readVersions(companyId),
           db.execute(sql`
             SELECT category FROM (
-              SELECT name AS category FROM factory_worker_categories WHERE company_id = ${companyId}
-              UNION
               SELECT category FROM factory_staff_tracking_entries
                 WHERE company_id = ${companyId} AND page_type = 'production'
+                  AND period_type='daily' AND period_start=${asOf}::date
               UNION
-              SELECT category_label AS category
-                FROM factory_production_target_bonus_category_rates WHERE company_id = ${companyId}
-            ) categories
+              SELECT category FROM factory_worker_production_target_defaults
+                WHERE company_id=${companyId} AND effective_from <= ${asOf}::date
+            ) production_target_categories
             WHERE category IS NOT NULL AND BTRIM(category) <> ''
             ORDER BY category LIMIT 1000
           `),
@@ -71,10 +70,6 @@ export function registerProductionTargetBonusCategoryRateRoutes(app: Express): v
         for (const row of resultRows(known) as Array<{ category: string }>) {
           const parsed = normalizeBonusCategory(row.category);
           if (parsed && !catalog.has(parsed.key)) catalog.set(parsed.key, parsed.label);
-        }
-        // If the known-category query is capped, preserve all configured rate labels too.
-        for (const version of versions) {
-          if (!catalog.has(version.categoryKey)) catalog.set(version.categoryKey, version.categoryLabel);
         }
         const categories = [...catalog].map(([key, label]) => ({
           categoryKey: key, categoryLabel: label,
@@ -133,6 +128,21 @@ export function registerProductionTargetBonusCategoryRateRoutes(app: Express): v
             }
             return { status: 200, versionId: Number(previous.id), replayed: true };
           }
+          // A bonus category must be in Production Targets, never a free-text
+          // imported stock catalogue or an old saved rate from another module.
+          const assigned = resultRows(await tx.execute(sql`
+            SELECT 1 AS present FROM (
+              SELECT category FROM factory_staff_tracking_entries
+               WHERE company_id=${companyId} AND page_type='production'
+                AND period_type='daily' AND period_start=${effectiveFrom}::date
+              UNION
+              SELECT category FROM factory_worker_production_target_defaults
+               WHERE company_id=${companyId} AND effective_from <= ${effectiveFrom}::date
+            ) production_categories
+            WHERE LOWER(BTRIM(category))=${category.key} LIMIT 1
+          `));
+          if (!assigned.length)
+            return { status: 409, message: "Assign this category in Production Targets before setting a rate" };
           const inserted = resultRows(await tx.execute(sql`
             INSERT INTO factory_production_target_bonus_category_rates (
               company_id, category_key, category_label, effective_from,
