@@ -23,6 +23,7 @@ type MyMachine = {
   companyId: number;
   userId: string;
   canManage: boolean;
+  canScan: boolean;
   assignment: null | { assignmentId: number; machineId: number; machineCode: string; machineName: string; machineActive: boolean; assignedAt: string };
 };
 type HistoricalAssignment = Assignment & {
@@ -112,8 +113,11 @@ export default function PressingMachineManagement({ active }: { active: boolean 
     staleTime: 0, gcTime: 0, enabled: selectedCompany !== null,
     refetchOnMount: "always", refetchOnWindowFocus: true,
   });
+  // Scan permission is server-authoritative and company-scoped. Read-only
+  // sessions must not activate a camera or replay locally queued writes.
+  const canScan = myQuery.data?.canScan === true && myQuery.data.companyId === selectedCompany?.id;
   const pressingQueue = usePressingOfflineSync(
-    myQuery.data ? { companyId: myQuery.data.companyId, userId: myQuery.data.userId } : null,
+    canScan && myQuery.data ? { companyId: myQuery.data.companyId, userId: myQuery.data.userId } : null,
     active,
   );
   const canManage = myQuery.data?.canManage === true;
@@ -180,19 +184,26 @@ export default function PressingMachineManagement({ active }: { active: boolean 
                 <p className="font-semibold">{myQuery.data.assignment.machineCode} — {myQuery.data.assignment.machineName}</p>
                 <p className="text-sm text-muted-foreground">Assigned {formatted(myQuery.data.assignment.assignedAt)}</p>
                 <Badge variant={myQuery.data.assignment.machineActive ? "default" : "destructive"}>
-                  {myQuery.data.assignment.machineActive ? "Ready for pressing confirmation" : "Inactive"}
+                  {!canScan ? "Read only" : myQuery.data.assignment.machineActive ? "Ready for pressing confirmation" : "Inactive"}
                 </Badge>
               </div>
             ) : <p className="text-sm text-muted-foreground">No machine assigned. Ask your supervisor for an assignment.</p>}
           </CardContent>
         </Card>
       )}
-      <ContinuousPressingScanner
-        active={active}
-        assignment={myQuery.data?.assignment ?? null}
-        onBarcode={pressingQueue.submit}
-      />
-      {myQuery.data && (
+      {myQuery.data && !canScan && myQuery.data.companyId === selectedCompany?.id && (
+        <p role="status" data-testid="pressing-view-only-notice" className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+          Read-only pressing access: scanning and changes are disabled. Pressing reports remain available below.
+        </p>
+      )}
+      {canScan && (
+        <ContinuousPressingScanner
+          active={active}
+          assignment={myQuery.data?.assignment ?? null}
+          onBarcode={pressingQueue.submit}
+        />
+      )}
+      {canScan && (
         <PressingOfflineQueueStatus snapshot={pressingQueue.snapshot} retryNow={pressingQueue.retryNow} />
       )}
       {myQuery.data && myQuery.data.companyId === selectedCompany?.id && (
