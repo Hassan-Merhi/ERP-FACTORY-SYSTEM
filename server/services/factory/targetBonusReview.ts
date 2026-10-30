@@ -13,6 +13,7 @@ export interface TargetBonusRow {
   workerName: string;
   category: string;
   linkGroupId: number | null;
+  linkEndedOn?: string | null;
   targetBales: number;
   producedBales: number;
   extraBales: number;
@@ -28,7 +29,7 @@ export interface TargetBonusRow {
 
 type DbRow = {
   date: string; workerId: string | number; workerName: string; category: string | null;
-  linkGroupId: string | number | null; targetBales: string | number;
+  linkGroupId: string | number | null; linkEndedOn: string | null; targetBales: string | number;
   producedBales: string | number; extraBales: string | number;
   ratePerBale: string | number | null; proposedAmount: string | number;
   status: TargetBonusStatus | null; reviewedBy: string | null; reviewedAt: string | null;
@@ -95,6 +96,7 @@ export async function loadTargetBonusRows(
       w.full_name AS "workerName",
       COALESCE(e.category, '') AS category,
       links.id AS "linkGroupId",
+      previous_link.ended AS "linkEndedOn",
       COALESCE(review.target_bales, e.target_bales, 0) AS "targetBales",
       COALESCE(review.produced_bales, output.count, 0)::integer AS "producedBales",
       COALESCE(review.extra_bales, GREATEST(0::numeric, COALESCE(output.count, 0) - COALESCE(e.target_bales, 0))) AS "extraBales",
@@ -128,6 +130,14 @@ export async function loadTargetBonusRows(
         AND (l.effective_to IS NULL OR l.effective_to > e.period_start)
       ORDER BY l.effective_from DESC, l.id DESC LIMIT 1
     ) links ON true
+    LEFT JOIN LATERAL (
+      SELECT MAX(l.effective_to)::text AS ended
+      FROM factory_worker_production_links l
+      JOIN factory_worker_production_link_members m
+        ON m.company_id=l.company_id AND m.link_id=l.id
+      WHERE l.company_id=e.company_id AND m.worker_id=e.person_id
+        AND l.effective_to<=e.period_start
+    ) previous_link ON links.id IS NULL
     -- Count each closed day's captured or stock bales only once. A saved
     -- linked team's shared output is distributed across its effective members;
     -- immutable approved/paid reviews still override with their frozen values.
@@ -187,6 +197,7 @@ export async function loadTargetBonusRows(
     workerName: String(row.workerName),
     category: String(row.category ?? ""),
     linkGroupId: row.linkGroupId == null ? null : Number(row.linkGroupId),
+    linkEndedOn: row.linkEndedOn,
     targetBales: Number(row.targetBales),
     producedBales: Number(row.producedBales),
     extraBales: Number(row.extraBales),
