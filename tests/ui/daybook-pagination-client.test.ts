@@ -229,17 +229,22 @@ describe("factory daybook pagination client", () => {
   });
 
   it("recovers from a network error, a refused page or an unreadable one", async () => {
+    const requestedPage = (call: number) =>
+      new URL(String(harness.previousFetch.mock.calls[call][0]), "http://x").searchParams.get("page");
     harness.previousFetch.mockResolvedValueOnce(page([{ id: 41 }], 1, 3, 205));
     await window.fetch("/api/factory/daybook?txType=RETRY");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(harness.invalidateQueries).toHaveBeenCalledOnce();
 
-    scrollToBottom();
     harness.previousFetch.mockRejectedValueOnce(new TypeError("Failed to fetch"));
     await expect(window.fetch("/api/factory/daybook?txType=RETRY")).rejects.toThrow("Failed to fetch");
-    expect(screenText("factory-daybook-progress")).not.toContain("Loading more");
+    expect(requestedPage(1)).toBe("2");
 
+    // After a failure the next request starts again from page 1.
     harness.previousFetch.mockResolvedValueOnce(new Response("{}", { status: 503 }));
     const refused = await window.fetch("/api/factory/daybook?txType=RETRY");
     expect(refused.status).toBe(503);
+    expect(requestedPage(2)).toBe("1");
 
     harness.previousFetch.mockResolvedValueOnce(new Response("not json", { status: 200 }));
     const unreadable = await window.fetch("/api/factory/daybook?txType=RETRY");
@@ -249,11 +254,10 @@ describe("factory daybook pagination client", () => {
     const unpaged = await window.fetch("/api/factory/daybook?txType=RETRY");
     expect(await unpaged.json()).toEqual({ rows: [] });
 
-    // The next refetch starts over from page 1, and scrolling asks for page 2 again.
     harness.previousFetch.mockResolvedValueOnce(page([{ id: 41 }], 1, 3, 205));
     await window.fetch("/api/factory/daybook?txType=RETRY");
     harness.invalidateQueries.mockReset();
-    scrollToBottom();
+    await vi.advanceTimersByTimeAsync(0);
     expect(harness.invalidateQueries).toHaveBeenCalledOnce();
   });
 
@@ -263,30 +267,25 @@ describe("factory daybook pagination client", () => {
       .mockResolvedValueOnce(page([{ id: 52 }, { id: 53 }], 2, 2, 3));
 
     await window.fetch("/api/factory/daybook?txType=OVERLAP");
-    scrollToBottom();
+    await vi.advanceTimersByTimeAsync(0);
     const merged = await window.fetch("/api/factory/daybook?txType=OVERLAP");
 
     expect((await merged.json()).map((entry: { id: number }) => entry.id)).toEqual([51, 52, 53]);
   });
 
-  it("ignores short inner scroll areas and forgets progress after leaving the daybook", async () => {
+  it("drops a pending background page after leaving the daybook", async () => {
     harness.previousFetch.mockResolvedValueOnce(page([{ id: 61 }], 1, 3, 205));
     await window.fetch("/api/factory/daybook?txType=LEAVE");
 
-    const panel = document.createElement("div");
-    document.body.append(panel);
-    Object.defineProperty(panel, "scrollHeight", { configurable: true, value: 300 });
-    panel.dispatchEvent(new Event("scroll"));
-    expect(harness.invalidateQueries).not.toHaveBeenCalled();
-    panel.remove();
-
     history.pushState({}, "", "/dashboard");
     await Promise.resolve();
-    expect(progressDisplay()).toBe("none");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(harness.invalidateQueries).not.toHaveBeenCalled();
 
+    // Coming back starts from page 1; the abandoned progress is not resumed.
     history.pushState({}, "", "/factory/daybook");
     await Promise.resolve();
-    scrollToBottom();
+    await vi.advanceTimersByTimeAsync(0);
     expect(harness.invalidateQueries).not.toHaveBeenCalled();
   });
 });
