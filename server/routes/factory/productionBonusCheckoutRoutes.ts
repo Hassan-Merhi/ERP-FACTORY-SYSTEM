@@ -5,6 +5,7 @@
  * allocation and no End Production prerequisite.
  */
 import type { Express, Request, Response } from "express";
+import { bonusServerText } from "../../i18n/productionBonusCheckoutMessages";
 import { createHash } from "node:crypto";
 import Decimal from "decimal.js";
 import { sql } from "drizzle-orm";
@@ -209,23 +210,23 @@ export function registerProductionBonusCheckoutRoutes(app:Express):void {
     requireAuth,guard,async(req:Request,res:Response)=>{
       if(!allowed(req))return res.status(403).json({message:"Admin or Owner required"});
       const id=company(req),date=req.query.date,method=req.query.method;
-      if(!id)return res.status(400).json({message:"Factory company required"});
+      if(!id)return res.status(400).json({message:bonusServerText(req.headers["accept-language"],"checkoutCompany")});
       if(!targetBonusIsValidDate(date) || (method!=="standard" && method!=="category"))
-        return res.status(400).json({message:"Select a production date and bonus method"});
+        return res.status(400).json({message:bonusServerText(req.headers["accept-language"],"checkoutMethod")});
       try {
         const offers=await calculateOffers(db,id,date,method);
         res.setHeader("Cache-Control","private, no-store");
         return res.json({date,method,currency:"USD",offers});
       } catch(error) {
         logger.error("Bonus checkout preview failed",{error});
-        return res.status(500).json({message:"Unable to calculate production bonus"});
+        return res.status(500).json({message:bonusServerText(req.headers["accept-language"],"checkoutFailed")});
       }
     });
   app.post("/api/factory/production-target-bonuses/checkout/pay",
     requireAuth,guard,async(req:Request,res:Response)=>{
       if(!allowed(req))return res.status(403).json({message:"Admin or Owner required"});
       const id=company(req),method=req.body?.method;
-      if(!id)return res.status(400).json({message:"Factory company required"});
+      if(!id)return res.status(400).json({message:bonusServerText(req.headers["accept-language"],"checkoutCompany")});
       if(method!=="standard" && method!=="category")
         return res.status(400).json({message:"Choose standard or category per-bale bonus"});
       try {
@@ -275,7 +276,7 @@ export function registerProductionBonusCheckoutRoutes(app:Express):void {
           ? (error as {status:number}).status : 500;
         if(status===500)logger.error("Production bonus checkout payment failed",{error});
         return res.status(status).json({message:status===500?
-          "Unable to post bonus; no partial payment was saved":
+          bonusServerText(req.headers["accept-language"],"paymentFailed"):
           error instanceof Error?error.message:"Invalid bonus payment"});
       }
     });
