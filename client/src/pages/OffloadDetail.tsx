@@ -1,4 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
+import { offloadItemDisplayName, sortOffloadItemsByName } from "@shared/offloadItemSort";
 import { useParams, useLocation } from "wouter";
 import { useBackToParent } from "@/hooks/use-back-to-parent";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
@@ -191,6 +192,8 @@ export default function OffloadDetail() {
     },
   });
 
+  // Always show the stock lines by item name, even when the API/cache returns insertion order.
+  const sortedItems = offload ? sortOffloadItemsByName(offload.items) : [];
   const itemsTotal = offload?.items.reduce((s, i) => s + Number(i.totalValue), 0) ?? 0;
   const live = offload?.liveCharges;
   // Prefer live voucher amounts when available
@@ -320,10 +323,10 @@ export default function OffloadDetail() {
                     </tr>
                   </thead>
                   <tbody>
-                    {offload.items.map((item) => (
+                    {sortedItems.map((item) => (
                       <tr key={item.id} className="border-b last:border-0">
                         <td className="p-3">
-                          {item.stockItemName || item.stockItemCode || `Item #${item.stockItemId}`}
+                          {offloadItemDisplayName(item)}
                         </td>
                         <td className="p-3 text-right font-mono">{formatNumber(Number(item.quantity))}</td>
                         <td className="p-3 text-right font-mono">{formatAmount(Number(item.rate))}</td>

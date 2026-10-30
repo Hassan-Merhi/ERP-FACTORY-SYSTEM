@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { readActiveCompanyScope } from "@/lib/progressivePagination";
@@ -158,8 +159,8 @@ export function ContainerPlannerBaleAssignment({ planId, onPlanChanged }: Props)
     );
   }
 
-  const submitScan = () => {
-    const code = scanValue.trim();
+  const submitScan = (value = scanValue) => {
+    const code = value.trim();
     if (!code || selectedContainerId == null) return;
     setScanValue("");
     assignMutation.mutate({ containerId: selectedContainerId, baleCodes: [code] });
@@ -274,10 +275,11 @@ export function ContainerPlannerBaleAssignment({ planId, onPlanChanged }: Props)
               autoFocus
               data-testid="input-scan-bale"
             />
+            <MobileBarcodeScanner onScan={(code) => submitScan(code)} disabled={selectedContainer.isLocked || assignMutation.isPending} />
             <Button
               size="sm"
               disabled={!scanValue.trim() || selectedContainer.isLocked || assignMutation.isPending}
-              onClick={submitScan}
+              onClick={() => submitScan()}
               data-testid="button-scan-bale"
             >
               Assign

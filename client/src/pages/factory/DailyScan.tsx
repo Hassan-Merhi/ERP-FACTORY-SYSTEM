@@ -15,6 +15,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -176,8 +177,8 @@ export default function DailyScan() {
   const scannedKg = scanned.reduce((s, b) => s + parseFloat(b.weight_kg || "0"), 0);
   const allDone = totalBales > 0 && unscanned.length === 0;
 
-  const handleScan = async () => {
-    const ref = scanInput.trim().toUpperCase();
+  const handleScan = async (code = scanInput) => {
+    const ref = code.trim().toUpperCase();
     if (!ref) return;
 
     // Client-side validation: must be from this day's production
@@ -420,7 +421,8 @@ export default function DailyScan() {
           data-testid="input-daily-scan-ref"
           disabled={scanning}
         />
-        <Button onClick={handleScan} disabled={scanning || !scanInput.trim()} data-testid="button-daily-scan-submit">
+        <MobileBarcodeScanner onScan={(code) => void handleScan(code)} disabled={scanning} />
+        <Button onClick={() => void handleScan()} disabled={scanning || !scanInput.trim()} data-testid="button-daily-scan-submit">
           {scanning ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (

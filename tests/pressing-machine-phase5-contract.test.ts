@@ -50,7 +50,8 @@ describe("Phase 5 pressing offline resilience contract", () => {
     expect(hook).toContain("requestId: crypto.randomUUID()");
   });
   it("shows queued scans in amber and never increases accounting/stock", () => {
-    expect(manager).toContain("onBarcode={pressingQueue.submit}");
+    expect(manager).toContain("onBarcode={cameraRead}");
+    expect(manager).toContain("scanner.submit({");
     expect(manager).toContain("<PressingOfflineQueueStatus");
     expect(panel).toContain("Pending scans are not counted");
     expect(panel).toContain("Retry pending");

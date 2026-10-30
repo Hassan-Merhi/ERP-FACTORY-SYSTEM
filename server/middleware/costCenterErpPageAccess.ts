@@ -18,8 +18,8 @@ export const COST_CENTER_ERP_PAGE_KEY = "accounts";
 
 /**
  * Mirrors /api/my-erp-pages for one company: Admin/Developer have full ERP
- * access. View Only inherits all read pages when it has no custom allow-list;
- * other non-privileged roles require an explicit accounts assignment.
+ * access. View Only inherits the ERP Accounts read page regardless of a
+ * stale per-user allow-list; other non-privileged roles require an explicit assignment.
  */
 export async function hasCostCenterErpPageAccess(companyId: number, userId: string, role: string): Promise<boolean> {
   if (role === "Admin" || role === "Developer") return true;

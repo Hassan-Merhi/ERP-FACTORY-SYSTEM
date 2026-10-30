@@ -8,6 +8,7 @@
 import { Check, ChevronRight, Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { formatNum } from "./utils";
@@ -20,7 +21,8 @@ function MobileBrowseSheet({ model }: { model: FactoryPosModel }) {
       <SheetContent side="bottom" className="h-[80vh] flex flex-col">
         <div className="pb-3 border-b">
           <div className="text-base font-semibold mb-3">Add Product</div>
-          <div className="relative">
+          <div className="flex items-center gap-2">
+          <div className="relative min-w-0 flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Scan barcode or search..."
@@ -30,6 +32,8 @@ function MobileBrowseSheet({ model }: { model: FactoryPosModel }) {
               className="pl-9"
               autoFocus
             />
+          </div>
+          <MobileBarcodeScanner onScan={(code) => model.scanProductFromCamera(code, true)} disabled={!model.locationId} />
           </div>
         </div>
         <div className="flex-1 overflow-y-auto space-y-1 pt-3">

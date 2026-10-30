@@ -2,6 +2,7 @@ import { CheckSquare, DollarSign, ScanLine, Trash2, Weight, X } from "lucide-rea
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { PageHeader } from "@/components/PageHeader";
 import { Textarea } from "@/components/ui/textarea";
 import { fmt, fmtKg } from "./wastedispatch/utils";
@@ -25,6 +26,7 @@ export default function WasteDispatchOptimized() {
     setConfirming,
     clearSelectedBales,
     handleScan,
+    scanReference,
     submitMutation,
     deleteDispatchId,
     setDeleteDispatchId,
@@ -82,7 +84,8 @@ export default function WasteDispatchOptimized() {
               <label className="mb-1 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 <ScanLine className="h-3 w-3" /> Scan / Enter Ref
               </label>
-              <div className="relative">
+              <div className="flex items-center gap-2">
+                <div className="relative min-w-0 flex-1">
                 <ScanLine className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={scanInput}
@@ -93,6 +96,8 @@ export default function WasteDispatchOptimized() {
                   data-testid="input-scan-ref"
                   autoComplete="off"
                 />
+                </div>
+                <MobileBarcodeScanner onScan={(code) => void scanReference(code)} />
               </div>
             </CardContent>
           </Card>

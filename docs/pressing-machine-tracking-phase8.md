@@ -31,9 +31,9 @@ This operation changes **physical pressing analytics only**, subtracting the voi
 
 ## Safe re-confirmation
 
-After supervisor void, the partial unique index `(company_id,bale_id) WHERE voided_at IS NULL` permits a **new, separately validated** pressing confirmation for the same bale, only if it remains eligible `PENDING_PRESSING`.
+After supervisor void, the partial unique index `(company_id,bale_id) WHERE voided_at IS NULL` permits a **new, separately validated** pressing confirmation for the same bale, as long as the bale still exists and has not been deleted (regardless of inventory status).
 
-The regular scanner runs every original Phase 4 rule again: authenticated operator, active matching machine assignment, machine not down, pending bale, one active confirmation across all machines, server timestamp, UUID request id and transaction audit.
+The regular scanner runs every original Phase 4 rule again: authenticated operator, active matching machine assignment, machine not down, active non-deleted bale of any inventory status, one active confirmation across all machines, server timestamp, UUID request id and transaction audit.
 
 When a newly accepted confirmation follows a voided one, the backend also inserts an immutable `RECONFIRM` correction event with:
 
@@ -86,8 +86,8 @@ npm run verify:migrations
 4. Try to void as a worker, POS view-only user, another company, or unapproved pressing tab: 403/404, no writes.
 5. Try to UPDATE or DELETE correction and confirmation history directly: database trigger must reject.
 6. Retry the old original scan UUID after void: should **not** return active success.
-7. Rescan with a new UUID on an eligible pending bale; new confirmation and `RECONFIRM` linkage both commit together. Trigger must still protect original and replacement.
-8. Try a new scan when the bale has been finalized, machine deactivated, assignment changed or downtime opened: rejected, no new confirmation.
+7. Rescan with a new UUID on an active non-deleted bale (even if finalized); new confirmation and `RECONFIRM` linkage both commit together. Trigger must still protect original and replacement.
+8. Try a new scan when the bale has been deleted, machine deactivated, assignment changed or downtime opened: rejected, no new confirmation. Finalized bales are allowed when not already confirmed.
 9. Void while a scan is in flight. Verify machine/bale locking prevents double-active records and no stale financial changes.
 10. Confirm that active report summary/analytics drop by exactly one bale and the correct KG after void, that the void remains available under Voided/All, and that a permitted replacement is counted **once**.
 11. Run offline disconnected scan, reconnect, simulate lost response, switch users/companies; verify no duplicate active confirmation or cross-tenant queued replay.

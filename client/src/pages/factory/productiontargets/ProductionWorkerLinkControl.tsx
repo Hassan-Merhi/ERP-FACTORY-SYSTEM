@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { evenSplitBales, isValidBaleTarget } from "@shared/factoryProductionTargetSplit";
+import { evenSplitBales, isValidBaleTarget, linkedTotalBalesFromPerWorker } from "@shared/factoryProductionTargetSplit";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
@@ -98,12 +98,13 @@ export function ProductionWorkerLinkControl({
   };
 
   const openUnlinkDialog = () => {
-    // The daily Edit Targets value can override the shared fixed target.
-    // Unlink always allocates the authoritative repeating Fixed Target.
-    const shared = row.defaultTargetBales ?? null;
-    setUnlinkTarget(shared ?? null);
-    if (shared !== null && isValidBaleTarget(shared)) {
-      fillEvenSplit(shared);
+    // The linked table counts each worker's fixed target. Reconstruct its
+    // combined total before splitting, e.g. two workers at 7 = 14 total.
+    // Daily Edit Targets overrides must not replace the repeating fixed target.
+    const combined = linkedTotalBalesFromPerWorker(row.defaultTargetBales ?? null, currentMemberIds.length);
+    setUnlinkTarget(combined);
+    if (combined !== null && isValidBaleTarget(combined)) {
+      fillEvenSplit(combined);
     } else {
       setUnlinkDraft({});
     }

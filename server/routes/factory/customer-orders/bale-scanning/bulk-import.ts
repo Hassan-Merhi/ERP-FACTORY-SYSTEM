@@ -53,7 +53,7 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
         .select()
         .from(customerOrders)
         .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)));
-      if (!order) return res.status(404).json({ message: "Order not found" });
+      if (!order || order.deletedAt) return res.status(404).json({ message: "Order not found" });
       if (!["DRAFT", "LOADING", "PENDING_VERIFICATION"].includes(order.status)) {
         return res
           .status(400)
@@ -112,11 +112,11 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
             }
 
             const [currentOrder] = await tx
-              .select({ status: customerOrders.status })
+              .select({ status: customerOrders.status, deletedAt: customerOrders.deletedAt })
               .from(customerOrders)
               .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))
               .for("update");
-            if (!currentOrder || !["DRAFT", "LOADING", "PENDING_VERIFICATION"].includes(currentOrder.status)) {
+            if (!currentOrder || currentOrder.deletedAt || !["DRAFT", "LOADING", "PENDING_VERIFICATION"].includes(currentOrder.status)) {
               return { kind: "notFound" as const };
             }
 
@@ -173,6 +173,8 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
                   JOIN customer_orders co ON co.id = cob.order_id
                   WHERE cob.bale_id = ${bale.id}
                     AND co.status != 'CANCELLED'
+                    AND co.company_id = ${companyId}
+                    AND co.deleted_at IS NULL
                     AND cob.order_id != ${orderId}
                   LIMIT 1`
             );
@@ -258,6 +260,8 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
           sql`SELECT cob.bale_id FROM customer_order_bales cob
               JOIN customer_orders co ON co.id = cob.order_id
               WHERE co.status != 'CANCELLED'
+                AND co.company_id = ${companyId}
+                AND co.deleted_at IS NULL
                 AND cob.order_id != ${orderId}`
         );
         for (const row of resultRows<{ bale_id: number }>(blockedRows)) {
@@ -369,6 +373,8 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
                     JOIN customer_orders co ON co.id = cob.order_id
                     WHERE cob.bale_id = ${bale.id}
                       AND co.status != 'CANCELLED'
+                      AND co.company_id = ${companyId}
+                      AND co.deleted_at IS NULL
                       AND cob.order_id != ${orderId}
                     LIMIT 1`
               );

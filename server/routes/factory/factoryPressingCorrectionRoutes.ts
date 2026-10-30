@@ -7,13 +7,14 @@
  * This endpoint intentionally NEVER calls stock finalization or ERP accounting.
  */
 import type { Express, Request, Response } from "express";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { z, ZodError } from "zod";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
 import {
   factoryBales, factoryPressingMachines, factoryPressingConfirmations,
-  factoryPressingCorrections,
+  factoryPressingCorrections, factoryUserProfiles,
 } from "@shared/schema";
 import {
   ActiveCompanyPermissionContextError, getActiveCompanyPermissionContext,
@@ -22,9 +23,10 @@ import {
 import { logAudit } from "../helpers/auditHelpers";
 import { logger } from "../../lib/logger";
 
-const SUPERVISORS = new Set(["Developer", "Admin", "Owner", "Manager"]);
+const SUPERVISORS = new Set(["Admin", "Owner"]);
 const correctionRequest = z.object({
-  reason: z.string().trim().min(10, "A detailed reason of at least 10 characters is required").max(1000),
+  // Legacy clients may still send a reason, but none is required.
+  reason: z.string().trim().max(1000).optional(),
 }).strict();
 const listParams = z.object({
   confirmationId: z.coerce.number().int().positive().optional(),
@@ -41,7 +43,7 @@ function fail(res: Response, error: unknown) {
   if (error instanceof ActiveCompanyPermissionContextError)
     return res.status(error.status).json({ code: error.code, message: error.message });
   if (error instanceof ZodError)
-    return res.status(400).json({ code: "PRESSING_INVALID_CORRECTION", message: "Enter a mandatory reason (10–1000 characters)", issues: error.issues });
+    return res.status(400).json({ code: "PRESSING_INVALID_CORRECTION", message: "Invalid pressing correction request", issues: error.issues });
   logger.error("Factory pressing correction failed", { error });
   return res.status(500).json({ code: "PRESSING_CORRECTION_FAILED", message: "Correction was not saved. Check history before trying again." });
 }
@@ -65,7 +67,8 @@ export function registerFactoryPressingCorrectionRoutes(app: Express): void {
       try {
         const ctx = await requireSupervisor(req);
         const confirmationId = validId(req.params.id);
-        const { reason } = correctionRequest.parse(req.body);
+        const { reason: suppliedReason } = correctionRequest.parse(req.body ?? {});
+        const reason = suppliedReason || "Deleted from active pressing scans by supervisor";
         const outcome = await db.transaction(async tx => {
           // Read identity first; acquire locks in the same order as Phase 4:
           // machine → bale → existing confirmation. This also serializes
@@ -138,7 +141,120 @@ export function registerFactoryPressingCorrectionRoutes(app: Express): void {
             voidedBy: ctx.userId,
             needsRescan: true,
             stockFinalized: false,
-            message: "Physical pressing record voided. A new independent scan may now be confirmed if the bale is still pending pressing.",
+            message: "Pressing scan removed from active counts. The original remains in audit history.",
+          };
+        });
+        return res.status(200).json(outcome);
+      } catch (error) { return fail(res, error); }
+    }
+  );
+
+
+  // One-click Return: restore a voided pressing result without rescanning or
+  // editing historical evidence. A linked replacement keeps the original
+  // operator, machine, measured KG, production date and scan timestamp.
+  app.post("/api/factory/pressing-machines/confirmations/:id/restore",
+    requireAuth, async (req: Request, res: Response) => {
+      try {
+        const ctx = await requireSupervisor(req);
+        const confirmationId = validId(req.params.id);
+        const outcome = await db.transaction(async tx => {
+          const [target] = await tx.select({
+            machineId: factoryPressingConfirmations.machineId,
+            baleId: factoryPressingConfirmations.baleId,
+          }).from(factoryPressingConfirmations).where(and(
+            eq(factoryPressingConfirmations.companyId, ctx.companyId),
+            eq(factoryPressingConfirmations.id, confirmationId),
+          )).limit(1);
+          if (!target) throw new CorrectionError(404, "PRESSING_CONFIRMATION_NOT_FOUND", "Pressing confirmation not found");
+
+          // Match void and scan lock order to prevent concurrent duplicate restores.
+          const [machine] = await tx.select({ id: factoryPressingMachines.id })
+            .from(factoryPressingMachines).where(and(
+              eq(factoryPressingMachines.companyId, ctx.companyId),
+              eq(factoryPressingMachines.id, target.machineId),
+            )).for("update");
+          if (!machine) throw new CorrectionError(404, "PRESSING_MACHINE_NOT_FOUND", "Machine not found");
+          const [bale] = await tx.select({
+            id: factoryBales.id, deletedAt: factoryBales.deletedAt, status: factoryBales.status,
+          }).from(factoryBales).where(and(
+            eq(factoryBales.companyId, ctx.companyId),
+            eq(factoryBales.id, target.baleId),
+          )).for("update");
+          if (!bale || bale.deletedAt || bale.status === "DELETED") {
+            throw new CorrectionError(409, "PRESSING_BALE_DELETED",
+              "A deleted factory bale cannot be returned to pressing counts");
+          }
+          const [original] = await tx.select().from(factoryPressingConfirmations)
+            .where(and(
+              eq(factoryPressingConfirmations.companyId, ctx.companyId),
+              eq(factoryPressingConfirmations.id, confirmationId),
+            )).for("update");
+          if (!original) throw new CorrectionError(404, "PRESSING_CONFIRMATION_NOT_FOUND", "Pressing confirmation not found");
+          if (!original.voidedAt) {
+            throw new CorrectionError(409, "PRESSING_NOT_VOIDED", "This pressing scan is already active");
+          }
+          const [active] = await tx.select({ id: factoryPressingConfirmations.id })
+            .from(factoryPressingConfirmations).where(and(
+              eq(factoryPressingConfirmations.companyId, ctx.companyId),
+              eq(factoryPressingConfirmations.baleId, original.baleId),
+              isNull(factoryPressingConfirmations.voidedAt),
+            )).limit(1);
+          if (active) {
+            throw new CorrectionError(409, "PRESSING_ALREADY_CONFIRMED",
+              "This bale already has an active pressing scan; refresh the list");
+          }
+          const [restored] = await tx.insert(factoryPressingConfirmations).values({
+            companyId: original.companyId,
+            baleId: original.baleId,
+            machineId: original.machineId,
+            assignmentId: original.assignmentId,
+            sessionId: original.sessionId,
+            shiftId: original.shiftId,
+            userId: original.userId,
+            userNameSnapshot: original.userNameSnapshot,
+            machineNameSnapshot: original.machineNameSnapshot,
+            referenceNumber: original.referenceNumber,
+            articleCode: original.articleCode,
+            productName: original.productName,
+            weightKg: original.weightKg,
+            requestId: "supervisor-restore-" + randomUUID(),
+            deviceCapturedAt: original.deviceCapturedAt,
+            confirmedAt: original.confirmedAt,
+            productionDate: original.productionDate,
+            timezoneName: original.timezoneName,
+          }).onConflictDoNothing().returning();
+          if (!restored) {
+            throw new CorrectionError(409, "PRESSING_ALREADY_CONFIRMED",
+              "Another pressing scan is already active for this bale");
+          }
+          const now = new Date();
+          const [correction] = await tx.insert(factoryPressingCorrections).values({
+            companyId: ctx.companyId,
+            confirmationId: original.id,
+            replacementConfirmationId: restored.id,
+            action: "RECONFIRM",
+            reason: "Returned to active pressing scans by supervisor",
+            supervisorUserId: ctx.userId,
+            createdAt: now,
+          }).returning();
+          await logAudit({
+            userId: ctx.userId, username: String(req.session.username || ctx.userId),
+            companyId: ctx.companyId, action: "restore",
+            tableName: "factory_pressing_confirmations",
+            recordId: restored.id, recordIdentifier: restored.referenceNumber,
+            changes: {
+              returnedFromId: { old: null, new: original.id },
+              correctionId: { old: null, new: correction.id },
+              originalScanAt: { old: null, new: original.confirmedAt.toISOString() },
+            },
+          }, tx);
+          return {
+            confirmationId: restored.id,
+            returnedFromId: original.id,
+            correctionId: correction.id,
+            referenceNumber: restored.referenceNumber,
+            message: "Bale returned to active pressing scans",
           };
         });
         return res.status(200).json(outcome);
@@ -171,7 +287,23 @@ export function registerFactoryPressingCorrectionRoutes(app: Express): void {
         const rows = await db.select().from(factoryPressingCorrections)
           .where(and(...where)).orderBy(desc(factoryPressingCorrections.createdAt),
             desc(factoryPressingCorrections.id)).limit(filters.limit);
-        return res.json(rows);
+        // Supervisor identity stays as immutable user ID in the audit table,
+        // but UI receives only the current company-specific display name.
+        const supervisorIds = [...new Set(rows.map(row => row.supervisorUserId))];
+        const profiles = supervisorIds.length
+          ? await db.select({
+              userId: factoryUserProfiles.userId,
+              displayName: factoryUserProfiles.displayName,
+            }).from(factoryUserProfiles).where(and(
+              eq(factoryUserProfiles.companyId, ctx.companyId),
+              inArray(factoryUserProfiles.userId, supervisorIds),
+            ))
+          : [];
+        const names = new Map(profiles.map(row => [row.userId, row.displayName.trim()]));
+        return res.json(rows.map(row => ({
+          ...row,
+          supervisorDisplayName: names.get(row.supervisorUserId) || "Display name not set",
+        })));
       } catch (error) { return fail(res, error); }
     }
   );

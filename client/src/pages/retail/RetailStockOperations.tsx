@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Label } from "@/components/ui/label";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
@@ -360,8 +361,9 @@ export default function RetailStockOperations() {
         ))}
       </div>
 
+      <div className="flex items-center gap-2">
       <form
-        className="relative"
+        className="relative min-w-0 flex-1"
         onSubmit={(event) => {
           event.preventDefault();
           void onScan(scanText);
@@ -380,6 +382,8 @@ export default function RetailStockOperations() {
           data-testid="stock-scan"
         />
       </form>
+      <MobileBarcodeScanner onScan={(code) => void onScan(code)} className="h-12 w-12 shrink-0" />
+      </div>
       {mode === "receive" && (
         <label className="flex items-center gap-2 text-sm">
           <Checkbox checked={quickReceive} onCheckedChange={(value) => setQuickReceive(value === true)} />

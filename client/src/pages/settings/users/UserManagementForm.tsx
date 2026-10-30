@@ -173,7 +173,7 @@ export function UserManagementForm({
             <>
               <p className="text-xs rounded-md bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 px-3 py-2.5 text-sky-700 dark:text-sky-300">
                 This user can only view data — all write actions are blocked. Use the toggles below to choose which
-                sections they can access. If both are on, they can view everything.
+                systems they can access. ERP includes all standard business-data pages, while Factory uses its assigned pages.
               </p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="flex items-center justify-between rounded-md border p-3">
@@ -238,6 +238,7 @@ export function UserManagementForm({
       <AdvancedRestrictions
         user={user}
         isPrivileged={isPrivileged}
+        isViewOnly={isViewOnly}
         hasFactoryAccess={hasFactoryAccess}
         hasErpAccess={hasErpAccess}
         pageAccess={pageAccess}

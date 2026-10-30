@@ -1,5 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { FactoryMobileActionBar } from "@/components/ui/factory-mobile";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -647,6 +648,11 @@ export default function FactoryInvoiceCreate() {
                 className={scanInputClass}
                 data-testid="input-scan-code"
               />
+              <MobileBarcodeScanner onScan={(code) => {
+                if (orderId && selectedLocationId && !addBaleMutation.isPending) {
+                  addBaleMutation.mutate({ scanCode: code, locationId: parseInt(selectedLocationId) });
+                }
+              }} disabled={!orderId || !selectedLocationId || addBaleMutation.isPending} />
               {(!orderId || !selectedLocationId) && (
                 <p className="text-xs text-muted-foreground mt-1">
                   {!orderId ? "Select a customer with an active proforma first" : "Select a location to start scanning"}

@@ -413,6 +413,7 @@ async function throwIfResNotOk(res: Response) {
         ledgerBalance?: unknown;
         notInProforma?: unknown;
         overloaded?: unknown;
+        previous?: unknown;
       } = new Error(errorData.message || res.statusText);
     error.status = res.status;
     error.code = errorData.code;
@@ -421,6 +422,8 @@ async function throwIfResNotOk(res: Response) {
     error.ledgerBalance = errorData.ledgerBalance;
     error.notInProforma = errorData.notInProforma;
     error.overloaded = errorData.overloaded;
+    // Keep structured prior-confirmation data for pressing duplicate feedback.
+    error.previous = errorData.previous;
     throw error;
   }
 }

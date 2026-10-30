@@ -69,6 +69,23 @@ describe("Wave 2 live-page websocket events", () => {
     expect(predicate(queryWithKey("/api/accounts"))).toBe(false);
   });
 
+  it("refreshes Ground Scan when inventory, POS or container activity changes bale status", () => {
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue();
+    renderHook(() => useWsInvalidation(), { wrapper: wrapper(client) });
+
+    for (const topic of ["inventory", "pos", "containers"] as const) {
+      sockets[0].receive({ type: "invalidate", topics: [topic] });
+      vi.advanceTimersByTime(400);
+      const predicate = invalidate.mock.calls.at(-1)?.[0].predicate!;
+      expect(predicate(queryWithKey("/api/factory/ground-scan-items"))).toBe(true);
+      if (topic !== "containers") {
+        expect(predicate(queryWithKey("/api/factory/stock-entry/in-stock-locations"))).toBe(true);
+      }
+      expect(predicate(queryWithKey("/api/factory/daily-bale-scans"))).toBe(false);
+    }
+  });
+
   it("routes presence invalidations only to presence queries", () => {
     const client = new QueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue();

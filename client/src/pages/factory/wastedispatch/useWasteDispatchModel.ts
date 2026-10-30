@@ -222,9 +222,8 @@ export function useWasteDispatchModel() {
     },
   });
 
-  const handleScan = async (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key !== "Enter") return;
-    const reference = scanInput.trim();
+  const scanReference = async (code: string) => {
+    const reference = code.trim();
     if (!reference) return;
     try {
       const response = await readWasteJson<{ bale: WasteBale }>(
@@ -239,6 +238,13 @@ export function useWasteDispatchModel() {
     } catch (error: unknown) {
       toast({ title: "Not found", description: errorMessage(error), variant: "destructive" });
       setScanInput("");
+    }
+  };
+
+  const handleScan = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void scanReference(scanInput);
     }
   };
 
@@ -387,6 +393,7 @@ export function useWasteDispatchModel() {
     toggleGroupSelection,
     selectAllMutation,
     handleScan,
+    scanReference,
     submitMutation,
     deleteDispatchMutation,
     toggleHistoryItem,

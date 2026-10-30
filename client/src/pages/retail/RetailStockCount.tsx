@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ClipboardList, FileDown, Lock, Play, RotateCcw, ScanLine, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -424,6 +425,7 @@ export default function RetailStockCount() {
                         data-testid="stock-count-scan"
                       />
                     </div>
+                    <MobileBarcodeScanner onScan={(code) => scanMutation.mutate(code)} disabled={scanMutation.isPending} className="h-11 w-11 shrink-0" />
                     <Button
                       type="submit"
                       disabled={!scanText.trim() || scanMutation.isPending}

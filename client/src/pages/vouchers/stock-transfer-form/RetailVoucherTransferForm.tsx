@@ -11,6 +11,7 @@ import { ArrowRightLeft, Barcode, Loader2, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
@@ -368,7 +369,9 @@ export function RetailVoucherTransferForm({ isPOS = false }: { isPOS?: boolean }
                   {locations.find((loc) => loc.id === sourceId)?.name || "Choose source"}
                 </span>
               </div>
+              <div className="flex items-center gap-2">
               <form
+                className="min-w-0 flex-1"
                 onSubmit={(event) => {
                   event.preventDefault();
                   void handleScan(search);
@@ -390,6 +393,8 @@ export function RetailVoucherTransferForm({ isPOS = false }: { isPOS?: boolean }
                   <Barcode className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 </div>
               </form>
+              <MobileBarcodeScanner onScan={(code) => void handleScan(code)} disabled={!sourceId || saving} />
+              </div>
               <div className="text-xs text-muted-foreground">
                 Click an item to add it; click its picture to view all photos. Scanning again adds one more.
               </div>

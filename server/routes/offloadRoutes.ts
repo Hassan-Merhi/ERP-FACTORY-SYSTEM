@@ -11,6 +11,7 @@
  * maps the outcome onto a response.
  */
 import type { Express } from "express";
+import { sortOffloadItemsByName } from "@shared/offloadItemSort";
 import { logger } from "../lib/logger";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { eq, and, or, desc, gte, lte, like, sql } from "drizzle-orm";
@@ -324,7 +325,7 @@ export function registerOffloadRoutes(app: Express) {
         hasVouchers: liveVouchers.length > 0,
       };
 
-      res.json({ ...offload, items, poCharges, additionalCharges, liveCharges });
+      res.json({ ...offload, items: sortOffloadItemsByName(items), poCharges, additionalCharges, liveCharges });
     } catch (error: unknown) {
       return sendCompanyAccessError(res, error);
     }

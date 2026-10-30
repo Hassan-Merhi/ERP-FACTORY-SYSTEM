@@ -23,16 +23,22 @@ const dateFilter = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value =>
   !Number.isNaN(Date.parse(value + "T00:00:00Z")) &&
   new Date(value + "T00:00:00Z").toISOString().slice(0,10) === value,
   "Use a valid YYYY-MM-DD calendar date");
+const minuteFilter = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use a valid HH:mm 24-hour time");
 const positiveInt = z.coerce.number().int().positive();
 export const pressingReportFiltersSchema = z.object({
   from: dateFilter.optional(),
   to: dateFilter.optional(),
+  // Beirut-local minute precision; unset times include the complete day.
+  fromTime: minuteFilter.optional(),
+  toTime: minuteFilter.optional(),
   asOf: z.string().datetime({ offset: true }).optional(),
   machineId: positiveInt.optional(),
   userId: z.string().trim().min(1).max(255).optional(),
   shiftId: positiveInt.optional(),
   articleCode: z.string().trim().min(1).max(50).optional(),
   search: z.string().trim().min(1).max(100).optional(),
+  // Exact bale weight; decimal KG values are supported (not just 40 or 80 KG).
+  weightKg: z.coerce.number().positive().max(100000).optional(),
   status: z.enum(["active", "voided", "all"]).default("active"),
   mode: z.enum(["detailed", "condensed"]).default("detailed"),
   page: positiveInt.max(100000).default(1),
