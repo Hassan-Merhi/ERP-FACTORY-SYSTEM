@@ -10,3 +10,4 @@ export * from "./notifications";
 export * from "./requests";
 export * from "./sp";
 export * from "./whatsappSchedules";
+export * from "./edgeSync";
