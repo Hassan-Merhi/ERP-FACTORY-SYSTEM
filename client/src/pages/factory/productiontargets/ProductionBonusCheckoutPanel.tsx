@@ -4,7 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Banknote, Calculator, CheckCircle2, Loader2, Pencil, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -92,6 +92,8 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
   const [to,setTo]=useState(initialDate);
   const [method,setMethod]=useState<Method>("standard");
   const [selected,setSelected]=useState<number[]>([]);
+  const [showAll,setShowAll]=useState(false);
+  const [search,setSearch]=useState("");
   const [accountId,setAccountId]=useState("");
   const [paymentDate,setPaymentDate]=useState(()=>localDateStr(new Date()));
   const [confirmPay,setConfirmPay]=useState(false);
@@ -99,7 +101,7 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
   const [newRate,setNewRate]=useState("");
   const [reverse,setReverse]=useState<PaymentRow|null>(null);
   const [reverseReason,setReverseReason]=useState("");
-  useEffect(()=>{setFrom(startOfRange(initialDate));setTo(initialDate);setSelected([]);},[initialDate]);
+  useEffect(()=>{setFrom(startOfRange(initialDate));setTo(initialDate);setSelected([]);setSearch("");setShowAll(false);},[initialDate]);
   const validRange=isDate(from)&&isDate(to)&&from<=to&&daysApart(from,to)<=31;
   const {data:access}=useQuery<{canDecide:boolean}>({
     queryKey:["/api/factory/staff-tracking/production-bonuses",from,from],
@@ -134,8 +136,13 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
   [offers,selected]);
   const selectedGroups=groups.filter(group=>selected.includes(group.workerId)&&group.readyDays>0);
   const total=chosen.reduce((sum,row)=>sum+Math.round(Number(row.amount)*100),0)/100;
-  const allSelected=payable.length>0&&groups.filter(group=>group.readyDays>0)
-    .every(group=>selected.includes(group.workerId));
+  const payableGroups=groups.filter(group=>group.readyDays>0);
+  const visibleGroups=groups.filter(group=>
+    (showAll||group.readyDays>0)&&
+    group.workerName.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+  const visiblePayableGroups=visibleGroups.filter(group=>group.readyDays>0);
+  const allSelected=visiblePayableGroups.length>0&&
+    visiblePayableGroups.every(group=>selected.includes(group.workerId));
   const tooMany=chosen.length>100;
   const pay=useMutation({
     mutationFn:()=>request<{posted:number;replayed:number}>("POST",endpoint+"/pay",{ // data-no-translate: TypeScript generic, not user-visible JSX
@@ -179,122 +186,110 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
     },
     onError:(error:Error)=>toast({title:t("reverseFailed"),description:error.message,variant:"destructive"}),
   });
+
   if(!canUse)return null;
-  return <Card data-testid="production-bonus-checkout" className="overflow-hidden shadow-none">
-    <CardHeader className="border-b bg-muted/20">
-      <CardTitle className="flex items-center gap-2 text-lg"><Banknote className="h-5 w-5 text-primary"/>{t("title")}</CardTitle>
-      <p className="text-sm text-muted-foreground">
-        {t("intro")}
-      </p>
-    </CardHeader>
-    <CardContent className="space-y-4 pt-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="space-y-1 text-xs text-muted-foreground">{t("fromDate")}
+  return <Card data-testid="production-bonus-checkout" className="overflow-hidden border-border/70 shadow-xs">
+    <CardContent className="space-y-5 p-4 sm:p-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <Banknote className="h-5 w-5"/>
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold">{t("payWorkers")}</h2>
+          <p className="text-sm text-muted-foreground">{t("payIntro")}</p>
+        </div>
+      </div>
+
+      <div className="grid gap-3 rounded-xl border border-border/70 bg-card/60 p-4 sm:grid-cols-2 xl:grid-cols-3">
+        <label className="space-y-1.5 text-xs font-medium text-muted-foreground">{t("fromDate")}
           <Input aria-label={t("fromDate")} type="date" value={from}
-            onChange={event=>{setFrom(event.target.value);setSelected([]);}} className="w-[170px]"/>
+            onChange={event=>{setFrom(event.target.value);setSelected([]);}} className="h-10"/>
         </label>
-        <label className="space-y-1 text-xs text-muted-foreground">{t("toDate")}
+        <label className="space-y-1.5 text-xs font-medium text-muted-foreground">{t("toDate")}
           <Input aria-label={t("toDate")} type="date" value={to}
-            onChange={event=>{setTo(event.target.value);setSelected([]);}} className="w-[170px]"/>
+            onChange={event=>{setTo(event.target.value);setSelected([]);}} className="h-10"/>
         </label>
-        <label className="space-y-1 text-xs text-muted-foreground">{t("method")}
+        <label className="space-y-1.5 text-xs font-medium text-muted-foreground">{t("method")}
           <Select value={method} onValueChange={value=>{setMethod(value as Method);setSelected([]);}}>
-            <SelectTrigger className="min-w-[220px]"><SelectValue/></SelectTrigger>
+            <SelectTrigger className="h-10"><SelectValue/></SelectTrigger>
             <SelectContent>
               <SelectItem value="standard">{t("standard")}</SelectItem>
               <SelectItem value="category">{t("category")}</SelectItem>
             </SelectContent>
           </Select>
         </label>
-        <label className="space-y-1 text-xs text-muted-foreground">{t("paymentDate")}
-          <Input aria-label={t("paymentDate")} type="date" value={paymentDate}
-            onChange={event=>setPaymentDate(event.target.value)} className="w-[170px]"/>
-        </label>
-        <label className="min-w-[230px] flex-1 space-y-1 text-xs text-muted-foreground">{t("payFrom")}
-          <Select value={accountId} onValueChange={setAccountId}>
-            <SelectTrigger><SelectValue placeholder={t("chooseAccount")}/></SelectTrigger>
-            <SelectContent>
-              {cashAccounts.map(account=><SelectItem key={account.id} value={String(account.id)}>
-                {account.name} ({account.code})
-              </SelectItem>)}
-            </SelectContent>
-          </Select>
-        </label>
       </div>
-      <details className="rounded-lg border bg-muted/10">
-        <summary className="cursor-pointer px-4 py-3 text-sm font-medium">{t("settings")}</summary>
-        <div className="space-y-3 border-t p-3">
-          <p className="text-xs text-muted-foreground">{t("settingsHint")}</p>
-          <ProductionBonusCategoryRatesPanel initialDate={from}/>
-          <details className="rounded-lg border">
-            <summary className="cursor-pointer px-3 py-2 text-xs">{t("legacy")}</summary>
-            <ProductionBonusWeeklyMethodPanel initialDate={to}/>
-          </details>
-        </div>
-      </details>
+
       {!validRange&&<p role="alert" className="text-sm text-destructive">{t("invalidRange")}</p>}
       {error&&<p role="alert" className="text-sm text-destructive">{(error as Error).message}</p>}
-      <p className="text-xs text-muted-foreground">{t("rangeExplanation")}</p>
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-        {([
-          [t("workersExtra"),String(groups.filter(group=>group.extra>0).length)],
-          [t("ready"),String(groups.filter(group=>group.readyDays>0).length)],
-          [t("selected"),String(selectedGroups.length)],
-          [t("totalPay"),usd(total)],
-        ] as const).map(([label,value])=><div key={label} className="rounded-lg border p-3">
-          <div className="text-xs text-muted-foreground">{label}</div>
-          <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
-        </div>)}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <span className="text-sm font-medium">{payableGroups.length} {t("ready")}</span>
+        <span className="text-sm text-muted-foreground">{groups.length} {t("totalWorkers")}</span>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button variant="outline" size="sm" disabled={!payable.length}
-          onClick={()=>setSelected(allSelected?[]:groups.filter(group=>group.readyDays>0).map(group=>group.workerId))}>
-          {allSelected?t("clear"):t("selectAll")}
-        </Button>
-        <span className="ml-auto text-sm font-semibold">{selectedGroups.length} {t("selected")} · {usd(total)}</span>
-        <Button disabled={!chosen.length||!accountId||!paymentDate||!validRange||tooMany||pay.isPending}
-          onClick={()=>setConfirmPay(true)}>
-          <CheckCircle2 className="mr-2 h-4 w-4"/> {t("reviewPay")}
-        </Button>
+
+      <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-card/60 p-3 lg:flex-row lg:items-center lg:justify-between">
+        <Input value={search} onChange={event=>setSearch(event.target.value)}
+          aria-label={t("searchWorkers")} placeholder={t("searchWorkers")}
+          className="h-10 w-full lg:max-w-xs"/>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 rounded-lg border bg-muted/30 p-1">
+            <Button type="button" size="sm" variant={!showAll?"secondary":"ghost"} className="h-8"
+              onClick={()=>setShowAll(false)}>{t("showPayable")}</Button>
+            <Button type="button" size="sm" variant={showAll?"secondary":"ghost"} className="h-8"
+              onClick={()=>setShowAll(true)}>{t("showEveryone")}</Button>
+          </div>
+          <Button type="button" variant="outline" size="sm" disabled={!visiblePayableGroups.length}
+            onClick={()=>setSelected(previous=>allSelected?
+              previous.filter(id=>!visiblePayableGroups.some(group=>group.workerId===id)):
+              [...new Set([...previous,...visiblePayableGroups.map(group=>group.workerId)])])}>
+            {allSelected?t("clear"):t("selectAll")}
+          </Button>
+        </div>
       </div>
-      {tooMany&&<p role="alert" className="text-sm text-destructive">{t("max100")}</p>}
-      <div className="overflow-x-auto rounded-lg border">
+
+      <div className="overflow-x-auto rounded-xl border border-border/70">
         <Table>
-          <TableHeader><TableRow>
-            <TableHead className="w-12">{t("select")}</TableHead><TableHead>{t("workerCategory")}</TableHead>
-            <TableHead className="text-right">{t("target")}</TableHead>
-            <TableHead className="text-right">{t("made")}</TableHead>
-            <TableHead className="text-right">{t("extra")}</TableHead>
-            <TableHead className="text-right">{t("bonus")}</TableHead>
-            <TableHead>{t("statusAction")}</TableHead>
-          </TableRow></TableHeader>
+          <TableHeader>
+            <TableRow className="bg-muted/30">
+              <TableHead className="w-12">{t("select")}</TableHead>
+              <TableHead>{t("worker")}</TableHead>
+              <TableHead>{t("productionSummary")}</TableHead>
+              <TableHead className="text-right">{t("bonus")}</TableHead>
+              <TableHead>{t("statusAction")}</TableHead>
+            </TableRow>
+          </TableHeader>
           <TableBody>
-            {isLoading&&<TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+            {isLoading&&<TableRow><TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
               <Loader2 className="mr-2 inline h-4 w-4 animate-spin"/>{t("loading")}
             </TableCell></TableRow>}
-            {!isLoading&&!groups.length&&<TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
-              {t("noRows")}
+            {!isLoading&&!error&&!visibleGroups.length&&<TableRow><TableCell colSpan={5} className="py-12 text-center text-muted-foreground">
+              {search.trim()?t("noMatches"):!showAll&&groups.length?t("noPayable"):t("noRows")}
+              {!showAll&&groups.length>0&&<div className="mt-3">
+                <Button type="button" size="sm" variant="outline" onClick={()=>setShowAll(true)}>{t("showEveryone")}</Button>
+              </div>}
             </TableCell></TableRow>}
-            {groups.map(group=>{
+            {!isLoading&&visibleGroups.map(group=>{
               const ready=group.readyDays>0;
               const label=ready?t("ready"):group.needsSetup>0?t("needsSetup"):
                 group.blockedDays>0?t("needsReview"):group.paidDays>0?t("paidStatus"):t("noBonus");
               return <TableRow key={group.workerId} className="align-top">
-                <TableCell><Checkbox aria-label={t("selectBonus")+" "+group.workerName}
-                  checked={selected.includes(group.workerId)} disabled={!ready}
-                  onCheckedChange={checked=>setSelected(previous=>checked?
-                    [...new Set([...previous,group.workerId])]:
-                    previous.filter(id=>id!==group.workerId))}/></TableCell>
                 <TableCell>
+                  <Checkbox aria-label={t("selectBonus")+" "+group.workerName}
+                    checked={selected.includes(group.workerId)} disabled={!ready}
+                    onCheckedChange={checked=>setSelected(previous=>checked?
+                      [...new Set([...previous,group.workerId])]:
+                      previous.filter(id=>id!==group.workerId))}/>
+                </TableCell>
+                <TableCell className="min-w-[180px]">
                   <div className="font-medium">{group.workerName}</div>
                   <details className="mt-1 text-xs">
-                    <summary className="cursor-pointer text-muted-foreground">
-                      <Calculator className="mr-1 inline h-3 w-3"/>{t("dailyDetails")}
+                    <summary className="inline-flex cursor-pointer items-center text-primary hover:underline">
+                      <Calculator className="mr-1 h-3 w-3"/>{t("dailyDetails")}
                     </summary>
-                    <div className="mt-2 space-y-2 min-w-[290px]">
+                    <div className="mt-2 min-w-[280px] space-y-2">
                       {group.days.map(day=>{
                         const payment=(payments?.payments??[]).find(p=>p.workerId===day.workerId&&p.date===day.date);
-                        return <div key={day.date} className="rounded border p-2">
+                        return <div key={day.date} className="rounded-lg border p-2">
                           <div className="font-medium">{day.date}: {t("target")} {day.target}, {t("made")} {day.produced},
                             {" "}{t("extra")} {day.extra} · {usd(day.amount)}</div>
                           <div className="text-muted-foreground">{day.issue??(
@@ -305,8 +300,9 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
                           </div>)}
                           {method==="standard" && day.extra>0 &&
                            (day.status==="pending" || day.status==="approved" ||
-                            (day.status==="needs_setup" && day.issue?.includes("rate")))&&<Button size="sm" variant="outline" className="mt-1 h-7"
-                             onClick={()=>{setEditingRate(day);setNewRate(day.lines[0]?.rate??"");}}>
+                            (day.status==="needs_setup" && day.issue?.includes("rate")))&&
+                            <Button size="sm" variant="outline" className="mt-1 h-7"
+                              onClick={()=>{setEditingRate(day);setNewRate(day.lines[0]?.rate??"");}}>
                               <Pencil className="mr-1 h-3 w-3"/>{t("editRate")}
                             </Button>}
                           {payment?.paymentStatus==="POSTED"&&<Button size="sm" variant="outline"
@@ -318,10 +314,15 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
                     </div>
                   </details>
                 </TableCell>
-                <TableCell className="text-right tabular-nums">{group.target}</TableCell>
-                <TableCell className="text-right tabular-nums">{group.produced}</TableCell>
-                <TableCell className="text-right font-semibold tabular-nums">{group.extra}</TableCell>
-                <TableCell className="text-right font-semibold tabular-nums">{usd(group.amount)}</TableCell>
+                <TableCell className="min-w-[185px]">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm tabular-nums">
+                    <div><span className="block text-xs text-muted-foreground">{t("target")}</span>{group.target}</div>
+                    <div><span className="block text-xs text-muted-foreground">{t("made")}</span>{group.produced}</div>
+                    <div><span className="block text-xs text-muted-foreground">{t("extra")}</span>
+                      <strong>{group.extra}</strong></div>
+                  </div>
+                </TableCell>
+                <TableCell className="text-right text-base font-semibold tabular-nums">{usd(group.amount)}</TableCell>
                 <TableCell>
                   <Badge variant={ready?"default":"secondary"}>{label}</Badge>
                   {group.needsSetup>0&&<p className="mt-1 text-xs text-amber-600">
@@ -333,36 +334,74 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
                       onClick={()=>navigate("/factory/stock-entry?tab=production-targets")}>
                       {t("editTargets")}
                     </Button>}
-                  {ready&&<p className="mt-1 text-xs text-muted-foreground">
-                    {group.readyDays} {t("payableDays")}</p>}
                 </TableCell>
               </TableRow>;
             })}
           </TableBody>
         </Table>
       </div>
-      <p className="text-xs text-muted-foreground">
-        {t("historyHint")}
-      </p>
+
+      <div className="flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="text-sm font-medium">{selectedGroups.length} {t("selected")}</div>
+          <div className="text-2xl font-bold tabular-nums">{usd(total)}</div>
+        </div>
+        <Button className="sm:min-w-[170px]" disabled={!chosen.length||!validRange||tooMany||pay.isPending}
+          onClick={()=>setConfirmPay(true)}>
+          <CheckCircle2 className="mr-2 h-4 w-4"/>{t("reviewPay")}
+        </Button>
+      </div>
+      {tooMany&&<p role="alert" className="text-sm text-destructive">{t("max100")}</p>}
+
+      <details className="rounded-lg border border-border/70">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-medium">{t("settings")}</summary>
+        <div className="space-y-3 border-t p-3">
+          <p className="text-xs text-muted-foreground">{t("settingsHint")}</p>
+          <ProductionBonusCategoryRatesPanel initialDate={from}/>
+          <details className="rounded-lg border">
+            <summary className="cursor-pointer px-3 py-2 text-xs">{t("legacy")}</summary>
+            <ProductionBonusWeeklyMethodPanel initialDate={to}/>
+          </details>
+        </div>
+      </details>
     </CardContent>
+
     <Dialog open={confirmPay} onOpenChange={setConfirmPay}>
       <DialogContent className="max-w-xl">
-        <DialogHeader><DialogTitle>{t("confirmTitle")}</DialogTitle>
+        <DialogHeader>
+          <DialogTitle>{t("confirmTitle")}</DialogTitle>
           <DialogDescription>{t("confirmHint")}</DialogDescription>
         </DialogHeader>
-        <div className="max-h-[300px] overflow-y-auto rounded-lg border">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="space-y-1.5 text-sm">{t("payFrom")}
+            <Select value={accountId} onValueChange={setAccountId}>
+              <SelectTrigger><SelectValue placeholder={t("chooseAccount")}/></SelectTrigger>
+              <SelectContent>
+                {cashAccounts.map(account=><SelectItem key={account.id} value={String(account.id)}>
+                  {account.name} ({account.code})
+                </SelectItem>)}
+              </SelectContent>
+            </Select>
+          </label>
+          <label className="space-y-1.5 text-sm">{t("paymentDate")}
+            <Input aria-label={t("paymentDate")} type="date" value={paymentDate}
+              onChange={event=>setPaymentDate(event.target.value)}/>
+          </label>
+        </div>
+        <div className="max-h-[250px] overflow-y-auto rounded-lg border">
           {chosen.map(row=><div key={row.date+":"+row.workerId} className="flex justify-between gap-2 border-b px-3 py-2 text-sm">
             <div><div className="font-medium">{row.workerName}</div>
-              <div className="text-xs text-muted-foreground">{row.date} · {row.extra} {t("extraBales")} · {row.method==="category"?t("categoryRates"):t("standardRate")}</div>
+              <div className="text-xs text-muted-foreground">{row.date} · {row.extra} {t("extraBales")}</div>
             </div><strong className="tabular-nums">{usd(row.amount)}</strong>
           </div>)}
         </div>
-        <div className="flex justify-between text-sm"><span>{t("payingFrom")}</span>
-          <strong>{cashAccounts.find(a=>String(a.id)===accountId)?.name??t("notSelected")}</strong></div>
-        <div className="flex justify-between text-base font-bold"><span>{t("total")}</span><span>{usd(total)}</span></div>
+        <div className="flex justify-between text-base font-bold">
+          <span>{t("total")}</span><span>{usd(total)}</span>
+        </div>
         <DialogFooter>
           <Button variant="outline" onClick={()=>setConfirmPay(false)}>{t("cancel")}</Button>
-          <Button disabled={pay.isPending||!chosen.length||tooMany} onClick={()=>pay.mutate()}>
+          <Button disabled={pay.isPending||!chosen.length||!accountId||!isDate(paymentDate)||tooMany}
+            onClick={()=>pay.mutate()}>
             {pay.isPending&&<Loader2 className="mr-2 h-4 w-4 animate-spin"/>}{t("approvePay")} {usd(total)}
           </Button>
         </DialogFooter>
