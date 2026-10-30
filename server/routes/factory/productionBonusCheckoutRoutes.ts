@@ -16,7 +16,7 @@ import { requireFactoryTabAccess } from "../../lib/factoryAccessControl";
 import { resultRows } from "../../lib/queryResult";
 import { logger } from "../../lib/logger";
 import { errorStatus, translateDatabaseError } from "../../lib/httpHandlers";
-import { loadTargetBonusRows, targetBonusIsValidDate } from "../../services/factory/targetBonusReview";
+import { loadTargetBonusRows, targetBonusValidRange } from "../../services/factory/targetBonusReview";
 import { postTargetBonusPaymentsInTransaction } from "../../services/factory/targetBonusPaymentService";
 import { parseTargetBonusPaymentCommand } from "../../services/factory/targetBonusPaymentPolicy";
 import { normalizeBonusCategory } from "@shared/productionTargetBonusCategoryRates";
@@ -29,7 +29,7 @@ type BonusLine = { category: string; produced: number; extra: number; rate: stri
 type Offer = {
   date: string; workerId: number; workerName: string; target: number; produced: number;
   extra: number; method: Method; lines: BonusLine[]; amount: string; token: string;
-  status: "pending" | "approved" | "paid" | "reversed" | "blocked" | "rejected";
+  status: "pending" | "approved" | "paid" | "reversed" | "no_bonus" | "needs_setup" | "blocked" | "rejected";
   issue: string | null;
 };
 type RecordRow = Record<string, unknown>;
@@ -98,12 +98,15 @@ async function creditedCategories(
 }
 
 async function calculateOffers(
-  tx: DatabaseOrTransaction, companyId: number, date: string, method: Method,
+  tx: DatabaseOrTransaction, companyId: number, from: string, to: string, method: Method,
 ): Promise<Offer[]> {
-  const [daily, claims, weekly] = await Promise.all([
-    loadTargetBonusRows(tx, companyId, date, date),
+  // One range read for closed and open days; each worker/day remains an individual
+  // frozen accounting entitlement even when displayed as a range total.
+  const [daily, claimsResult, methodsResult, weeklyReviewsResult, categoryReviewsResult] = await Promise.all([
+    loadTargetBonusRows(tx, companyId, from, to),
     tx.execute(sql`
-      SELECT rv.worker_id AS "workerId", rv.status, rv.bonus_amount::text AS amount,
+      SELECT rv.production_date::text AS date, rv.worker_id AS "workerId",
+        rv.status, rv.bonus_amount::text AS amount,
         p.status AS "paymentStatus", details.method AS "checkoutMethod",
         details.breakdown AS breakdown, details.calculation_hash AS "calculationHash"
       FROM factory_target_bonus_reviews rv
@@ -111,28 +114,41 @@ async function calculateOffers(
         ON p.company_id=rv.company_id AND p.review_id=rv.id
       LEFT JOIN factory_target_bonus_checkout_details details
         ON details.company_id=rv.company_id AND details.review_id=rv.id
-      WHERE rv.company_id=${companyId} AND rv.production_date=${date}::date
+      WHERE rv.company_id=${companyId}
+        AND rv.production_date BETWEEN ${from}::date AND ${to}::date
     `),
     tx.execute(sql`
-      SELECT method FROM factory_production_target_bonus_weekly_methods
+      SELECT effective_week::text AS week, method
+      FROM factory_production_target_bonus_weekly_methods
+      WHERE company_id=${companyId} AND effective_week<=${to}::date
+      ORDER BY effective_week DESC,id DESC
+    `),
+    tx.execute(sql`
+      SELECT worker_id AS id, week_start::text AS start, week_end::text AS "end"
+      FROM factory_target_bonus_weekly_reviews
       WHERE company_id=${companyId}
-        AND effective_week <= ${mondayOfProductionBonusWeek(date)!}::date
-      ORDER BY effective_week DESC,id DESC LIMIT 1
+        AND week_start<=${to}::date AND week_end>=${from}::date
+    `),
+    tx.execute(sql`
+      SELECT worker_id AS id, production_date::text AS date
+      FROM factory_target_bonus_category_reviews
+      WHERE company_id=${companyId}
+        AND production_date BETWEEN ${from}::date AND ${to}::date
     `),
   ]);
-  const claimsByWorker = new Map(rows(claims).map(row => [Number(row.workerId),row]));
-  const weeklyFlat = rows(weekly)[0]?.method === "weekly_flat";
-  const weeklyClaims = new Set(rows(await tx.execute(sql`
-    SELECT worker_id AS id FROM factory_target_bonus_weekly_reviews
-    WHERE company_id=${companyId} AND ${date}::date BETWEEN week_start AND week_end
-  `)).map(row=>Number(row.id)));
-  const categoryClaims = new Set(rows(await tx.execute(sql`
-    SELECT worker_id AS id FROM factory_target_bonus_category_reviews
-    WHERE company_id=${companyId} AND production_date=${date}::date
-  `)).map(row=>Number(row.id)));
+  const claimsByDay = new Map(rows(claimsResult).map(row => [String(row.date).slice(0,10)+":"+Number(row.workerId),row]));
+  const weeklyMethods=rows(methodsResult);
+  const weeklyReviews=rows(weeklyReviewsResult);
+  const categoryClaims=new Set(rows(categoryReviewsResult).map(row=>String(row.date).slice(0,10)+":"+Number(row.id)));
   const result: Offer[] = [];
   for(const item of daily) {
-    const claim = claimsByWorker.get(item.workerId);
+    const date=item.date;
+    const key=date+":"+item.workerId;
+    const claim=claimsByDay.get(key);
+    const weekStart=mondayOfProductionBonusWeek(date)!;
+    const weeklyFlat=weeklyMethods.find(row=>String(row.week).slice(0,10)<=weekStart)?.method==="weekly_flat";
+    const weeklyClaim=weeklyReviews.some(row=>Number(row.id)===item.workerId &&
+      String(row.start).slice(0,10)<=date && String(row.end).slice(0,10)>=date);
     const lines: BonusLine[] = [];
     let issue: string | null = null;
     let amount = "0.00";
@@ -149,9 +165,9 @@ async function calculateOffers(
         lines.push({category:"All categories", produced:item.producedBales,
           extra:item.extraBales, rate:new Decimal(item.ratePerBale).toFixed(4),bonus:amount});
       }
-    } else if (weeklyFlat || weeklyClaims.has(item.workerId)) {
+    } else if (weeklyFlat || weeklyClaim) {
       issue="A weekly flat-bonus method/review already covers this worker";
-    } else if (categoryClaims.has(item.workerId)) {
+    } else if (categoryClaims.has(key)) {
       issue="An older category-bonus review already exists; reconcile before paying";
     } else if (!item.targetConfigured || item.targetBales <= 0 ||
                !Number.isFinite(item.targetBales)) {
@@ -211,8 +227,12 @@ async function calculateOffers(
     const status: Offer["status"] = claim?.paymentStatus === "POSTED" ? "paid" :
       claim?.paymentStatus === "REVERSED" ? "reversed" :
       claim?.status === "rejected" ? "rejected" :
+      issue === "Target not exceeded" || (item.targetBales <= 0 && item.producedBales === 0 && !claim)
+        ? "no_bonus" :
+      issue?.startsWith("Save a positive") || issue?.startsWith("Set the worker") ||
+      issue?.startsWith("Set a positive category") ? "needs_setup" :
       issue ? "blocked" : claim ? "approved" :
-      item.extraBales>0 && Number(amount)>0 ? "pending" : "blocked";
+      item.extraBales>0 && Number(amount)>0 ? "pending" : "no_bonus";
     const offerCore={date,workerId:item.workerId,workerName:item.workerName,
       target:item.targetBales,produced:item.producedBales,extra:item.extraBales,
       method,lines,amount};
@@ -227,14 +247,14 @@ export function registerProductionBonusCheckoutRoutes(app:Express):void {
   app.get("/api/factory/production-target-bonuses/checkout",
     requireAuth,guard,async(req:Request,res:Response)=>{
       if(!allowed(req))return res.status(403).json({message:bonusServerText(req.headers["accept-language"],"adminOnly")});
-      const id=company(req),date=req.query.date,method=req.query.method;
+      const id=company(req),from=req.query.from??req.query.date,to=req.query.to??req.query.date,method=req.query.method;
       if(!id)return res.status(400).json({message:bonusServerText(req.headers["accept-language"],"checkoutCompany")});
-      if(!targetBonusIsValidDate(date) || (method!=="standard" && method!=="category"))
+      if(!targetBonusValidRange(from,to) || (method!=="standard" && method!=="category"))
         return res.status(400).json({message:bonusServerText(req.headers["accept-language"],"checkoutMethod")});
       try {
-        const offers=await calculateOffers(db,id,date,method);
+        const offers=await calculateOffers(db,id,from,to,method);
         res.setHeader("Cache-Control","private, no-store");
-        return res.json({date,method,currency:"USD",offers});
+        return res.json({from,to,method,currency:"USD",offers});
       } catch(error) {
         logger.error("Bonus checkout preview failed",{error});
         return res.status(500).json({message:bonusServerText(req.headers["accept-language"],"checkoutFailed")});
@@ -252,14 +272,17 @@ export function registerProductionBonusCheckoutRoutes(app:Express):void {
         const input=req.body.selections as Array<Record<string,unknown>>;
         if(input.some(row=>typeof row.token!=="string" || !/^[a-f0-9]{64}$/.test(row.token)))
           fail(400,"Refresh the bonus calculation before paying");
-        if(command.selections.some(row=>row.date!==command.selections[0].date))
-          fail(400,"Select one Production Targets date per payment");
+        const firstDate=command.selections[0].date;
+        const lastDate=command.selections[command.selections.length-1].date;
+        if(!targetBonusValidRange(firstDate,lastDate))
+          fail(400,"Select production dates within a 32-day window");
         const result=await db.transaction(async tx=>{
           await tx.execute(sql`SELECT pg_advisory_xact_lock(84023,${id})`);
-          const date=command.selections[0].date;
-          const quotes=await calculateOffers(tx,id,date,method);
+          const quotes=await calculateOffers(tx,id,firstDate,lastDate,method);
+          const quotedByDay=new Map(quotes.map(quote=>[quote.date+":"+quote.workerId,quote]));
           for(const selection of command.selections) {
-            const quote=quotes.find(q=>q.workerId===selection.workerId);
+            const date=selection.date;
+            const quote=quotedByDay.get(date+":"+selection.workerId);
             const received=input.find(q=>Number(q.workerId)===selection.workerId&&q.date===date);
             if(!quote || !received || quote.token!==received.token ||
                quote.amount!==selection.expectedAmount ||
