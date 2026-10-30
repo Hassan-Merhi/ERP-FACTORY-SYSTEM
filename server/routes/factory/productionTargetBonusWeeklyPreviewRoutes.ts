@@ -142,7 +142,7 @@ export async function loadWeeklyFlatBonusProposal(
         return {
           ...proposal, dayCount: dayEvidence.length, weekStartsOn: "Monday",
           source: "immutable-finalized-physical-bale-category-evidence",
-          note: "Phase 14 review is audit-only. Posting and payment are not available.",
+          note: "Weekly approval is separate from Cash/Bank posting. Check Weekly Flat Bonus Payments for actual payment status.",
         };
 
 }
