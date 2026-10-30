@@ -35,6 +35,11 @@ export function supportsPhase8LanVoucherCapture(body) {
       voucher.locationId != null || voucher.effectiveDate != null ||
       typeof voucher.voucherDate !== "string" ||
       !/^\d{4}-\d{2}-\d{2}$/.test(voucher.voucherDate)) return false;
+  // The cloud apply path requires a real calendar day, not a string that
+  // merely looks like YYYY-MM-DD (e.g. February 30).
+  const parsedDay = new Date(voucher.voucherDate + "T00:00:00Z");
+  if (!Number.isFinite(parsedDay.getTime()) ||
+      parsedDay.toISOString().slice(0, 10) !== voucher.voucherDate) return false;
   let debit = 0n;
   let credit = 0n;
   for (const entry of body.entries) {
