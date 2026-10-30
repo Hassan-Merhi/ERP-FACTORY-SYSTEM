@@ -701,17 +701,40 @@ describe("MC-2: intercompany transfer legs", () => {
     expect(Number(opposite.rows[0].debit)).toBe(100);
     expect(Number(opposite.rows[0].credit)).toBe(100);
 
+    // Changing the selected opposite-side ledger account (the account row
+    // highlighted in the voucher editor) must work as well.
+    const replacementContra = await insertId(
+      `INSERT INTO ledger_accounts (company_id, code, name, account_type, opening_balance, opening_balance_side)
+       VALUES ($1, $2, 'Intercompany corrected contra', 'Liability', 0, 'Cr') RETURNING id`,
+      [ctx.companyId, `${PREFIX}-ICT-CONTRA-${ctx.companyId}`]
+    );
+    const correctedContra = await agent.patch(`/api/vouchers/${legs.from}/payment-receipt`).send({
+      ...correctionPayload,
+      entries: [{ accountType: "ledger", accountId: replacementContra, amount: "100" }],
+    });
+    expect(correctedContra.status).toBe(200);
+    const reclassifiedContra = await pool.query(
+      `SELECT ledger_account_id, debit_amount::numeric AS debit, credit_amount::numeric AS credit
+         FROM voucher_entries WHERE voucher_id = $1 ORDER BY id`,
+      [legs.from]
+    );
+    expect(reclassifiedContra.rows.map((line) => [line.ledger_account_id, Number(line.debit), Number(line.credit)])).toEqual([
+      [replacementAccount, 0, 100],
+      [replacementContra, 100, 0],
+    ]);
+
     // The same editor must still refuse a transfer amount change or a
     // replacement account owned by another company.
     const amountChanged = await agent.patch(`/api/vouchers/${legs.from}/payment-receipt`).send({
       ...correctionPayload,
-      entries: [{ accountType: "ledger", accountId: ctx.salesAccountId, amount: "101" }],
+      entries: [{ accountType: "ledger", accountId: replacementContra, amount: "101" }],
     });
     expect(amountChanged.status).toBe(409);
     expect(amountChanged.body.code).toBe("INTERCOMPANY_TRANSFER_LEG_EDIT_REFUSED");
     const foreignAccount = await agent.patch(`/api/vouchers/${legs.from}/payment-receipt`).send({
       ...correctionPayload,
       paymentAccountId: ids.B_CASH,
+      entries: [{ accountType: "ledger", accountId: replacementContra, amount: "100" }],
     });
     expect(foreignAccount.status).toBe(400);
     expect(foreignAccount.body.code).toBe("POSTING_TARGET_INVALID");
