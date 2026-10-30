@@ -15,6 +15,7 @@ import { localDateStr } from "../factoryProductionTargetsModel";
 import { ProductionBonusCategoryRatesPanel } from "./ProductionBonusCategoryRatesPanel";
 import { ProductionBonusWeeklyMethodPanel } from "./ProductionBonusWeeklyMethodPanel";
 import { ProductionBonusWeeklySheet } from "./ProductionBonusWeeklySheet";
+import { isProductionWorkday } from "@shared/productionTargetBonusWeeklyMethod";
 
 type Method = "standard" | "category";
 type Line = { category: string; produced: number; extra: number; rate: string; bonus: string };
@@ -134,7 +135,8 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
   });
   const cashAccounts=(accounts?.accounts??[]).filter(a=>
     !a.openingCurrency||a.openingCurrency.toUpperCase()==="USD");
-  const offers=data?.offers??[];
+  // Sunday is a factory holiday; stale cached API data must never enable Sunday payout.
+  const offers=(data?.offers??[]).filter(row=>isProductionWorkday(row.date));
   const groups=useMemo(()=>summarizeByWorker(offers),[offers]);
   const chosen=useMemo(()=>offers.filter(row=>
     selected.includes(row.workerId)&&payableStatus(row)),

@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import type { DatabaseOrTransaction } from "../../db";
 import { resultRows } from "../../lib/queryResult";
 import { loadLiveTargetBonusRows } from "./targetBonusLivePreview";
+import { isProductionWorkday } from "@shared/productionTargetBonusWeeklyMethod";
 import { BONUS_CATEGORY_COUNTED_BALE_STATUSES } from "./productionBonusCategoryCapture";
 
 export type TargetBonusStatus = "pending" | "approved" | "rejected";
@@ -159,6 +160,7 @@ export async function loadTargetBonusRows(
       AND e.period_type = 'daily'
       AND e.person_type = 'worker'
       AND e.period_start BETWEEN ${start}::date AND ${end}::date
+      AND EXTRACT(ISODOW FROM e.period_start) <> 7
     ORDER BY e.period_start DESC, w.full_name ASC, e.person_id ASC
   `);
   const finalizedRows = (resultRows(result) as DbRow[]).map((row): TargetBonusRow => ({
@@ -180,7 +182,8 @@ export async function loadTargetBonusRows(
     sourceFinalized: true,
   }));
   const liveRows = await loadLiveTargetBonusRows(executor, companyId, start, end);
-  return [...finalizedRows, ...liveRows].sort((a,b) =>
+  return [...finalizedRows, ...liveRows]
+    .filter(row => isProductionWorkday(row.date)).sort((a,b) =>
     b.date.localeCompare(a.date) || a.workerName.localeCompare(b.workerName) || a.workerId - b.workerId);
 }
 

@@ -33,6 +33,12 @@ export function mondayOfProductionBonusWeek(day: unknown): string | null {
   return date.toISOString().slice(0, 10);
 }
 
+/** Sunday is a factory holiday: exclude it from production targets and new bonus calculations. */
+export function isProductionWorkday(date: string): boolean {
+  if (!isBonusCategoryDate(date)) return false;
+  return new Date(date + "T12:00:00.000Z").getUTCDay() !== 0;
+}
+
 export function parseWeeklyFlatBonusUsd(value: unknown): string | null {
   if ((typeof value !== "string" && typeof value !== "number") ||
       !/^(?:0|[1-9][0-9]{0,5})(?:\.[0-9]{1,2})?$/.test(String(value))) return null;

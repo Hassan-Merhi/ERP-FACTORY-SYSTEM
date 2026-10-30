@@ -6,7 +6,7 @@ import { requireFactoryTabAccess } from "../../lib/factoryAccessControl";
 import { logger } from "../../lib/logger";
 import { resultRows } from "../../lib/queryResult";
 import { isBonusCategoryDate } from "@shared/productionTargetBonusCategoryRates";
-import { mondayOfProductionBonusWeek } from "@shared/productionTargetBonusWeeklyMethod";
+import { isProductionWorkday, mondayOfProductionBonusWeek } from "@shared/productionTargetBonusWeeklyMethod";
 import { previewProductionBonusCategories } from "../../services/factory/productionBonusCategoryCalculator";
 import { categoryReviewSnapshotPayload, categoryReviewSnapshotToken }
   from "../../services/factory/categoryBonusReviewSnapshot";
@@ -45,6 +45,7 @@ function parseRequest(body: unknown): {
   const input = body as Record<string, unknown>;
   const workerId = input.workerId;
   if (input.confirm !== true || !isBonusCategoryDate(input.date) ||
+      !isProductionWorkday(input.date) ||
       typeof workerId !== "number" || !Number.isSafeInteger(workerId) || workerId <= 0 ||
       (input.decision !== "approved" && input.decision !== "rejected") ||
       typeof input.expectedAmount !== "string" ||

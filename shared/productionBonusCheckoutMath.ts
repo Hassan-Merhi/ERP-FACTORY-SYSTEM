@@ -1,6 +1,6 @@
 import { productionBonusCheckoutErrors as errors } from "./i18n/productionBonusCheckoutErrors";
 import Decimal from "decimal.js";
-import { mondayOfProductionBonusWeek } from "./productionTargetBonusWeeklyMethod";
+import { isProductionWorkday, mondayOfProductionBonusWeek } from "./productionTargetBonusWeeklyMethod";
 /** Attribute each Stock Entry bale to the worker who finalized it.
  * Linking workers at the same table does not transfer or split their bonus
  * credits; category totals must match the individual preview exactly.
@@ -72,6 +72,8 @@ export function allocateWeeklyExtraBales(days: readonly WeeklyBonusDay[]): Map<s
     if(!monday)throw new Error("Invalid production week date");
     const key=monday+":"+day.workerId;
     result.set(day.date+":"+day.workerId,0);
+    // Preserve a zero result for holiday dates; do not add Sunday target or output.
+    if (!isProductionWorkday(day.date)) continue;
     const bucket=weeks.get(key)??[];
     bucket.push(day);
     weeks.set(key,bucket);
