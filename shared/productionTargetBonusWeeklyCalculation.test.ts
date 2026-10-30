@@ -123,6 +123,12 @@ describe("Phase 13 weekly flat eligibility (read-only)", () => {
     expect(paid.workers[0].reasons).toContain("EXISTING_PAYROLL_BONUS_CLAIM");
     expect(paid.workers[0].eligible).toBe(false);
   });
+  it("blocks a physical bale captured twice in one week", () => {
+    const proposal = calculateWeeklyFlatBonus({ ...fixture(), repeatedBaleInWeek: true });
+    expect(proposal.globalIssues).toContain("DUPLICATE_SOURCE_BALE");
+    expect(proposal.totalProposedBonusUsd).toBe("0.00");
+    expect(proposal.workers.every(worker => !worker.eligible)).toBe(true);
+  });
   it("rejects duplicated source dates or a non-Monday week start", () => {
     expect(() => calculateWeeklyFlatBonus({ ...fixture(), weekStart: "2026-10-27" })).toThrow();
     const original = fixture();
