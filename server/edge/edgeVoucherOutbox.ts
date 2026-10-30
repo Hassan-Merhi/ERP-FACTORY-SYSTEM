@@ -3,7 +3,7 @@
  * Recording the envelope in the same transaction as the voucher makes the
  * source durable; it does NOT authorize applying it against the cloud ledger.
  */
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { sql } from "drizzle-orm";
 import type { DbTransaction } from "../db";
@@ -135,10 +135,13 @@ export async function captureEdgeVoucherTx(tx: DbTransaction, evidence: EdgeVouc
       !evidence.actorUserId) {
     throw new Error("EDGE_OUTBOX_SCOPE_INVALID");
   }
-  const operationId =
-    evidence.requestId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(evidence.requestId)
-      ? evidence.requestId
-      : randomUUID();
+  // Never invent a different operation ID after the voucher has posted:
+  // a broken/missing request identity must roll back this SAME transaction.
+  if (typeof evidence.requestId !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(evidence.requestId)) {
+    throw new Error("EDGE_OUTBOX_OPERATION_ID_INVALID");
+  }
+  const operationId = evidence.requestId;
   const payload = canonicalEdgeVoucherPayload(evidence.voucher, evidence.entries);
   const hash = createHash("sha256").update(payload, "utf8").digest("hex");
   // Ordered captures serialize to commit in the same order as sequence
