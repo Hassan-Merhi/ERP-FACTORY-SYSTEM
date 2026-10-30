@@ -35,6 +35,9 @@ test("rejects forged tenant, reused identity and malformed source receipt data",
     { deviceCapturedAt: "2026-02-30T06:45:10.000Z" },
     { productionDate: "2026-02-30" }, { productionDate: "2026-13-01" },
     { timezoneName: "" },
+    { stockDelta: 1 }, { voucher: { amount: 10 } },
+    { attachment: { path: "/private.pdf" } },
+    { inventoryFinalized: true },
   ];
   for (const change of invalid) {
     assert.throws(() => phase9PressingEnvelope({ ...valid, ...change }),
