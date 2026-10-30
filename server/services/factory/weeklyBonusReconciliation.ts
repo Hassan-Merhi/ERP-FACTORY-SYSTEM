@@ -71,7 +71,7 @@ const same = (value: string | number, expected: Decimal): boolean => {
   const parsed = exact(value);
   return parsed !== null && parsed.eq(expected);
 };
-const equalId = (left: string | number | null, right: string | number): boolean =>
+const equalId = (left: string | number | null, right: string | number | null): boolean =>
   left !== null && Number(left) === Number(right);
 
 export function reconcileWeeklyBonusLedger(
