@@ -42,8 +42,8 @@ export async function ensureFactoryTargetBonusPaymentSchema(pool: Pick<Pool, "qu
     CREATE INDEX IF NOT EXISTS factory_target_bonus_payments_date
       ON factory_target_bonus_payments(company_id, payment_date DESC)
   `);
-  // Checkout freezes its calculation breakdown without changing historic
-  // review/payment rows or creating a competing cash claim.
+  // Persist the bonus method and category breakdown alongside the existing
+  // one-payment-per-review claim, without creating a second payment source.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS factory_target_bonus_checkout_details (
       id BIGSERIAL PRIMARY KEY,
