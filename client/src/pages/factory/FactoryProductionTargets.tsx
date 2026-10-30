@@ -282,10 +282,14 @@ export default function FactoryProductionTargets() {
   const workerTotals = useMemo(
     () => ({
       total: rows.length,
-      present: rows.filter((row) => row.status === FACTORY_TRACKING_STATUSES.present).length,
-      absent: rows.filter((row) => row.status === FACTORY_TRACKING_STATUSES.absent).length,
+      present: rows.filter((row) => periodType === "daily"
+        ? row.status === FACTORY_TRACKING_STATUSES.present
+        : (row.absentDays ?? 0) === 0).length,
+      absent: rows.filter((row) => periodType === "daily"
+        ? row.status === FACTORY_TRACKING_STATUSES.absent
+        : (row.absentDays ?? 0) > 0).length,
     }),
-    [rows]
+    [rows, periodType]
   );
 
   const busy = sendWhatsappMutation.isPending || endProductionMutation.isPending || exportWeeklyMutation.isPending;
@@ -354,12 +358,19 @@ export default function FactoryProductionTargets() {
           </Button>
 
           <Button
-            onClick={() => setEditorOpen(true)}
+            onClick={() => {
+              if (periodType !== "daily") {
+                setPeriodType("daily");
+                return;
+              }
+              setEditorOpen(true);
+            }}
             disabled={finalized || rows.length === 0 || busy}
+            title={periodType === "daily" ? undefined : "Period targets are a sum of daily targets. Switch to Daily to edit."}
             data-testid="button-edit-production-targets"
           >
             <SlidersHorizontal className="mr-2 h-4 w-4" />
-            {tr("editTargets")}
+            {periodType === "daily" ? tr("editTargets") : "Edit Daily Targets"}
           </Button>
 
           {periodType === "daily" && (
@@ -400,7 +411,8 @@ export default function FactoryProductionTargets() {
         <CalendarDays className="mr-1.5 inline h-3.5 w-3.5" />
         {period.start}
         {period.end !== period.start ? ` — ${period.end}` : ""}
-        <span className="ml-3">{tr("useEditorToManageTargets")}</span>
+        <span className="ml-3">{periodType === "daily" ? tr("useEditorToManageTargets")
+          : "Targets and attendance are summed from each date in this period; edit individual days in Daily view."}</span>
       </div>
 
       {finalized && (
@@ -528,7 +540,12 @@ export default function FactoryProductionTargets() {
                         active: row.active,
                       },
                     ];
-                    const isAbsent = members.some((member) => member.status === FACTORY_TRACKING_STATUSES.absent);
+                    const isAbsent = periodType !== "daily"
+                      ? (row.absentDays ?? 0) > 0
+                      : members.some((member) => member.status === FACTORY_TRACKING_STATUSES.absent);
+                    const comparisonTarget = periodType === "daily"
+                      ? row.targetBales
+                      : row.targetBales == null ? null : row.targetBales - (row.absentTargetBales ?? 0);
                     return (
                       <TableRow
                         key={row.linkGroupId != null ? `link-${row.linkGroupId}` : `worker-${row.personId}`}
@@ -558,14 +575,16 @@ export default function FactoryProductionTargets() {
                           {row.producedBales ?? 0}
                         </TableCell>
                         <TableCell
-                          className={`border-r border-border/70 text-right text-base font-semibold tabular-nums ${differenceClass(row.targetBales, row.producedBales)}`}
+                          className={`border-r border-border/70 text-right text-base font-semibold tabular-nums ${differenceClass(comparisonTarget, row.producedBales)}`}
                         >
-                          {differenceText(row.targetBales, row.producedBales)}
+                          {differenceText(comparisonTarget, row.producedBales)}
                         </TableCell>
                         <TableCell>
                           <div className="space-y-1.5">
                             {members.map((member) => {
-                              const memberAbsent = member.status === FACTORY_TRACKING_STATUSES.absent;
+                              const memberAbsent = periodType !== "daily"
+                                ? (row.absentDays ?? 0) > 0
+                                : member.status === FACTORY_TRACKING_STATUSES.absent;
                               return (
                                 <div
                                   key={member.personId}
@@ -575,10 +594,16 @@ export default function FactoryProductionTargets() {
                                       : "border-border bg-muted/70 text-muted-foreground"
                                   }`}
                                   aria-disabled="true"
-                                  title={`${member.name}: ${tr("statusControlledFromAttendance")}`}
+                                  title={periodType === "daily"
+                                    ? `${member.name}: ${tr("statusControlledFromAttendance")}`
+                                    : `${member.name}: ${row.absentDays ?? 0} absent out of ${row.periodDays ?? 0} roster days`}
                                 >
                                   <LockKeyhole className="h-3.5 w-3.5 shrink-0" />
-                                  <span>{tr(statusTranslationKey(member.status))}</span>
+                                  <span>{periodType === "daily"
+                                    ? tr(statusTranslationKey(member.status))
+                                    : (row.absentDays ?? 0) > 0
+                                      ? `${tr("absent")} ${row.absentDays}/${row.periodDays ?? 0}`
+                                      : tr("present")}</span>
                                 </div>
                               );
                             })}

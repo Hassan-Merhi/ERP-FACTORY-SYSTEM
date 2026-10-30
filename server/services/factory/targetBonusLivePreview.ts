@@ -66,6 +66,10 @@ export async function loadLiveTargetBonusRows(
       FROM credited_bales bc
       JOIN factory_worker_production_link_members lm
         ON lm.company_id = ${companyId} AND lm.worker_id = bc.worker_id
+      JOIN factory_worker_production_links active_link
+        ON active_link.id = lm.link_id AND active_link.company_id = lm.company_id
+        AND active_link.effective_from <= bc.work_date
+        AND (active_link.effective_to IS NULL OR active_link.effective_to > bc.work_date)
       GROUP BY bc.work_date, lm.link_id
     )
     SELECT d.work_date::text AS date, w.id AS "workerId",
