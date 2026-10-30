@@ -165,7 +165,8 @@ export function calculateWeeklyFlatBonus(input: WeeklyFlatBonusInput): WeeklyFla
       const entry = workers.get(person.workerId) ?? {
         workerId: person.workerId, workerName: person.workerName, target: new Decimal(0),
         creditedBales: 0, workedDays: 0, absentDays: 0,
-        categories: new Map(), dayBreakdown: [], reasons: new Set<WeeklyFlatBonusIssue>(),
+        categories: new Map<string, { categoryKey: string; categoryLabel: string; creditedBales: number }>(),
+        dayBreakdown: [] as WeeklyFlatWorkerProposal["dayBreakdown"], reasons: new Set<WeeklyFlatBonusIssue>(),
       };
       if (!validCredit(person.creditedBales)) entry.reasons.add("INVALID_DAILY_CREDIT");
       else {
