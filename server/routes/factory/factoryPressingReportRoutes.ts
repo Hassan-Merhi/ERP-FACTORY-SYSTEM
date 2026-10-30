@@ -44,7 +44,7 @@ function handleError(res: Response, error: unknown) {
 async function context(req: Request): Promise<QueryCtx> {
   const ctx = await getActiveCompanyPermissionContext(req);
   return { companyId: ctx.companyId, userId: ctx.userId,
-    supervisor: (MANAGER_ROLES.has(ctx.role) || ctx.role === "View Only") && !ctx.posViewOnly,
+    supervisor: (MANAGER_ROLES.has(ctx.role) && !ctx.posViewOnly) || ctx.role === "View Only",
     canCorrect: (ctx.role === "Admin" || ctx.role === "Owner") && !ctx.posViewOnly };
 }
 function escapeLike(text: string): string {
