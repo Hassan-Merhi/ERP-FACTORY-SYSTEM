@@ -97,13 +97,13 @@ Done on the branch:
 - Deterministic multi-device conflict review with no silent financial/stock overwrite: Phase 8 divergent-replay refusal; Phase 9 conflict register + named DBA decisions.
 - Permission revocation after capture: cloud apply re-checks the actor's CURRENT access (Phase 8 Admin/Owner + DBA approval; Phase 9 active user and non-view-only company role).
 - Tenant isolation: tenant-scoped source FKs on capture, envelope/payload identity binding, approved-company check at apply.
-- Safe server stop/handover visibility: `scripts/edge/factory-handover-preflight.mjs` (status / handover gate).
+- Safe server stop/handover visibility: `scripts/edge/factory-handover-preflight.mjs` (status / handover gate) and the read-only, Admin/Owner-only LAN endpoint `GET /api/edge/operator/status` (same report, no database access needed).
 - Reviewed DBA schema installer with explicit acknowledgement (`server/edge/offlineSchemaInstall.ts`).
 
 Still open (not started or needs external review):
 - Reviewed local-session/cold-start policy for laptops that cannot reach the LAN server (browser-only offline beyond the Phase 5 encrypted read cache and the narrow voucher outbox).
 - Encrypted migration of legacy localStorage/IndexedDB queue entries (currently quarantined, never replayed).
-- Operator UI for pause/resume, conflicts and handover (currently CLI/SQL).
+- Operator UI screens for pause/resume and conflict decisions (status is available over HTTP; changes are CLI/DBA).
 
 ## Phase 11 — End-to-end factory certification and rollout
 - Integrate Phases 7–10 and run full repository CI, schema/migration, security and release tests on the exact integration release SHA.

@@ -19,6 +19,11 @@ import { supportsPhase8LanVoucherCapture } from "./phase8CapturePolicy.mjs";
 import { Phase9StatusRefusal, readPhase9OperationStatus } from "./phase9OperationStatus.mjs";
 import { registerCloudEdgeSyncReceiver } from "./edgeSyncReceiver";
 import { edgeStatusRateLimit } from "./edgeRateLimit";
+import { summarizeLanEvidence } from "./phase10Handover.mjs";
+import {
+  ActiveCompanyPermissionContextError,
+  getActiveCompanyPermissionContext,
+} from "../services/security/activeCompanyPermissionContext";
 
 type EdgeConfiguration = ReturnType<typeof readFactoryEdgeConfiguration>;
 
@@ -168,6 +173,28 @@ export function registerFactoryEdgeBoundary(app: Express): void {
     }
   );
   // Staging-only, HMAC-authenticated cloud receiver. No posted business effects.
+  // Phase 10: read-only operator view of LAN evidence and relay state, so a
+  // shift lead can see pending / staged / applied / conflicts before handover
+  // without database access. Admin/Owner of the active company only.
+  if (config.mode === "lan") {
+    app.get("/api/edge/operator/status", edgeStatusRateLimit, requireAuth, async (req, res) => {
+      res.setHeader("Cache-Control", "no-store");
+      try {
+        await assertActiveCompanyAccess(req);
+        const ctx = await getActiveCompanyPermissionContext(req);
+        if ((ctx.role !== "Admin" && ctx.role !== "Owner") || ctx.posViewOnly) {
+          return res.status(403).json({ code: "EDGE_OPERATOR_ROLE_REQUIRED" });
+        }
+        return res.json(await summarizeLanEvidence(pool, config.siteId));
+      } catch (error) {
+        if (error instanceof CompanyAccessError) return sendCompanyAccessError(res, error);
+        if (error instanceof ActiveCompanyPermissionContextError) {
+          return res.status(error.status).json({ code: error.code });
+        }
+        return res.status(503).json({ code: "EDGE_OPERATOR_STATUS_UNAVAILABLE" });
+      }
+    });
+  }
   registerCloudEdgeSyncReceiver(app);
   let pressingCheck: { value: boolean; at: number } | null = null;
   async function pressingCaptureInstalled(): Promise<boolean> {
