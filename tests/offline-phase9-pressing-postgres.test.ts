@@ -76,7 +76,8 @@ describe.skipIf(!databaseUrl)("Phase 9 pressing outbox, disposable PostgreSQL 17
 
       await client.query("SAVEPOINT duplicate_scan");
       try {
-        await expect(capturePhase9PressingTx(tx, base)).rejects.toMatchObject({ code: "23505" });
+        // Drizzle wraps the driver error; the PostgreSQL SQLSTATE lives on cause.
+        await expect(capturePhase9PressingTx(tx, base)).rejects.toMatchObject({ cause: { code: "23505" } });
       } finally {
         await client.query("ROLLBACK TO SAVEPOINT duplicate_scan");
       }
@@ -86,7 +87,7 @@ describe.skipIf(!databaseUrl)("Phase 9 pressing outbox, disposable PostgreSQL 17
         await expect(capturePhase9PressingTx(tx, {
           ...base, requestId: "c4f9ac65-a734-4aac-93b8-2adfb8cb4de2",
           localConfirmationId: 14,
-        })).rejects.toMatchObject({ code: "23503" });
+        })).rejects.toMatchObject({ cause: { code: "23503" } });
       } finally {
         await client.query("ROLLBACK TO SAVEPOINT company_scope");
       }

@@ -7,6 +7,9 @@ const lan = {
   FACTORY_EDGE_HOSTNAME: "erp.factory.internal",
   FACTORY_EDGE_WRITE_MODE: "lan-primary",
   FACTORY_EDGE_PRIMARY_ACK: "CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED",
+  // Phase 7: LAN-primary requires an exact writer epoch and baseline digest.
+  FACTORY_EDGE_WRITER_EPOCH: "3",
+  FACTORY_EDGE_BASELINE_SHA256: "a".repeat(64),
   NODE_ENV: "production",
   PGHOST: "postgres",
   PGPORT: "5432",
@@ -20,11 +23,15 @@ const lan = {
   CSRF_ENFORCE: "1",
 };
 
+const PRIMARY_ONLY = new Set([
+  "FACTORY_EDGE_PRIMARY_ACK", "FACTORY_EDGE_WRITER_EPOCH", "FACTORY_EDGE_BASELINE_SHA256",
+]);
+
 function setLan(primary = true) {
   vi.stubEnv("DATABASE_URL", undefined);
   for (const [key, value] of Object.entries(lan)) {
     if (key === "FACTORY_EDGE_WRITE_MODE" && !primary) vi.stubEnv(key, "read-only");
-    else if (key === "FACTORY_EDGE_PRIMARY_ACK" && !primary) vi.stubEnv(key, "");
+    else if (PRIMARY_ONLY.has(key) && !primary) vi.stubEnv(key, "");
     else vi.stubEnv(key, value);
   }
 }
