@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Banknote, Calculator, CheckCircle2, Loader2, Pencil, RotateCcw } from "lucide-react";
+import { Banknote, Calculator, CheckCircle2, LayoutList, Loader2, Pencil, RotateCcw, Table2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -16,11 +16,12 @@ import { queryClient } from "@/lib/queryClient";
 import { localDateStr } from "../factoryProductionTargetsModel";
 import { ProductionBonusCategoryRatesPanel } from "./ProductionBonusCategoryRatesPanel";
 import { ProductionBonusWeeklyMethodPanel } from "./ProductionBonusWeeklyMethodPanel";
+import { ProductionBonusWeeklySheet } from "./ProductionBonusWeeklySheet";
 
 type Method = "standard" | "category";
 type Line = { category: string; produced: number; extra: number; rate: string; bonus: string };
 type Offer = {
-  date: string; workerId: number; workerName: string; target: number; produced: number;
+  date: string; workerId: number; workerName: string; category: string; target: number; produced: number;
   extra: number; method: Method; lines: Line[]; amount: string; token: string;
   status: "pending" | "approved" | "paid" | "reversed" | "no_bonus" | "needs_setup" | "blocked" | "rejected" | "weekly";
   issue: string | null;
@@ -92,6 +93,7 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
   const [method,setMethod]=useState<Method>("standard");
   const [selected,setSelected]=useState<number[]>([]);
   const [showAll,setShowAll]=useState(false);
+  const [sheetView,setSheetView]=useState(false);
   const [search,setSearch]=useState("");
   const [accountId,setAccountId]=useState("");
   const [paymentDate,setPaymentDate]=useState(()=>localDateStr(new Date()));
@@ -196,6 +198,16 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
           <h2 className="text-lg font-semibold">{t("payWorkers")}</h2>
           <p className="text-sm text-muted-foreground">{t("payIntro")}</p>
         </div>
+        <div className="ml-auto flex items-center gap-1 rounded-lg border border-border/70 bg-muted/30 p-1">
+          <Button type="button" size="sm" variant={!sheetView?"secondary":"ghost"}
+            aria-pressed={!sheetView} onClick={()=>setSheetView(false)}>
+            <LayoutList className="mr-1.5 h-4 w-4"/>{t("listView")}
+          </Button>
+          <Button type="button" size="sm" variant={sheetView?"secondary":"ghost"}
+            aria-pressed={sheetView} onClick={()=>{setSheetView(true);setShowAll(true);}}>
+            <Table2 className="mr-1.5 h-4 w-4"/>{t("sheetView")}
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-3 rounded-xl border border-border/70 bg-card/60 p-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -245,7 +257,12 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-border/70">
+      {sheetView ? <ProductionBonusWeeklySheet from={from} to={to}
+        workers={visibleGroups} loading={isLoading} selected={selected}
+        onToggle={(workerId,checked)=>setSelected(previous=>checked?
+          [...new Set([...previous,workerId])]:
+          previous.filter(id=>id!==workerId))}/>
+        : <div className="overflow-x-auto rounded-xl border border-border/70">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/30">
@@ -322,17 +339,39 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
             })}
           </TableBody>
         </Table>
-      </div>
+      </div>}
 
-      <div className="flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="text-sm font-medium">{selectedGroups.length} {t("selected")}</div>
           <div className="text-2xl font-bold tabular-nums">{usd(total)}</div>
         </div>
-        <Button className="sm:min-w-[170px]" disabled={!chosen.length||!validRange||tooMany||pay.isPending}
-          onClick={()=>setConfirmPay(true)}>
-          <CheckCircle2 className="mr-2 h-4 w-4"/>{t("reviewPay")}
-        </Button>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="space-y-1 text-xs font-medium text-muted-foreground">
+            {t("payFrom")}
+            <Select value={accountId} onValueChange={setAccountId}>
+              <SelectTrigger className="h-10 w-[230px]" aria-label={t("payFrom")}>
+                <SelectValue placeholder={t("chooseAccount")}/>
+              </SelectTrigger>
+              <SelectContent>{cashAccounts.map(account=>
+                <SelectItem key={account.id} value={String(account.id)}>
+                  {account.name} ({account.code})
+                </SelectItem>)}
+              </SelectContent>
+            </Select>
+          </label>
+          <label className="space-y-1 text-xs font-medium text-muted-foreground">
+            {t("paymentDate")}
+            <Input type="date" aria-label={t("paymentDate")}
+              className="h-10 w-[165px]" value={paymentDate}
+              onChange={event=>setPaymentDate(event.target.value)}/>
+          </label>
+          <Button className="h-10 sm:min-w-[170px]"
+            disabled={!chosen.length||!validRange||tooMany||pay.isPending}
+            onClick={()=>setConfirmPay(true)}>
+            <CheckCircle2 className="mr-2 h-4 w-4"/>{t("reviewPay")}
+          </Button>
+        </div>
       </div>
       {tooMany&&<p role="alert" className="text-sm text-destructive">{t("max100")}</p>}
 

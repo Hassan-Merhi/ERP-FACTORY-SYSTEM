@@ -29,7 +29,7 @@ const guard = requireFactoryTabAccess("factory/stock-entry", "hide_tab_stockentr
 type Method = "standard" | "category";
 type BonusLine = { category: string; produced: number; extra: number; rate: string; bonus: string };
 type Offer = {
-  date: string; workerId: number; workerName: string; target: number; produced: number;
+  date: string; workerId: number; workerName: string; category: string; target: number; produced: number;
   extra: number; method: Method; lines: BonusLine[]; amount: string; token: string;
   status: "pending" | "approved" | "paid" | "reversed" | "no_bonus" | "needs_setup" | "blocked" | "rejected" | "weekly";
   issue: string | null;
@@ -344,7 +344,7 @@ async function calculateOffers(
     const offerCore={date,workerId:item.workerId,workerName:item.workerName,
       target:item.targetBales,produced:item.producedBales,extra:item.extraBales,
       method,lines,amount};
-    result.push({...offerCore,
+    result.push({...offerCore, category:item.category,
       token:claim?.paymentStatus && typeof claim.calculationHash==="string"
         ? claim.calculationHash : hash(offerCore),
       status,issue});
