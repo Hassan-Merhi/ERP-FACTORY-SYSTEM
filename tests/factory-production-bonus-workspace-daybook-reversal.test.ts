@@ -21,6 +21,9 @@ describe("Production Bonuses dedicated page and audited Daybook deletion", () =>
     expect(workspace).toContain("<ProductionBonusCategoryRatesPanel");
     expect(workspace).toContain("<ProductionBonusesPanel");
     expect(workspace).toContain("<ProductionTargetBonusPaymentsPanel");
+    expect(workspace).toContain('/factory/stock-entry?tab=production-targets');
+    expect(source("client/src/pages/factory/BaleStockEntry.tsx"))
+      .toContain('get("tab") === "production-targets"');
   });
 
   it("shows the reviewed calculation, USD account and explicit Pay action", () => {
