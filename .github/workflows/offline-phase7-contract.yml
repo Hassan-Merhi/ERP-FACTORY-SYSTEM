@@ -1,0 +1,28 @@
+name: Offline Phase 7 writer fence contracts
+
+on:
+  push:
+    branches:
+      - feat/offline-mode-integration
+    paths:
+      - 'server/edge/phase7WriterGate.mjs'
+      - 'server/edge/edgeRuntimePolicy.mjs'
+      - 'deploy/lan/phase7-install-writer-fence.sql'
+      - 'tests/offline-phase7-writer-gate.test.mjs'
+      - '.github/workflows/offline-phase7-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  writer-fence-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify Phase 7 fail-closed contracts
+        run: node --test tests/offline-phase7-writer-gate.test.mjs
