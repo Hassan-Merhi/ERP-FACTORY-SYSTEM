@@ -7,8 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectContent, SelectValue, SelectItem } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { bonusText } from "@/i18n/factoryProductionBonusCheckoutTranslations";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
+import { localDateStr } from "../factoryProductionTargetsModel";
 import { isBonusCategoryDate, parseBonusCategoryRate } from "@shared/productionTargetBonusCategoryRates";
 
 interface CategoryRate {
@@ -39,10 +42,11 @@ async function api<T>(method: "GET" | "POST", url: string, body?: unknown): Prom
  */
 export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate: string }) {
   const { toast } = useToast();
+  const { language } = useApplicationLanguage();
   const [asOf, setAsOf] = useState(initialDate);
   const [editing, setEditing] = useState(false);
   const [category, setCategory] = useState("");
-  const [effectiveFrom, setEffectiveFrom] = useState(initialDate);
+  const [effectiveFrom, setEffectiveFrom] = useState(()=>localDateStr(new Date()));
   const [rate, setRate] = useState("");
   const [enabled, setEnabled] = useState(true);
   const [note, setNote] = useState("");
@@ -56,7 +60,7 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
   });
   function openEditor(label = "", current: CategoryRate | null = null) {
     setCategory(label);
-    setEffectiveFrom(initialDate);
+    setEffectiveFrom(localDateStr(new Date()));
     setRate(current?.ratePerExtraBale ?? "");
     setEnabled(current?.enabled ?? true);
     setNote("");
@@ -70,9 +74,10 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
     }),
     onSuccess: () => {
       setEditing(false);
-      toast({ title: "Category rate saved", description: "Saved as an effective-dated rate version. Existing bonus payments are unchanged." });
+      toast({ title: "Category rate saved", description: bonusText("categorySavedToast",language) });
       void queryClient.invalidateQueries({ queryKey: [endpoint] });
       void queryClient.invalidateQueries({ queryKey: ["/api/factory/production-target-bonuses/category-preview"] });
+      void queryClient.invalidateQueries({ queryKey: ["/api/factory/production-target-bonuses/checkout"] });
     },
     onError: (cause: Error) => toast({ title: "Category rate not saved", description: cause.message, variant: "destructive" }),
   });
@@ -88,9 +93,7 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
       </summary>
       <div className="space-y-3 border-t px-4 py-4">
         <p className="text-xs text-muted-foreground">
-          Set a different USD amount per extra bale for each category. Rates are saved by effective date.
-          Allocating targets and production when a worker switches categories is handled separately;
-          these saved rates do not change existing approvals or post money.
+          {bonusText("categoryLatestHint",language)}
         </p>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <label className="space-y-1 text-xs text-muted-foreground">
@@ -110,7 +113,7 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
               <tr>
                 <th className="px-3 py-2">Category</th>
                 <th className="px-3 py-2">Rate / extra bale</th>
-                <th className="px-3 py-2">Effective from</th>
+                <th className="px-3 py-2">Version date</th>
                 <th className="px-3 py-2">Status</th>
                 <th className="px-3 py-2 text-right">Edit</th>
               </tr>
@@ -148,7 +151,7 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
             <summary className="cursor-pointer text-muted-foreground">Rate change history ({data.history.length}{data.historyTruncated ? "+" : ""})</summary>
             <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
               {data.history.map(version => <div key={version.id} className="flex flex-wrap justify-between gap-3 border-b py-1">
-                <span>{version.categoryLabel} · from {version.effectiveFrom}</span>
+                <span>{version.categoryLabel} · {version.effectiveFrom}</span>
                 <span className="tabular-nums">{version.enabled ? "$" + version.ratePerExtraBale : "Disabled"}</span>
               </div>)}
             </div>
@@ -159,8 +162,7 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
             <DialogHeader>
               <DialogTitle>Category bonus rate</DialogTitle>
               <DialogDescription>
-                Save the amount for this category from the selected date forward.
-                Previous saved versions and reviewed bonuses remain unchanged.
+                {bonusText("categoryEditHelp",language)}
               </DialogDescription>
             </DialogHeader>
             <label className="space-y-1 text-sm">Category
@@ -175,10 +177,6 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
                     </SelectItem>)}
                 </SelectContent>
               </Select>
-            </label>
-            <label className="space-y-1 text-sm">Effective from
-              <Input aria-label="Category rate effective from" type="date" value={effectiveFrom}
-                onChange={event => setEffectiveFrom(event.target.value)} />
             </label>
             <label className="space-y-1 text-sm">Amount per extra bale (USD)
               <Input aria-label="Category rate USD per extra bale" type="number"
@@ -197,7 +195,7 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
               <Button type="button" variant="outline" onClick={() => setEditing(false)}>Cancel</Button>
               <Button type="button" disabled={!canSave} onClick={() => save.mutate()}>
                 {save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save dated rate
+                Save rate
               </Button>
             </DialogFooter>
           </DialogContent>

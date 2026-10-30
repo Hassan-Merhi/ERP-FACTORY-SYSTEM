@@ -7,7 +7,7 @@ import { logger } from "../../lib/logger";
 import { requireFactoryTabAccess } from "../../lib/factoryAccessControl";
 import {
   isBonusCategoryDate, normalizeBonusCategory, parseBonusCategoryRate,
-  resolveBonusCategoryRate, type ProductionBonusCategoryRateVersion,
+  type ProductionBonusCategoryRateVersion,
 } from "@shared/productionTargetBonusCategoryRates";
 
 const guard = requireFactoryTabAccess("factory/stock-entry", "hide_tab_stockentry_production_targets");
@@ -92,13 +92,16 @@ export function registerProductionTargetBonusCategoryRateRoutes(app: Express): v
         }
         const categories = [...catalog].map(([key, label]) => ({
           categoryKey: key, categoryLabel: label,
-          effective: resolveBonusCategoryRate(key, asOf, versions),
+          // Display the same latest configured rate used by unpaid checkout,
+          // including previously worked weeks. Paid claims retain their snapshot.
+          effective: [...versions].filter(v=>v.categoryKey===key)
+            .sort((a,b)=>b.id-a.id)[0] ?? null,
         })).sort((a, b) => a.categoryLabel.localeCompare(b.categoryLabel));
         res.setHeader("Cache-Control", "private, no-store");
         return res.json({
           currency: "USD", asOf, categories,
           history: versions, historyTruncated: versions.length >= 3000,
-          configuredForPayments: false,
+          configuredForPayments: true,
         });
       } catch (error) {
         logger.error("Cannot load Production Targets category rates", { error });
@@ -126,6 +129,8 @@ export function registerProductionTargetBonusCategoryRateRoutes(app: Express): v
       }
       try {
         const result = await db.transaction(async tx => {
+          // Serialize rate changes with bonus payment/approval posting.
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(84023, ${companyId})`);
           await tx.execute(sql`SELECT pg_advisory_xact_lock(7642, ${companyId})`);
           // Category rates may only be set for categories explicitly used by
           // Production Targets. Worker groups and arbitrary new labels are not rates.
@@ -174,7 +179,8 @@ export function registerProductionTargetBonusCategoryRateRoutes(app: Express): v
         if ("message" in result) return res.status(result.status).json({ message: result.message });
         return res.status(result.status).json({
           ...result, currency: "USD", category: category.label,
-          appliedToHistoricalApprovals: false, configuredForPayments: false,
+          appliedToHistoricalApprovals: false, repricesUnpaidBonusOffers: true,
+          paidClaimsRemainLocked: true, configuredForPayments: true,
         });
       } catch (error) {
         logger.error("Cannot save Production Targets category rate", { error });

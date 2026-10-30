@@ -159,7 +159,7 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
   });
   const saveRate=useMutation({
     mutationFn:()=>request("POST","/api/factory/staff-tracking/production-bonuses/rate",{
-      workerId:editingRate!.workerId,effectiveFrom:editingRate!.date,ratePerBale:newRate,
+      workerId:editingRate!.workerId,effectiveFrom:localDateStr(new Date()),ratePerBale:newRate,
     }),
     onSuccess:()=>{
       setEditingRate(null);toast({title:t("rateSaved")});
@@ -303,8 +303,9 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
                             {line.category}: {line.produced} {t("lineMade")} · {line.extra} {t("lineExtra")}
                             {" "}× {usd(line.rate)} = {usd(line.bonus)}
                           </div>)}
-                          {method==="standard" && day.extra>0 && day.status==="needs_setup" &&
-                           day.issue?.includes("rate")&&<Button size="sm" variant="outline" className="mt-1 h-7"
+                          {method==="standard" && day.extra>0 &&
+                           (day.status==="pending" || day.status==="approved" ||
+                            (day.status==="needs_setup" && day.issue?.includes("rate")))&&<Button size="sm" variant="outline" className="mt-1 h-7"
                              onClick={()=>{setEditingRate(day);setNewRate(day.lines[0]?.rate??"");}}>
                               <Pencil className="mr-1 h-3 w-3"/>{t("editRate")}
                             </Button>}
