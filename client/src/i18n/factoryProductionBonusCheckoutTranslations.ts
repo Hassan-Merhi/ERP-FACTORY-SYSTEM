@@ -4,7 +4,7 @@ const translations = {
   payWorkers: { en: "Pay workers", ar: "دفع مكافآت العمال", fr: "Payer les ouvriers" },
   payIntro: { en: "Select who gets a bonus, review the total, and pay.", ar: "اختر العمال المستحقين، راجع الإجمالي ثم ادفع.", fr: "Sélectionnez les primes, vérifiez le total puis payez." },
   worker: { en: "Worker", ar: "العامل", fr: "Ouvrier" },
-  totalWorkers: { en: "workers in this period", ar: "عمال خلال هذه الفترة", fr: "ouvriers sur cette période" },
+  totalWorkers: { en: "workers in Production Targets on the To date", ar: "عامل في أهداف الإنتاج بتاريخ إلى", fr: "ouvriers des objectifs de production à la date de fin" },
   searchWorkers: { en: "Search workers...", ar: "البحث عن عامل...", fr: "Rechercher un ouvrier..." },
   showPayable: { en: "Ready", ar: "الجاهزون", fr: "À payer" },
   showEveryone: { en: "All Production Targets workers", ar: "جميع عمال أهداف الإنتاج", fr: "Tous les ouvriers des objectifs de production" },

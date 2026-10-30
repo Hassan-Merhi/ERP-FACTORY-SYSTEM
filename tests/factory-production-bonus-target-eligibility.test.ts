@@ -25,9 +25,33 @@ describe("Production Targets bonus checkout eligibility", () => {
     expect(route).toContain("loadTargetBonusRows(tx, companyId, weekFrom, weekTo)");
     expect(route).toContain("allocateWeeklyExtraBales(daily.map(day=>");
     expect(route).toContain("weeklyExtras.get(key)??0");
-    expect(route).toContain("if(source.date<from || source.date>to)continue");
+    expect(route).toContain("if(source.date<from || source.date>to ||");
     expect(combined).toContain("return [...finalizedRows, ...liveRows]");
     expect(live).toContain("AND NOT EXISTS (");
+  });
+
+  it("lists exactly the Production Targets workers on the selected end date, not a range union", () => {
+    const roster = source("server/services/factory/productionTargetsRoster.ts");
+    const tracking = source("server/routes/factory/factoryStaffTrackingRoutes.ts");
+    const checkout = source("server/routes/factory/productionBonusCheckoutRoutes.ts");
+    const ui = source("client/src/pages/factory/productiontargets/ProductionBonusCheckoutPanel.tsx");
+    const live = source("server/services/factory/targetBonusLivePreview.ts");
+
+    expect(tracking).toContain("isProductionTargetsRosterWorker({");
+    expect(roster).toContain("if (row.finalized) return row.savedForPeriod");
+    expect(roster).toContain("row.plannerAssigned &&");
+    expect(roster).toContain("factory_worker_categories planner");
+    expect(roster).toContain("factory_staff_tracking_period_closures c");
+    expect(roster).toContain("factory_worker_production_links l");
+    expect(checkout).toContain("loadProductionTargetsRosterIds(tx,companyId,rosterDate)");
+    expect(checkout).toContain("!rosterWorkerIds.has(source.workerId)");
+    expect(checkout).toContain("const rosterDate=req.body?.rosterDate??lastDate");
+    expect(checkout).toContain("calculateOffers(tx,id,firstDate,lastDate,method,rosterDate)");
+    expect(ui).toContain("method,rosterDate:to,confirm:true");
+    // An active planner worker on the Targets table must be displayed even if
+    // they have neither a saved target nor production for the selected day.
+    expect(live).not.toContain("AND (saved.person_id IS NOT NULL OR defaults.target_bales IS NOT NULL");
+    expect(live).toContain("w.active=TRUE AND (w.date_joined IS NULL");
   });
 
   it("does not replace someone's individual target with their linked teammate's target", () => {
