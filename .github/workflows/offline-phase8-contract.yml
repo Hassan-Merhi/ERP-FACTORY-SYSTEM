@@ -85,6 +85,8 @@ jobs:
         env:
           PHASE8_TEST_DATABASE_URL: postgresql://postgres:phase8-test-admin-pass@127.0.0.1:55433/postgres
         run: node --test tests/offline-phase8-postgres.test.mjs
+      - name: Report unverified post evidence as review-required
+        run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-phase9-voucher-capture.test.ts
       - name: Do not stamp cloud sync time on LAN-only acceptance
         run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-phase9-sync-event.test.ts
       - name: Refuse new unverified legacy browser queue entries
