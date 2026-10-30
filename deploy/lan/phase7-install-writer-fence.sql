@@ -75,6 +75,48 @@ BEGIN
   END LOOP;
 END
 $phase7$;
+
+-- A privileged migration/DDL connection can create or alter tables. Install an
+-- event trigger so newly created public business tables are covered BEFORE the
+-- DDL transaction commits; an unguarded new table is not a writer bypass.
+-- PostgreSQL requires superuser for event trigger installation, which managed
+-- clouds may not provide. If unavailable, DO NOT claim Phase 7 certification.
+CREATE OR REPLACE FUNCTION phase7_writer.guard_public_table_ddl()
+RETURNS event_trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, phase7_writer
+AS $phase7$
+DECLARE
+  relation record;
+BEGIN
+  FOR relation IN
+    SELECT DISTINCT n.nspname AS ns, c.relname AS tbl, c.oid AS rel_oid
+      FROM pg_event_trigger_ddl_commands() cmd
+      JOIN pg_class c ON c.oid = cmd.objid
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public' AND c.relkind IN ('r','p')
+        AND c.relname NOT IN ('session')
+  LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_trigger t
+       WHERE t.tgrelid = relation.rel_oid AND t.tgname = 'phase7_writer_fence'
+         AND t.tgenabled = 'O' AND NOT t.tgisinternal
+    ) THEN
+      EXECUTE format(
+        'CREATE TRIGGER phase7_writer_fence BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON %I.%I FOR EACH STATEMENT EXECUTE FUNCTION phase7_writer.assert_current_epoch()',
+        relation.ns, relation.tbl
+      );
+    END IF;
+  END LOOP;
+END
+$phase7$;
+REVOKE ALL ON FUNCTION phase7_writer.guard_public_table_ddl() FROM PUBLIC;
+DROP EVENT TRIGGER IF EXISTS phase7_writer_guard_ddl;
+CREATE EVENT TRIGGER phase7_writer_guard_ddl
+ON ddl_command_end
+WHEN TAG IN ('CREATE TABLE', 'ALTER TABLE', 'CREATE TABLE AS', 'SELECT INTO')
+EXECUTE FUNCTION phase7_writer.guard_public_table_ddl();
 COMMIT;
 
 -- DBA ONLY (separate reviewed transaction, not part of this script):
