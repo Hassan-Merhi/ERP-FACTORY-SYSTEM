@@ -515,10 +515,20 @@ export function useFactoryDaybookModel() {
       const res = await factoryApiRequest("DELETE", `/api/factory/daybook/entry/${entryId}`);
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/daybook"] });
+    onSuccess: (result: {reversed?:boolean;replayed?:boolean}) => {
+      void queryClient.invalidateQueries({ queryKey: ["/api/factory/daybook"] });
+      if (result.reversed) {
+        void queryClient.invalidateQueries({ queryKey: ["/api/factory/staff-tracking/production-bonuses/payments"] });
+        void queryClient.invalidateQueries({ queryKey: ["/api/factory/production-target-bonuses/weekly-payments"] });
+        void queryClient.invalidateQueries({ queryKey: ["/api/factory/production-target-bonuses/weekly-reconciliation"] });
+        void queryClient.invalidateQueries({ queryKey: ["/api/factory/vouchers"] });
+        void queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts"] });
+        toast({ title: result.replayed ? "Bonus already reversed" : "Bonus payment removed and reversed",
+          description: "Cash / Bank and Deposit Expense were offset. Original and reversal vouchers remain in audit history; this bonus cannot be paid again." });
+      } else {
+        toast({ title: "Entry deleted", description: "The daybook entry has been permanently removed." });
+      }
       setDeleteEntry(null);
-      toast({ title: "Entry deleted", description: "The daybook entry has been permanently removed." });
     },
     onError: (e: ClientErrorLike) => {
       if (e?._handledGlobally) return;
