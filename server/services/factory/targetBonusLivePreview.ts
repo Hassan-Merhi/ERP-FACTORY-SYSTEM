@@ -88,7 +88,6 @@ export async function loadLiveTargetBonusRows(
       (resolved.target IS NOT NULL OR review.id IS NOT NULL) AS "targetConfigured"
     FROM work_days d
     JOIN factory_workers w ON w.company_id = ${companyId}
-      AND (w.date_joined IS NULL OR w.date_joined <= d.work_date)
     LEFT JOIN factory_staff_tracking_entries saved
       ON saved.company_id=w.company_id AND saved.person_id=w.id
       AND saved.person_type='worker' AND saved.page_type='production'
@@ -172,9 +171,11 @@ export async function loadLiveTargetBonusRows(
         AND c.period_type='daily' AND c.period_start=d.work_date
         AND c.period_end=d.work_date
     )
-      AND (w.active=TRUE OR saved.person_id IS NOT NULL)
-      AND (saved.person_id IS NOT NULL OR defaults.target_bales IS NOT NULL
-        OR link.id IS NOT NULL OR credit.credited>0 OR review.id IS NOT NULL)
+      -- Mirror the Production Targets daily roster: all current planner
+      -- workers are listed, even when their target and made counts are 0.
+      -- Saved day records and linked workers remain visible if inactive.
+      AND (saved.person_id IS NOT NULL OR link.id IS NOT NULL OR
+           (w.active=TRUE AND (w.date_joined IS NULL OR w.date_joined<=d.work_date)))
     ORDER BY d.work_date DESC,w.full_name,w.id
   `);
   return (resultRows(result) as LiveRow[]).map(row=>({
