@@ -136,7 +136,7 @@ export function matchesOfflineVoucherAcknowledgement(
   if (receipt.clientRequestId !== operation.id ||
       original.clientRequestId !== operation.id ||
       voucher.companyId !== operation.companyId ||
-      !Number.isSafeInteger(voucher.id) || Number(voucher.id) <= 0 ||
+      (typeof voucher.id !== "number" || !Number.isSafeInteger(voucher.id) || voucher.id <= 0) ||
       voucher.voucherType !== "Journal" ||
       String(voucher.currency ?? "USD") !== "USD" ||
       !date ||
