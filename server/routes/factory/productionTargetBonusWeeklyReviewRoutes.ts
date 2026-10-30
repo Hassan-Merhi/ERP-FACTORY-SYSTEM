@@ -88,7 +88,7 @@ export function registerProductionTargetBonusWeeklyReviewRoutes(app: Express): v
         `)) as StoredReview[];
         res.setHeader("Cache-Control", "private, no-store");
         return res.json({
-          weekStart, currency: "USD", approvalDoesNotPost: true, paymentEnabled: false,
+          weekStart, currency: "USD", approvalDoesNotPost: true, paymentEnabled: true,
           reviews: rows.map(row => ({
             ...row, id: Number(row.id), workerId: Number(row.workerId),
             methodVersionId: Number(row.methodVersionId),
@@ -185,7 +185,7 @@ export function registerProductionTargetBonusWeeklyReviewRoutes(app: Express): v
         if (result.replayed) res.setHeader("X-Idempotent-Replay", "true");
         return res.status(result.replayed ? 200 : 201).json({
           ...result, success: true, weekStart: command.weekStart, workerId: command.workerId,
-          currency: "USD", accountingPosted: false, paymentEnabled: false,
+          currency: "USD", accountingPosted: false, paymentEnabled: true,
         });
       } catch (error) { return errorResponse(res, error); }
     },
