@@ -27,6 +27,7 @@ export interface ProductionRow {
   absentTargetBales?: number;
   absentDays?: number;
   periodDays?: number;
+  missingTargetDays?: number;
   defaultTargetBales?: number | null;
   targetBalesOverridden?: boolean;
   producedBales: number | null;
