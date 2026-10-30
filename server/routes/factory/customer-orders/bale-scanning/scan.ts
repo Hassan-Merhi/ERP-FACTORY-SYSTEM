@@ -377,6 +377,18 @@ export function registerOrderBaleScanRoutes(app: Express) {
               )
             );
           const pricingLine = matchingProformaLines[0] || null;
+          if (!pricingLine) {
+            // Container-only expected additions use the customer's agreed
+            // price snapshot, without modifying the reusable master proforma.
+            const extraPrice = resultRows<{ price_per_bale: string }>(await tx.execute(sql`
+              SELECT price_per_bale::text AS price_per_bale
+              FROM customer_order_extra_expected_lines
+              WHERE company_id = ${companyId} AND order_id = ${orderId}
+                AND UPPER(TRIM(article_code)) = UPPER(TRIM(${effectiveArticleCode}))
+              LIMIT 1
+            `))[0];
+            if (extraPrice) priceUsed = extraPrice.price_per_bale;
+          }
           if (pricingLine) {
             const pricingMode = pricingLine.pricingMode ?? "per_bale";
             const perKgVal = pricingLine.pricePerKg;
