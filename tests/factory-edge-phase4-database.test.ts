@@ -17,6 +17,7 @@ testDatabase("Phase 4 LAN durable database outbox", () => {
   let schema = "";
 
   beforeAll(async () => {
+    vi.stubEnv("DATABASE_URL", undefined);
     vi.stubEnv("FACTORY_EDGE_MODE", "lan");
     vi.stubEnv("FACTORY_EDGE_SITE_ID", siteId);
     vi.stubEnv("FACTORY_EDGE_HOSTNAME", "erp.factory.internal");
