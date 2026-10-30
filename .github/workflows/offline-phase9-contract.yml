@@ -23,6 +23,10 @@ on:
       - 'tests/offline-phase9*.mjs'
       - 'tests/offline-phase9*.ts'
       - 'tests/ui/offline-phase9*.ts'
+      - 'tests/ui/offline-phase9*.tsx'
+      - 'client/src/components/OfflineBanner.tsx'
+      - 'client/src/contexts/ConnectivityContext.tsx'
+      - 'client/src/components/PendingSyncIndicator.tsx'
       - '.github/workflows/offline-phase9-contract.yml'
   workflow_dispatch:
 
@@ -48,6 +52,8 @@ jobs:
         run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-phase9-status.test.ts
       - name: Test LAN write boundary
         run: node node_modules/vitest/vitest.mjs run tests/factory-edge-boundary.test.ts
+      - name: Test legacy banner cannot replay unverified writes
+        run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-phase9-legacy-banner.test.tsx
       - name: Verify narrow device capture and legacy queue quarantine
         run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-operation-contract.test.ts tests/ui/offline-durable-outbox.test.ts
       - name: Test Phase 9 status live-session and membership gating
