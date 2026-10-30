@@ -46,9 +46,9 @@ export interface CategoryEvidenceResult {
   readyForTargetAllocation: boolean;
 }
 
-/** Every physical bale is counted exactly once for its recorded finalizer.
- * Linked workers keep their own Stock Entry credits and categories; linking
- * their table must not redistribute a bale to a different employee.
+/** Every physical bale is counted exactly once.
+ * Active links share a day's team output using deterministic whole-bale credits,
+ * while standalone workers keep Stock Entry finalizer attribution.
  */
 export function buildCategoryEvidence(
   workers: CategoryEvidenceWorker[],
@@ -105,14 +105,31 @@ export function buildCategoryEvidence(
         prev.lastFinalizedAt = timestamp;
     }
   };
-  const categorySourceCounts = new Map<string, number>();
-  for (const bale of validBales) {
-    const key = bale.workerId + ":" + bale.categoryKey;
-    categorySourceCounts.set(key, (categorySourceCounts.get(key) ?? 0) + 1);
+  // A linked table's total may be finalized under just one scanner/operator.
+  // Attribute the team's physical bales once to all effective link members in
+  // stable bale-ID order. This matches live and finalized bonus SQL allocation.
+  const groupMembers = new Map(links.map(link => [
+    link.id, [...new Set(link.workerIds)].sort((a,b)=>a-b),
+  ]));
+  const groupOffsets = new Map<number, number>();
+  const assigned: Array<{workerId:number; bale:typeof validBales[number]}>=[];
+  for(const bale of [...validBales].sort((a,b)=>a.baleId-b.baleId)){
+    const groupId=groups.get(bale.workerId!);
+    const members=groupId==null?null:groupMembers.get(groupId);
+    const workerId=members?.length
+      ? members[(groupOffsets.get(groupId!)??0)%members.length]
+      : bale.workerId!;
+    if(groupId!=null && members?.length)
+      groupOffsets.set(groupId,(groupOffsets.get(groupId)??0)+1);
+    assigned.push({workerId,bale});
   }
-  for (const bale of validBales) {
-    give(bale.workerId!, bale, categorySourceCounts.get(bale.workerId + ":" + bale.categoryKey)!);
+  const categorySourceCounts = new Map<string,number>();
+  for(const {workerId,bale} of assigned){
+    const key=workerId+":"+bale.categoryKey;
+    categorySourceCounts.set(key,(categorySourceCounts.get(key)??0)+1);
   }
+  for(const {workerId,bale} of assigned)
+    give(workerId,bale,categorySourceCounts.get(workerId+":"+bale.categoryKey)!);
   for (const link of links) {
     const ids = new Set(link.workerIds);
     const present = [...ids].some(id => byWorker.has(id) && byWorker.get(id)?.status !== "Absent");
