@@ -171,7 +171,10 @@ async function calculateOffers(
       issue="An older category-bonus review already exists; reconcile before paying";
     } else if (!item.targetConfigured || item.targetBales <= 0 ||
                !Number.isFinite(item.targetBales)) {
-      issue="Save a positive Production Targets target first";
+      // Zero production with no target is not a payable claim and not a
+      // configuration error needing a warning for that day.
+      issue=item.producedBales>0
+        ? "Save a positive Production Targets target first" : "Target not exceeded";
     } else if (item.extraBales <= 0) {
       issue="Target not exceeded";
     } else if (method==="standard") {
