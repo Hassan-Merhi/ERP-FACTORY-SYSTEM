@@ -51,6 +51,13 @@ interface SourceGroup {
  */
 export const SOURCE_GROUPS: SourceGroup[] = [
   {
+    txTypes: ["PRODUCTION_TARGET_BONUS_PAYMENT", "PRODUCTION_TARGET_BONUS_REVERSAL"],
+    sourceTable: "factory_target_bonus_payments",
+    companyCol: "company_id",
+    deletedAtCol: null,
+    requireReferenceId: true,
+  },
+  {
     txTypes: ["PRODUCTION_TARGET_WEEKLY_BONUS_PAYMENT", "PRODUCTION_TARGET_WEEKLY_BONUS_REVERSAL"],
     sourceTable: "factory_target_bonus_weekly_payments",
     companyCol: "company_id",
@@ -169,6 +176,8 @@ for (const group of SOURCE_GROUPS) {
  * txType alone (i.e., every call site uses the same source table).
  */
 export const AUTO_FILL_REF_TABLE: Record<string, string> = {
+  PRODUCTION_TARGET_BONUS_PAYMENT: "factory_target_bonus_payments",
+  PRODUCTION_TARGET_BONUS_REVERSAL: "factory_target_bonus_payments",
   PRODUCTION_TARGET_WEEKLY_BONUS_PAYMENT: "factory_target_bonus_weekly_payments",
   PRODUCTION_TARGET_WEEKLY_BONUS_REVERSAL: "factory_target_bonus_weekly_payments",
   SUPPLIER_FX_TRANSFER: "factory_supplier_fx_transfers",
