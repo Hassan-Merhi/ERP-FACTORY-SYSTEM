@@ -12,6 +12,7 @@ import { DaybookRow, Voucher, ViewVoucherEntry } from "./types";
 interface DaybookTableProps {
   displayedRows: DaybookRow[];
   visibleRows: DaybookRow[];
+  offloadAlphabetical?: boolean;
   viewMode: "detailed" | "condensed";
   selectedRowId: string | null;
   setSelectedRowId: (id: string | null) => void;
@@ -47,6 +48,7 @@ interface DaybookTableProps {
 export function DaybookTable({
   displayedRows,
   visibleRows,
+  offloadAlphabetical = false,
   viewMode,
   selectedRowId,
   setSelectedRowId,
@@ -115,7 +117,11 @@ export function DaybookTable({
     > = {};
 
     for (const row of visibleRows) {
-      const date = row._type === "voucher" ? row.data.voucherDate : row.data.offloadedAt.slice(0, 10);
+      const date = offloadAlphabetical
+        ? "all-offloads"
+        : row._type === "voucher"
+          ? row.data.voucherDate
+          : row.data.offloadedAt.slice(0, 10);
       const type = row._type === "voucher" ? row.data.voucherType : "Offload";
       const amt =
         row._type === "voucher"
@@ -145,7 +151,9 @@ export function DaybookTable({
       <Table wrapperClassName="max-h-[calc(100dvh-220px)]">
         <TableHeader className="sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_th]:text-foreground/90">
           <TableRow>
-            <TableHead className="sticky left-0 bg-muted z-10 pl-4">Date / Type</TableHead>
+            <TableHead className="sticky left-0 bg-muted z-10 pl-4">
+              {offloadAlphabetical ? "Offloaded containers" : "Date / Type"}
+            </TableHead>
             <TableHead className="text-right">Count</TableHead>
             {!hideAmounts && <TableHead className="text-right">Total</TableHead>}
           </TableRow>
@@ -171,7 +179,9 @@ export function DaybookTable({
                       ) : (
                         <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                       )}
-                      <span className="text-sm font-semibold">{formatDisplayDate(parseISO(date))}</span>
+                      <span className="text-sm font-semibold">
+                        {offloadAlphabetical ? "All dates · A–Z" : formatDisplayDate(parseISO(date))}
+                      </span>
                     </div>
                   </TableCell>
                   <TableCell className="text-right text-sm font-mono text-muted-foreground">{totalCount}</TableCell>
@@ -216,7 +226,13 @@ export function DaybookTable({
                           tg.rows.map((row) => {
                             if (row._type === "offload") {
                               const o = row.data;
-                              const desc = [o.containerNumber, o.locationName].filter(Boolean).join(" — ");
+                              const desc = [
+                                o.containerNumber,
+                                ...(offloadAlphabetical ? [formatDisplayDate(parseISO(o.offloadedAt.slice(0, 10)))] : []),
+                                o.locationName,
+                              ]
+                                .filter(Boolean)
+                                .join(" — ");
                               return (
                                 <TableRow key={`${typeKey}-offload-${o.id}`} className="bg-muted/20">
                                   <TableCell className="sticky left-0 bg-inherit z-10 pl-16 max-w-0 w-full overflow-hidden">
@@ -314,7 +330,7 @@ export function DaybookTable({
   let lastDate = "";
   for (const row of displayedRows) {
     const rowDate = row._type === "voucher" ? row.data.voucherDate : row.data.offloadedAt.slice(0, 10);
-    if (rowDate !== lastDate) {
+    if (!offloadAlphabetical && rowDate !== lastDate) {
       const dayRows = displayedRows.filter((r) => {
         const d = r._type === "voucher" ? r.data.voucherDate : r.data.offloadedAt.slice(0, 10);
         return d === rowDate;
@@ -634,7 +650,7 @@ export function DaybookTable({
   for (const row of displayedRows) {
     const rowDate = row._type === "voucher" ? row.data.voucherDate : row.data.offloadedAt.slice(0, 10);
 
-    if (rowDate !== mobileLastDate) {
+    if (!offloadAlphabetical && rowDate !== mobileLastDate) {
       const dayRows = displayedRows.filter((r) => {
         const d = r._type === "voucher" ? r.data.voucherDate : r.data.offloadedAt.slice(0, 10);
         return d === rowDate;

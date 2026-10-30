@@ -4,6 +4,7 @@ import { Shield, Activity, History } from "lucide-react";
 import { ActiveUsersSection } from "./ActiveUsersSection";
 import { ActiveSessionsTab } from "./ActiveSessionsTab";
 import { LoginHistoryTab } from "./LoginHistoryTab";
+import { GlobalForceRefreshCard } from "./GlobalForceRefreshCard";
 
 export function SessionsHub({ isAdmin, isDev }: { isAdmin: boolean; isDev: boolean }) {
   const [tab, setTab] = useState(isDev ? "watch" : "sessions");
@@ -20,6 +21,8 @@ export function SessionsHub({ isAdmin, isDev }: { isAdmin: boolean; isDev: boole
           Monitor active sessions, login history, and watch real-time user activity.
         </p>
       </div>
+
+      {isAdmin && <GlobalForceRefreshCard />}
 
       <Tabs value={tab} onValueChange={setTab}>
         <div className="erp-mobile-scroll-tabs pb-1">

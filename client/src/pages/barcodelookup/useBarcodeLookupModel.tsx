@@ -382,8 +382,8 @@ export function useBarcodeLookupModel() {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSearch = () => {
-    const value = searchValue.trim();
+  const handleSearch = (code = searchValue) => {
+    const value = code.trim();
     if (!value) return;
     if (searchMode === "article") articleLookup.mutate(value);
     else referenceLookup.mutate(value);

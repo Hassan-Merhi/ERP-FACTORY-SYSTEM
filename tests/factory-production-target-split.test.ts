@@ -1,7 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { evenSplitBales, resolveUnlinkBaleAllocations } from "../shared/factoryProductionTargetSplit";
+import { evenSplitBales, linkedTotalBalesFromPerWorker, resolveUnlinkBaleAllocations } from "../shared/factoryProductionTargetSplit";
 
 describe("unlinking shared factory production targets", () => {
+  it("restores two independent 7-bale targets from a displayed linked total of 14", () => {
+    // The linked worker defaults are 7 each; their combined display is 14.
+    const linkedTotal = linkedTotalBalesFromPerWorker(7, 2);
+    expect(linkedTotal).toBe(14);
+    expect([...resolveUnlinkBaleAllocations(linkedTotal, [20, 10])]).toEqual([
+      [10, 7],
+      [20, 7],
+    ]);
+  });
+
+  it("preserves linked totals for three workers, decimals and missing targets", () => {
+    expect(linkedTotalBalesFromPerWorker(4, 3)).toBe(12);
+    expect(linkedTotalBalesFromPerWorker(6.25, 2)).toBe(12.5);
+    expect(linkedTotalBalesFromPerWorker(null, 2)).toBeNull();
+    expect(() => linkedTotalBalesFromPerWorker(4, 0)).toThrow("worker count");
+  });
+
   it("splits even targets without duplicating any bale", () => {
     expect([...resolveUnlinkBaleAllocations(14, [20, 10])]).toEqual([
       [10, 7],

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -483,6 +484,7 @@ export function ProductEditor({
                         readOnly={Boolean(variant.id) && !unlockedBarcodes.has(variantIndex)}
                         onChange={(e) => updateVariant(variantIndex, { barcode: e.target.value })}
                       />
+                      <MobileBarcodeScanner onScan={(code) => updateVariant(variantIndex, { barcode: code })} disabled={Boolean(variant.id) && !unlockedBarcodes.has(variantIndex)} />
                       {variant.id && !unlockedBarcodes.has(variantIndex) && (
                         <Button
                           type="button"

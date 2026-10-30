@@ -10,10 +10,12 @@ import { registerAuthoritativeVerificationStockMiddleware } from "./authoritativ
 import { registerOrderVerificationSummaryRoutes } from "./verification-summary";
 import { registerOrderRecoverBalesRoutes } from "./recover";
 import { registerOrderVerifyRoutes } from "./verify";
+import { registerContainerExtraExpectedLineRoutes } from "./container-extra-items";
 
 export function registerOrderVerifyRecoverRoutes(app: Express) {
   registerAuthoritativeVerificationStockMiddleware(app);
   registerOrderVerificationSummaryRoutes(app);
+  registerContainerExtraExpectedLineRoutes(app);
   registerOrderRecoverBalesRoutes(app);
   registerOrderVerifyRoutes(app);
 }

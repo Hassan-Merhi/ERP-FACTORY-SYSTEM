@@ -301,6 +301,16 @@ export async function attachProductionBonusesToPayroll(
       AND a.company_id = ${Number(payroll.companyId)}
       AND a.worker_id = ${Number(payroll.workerId)}
       AND a.payroll_id IS NULL
+      -- A direct Production Targets bonus payout is mutually exclusive with
+      -- the legacy Production Planner bonus for the same worker/date.
+      AND NOT EXISTS (
+        SELECT 1 FROM factory_target_bonus_payments paid
+        JOIN factory_target_bonus_reviews reviewed ON reviewed.id = paid.review_id
+        WHERE paid.company_id = a.company_id
+          AND reviewed.company_id = a.company_id
+          AND paid.worker_id = a.worker_id
+          AND reviewed.production_date = r.production_date
+      )
       AND r.production_date BETWEEN ${String(payroll.periodStart)}::date AND ${String(payroll.periodEnd)}::date
   `);
   const newTotals = (await getProductionBonusTotalsForPayrollIds(executor, [payrollId])).get(payrollId) ?? EMPTY_TOTALS;

@@ -6,6 +6,7 @@ import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
 import { apiRequest } from "@/lib/queryClient";
 import { intercompanyApprovalMessage, parseIntercompanyApproval } from "@/lib/intercompanyApproval";
+import { dismissIntercompanyRequestsInBatches } from "@/lib/bulkDismissIntercompanyRequests";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { liveCountQueryPolicy, stableReferenceQueryPolicy } from "@/lib/queryPolicies";
 import { Button } from "@/components/ui/button";
@@ -121,6 +122,7 @@ export function NotificationsCenter() {
   const [dismissReq, setDismissReq] = useState<ICRequest | null>(null);
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [dismissNote, setDismissNote] = useState("");
+  const [confirmBulkDismiss, setConfirmBulkDismiss] = useState(false);
 
   // ── Unread count (scoped to current company) ──────────────────────────────────
   const { data: unreadData } = useQuery<{ count: number }>({
@@ -234,6 +236,31 @@ export function NotificationsCenter() {
     onError: (err: ClientErrorLike) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
+  // Reuse the existing, individually authorized dismissal endpoint. Each request
+  // is claimed only while pending; no source or destination vouchers are changed.
+  const dismissAllICMutation = useMutation({
+    mutationFn: (ids: number[]) => dismissIntercompanyRequestsInBatches(
+      ids,
+      (id) => apiRequest("POST", `/api/intercompany-requests/${id}/dismiss`,
+        { note: "Bulk dismissed from notification center" }),
+    ),
+    onSuccess: ({ dismissed, failed }) => {
+      setConfirmBulkDismiss(false);
+      invalidateIC();
+      toast({
+        title: failed ? "Some requests could not be dismissed" : "Intercompany requests dismissed",
+        description: failed
+          ? `${dismissed} dismissed; ${failed} could not be dismissed. Refresh and review remaining requests.`
+          : `${dismissed} pending request${dismissed === 1 ? "" : "s"} dismissed.`,
+        variant: failed ? "destructive" : "default",
+      });
+    },
+    onError: (err: ClientErrorLike) => {
+      invalidateIC();
+      toast({ title: "Dismiss all failed", description: err.message, variant: "destructive" });
+    },
+  });
+
   // ── Notification item click ───────────────────────────────────────────────────
   const handleNotifClick = (item: NotificationItem) => {
     if (!item.isRead) markReadMutation.mutate(item.id);
@@ -297,19 +324,33 @@ export function NotificationsCenter() {
                 </Button>
               )}
               {activeTab === "intercompany" && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-xs gap-1 h-7"
-                  onClick={() => {
-                    setOpen(false);
-                    navigate("/intercompany-requests");
-                  }}
-                  data-testid="button-ic-view-all"
-                >
-                  View all
-                  <ExternalLink className="h-3 w-3" />
-                </Button>
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs h-7 px-2"
+                    disabled={icLoading || icRequests.length === 0 || dismissAllICMutation.isPending}
+                    onClick={() => setConfirmBulkDismiss(true)}
+                    data-testid="button-ic-dismiss-all"
+                  >
+                    {dismissAllICMutation.isPending
+                      ? <Loader2 className="h-3 w-3 animate-spin" />
+                      : "Dismiss all"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs gap-1 h-7 px-2"
+                    onClick={() => {
+                      setOpen(false);
+                      navigate("/intercompany-requests");
+                    }}
+                    data-testid="button-ic-view-all"
+                  >
+                    View all
+                    <ExternalLink className="h-3 w-3" />
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -552,6 +593,32 @@ export function NotificationsCenter() {
               data-testid="button-confirm-approve"
             >
               {approveMutation.isPending ? "Approving…" : "Approve & Post"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm that bulk dismissal is a request decision, not just hiding an alert. */}
+      <Dialog open={confirmBulkDismiss} onOpenChange={(value) => {
+        if (!dismissAllICMutation.isPending) setConfirmBulkDismiss(value);
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Dismiss all intercompany requests?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Dismiss all {icRequests.length} pending intercompany payment
+            {icRequests.length === 1 ? " request" : " requests"} shown to you?
+            These requests will no longer be available for approval. No mirror
+            vouchers will be posted, and existing vouchers will not be deleted.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" disabled={dismissAllICMutation.isPending}
+              onClick={() => setConfirmBulkDismiss(false)}>Cancel</Button>
+            <Button variant="destructive" disabled={icRequests.length === 0 || dismissAllICMutation.isPending}
+              data-testid="button-confirm-ic-dismiss-all"
+              onClick={() => dismissAllICMutation.mutate(icRequests.map((request) => request.id))}>
+              {dismissAllICMutation.isPending ? "Dismissing…" : `Dismiss all (${icRequests.length})`}
             </Button>
           </DialogFooter>
         </DialogContent>

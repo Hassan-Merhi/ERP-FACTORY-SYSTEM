@@ -2,6 +2,7 @@ import { ChevronDown, ScanLine, Search } from "lucide-react";
 import { BaleWeightEditDialog } from "@/components/BaleWeightEditDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BarcodeAdminDialogs } from "./BarcodeAdminDialogs";
 import { BarcodeArticleResults } from "./BarcodeArticleResults";
@@ -44,9 +45,10 @@ export function BarcodeLookupView({ model }: { model: BarcodeLookupModel }) {
               autoFocus
               data-testid="input-lookup-search"
             />
+            <MobileBarcodeScanner onScan={(code) => model.handleSearch(code)} disabled={model.isLoading} className="h-10 w-10 shrink-0" />
             <Button
               size="sm"
-              onClick={model.handleSearch}
+              onClick={() => model.handleSearch()}
               disabled={model.isLoading || !model.searchValue.trim()}
               className="h-10 gap-1.5 px-4 sm:min-w-26"
               data-testid="button-lookup-search"

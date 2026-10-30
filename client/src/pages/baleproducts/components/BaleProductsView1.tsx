@@ -17,9 +17,88 @@ import { EmptyState } from "../components/EmptyState";
 import type { useBaleProductsModel } from "../useBaleProductsModel";
 
 type Model = ReturnType<typeof useBaleProductsModel>;
+type BaleProduct = NonNullable<Model["activeProducts"]>[number];
+
+function ProductColorPills({
+  product,
+  designColors,
+  colorUpdateMutation,
+  canEdit,
+}: {
+  product: BaleProduct;
+  designColors: Model["designColors"];
+  colorUpdateMutation: Model["colorUpdateMutation"];
+  canEdit: boolean;
+}) {
+  const selectedColor = designColors.find((color) => color.value === product.labelDesignColor);
+  const isUpdating = colorUpdateMutation.isPending && colorUpdateMutation.variables?.id === product.id;
+
+  if (!canEdit) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" title={selectedColor?.label ?? product.labelDesignColor ?? "No Design"}>
+        <span
+          className="h-4 w-4 rounded-full border border-foreground/30"
+          style={selectedColor ? { backgroundColor: selectedColor.color } : undefined}
+        />
+        {!selectedColor && !product.labelDesignColor ? "No Design" : null}
+      </span>
+    );
+  }
+
+  return (
+    <div
+      className="inline-flex flex-wrap items-center gap-1.5"
+      role="group"
+      aria-label={`Label design color for ${product.name}`}
+      data-testid={`product-color-pills-${product.id}`}
+    >
+      <button
+        type="button"
+        className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-foreground/30 bg-background text-muted-foreground hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${!product.labelDesignColor ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
+        title="No Design"
+        aria-label={`No Design for ${product.name}`}
+        aria-pressed={!product.labelDesignColor}
+        disabled={colorUpdateMutation.isPending}
+        onClick={() => {
+          if (product.labelDesignColor) colorUpdateMutation.mutate({ id: product.id, labelDesignColor: null });
+        }}
+        data-testid={`quick-label-color-none-${product.id}`}
+      >
+        <X className="h-3 w-3" />
+      </button>
+      {designColors.map((color) => (
+        <button
+          key={color.value}
+          type="button"
+          className={`h-5 w-5 shrink-0 rounded-full border border-foreground/30 hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${product.labelDesignColor === color.value ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
+          style={{ backgroundColor: color.color }}
+          title={color.label}
+          aria-label={`Set ${product.name} label design to ${color.label}`}
+          aria-pressed={product.labelDesignColor === color.value}
+          disabled={colorUpdateMutation.isPending}
+          onClick={() => {
+            if (product.labelDesignColor !== color.value) {
+              colorUpdateMutation.mutate({ id: product.id, labelDesignColor: color.value });
+            }
+          }}
+          data-testid={`quick-label-color-${product.id}-${color.value}`}
+        />
+      ))}
+      {isUpdating && <span className="text-xs text-muted-foreground">Saving...</span>}
+      {product.labelDesignColor && !selectedColor && (
+        <span className="text-xs text-muted-foreground" title="Saved design is not in the current color palette">
+          {product.labelDesignColor}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function BaleProductsView1({ model }: { model: Model }) {
   const {
     setCreateDialogOpen,
+    designColors,
+    colorUpdateMutation,
     condensedView,
     expandedGroups,
     setEditingProduct,
@@ -443,7 +522,17 @@ export function BaleProductsView1({ model }: { model: Model }) {
                     />
                   </TableCell>
                   <TableCell className="font-mono font-medium">{product.articleCode || "-"}</TableCell>
-                  <TableCell className="font-medium">{product.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                      <span>{product.name}</span>
+                      <ProductColorPills
+                        product={product}
+                        designColors={designColors}
+                        colorUpdateMutation={colorUpdateMutation}
+                        canEdit={isAdmin}
+                      />
+                    </div>
+                  </TableCell>
                   <TableCell className="font-medium text-right" dir="rtl" lang="ar">
                     {product.nameAr || "—"}
                   </TableCell>

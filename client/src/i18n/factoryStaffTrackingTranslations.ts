@@ -357,6 +357,82 @@ const factoryStaffTrackingTranslations = {
     ar: "تم إنهاء الإنتاج، لكن لم يتم إرسال الصورة عبر واتساب",
     fr: "La production est terminée, mais l’image WhatsApp n’a pas été envoyée",
   },
+
+  exportProductionExcel: {
+    en: "Export Excel",
+    ar: "تصدير إكسل",
+    fr: "Exporter Excel",
+  },
+  exportDateRangeTitle: {
+    en: "Choose production dates",
+    ar: "اختر تواريخ الإنتاج",
+    fr: "Choisir les dates de production",
+  },
+  exportSelectDateRange: {
+    en: "Select a start day and an end day on the calendar, or choose a week below.",
+    ar: "اختر يوم البداية ويوم النهاية من التقويم أو اختر أسبوعًا أدناه.",
+    fr: "Choisissez un premier et un dernier jour dans le calendrier, ou sélectionnez une période ci-dessous.",
+  },
+  exportChooseEndDate: {
+    en: "Now choose the end day on the calendar.",
+    ar: "اختر الآن يوم النهاية من التقويم.",
+    fr: "Choisissez maintenant le dernier jour dans le calendrier.",
+  },
+  exportThisWeek: {
+    en: "This week",
+    ar: "هذا الأسبوع",
+    fr: "Cette semaine",
+  },
+  exportLastWeek: {
+    en: "Last week",
+    ar: "الأسبوع الماضي",
+    fr: "La semaine dernière",
+  },
+  exportLastFourWeeks: {
+    en: "Past 4 weeks",
+    ar: "آخر 4 أسابيع",
+    fr: "Les 4 dernières semaines",
+  },
+  exportSelectedDates: {
+    en: "Dates to export",
+    ar: "التواريخ المراد تصديرها",
+    fr: "Dates à exporter",
+  },
+  exportRangeLimit: {
+    en: "Choose any consecutive days, up to 12 weeks. Only the Excel report changes.",
+    ar: "اختر أي أيام متتالية حتى 12 أسبوعًا. يتغير تقرير إكسل فقط.",
+    fr: "Choisissez des jours consécutifs jusqu’à 12 semaines. Seul le rapport Excel change.",
+  },
+  exportRangeTooLong: {
+    en: "Select no more than 84 days (12 weeks).",
+    ar: "اختر 84 يومًا كحد أقصى (12 أسبوعًا).",
+    fr: "Sélectionnez au maximum 84 jours (12 semaines).",
+  },
+  exportFutureDate: {
+    en: "Future production dates cannot be exported.",
+    ar: "لا يمكن تصدير تواريخ إنتاج مستقبلية.",
+    fr: "Les dates futures de production ne peuvent pas être exportées.",
+  },
+  exportInvalidRange: {
+    en: "Select a valid start and end date.",
+    ar: "اختر تاريخ بداية ونهاية صالحين.",
+    fr: "Sélectionnez des dates de début et de fin valides.",
+  },
+  exportWeeklyExcel: { en: "Export Weekly Excel", ar: "تصدير إكسل أسبوعي", fr: "Exporter l’Excel hebdomadaire" },
+  exportingWeeklyExcel: { en: "Exporting Excel...", ar: "جارٍ تصدير إكسل...", fr: "Export Excel en cours..." },
+  weeklyExcelExported: { en: "Weekly Excel exported", ar: "تم تصدير إكسل الأسبوع", fr: "Excel hebdomadaire exporté" },
+  weeklyExcelExportFailed: { en: "Weekly Excel export failed", ar: "فشل تصدير إكسل الأسبوع", fr: "Échec de l’export Excel hebdomadaire" },
+  weeklyExcelRange: { en: "Daily targets and worker links:", ar: "الأهداف اليومية وروابط العمال:", fr: "Objectifs quotidiens et liens des ouvriers :" },
+  weeklyExcelTooltip: {
+    en: "Choose specific days or weeks on a calendar for the Excel report.",
+    ar: "اختر أيامًا أو أسابيع محددة من التقويم لتقرير إكسل.",
+    fr: "Choisissez des jours ou des semaines dans le calendrier pour le rapport Excel.",
+  },
+  futureWeekNotReady: {
+    en: "A future production week cannot be exported yet.",
+    ar: "لا يمكن تصدير أسبوع إنتاج مستقبلي بعد.",
+    fr: "Une semaine de production future ne peut pas encore être exportée.",
+  },
   dailyTotal: { en: "Daily Total", ar: "الإجمالي اليومي", fr: "Total du jour" },
 } as const;
 

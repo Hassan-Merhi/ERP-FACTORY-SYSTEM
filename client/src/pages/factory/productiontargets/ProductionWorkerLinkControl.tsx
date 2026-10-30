@@ -28,7 +28,6 @@ interface ProductionWorkerLinkControlProps {
   row: ProductionRow;
   rows: ProductionRow[];
   effectiveFrom: string;
-  targetBales?: number | null;
   disabled?: boolean;
 }
 
@@ -38,7 +37,6 @@ export function ProductionWorkerLinkControl({
   row,
   rows,
   effectiveFrom,
-  targetBales,
   disabled = false,
 }: ProductionWorkerLinkControlProps) {
   const { toast } = useToast();
@@ -98,15 +96,18 @@ export function ProductionWorkerLinkControl({
   };
 
   const openUnlinkDialog = () => {
-    // The daily Edit Targets value can override the shared fixed target.
-    // Unlink always allocates the authoritative repeating Fixed Target.
-    const shared = row.defaultTargetBales ?? null;
-    setUnlinkTarget(shared ?? null);
-    if (shared !== null && isValidBaleTarget(shared)) {
-      fillEvenSplit(shared);
-    } else {
-      setUnlinkDraft({});
-    }
+    // Start with each person's own repeating fixed target, never an average.
+    const fixedTargets = currentMemberIds.map(
+      (workerId) => rows.find((candidate) => candidate.personId === workerId)?.defaultTargetBales ?? null
+    );
+    const complete = fixedTargets.every((value) => value !== null && isValidBaleTarget(value));
+    const combined = complete
+      ? fixedTargets.reduce((sum, value) => sum + Math.round((value ?? 0) * 100), 0) / 100
+      : null;
+    setUnlinkTarget(combined);
+    setUnlinkDraft(complete
+      ? Object.fromEntries(currentMemberIds.map((workerId, index) => [workerId, String(fixedTargets[index])]))
+      : {});
     setUnlinkOpen(true);
   };
 
@@ -163,14 +164,9 @@ export function ProductionWorkerLinkControl({
         throw new Error(tr("workerLinkFailed"));
       }
 
-      const sharedTargetBales =
-        targetBales === undefined
-          ? (row.targetBales ?? partners.find((partner) => partner.targetBales != null)?.targetBales ?? null)
-          : targetBales;
       const response = await factoryApiRequest("POST", "/api/factory/staff-tracking/production-worker-links", {
         effectiveFrom,
         workerIds,
-        targetBales: sharedTargetBales,
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
@@ -197,14 +193,17 @@ export function ProductionWorkerLinkControl({
         `/api/factory/staff-tracking/production-worker-links/${row.linkGroupId}/unlink`,
         {
           effectiveTo: effectiveFrom,
-          ...(unlinkTarget === null
-            ? {}
-            : {
+          ...(unlinkTarget !== null && unlinkMembers.some((member) =>
+            Number(unlinkDraft[member.workerId]) !==
+              (rows.find((candidate) => candidate.personId === member.workerId)?.defaultTargetBales ?? null)
+          )
+            ? {
                 allocations: unlinkMembers.map((member) => ({
                   workerId: member.workerId,
                   targetBales: Number(unlinkDraft[member.workerId]),
                 })),
-              }),
+              }
+            : {}),
         }
       );
       if (!response.ok) {

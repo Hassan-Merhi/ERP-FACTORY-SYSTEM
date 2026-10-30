@@ -37,6 +37,7 @@ import { OffloadDialog } from "@/components/OffloadDialog";
 import { ContainerDetailDialog1 } from "./ContainerDetailDialog1";
 import { ContainerDetailPriceImportDialog } from "./ContainerDetailPriceImportDialog";
 import type { useContainerDetailModel } from "../useContainerDetailModel";
+import { compareItemNamesAZ } from "@/lib/itemNameSort";
 
 type Model = ReturnType<typeof useContainerDetailModel>;
 export function ContainerDetailErpView({ model }: { model: Model }) {
@@ -48,6 +49,11 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
   if (!containerData) return null;
 
   const { container, pos, charges } = containerData;
+  // Display-only ordering, shared by desktop table and mobile item cards.
+  const alphabetizedPos = pos.map((po) => ({
+    ...po,
+    items: [...po.items].sort((a, b) => compareItemNamesAZ(a.itemName, b.itemName)),
+  }));
   const supplier = suppliers.find((s) => s.id === container.supplierId);
 
   // Compute totals live from the actual PO and charges data so they are
@@ -310,7 +316,7 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
         </div>
       ) : (
         <div className="space-y-4">
-          {pos.map((po) => (
+          {alphabetizedPos.map((po) => (
             <div key={po.id} className="rounded-lg border bg-card overflow-hidden">
               {/* PO header bar */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 bg-muted/40 border-b">

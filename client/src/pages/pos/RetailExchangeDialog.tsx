@@ -4,6 +4,7 @@ import { Minus, Plus, ScanLine, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
 import { apiRequest } from "@/lib/queryClient";
@@ -128,8 +129,8 @@ export function RetailExchangeDialog({
   );
   const balance = (newItems.length ? collectedNow : 0) - tenderRefund;
 
-  const scan = async () => {
-    const barcode = scanText.trim();
+  const scan = async (code = scanText) => {
+    const barcode = code.trim();
     if (!barcode || !locationId) return;
     try {
       const result = await lookupRetailBarcode(barcode, locationId);
@@ -296,8 +297,9 @@ export function RetailExchangeDialog({
 
           <section className="space-y-2">
             <h3 className="text-sm font-semibold">Customer takes</h3>
+            <div className="flex items-center gap-2">
             <form
-              className="relative"
+              className="relative min-w-0 flex-1"
               onSubmit={(event) => {
                 event.preventDefault();
                 void scan();
@@ -312,6 +314,8 @@ export function RetailExchangeDialog({
                 onChange={(event) => setScanText(event.target.value)}
               />
             </form>
+            <MobileBarcodeScanner onScan={(code) => void scan(code)} disabled={!locationId} />
+            </div>
             {newItems.map((item) => (
               <div key={item.variantId} className="flex items-center gap-3 rounded-md border p-2">
                 <RetailItemImage item={item} className="h-10 w-10" />

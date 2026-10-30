@@ -4,6 +4,7 @@ import {
   CalendarClock,
   CalendarDays,
   ClipboardCheck,
+  FileDown,
   Loader2,
   LockKeyhole,
   MessageCircle,
@@ -47,6 +48,14 @@ import {
 } from "./factoryProductionTargetsModel";
 import { ProductionTargetDefaultsDialog } from "./productiontargets/ProductionTargetDefaultsDialog";
 import { ProductionTargetsEditorDialog } from "./productiontargets/ProductionTargetsEditorDialog";
+import { ProductionExcelRangeDialog, type ProductionExportDates } from "./productiontargets/ProductionExcelRangeDialog";
+import { ProductionTargetsDateRangeDialog, type ProductionTargetsDateRange } from "./productiontargets/ProductionTargetsDateRangeDialog";
+import { Coins } from "lucide-react";
+import { useLocation } from "wouter";
+import type { AuthMe } from "@shared/apiTypes";
+
+
+import { exportWeeklyProductionExcel, ProductionDateRangeError } from "./productiontargets/productionWeeklyExcel";
 
 function SummaryTile({ label, value, icon }: { label: string; value: string | number; icon: React.ReactNode }) {
   return (
@@ -104,16 +113,25 @@ function SummaryGroupTile({
 
 export default function FactoryProductionTargets() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
+  const { data: session } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"], staleTime: 60000 });
+  const bonusRole = session?.currentRole ?? session?.role;
+  const canManageBonuses = bonusRole === "Admin" || bonusRole === "Owner";
   const { language } = useApplicationLanguage();
   const tr = (key: FactoryStaffTrackingTranslationKey) => translateFactoryStaffTrackingText(key, language);
   const [periodType, setPeriodType] = useState<PeriodType>("daily");
   const [referenceDate, setReferenceDate] = useState(() => localDateStr(new Date()));
+  const [customRange, setCustomRange] = useState<ProductionTargetsDateRange | null>(null);
+  const [dateRangeOpen, setDateRangeOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<ProductionRow[]>([]);
   const [editorOpen, setEditorOpen] = useState(false);
   const [defaultsEditorOpen, setDefaultsEditorOpen] = useState(false);
+  const [excelRangeOpen, setExcelRangeOpen] = useState(false);
   const productionReportRef = useRef<HTMLDivElement>(null);
-  const period = useMemo(() => periodFor(periodType, referenceDate), [periodType, referenceDate]);
+  const period = useMemo(() =>
+    periodType === "daily" ? periodFor("daily", referenceDate) : (customRange ?? periodFor(periodType, referenceDate)),
+  [periodType, referenceDate, customRange]);
 
   const { data, isLoading } = useQuery<ProductionResponse>({
     queryKey: ["/api/factory/staff-tracking", "production", periodType, period.start, period.end],
@@ -221,6 +239,28 @@ export default function FactoryProductionTargets() {
     },
   });
 
+  const exportWeeklyMutation = useMutation({
+    mutationFn: (dates: ProductionExportDates) => exportWeeklyProductionExcel(dates.start, dates.end),
+    onSuccess: ({ start, end }) => {
+      setExcelRangeOpen(false);
+      toast({
+        title: tr("weeklyExcelExported"),
+        description: tr("weeklyExcelRange") + " " + start + " — " + end,
+      });
+    },
+    onError: (error: Error) => {
+      const description =
+        error instanceof ProductionDateRangeError
+          ? error.code === "tooLong"
+            ? tr("exportRangeTooLong")
+            : error.code === "future"
+              ? tr("exportFutureDate")
+              : tr("exportInvalidRange")
+          : error.message;
+      toast({ title: tr("weeklyExcelExportFailed"), description, variant: "destructive" });
+    },
+  });
+
   const collapsedRows = useMemo(() => collapseLinkedProductionRows(rows), [rows]);
 
   const groupedVisibleRows = useMemo<ProductionGroup[]>(() => {
@@ -244,16 +284,26 @@ export default function FactoryProductionTargets() {
   const productionReportGroups = useMemo(() => groupProductionRows(collapsedRows), [collapsedRows]);
 
   const totals = useMemo(() => summarizeProductionRows(rows), [rows]);
+  const missingTargetDays = useMemo(
+    () => periodType === "daily"
+      ? 0
+      : rows.reduce((sum, row) => sum + (row.missingTargetDays ?? 0), 0),
+    [rows, periodType],
+  );
   const workerTotals = useMemo(
     () => ({
       total: rows.length,
-      present: rows.filter((row) => row.status === FACTORY_TRACKING_STATUSES.present).length,
-      absent: rows.filter((row) => row.status === FACTORY_TRACKING_STATUSES.absent).length,
+      present: rows.filter((row) => periodType === "daily"
+        ? row.status === FACTORY_TRACKING_STATUSES.present
+        : (row.absentDays ?? 0) === 0).length,
+      absent: rows.filter((row) => periodType === "daily"
+        ? row.status === FACTORY_TRACKING_STATUSES.absent
+        : (row.absentDays ?? 0) > 0).length,
     }),
-    [rows]
+    [rows, periodType]
   );
 
-  const busy = sendWhatsappMutation.isPending || endProductionMutation.isPending;
+  const busy = sendWhatsappMutation.isPending || endProductionMutation.isPending || exportWeeklyMutation.isPending;
 
   return (
     <div className="space-y-4">
@@ -269,7 +319,10 @@ export default function FactoryProductionTargets() {
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground">{tr("period")}</p>
-            <Select value={periodType} onValueChange={(value) => setPeriodType(value as PeriodType)} disabled={busy}>
+            <Select value={periodType} onValueChange={(value) => {
+              setPeriodType(value as PeriodType);
+              setCustomRange(null);
+            }} disabled={busy}>
               <SelectTrigger className="w-[130px]" data-testid="select-production-period-type">
                 <SelectValue />
               </SelectTrigger>
@@ -281,14 +334,44 @@ export default function FactoryProductionTargets() {
             </Select>
           </div>
           <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">{tr("referenceDate")}</p>
-            <Input
-              type="date"
-              value={referenceDate}
-              onChange={(event) => setReferenceDate(event.target.value)}
-              className="w-[155px]"
-              disabled={busy}
-            />
+            <p className="text-xs text-muted-foreground">{periodType === "daily" ? tr("referenceDate") : "Date range"}</p>
+            {periodType === "daily" ? (
+              <Input
+                type="date"
+                value={referenceDate}
+                onChange={(event) => setReferenceDate(event.target.value)}
+                className="w-[155px]"
+                disabled={busy}
+              />
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9 gap-2 tabular-nums"
+                  onClick={() => setDateRangeOpen(true)}
+                  disabled={busy}
+                  title="Choose start and end dates from the calendar"
+                  data-testid="button-production-targets-date-range"
+                >
+                  <CalendarDays className="h-4 w-4" />
+                  {period.start} — {period.end}
+                </Button>
+                {customRange && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setCustomRange(null)}
+                    disabled={busy}
+                    data-testid="button-reset-production-targets-date-range"
+                    title={periodType === "weekly" ? "Restore full week" : "Restore full month"}
+                  >
+                    Reset
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
 
           {periodType === "daily" && (
@@ -304,12 +387,34 @@ export default function FactoryProductionTargets() {
           )}
 
           <Button
-            onClick={() => setEditorOpen(true)}
+            variant="outline"
+            onClick={() => setExcelRangeOpen(true)}
+            disabled={busy}
+            title={tr("weeklyExcelTooltip")}
+            data-testid="button-export-production-weekly-excel"
+          >
+            {exportWeeklyMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <FileDown className="mr-2 h-4 w-4" />
+            )}
+            {exportWeeklyMutation.isPending ? tr("exportingWeeklyExcel") : tr("exportProductionExcel")}
+          </Button>
+
+          <Button
+            onClick={() => {
+              if (periodType !== "daily") {
+                setPeriodType("daily");
+                return;
+              }
+              setEditorOpen(true);
+            }}
             disabled={finalized || rows.length === 0 || busy}
+            title={periodType === "daily" ? undefined : "Period targets are a sum of daily targets. Switch to Daily to edit."}
             data-testid="button-edit-production-targets"
           >
             <SlidersHorizontal className="mr-2 h-4 w-4" />
-            {tr("editTargets")}
+            {periodType === "daily" ? tr("editTargets") : "Edit Daily Targets"}
           </Button>
 
           {periodType === "daily" && (
@@ -350,8 +455,17 @@ export default function FactoryProductionTargets() {
         <CalendarDays className="mr-1.5 inline h-3.5 w-3.5" />
         {period.start}
         {period.end !== period.start ? ` — ${period.end}` : ""}
-        <span className="ml-3">{tr("useEditorToManageTargets")}</span>
+        <span className="ml-3">{periodType === "daily" ? tr("useEditorToManageTargets")
+          : "Targets and attendance are summed from each date in this period; edit individual days in Daily view."}</span>
       </div>
+
+      {periodType !== "daily" && missingTargetDays > 0 && !isLoading && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300" role="status">
+          {missingTargetDays} worker-day targets are not configured in this range.
+          The target and expected totals include only recorded daily targets;
+          differences are withheld until the missing targets are set.
+        </div>
+      )}
 
       {finalized && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
@@ -389,10 +503,26 @@ export default function FactoryProductionTargets() {
         />
         <SummaryTile
           label={tr("diff")}
-          value={totals.difference > 0 ? `+${totals.difference}` : totals.difference}
+          value={missingTargetDays > 0 ? "—" : totals.difference > 0 ? `+${totals.difference}` : totals.difference}
           icon={<UserX className="h-5 w-5" />}
         />
       </div>
+
+      {periodType === "daily" && canManageBonuses && (
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card p-4" data-testid="production-bonuses-launcher">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg border bg-muted/40 p-2"><Coins className="h-5 w-5 text-primary" /></div>
+            <div>
+              <p className="font-semibold">Production Bonuses</p>
+              <p className="text-xs text-muted-foreground">
+                Set rates, review calculations, approve worker bonuses and pay from Cash / Bank.
+              </p>
+            </div>
+          </div>
+          <Button type="button" onClick={() => navigate("/factory/production-bonuses?date=" + referenceDate)}
+            data-testid="button-open-production-bonuses">Open Production Bonuses</Button>
+        </div>
+      )}
 
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -462,7 +592,14 @@ export default function FactoryProductionTargets() {
                         active: row.active,
                       },
                     ];
-                    const isAbsent = members.some((member) => member.status === FACTORY_TRACKING_STATUSES.absent);
+                    const isAbsent = periodType !== "daily"
+                      ? (row.absentDays ?? 0) > 0
+                      : members.some((member) => member.status === FACTORY_TRACKING_STATUSES.absent);
+                    const comparisonTarget = periodType === "daily"
+                      ? row.targetBales
+                      : (row.missingTargetDays ?? 0) > 0 || row.targetBales == null
+                        ? null
+                        : row.targetBales - (row.absentTargetBales ?? 0);
                     return (
                       <TableRow
                         key={row.linkGroupId != null ? `link-${row.linkGroupId}` : `worker-${row.personId}`}
@@ -492,14 +629,16 @@ export default function FactoryProductionTargets() {
                           {row.producedBales ?? 0}
                         </TableCell>
                         <TableCell
-                          className={`border-r border-border/70 text-right text-base font-semibold tabular-nums ${differenceClass(row.targetBales, row.producedBales)}`}
+                          className={`border-r border-border/70 text-right text-base font-semibold tabular-nums ${differenceClass(comparisonTarget, row.producedBales)}`}
                         >
-                          {differenceText(row.targetBales, row.producedBales)}
+                          {differenceText(comparisonTarget, row.producedBales)}
                         </TableCell>
                         <TableCell>
                           <div className="space-y-1.5">
                             {members.map((member) => {
-                              const memberAbsent = member.status === FACTORY_TRACKING_STATUSES.absent;
+                              const memberAbsent = periodType !== "daily"
+                                ? (row.absentDays ?? 0) > 0
+                                : member.status === FACTORY_TRACKING_STATUSES.absent;
                               return (
                                 <div
                                   key={member.personId}
@@ -509,10 +648,16 @@ export default function FactoryProductionTargets() {
                                       : "border-border bg-muted/70 text-muted-foreground"
                                   }`}
                                   aria-disabled="true"
-                                  title={`${member.name}: ${tr("statusControlledFromAttendance")}`}
+                                  title={periodType === "daily"
+                                    ? `${member.name}: ${tr("statusControlledFromAttendance")}`
+                                    : `${member.name}: ${row.absentDays ?? 0} absent out of ${row.periodDays ?? 0} roster days`}
                                 >
                                   <LockKeyhole className="h-3.5 w-3.5 shrink-0" />
-                                  <span>{tr(statusTranslationKey(member.status))}</span>
+                                  <span>{periodType === "daily"
+                                    ? tr(statusTranslationKey(member.status))
+                                    : (row.absentDays ?? 0) > 0
+                                      ? `${tr("absent")} ${row.absentDays}/${row.periodDays ?? 0}`
+                                      : tr("present")}</span>
                                 </div>
                               );
                             })}
@@ -527,6 +672,25 @@ export default function FactoryProductionTargets() {
           </TableBody>
         </Table>
       </div>
+
+      {periodType !== "daily" && (
+        <ProductionTargetsDateRangeDialog
+          open={dateRangeOpen}
+          onOpenChange={setDateRangeOpen}
+          range={period}
+          onApply={(nextRange) => {
+            setCustomRange(nextRange);
+            setDateRangeOpen(false);
+          }}
+        />
+      )}
+
+      <ProductionExcelRangeDialog
+        open={excelRangeOpen}
+        onOpenChange={setExcelRangeOpen}
+        exporting={exportWeeklyMutation.isPending}
+        onExport={(dates) => exportWeeklyMutation.mutate(dates)}
+      />
 
       <ProductionTargetDefaultsDialog
         open={defaultsEditorOpen}

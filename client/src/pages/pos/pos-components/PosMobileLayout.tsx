@@ -1,5 +1,6 @@
 import { Search, ShoppingCart, Trash2, MapPin, User, ChevronDown, Check, Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -163,6 +164,11 @@ export function PosMobileLayout({
               onChange={(event) => setSearchTerm(event.target.value)}
               data-testid="input-mobile-product-search"
             />
+            <MobileBarcodeScanner onScan={(code) => {
+              const match = inventory.find((item) => item.code?.trim().toUpperCase() === code.trim().toUpperCase());
+              if (match) openItemSheet(match);
+              else setSearchTerm(code);
+            }} />
             {searchTerm && (
               <button
                 type="button"

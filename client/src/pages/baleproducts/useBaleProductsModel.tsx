@@ -317,10 +317,15 @@ export function useBaleProductsModel() {
       const response = await modeApiRequest("POST", `/api/factory/bale-products/${id}/cascade-update`, {
         labelDesignColor,
       });
+      if (!response.ok) {
+        const details = await response.json().catch(() => ({}));
+        throw new Error(details.message || "Failed to update label color");
+      }
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/bale-products"] });
+      void queryClient.invalidateQueries({ queryKey: ["/api/factory/bale-products"] });
+      toast({ title: "Label color updated" });
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;

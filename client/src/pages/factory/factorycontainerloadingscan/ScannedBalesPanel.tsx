@@ -21,6 +21,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatNumber } from "../customerLoadingFormat";
 import type { FactoryContainerLoadingScanModel } from "./useFactoryContainerLoadingScanModel";
@@ -118,7 +119,8 @@ function ScanControls({ model }: { model: FactoryContainerLoadingScanModel }) {
         />
       </div>
 
-      <div className="relative">
+      <div className="flex items-center gap-2">
+        <div className="relative min-w-0 flex-1">
         <ScanLine className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
         <Input
           ref={model.scannerRef}
@@ -132,6 +134,13 @@ function ScanControls({ model }: { model: FactoryContainerLoadingScanModel }) {
           className={`h-14 min-w-0 rounded-xl border-border/80 bg-background pl-12 font-mono text-base shadow-xs transition-all focus-visible:ring-2 sm:text-lg ${model.scanInputClass}`}
           autoFocus
           data-testid="input-scan-code"
+        />
+        </div>
+        <MobileBarcodeScanner
+          onScan={model.submitScannedCode}
+          feedback={model.cameraScanFeedback}
+          disabled={!model.orderId || !model.orderDetail || !model.selectedLocationId || model.addBaleMutation.isPending}
+          className="h-14 w-14 shrink-0"
         />
       </div>
     </div>

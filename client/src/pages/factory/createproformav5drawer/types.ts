@@ -7,6 +7,7 @@
 export interface ArticleRow {
   articleCode: string;
   productName: string;
+  categoryName?: string;
   stockAvailable: number;
   totalLoaded: number;
   expectedToLoad: number;

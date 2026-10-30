@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/PageHeader";
@@ -152,9 +153,8 @@ export default function WasteDispatch() {
     }
   };
 
-  const handleScan = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key !== "Enter") return;
-    const ref = scanInput.trim().toUpperCase();
+  const scanReference = (code: string) => {
+    const ref = code.trim().toUpperCase();
     if (!ref) return;
     const match = bales.find((b) => b.referenceNumber.toUpperCase() === ref);
     if (match) {
@@ -172,6 +172,13 @@ export default function WasteDispatch() {
     } else {
       toast({ title: "Not found", description: `No bale with ref "${ref}"`, variant: "destructive" });
       setScanInput("");
+    }
+  };
+
+  const handleScan = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      scanReference(scanInput);
     }
   };
 
@@ -351,6 +358,7 @@ export default function WasteDispatch() {
                   data-testid="input-scan-ref"
                   autoComplete="off"
                 />
+                <MobileBarcodeScanner onScan={scanReference} className="mt-2" />
               </div>
               <p className="text-xs text-muted-foreground mt-1">Press Enter to select a bale</p>
             </CardContent>

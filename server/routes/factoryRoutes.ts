@@ -22,7 +22,6 @@ import { registerFactoryDailyScanRoutes } from "./factory/factoryDailyScanRoutes
 import { registerFactoryPressingMachineManagementRoutes } from "./factory/factoryPressingMachineManagementRoutes";
 import { registerFactoryPressingConfirmRoutes } from "./factory/factoryPressingConfirmationRoutes";
 import { registerFactoryPressingReportRoutes } from "./factory/factoryPressingReportRoutes";
-import { registerFactoryPressingOperationsRoutes } from "./factory/factoryPressingOperationsRoutes";
 import { registerFactoryPressingCorrectionRoutes } from "./factory/factoryPressingCorrectionRoutes";
 import { registerFactoryGroundScanRoutes } from "./factory/factoryGroundScanRoutes";
 import { registerFactoryContainerTrackingRoutes } from "./factory/factoryContainerTrackingRoutes";
@@ -31,7 +30,11 @@ import { registerProductionPlannerRoutes } from "./factory/factoryProductionPlan
 import { registerProductionPositionPlannerRoutes } from "./factory/productionPositionPlannerRoutes";
 import { registerFactoryContactRoutes } from "./factory/factoryContactRoutes";
 import { registerFactoryStaffTrackingRoutes } from "./factory/factoryStaffTrackingRoutes";
+import { registerFactoryTargetBonusPaymentRoutes } from "./factory/factoryTargetBonusPaymentRoutes";
+import { registerFactoryProductionTargetBonusReportRoutes } from "./factory/factoryProductionTargetBonusReportRoutes";
+import { loadProductionTargetBonusHistory } from "../services/factory/productionTargetBonusReportAdapter";
 import { registerFactoryProductionWorkerLinkRoutes } from "./factory/factoryProductionWorkerLinkRoutes";
+import { registerFactoryTargetBonusRoutes } from "./factory/factoryTargetBonusRoutes";
 import { registerPerformanceReadMicrocache } from "./performance/readMicrocache";
 import { registerFactoryDaybookPaginationRoutes } from "./factory/factoryDaybookPaginationRoutes";
 import { registerFactoryStockEntryHistoryPaginationRoutes } from "./factory/factoryStockEntryHistoryPaginationRoutes";
@@ -224,7 +227,6 @@ export function registerFactoryRoutes(app: Express, requireAuth: RequestHandler,
   registerFactoryPressingMachineManagementRoutes(app);
   registerFactoryPressingConfirmRoutes(app);
   registerFactoryPressingReportRoutes(app);
-  registerFactoryPressingOperationsRoutes(app);
   registerFactoryPressingCorrectionRoutes(app);
   registerFactoryGroundScanRoutes(app);
   registerEndProductionRoutes(app, requireAuth);
@@ -232,5 +234,8 @@ export function registerFactoryRoutes(app: Express, requireAuth: RequestHandler,
   registerProductionPositionPlannerRoutes(app);
   registerFactoryContactRoutes(app);
   registerFactoryStaffTrackingRoutes(app);
+  registerFactoryTargetBonusPaymentRoutes(app);
   registerFactoryProductionWorkerLinkRoutes(app);
+  registerFactoryTargetBonusRoutes(app);
+  registerFactoryProductionTargetBonusReportRoutes(app, loadProductionTargetBonusHistory);
 }

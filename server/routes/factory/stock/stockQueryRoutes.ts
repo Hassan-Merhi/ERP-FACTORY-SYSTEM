@@ -43,7 +43,7 @@ export function registerFactoryStockQueryRoutes(app: Express) {
           .select({ baleId: customerOrderBales.baleId })
           .from(customerOrderBales)
           .innerJoin(customerOrders, eq(customerOrderBales.orderId, customerOrders.id))
-          .where(and(eq(customerOrders.status, "LOADING"), inArray(customerOrderBales.baleId, allIds)));
+          .where(and(eq(customerOrders.companyId, companyId), isNull(customerOrders.deletedAt), eq(customerOrders.status, "LOADING"), inArray(customerOrderBales.baleId, allIds)));
         for (const r of loadingRows) loadingBaleIds.add(r.baleId);
       }
 

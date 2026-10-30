@@ -28,18 +28,25 @@ describe("Pressing machine Phase 4 transaction safety", () => {
     expect(route).toContain("PRESSING_ASSIGNMENT_CHANGED");
   });
 
-  it("resolves every bale authoritatively, rejecting excluded and finalized references", () => {
+  it("resolves company-owned bales, allowing all non-deleted inventory statuses", () => {
     expect(route).toContain("eq(factoryBales.companyId, companyId)");
     expect(route).toContain("eq(factoryBales.referenceNumber, reference)");
     expect(route).toContain("isNull(factoryBales.deletedAt)");
-    expect(route).toContain('bale.status !== "PENDING_PRESSING"');
-    expect(route).toContain("nonBalePriorityProductIds");
+    expect(route).toContain('bale.status === "DELETED"');
+    expect(route).not.toContain("PRESSING_BALE_NOT_PENDING");
     expect(route).toContain("PRESSING_BALE_NOT_FOUND");
-    expect(route).toContain("PRESSING_NON_BALE_ITEM");
+    expect(route).not.toContain("PRESSING_NON_BALE_ITEM");
+    expect(route).not.toContain("isNonBalePriorityProduct");
+    expect(route).toContain("Non-bale Priority products");
   });
 
   it("enforces one active confirmation across all machines and a unique request ID", () => {
     expect(route).toContain("PRESSING_ALREADY_CONFIRMED");
+    expect(route).toContain('operatorName: priorProfile?.displayName?.trim()');
+    expect(route).toContain('operatorName: otherProfile?.displayName?.trim()');
+    expect(scanner).toContain('data-testid="pressing-duplicate-user"');
+    expect(scanner).toContain("ALREADY SCANNED");
+    expect(route).toContain("userNameSnapshot: operator.displayName?.trim()");
     expect(route).toContain("PRESSING_REQUEST_ID_REUSED");
     expect(route).toContain("PRESSING_CONFIRMATION_VOIDED");
     expect(route).toContain('.onConflictDoNothing().returning()');
@@ -62,7 +69,8 @@ describe("Pressing machine Phase 4 transaction safety", () => {
   });
 
   it("never marks a scan as confirmed until the server's receipt arrives", () => {
-    expect(manager).toContain("onBarcode={pressingQueue.submit}");
+    expect(manager).toContain("onBarcode={cameraRead}");
+    expect(manager).toContain("scanner.submit({");
     expect(client).toContain("const receipt: unknown = await response.json()");
     expect(client).toContain('item.status === "PRESSING_COMPLETED"');
     expect(client).toContain('kind: "confirmed"');

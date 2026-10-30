@@ -287,4 +287,44 @@ export const backendMessagesPhase7TranslationsPart13: readonly Phase7BackendMess
     ar: "توجد قيود قديمة متعددة لدى الشركة الأم تطابق الحاوية {0}؛ يرجى مطابقتها قبل التعديل.",
     fr: "Plusieurs anciens journaux de la société mère correspondent au conteneur {0} ; rapprochez-les avant de modifier.",
   },
+  {
+    en: "Only Admin or Developer can permanently delete non-financial entries",
+    ar: "يمكن للمسؤول أو المطوّر فقط حذف القيود غير المالية نهائيًا.",
+    fr: "Seul un administrateur ou un développeur peut supprimer définitivement les écritures non financières.",
+  },
+  {
+    en: "Only Admin or Owner can delete bonus payments",
+    ar: "يمكن للمسؤول أو المالك فقط حذف مدفوعات المكافآت.",
+    fr: "Seul un administrateur ou le propriétaire peut supprimer les paiements de primes.",
+  },
+  {
+    en: "Only Admin or Owner can reverse bonuses",
+    ar: "يمكن للمسؤول أو المالك فقط عكس المكافآت.",
+    fr: "Seul un administrateur ou le propriétaire peut contrepasser les primes.",
+  },
+  {
+    en: "Posted bonus Daybook entries cannot be edited. Reverse the payment instead.",
+    ar: "لا يمكن تعديل قيود مكافآت الإنتاج المسجلة في دفتر اليومية. اعكس الدفع بدلاً من ذلك.",
+    fr: "Les écritures de primes comptabilisées dans le journal ne peuvent pas être modifiées. Contrepassez le paiement.",
+  },
+  {
+    en: "Production bonus audit entries cannot be hard-deleted",
+    ar: "لا يمكن حذف قيود تدقيق مكافآت الإنتاج نهائيًا.",
+    fr: "Les écritures d'audit des primes de production ne peuvent pas être supprimées définitivement.",
+  },
+  {
+    en: "Reversal audit entries cannot be deleted",
+    ar: "لا يمكن حذف قيود التدقيق الخاصة بالعكس.",
+    fr: "Les écritures d'audit de contrepassation ne peuvent pas être supprimées.",
+  },
+  {
+    en: "This is an accounting reversal voucher and must remain in audit history",
+    ar: "هذا سند عكس محاسبي ويجب الاحتفاظ به في سجل التدقيق.",
+    fr: "Cette pièce de contrepassation comptable doit rester dans l'historique d'audit.",
+  },
+  {
+    en: "Production ended. No WhatsApp message was sent.",
+    ar: "انتهى الإنتاج. لم يتم إرسال أي رسالة عبر واتساب.",
+    fr: "La production est terminée. Aucun message WhatsApp n'a été envoyé.",
+  },
 ];

@@ -215,3 +215,25 @@ New phase documents are written straight into `archive/`. Only material that
 describes lasting behaviour gets promoted out, and promoting one means
 reclassifying it in `config/doc-index.json` — which is the moment to check that
 it is actually still true.
+
+## Current reference index additions
+
+These current-reference documents are indexed here for audit coverage. Their behavior is described in each linked file.
+
+| Reference | Focus |
+|---|---|
+| [global-force-refresh-all-users-2026-10-28.md](global-force-refresh-all-users-2026-10-28.md) | Current global force refresh all users 2026 10 28 reference |
+| [one-time-pwa-force-refresh-2026-10-28.md](one-time-pwa-force-refresh-2026-10-28.md) | Current one time pwa force refresh 2026 10 28 reference |
+| [pressing-scan-simple-mode.md](pressing-scan-simple-mode.md) | Current pressing scan simple mode reference |
+| [production-target-bonus-phase10-category-calculation.md](production-target-bonus-phase10-category-calculation.md) | Current production target bonus phase10 category calculation reference |
+| [production-target-bonus-phase11-category-reviews.md](production-target-bonus-phase11-category-reviews.md) | Current production target bonus phase11 category reviews reference |
+| [production-target-bonus-phase12-weekly-flat-settings.md](production-target-bonus-phase12-weekly-flat-settings.md) | Current production target bonus phase12 weekly flat settings reference |
+| [production-target-bonus-phase13-weekly-flat-eligibility.md](production-target-bonus-phase13-weekly-flat-eligibility.md) | Current production target bonus phase13 weekly flat eligibility reference |
+| [production-target-bonus-phase14-weekly-reviews.md](production-target-bonus-phase14-weekly-reviews.md) | Current production target bonus phase14 weekly reviews reference |
+| [production-target-bonus-phase15-weekly-payment.md](production-target-bonus-phase15-weekly-payment.md) | Current production target bonus phase15 weekly payment reference |
+| [production-target-bonus-phase16-certification.md](production-target-bonus-phase16-certification.md) | Current production target bonus phase16 certification reference |
+| [production-target-bonus-phase8-category-rates.md](production-target-bonus-phase8-category-rates.md) | Current production target bonus phase8 category rates reference |
+| [production-target-bonus-phase9-category-evidence.md](production-target-bonus-phase9-category-evidence.md) | Current production target bonus phase9 category evidence reference |
+| [production-target-bonus-phases-1-2.md](production-target-bonus-phases-1-2.md) | Current production target bonus phases 1 2 reference |
+| [production-target-bonuses-phase7-reporting.md](production-target-bonuses-phase7-reporting.md) | Current production target bonuses phase7 reporting reference |
+| [production-target-bonuses-unified-integration.md](production-target-bonuses-unified-integration.md) | Current production target bonuses unified integration reference |
