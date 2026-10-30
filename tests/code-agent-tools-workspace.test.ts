@@ -5,7 +5,7 @@
  */
 import fs from "fs";
 import path from "path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import {
   extractFilePathsFromMessage,
   extractSearchPattern,
@@ -36,29 +36,41 @@ describe("resolveWorkspacePath", () => {
 });
 
 describe("file reads", () => {
-  it("returns short files whole and truncates long ones at 300 lines", async () => {
-    const small = await readProjectFile("tsconfig.json");
-    expect(small).toMatchObject({ truncated: false, relPath: "tsconfig.json" });
-    expect(small.content).toBe(fs.readFileSync(path.join(WORKSPACE_ROOT, "tsconfig.json"), "utf8"));
+  // Fixtures live in the ignored artifacts folder so reads never depend on real source text.
+  const dir = path.join("artifacts", `code-agent-tools-${process.pid}`);
+  const write = (name: string, content: string) => {
+    fs.mkdirSync(path.join(WORKSPACE_ROOT, dir), { recursive: true });
+    fs.writeFileSync(path.join(WORKSPACE_ROOT, dir, name), content);
+    return path.join(dir, name);
+  };
+  afterAll(() => fs.rmSync(path.join(WORKSPACE_ROOT, dir), { recursive: true, force: true }));
 
-    const big = await readProjectFile("server/services/accounting/fiscalReviewService.ts");
+  it("returns short files whole and truncates long ones at 300 lines", async () => {
+    const smallPath = write("small.txt", "alpha\nbeta\n");
+    expect(await readProjectFile(smallPath)).toEqual({
+      content: "alpha\nbeta\n",
+      truncated: false,
+      totalLines: 3,
+      relPath: smallPath,
+    });
+
+    const exact = Array.from({ length: 300 }, (_, i) => `row ${i}`).join("\n");
+    expect(await readProjectFile(write("exact.txt", exact))).toMatchObject({ truncated: false, content: exact });
+    expect((await readProjectFile(write("over.txt", `${exact}\nlast`))).truncated).toBe(true);
+
+    const lines = Array.from({ length: 350 }, (_, i) => `line ${i + 1}`);
+    const big = await readProjectFile(write("big.txt", lines.join("\n")));
     expect(big.truncated).toBe(true);
-    expect(big.totalLines).toBeGreaterThan(300);
-    expect(big.content.split("\n").slice(0, 300).join("\n")).toBe(
-      fs
-        .readFileSync(path.join(WORKSPACE_ROOT, "server/services/accounting/fiscalReviewService.ts"), "utf8")
-        .split("\n")
-        .slice(0, 300)
-        .join("\n")
-    );
-    expect(big.content).toContain(`// ... (${big.totalLines - 300} more lines — file truncated)`);
+    expect(big.totalLines).toBe(350);
+    expect(big.content).toBe(`${lines.slice(0, 300).join("\n")}\n\n// ... (50 more lines — file truncated)`);
   });
 
   it("refuses missing files and directories", async () => {
+    const present = write("raw.txt", "raw text");
     await expect(readProjectFile("no/such/file.ts")).rejects.toThrow("File not found: no/such/file.ts");
-    await expect(readProjectFile("server")).rejects.toThrow("Not a file: server");
+    await expect(readProjectFile(dir)).rejects.toThrow(`Not a file: ${dir}`);
     expect(await readProjectFileRaw("no/such/file.ts")).toBe("");
-    expect(await readProjectFileRaw("tsconfig.json")).toContain("compilerOptions");
+    expect(await readProjectFileRaw(present)).toBe("raw text");
   });
 });
 
