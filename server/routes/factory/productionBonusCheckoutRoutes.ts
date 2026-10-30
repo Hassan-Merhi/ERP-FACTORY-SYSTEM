@@ -102,11 +102,12 @@ async function calculateOffers(
 ): Promise<Offer[]> {
   // One range read for closed and open days; each worker/day remains an individual
   // frozen accounting entitlement even when displayed as a range total.
-  const [daily, claimsResult, methodsResult, weeklyReviewsResult, categoryReviewsResult] = await Promise.all([
+  const [daily, claimsResult, methodsResult, weeklyReviewsResult, categoryReviewsResult, standardRatesResult] = await Promise.all([
     loadTargetBonusRows(tx, companyId, from, to),
     tx.execute(sql`
       SELECT rv.production_date::text AS date, rv.worker_id AS "workerId",
         rv.status, rv.bonus_amount::text AS amount,
+        rv.rate_per_bale::text AS "ratePerBale",
         p.status AS "paymentStatus", details.method AS "checkoutMethod",
         details.breakdown AS breakdown, details.calculation_hash AS "calculationHash"
       FROM factory_target_bonus_reviews rv
@@ -135,11 +136,42 @@ async function calculateOffers(
       WHERE company_id=${companyId}
         AND production_date BETWEEN ${from}::date AND ${to}::date
     `),
+    // The most recently SAVED rate applies to all unpaid worker-days, even
+    // older weeks. Do not filter by production_date: that was the original bug.
+    tx.execute(sql`
+      SELECT DISTINCT ON (scope,worker_id)
+        scope,worker_id AS "workerId",enabled,
+        rate_per_extra_bale::text AS rate
+      FROM factory_production_target_bonus_rates
+      WHERE company_id=${companyId}
+      ORDER BY scope,worker_id,id DESC
+    `),
   ]);
   const claimsByDay = new Map(rows(claimsResult).map(row => [String(row.date).slice(0,10)+":"+Number(row.workerId),row]));
   const weeklyMethods=rows(methodsResult);
   const weeklyReviews=rows(weeklyReviewsResult);
   const categoryClaims=new Set(rows(categoryReviewsResult).map(row=>String(row.date).slice(0,10)+":"+Number(row.id)));
+  const activeStandardRates=rows(standardRatesResult);
+  const rateForWorker=(workerId:number)=>{
+    const version=activeStandardRates.find(row=>row.scope==="worker"&&Number(row.workerId)===workerId)
+      ?? activeStandardRates.find(row=>row.scope==="company");
+    return version?.enabled===true && Number(version.rate)>0
+      ? new Decimal(String(version.rate)) : null;
+  };
+  const categoryRates=new Map<string,Decimal|null>();
+  const rateForCategory=async(key:string)=>{
+    if(categoryRates.has(key))return categoryRates.get(key)!;
+    const version=rows(await tx.execute(sql`
+      SELECT enabled,rate_per_extra_bale::text AS rate
+      FROM factory_production_target_bonus_category_rates
+      WHERE company_id=${companyId} AND category_key=${key}
+      ORDER BY id DESC LIMIT 1
+    `))[0];
+    const rate=version?.enabled===true&&Number(version.rate)>0
+      ? new Decimal(String(version.rate)):null;
+    categoryRates.set(key,rate);
+    return rate;
+  };
   const result: Offer[] = [];
   for(const item of daily) {
     const date=item.date;
@@ -160,10 +192,38 @@ async function calculateOffers(
         if(line && typeof line==="object") lines.push(line as unknown as BonusLine);
       }
       amount=usd(String(claim.amount));
-      if (method === "standard" && lines.length === 0 && item.extraBales > 0 &&
-          item.ratePerBale != null) {
-        lines.push({category:"All categories", produced:item.producedBales,
-          extra:item.extraBales, rate:new Decimal(item.ratePerBale).toFixed(4),bonus:amount});
+      if (claim.paymentStatus === "POSTED" || claim.paymentStatus === "REVERSED" ||
+          claim.status === "rejected") {
+        // Once a payment claim exists, neither reversal nor later edits can
+        // rewrite its originally reviewed amount and category breakdown.
+        if(method==="standard" && lines.length===0 && item.extraBales>0)
+          lines.push({category:"All categories",produced:item.producedBales,extra:item.extraBales,
+            rate:new Decimal(String(claim.ratePerBale??item.ratePerBale??0)).toFixed(4),bonus:amount});
+      } else if(!issue && method==="standard") {
+        const rate=rateForWorker(item.workerId);
+        if(!rate)issue="Set the worker/company per-bale rate first";
+        else {
+          amount=usd(rate.times(item.extraBales));
+          lines.splice(0,lines.length,{category:"All categories",produced:item.producedBales,
+            extra:item.extraBales,rate:rate.toFixed(4),bonus:amount});
+        }
+      } else if(!issue && method==="category") {
+        if(!lines.length)issue="Missing approved category breakdown; reconcile before paying";
+        else {
+          let total=new Decimal(0);
+          const priced: BonusLine[]=[];
+          for(const line of lines) {
+            if(!Number.isSafeInteger(line.extra)||line.extra<0){issue="Invalid approved category breakdown";break;}
+            if(line.extra===0){priced.push({...line,rate:"0.0000",bonus:"0.00"});continue;}
+            const category=normalizeBonusCategory(line.category);
+            const rate=category?await rateForCategory(category.key):null;
+            if(!rate){issue="Set a positive category rate for "+line.category;break;}
+            const subtotal=usd(rate.times(line.extra));
+            total=total.plus(subtotal);
+            priced.push({...line,rate:rate.toFixed(4),bonus:subtotal});
+          }
+          if(!issue){amount=usd(total);lines.splice(0,lines.length,...priced);}
+        }
       }
     } else if (weeklyFlat || weeklyClaim) {
       issue="A weekly flat-bonus method/review already covers this worker";
@@ -178,11 +238,12 @@ async function calculateOffers(
     } else if (item.extraBales <= 0) {
       issue="Target not exceeded";
     } else if (method==="standard") {
-      if (!item.ratePerBale || item.ratePerBale <= 0) issue="Set the worker/company per-bale rate first";
+      const rate=rateForWorker(item.workerId);
+      if(!rate)issue="Set the worker/company per-bale rate first";
       else {
-        amount=usd(item.proposedAmount);
+        amount=usd(rate.times(item.extraBales));
         lines.push({category:"All categories",produced:item.producedBales,
-          extra:item.extraBales,rate:new Decimal(item.ratePerBale).toFixed(4),bonus:amount});
+          extra:item.extraBales,rate:rate.toFixed(4),bonus:amount});
       }
     } else {
       if (!Number.isSafeInteger(item.extraBales)) {
@@ -205,18 +266,11 @@ async function calculateOffers(
             continue;
           }
           const normalized=normalizeBonusCategory(part.category)!;
-          const rateRow=rows(await tx.execute(sql`
-            SELECT enabled,rate_per_extra_bale::text AS rate
-            FROM factory_production_target_bonus_category_rates
-            WHERE company_id=${companyId} AND category_key=${normalized.key}
-              AND effective_from <= ${date}::date
-            ORDER BY effective_from DESC,id DESC LIMIT 1
-          `))[0];
-          if(!rateRow || rateRow.enabled !== true || Number(rateRow.rate)<=0) {
+          const rate=await rateForCategory(normalized.key);
+          if(!rate) {
             issue="Set a positive category rate for "+part.category;
             break;
           }
-          const rate=new Decimal(String(rateRow.rate));
           const partial=usd(rate.times(part.extra));
           // Line-level cent rounding ensures the displayed category subtotals
           // add up exactly to the worker's posted accounting amount.
@@ -240,7 +294,8 @@ async function calculateOffers(
       target:item.targetBales,produced:item.producedBales,extra:item.extraBales,
       method,lines,amount};
     result.push({...offerCore,
-      token:typeof claim?.calculationHash === "string" ? claim.calculationHash : hash(offerCore),
+      token:claim?.paymentStatus && typeof claim.calculationHash==="string"
+        ? claim.calculationHash : hash(offerCore),
       status,issue});
   }
   return result;
