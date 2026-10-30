@@ -40,7 +40,8 @@ const daysApart=(from:string,to:string)=>Math.round(
 const startOfRange=(date:string)=>{
   if(!isDate(date))return date;
   const d=new Date(date+"T12:00:00Z");
-  d.setUTCDate(d.getUTCDate()-6);
+  // The default checkout period follows the production week (Monday onward).
+  d.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7));
   return d.toISOString().slice(0,10);
 };
 const payableStatus=(row:Offer)=>row.status==="pending"||row.status==="approved";
