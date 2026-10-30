@@ -10,6 +10,7 @@ const HEADER = new Set([
   "description", "exchangeRate", "locationId", "effectiveDate",
 ]);
 const LINE = new Set(["ledgerAccountId", "debitAmount", "creditAmount", "narration"]);
+const TOP_LEVEL = new Set(["clientRequestId", "voucher", "entries"]);
 
 function cents(value) {
   const text = String(value ?? "0");
@@ -20,6 +21,7 @@ function cents(value) {
 
 export function supportsPhase8LanVoucherCapture(body) {
   if (!body || typeof body !== "object" || Array.isArray(body) ||
+      Object.keys(body).some((key) => !TOP_LEVEL.has(key)) ||
       typeof body.clientRequestId !== "string" ||
       body.clientRequestId.length < 1 || body.clientRequestId.length > 128 ||
       !/^[A-Za-z0-9._:-]+$/.test(body.clientRequestId) ||
