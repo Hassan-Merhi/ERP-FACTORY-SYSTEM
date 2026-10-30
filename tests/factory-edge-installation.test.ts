@@ -22,7 +22,7 @@ describe("LAN edge operator preflight", () => {
     expect(parsed).toHaveProperty("EDGE_RELEASE_SHA");
     expect(parsed).toHaveProperty("EDGE_WRITER_EPOCH");
     expect(parsed).toHaveProperty("EDGE_BASELINE_SHA256");
-    expect(() => parseEdgeEnvironment("EDGE_WRITER_EPOCH=1\\nEDGE_BASELINE_SHA256=" + "a".repeat(64))).not.toThrow();
+    expect(() => parseEdgeEnvironment("EDGE_WRITER_EPOCH=1\nEDGE_BASELINE_SHA256=" + "a".repeat(64))).not.toThrow();
   });
   it("rejects a nonprivate LAN bind IP before reading credentials", () => {
     expect(() => verifyEdgeInstallation({ EDGE_BIND_IP: "0.0.0.0" }, "", "")).toThrow("EDGE_BIND_IP_NOT_PRIVATE");
