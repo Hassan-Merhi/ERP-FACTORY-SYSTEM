@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import type { DatabaseOrTransaction } from "../../db";
 import { resultRows } from "../../lib/queryResult";
+import { loadLiveTargetBonusRows } from "./targetBonusLivePreview";
 
 export type TargetBonusStatus = "pending" | "approved" | "rejected";
 
@@ -19,6 +20,8 @@ export interface TargetBonusRow {
   reviewedBy: string | null;
   reviewedAt: string | null;
   lockedAmount: number | null;
+  targetConfigured?: boolean;
+  sourceFinalized?: boolean;
 }
 
 type DbRow = {
@@ -28,6 +31,7 @@ type DbRow = {
   ratePerBale: string | number | null; proposedAmount: string | number;
   status: TargetBonusStatus | null; reviewedBy: string | null; reviewedAt: string | null;
   lockedAmount: string | number | null;
+  targetConfigured?: boolean;
 };
 
 /** Finalized daily targets are the source of truth.
@@ -61,7 +65,8 @@ export async function loadTargetBonusRows(
       COALESCE(review.status, 'pending') AS status,
       review.reviewed_by AS "reviewedBy",
       review.reviewed_at::text AS "reviewedAt",
-      review.bonus_amount AS "lockedAmount"
+      review.bonus_amount AS "lockedAmount",
+      (e.target_bales IS NOT NULL OR review.id IS NOT NULL) AS "targetConfigured"
     FROM factory_staff_tracking_entries e
     JOIN factory_staff_tracking_period_closures closure
       ON closure.company_id = e.company_id
@@ -125,7 +130,7 @@ export async function loadTargetBonusRows(
       AND e.period_start BETWEEN ${start}::date AND ${end}::date
     ORDER BY e.period_start DESC, w.full_name ASC, e.person_id ASC
   `);
-  return (resultRows(result) as DbRow[]).map((row) => ({
+  const finalizedRows = (resultRows(result) as DbRow[]).map((row): TargetBonusRow => ({
     date: String(row.date).slice(0, 10),
     workerId: Number(row.workerId),
     workerName: String(row.workerName),
@@ -140,7 +145,13 @@ export async function loadTargetBonusRows(
     reviewedBy: row.reviewedBy,
     reviewedAt: row.reviewedAt,
     lockedAmount: row.lockedAmount == null ? null : Number(row.lockedAmount),
+    targetConfigured: Boolean(row.targetConfigured),
+    sourceFinalized: true,
   }));
+  const liveRows = await loadLiveTargetBonusRows(executor, companyId, start, end);
+  return [...finalizedRows, ...liveRows].sort((a,b) =>
+    b.date.localeCompare(a.date) || a.workerName.localeCompare(b.workerName) || a.workerId - b.workerId);
+}
 }
 
 export function targetBonusIsValidDate(date: unknown): date is string {
