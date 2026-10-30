@@ -57,7 +57,8 @@ describe("Wave 2 live-page policy", () => {
 
     expect(dailyScan).toContain("visibleTabInterval(90_000)");
     expect(dailyScan).toContain("refetchIntervalInBackground: false");
-    expect(groundScan).toContain("visibleTabInterval(30_000)");
+    // #2564 refreshes live bale status every 15 seconds while visible.
+    expect(groundScan).toContain("visibleTabInterval(15_000)");
     expect(groundScan).toContain("refetchIntervalInBackground: false");
     expect(dailyScan).not.toMatch(/visibleTabInterval\((?:1_?000|2_?000|3_?000|4_?000|5_?000)\)/);
     expect(groundScan).not.toMatch(/visibleTabInterval\((?:1_?000|2_?000|3_?000|4_?000|5_?000)\)/);
