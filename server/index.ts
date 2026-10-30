@@ -14,6 +14,7 @@ import express from "express";
 import { createHttpApp } from "./httpApp";
 import { registerFactoryEdgeBoundary } from "./edge/edgeBoundary";
 import { ensureEdgeVoucherOutboxSchema } from "./edge/edgeVoucherOutbox";
+import { ensurePhase9PressingOutboxSchema } from "./edge/phase9PressingOutbox";
 import { ensureCloudEdgeStageSchema } from "./edge/edgeCloudStaging";
 import { readCloudSyncStageConfiguration } from "./edge/edgeSyncStageProtocol.mjs";
 import { readFactoryEdgeConfiguration, shouldStartEdgeBackgroundJobs } from "./edge/edgeRuntimePolicy.mjs";
@@ -305,6 +306,9 @@ let migrationsDone = false;
       await ensureCanonicalStockMovementJournal(pool);
       await ensureRuntimeSchema(pool);
       await ensureEdgeVoucherOutboxSchema(pool);
+      // Independent evidence stream. LAN pressing writes remain fenced until
+      // cloud apply and reconciliation have been independently certified.
+      await ensurePhase9PressingOutboxSchema(pool);
       await ensureCloudEdgeStageSchema(pool, readCloudSyncStageConfiguration().enabled);
       // Needs fiscal_period_closures from ensureRuntimeSchema. Fatal on failure:
       // serving writes without the closed-period lock would let closed books change.
