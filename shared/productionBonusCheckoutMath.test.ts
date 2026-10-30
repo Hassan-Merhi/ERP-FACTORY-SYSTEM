@@ -52,7 +52,7 @@ describe("weekly production bonus netting",()=>{
   it("never awards daily surplus when the week's total is below the target",()=>{
     const result=allocateWeeklyExtraBales([
       day("2026-10-19",10,10),day("2026-10-20",9,10),
-      day("2026-10-21",12,10),day("2026-10-22",10,10),day("2026-10-23",6,10),
+      day("2026-10-21",12,10),day("2026-10-22",10,10),day("2026-10-23",11,15),
     ]);
     expect(result.get("2026-10-21:7")).toBe(0);
     expect([...result.values()].reduce((sum,value)=>sum+value,0)).toBe(0);
