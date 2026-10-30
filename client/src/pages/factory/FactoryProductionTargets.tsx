@@ -284,6 +284,12 @@ export default function FactoryProductionTargets() {
   const productionReportGroups = useMemo(() => groupProductionRows(collapsedRows), [collapsedRows]);
 
   const totals = useMemo(() => summarizeProductionRows(rows), [rows]);
+  const missingTargetDays = useMemo(
+    () => periodType === "daily"
+      ? 0
+      : rows.reduce((sum, row) => sum + (row.missingTargetDays ?? 0), 0),
+    [rows, periodType],
+  );
   const workerTotals = useMemo(
     () => ({
       total: rows.length,
@@ -328,7 +334,7 @@ export default function FactoryProductionTargets() {
             </Select>
           </div>
           <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">{tr("referenceDate")}</p>
+            <p className="text-xs text-muted-foreground">{periodType === "daily" ? tr("referenceDate") : "Date range"}</p>
             {periodType === "daily" ? (
               <Input
                 type="date"
@@ -453,6 +459,14 @@ export default function FactoryProductionTargets() {
           : "Targets and attendance are summed from each date in this period; edit individual days in Daily view."}</span>
       </div>
 
+      {periodType !== "daily" && missingTargetDays > 0 && !isLoading && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300" role="status">
+          {missingTargetDays} worker-day targets are not configured in this range.
+          The target and expected totals include only recorded daily targets;
+          differences are withheld until the missing targets are set.
+        </div>
+      )}
+
       {finalized && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
           <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
@@ -489,7 +503,7 @@ export default function FactoryProductionTargets() {
         />
         <SummaryTile
           label={tr("diff")}
-          value={totals.difference > 0 ? `+${totals.difference}` : totals.difference}
+          value={missingTargetDays > 0 ? "—" : totals.difference > 0 ? `+${totals.difference}` : totals.difference}
           icon={<UserX className="h-5 w-5" />}
         />
       </div>
@@ -583,7 +597,9 @@ export default function FactoryProductionTargets() {
                       : members.some((member) => member.status === FACTORY_TRACKING_STATUSES.absent);
                     const comparisonTarget = periodType === "daily"
                       ? row.targetBales
-                      : row.targetBales == null ? null : row.targetBales - (row.absentTargetBales ?? 0);
+                      : (row.missingTargetDays ?? 0) > 0 || row.targetBales == null
+                        ? null
+                        : row.targetBales - (row.absentTargetBales ?? 0);
                     return (
                       <TableRow
                         key={row.linkGroupId != null ? `link-${row.linkGroupId}` : `worker-${row.personId}`}
