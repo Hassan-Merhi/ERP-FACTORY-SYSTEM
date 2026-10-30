@@ -65,13 +65,22 @@ const enabled = Boolean(process.env.DATABASE_URL);
   });
 
   it("rejects diverging replay, missing predecessor and operation-id reuse", async () => {
-    const changed = { ...event, payload: { ...payload, voucher: { id: 88, totalAmount: "99" } } };
+    const changed = { ...event, payload: { ...payload, voucher: { ...payload.voucher, totalAmount: "99" } } };
     changed.payloadSha256 = hashEvidence(changed.payload);
     await expect(stageVoucherEvents(transportPool as never, envelope([changed]), siteId)).rejects.toThrow(
       "EDGE_SYNC_DIVERGENT_REPLAY"
     );
 
-    const third = { ...event, sequence: "3", operationId: randomUUID(), localVoucherId: 90 };
+    // A well-formed later event (its payload matches its own voucher ID).
+    const thirdPayload = { ...payload, voucher: { ...payload.voucher, id: 90 } };
+    const third = {
+      ...event,
+      sequence: "3",
+      operationId: randomUUID(),
+      localVoucherId: 90,
+      payload: thirdPayload,
+      payloadSha256: hashEvidence(thirdPayload),
+    };
     await expect(stageVoucherEvents(transportPool as never, envelope([third]), siteId)).rejects.toThrow(
       "EDGE_SYNC_MISSING_PREDECESSOR"
     );
