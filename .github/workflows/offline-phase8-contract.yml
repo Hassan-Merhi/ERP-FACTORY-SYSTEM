@@ -14,6 +14,7 @@ on:
       - 'server/routes/vouchers/centralGenericVoucherCreateRoute.ts'
       - 'scripts/edge/fetch-applied-receipts.mjs'
       - 'tests/offline-phase8*.mjs'
+      - 'tests/offline-phase8*.ts'
       - '.github/workflows/offline-phase8-contract.yml'
   workflow_dispatch:
 
@@ -46,6 +47,8 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Verify Phase 8 pure rejection and receipt contracts
         run: node --test tests/offline-phase8-contract.test.mjs
+      - name: Refuse unsafe initial voucher source shapes
+        run: node --import tsx --test tests/offline-phase8-posting-shape.test.ts
       - name: Exercise exactly-once posting on disposable PostgreSQL 17
         env:
           PHASE8_TEST_DATABASE_URL: postgresql://postgres:phase8-test-admin-pass@127.0.0.1:55433/postgres
