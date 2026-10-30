@@ -181,6 +181,21 @@ export async function postTargetBonusPayments(
           productionDate: review.date, amount, voucherId: Number(existing.voucherId), replayed: true });
         continue;
       }
+      // A reviewed weekly worker/week must never also receive a new daily payment.
+      const weeklyClaim = first(await tx.execute(sql`
+        SELECT 1 FROM factory_target_bonus_weekly_reviews
+        WHERE company_id = ${companyId} AND worker_id = ${review.workerId}
+          AND ${choice.date}::date BETWEEN week_start AND week_end LIMIT 1
+      `));
+      if (weeklyClaim) conflict("Weekly flat bonus review already covers this worker/day");
+      const weeklyMode = first(await tx.execute(sql`
+        SELECT method FROM factory_production_target_bonus_weekly_methods
+        WHERE company_id = ${companyId}
+          AND effective_week <= (${choice.date}::date - (EXTRACT(ISODOW FROM ${choice.date}::date)::integer - 1))
+        ORDER BY effective_week DESC, id DESC LIMIT 1
+      `));
+      if (weeklyMode?.method === "weekly_flat")
+        conflict("Weekly flat bonus is selected for this production week; daily payouts are disabled");
       if (state !== "POST") conflict("Payment already exists");
       if (command.paymentDate < choice.date) conflict("Payment cannot predate the finalized production day");
       if (expenseId == null) expenseId = await expenseAccountTx(tx, companyId);
