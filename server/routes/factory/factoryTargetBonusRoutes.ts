@@ -154,7 +154,7 @@ export function registerFactoryTargetBonusRoutes(app: Express): void {
             if (weeklyReview.length)
               throw httpError(409, "This worker/week already has a weekly flat bonus review");
             const item = index.get(decisionKey(choice.date, choice.workerId));
-            if (!item) throw httpError(409, "This worker/date is not a finalized production record");
+            if (!item) throw httpError(409, "No production record for this worker/date");
             if (item.status !== "pending") {
               if (item.status === choice.decision) {
                 unchanged++;
@@ -180,6 +180,8 @@ export function registerFactoryTargetBonusRoutes(app: Express): void {
             if (Math.round(item.proposedAmount * 100) !== Math.round(choice.expectedAmount * 100)) {
               throw httpError(409, "Bonus amount changed since review; refresh and review again");
             }
+            if (choice.decision === "approved" && item.targetConfigured === false)
+              throw httpError(409, "Set a valid production target before approving this live bonus");
             if (choice.decision === "approved" && (item.ratePerBale == null || item.ratePerBale <= 0 || item.extraBales <= 0)) {
               throw httpError(409, "Set a positive rate and verify extra bales before approving");
             }
