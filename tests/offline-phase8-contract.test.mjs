@@ -9,7 +9,7 @@ import { verifyAppliedReceiptResponse } from "../scripts/edge/fetch-applied-rece
 const siteId = "027d7472-4a29-4bb3-a4aa-5b30e4ad631f";
 const operationId = "f81d4fae-7dec-11d0-a765-00a0c91e6bf6";
 const journal = {
-  clientRequestId: "phase8-test-1",
+  clientRequestId: "e53cdbd1-7c4b-4b5c-9a60-b4f9de710b8c",
   voucher: { voucherType: "Journal", voucherDate: "2026-10-30", currency: "USD", optional: false },
   entries: [
     { ledgerAccountId: 31, debitAmount: "10.00", creditAmount: "0" },
@@ -28,6 +28,7 @@ test("LAN captures only explicitly supported USD ledger-only journals", () => {
     { entries: [...journal.entries, { employeeId: 4 }] },
     { entries: journal.entries.map((x) => ({ ...x, customerId: 5 })) },
     { clientRequestId: "" },
+    { clientRequestId: "not-a-uuid" },
     { file: { name: "receipt.pdf" } },
     { attachmentId: 23 },
     { upload: "untracked" },
