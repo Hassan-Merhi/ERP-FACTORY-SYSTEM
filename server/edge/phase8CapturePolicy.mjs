@@ -23,8 +23,9 @@ export function supportsPhase8LanVoucherCapture(body) {
   if (!body || typeof body !== "object" || Array.isArray(body) ||
       Object.keys(body).some((key) => !TOP_LEVEL.has(key)) ||
       typeof body.clientRequestId !== "string" ||
-      body.clientRequestId.length < 1 || body.clientRequestId.length > 128 ||
-      !/^[A-Za-z0-9._:-]+$/.test(body.clientRequestId) ||
+      // The immutable outbox uses UUID operation IDs. Non-UUID request
+      // identities must not silently fall back to a different random ID.
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.clientRequestId) ||
       !body.voucher || typeof body.voucher !== "object" ||
       Array.isArray(body.voucher) || !Array.isArray(body.entries) ||
       body.entries.length < 2 || body.entries.length > 100) return false;
