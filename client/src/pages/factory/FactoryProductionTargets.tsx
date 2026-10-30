@@ -49,9 +49,10 @@ import {
 import { ProductionTargetDefaultsDialog } from "./productiontargets/ProductionTargetDefaultsDialog";
 import { ProductionTargetsEditorDialog } from "./productiontargets/ProductionTargetsEditorDialog";
 import { ProductionExcelRangeDialog, type ProductionExportDates } from "./productiontargets/ProductionExcelRangeDialog";
-import { ProductionBonusesPanel } from "./productiontargets/ProductionBonusesPanel";
-import { ProductionTargetBonusPaymentsPanel } from "./productiontargets/ProductionTargetBonusPaymentsPanel";
-import { ProductionBonusHistoryPanel } from "./productiontargets/ProductionBonusHistoryPanel";
+import { Coins } from "lucide-react";
+import { useLocation } from "wouter";
+
+
 import { exportWeeklyProductionExcel, ProductionDateRangeError } from "./productiontargets/productionWeeklyExcel";
 
 function SummaryTile({ label, value, icon }: { label: string; value: string | number; icon: React.ReactNode }) {
@@ -110,6 +111,7 @@ function SummaryGroupTile({
 
 export default function FactoryProductionTargets() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const { language } = useApplicationLanguage();
   const tr = (key: FactoryStaffTrackingTranslationKey) => translateFactoryStaffTrackingText(key, language);
   const [periodType, setPeriodType] = useState<PeriodType>("daily");
@@ -438,9 +440,21 @@ export default function FactoryProductionTargets() {
         />
       </div>
 
-      {periodType === "daily" && <ProductionBonusesPanel initialDate={referenceDate} />}
-      {periodType === "daily" && <ProductionTargetBonusPaymentsPanel initialDate={referenceDate} />}
-      {periodType === "daily" && <ProductionBonusHistoryPanel />}
+      {periodType === "daily" && (
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card p-4" data-testid="production-bonuses-launcher">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg border bg-muted/40 p-2"><Coins className="h-5 w-5 text-primary" /></div>
+            <div>
+              <p className="font-semibold">Production Bonuses</p>
+              <p className="text-xs text-muted-foreground">
+                Set rates, review calculations, approve worker bonuses and pay from Cash / Bank.
+              </p>
+            </div>
+          </div>
+          <Button type="button" onClick={() => navigate("/factory/production-bonuses?date=" + referenceDate)}
+            data-testid="button-open-production-bonuses">Open Production Bonuses</Button>
+        </div>
+      )}
 
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
