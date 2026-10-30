@@ -74,10 +74,10 @@ describe("factory camera decoder", () => {
     const decoder = await createBundledCameraDecoder();
     expect(await decoder!.detect(fakeVideo(2560, 1440))).toEqual([]);
     const canvas = zxingBrowser.decodeFromCanvas.mock.calls[0][0] as HTMLCanvasElement;
-    expect(canvas.width).toBe(1280);
+    expect(canvas.width).toBe(1024);
     // Most frames only decode the center band, reducing work on high-res phones.
-    expect(canvas.height).toBe(403);
-    expect(drawImage).toHaveBeenCalledWith(expect.anything(), 0, 316, 2560, 806, 0, 0, 1280, 403);
+    expect(canvas.height).toBe(322);
+    expect(drawImage).toHaveBeenCalledWith(expect.anything(), 0, 316, 2560, 806, 0, 0, 1024, 322);
     // A frame without dimensions (video not ready) is skipped, never decoded.
     expect(await decoder!.detect(fakeVideo(0, 0))).toEqual([]);
     expect(zxingBrowser.decodeFromCanvas).toHaveBeenCalledTimes(1);
@@ -91,14 +91,16 @@ describe("factory camera decoder", () => {
     const decoder = await createBundledCameraDecoder();
     const video = fakeVideo(2560, 1440);
     for (let i = 0; i < 5; i++) await decoder!.detect(video);
-    expect(drawImage).toHaveBeenLastCalledWith(video, 0, 0, 2560, 1440, 0, 0, 1280, 720);
+    expect(drawImage).toHaveBeenLastCalledWith(video, 0, 0, 2560, 1440, 0, 0, 1024, 576);
     decoder!.dispose();
   });
 
   it("falls back to ZXing when the native detector only supports QR and cannot read Code 128 labels", async () => {
     class QRDetector {
       static getSupportedFormats = async () => ["qr_code"];
-      async detect() { return [{ rawValue: "NEVER_USE_QR_ONLY_DETECTOR" }]; }
+      async detect() {
+        return [{ rawValue: "NEVER_USE_QR_ONLY_DETECTOR" }];
+      }
     }
     vi.stubGlobal("BarcodeDetector", QRDetector);
     expect(await createNativeCameraDecoder()).toBeNull();

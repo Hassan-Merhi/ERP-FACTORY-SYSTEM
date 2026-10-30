@@ -75,14 +75,13 @@ describe("ERP Cost Center server-side feature authorization", () => {
     }
   });
 
-  it("allows ERP View Only accounts to browse cost centers by default but respects explicit page allow-lists", async () => {
-    const allowed = await check("/api/cost-centers/reports/summary", "View Only", []);
-    expect(allowed.next).toHaveBeenCalledOnce();
-    expect(allowed.response.status).not.toHaveBeenCalled();
-
-    const denied = await check("/api/cost-centers/reports/summary", "View Only", ["daybook"]);
-    expect(denied.response.status).toHaveBeenCalledWith(403);
-    expect(denied.next).not.toHaveBeenCalled();
+  it("allows ERP View Only accounts to browse cost centers even with a stale page allow-list", async () => {
+    // #2592: View Only always inherits the ERP Accounts read page.
+    for (const pages of [[], ["daybook"]]) {
+      const allowed = await check("/api/cost-centers/reports/summary", "View Only", pages);
+      expect(allowed.next).toHaveBeenCalledOnce();
+      expect(allowed.response.status).not.toHaveBeenCalled();
+    }
   });
 
   it("preserves Admin and Developer full-access semantics", async () => {

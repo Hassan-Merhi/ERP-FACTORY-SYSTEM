@@ -18,7 +18,7 @@ describe("Production bonus live calculation and manual-only WhatsApp", () => {
     expect(live).toContain("factory_production_target_bonus_rates");
     expect(live).toContain("COALESCE(review.bonus_amount");
     expect(live).toContain("sourceFinalized:false");
-    expect(live).toContain("WHERE NOT EXISTS (");
+    expect(live).toMatch(/NOT EXISTS \(\s*SELECT 1 FROM factory_staff_tracking_period_closures c/);
     expect(live).toContain("factory_staff_tracking_period_closures c");
   });
 

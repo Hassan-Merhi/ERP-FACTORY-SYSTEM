@@ -1,6 +1,5 @@
 import { getErrorMessage, getErrorStack } from "../../lib/httpHandlers";
 import { ZipArchive } from "archiver";
-import { PassThrough } from "stream";
 import { logger } from "../../lib/logger";
 import { fetchAllCompanies } from "../export-data";
 import { sendExportEmail } from "../emailService";
@@ -23,6 +22,7 @@ export function getTodayLabel(): string {
 
 /**
  * Build a ZIP containing per-company net position Excel files.
+ * A company whose workbook fails is logged and left out of the archive.
  */
 export async function buildNetPositionZip(
   companies: Array<{ id: number; name: string }>,
@@ -39,15 +39,14 @@ export async function buildNetPositionZip(
     void (async () => {
       for (const company of companies) {
         const safe = company.name.replace(/[^a-z0-9]/gi, "_");
-        const pass = new PassThrough();
-        arc.append(pass, { name: `NetPosition_${safe}_${endDate}.xlsx` });
         try {
-          await generateNetPositionExcel(company.id, company.name, startDate, endDate, pass);
-          if (!pass.destroyed) pass.end();
+          // Render to a buffer first: appending a stream that later fails would
+          // error the whole archive and leave it unfinalized.
+          const workbook = await generateNetPositionExcel(company.id, company.name, startDate, endDate);
+          arc.append(workbook, { name: `NetPosition_${safe}_${endDate}.xlsx` });
           logger.info(`[NetPositionExport] Added ${company.name}`);
         } catch (e: unknown) {
           logger.error(`[NetPositionExport] Failed for ${company.name}:`, { error: getErrorMessage(e) });
-          if (!pass.destroyed) pass.destroy(e instanceof Error ? e : undefined);
         }
       }
 

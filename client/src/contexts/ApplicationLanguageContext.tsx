@@ -201,6 +201,16 @@ export function useApplicationLanguage() {
   return value;
 }
 
+/**
+ * The active language for shared widgets that may render outside the
+ * provider (embedded scanners, isolated previews); falls back to the stored
+ * browser preference instead of throwing.
+ */
+export function useApplicationLanguageCode(): ApplicationLanguage {
+  const value = useContext(ApplicationLanguageContext);
+  return value ? value.language : readLocalPreference();
+}
+
 export function useApplicationDirection(): ApplicationDirection {
   const value = useContext(ApplicationLanguageContext);
   if (value) return value.direction;

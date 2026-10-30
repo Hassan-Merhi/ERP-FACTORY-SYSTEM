@@ -63,6 +63,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [pressing-machine-tracking-phase5.md](pressing-machine-tracking-phase5.md) | Pressing Machines Phase 5: IndexedDB offline queue, ordered retry with immutable request IDs, Pending/Sending/Confirmed/Rejected states |
 | [pressing-machine-tracking-phase6.md](pressing-machine-tracking-phase6.md) | Pressing Machines Phase 6: permanent history, filters, saved views, Excel export limits |
 | [pressing-machine-tracking-phase7.md](pressing-machine-tracking-phase7.md) | Pressing Machines Phase 7: configured shifts, overnight rollover, recorded downtime, observed analytics |
+| [pressing-scan-simple-mode.md](pressing-scan-simple-mode.md) | Simplified Pressing Scan mode: worker camera view, P1–P3 daily totals, hourly KG targets |
 | [pressing-machine-tracking-phase8.md](pressing-machine-tracking-phase8.md) | Pressing Machines Phase 8: supervisor voids, append-only corrections, audited rescans and the executed verification record |
 | [erp-test-company.md](erp-test-company.md) | Provisioning an isolated ERP test company and its limited tester account |
 | [automatic-priority-print-loading.md](automatic-priority-print-loading.md) | Automatic Priority Printing & Loading: company switch, automatic loading allocation, priority-colored labels, physical bale deletion and Priority #1 recovery |
@@ -91,6 +92,8 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [render-production-logging.md](render-production-logging.md) | Logging configuration on Render |
 | [program-1-incident-response-runbook.md](program-1-incident-response-runbook.md) | Incident response |
 | [troubleshooting.md](troubleshooting.md) | Common failures and fixes |
+| [global-force-refresh-all-users-2026-10-28.md](global-force-refresh-all-users-2026-10-28.md) | Role-scoped force refresh of regular and Admin/Owner/Developer devices |
+| [one-time-pwa-force-refresh-2026-10-28.md](one-time-pwa-force-refresh-2026-10-28.md) | The one-time web/PWA refresh campaign (`erp-v13` service worker, iOS marker) |
 | [fresh-db-bootstrap.md](fresh-db-bootstrap.md) | Known gap bootstrapping an empty database |
 
 ## Building and testing
@@ -140,6 +143,7 @@ These describe work in progress and carry live figures bound to their sources.
 | [erp-90-phases-3-6.md](erp-90-phases-3-6.md) | ERP 90/100 Phases 3–6: tenant isolation, accounting and inventory convergence |
 | [god-file-split-program.md](god-file-split-program.md) | Splitting oversized files, and the harness that makes a split provable |
 | [system-quality-program.md](system-quality-program.md) | Type safety, test breadth, documentation state, configuration coherence |
+| [coverage-program.md](coverage-program.md) | Coverage targets and phases, the UI test harness, measured coverage and removal candidates |
 | [Retail fashion variants Wave 1 spec](superpowers/specs/2026-10-03-retail-fashion-variants-wave1-design.md) | Current Retail color + size variant and variant-image contract |
 | [Retail fashion variants Wave 1 plan](superpowers/plans/2026-10-03-retail-fashion-variants-wave1.md) | Implementation and verification plan for the current Retail fashion-variant rollout |
 | [Retail Wave 2 spec](superpowers/specs/2026-10-05-retail-wave2-customers-pricing-tax-stock-count-design.md) | Current Retail customers, discounts, tax foundation and physical stock-count contract |

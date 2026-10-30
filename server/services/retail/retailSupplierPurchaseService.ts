@@ -301,8 +301,7 @@ export async function postRetailSupplierPurchase(
       }))
     );
     const items: RetailSupplierPurchaseItem[] = [];
-    let stockValueBefore = new Decimal(0),
-      stockValueAfter = new Decimal(0);
+    let receivedValue = new Decimal(0);
     for (const [index, line] of input.lines.entries()) {
       const assigned = catalog.rows[index];
       const stock = await lockInventoryRow(tx, companyId, assigned.variantId, input.locationId);
@@ -317,8 +316,7 @@ export async function postRetailSupplierPurchase(
           ? unitCost
           : basis.times(beforeAvg).plus(addedQty.times(unitCost)).div(basis.plus(addedQty));
       const avgStored = nextAverage.toDecimalPlaces(6, Decimal.ROUND_HALF_UP);
-      stockValueBefore = stockValueBefore.plus(beforeQty.times(beforeAvg));
-      stockValueAfter = stockValueAfter.plus(totalQty.times(avgStored));
+      receivedValue = receivedValue.plus(addedQty.times(unitCost));
       await setInventoryQuantity(
         tx,
         companyId,
@@ -361,8 +359,11 @@ export async function postRetailSupplierPurchase(
         sellingPrice: new Decimal(line.sellingPrice).toFixed(4),
       });
     }
+    // Reconcile what this receipt adds, not the whole stock value change: a
+    // receipt into oversold (negative) stock resets the average to the receipt
+    // cost, which also revalues the oversold units and could never match.
     const bookedCost = new Decimal(debit.baseDebitAmount);
-    if (!stockValueAfter.minus(stockValueBefore).toDecimalPlaces(2).eq(bookedCost.toDecimalPlaces(2))) {
+    if (!receivedValue.toDecimalPlaces(2).eq(bookedCost.toDecimalPlaces(2))) {
       throw new Error("Inventory valuation does not reconcile to supplier invoice; check stock cost/FX rate");
     }
 

@@ -57,11 +57,13 @@ export default function FactoryPriceList() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Focus only when changing cells, not on every digit typed.
+  // Refocus only when a different cell starts editing, not on every draft keystroke.
+  const editingCellKey = editingCell ? `${editingCell.productId}:${editingCell.field}` : null;
   useEffect(() => {
-    if (!editingCell) return;
+    if (!editingCellKey) return;
     inputRef.current?.focus();
     inputRef.current?.select();
-  }, [editingCell?.productId, editingCell?.field]);
+  }, [editingCellKey]);
 
   const { data: products = [], isLoading } = useQuery<FactoryBaleProduct[]>({
     queryKey: ["/api/factory/bale-products"],
@@ -73,7 +75,9 @@ export default function FactoryPriceList() {
 
   const updatePriceMutation = useMutation({
     mutationFn: async ({
-      id, field, value,
+      id,
+      field,
+      value,
     }: {
       id: number;
       field: "sellingPrice" | "productionPrice";
@@ -263,8 +267,7 @@ export default function FactoryPriceList() {
     const matchCategory = categoryFilter === "all" || String(p.categoryId) === categoryFilter;
     // Keep a row visible while Enter moves from its selling price to production cost.
     // Otherwise a "Show unpriced" refresh would unmount the second editable cell.
-    const matchZeroOnly =
-      !showZeroOnly || parseFloat(p.sellingPrice || "0") === 0 || editingCell?.productId === p.id;
+    const matchZeroOnly = !showZeroOnly || parseFloat(p.sellingPrice || "0") === 0 || editingCell?.productId === p.id;
     return matchSearch && matchCategory && matchZeroOnly;
   });
 

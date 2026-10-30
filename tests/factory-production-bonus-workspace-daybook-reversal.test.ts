@@ -22,10 +22,9 @@ describe("Production Bonuses dedicated page and audited Daybook deletion", () =>
     expect(checkout).toContain("<ProductionBonusCategoryRatesPanel");
     expect(checkout).toContain('t("reviewPay")');
     expect(checkout).toContain("/checkout");
-    expect(checkout).toContain('method==="category"');
-    expect(workspace).toContain('/factory/stock-entry?tab=production-targets');
-    expect(source("client/src/pages/factory/BaleStockEntry.tsx"))
-      .toContain('get("tab") === "production-targets"');
+    expect(checkout).toContain('<SelectItem value="category">');
+    expect(workspace).toContain("/factory/stock-entry?tab=production-targets");
+    expect(source("client/src/pages/factory/BaleStockEntry.tsx")).toContain('get("tab") === "production-targets"');
   });
 
   it("only offers categories defined in Production Targets and omits unnecessary evidence panels", () => {
@@ -33,12 +32,12 @@ describe("Production Bonuses dedicated page and audited Daybook deletion", () =>
     const editor = source("client/src/pages/factory/productiontargets/ProductionBonusCategoryRatesPanel.tsx");
     const page = source("client/src/pages/factory/FactoryProductionBonuses.tsx");
     expect(rates).toContain("FROM factory_worker_production_target_defaults");
-    expect(rates).toContain("FROM factory_staff_tracking_entries e");
+    expect(rates).toContain("LEFT JOIN factory_staff_tracking_entries e");
     expect(rates).toContain("latest_defaults");
     expect(rates).not.toContain("SELECT name AS category FROM factory_worker_categories");
     expect(rates).toContain("Select an existing category from Production Targets");
     expect(editor).toContain('aria-label="Production Targets category"');
-    expect(editor).toContain('data?.categories.some');
+    expect(editor).toContain("data?.categories.some");
     expect(page).not.toContain("<ProductionBonusCategoryEvidencePanel");
     expect(page).not.toContain("<ProductionBonusCategoryPreviewPanel");
   });
@@ -50,7 +49,7 @@ describe("Production Bonuses dedicated page and audited Daybook deletion", () =>
     expect(server).toContain('rv.target_bales::text AS "targetBales"');
     expect(server).toContain('rv.extra_bales::text AS "extraBales"');
     expect(server).toContain('rv.rate_per_bale::text AS "ratePerBale"');
-    expect(daily).toContain('data-testid={`pay-daily-production-bonus-${row.reviewId}`}');
+    expect(daily).toContain("data-testid={`pay-daily-production-bonus-${row.reviewId}`}");
     expect(daily).toContain("Verified calculation · approved daily review");
     expect(daily).toContain("Confirm daily bonus paying account");
     expect(daily).toContain("Approved to pay:");
@@ -68,15 +67,15 @@ describe("Production Bonuses dedicated page and audited Daybook deletion", () =>
     expect(edit).toContain("reverseWeeklyBonusPayment(companyId");
     expect(edit).toContain("const bonus = bonusSource(entry.referenceTable, entry.referenceId)");
     expect(edit).toContain("if (bonusVoucher.length)");
-    expect(edit).toContain("if (entry.txType === \"PRODUCTION_TARGET_BONUS_REVERSAL\"");
-    expect(edit).toContain("retainedAudit:true");
+    expect(edit).toMatch(/if \(\s*entry\.txType === "PRODUCTION_TARGET_BONUS_REVERSAL"/);
+    expect(edit).toMatch(/retainedAudit:\s*true/);
     expect(edit).toContain("Posted bonus Daybook entries cannot be edited");
     expect(edit).toContain("res.status(errorStatus(error))");
     const daily = source("server/services/factory/targetBonusPaymentService.ts");
     const weekly = source("server/services/factory/weeklyBonusPaymentService.ts");
-    for (const service of [daily,weekly]) {
+    for (const service of [daily, weekly]) {
       expect(service).toContain("pg_advisory_xact_lock(84023");
-      expect(service).toContain('status=\'REVERSED\'');
+      expect(service).toContain("status='REVERSED'");
       expect(service).toContain('voucherType: "Receipt"');
     }
   });
