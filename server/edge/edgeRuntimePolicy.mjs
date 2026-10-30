@@ -77,6 +77,21 @@ export function readFactoryEdgeConfiguration(env = process.env) {
   if (writeMode !== "lan-primary" && env.FACTORY_EDGE_PRIMARY_ACK) {
     throw new Error("EDGE_UNEXPECTED_PRIMARY_ACK");
   }
+  // Phase 7: the operator ACK alone is not sufficient for authority.
+  // The DB-installed fence must match an exact positive epoch and a verified
+  // encrypted source baseline. An unconfigured/privileged DB role still blocks.
+  const writerEpoch = env.FACTORY_EDGE_WRITER_EPOCH || "";
+  const baselineSha256 = env.FACTORY_EDGE_BASELINE_SHA256 || "";
+  if (writeMode === "lan-primary") {
+    if (!/^[1-9][0-9]{0,14}$/.test(writerEpoch) || !Number.isSafeInteger(Number(writerEpoch))) {
+      throw new Error("EDGE_PHASE7_WRITER_EPOCH_REQUIRED");
+    }
+    if (!/^[0-9a-f]{64}$/.test(baselineSha256)) {
+      throw new Error("EDGE_PHASE7_BASELINE_DIGEST_REQUIRED");
+    }
+  } else if (writerEpoch || baselineSha256) {
+    throw new Error("EDGE_PHASE7_EPOCH_WITHOUT_PRIMARY");
+  }
 
   return Object.freeze({
     mode: "lan",
@@ -84,6 +99,8 @@ export function readFactoryEdgeConfiguration(env = process.env) {
     hostname: env.FACTORY_EDGE_HOSTNAME,
     writeMode,
     primary: writeMode === "lan-primary",
+    writerEpoch: writeMode === "lan-primary" ? writerEpoch : null,
+    baselineSha256: writeMode === "lan-primary" ? baselineSha256 : null,
   });
 }
 
