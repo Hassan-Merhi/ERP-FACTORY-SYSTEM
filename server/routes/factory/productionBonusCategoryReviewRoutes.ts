@@ -6,6 +6,7 @@ import { requireFactoryTabAccess } from "../../lib/factoryAccessControl";
 import { logger } from "../../lib/logger";
 import { resultRows } from "../../lib/queryResult";
 import { isBonusCategoryDate } from "@shared/productionTargetBonusCategoryRates";
+import { mondayOfProductionBonusWeek } from "@shared/productionTargetBonusWeeklyMethod";
 import { previewProductionBonusCategories } from "../../services/factory/productionBonusCategoryCalculator";
 import { categoryReviewSnapshotPayload, categoryReviewSnapshotToken }
   from "../../services/factory/categoryBonusReviewSnapshot";
@@ -135,6 +136,15 @@ export function registerProductionBonusCategoryReviewRoutes(app: Express): void 
           `));
           if (weekly.length) fail(409, "This worker/week already has a weekly flat bonus review");
 
+          // Respect the selected weekly mode before creating a new category decision.
+          const weekStart = mondayOfProductionBonusWeek(command.date)!;
+          const weeklyMode = resultRows(await tx.execute(sql`
+            SELECT method FROM factory_production_target_bonus_weekly_methods
+            WHERE company_id = ${companyId} AND effective_week <= ${weekStart}::date
+            ORDER BY effective_week DESC, id DESC LIMIT 1
+          `)) as Array<{ method: string }>;
+          if (weeklyMode[0]?.method === 'weekly_flat')
+            fail(409, 'Weekly flat bonus is selected for this week; daily category reviews are disabled');
           const proposal = await previewProductionBonusCategories(companyId, command.date, tx);
           const worker = proposal.workers.find(item => item.workerId === command.workerId);
           if (!worker || worker.blocked || !proposal.finalized || !proposal.evidenceVerified ||
