@@ -71,6 +71,7 @@ export function ProductionBonusWeeklyMethodPanel({ initialDate }: { initialDate:
       setEditing(false);
       toast({ title: "Weekly bonus method saved", description: "New effective-week version saved. Existing bonus approvals and payments are unchanged." });
       void queryClient.invalidateQueries({ queryKey: [endpoint] });
+      void queryClient.invalidateQueries({ queryKey: ["/api/factory/production-target-bonuses/weekly-preview"] });
     },
     onError: (cause: Error) =>
       toast({ title: "Weekly method not saved", description: cause.message, variant: "destructive" }),
