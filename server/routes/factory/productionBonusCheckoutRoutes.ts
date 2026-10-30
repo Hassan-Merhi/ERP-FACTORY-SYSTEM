@@ -695,17 +695,15 @@ export function registerProductionBonusCheckoutRoutes(app: Express): void {
               typeof (error as { status?: unknown })?.status === "number" ? (error as { status: number }).status : 500
             );
         if (status === 500) logger.error("Production bonus checkout payment failed", { error });
-        return res
-          .status(status)
-          .json({
-            message:
-              status === 500
-                ? bonusServerText(req.headers["accept-language"], "paymentFailed")
-                : (translated?.message ??
-                  (error instanceof Error
-                    ? error.message
-                    : bonusServerText(req.headers["accept-language"], "invalidBonusPayment"))),
-          });
+        return res.status(status).json({
+          message:
+            status === 500
+              ? bonusServerText(req.headers["accept-language"], "paymentFailed")
+              : (translated?.message ??
+                (error instanceof Error
+                  ? error.message
+                  : bonusServerText(req.headers["accept-language"], "invalidBonusPayment"))),
+        });
       }
     }
   );
