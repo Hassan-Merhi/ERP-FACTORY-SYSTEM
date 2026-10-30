@@ -28,7 +28,6 @@ type Phase8VoucherEvent = {
   payload: { voucher: Record<string, unknown>; entries: Array<Record<string, unknown>> };
 };
 
-
 const postingDeps = createDatabasePostingDependencies();
 
 export async function postApprovedPhase8Journal(
@@ -45,9 +44,10 @@ export async function postApprovedPhase8Journal(
     .select({ id: ledgerAccounts.id, code: ledgerAccounts.code, accountType: ledgerAccounts.accountType })
     .from(ledgerAccounts)
     .where(and(eq(ledgerAccounts.companyId, event.companyId), inArray(ledgerAccounts.id, shape.ledgerAccountIds)));
-  if (accounts.length !== shape.ledgerAccountIds.length || accounts.some((a) =>
-    /^(EMP-|INV-|STOCK-)/i.test(a.code ?? "") || /inventory|stock/i.test(a.accountType ?? "")
-  )) {
+  if (
+    accounts.length !== shape.ledgerAccountIds.length ||
+    accounts.some((a) => /^(EMP-|INV-|STOCK-)/i.test(a.code ?? "") || /inventory|stock/i.test(a.accountType ?? ""))
+  ) {
     throw new Phase8ApplyRefusal("PHASE8_LEDGER_TARGET_NOT_APPROVED");
   }
   // NEVER apply the LAN voucher's original primary key or display number.
@@ -80,11 +80,13 @@ export async function postApprovedPhase8Journal(
     throw new Phase8ApplyRefusal("PHASE8_ORPHANED_POSTING_IDENTITY");
   }
   const postedDate: unknown = posted.voucher.voucherDate;
-  const cloudDate = postedDate instanceof Date
-    ? postedDate.toISOString().slice(0, 10)
-    : String(postedDate).slice(0, 10);
-  if (cloudDate !== shape.date || posted.voucher.companyId !== event.companyId ||
-      posted.entries.length !== shape.entries.length) {
+  const cloudDate =
+    postedDate instanceof Date ? postedDate.toISOString().slice(0, 10) : String(postedDate).slice(0, 10);
+  if (
+    cloudDate !== shape.date ||
+    posted.voucher.companyId !== event.companyId ||
+    posted.entries.length !== shape.entries.length
+  ) {
     throw new Phase8ApplyRefusal("PHASE8_POSTING_RECONCILIATION_FAILED");
   }
   return { cloudVoucherId: posted.voucher.id, businessDate: shape.date };

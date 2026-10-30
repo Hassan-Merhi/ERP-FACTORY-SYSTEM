@@ -8,11 +8,7 @@ import {
   validateStageEnvelope,
   verifyStageSignature,
 } from "../server/edge/edgeSyncStageProtocol.mjs";
-import {
-  readSenderConfiguration,
-  stagedEnvelope,
-  verifyStageReceipt,
-} from "../scripts/edge/send-voucher-outbox.mjs";
+import { readSenderConfiguration, stagedEnvelope, verifyStageReceipt } from "../scripts/edge/send-voucher-outbox.mjs";
 
 const siteId = "027d7472-4a29-4bb3-a4aa-5b30e4ad631f";
 const key = "phase4-test-only-shared-voucher-stage-key-".repeat(2);
@@ -35,40 +31,50 @@ describe("Phase 4 signed transport", () => {
     const timestamp = "1793364000";
     const signature = makeStageSignature(bytes, timestamp, key);
     expect(() => verifyStageSignature(bytes, timestamp, signature, key, Number(timestamp))).not.toThrow();
-    expect(() => verifyStageSignature(Buffer.concat([bytes, Buffer.from(" ")]), timestamp, signature, key, Number(timestamp)))
-      .toThrow("EDGE_SYNC_SIGNATURE_INVALID");
-    expect(() => verifyStageSignature(bytes, timestamp, signature, key, Number(timestamp) + 301))
-      .toThrow("EDGE_SYNC_SIGNATURE_INVALID");
-    expect(() => verifyStageSignature(bytes, timestamp, signature, "other-dedicated-key".repeat(5), Number(timestamp)))
-      .toThrow("EDGE_SYNC_SIGNATURE_INVALID");
+    expect(() =>
+      verifyStageSignature(Buffer.concat([bytes, Buffer.from(" ")]), timestamp, signature, key, Number(timestamp))
+    ).toThrow("EDGE_SYNC_SIGNATURE_INVALID");
+    expect(() => verifyStageSignature(bytes, timestamp, signature, key, Number(timestamp) + 301)).toThrow(
+      "EDGE_SYNC_SIGNATURE_INVALID"
+    );
+    expect(() =>
+      verifyStageSignature(bytes, timestamp, signature, "other-dedicated-key".repeat(5), Number(timestamp))
+    ).toThrow("EDGE_SYNC_SIGNATURE_INVALID");
   });
 
   it("refuses invalid or divergent evidence and reordered sequence IDs", () => {
     expect(validateStageEnvelope(envelope, siteId)).toHaveLength(1);
     expect(() => validateStageEnvelope({ ...envelope, siteId: "wrong" }, siteId)).toThrow("EDGE_SYNC_ENVELOPE_INVALID");
-    expect(() => validateStageEnvelope({ ...envelope, events: [{ ...event, payload: {} }] }, siteId))
-      .toThrow("EDGE_SYNC_EVENT_INVALID");
-    expect(() => validateStageEnvelope({ ...envelope, events: [event, event] }, siteId))
-      .toThrow("EDGE_SYNC_ORDER_INVALID");
-    expect(() => validateStageEnvelope({ ...envelope, events: [{ ...event, sequence: "1;DROP" }] }, siteId))
-      .toThrow("EDGE_SYNC_EVENT_INVALID");
+    expect(() => validateStageEnvelope({ ...envelope, events: [{ ...event, payload: {} }] }, siteId)).toThrow(
+      "EDGE_SYNC_EVENT_INVALID"
+    );
+    expect(() => validateStageEnvelope({ ...envelope, events: [event, event] }, siteId)).toThrow(
+      "EDGE_SYNC_ORDER_INVALID"
+    );
+    expect(() => validateStageEnvelope({ ...envelope, events: [{ ...event, sequence: "1;DROP" }] }, siteId)).toThrow(
+      "EDGE_SYNC_EVENT_INVALID"
+    );
     const reordered = { entries: [{ debit: "5.00" }], voucher: { amount: "5.00", companyId: 5, id: 30 } };
     expect(hashEvidence(reordered)).toBe(event.payloadSha256);
   });
 
   it("only enables a receiver on a deliberately fenced cloud", () => {
     expect(readCloudSyncStageConfiguration({}).enabled).toBe(false);
-    expect(() => readCloudSyncStageConfiguration({
-      FACTORY_SYNC_RECEIVE_ENABLED: "1",
-      FACTORY_SYNC_SITE_ID: siteId,
-      FACTORY_SYNC_HMAC_KEY: key,
-    })).toThrow("EDGE_SYNC_REQUIRES_FENCED_CLOUD");
-    expect(readCloudSyncStageConfiguration({
-      FACTORY_SYNC_RECEIVE_ENABLED: "1",
-      FACTORY_SYNC_SITE_ID: siteId,
-      FACTORY_SYNC_HMAC_KEY: key,
-      FACTORY_CLOUD_WRITE_MODE: "fenced",
-    }).enabled).toBe(true);
+    expect(() =>
+      readCloudSyncStageConfiguration({
+        FACTORY_SYNC_RECEIVE_ENABLED: "1",
+        FACTORY_SYNC_SITE_ID: siteId,
+        FACTORY_SYNC_HMAC_KEY: key,
+      })
+    ).toThrow("EDGE_SYNC_REQUIRES_FENCED_CLOUD");
+    expect(
+      readCloudSyncStageConfiguration({
+        FACTORY_SYNC_RECEIVE_ENABLED: "1",
+        FACTORY_SYNC_SITE_ID: siteId,
+        FACTORY_SYNC_HMAC_KEY: key,
+        FACTORY_CLOUD_WRITE_MODE: "fenced",
+      }).enabled
+    ).toBe(true);
   });
 
   it("rejects non-HTTPS relay origins and forged applied receipts", () => {
@@ -85,26 +91,36 @@ describe("Phase 4 signed transport", () => {
       PGSSLMODE: "disable",
     };
     expect(readSenderConfiguration(env).endpoint).toBe("https://cloud.example.com/api/edge/sync/stage");
-    expect(() => readSenderConfiguration({ ...env, FACTORY_SYNC_CLOUD_URL: "http://cloud.example.com" }))
-      .toThrow("EDGE_SYNC_CLOUD_URL_INVALID");
-    expect(() => readSenderConfiguration({ ...env, FACTORY_SYNC_CLOUD_URL: "https://127.0.0.1" }))
-      .toThrow("EDGE_SYNC_CLOUD_URL_INVALID");
+    expect(() => readSenderConfiguration({ ...env, FACTORY_SYNC_CLOUD_URL: "http://cloud.example.com" })).toThrow(
+      "EDGE_SYNC_CLOUD_URL_INVALID"
+    );
+    expect(() => readSenderConfiguration({ ...env, FACTORY_SYNC_CLOUD_URL: "https://127.0.0.1" })).toThrow(
+      "EDGE_SYNC_CLOUD_URL_INVALID"
+    );
     const received = {
       protocol: "factory-lan-voucher-stage-receipt/v1",
       siteId,
       state: "staged-not-applied",
-      events: [{
-        sequence: event.sequence,
-        operationId: event.operationId,
-        payloadSha256: event.payloadSha256,
-        state: "staged-not-applied",
-      }],
+      events: [
+        {
+          sequence: event.sequence,
+          operationId: event.operationId,
+          payloadSha256: event.payloadSha256,
+          state: "staged-not-applied",
+        },
+      ],
     };
     expect(verifyStageReceipt(received, envelope)).toHaveLength(1);
     expect(() => verifyStageReceipt({ ...received, state: "applied" }, envelope)).toThrow("EDGE_SYNC_RECEIPT_INVALID");
-    expect(() => verifyStageReceipt({
-      ...received, events: [{ ...received.events[0], payloadSha256: "0".repeat(64) }],
-    }, envelope)).toThrow("EDGE_SYNC_RECEIPT_MISMATCH");
+    expect(() =>
+      verifyStageReceipt(
+        {
+          ...received,
+          events: [{ ...received.events[0], payloadSha256: "0".repeat(64) }],
+        },
+        envelope
+      )
+    ).toThrow("EDGE_SYNC_RECEIPT_MISMATCH");
   });
 
   it("translates local DB rows to exact validated staging events", () => {
@@ -119,7 +135,8 @@ describe("Phase 4 signed transport", () => {
       payload_sha256: event.payloadSha256,
     };
     expect(stagedEnvelope([row], siteId)).toEqual(envelope);
-    expect(() => stagedEnvelope([{ ...row, payload_sha256: createHash("sha256").update("wrong").digest("hex") }], siteId))
-      .toThrow("EDGE_SYNC_LOCAL_EVIDENCE_CHANGED");
+    expect(() =>
+      stagedEnvelope([{ ...row, payload_sha256: createHash("sha256").update("wrong").digest("hex") }], siteId)
+    ).toThrow("EDGE_SYNC_LOCAL_EVIDENCE_CHANGED");
   });
 });

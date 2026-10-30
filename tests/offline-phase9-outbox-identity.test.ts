@@ -3,7 +3,8 @@ import type { DbTransaction } from "../server/db";
 
 vi.mock("../server/edge/edgeRuntimePolicy.mjs", () => ({
   readFactoryEdgeConfiguration: () => ({
-    mode: "lan", primary: true,
+    mode: "lan",
+    primary: true,
     siteId: "027d7472-4a29-4bb3-a4aa-5b30e4ad631f",
   }),
 }));
@@ -15,7 +16,10 @@ const base = {
   localVoucherId: 17,
   actorUserId: "operator-1",
   voucher: { voucherType: "Journal", voucherDate: "2026-10-30" },
-  entries: [{ ledgerAccountId: 11, debitAmount: "10.00" }, { ledgerAccountId: 12, creditAmount: "10.00" }],
+  entries: [
+    { ledgerAccountId: 11, debitAmount: "10.00" },
+    { ledgerAccountId: 12, creditAmount: "10.00" },
+  ],
 };
 
 function transaction() {

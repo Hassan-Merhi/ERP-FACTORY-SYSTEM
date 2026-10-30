@@ -167,8 +167,15 @@ async function ensureDatabaseClientScope(client: PoolClient): Promise<void> {
        set_config('phase7_writer.mode', $10, false),
        set_config('phase7_writer.site_id', $11, false),
        set_config('phase7_writer.epoch', $12, false)`,
-    [desired.maintenance, desired.companyId, desired.authorizedCompanyIds, ...actor.values,
-     writerMode, writerSite, writerEpoch]
+    [
+      desired.maintenance,
+      desired.companyId,
+      desired.authorizedCompanyIds,
+      ...actor.values,
+      writerMode,
+      writerSite,
+      writerEpoch,
+    ]
   );
   clientScopeSignatures.set(client, signature);
 }

@@ -65,12 +65,20 @@ function transportFor(
     }
     if (status === "network") throw new TypeError("Connection lost after sending");
     const original = JSON.parse(String(init?.body ?? "{}")) as { clientRequestId?: string };
-    return new Response(JSON.stringify({
-      clientRequestId: original.clientRequestId,
-      voucher: { id: 71, companyId: sessionActor.companyId, voucherType: "Journal",
-        voucherDate: payload.voucher.voucherDate, currency: "USD" },
-      entries: payload.entries,
-    }), { status });
+    return new Response(
+      JSON.stringify({
+        clientRequestId: original.clientRequestId,
+        voucher: {
+          id: 71,
+          companyId: sessionActor.companyId,
+          voucherType: "Journal",
+          voucherDate: payload.voucher.voucherDate,
+          currency: "USD",
+        },
+        entries: payload.entries,
+      }),
+      { status }
+    );
   }) as typeof fetch;
   return { transport, calls };
 }
@@ -172,13 +180,21 @@ describe("durable outbox — capture before delivery", () => {
     const { deliverOfflineOperations } = await import("@/lib/offline/durableOutbox");
     for (const response of [
       { voucherId: 71 },
-      { clientRequestId: "another-operation", voucher: { id: 71, companyId: 6,
-        voucherType: "Journal", voucherDate: "2026-10-29" }, entries: payload.entries },
-      { clientRequestId: "original", voucher: { id: 71, companyId: 999,
-        voucherType: "Journal", voucherDate: "2026-10-29" }, entries: payload.entries },
-      { clientRequestId: "original", voucher: { id: 71, companyId: 6,
-        voucherType: "Journal", voucherDate: "2026-10-29" },
-        entries: [{ ...payload.entries[0], debitAmount: "100" }, payload.entries[1]] },
+      {
+        clientRequestId: "another-operation",
+        voucher: { id: 71, companyId: 6, voucherType: "Journal", voucherDate: "2026-10-29" },
+        entries: payload.entries,
+      },
+      {
+        clientRequestId: "original",
+        voucher: { id: 71, companyId: 999, voucherType: "Journal", voucherDate: "2026-10-29" },
+        entries: payload.entries,
+      },
+      {
+        clientRequestId: "original",
+        voucher: { id: 71, companyId: 6, voucherType: "Journal", voucherDate: "2026-10-29" },
+        entries: [{ ...payload.entries[0], debitAmount: "100" }, payload.entries[1]],
+      },
     ]) {
       state.records.clear();
       const row = await queue();
@@ -196,7 +212,8 @@ describe("durable outbox — capture before delivery", () => {
       const result = await deliverOfflineOperations(mismatch);
       expect(result).toMatchObject({ acknowledged: 0, rejected: 1 });
       expect(state.records.get(row.id)).toMatchObject({
-        state: "needs_review", lastError: "OFFLINE_RECEIPT_UNVERIFIED",
+        state: "needs_review",
+        lastError: "OFFLINE_RECEIPT_UNVERIFIED",
       });
       expect(state.records.size).toBe(1);
       expect(mismatch).toHaveBeenCalledTimes(3);

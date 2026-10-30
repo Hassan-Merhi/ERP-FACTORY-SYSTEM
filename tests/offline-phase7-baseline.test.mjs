@@ -18,7 +18,9 @@ const input = {
 
 test("separately scoped matching clone fingerprints compare", () => {
   assert.deepEqual(comparePhase7Baselines({ ...input, scope: "source" }, { ...input, scope: "restore" }), {
-    tables: 1, sequences: 1, uploads: 2,
+    tables: 1,
+    sequences: 1,
+    uploads: 2,
   });
 });
 
@@ -47,9 +49,15 @@ test("bad evidence, duplication and swapped trust roles are rejected", () => {
     { scope: "restore" },
   ]) {
     assert.throws(
-      () => comparePhase7Baselines({ ...input, ...patch, scope: patch.scope ?? "source" }, {
-        ...input, scope: "restore",
-      }), /PHASE7_BASELINE_/
+      () =>
+        comparePhase7Baselines(
+          { ...input, ...patch, scope: patch.scope ?? "source" },
+          {
+            ...input,
+            scope: "restore",
+          }
+        ),
+      /PHASE7_BASELINE_/
     );
   }
 });

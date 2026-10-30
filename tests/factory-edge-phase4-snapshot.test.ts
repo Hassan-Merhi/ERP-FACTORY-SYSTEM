@@ -23,12 +23,12 @@ describe("Phase 4 authenticated encrypted checkpoint", () => {
   it("verifies original data but rejects changes or wrong site", () => {
     const m = createEncryptedSnapshotManifest({ siteId, backupId, files, signingKey });
     expect(verifyEncryptedSnapshotManifest(m, { siteId, files, signingKey }).backupId).toBe(backupId);
-    expect(() => verifyEncryptedSnapshotManifest({ ...m, backupId: "20261030T223001Z" }, { siteId, signingKey }))
-      .toThrow();
+    expect(() =>
+      verifyEncryptedSnapshotManifest({ ...m, backupId: "20261030T223001Z" }, { siteId, signingKey })
+    ).toThrow();
     expect(() =>
       verifyEncryptedSnapshotManifest(m, { siteId, files: [{ ...files[0], bytes: 50 }, files[1]], signingKey })
-    )
-      .toThrow("EDGE_SYNC_MANIFEST_ARCHIVE_MISMATCH");
+    ).toThrow("EDGE_SYNC_MANIFEST_ARCHIVE_MISMATCH");
   });
   it("requires complete ciphertext pairs and safe rclone destinations", () => {
     expect(identifyBackupPairs(names)).toHaveLength(1);

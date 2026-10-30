@@ -73,12 +73,15 @@ describe("edge runtime write safety", () => {
   });
 
   it("rejects even a populated database when its Phase 7 PostgreSQL fence is missing", async () => {
-    const app = fixture({
-      FACTORY_EDGE_WRITE_MODE: "lan-primary",
-      FACTORY_EDGE_PRIMARY_ACK: "CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED",
-      FACTORY_EDGE_WRITER_EPOCH: "2",
-      FACTORY_EDGE_BASELINE_SHA256: "a".repeat(64),
-    }, async () => true);
+    const app = fixture(
+      {
+        FACTORY_EDGE_WRITE_MODE: "lan-primary",
+        FACTORY_EDGE_PRIMARY_ACK: "CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED",
+        FACTORY_EDGE_WRITER_EPOCH: "2",
+        FACTORY_EDGE_BASELINE_SHA256: "a".repeat(64),
+      },
+      async () => true
+    );
     const res = await request(app).post("/api/vouchers/with-entries").send(approvedJournal);
     expect(res.status).toBe(503);
     expect(res.body.code).toBe("EDGE_PHASE7_WRITER_AUTHORITY_UNVERIFIED");
@@ -96,8 +99,9 @@ describe("edge runtime write safety", () => {
       async () => true
     );
     expect((await request(app).post("/api/vouchers/with-entries").send(approvedJournal)).body.ok).toBe(true);
-    expect((await request(app).post("/api/vouchers/with-entries").send({ voucher: {} })).body.code)
-      .toBe("EDGE_PHASE8_CAPTURE_UNSUPPORTED");
+    expect((await request(app).post("/api/vouchers/with-entries").send({ voucher: {} })).body.code).toBe(
+      "EDGE_PHASE8_CAPTURE_UNSUPPORTED"
+    );
     const rejected = await request(app).post("/api/factory/bales");
     expect(rejected.status).toBe(423);
     expect(rejected.body.code).toBe("EDGE_SYNC_UNSUPPORTED_OPERATION");

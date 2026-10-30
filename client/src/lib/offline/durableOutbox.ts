@@ -53,8 +53,11 @@ function getDeviceId(): string {
  */
 export async function queueOfflineOperation(input: QueueOfflineInput): Promise<OfflineOperation> {
   if (!isValidOfflineActor(input.actor)) throw offlineError("OFFLINE_ACTOR_REQUIRED");
-  if (input.mode !== "erp" || input.entityType !== "voucher-with-entries" ||
-      !isAutoReplayAllowed(input.method, input.url)) {
+  if (
+    input.mode !== "erp" ||
+    input.entityType !== "voucher-with-entries" ||
+    !isAutoReplayAllowed(input.method, input.url)
+  ) {
     throw offlineError("OFFLINE_WRITE_UNVERIFIED");
   }
   if (!validateOfflinePayload(input.payload)) throw offlineError("OFFLINE_UNSAFE_PAYLOAD");

@@ -128,12 +128,13 @@ function FullConnectivityProvider({ children }: Props) {
       ]);
       const currentActor = getVerifiedOfflineReadScope();
       // Discard stale async counts if a company switch or logout occurred.
-      const sameScope = !!actor && !!currentActor &&
-        actor.companyId === currentActor.companyId && actor.userId === currentActor.userId;
+      const sameScope =
+        !!actor && !!currentActor && actor.companyId === currentActor.companyId && actor.userId === currentActor.userId;
       const owned = sameScope ? durable : [];
       const pending = owned.filter((item) => item.state === "pending" || item.state === "sending").length;
-      const review = owned.filter((item) =>
-        item.state === "conflict" || item.state === "rejected" || item.state === "needs_review").length;
+      const review = owned.filter(
+        (item) => item.state === "conflict" || item.state === "rejected" || item.state === "needs_review"
+      ).length;
       const blockedLegacy = legacyIdbCount + getQueue().length;
       if (isMountedRef.current) {
         // Legacy records must NEVER appear as "pending sync": only the vetted

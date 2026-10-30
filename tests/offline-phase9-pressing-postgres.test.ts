@@ -4,7 +4,9 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import type { DbTransaction } from "../server/db";
 
 const env = vi.hoisted(() => ({
-  mode: "lan", primary: true, siteId: "027d7472-4a29-4bb3-a4aa-5b30e4ad631f",
+  mode: "lan",
+  primary: true,
+  siteId: "027d7472-4a29-4bb3-a4aa-5b30e4ad631f",
 }));
 vi.mock("../server/edge/edgeRuntimePolicy.mjs", () => ({
   readFactoryEdgeConfiguration: () => env,
@@ -14,11 +16,18 @@ import { capturePhase9PressingTx, ensurePhase9PressingOutboxSchema } from "../se
 
 const databaseUrl = process.env.PHASE8_TEST_DATABASE_URL;
 const base = {
-  companyId: 5, actorUserId: "worker-1", localConfirmationId: 13,
+  companyId: 5,
+  actorUserId: "worker-1",
+  localConfirmationId: 13,
   requestId: "e53cdbd1-7c4b-4b5c-9a60-b4f9de710b8c",
-  baleId: 100, machineId: 4, assignmentId: 3, referenceNumber: "BALE-100",
+  baleId: 100,
+  machineId: 4,
+  assignmentId: 3,
+  referenceNumber: "BALE-100",
   confirmedAt: "2026-10-30T06:45:10.000Z",
-  deviceCapturedAt: null, productionDate: "2026-10-30", timezoneName: "Asia/Beirut",
+  deviceCapturedAt: null,
+  productionDate: "2026-10-30",
+  timezoneName: "Asia/Beirut",
 };
 
 afterEach(() => {
@@ -84,10 +93,13 @@ describe.skipIf(!databaseUrl)("Phase 9 pressing outbox, disposable PostgreSQL 17
 
       await client.query("SAVEPOINT company_scope");
       try {
-        await expect(capturePhase9PressingTx(tx, {
-          ...base, requestId: "c4f9ac65-a734-4aac-93b8-2adfb8cb4de2",
-          localConfirmationId: 14,
-        })).rejects.toMatchObject({ cause: { code: "23503" } });
+        await expect(
+          capturePhase9PressingTx(tx, {
+            ...base,
+            requestId: "c4f9ac65-a734-4aac-93b8-2adfb8cb4de2",
+            localConfirmationId: 14,
+          })
+        ).rejects.toMatchObject({ cause: { code: "23503" } });
       } finally {
         await client.query("ROLLBACK TO SAVEPOINT company_scope");
       }
@@ -96,8 +108,9 @@ describe.skipIf(!databaseUrl)("Phase 9 pressing outbox, disposable PostgreSQL 17
       expect(saved.rows[0].count).toBe(1);
       const counter = await client.query("SELECT last_sequence::text FROM factory_edge_pressing_counter");
       expect(counter.rows[0].last_sequence).toBe("1");
-      await expect(client.query("DELETE FROM factory_pressing_confirmations WHERE id=13"))
-        .rejects.toMatchObject({ code: "23503" });
+      await expect(client.query("DELETE FROM factory_pressing_confirmations WHERE id=13")).rejects.toMatchObject({
+        code: "23503",
+      });
     } finally {
       await client.query("ROLLBACK").catch(() => undefined);
       await client.end().catch(() => undefined);

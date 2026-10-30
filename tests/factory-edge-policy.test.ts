@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { edgeBlocksWrite, edgeStatusPayload, readFactoryEdgeConfiguration, shouldStartEdgeBackgroundJobs } from "../server/edge/edgeRuntimePolicy.mjs";
+import {
+  edgeBlocksWrite,
+  edgeStatusPayload,
+  readFactoryEdgeConfiguration,
+  shouldStartEdgeBackgroundJobs,
+} from "../server/edge/edgeRuntimePolicy.mjs";
 
 const safe = {
   FACTORY_EDGE_MODE: "lan",
@@ -59,22 +64,28 @@ describe("factory LAN edge deployment policy", () => {
     expect(edgeBlocksWrite(p, "PATCH", "/api/inventory/1")).toBe(true);
   });
   it("does not accept a manual ACK without the Phase 7 database identity", () => {
-    expect(() => readFactoryEdgeConfiguration({
-      ...safe,
-      FACTORY_EDGE_WRITE_MODE: "lan-primary",
-      FACTORY_EDGE_PRIMARY_ACK: "CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED",
-    })).toThrow("EDGE_PHASE7_WRITER_EPOCH_REQUIRED");
-    expect(() => readFactoryEdgeConfiguration({
-      ...safe,
-      FACTORY_EDGE_WRITE_MODE: "lan-primary",
-      FACTORY_EDGE_PRIMARY_ACK: "CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED",
-      FACTORY_EDGE_WRITER_EPOCH: "2",
-      FACTORY_EDGE_BASELINE_SHA256: "invalid",
-    })).toThrow("EDGE_PHASE7_BASELINE_DIGEST_REQUIRED");
-    expect(() => readFactoryEdgeConfiguration({
-      ...safe,
-      FACTORY_EDGE_WRITER_EPOCH: "2",
-    })).toThrow("EDGE_PHASE7_EPOCH_WITHOUT_PRIMARY");
+    expect(() =>
+      readFactoryEdgeConfiguration({
+        ...safe,
+        FACTORY_EDGE_WRITE_MODE: "lan-primary",
+        FACTORY_EDGE_PRIMARY_ACK: "CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED",
+      })
+    ).toThrow("EDGE_PHASE7_WRITER_EPOCH_REQUIRED");
+    expect(() =>
+      readFactoryEdgeConfiguration({
+        ...safe,
+        FACTORY_EDGE_WRITE_MODE: "lan-primary",
+        FACTORY_EDGE_PRIMARY_ACK: "CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED",
+        FACTORY_EDGE_WRITER_EPOCH: "2",
+        FACTORY_EDGE_BASELINE_SHA256: "invalid",
+      })
+    ).toThrow("EDGE_PHASE7_BASELINE_DIGEST_REQUIRED");
+    expect(() =>
+      readFactoryEdgeConfiguration({
+        ...safe,
+        FACTORY_EDGE_WRITER_EPOCH: "2",
+      })
+    ).toThrow("EDGE_PHASE7_EPOCH_WITHOUT_PRIMARY");
   });
   it("only admits session traffic in read-only mode", () => {
     const p = readFactoryEdgeConfiguration(safe);
@@ -101,12 +112,7 @@ describe("factory LAN edge deployment policy", () => {
           : {}),
       };
       const config = readFactoryEdgeConfiguration(input);
-      for (const path of [
-        "/api/auth/login",
-        "/api/auth/logout",
-        "/api/auth/set-company",
-        "/api/csp-report",
-      ]) {
+      for (const path of ["/api/auth/login", "/api/auth/logout", "/api/auth/set-company", "/api/csp-report"]) {
         expect(edgeBlocksWrite(config, "POST", path)).toBe(false);
         for (const verb of ["PUT", "PATCH", "DELETE"]) {
           expect(edgeBlocksWrite(config, verb, path)).toBe(true);

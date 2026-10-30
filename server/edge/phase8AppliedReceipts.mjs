@@ -9,12 +9,18 @@ export const PHASE8_RECEIPT_QUERY_PROTOCOL = "factory-lan-voucher-applied-query/
 export const PHASE8_RECEIPT_PROTOCOL = "factory-lan-voucher-applied-receipts/v1";
 
 export function validateAppliedReceiptQuery(body, expectedSite) {
-  if (!body || typeof body !== "object" || Array.isArray(body) ||
-      Object.keys(body).sort().join(",") !== "fromSequence,protocol,siteId" ||
-      body.protocol !== PHASE8_RECEIPT_QUERY_PROTOCOL ||
-      body.siteId !== expectedSite || !UUID.test(body.siteId ?? "") ||
-      typeof body.fromSequence !== "string" || !SEQ.test(body.fromSequence) ||
-      BigInt(body.fromSequence) > 9223372036854775807n) {
+  if (
+    !body ||
+    typeof body !== "object" ||
+    Array.isArray(body) ||
+    Object.keys(body).sort().join(",") !== "fromSequence,protocol,siteId" ||
+    body.protocol !== PHASE8_RECEIPT_QUERY_PROTOCOL ||
+    body.siteId !== expectedSite ||
+    !UUID.test(body.siteId ?? "") ||
+    typeof body.fromSequence !== "string" ||
+    !SEQ.test(body.fromSequence) ||
+    BigInt(body.fromSequence) > 9223372036854775807n
+  ) {
     throw new Error("PHASE8_RECEIPT_QUERY_INVALID");
   }
   return body;
@@ -22,16 +28,20 @@ export function validateAppliedReceiptQuery(body, expectedSite) {
 
 export async function getAppliedCloudReceipts(queryable, body, expectedSite) {
   const input = validateAppliedReceiptQuery(body, expectedSite);
-  const rows = await queryable.query(`
+  const rows = await queryable.query(
+    `
     SELECT sequence::text, operation_id::text, company_id, actor_user_id,
            local_voucher_id, cloud_voucher_id, payload_sha256,
            business_date::text
     FROM factory_edge_applied_vouchers
     WHERE site_id=$1::uuid AND sequence >= $2::bigint
     ORDER BY sequence ASC LIMIT 25
-  `, [expectedSite, input.fromSequence]);
+  `,
+    [expectedSite, input.fromSequence]
+  );
   return {
-    protocol: PHASE8_RECEIPT_PROTOCOL, siteId: expectedSite,
+    protocol: PHASE8_RECEIPT_PROTOCOL,
+    siteId: expectedSite,
     state: "cloud-applied",
     events: rows.rows.map((row) => ({
       sequence: String(row.sequence),

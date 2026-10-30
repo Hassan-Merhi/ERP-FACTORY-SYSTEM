@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { canonicalEdgeVoucherPayload, captureEdgeVoucherTx, ensureEdgeVoucherOutboxSchema } from "../server/edge/edgeVoucherOutbox";
+import {
+  canonicalEdgeVoucherPayload,
+  captureEdgeVoucherTx,
+  ensureEdgeVoucherOutboxSchema,
+} from "../server/edge/edgeVoucherOutbox";
 
 const lan = {
   FACTORY_EDGE_MODE: "lan",
@@ -23,9 +27,7 @@ const lan = {
   CSRF_ENFORCE: "1",
 };
 
-const PRIMARY_ONLY = new Set([
-  "FACTORY_EDGE_PRIMARY_ACK", "FACTORY_EDGE_WRITER_EPOCH", "FACTORY_EDGE_BASELINE_SHA256",
-]);
+const PRIMARY_ONLY = new Set(["FACTORY_EDGE_PRIMARY_ACK", "FACTORY_EDGE_WRITER_EPOCH", "FACTORY_EDGE_BASELINE_SHA256"]);
 
 function setLan(primary = true) {
   vi.stubEnv("DATABASE_URL", undefined);
@@ -43,8 +45,11 @@ describe("Phase 4 voucher outbox durability policy", () => {
     vi.stubEnv("FACTORY_EDGE_MODE", "cloud");
     const execute = vi.fn();
     await captureEdgeVoucherTx({ execute } as never, {
-      companyId: 1, actorUserId: "worker", localVoucherId: 1,
-      voucher: { id: 1 }, entries: [],
+      companyId: 1,
+      actorUserId: "worker",
+      localVoucherId: 1,
+      voucher: { id: 1 },
+      entries: [],
     });
     expect(execute).not.toHaveBeenCalled();
   });
@@ -69,7 +74,9 @@ describe("Phase 4 voucher outbox durability policy", () => {
     setLan();
     const execute = vi.fn().mockResolvedValue([]);
     await captureEdgeVoucherTx({ execute } as never, {
-      companyId: 5, actorUserId: "u5", localVoucherId: 42,
+      companyId: 5,
+      actorUserId: "u5",
+      localVoucherId: 42,
       requestId: "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
       voucher: { id: 42, amount: "10.00" },
       entries: [{ debitAmount: "10.00" }],
@@ -82,15 +89,23 @@ describe("Phase 4 voucher outbox durability policy", () => {
   it("refuses invalid company scope and never captures on read-only LAN", async () => {
     setLan();
     const execute = vi.fn().mockResolvedValue([]);
-    await expect(captureEdgeVoucherTx({ execute } as never, {
-      companyId: 0, actorUserId: "u", localVoucherId: 5,
-      voucher: {}, entries: [],
-    })).rejects.toThrow("EDGE_OUTBOX_SCOPE_INVALID");
+    await expect(
+      captureEdgeVoucherTx({ execute } as never, {
+        companyId: 0,
+        actorUserId: "u",
+        localVoucherId: 5,
+        voucher: {},
+        entries: [],
+      })
+    ).rejects.toThrow("EDGE_OUTBOX_SCOPE_INVALID");
     expect(execute).not.toHaveBeenCalled();
     setLan(false);
     await captureEdgeVoucherTx({ execute } as never, {
-      companyId: 5, actorUserId: "u", localVoucherId: 5,
-      voucher: {}, entries: [],
+      companyId: 5,
+      actorUserId: "u",
+      localVoucherId: 5,
+      voucher: {},
+      entries: [],
     });
     expect(execute).not.toHaveBeenCalled();
   });

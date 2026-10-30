@@ -32,7 +32,8 @@ export function visiblePhase9Status(
     !candidate.state ||
     !Object.hasOwn(VALID_PROOF, candidate.state) ||
     VALID_PROOF[candidate.state as Phase9Evidence["state"]] !== candidate.evidence
-  ) return "local-only";
+  )
+    return "local-only";
   return candidate.state;
 }
 

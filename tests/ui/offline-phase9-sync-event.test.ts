@@ -3,7 +3,11 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/featureFlags", () => ({ OFFLINE_MODE_ENABLED: true }));
 const state = vi.hoisted(() => ({
   deliver: vi.fn(async () => ({
-    acknowledged: 1, rejected: 0, conflicts: 0, retried: 0, paused: false,
+    acknowledged: 1,
+    rejected: 0,
+    conflicts: 0,
+    retried: 0,
+    paused: false,
   })),
   globalState: vi.fn(),
 }));

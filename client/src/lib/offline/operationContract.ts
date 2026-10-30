@@ -49,12 +49,17 @@ export function isAutoReplayAllowed(method: string, url: string): boolean {
  * The server remains authoritative and revalidates independently.
  */
 const OFFLINE_JOURNAL_HEADER = new Set([
-  "voucherType", "voucherDate", "currency", "optional", "voucherNumber",
-  "description", "exchangeRate", "locationId", "effectiveDate",
+  "voucherType",
+  "voucherDate",
+  "currency",
+  "optional",
+  "voucherNumber",
+  "description",
+  "exchangeRate",
+  "locationId",
+  "effectiveDate",
 ]);
-const OFFLINE_JOURNAL_LINE = new Set([
-  "ledgerAccountId", "debitAmount", "creditAmount", "narration",
-]);
+const OFFLINE_JOURNAL_LINE = new Set(["ledgerAccountId", "debitAmount", "creditAmount", "narration"]);
 const OFFLINE_JOURNAL_TOP = new Set(["voucher", "entries", "clientRequestId"]);
 const OFFLINE_JOURNAL_MONEY = /^(?:0|[1-9][0-9]{0,14})(?:\.[0-9]{1,2})?$/;
 
@@ -69,20 +74,28 @@ export function isVettedOfflineVoucherPayload(input: unknown): boolean {
   if (!input || typeof input !== "object" || Array.isArray(input)) return false;
   const data = input as Record<string, unknown>;
   if (Object.keys(data).some((key) => !OFFLINE_JOURNAL_TOP.has(key))) return false;
-  if (data.clientRequestId !== undefined &&
-      (typeof data.clientRequestId !== "string" ||
-       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.clientRequestId))) return false;
+  if (
+    data.clientRequestId !== undefined &&
+    (typeof data.clientRequestId !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.clientRequestId))
+  )
+    return false;
   if (!data.voucher || typeof data.voucher !== "object" || Array.isArray(data.voucher)) return false;
   const voucher = data.voucher as Record<string, unknown>;
-  if (Object.keys(voucher).some((key) => !OFFLINE_JOURNAL_HEADER.has(key)) ||
-      voucher.voucherType !== "Journal" || voucher.optional === true ||
-      String(voucher.currency ?? "USD") !== "USD" ||
-      voucher.locationId != null || voucher.effectiveDate != null ||
-      typeof voucher.voucherDate !== "string" ||
-      !/^\d{4}-\d{2}-\d{2}$/.test(voucher.voucherDate)) return false;
+  if (
+    Object.keys(voucher).some((key) => !OFFLINE_JOURNAL_HEADER.has(key)) ||
+    voucher.voucherType !== "Journal" ||
+    voucher.optional === true ||
+    String(voucher.currency ?? "USD") !== "USD" ||
+    voucher.locationId != null ||
+    voucher.effectiveDate != null ||
+    typeof voucher.voucherDate !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(voucher.voucherDate)
+  )
+    return false;
   const parsedDate = new Date(voucher.voucherDate + "T00:00:00Z");
-  if (!Number.isFinite(parsedDate.getTime()) ||
-      parsedDate.toISOString().slice(0, 10) !== voucher.voucherDate) return false;
+  if (!Number.isFinite(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== voucher.voucherDate)
+    return false;
   if (!Array.isArray(data.entries) || data.entries.length < 2 || data.entries.length > 100) return false;
 
   let debits = 0n;
@@ -121,28 +134,38 @@ export function matchesOfflineVoucherAcknowledgement(
   } catch {
     return false;
   }
-  if (!isVettedOfflineVoucherPayload(source) ||
-      !source || typeof source !== "object" || Array.isArray(source) ||
-      !received || typeof received !== "object" || Array.isArray(received)) return false;
+  if (
+    !isVettedOfflineVoucherPayload(source) ||
+    !source ||
+    typeof source !== "object" ||
+    Array.isArray(source) ||
+    !received ||
+    typeof received !== "object" ||
+    Array.isArray(received)
+  )
+    return false;
   const original = source as Record<string, unknown>;
   const receipt = received as Record<string, unknown>;
   const posted = receipt.voucher;
   if (!posted || typeof posted !== "object" || Array.isArray(posted)) return false;
   const voucher = posted as Record<string, unknown>;
   const requested = original.voucher as Record<string, unknown>;
-  const date = typeof voucher.voucherDate === "string"
-    ? voucher.voucherDate
-    : null;
-  if (receipt.clientRequestId !== operation.id ||
-      original.clientRequestId !== operation.id ||
-      voucher.companyId !== operation.companyId ||
-      (typeof voucher.id !== "number" || !Number.isSafeInteger(voucher.id) || voucher.id <= 0) ||
-      voucher.voucherType !== "Journal" ||
-      String(voucher.currency ?? "USD") !== "USD" ||
-      !date ||
-      date.slice(0, 10) !== requested.voucherDate ||
-      !Array.isArray(receipt.entries) ||
-      receipt.entries.length !== (original.entries as unknown[]).length) return false;
+  const date = typeof voucher.voucherDate === "string" ? voucher.voucherDate : null;
+  if (
+    receipt.clientRequestId !== operation.id ||
+    original.clientRequestId !== operation.id ||
+    voucher.companyId !== operation.companyId ||
+    typeof voucher.id !== "number" ||
+    !Number.isSafeInteger(voucher.id) ||
+    voucher.id <= 0 ||
+    voucher.voucherType !== "Journal" ||
+    String(voucher.currency ?? "USD") !== "USD" ||
+    !date ||
+    date.slice(0, 10) !== requested.voucherDate ||
+    !Array.isArray(receipt.entries) ||
+    receipt.entries.length !== (original.entries as unknown[]).length
+  )
+    return false;
 
   function signatures(entries: unknown[]): string[] | null {
     const result: string[] = [];

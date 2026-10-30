@@ -3,10 +3,16 @@ import { evaluateVoucherOutboxAudit } from "../scripts/edge/audit-voucher-outbox
 
 describe("LAN outbox reconciliation evidence", () => {
   it("reports only local and cloud-STAGED evidence, never cloud postings", () => {
-    expect(evaluateVoucherOutboxAudit({
-      total: "5", staged: "3", pending: "2",
-      lastSequence: "5", invalidReceipts: "0", gaps: "0",
-    })).toEqual({
+    expect(
+      evaluateVoucherOutboxAudit({
+        total: "5",
+        staged: "3",
+        pending: "2",
+        lastSequence: "5",
+        invalidReceipts: "0",
+        gaps: "0",
+      })
+    ).toEqual({
       localVouchers: 5,
       stagedEvidence: 3,
       pendingEvidence: 2,
@@ -21,11 +27,17 @@ describe("LAN outbox reconciliation evidence", () => {
       { staged: "4" },
       { pending: "-1" },
     ]) {
-      expect(() => evaluateVoucherOutboxAudit({
-        total: "5", staged: "3", pending: "2",
-        lastSequence: "5", invalidReceipts: "0", gaps: "0",
-        ...changed,
-      })).toThrow("EDGE_SYNC_OUTBOX_AUDIT_MISMATCH");
+      expect(() =>
+        evaluateVoucherOutboxAudit({
+          total: "5",
+          staged: "3",
+          pending: "2",
+          lastSequence: "5",
+          invalidReceipts: "0",
+          gaps: "0",
+          ...changed,
+        })
+      ).toThrow("EDGE_SYNC_OUTBOX_AUDIT_MISMATCH");
     }
   });
 });

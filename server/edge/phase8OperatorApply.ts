@@ -7,22 +7,29 @@ import { pool } from "../db";
 import { readFactoryEdgeConfiguration } from "./edgeRuntimePolicy.mjs";
 import { applyStagedVoucherOnce } from "./phase8ApplyStore.mjs";
 import { postApprovedPhase8Journal } from "./phase8VoucherPosting";
-import { runWithDatabaseScopeRuntimeContext, createTenantDatabaseScope } from "../services/security/databaseScopeRuntimeContext";
+import {
+  runWithDatabaseScopeRuntimeContext,
+  createTenantDatabaseScope,
+} from "../services/security/databaseScopeRuntimeContext";
 
 const SHA = /^[0-9a-f]{64}$/;
 const POSITIVE = /^[1-9][0-9]{0,15}$/;
 
 export function readPhase8OperatorConfig(env: NodeJS.ProcessEnv = process.env) {
   const edge = readFactoryEdgeConfiguration(env);
-  if (edge.mode !== "cloud" || edge.writeMode !== "fenced" ||
-      env.FACTORY_SYNC_RECEIVE_ENABLED !== "1" ||
-      env.FACTORY_PHASE8_APPLY_ENABLED !== "1" ||
-      env.FACTORY_PHASE8_APPLY_ACK !== "LAN_FROZEN_AND_CLOUD_EPOCH_APPROVED" ||
-      !env.FACTORY_SYNC_SITE_ID || !env.FACTORY_PHASE8_BASELINE_SHA256 ||
-      !SHA.test(env.FACTORY_PHASE8_BASELINE_SHA256) ||
-      !POSITIVE.test(env.FACTORY_PHASE8_COMPANY_ID || "") ||
-      !POSITIVE.test(env.FACTORY_CLOUD_WRITER_EPOCH || "") ||
-      !Number.isSafeInteger(Number(env.FACTORY_CLOUD_WRITER_EPOCH))) {
+  if (
+    edge.mode !== "cloud" ||
+    edge.writeMode !== "fenced" ||
+    env.FACTORY_SYNC_RECEIVE_ENABLED !== "1" ||
+    env.FACTORY_PHASE8_APPLY_ENABLED !== "1" ||
+    env.FACTORY_PHASE8_APPLY_ACK !== "LAN_FROZEN_AND_CLOUD_EPOCH_APPROVED" ||
+    !env.FACTORY_SYNC_SITE_ID ||
+    !env.FACTORY_PHASE8_BASELINE_SHA256 ||
+    !SHA.test(env.FACTORY_PHASE8_BASELINE_SHA256) ||
+    !POSITIVE.test(env.FACTORY_PHASE8_COMPANY_ID || "") ||
+    !POSITIVE.test(env.FACTORY_CLOUD_WRITER_EPOCH || "") ||
+    !Number.isSafeInteger(Number(env.FACTORY_CLOUD_WRITER_EPOCH))
+  ) {
     throw new Error("PHASE8_OPERATOR_APPLICATION_DISABLED");
   }
   return Object.freeze({
@@ -57,13 +64,16 @@ if (process.argv[1] && /phase8OperatorApply\.(?:ts|js)$/.test(process.argv[1])) 
     console.error("Usage: node --import tsx server/edge/phase8OperatorApply.ts <staged-sequence>");
     process.exitCode = 2;
   } else {
-    runPhase8OperatorApply(sequence).then((receipt) => {
-      console.log(JSON.stringify({ phase: 8, result: receipt }));
-    }).catch((err: unknown) => {
-      console.error("PHASE8_APPLY_REFUSED", err instanceof Error ? err.message : String(err));
-      process.exitCode = 1;
-    }).finally(async () => {
-      await pool.end();
-    });
+    runPhase8OperatorApply(sequence)
+      .then((receipt) => {
+        console.log(JSON.stringify({ phase: 8, result: receipt }));
+      })
+      .catch((err: unknown) => {
+        console.error("PHASE8_APPLY_REFUSED", err instanceof Error ? err.message : String(err));
+        process.exitCode = 1;
+      })
+      .finally(async () => {
+        await pool.end();
+      });
   }
 }

@@ -78,10 +78,6 @@ export const factoryEdgeStagedVouchers = pgTable(
   (table) => [
     primaryKey({ columns: [table.siteId, table.sequence] }),
     uniqueIndex("factory_edge_staged_vouchers_operation").on(table.siteId, table.operationId),
-    uniqueIndex("factory_edge_staged_vouchers_business").on(
-      table.siteId,
-      table.companyId,
-      table.localVoucherId
-    ),
+    uniqueIndex("factory_edge_staged_vouchers_business").on(table.siteId, table.companyId, table.localVoucherId),
   ]
 );

@@ -23,12 +23,18 @@ const REVIEW = new Set(["conflict", "rejected", "needs_review"]);
 
 function operationSummary(state: OfflineOperation["state"]): string {
   switch (state) {
-    case "pending": return "On this device · not yet accepted by LAN";
-    case "sending": return "Delivery uncertain · original request retained";
-    case "acknowledged": return "LAN acknowledged · cloud posting NOT verified";
-    case "conflict": return "Conflict · operator review required";
-    case "rejected": return "Blocked · server rejected the request";
-    case "needs_review": return "Quarantined · never automatically retried";
+    case "pending":
+      return "On this device · not yet accepted by LAN";
+    case "sending":
+      return "Delivery uncertain · original request retained";
+    case "acknowledged":
+      return "LAN acknowledged · cloud posting NOT verified";
+    case "conflict":
+      return "Conflict · operator review required";
+    case "rejected":
+      return "Blocked · server rejected the request";
+    case "needs_review":
+      return "Quarantined · never automatically retried";
   }
 }
 
@@ -79,7 +85,9 @@ function OfflineBannerInner() {
 
   useEffect(() => {
     void refresh();
-    const onRefresh = () => { void refresh(); };
+    const onRefresh = () => {
+      void refresh();
+    };
     window.addEventListener("erp:sync", onRefresh);
     window.addEventListener("erp:offline-read-scope-verified", onRefresh);
     window.addEventListener("erp:offline-queue-changed", onRefresh);
@@ -145,8 +153,8 @@ function OfflineBannerInner() {
                   {legacy} legacy records blocked
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Old browser queues lack verified user/company identity and atomic replay evidence.
-                  They are preserved on this device for supervised recovery, NOT sent, retried, or deleted.
+                  Old browser queues lack verified user/company identity and atomic replay evidence. They are preserved
+                  on this device for supervised recovery, NOT sent, retried, or deleted.
                 </p>
               </div>
             )}
@@ -158,19 +166,23 @@ function OfflineBannerInner() {
             {snapshot.scoped && snapshot.operations.length === 0 && (
               <p className="text-sm text-muted-foreground">No durable voucher requests for this account.</p>
             )}
-            {snapshot.scoped && snapshot.operations.slice(-30).reverse().map((item) => (
-              <div key={item.id} className="border rounded-md p-3 space-y-1" data-testid="offline-durable-record">
-                <p className="font-mono text-xs flex items-center gap-2">
-                  <Clock className="h-3 w-3" /> {item.id.slice(0, 8)} · {item.clientDate}
-                </p>
-                <p className="text-xs">{operationSummary(item.state)}</p>
-              </div>
-            ))}
+            {snapshot.scoped &&
+              snapshot.operations
+                .slice(-30)
+                .reverse()
+                .map((item) => (
+                  <div key={item.id} className="border rounded-md p-3 space-y-1" data-testid="offline-durable-record">
+                    <p className="font-mono text-xs flex items-center gap-2">
+                      <Clock className="h-3 w-3" /> {item.id.slice(0, 8)} · {item.clientDate}
+                    </p>
+                    <p className="text-xs">{operationSummary(item.state)}</p>
+                  </div>
+                ))}
           </div>
           <div className="border-t pt-3 space-y-2">
             <p className="text-xs text-muted-foreground">
-              Only vetted durable Journal requests are eligible for retry. Inventory, POS, production,
-              payments and attachments remain blocked pending reconciliation.
+              Only vetted durable Journal requests are eligible for retry. Inventory, POS, production, payments and
+              attachments remain blocked pending reconciliation.
             </p>
             <Button
               variant="outline"

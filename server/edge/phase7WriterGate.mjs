@@ -56,18 +56,21 @@ export const PHASE7_AUTHORITY_SQL = [
   "SELECT s.site_id, s.mode, s.epoch, s.baseline_sha256,",
   "       a.role_safe, u.total AS uncovered_tables",
   "FROM phase7_writer.state s CROSS JOIN actor a CROSS JOIN uncovered u",
-  "WHERE s.singleton IS TRUE"
+  "WHERE s.singleton IS TRUE",
 ].join("\n");
 
 export async function hasVerifiedPhase7WriterAuthority(queryable, config) {
   if (config?.mode !== "lan" || !config.primary) return false;
   try {
     const { rows } = await queryable.query(PHASE7_AUTHORITY_SQL);
-    return rows?.length === 1 && isVerifiedPhase7WriterRow(rows[0], {
-      siteId: config.siteId,
-      writerEpoch: config.writerEpoch,
-      baselineSha256: config.baselineSha256,
-    });
+    return (
+      rows?.length === 1 &&
+      isVerifiedPhase7WriterRow(rows[0], {
+        siteId: config.siteId,
+        writerEpoch: config.writerEpoch,
+        baselineSha256: config.baselineSha256,
+      })
+    );
   } catch {
     // Missing table, revoked privilege, disconnect, DDL change: no write access.
     return false;

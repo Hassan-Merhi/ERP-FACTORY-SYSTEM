@@ -9,22 +9,35 @@ const scope = {
   actorUserId: "worker-7",
 };
 const original = {
-  sequence: "9", operation_id: scope.operationId,
-  company_id: 42, local_voucher_id: 107,
-  payload_sha256: "a".repeat(64), business_date: "2026-10-30",
-  stage_operation_id: null, stage_payload_sha256: null, stage_state: null,
-  applied_operation_id: null, applied_payload_sha256: null,
-  applied_company_id: null, applied_local_voucher_id: null,
-  applied_business_date: null, cloud_voucher_id: null, applied_state: null,
+  sequence: "9",
+  operation_id: scope.operationId,
+  company_id: 42,
+  local_voucher_id: 107,
+  payload_sha256: "a".repeat(64),
+  business_date: "2026-10-30",
+  stage_operation_id: null,
+  stage_payload_sha256: null,
+  stage_state: null,
+  applied_operation_id: null,
+  applied_payload_sha256: null,
+  applied_company_id: null,
+  applied_local_voucher_id: null,
+  applied_business_date: null,
+  cloud_voucher_id: null,
+  applied_state: null,
 };
 const stage = {
-  stage_operation_id: scope.operationId, stage_payload_sha256: "a".repeat(64),
+  stage_operation_id: scope.operationId,
+  stage_payload_sha256: "a".repeat(64),
   stage_state: "staged-not-applied",
 };
 const apply = {
-  applied_operation_id: scope.operationId, applied_payload_sha256: "a".repeat(64),
-  applied_company_id: 42, applied_local_voucher_id: 107,
-  applied_business_date: "2026-10-30", cloud_voucher_id: 908,
+  applied_operation_id: scope.operationId,
+  applied_payload_sha256: "a".repeat(64),
+  applied_company_id: 42,
+  applied_local_voucher_id: 107,
+  applied_business_date: "2026-10-30",
+  cloud_voucher_id: 908,
   applied_state: "cloud-applied",
 };
 function fixture(row) {
@@ -78,6 +91,9 @@ test("invalid actor and UUID cannot reach the database", async () => {
   assert.equal(validPhase9OperationScope({ ...scope, actorUserId: "" }), false);
   assert.equal(validPhase9OperationScope({ ...scope, operationId: "' OR 1=1" }), false);
   const { queryable, calls } = fixture(original);
-  await assert.rejects(readPhase9OperationStatus(queryable, { ...scope, actorUserId: "" }), /PHASE9_STATUS_SCOPE_INVALID/);
+  await assert.rejects(
+    readPhase9OperationStatus(queryable, { ...scope, actorUserId: "" }),
+    /PHASE9_STATUS_SCOPE_INVALID/
+  );
   assert.equal(calls.length, 0);
 });

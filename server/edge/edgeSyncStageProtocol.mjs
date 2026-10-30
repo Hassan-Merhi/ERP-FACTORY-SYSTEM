@@ -28,36 +28,59 @@ export function canonicalEvidence(input) {
 }
 
 export function hashEvidence(payload) {
-  return createHash("sha256").update(JSON.stringify(canonicalEvidence(payload)), "utf8").digest("hex");
+  return createHash("sha256")
+    .update(JSON.stringify(canonicalEvidence(payload)), "utf8")
+    .digest("hex");
 }
 
 export function validateStageEnvelope(body, expectedSiteId) {
-  if (!body || typeof body !== "object" || Array.isArray(body) ||
-      Object.keys(body).sort().join(",") !== "events,protocol,siteId" ||
-      body.protocol !== EDGE_SYNC_STAGE_VERSION || body.siteId !== expectedSiteId ||
-      !validIdentifier(body.siteId) || !Array.isArray(body.events) ||
-      body.events.length < 1 || body.events.length > EDGE_SYNC_STAGE_LIMIT) {
+  if (
+    !body ||
+    typeof body !== "object" ||
+    Array.isArray(body) ||
+    Object.keys(body).sort().join(",") !== "events,protocol,siteId" ||
+    body.protocol !== EDGE_SYNC_STAGE_VERSION ||
+    body.siteId !== expectedSiteId ||
+    !validIdentifier(body.siteId) ||
+    !Array.isArray(body.events) ||
+    body.events.length < 1 ||
+    body.events.length > EDGE_SYNC_STAGE_LIMIT
+  ) {
     throw new Error("EDGE_SYNC_ENVELOPE_INVALID");
   }
   let last = 0n;
   return body.events.map((e) => {
-    if (!e || typeof e !== "object" || Array.isArray(e) ||
-        Object.keys(e).sort().join(",") !== "actorUserId,companyId,kind,localVoucherId,operationId,payload,payloadSha256,sequence" ||
-        typeof e.sequence !== "string" || !SEQUENCE.test(e.sequence) ||
-        BigInt(e.sequence) > 9223372036854775807n ||
-        !validIdentifier(e.operationId) ||
-        !Number.isSafeInteger(e.companyId) || e.companyId < 1 ||
-        !Number.isSafeInteger(e.localVoucherId) || e.localVoucherId < 1 ||
-        typeof e.actorUserId !== "string" || e.actorUserId.length < 1 || e.actorUserId.length > 255 ||
-        e.kind !== "voucher.with-entries.v1" ||
-        !e.payload || typeof e.payload !== "object" || Array.isArray(e.payload) ||
-        !e.payload.voucher || typeof e.payload.voucher !== "object" ||
-        Array.isArray(e.payload.voucher) ||
-        e.payload.voucher.companyId !== e.companyId ||
-        e.payload.voucher.id !== e.localVoucherId ||
-        !Array.isArray(e.payload.entries) ||
-        typeof e.payloadSha256 !== "string" || !HASH.test(e.payloadSha256) ||
-        hashEvidence(e.payload) !== e.payloadSha256) {
+    if (
+      !e ||
+      typeof e !== "object" ||
+      Array.isArray(e) ||
+      Object.keys(e).sort().join(",") !==
+        "actorUserId,companyId,kind,localVoucherId,operationId,payload,payloadSha256,sequence" ||
+      typeof e.sequence !== "string" ||
+      !SEQUENCE.test(e.sequence) ||
+      BigInt(e.sequence) > 9223372036854775807n ||
+      !validIdentifier(e.operationId) ||
+      !Number.isSafeInteger(e.companyId) ||
+      e.companyId < 1 ||
+      !Number.isSafeInteger(e.localVoucherId) ||
+      e.localVoucherId < 1 ||
+      typeof e.actorUserId !== "string" ||
+      e.actorUserId.length < 1 ||
+      e.actorUserId.length > 255 ||
+      e.kind !== "voucher.with-entries.v1" ||
+      !e.payload ||
+      typeof e.payload !== "object" ||
+      Array.isArray(e.payload) ||
+      !e.payload.voucher ||
+      typeof e.payload.voucher !== "object" ||
+      Array.isArray(e.payload.voucher) ||
+      e.payload.voucher.companyId !== e.companyId ||
+      e.payload.voucher.id !== e.localVoucherId ||
+      !Array.isArray(e.payload.entries) ||
+      typeof e.payloadSha256 !== "string" ||
+      !HASH.test(e.payloadSha256) ||
+      hashEvidence(e.payload) !== e.payloadSha256
+    ) {
       throw new Error("EDGE_SYNC_EVENT_INVALID");
     }
     const sequence = BigInt(e.sequence);
@@ -82,8 +105,7 @@ function computeSignature(raw, timestamp, secret) {
 
 export function makeStageSignature(bodyBytes, timestamp, secret) {
   checkKey(secret);
-  if (!Buffer.isBuffer(bodyBytes) || bodyBytes.length === 0 ||
-      !/^[1-9][0-9]{9}$/.test(timestamp)) {
+  if (!Buffer.isBuffer(bodyBytes) || bodyBytes.length === 0 || !/^[1-9][0-9]{9}$/.test(timestamp)) {
     throw new Error("EDGE_SYNC_SIGN_INPUT_INVALID");
   }
   return computeSignature(bodyBytes, timestamp, secret);
@@ -91,10 +113,16 @@ export function makeStageSignature(bodyBytes, timestamp, secret) {
 
 export function verifyStageSignature(raw, timestamp, signature, secret, nowSeconds = Date.now() / 1000) {
   checkKey(secret);
-  if (!Buffer.isBuffer(raw) || raw.length === 0 || raw.length > 1048576 ||
-      typeof timestamp !== "string" || !/^[1-9][0-9]{9}$/.test(timestamp) ||
-      Math.abs(Number(timestamp) - nowSeconds) > 300 ||
-      typeof signature !== "string" || !HASH.test(signature)) {
+  if (
+    !Buffer.isBuffer(raw) ||
+    raw.length === 0 ||
+    raw.length > 1048576 ||
+    typeof timestamp !== "string" ||
+    !/^[1-9][0-9]{9}$/.test(timestamp) ||
+    Math.abs(Number(timestamp) - nowSeconds) > 300 ||
+    typeof signature !== "string" ||
+    !HASH.test(signature)
+  ) {
     throw new Error("EDGE_SYNC_SIGNATURE_INVALID");
   }
   const received = Buffer.from(signature, "hex");

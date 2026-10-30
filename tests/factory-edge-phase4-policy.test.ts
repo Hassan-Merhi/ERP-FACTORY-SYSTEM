@@ -12,8 +12,9 @@ describe("Phase 4 safe writer handoff", () => {
     expect(edgeBlocksWrite(config, "POST", "/api/vouchers/with-entries")).toBe(false);
   });
   it("refuses a fenced mode without confirmation", () => {
-    expect(() => readFactoryEdgeConfiguration({ FACTORY_CLOUD_WRITE_MODE: "fenced" }))
-      .toThrow("CLOUD_FENCE_NOT_ACKNOWLEDGED");
+    expect(() => readFactoryEdgeConfiguration({ FACTORY_CLOUD_WRITE_MODE: "fenced" })).toThrow(
+      "CLOUD_FENCE_NOT_ACKNOWLEDGED"
+    );
   });
   it("does not run background jobs in configured read-only cloud mode", () => {
     const config = readFactoryEdgeConfiguration({

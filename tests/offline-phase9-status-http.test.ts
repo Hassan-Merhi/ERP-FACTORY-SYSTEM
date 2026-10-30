@@ -48,7 +48,10 @@ vi.mock("../server/security/companyAccessBoundary", () => {
 });
 vi.mock("../server/edge/edgeRuntimePolicy.mjs", () => ({
   readFactoryEdgeConfiguration: () => ({
-    mode: "lan", siteId: SITE, primary: false, writeMode: "read-only",
+    mode: "lan",
+    siteId: SITE,
+    primary: false,
+    writeMode: "read-only",
   }),
   edgeStatusPayload: () => ({ mode: "lan", siteId: SITE, writeMode: "read-only" }),
   edgeBlocksWrite: () => true,
@@ -101,8 +104,7 @@ describe("Phase 9 LAN status HTTP authorization", () => {
   });
   it("rejects revoked company membership before reading even matching outbox data", async () => {
     state.allowMembership = false;
-    const res = await request(fixture({ userId: "user-7", companyId: 42 }))
-      .get("/api/edge/status?operationId=" + OP);
+    const res = await request(fixture({ userId: "user-7", companyId: 42 })).get("/api/edge/status?operationId=" + OP);
     expect(res.status).toBe(403);
     expect(res.body.code).toBe("COMPANY_ACCESS_DENIED");
     expect(state.authChecks).toBe(1);
@@ -110,8 +112,7 @@ describe("Phase 9 LAN status HTTP authorization", () => {
     expect(state.queryArgs).toHaveLength(0);
   });
   it("uses all four scope selectors and returns 404 rather than revealing another user's record", async () => {
-    const res = await request(fixture({ userId: "user-7", companyId: 42 }))
-      .get("/api/edge/status?operationId=" + OP);
+    const res = await request(fixture({ userId: "user-7", companyId: 42 })).get("/api/edge/status?operationId=" + OP);
     expect(res.status).toBe(404);
     expect(res.headers["cache-control"]).toBe("no-store");
     expect(state.queryArgs[0]).toEqual([SITE, OP, 42, "user-7"]);

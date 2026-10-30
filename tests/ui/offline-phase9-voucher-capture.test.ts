@@ -23,10 +23,11 @@ beforeEach(() => {
 
 describe("Phase 9 voucher capture communicates ambiguous post state", () => {
   it("does not call an unverified HTTP success a merely pending request", async () => {
-    await expect(submitDurableVoucherWithEntries(
-      { companyId: 3, userId: "operator-1" }, {}, "2026-10-30"
-    )).rejects.toMatchObject({
-      name: "OfflineOperationRejected", message: "OFFLINE_VOUCHER_REVIEW_REQUIRED",
+    await expect(
+      submitDurableVoucherWithEntries({ companyId: 3, userId: "operator-1" }, {}, "2026-10-30")
+    ).rejects.toMatchObject({
+      name: "OfflineOperationRejected",
+      message: "OFFLINE_VOUCHER_REVIEW_REQUIRED",
     });
     expect(state.queue).toHaveBeenCalledTimes(1);
     expect(state.deliver).toHaveBeenCalledTimes(1);
@@ -34,10 +35,11 @@ describe("Phase 9 voucher capture communicates ambiguous post state", () => {
 
   it("keeps a real pending delivery distinctly pending", async () => {
     state.state = "pending";
-    await expect(submitDurableVoucherWithEntries(
-      { companyId: 3, userId: "operator-1" }, {}, "2026-10-30"
-    )).rejects.toMatchObject({
-      name: "OfflineQueued", message: "OFFLINE_VOUCHER_PENDING",
+    await expect(
+      submitDurableVoucherWithEntries({ companyId: 3, userId: "operator-1" }, {}, "2026-10-30")
+    ).rejects.toMatchObject({
+      name: "OfflineQueued",
+      message: "OFFLINE_VOUCHER_PENDING",
     });
   });
 });

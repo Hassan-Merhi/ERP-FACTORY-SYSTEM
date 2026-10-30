@@ -10,12 +10,18 @@ import { capturePhase9PressingTx, ensurePhase9PressingOutboxSchema } from "../se
 import { Phase9PressingRefusal } from "../server/edge/phase9PressingEnvelope.mjs";
 
 const evidence = {
-  companyId: 5, actorUserId: "worker-1", localConfirmationId: 13,
+  companyId: 5,
+  actorUserId: "worker-1",
+  localConfirmationId: 13,
   requestId: "e53cdbd1-7c4b-4b5c-9a60-b4f9de710b8c",
-  baleId: 100, machineId: 4, assignmentId: 3, referenceNumber: "BALE-100",
+  baleId: 100,
+  machineId: 4,
+  assignmentId: 3,
+  referenceNumber: "BALE-100",
   confirmedAt: "2026-10-30T06:45:10.000Z",
   deviceCapturedAt: null,
-  productionDate: "2026-10-30", timezoneName: "Asia/Beirut",
+  productionDate: "2026-10-30",
+  timezoneName: "Asia/Beirut",
 };
 
 afterEach(() => {
@@ -41,8 +47,9 @@ describe("Phase 9 physical scan capture (not LAN write approval)", () => {
 
   it("rejects malformed evidence without touching any local table", async () => {
     const { tx, execute } = transaction();
-    await expect(capturePhase9PressingTx(tx, { ...evidence, companyId: 0 }))
-      .rejects.toBeInstanceOf(Phase9PressingRefusal);
+    await expect(capturePhase9PressingTx(tx, { ...evidence, companyId: 0 })).rejects.toBeInstanceOf(
+      Phase9PressingRefusal
+    );
     expect(execute).not.toHaveBeenCalled();
   });
 
@@ -74,8 +81,7 @@ describe("Phase 9 physical scan capture (not LAN write approval)", () => {
 
   it("retains atomic scan rollback semantics when evidence insertion fails", async () => {
     const tx = { execute: vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("DB_DISK_FULL")) };
-    await expect(capturePhase9PressingTx(tx as unknown as DbTransaction, evidence))
-      .rejects.toThrow("DB_DISK_FULL");
+    await expect(capturePhase9PressingTx(tx as unknown as DbTransaction, evidence)).rejects.toThrow("DB_DISK_FULL");
     expect(tx.execute).toHaveBeenCalledTimes(2);
   });
 });

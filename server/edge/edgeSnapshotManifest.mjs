@@ -19,8 +19,11 @@ function canonicalUnsigned(value) {
     throw new Error("EDGE_SYNC_MANIFEST_IDENTITY_INVALID");
   }
   const [database, uploads] = expectedEncryptedNames(value.backupId);
-  if (typeof value.createdAt !== "string" || !Number.isFinite(Date.parse(value.createdAt)) ||
-      new Date(value.createdAt).toISOString() !== value.createdAt) {
+  if (
+    typeof value.createdAt !== "string" ||
+    !Number.isFinite(Date.parse(value.createdAt)) ||
+    new Date(value.createdAt).toISOString() !== value.createdAt
+  ) {
     throw new Error("EDGE_SYNC_MANIFEST_DATE_INVALID");
   }
   if (!Array.isArray(value.files) || value.files.length !== 2) {
@@ -28,8 +31,13 @@ function canonicalUnsigned(value) {
   }
   for (const [index, expected] of [database, uploads].entries()) {
     const entry = value.files[index];
-    if (!entry || entry.name !== expected || !SHA256.test(entry.sha256 ?? "") ||
-        !Number.isSafeInteger(entry.bytes) || entry.bytes < 1) {
+    if (
+      !entry ||
+      entry.name !== expected ||
+      !SHA256.test(entry.sha256 ?? "") ||
+      !Number.isSafeInteger(entry.bytes) ||
+      entry.bytes < 1
+    ) {
       throw new Error("EDGE_SYNC_MANIFEST_FILES_INVALID");
     }
   }
@@ -75,9 +83,16 @@ export function verifyEncryptedSnapshotManifest(manifest, { siteId, signingKey, 
   const expected = Buffer.from(authTag(unsigned, signingKey), "hex");
   if (!timingSafeEqual(signed, expected)) throw new Error("EDGE_SYNC_MANIFEST_SIGNATURE_MISMATCH");
   if (files !== undefined) {
-    if (!Array.isArray(files) || files.length !== 2 ||
-        files.some((file, index) => file.name !== unsigned.files[index].name ||
-          file.bytes !== unsigned.files[index].bytes || file.sha256 !== unsigned.files[index].sha256)) {
+    if (
+      !Array.isArray(files) ||
+      files.length !== 2 ||
+      files.some(
+        (file, index) =>
+          file.name !== unsigned.files[index].name ||
+          file.bytes !== unsigned.files[index].bytes ||
+          file.sha256 !== unsigned.files[index].sha256
+      )
+    ) {
       throw new Error("EDGE_SYNC_MANIFEST_ARCHIVE_MISMATCH");
     }
   }

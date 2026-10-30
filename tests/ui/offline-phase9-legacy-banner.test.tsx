@@ -76,7 +76,9 @@ describe("Phase 9 offline banner refuses unverified legacy replays", () => {
     expect(screen.getByText("LAN acknowledged · cloud posting NOT verified")).toBeInTheDocument();
     const retry = screen.getByTestId("offline-safe-retry");
     expect(retry).toBeEnabled();
-    await act(async () => { fireEvent.click(retry); });
+    await act(async () => {
+      fireEvent.click(retry);
+    });
     await waitFor(() => expect(state.sync).toHaveBeenCalledTimes(1));
     expect(screen.getByTestId("offline-legacy-blocked")).toBeInTheDocument();
   });

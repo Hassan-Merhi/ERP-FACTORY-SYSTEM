@@ -1,11 +1,7 @@
 import { useEffect, useState } from "react";
 import { getVerifiedOfflineReadScope } from "@/lib/offline/offlineReadCache";
 import { listOfflineOperations } from "@/lib/offline/durableOutbox";
-import {
-  PHASE9_STATE_LABELS,
-  visiblePhase9Status,
-  type Phase9VisibleState,
-} from "@/lib/offline/phase9Status";
+import { PHASE9_STATE_LABELS, visiblePhase9Status, type Phase9VisibleState } from "@/lib/offline/phase9Status";
 
 interface StatusRow {
   id: string;
@@ -43,10 +39,11 @@ export function OfflineWriteStatusPanel() {
             let proof: unknown;
             if (operation.state === "acknowledged") {
               try {
-                const response = await fetch(
-                  "/api/edge/status?operationId=" + encodeURIComponent(operation.id),
-                  { credentials: "include", cache: "no-store", redirect: "error" }
-                );
+                const response = await fetch("/api/edge/status?operationId=" + encodeURIComponent(operation.id), {
+                  credentials: "include",
+                  cache: "no-store",
+                  redirect: "error",
+                });
                 if (response.ok && (response.headers.get("content-type") ?? "").includes("application/json")) {
                   proof = await response.json();
                 }
@@ -89,9 +86,9 @@ export function OfflineWriteStatusPanel() {
     <section aria-label="Offline write delivery" className="rounded-md border p-3 space-y-2">
       <h4 className="text-sm font-semibold">Offline voucher delivery</h4>
       <p className="text-xs text-muted-foreground">
-        A saved device request or LAN acknowledgement is not cloud posting.
-        Staged means cloud evidence only; cloud-applied requires a verified receipt.
-        Inventory, factory production, POS, payments and attachments remain blocked.
+        A saved device request or LAN acknowledgement is not cloud posting. Staged means cloud evidence only;
+        cloud-applied requires a verified receipt. Inventory, factory production, POS, payments and attachments remain
+        blocked.
       </p>
       {rows.length === 0 ? (
         <p className="text-xs text-muted-foreground">No durable voucher requests for this account.</p>
@@ -99,7 +96,9 @@ export function OfflineWriteStatusPanel() {
         <ul className="space-y-1 text-xs" data-testid="offline-write-delivery-status">
           {rows.map((row) => (
             <li key={row.id} className="flex flex-wrap justify-between gap-2">
-              <span className="font-mono">{row.id.slice(0, 8)} · {row.clientDate}</span>
+              <span className="font-mono">
+                {row.id.slice(0, 8)} · {row.clientDate}
+              </span>
               <span aria-label={row.status}>{PHASE9_STATE_LABELS[row.status]}</span>
             </li>
           ))}

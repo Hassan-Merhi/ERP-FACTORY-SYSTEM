@@ -15,11 +15,16 @@ export class Phase9StatusRefusal extends Error {
 }
 
 export function validPhase9OperationScope(scope) {
-  return !!scope && UUID.test(scope.siteId ?? "") &&
+  return (
+    !!scope &&
+    UUID.test(scope.siteId ?? "") &&
     UUID.test(scope.operationId ?? "") &&
-    Number.isSafeInteger(scope.companyId) && scope.companyId > 0 &&
+    Number.isSafeInteger(scope.companyId) &&
+    scope.companyId > 0 &&
     typeof scope.actorUserId === "string" &&
-    scope.actorUserId.length > 0 && scope.actorUserId.length <= 255;
+    scope.actorUserId.length > 0 &&
+    scope.actorUserId.length <= 255
+  );
 }
 
 /** All selectors are parameterized; source identity limits receipt joins. */
@@ -54,35 +59,52 @@ export async function readPhase9OperationStatus(queryable, scope) {
   const row = rows[0];
   if (!row) return null;
   // A mismatched or impossible receipt is a conflict, NEVER proof of apply.
-  const originalValid = String(row.operation_id).toLowerCase() === scope.operationId.toLowerCase() &&
+  const originalValid =
+    String(row.operation_id).toLowerCase() === scope.operationId.toLowerCase() &&
     Number(row.company_id) === scope.companyId &&
-    Number.isSafeInteger(Number(row.local_voucher_id)) && Number(row.local_voucher_id) > 0 &&
+    Number.isSafeInteger(Number(row.local_voucher_id)) &&
+    Number(row.local_voucher_id) > 0 &&
     SHA.test(String(row.payload_sha256 ?? ""));
-  const stagePresent = row.stage_operation_id != null || row.stage_state != null ||
-    row.stage_payload_sha256 != null;
-  const stageValid = !stagePresent ||
+  const stagePresent = row.stage_operation_id != null || row.stage_state != null || row.stage_payload_sha256 != null;
+  const stageValid =
+    !stagePresent ||
     (row.stage_state === "staged-not-applied" &&
-     String(row.stage_operation_id).toLowerCase() === scope.operationId.toLowerCase() &&
-     row.stage_payload_sha256 === row.payload_sha256);
-  const appliedPresent = row.applied_operation_id != null || row.applied_state != null ||
-    row.applied_payload_sha256 != null;
-  const appliedValid = !appliedPresent ||
-    (stagePresent && stageValid && row.applied_state === "cloud-applied" &&
-     String(row.applied_operation_id).toLowerCase() === scope.operationId.toLowerCase() &&
-     row.applied_payload_sha256 === row.payload_sha256 &&
-     Number(row.applied_company_id) === scope.companyId &&
-     Number(row.applied_local_voucher_id) === Number(row.local_voucher_id) &&
-     Number.isSafeInteger(Number(row.cloud_voucher_id)) && Number(row.cloud_voucher_id) > 0 &&
-     ISO_DATE.test(String(row.business_date ?? "").slice(0, 10)) &&
-     String(row.applied_business_date).slice(0, 10) === String(row.business_date).slice(0, 10));
-  const state = !originalValid || !stageValid || !appliedValid
-    ? "conflict" : appliedPresent ? "cloud-applied" : stagePresent ? "staged" : "local-only";
+      String(row.stage_operation_id).toLowerCase() === scope.operationId.toLowerCase() &&
+      row.stage_payload_sha256 === row.payload_sha256);
+  const appliedPresent =
+    row.applied_operation_id != null || row.applied_state != null || row.applied_payload_sha256 != null;
+  const appliedValid =
+    !appliedPresent ||
+    (stagePresent &&
+      stageValid &&
+      row.applied_state === "cloud-applied" &&
+      String(row.applied_operation_id).toLowerCase() === scope.operationId.toLowerCase() &&
+      row.applied_payload_sha256 === row.payload_sha256 &&
+      Number(row.applied_company_id) === scope.companyId &&
+      Number(row.applied_local_voucher_id) === Number(row.local_voucher_id) &&
+      Number.isSafeInteger(Number(row.cloud_voucher_id)) &&
+      Number(row.cloud_voucher_id) > 0 &&
+      ISO_DATE.test(String(row.business_date ?? "").slice(0, 10)) &&
+      String(row.applied_business_date).slice(0, 10) === String(row.business_date).slice(0, 10));
+  const state =
+    !originalValid || !stageValid || !appliedValid
+      ? "conflict"
+      : appliedPresent
+        ? "cloud-applied"
+        : stagePresent
+          ? "staged"
+          : "local-only";
   return {
     operationId: scope.operationId,
     companyId: scope.companyId,
     state,
-    evidence: state === "cloud-applied" ? "verified-local-cloud-receipt"
-      : state === "staged" ? "lan-staging-receipt"
-        : state === "conflict" ? "receipt-mismatch" : "lan-outbox",
+    evidence:
+      state === "cloud-applied"
+        ? "verified-local-cloud-receipt"
+        : state === "staged"
+          ? "lan-staging-receipt"
+          : state === "conflict"
+            ? "receipt-mismatch"
+            : "lan-outbox",
   };
 }

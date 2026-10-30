@@ -1,11 +1,7 @@
 import express from "express";
 import request from "supertest";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  EDGE_SYNC_STAGE_VERSION,
-  hashEvidence,
-  makeStageSignature,
-} from "../server/edge/edgeSyncStageProtocol.mjs";
+import { EDGE_SYNC_STAGE_VERSION, hashEvidence, makeStageSignature } from "../server/edge/edgeSyncStageProtocol.mjs";
 
 vi.mock("../server/db", () => ({
   pool: { connect: vi.fn(), query: vi.fn() },
@@ -32,16 +28,18 @@ const payload = { voucher: { id: 9, companyId: 3 }, entries: [] };
 const envelope = {
   protocol: EDGE_SYNC_STAGE_VERSION,
   siteId,
-  events: [{
-    sequence: "1",
-    operationId: "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
-    companyId: 3,
-    actorUserId: "u3",
-    localVoucherId: 9,
-    kind: "voucher.with-entries.v1",
-    payload,
-    payloadSha256: hashEvidence(payload),
-  }],
+  events: [
+    {
+      sequence: "1",
+      operationId: "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+      companyId: 3,
+      actorUserId: "u3",
+      localVoucherId: 9,
+      kind: "voucher.with-entries.v1",
+      payload,
+      payloadSha256: hashEvidence(payload),
+    },
+  ],
 };
 
 function makeTestApp() {
@@ -53,9 +51,13 @@ function makeTestApp() {
   vi.stubEnv("FACTORY_SYNC_SITE_ID", siteId);
   vi.stubEnv("FACTORY_SYNC_HMAC_KEY", key);
   const app = express();
-  app.use(express.json({
-    verify(req, _res, bytes) { (req as typeof req & { rawBody: Buffer }).rawBody = bytes; },
-  }));
+  app.use(
+    express.json({
+      verify(req, _res, bytes) {
+        (req as typeof req & { rawBody: Buffer }).rawBody = bytes;
+      },
+    })
+  );
   registerFactoryEdgeBoundary(app);
   app.post("/api/vouchers/with-entries", (_req, res) => res.sendStatus(200));
   return app;
@@ -68,7 +70,8 @@ describe("Phase 4 cloud HMAC receiver boundary", () => {
     const app = makeTestApp();
     const body = JSON.stringify(envelope);
     const timestamp = String(Math.floor(Date.now() / 1000));
-    const signed = await request(app).post("/api/edge/sync/stage")
+    const signed = await request(app)
+      .post("/api/edge/sync/stage")
       .set("Content-Type", "application/json")
       .set("X-Factory-Sync-Timestamp", timestamp)
       .set("X-Factory-Sync-Signature", makeStageSignature(Buffer.from(body), timestamp, key))
@@ -82,10 +85,10 @@ describe("Phase 4 cloud HMAC receiver boundary", () => {
     const app = makeTestApp();
     const body = JSON.stringify(envelope);
     const timestamp = String(Math.floor(Date.now() / 1000));
-    const rejected = await request(app).post("/api/edge/sync/stage")
-      .set("Content-Type", "application/json").send(body);
+    const rejected = await request(app).post("/api/edge/sync/stage").set("Content-Type", "application/json").send(body);
     expect(rejected.status).toBe(401);
-    const wrong = await request(app).post("/api/edge/sync/stage")
+    const wrong = await request(app)
+      .post("/api/edge/sync/stage")
       .set("Content-Type", "application/json")
       .set("X-Factory-Sync-Timestamp", timestamp)
       .set("X-Factory-Sync-Signature", makeStageSignature(Buffer.from(body), timestamp, key))

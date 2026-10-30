@@ -27,20 +27,28 @@ test("every unique API write has explicit capture, session-only or blocked dispo
   assert.equal(report.summary.productionComplete, false);
   const byPath = new Map(report.routes.map((r) => [r.path, r]));
   for (const path of [
-    "/api/pos/sales", "/api/factory/bales", "/api/inventory/quick-adjust",
-    "/api/suppliers/create", "/api/documents/upload", "/api/payments/:id",
+    "/api/pos/sales",
+    "/api/factory/bales",
+    "/api/inventory/quick-adjust",
+    "/api/suppliers/create",
+    "/api/documents/upload",
+    "/api/payments/:id",
   ]) {
     assert.equal(byPath.get(path).disposition, "blocked");
   }
   assert.equal(byPath.get("/api/vouchers/with-entries").policy, "voucher.with-entries.v1");
 });
 test("policy drift from an accidental LAN write bypass fails the audit", () => {
-  const unsafeGuard = (config, method, path) => path === "/api/pos/sales" ? false : edgeBlocksWrite(config, method, path);
+  const unsafeGuard = (config, method, path) =>
+    path === "/api/pos/sales" ? false : edgeBlocksWrite(config, method, path);
   assert.throws(() => auditPhase9WriteCoverage(manifest, unsafeGuard), /PHASE9_WRITE_GUARD_DRIFT/);
 });
 test("missing vetted route, bad manifest and unexpected allowed route are refused", () => {
   assert.throws(() => auditPhase9WriteCoverage({ routes: ["POST /api/pos/sales"] }), /PHASE9_APPROVED_ROUTE_MISSING/);
-  assert.throws(() => auditPhase9WriteCoverage({ routes: ["POST /api", ...manifest.routes] }), /PHASE9_MANIFEST_ROUTE_INVALID/);
+  assert.throws(
+    () => auditPhase9WriteCoverage({ routes: ["POST /api", ...manifest.routes] }),
+    /PHASE9_MANIFEST_ROUTE_INVALID/
+  );
   assert.throws(() => auditPhase9WriteCoverage({}), /PHASE9_MANIFEST_MISSING/);
 });
 test("real route manifest has explicit accounting/stock/POS/factory/attachment gaps", () => {

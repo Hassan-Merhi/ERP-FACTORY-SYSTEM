@@ -11,9 +11,18 @@ const REF = /^[A-Z0-9][A-Z0-9._/-]{0,99}$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const INPUT_FIELDS = new Set([
-  "companyId", "localConfirmationId", "baleId", "machineId",
-  "assignmentId", "actorUserId", "requestId", "referenceNumber",
-  "confirmedAt", "deviceCapturedAt", "productionDate", "timezoneName",
+  "companyId",
+  "localConfirmationId",
+  "baleId",
+  "machineId",
+  "assignmentId",
+  "actorUserId",
+  "requestId",
+  "referenceNumber",
+  "confirmedAt",
+  "deviceCapturedAt",
+  "productionDate",
+  "timezoneName",
 ]);
 
 export class Phase9PressingRefusal extends Error {
@@ -38,29 +47,37 @@ function validDay(date) {
  * Never substitute device-provided machine, operator, weight or timestamps.
  */
 export function phase9PressingEnvelope(evidence) {
-  if (!evidence || typeof evidence !== "object" || Array.isArray(evidence) ||
-      Object.keys(evidence).some((key) => !INPUT_FIELDS.has(key)) ||
-      !positive(evidence.companyId) ||
-      !positive(evidence.localConfirmationId) || !positive(evidence.baleId) ||
-      !positive(evidence.machineId) || !positive(evidence.assignmentId) ||
-      typeof evidence.actorUserId !== "string" ||
-      !evidence.actorUserId || evidence.actorUserId.length > 255 ||
-      !UUID.test(evidence.requestId ?? "") ||
-      typeof evidence.referenceNumber !== "string" ||
-      !REF.test(evidence.referenceNumber) ||
-      evidence.referenceNumber !== evidence.referenceNumber.toUpperCase() ||
-      !validDay(evidence.productionDate) ||
-      typeof evidence.timezoneName !== "string" ||
-      evidence.timezoneName.length < 1 || evidence.timezoneName.length > 80 ||
-      typeof evidence.confirmedAt !== "string" ||
-      !UTC.test(evidence.confirmedAt) ||
-      !Number.isFinite(Date.parse(evidence.confirmedAt)) ||
-      new Date(evidence.confirmedAt).toISOString() !== evidence.confirmedAt ||
-      (evidence.deviceCapturedAt !== null &&
-       (typeof evidence.deviceCapturedAt !== "string" ||
+  if (
+    !evidence ||
+    typeof evidence !== "object" ||
+    Array.isArray(evidence) ||
+    Object.keys(evidence).some((key) => !INPUT_FIELDS.has(key)) ||
+    !positive(evidence.companyId) ||
+    !positive(evidence.localConfirmationId) ||
+    !positive(evidence.baleId) ||
+    !positive(evidence.machineId) ||
+    !positive(evidence.assignmentId) ||
+    typeof evidence.actorUserId !== "string" ||
+    !evidence.actorUserId ||
+    evidence.actorUserId.length > 255 ||
+    !UUID.test(evidence.requestId ?? "") ||
+    typeof evidence.referenceNumber !== "string" ||
+    !REF.test(evidence.referenceNumber) ||
+    evidence.referenceNumber !== evidence.referenceNumber.toUpperCase() ||
+    !validDay(evidence.productionDate) ||
+    typeof evidence.timezoneName !== "string" ||
+    evidence.timezoneName.length < 1 ||
+    evidence.timezoneName.length > 80 ||
+    typeof evidence.confirmedAt !== "string" ||
+    !UTC.test(evidence.confirmedAt) ||
+    !Number.isFinite(Date.parse(evidence.confirmedAt)) ||
+    new Date(evidence.confirmedAt).toISOString() !== evidence.confirmedAt ||
+    (evidence.deviceCapturedAt !== null &&
+      (typeof evidence.deviceCapturedAt !== "string" ||
         !UTC.test(evidence.deviceCapturedAt) ||
         !Number.isFinite(Date.parse(evidence.deviceCapturedAt)) ||
-        new Date(evidence.deviceCapturedAt).toISOString() !== evidence.deviceCapturedAt))) {
+        new Date(evidence.deviceCapturedAt).toISOString() !== evidence.deviceCapturedAt))
+  ) {
     throw new Phase9PressingRefusal("PHASE9_PRESSING_EVIDENCE_INVALID");
   }
   return {

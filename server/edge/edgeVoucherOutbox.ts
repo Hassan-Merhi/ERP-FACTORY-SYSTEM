@@ -130,15 +130,21 @@ export interface EdgeVoucherEvidence {
 export async function captureEdgeVoucherTx(tx: DbTransaction, evidence: EdgeVoucherEvidence): Promise<void> {
   const config = readFactoryEdgeConfiguration();
   if (config.mode !== "lan" || !config.primary) return;
-  if (!Number.isSafeInteger(evidence.companyId) || evidence.companyId < 1 ||
-      !Number.isSafeInteger(evidence.localVoucherId) || evidence.localVoucherId < 1 ||
-      !evidence.actorUserId) {
+  if (
+    !Number.isSafeInteger(evidence.companyId) ||
+    evidence.companyId < 1 ||
+    !Number.isSafeInteger(evidence.localVoucherId) ||
+    evidence.localVoucherId < 1 ||
+    !evidence.actorUserId
+  ) {
     throw new Error("EDGE_OUTBOX_SCOPE_INVALID");
   }
   // Never invent a different operation ID after the voucher has posted:
   // a broken/missing request identity must roll back this SAME transaction.
-  if (typeof evidence.requestId !== "string" ||
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(evidence.requestId)) {
+  if (
+    typeof evidence.requestId !== "string" ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(evidence.requestId)
+  ) {
     throw new Error("EDGE_OUTBOX_OPERATION_ID_INVALID");
   }
   const operationId = evidence.requestId;
