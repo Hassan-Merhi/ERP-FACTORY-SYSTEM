@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2282,
+  "routeCount": 2284,
   "middlewareMountCount": 138,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -622,6 +622,8 @@
     "GET /api/factory/production-target-bonuses/preview [requireAuth > <anonymous>]",
     "GET /api/factory/production-target-bonuses/settings [requireAuth > <anonymous>]",
     "POST /api/factory/production-target-bonuses/settings [requireAuth > <anonymous>]",
+    "GET /api/factory/production-target-bonuses/category-rates [requireAuth > <anonymous> > <anonymous>]",
+    "POST /api/factory/production-target-bonuses/category-rates [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/factory/staff-tracking [requireAuth > <anonymous>]",
     "GET /api/factory/staff-tracking/production-target-defaults [requireAuth > <anonymous>]",
     "POST /api/factory/staff-tracking/production-target-defaults [requireAuth > <anonymous>]",

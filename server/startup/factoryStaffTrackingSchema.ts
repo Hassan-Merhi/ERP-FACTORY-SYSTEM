@@ -208,6 +208,33 @@ const FACTORY_PRODUCTION_TARGET_BONUS_RATES_SQL = `
     ON factory_production_target_bonus_rates (company_id, worker_id, effective_from DESC, id DESC);
 `;
 
+/**
+ * Phase 8: append-only category-specific bonus amounts, isolated from the
+ * already-approved Phase 1-7 worker/day payout contract. A category version
+ * is NOT a payable claim and never books an expense or cash movement.
+ */
+const FACTORY_PRODUCTION_TARGET_BONUS_CATEGORY_RATES_SQL = `
+  CREATE TABLE IF NOT EXISTS factory_production_target_bonus_category_rates (
+    id BIGSERIAL PRIMARY KEY,
+    company_id INTEGER NOT NULL,
+    category_key VARCHAR(100) NOT NULL,
+    category_label VARCHAR(100) NOT NULL,
+    effective_from DATE NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    rate_per_extra_bale NUMERIC(20,4) NOT NULL DEFAULT 0
+      CHECK (rate_per_extra_bale >= 0 AND rate_per_extra_bale <= 10000),
+    note VARCHAR(500),
+    request_key VARCHAR(128) NOT NULL,
+    created_by VARCHAR(255),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT factory_bonus_category_key_not_empty CHECK (BTRIM(category_key) <> ''),
+    CONSTRAINT factory_bonus_category_rate_request_key_unique UNIQUE (company_id, request_key)
+  );
+  CREATE INDEX IF NOT EXISTS factory_bonus_category_rate_effective_idx
+    ON factory_production_target_bonus_category_rates
+      (company_id, category_key, effective_from DESC, id DESC);
+`;
+
 export const factoryStaffTrackingSchema = [
   FACTORY_STAFF_TRACKING_TABLE_SQL,
   `CREATE UNIQUE INDEX IF NOT EXISTS factory_staff_tracking_unique_period_person
@@ -241,6 +268,9 @@ export async function ensureFactoryStaffTrackingSchema(database: StartupQueryabl
 
   // Core effective-dated bonus rates are ensured before approvals and payments.
   await database.query(FACTORY_PRODUCTION_TARGET_BONUS_RATES_SQL);
+
+  // Category settings are created on every boot but do not affect payable bonus rows.
+  await database.query(FACTORY_PRODUCTION_TARGET_BONUS_CATEGORY_RATES_SQL);
 
   // Production Targets review tables are required even without bulk migrations.
   await database.query(FACTORY_TARGET_BONUS_SCHEMA_SQL);
