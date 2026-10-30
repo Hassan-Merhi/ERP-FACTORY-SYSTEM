@@ -261,7 +261,10 @@ export default function FactoryPriceList() {
     if (!p.active) return false;
     const matchSearch = productMatchesSearch(p, search);
     const matchCategory = categoryFilter === "all" || String(p.categoryId) === categoryFilter;
-    const matchZeroOnly = !showZeroOnly || parseFloat(p.sellingPrice || "0") === 0;
+    // Keep a row visible while Enter moves from its selling price to production cost.
+    // Otherwise a "Show unpriced" refresh would unmount the second editable cell.
+    const matchZeroOnly =
+      !showZeroOnly || parseFloat(p.sellingPrice || "0") === 0 || editingCell?.productId === p.id;
     return matchSearch && matchCategory && matchZeroOnly;
   });
 
