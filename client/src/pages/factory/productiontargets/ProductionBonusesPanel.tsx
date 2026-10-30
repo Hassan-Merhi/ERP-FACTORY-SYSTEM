@@ -187,7 +187,7 @@ export function ProductionBonusesPanel({ initialDate }: { initialDate: string })
           <CardTitle className="text-lg">Production Bonuses</CardTitle>
         </div>
         <p className="text-sm text-muted-foreground">
-          Review finalized daily and weekly production. The per-bale method uses each worker's credited extra bales; the optional weekly-flat method locks a fixed amount after the weekly target is exceeded. Approval does not make a payment.
+          Review today's live production or finalized dates. A daily per-bale bonus can be approved before End Production; approval locks the current target, credited bales and USD amount. Weekly-flat bonuses still require completed, reconciled weeks. Approval does not pay.
         </p>
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
