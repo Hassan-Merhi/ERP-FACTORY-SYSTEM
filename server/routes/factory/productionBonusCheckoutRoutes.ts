@@ -18,6 +18,7 @@ import { loadTargetBonusRows, targetBonusIsValidDate } from "../../services/fact
 import { postTargetBonusPaymentsInTransaction } from "../../services/factory/targetBonusPaymentService";
 import { parseTargetBonusPaymentCommand } from "../../services/factory/targetBonusPaymentPolicy";
 import { normalizeBonusCategory } from "@shared/productionTargetBonusCategoryRates";
+import { splitExtraBalesByCategory, workerCategoryCredits } from "@shared/productionBonusCheckoutMath";
 import { mondayOfProductionBonusWeek } from "@shared/productionTargetBonusWeeklyMethod";
 
 const guard = requireFactoryTabAccess("factory/stock-entry", "hide_tab_stockentry_production_targets");
@@ -89,20 +90,11 @@ async function creditedCategories(
     FOR SHARE OF fb
   `));
   if (!found.length) return [];
-  const grouped = new Map<string, number>();
-  // One physical bale is credited once. For a linked team use stable ID order
-  // to assign the same floor/remainder number of bales as Production Targets.
-  const rank = members.indexOf(workerId);
-  for (let i = 0; i < found.length; i++) {
-    const bale = found[i];
-    if (groupId === null ? Number(bale.worker) !== workerId : i % members.length !== rank)
-      continue;
-    const parsed = normalizeBonusCategory(bale.category);
-    if (!parsed) fail(409, "Produced bale has no category. Correct stock-entry evidence first");
-    grouped.set(parsed.label, (grouped.get(parsed.label) ?? 0) + 1);
-  }
-  return [...grouped].map(([category,count])=>({category,count}))
-    .sort((a,b)=>a.category.localeCompare(b.category));
+  // Frozen or live bales are ordered by their physical ID before splitting.
+  return workerCategoryCredits(found.map(bale=>({
+    id:Number(bale.id), worker:bale.worker==null?null:Number(bale.worker),
+    category:typeof bale.category==="string"?bale.category:null,
+  })),members,workerId);
 }
 
 async function calculateOffers(
@@ -149,7 +141,7 @@ async function calculateOffers(
       if (!claim.checkoutMethod && method === "category") issue="Already reviewed with standard per-bale bonus";
       const savedLines=claim.breakdown;
       if (Array.isArray(savedLines)) for(const line of savedLines) {
-        if(line && typeof line==="object") lines.push(line as BonusLine);
+        if(line && typeof line==="object") lines.push(line as unknown as BonusLine);
       }
       amount=usd(String(claim.amount));
     } else if (weeklyFlat || weeklyClaims.has(item.workerId)) {
@@ -175,15 +167,7 @@ async function calculateOffers(
       else {
         // Divide excess bales proportionally across the actual categories made.
         // Stable largest-remainder allocation prevents double-counting one bale.
-        const portions=counts.map(c=>{
-          const exact=item.extraBales*c.count/credited;
-          return {...c,extra:Math.floor(exact),fraction:exact-Math.floor(exact)};
-        });
-        let remaining=item.extraBales-portions.reduce((sum,p)=>sum+p.extra,0);
-        for(const part of [...portions].sort((a,b)=>b.fraction-a.fraction||a.category.localeCompare(b.category))){
-          if(remaining--<=0)break;
-          part.extra++;
-        }
+        const portions=splitExtraBalesByCategory(item.extraBales,counts);
         let total = new Decimal(0);
         for (const part of portions) {
           const normalized=normalizeBonusCategory(part.category)!;
