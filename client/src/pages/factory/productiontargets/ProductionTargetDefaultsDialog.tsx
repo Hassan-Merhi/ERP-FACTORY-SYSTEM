@@ -269,11 +269,6 @@ export function ProductionTargetDefaultsDialog({
                           row={row}
                           rows={rows}
                           effectiveFrom={effectiveFrom}
-                          targetBales={
-                            draftDefaults[row.personId]?.targetBales !== undefined
-                              ? draftDefaults[row.personId].targetBales
-                              : (row.defaultTargetBales ?? null)
-                          }
                           disabled={isLoading || saveMutation.isPending || changedRecords.length > 0}
                         />
                       </div>
