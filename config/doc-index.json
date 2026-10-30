@@ -361,6 +361,7 @@
     "docs/cost-centers-phase6.md": "reference",
     "docs/cost-centers-phase7.md": "reference",
     "docs/cost-centers-phase8-release.md": "reference",
+    "docs/coverage-program.md": "reference",
     "docs/dead-code-cleanup-final-report.md": "reference",
     "docs/dead-code-prevention.md": "reference",
     "docs/deployment.md": "reference",
@@ -385,6 +386,7 @@
     "docs/fx-monetary-valuation/phase-5-historical-cache-audit.md": "reference",
     "docs/fx-monetary-valuation/phase-6-reconciliation-release-gate.md": "reference",
     "docs/fx-monetary-valuation/phase-7-verification-and-fixes.md": "reference",
+    "docs/global-force-refresh-all-users-2026-10-28.md": "reference",
     "docs/god-file-split-program.md": "reference",
     "docs/golden-coast-phase16-audit.md": "reference",
     "docs/group-net-position.md": "reference",
@@ -398,6 +400,7 @@
     "docs/monitoring/health-metrics.md": "reference",
     "docs/multi-currency-phase8-account-api.md": "reference",
     "docs/onboarding.md": "reference",
+    "docs/one-time-pwa-force-refresh-2026-10-28.md": "reference",
     "docs/operations/database-backup-rollback-recovery.md": "reference",
     "docs/operations/external-alerting-checklist.md": "reference",
     "docs/performance-phase9.md": "reference",
@@ -412,6 +415,7 @@
     "docs/pressing-machine-tracking-phase6.md": "reference",
     "docs/pressing-machine-tracking-phase7.md": "reference",
     "docs/pressing-machine-tracking-phase8.md": "reference",
+    "docs/pressing-scan-simple-mode.md": "reference",
     "docs/priority-scan-fixed-palette-color-block.md": "reference",
     "docs/production-deployment-checklist.md": "reference",
     "docs/program-1-incident-response-runbook.md": "reference",
@@ -477,7 +481,6 @@
     "docs/zambia-zmw/phase-6-vouchers-and-parties.md": "reference",
     "docs/zambia-zmw/phase-7-cash-bank-transfers.md": "reference",
     "docs/zambia-zmw/phase-8-inventory-purchasing-intercompany.md": "reference",
-    "docs/zambia-zmw/verification-2026-10-23.md": "reference",
-    "docs/coverage-program.md": "reference"
+    "docs/zambia-zmw/verification-2026-10-23.md": "reference"
   }
 }

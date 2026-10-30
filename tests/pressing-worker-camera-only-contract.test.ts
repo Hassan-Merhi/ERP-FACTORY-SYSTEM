@@ -26,7 +26,7 @@ describe("Pressing worker camera-only access", () => {
   it("mounts workers' continuously scanning camera from the Open action without inner settings", () => {
     expect(camera).toContain("useState(simpleControls)");
     expect(camera).toContain("{!simpleControls && running && (");
-    expect(camera).toContain("{!simpleControls && <div className=\"flex flex-wrap gap-2\">");
+    expect(camera).toContain('{!simpleControls && <div className="flex flex-wrap gap-2">');
     expect(camera).toContain("stream?.getTracks().forEach(track => track.stop())");
     expect(camera).not.toContain("The camera stays open between reads.");
     expect(camera).not.toContain("Permanent history and filters are below.");
@@ -53,16 +53,16 @@ describe("Pressing worker camera-only access", () => {
   });
 
   it("filters worker scoreboard to one Beirut production day without lifetime totals", () => {
-    expect(workerTotals).toContain('Daily confirmed scans (Beirut time)');
+    expect(workerTotals).toContain("Daily confirmed scans (Beirut time)");
     expect(workerTotals).toContain('type="date"');
-    expect(workerTotals).toContain('max={totals.data?.serverToday}');
+    expect(workerTotals).toContain("max={totals.data?.serverToday}");
     expect(workerTotals).toContain('day ? "?day=" + encodeURIComponent(day) : ""');
     expect(workerTotals).toContain('value={day || totals.data?.day || ""}');
     expect(workerTotals).not.toContain("All-time confirmed scans");
-    expect(report).toContain('const serverToday = factoryLocalDate(new Date(), PRESSING_TIME_ZONE)');
-    expect(report).toContain('c.confirmed_at >= ($2::date::timestamp AT TIME ZONE');
-    expect(report).toContain('c.confirmed_at < (($2::date + 1)::timestamp AT TIME ZONE');
-    expect(report).toContain('return res.json({ day, serverToday, workers: result.rows })');
+    expect(report).toContain("const serverToday = factoryLocalDate(new Date(), PRESSING_TIME_ZONE)");
+    expect(report).toContain("c.confirmed_at >= ($2::date::timestamp AT TIME ZONE");
+    expect(report).toContain("c.confirmed_at < (($2::date + 1)::timestamp AT TIME ZONE");
+    expect(report).toContain("return res.json({ day, serverToday, workers: result.rows })");
   });
 
   it("shows read-only hourly KG targets directly below pressing worker totals", () => {
@@ -76,7 +76,7 @@ describe("Pressing worker camera-only access", () => {
     expect(hourlyTargets).toContain('value={day || data?.day || ""}');
     expect(hourlyTargets).toContain("{data.canEdit && <Button");
     expect(report).toContain("canEdit: ctx.canCorrect");
-    expect(report).toContain("if (!ctx.canCorrect) throw new ReportPermissionError(403");
+    expect(report).toMatch(/if \(!ctx\.canCorrect\)\s+throw new ReportPermissionError\(\s*403,/);
   });
 
   it("allows shared aggregates while restricting other workers' detailed records and corrections", () => {
@@ -86,9 +86,9 @@ describe("Pressing worker camera-only access", () => {
     expect(report).toContain("UPPER(BTRIM(u.username)) IN ('P1', 'P2', 'P3')");
     expect(report).toContain("r.company_id = $1 AND r.user_id = u.id");
     expect(report).toContain("r.role IN ('User', 'Normal User')");
-    expect(report).toContain('c.company_id = $1 AND c.user_id = u.id AND c.voided_at IS NULL');
-    expect(report).not.toContain('SELECT user_id FROM factory_pressing_assignments WHERE company_id = $1');
-    expect(report).toContain('c.voided_at IS NULL');
+    expect(report).toContain("c.company_id = $1 AND c.user_id = u.id AND c.voided_at IS NULL");
+    expect(report).not.toContain("SELECT user_id FROM factory_pressing_assignments WHERE company_id = $1");
+    expect(report).toContain("c.voided_at IS NULL");
     expect(corrections).toContain('const SUPERVISORS = new Set(["Admin", "Owner"])');
   });
 });
