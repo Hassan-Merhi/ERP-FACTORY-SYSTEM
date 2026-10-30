@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { useLocation } from "wouter";
 import { ArrowLeft, Banknote, ClipboardCheck, Coins, Settings2, ShieldCheck, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ProductionBonusesPanel } from "./productiontargets/ProductionBonusesPanel";
@@ -22,6 +22,7 @@ const actions: Array<{ key: BonusTab; title: string; detail: string; icon: typeo
 
 /** Dedicated compensation workspace: no bonus configuration or money controls in the worker table. */
 export default function FactoryProductionBonuses() {
+  const [, navigate] = useLocation();
   const params = new URLSearchParams(window.location.search);
   const initialDate = params.get("date")?.match(/^\d{4}-\d{2}-\d{2}$/)?.[0] ?? localDateStr(new Date());
   const [active, setActive] = useState<BonusTab>("setup");
@@ -29,11 +30,10 @@ export default function FactoryProductionBonuses() {
   return <div className="mx-auto max-w-[1600px] space-y-5 px-2 pb-8 sm:px-4" data-testid="factory-production-bonus-workspace">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <Link href="/factory/stock-entry">
-          <Button type="button" variant="ghost" size="sm" className="-ml-2 mb-2 gap-2">
-            <ArrowLeft className="h-4 w-4" /> Back to Production Targets
-          </Button>
-        </Link>
+        <Button type="button" variant="ghost" size="sm" className="-ml-2 mb-2 gap-2"
+          onClick={() => navigate("/factory/stock-entry")}>
+          <ArrowLeft className="h-4 w-4" /> Back to Production Targets
+        </Button>
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
           <Coins className="h-6 w-6 text-primary" /> Production Bonuses
         </h1>
@@ -70,7 +70,10 @@ export default function FactoryProductionBonuses() {
           <h2 className="font-semibold">Bonus setup</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Choose either per-extra-bale or one fixed weekly bonus per qualifying worker.
-            Use different rates for Bags, Toys, Shoes and other categories. Changes apply from their effective dates.
+            Configure category-specific rates for Bags, Toys, Shoes and others.
+            Category-weighted amounts are currently audit/preview only, not payable;
+            the daily per-extra-bale and weekly-flat approved methods are payable.
+            Settings change only from their effective dates.
           </p>
         </div>
         <ProductionBonusWeeklyMethodPanel initialDate={initialDate} />
