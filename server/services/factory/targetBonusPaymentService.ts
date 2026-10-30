@@ -41,7 +41,7 @@ function policyToHttp(error: unknown): never {
   throw error;
 }
 
-async function payingAccountTx(tx: DbTransaction, companyId: number, accountId: number): Promise<number> {
+export async function payingAccountTx(tx: DbTransaction, companyId: number, accountId: number): Promise<number> {
   const account = first(await tx.execute(sql`
     SELECT id, account_type AS "accountType", active, opening_balance_currency AS "openingCurrency"
     FROM ledger_accounts
@@ -54,7 +54,7 @@ async function payingAccountTx(tx: DbTransaction, companyId: number, accountId: 
     conflict("The selected account has a non-USD opening currency; verified FX is required");
   return Number(account.id);
 }
-async function expenseAccountTx(tx: DbTransaction, companyId: number): Promise<number> {
+export async function expenseAccountTx(tx: DbTransaction, companyId: number): Promise<number> {
   // This is the user's existing Factory Deposit Expense classification.
   await tx.execute(sql`
     INSERT INTO ledger_accounts (company_id, code, name, account_type, opening_balance, active)
