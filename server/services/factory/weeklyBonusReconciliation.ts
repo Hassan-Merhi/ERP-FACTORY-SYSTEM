@@ -64,7 +64,7 @@ export type WeeklyBonusReconciliationCode =
 function exact(value: string | number): Decimal | null {
   try {
     const number = new Decimal(value);
-    return number.isFinite() && number.gte(0) ? number.toDecimalPlaces(2) : null;
+    return number.isFinite() ? number.toDecimalPlaces(2) : null;
   } catch { return null; }
 }
 const same = (value: string | number, expected: Decimal): boolean => {
@@ -134,8 +134,8 @@ export function reconcileWeeklyBonusLedger(
        Number(payment.reversalLines)!==2)
       errors.add("REVERSAL_LINES_MISMATCH");
     if(Number(payment.reversalDaybookCount)!==1 ||
-       !same(payment.reversalDaybookUsd,new Decimal(0).minus(expected).abs()) ||
-       !same(payment.reversalDaybookNative,new Decimal(0).minus(expected).abs()))
+       !same(payment.reversalDaybookUsd,new Decimal(0).minus(expected)) ||
+       !same(payment.reversalDaybookNative,new Decimal(0).minus(expected)))
       errors.add("REVERSAL_DAYBOOK_MISMATCH");
   }
   return {
