@@ -57,6 +57,7 @@ import { ensureSupplierTrackingShopDutyDefaults } from "./startup/ensureSupplier
 import { ensureZambiaHistoricalPurchaseCost } from "./startup/ensureZambiaHistoricalPurchaseCost";
 import { ensureFactoryContainerPlannerSchemaOnBoot } from "./startup/factoryContainerPlannerSchema";
 import { ensurePriorityScanSchema } from "./startup/priorityScanSchema";
+import { ensureContainerExtraExpectedLines } from "./startup/ensureContainerExtraExpectedLines";
 import { ensureFactoryBaleOrderIntegrity } from "./startup/ensureFactoryBaleOrderIntegrity";
 import { runApprovedLegacyBaleUnitCostRepair } from "./startup/runApprovedLegacyBaleUnitCostRepair";
 import { runApprovedLegacySoldBaleUnitCostRepair } from "./startup/runApprovedLegacySoldBaleUnitCostRepair";
@@ -330,6 +331,8 @@ let migrationsDone = false;
       await ensureRecurringJournalSchema(pool);
       await ensurePriorityScanSchema(pool);
       logger.info("[startup] ✓ Priority Scan schema ensured");
+      // Loading-only expected items must exist even when bulk migrations are disabled.
+      await ensureContainerExtraExpectedLines(pool);
       await ensureFactoryInvoiceDocumentSnapshotStore(pool);
       logger.info("[startup] ✓ Factory invoice document snapshot store ensured");
       try {

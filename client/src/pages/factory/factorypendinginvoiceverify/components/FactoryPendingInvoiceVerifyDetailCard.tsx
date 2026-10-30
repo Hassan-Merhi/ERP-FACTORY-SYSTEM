@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { ComparisonItem } from "../types";
+import { ContainerExtraItemsDialog } from "../../ContainerExtraItemsDialog";
 import { fmtNum } from "../utils";
 import type { useFactoryPendingInvoiceVerifyModel } from "../useFactoryPendingInvoiceVerifyModel";
 
@@ -14,6 +15,13 @@ export function FactoryPendingInvoiceVerifyDetailCard({ model }: { model: Model 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle className="text-lg">Proforma vs Loaded</CardTitle>
           <div className="flex flex-wrap items-center gap-2">
+            {(model.orderDetail?.proformaIdUsed || verification?.order?.proformaIdUsed) ? (
+              <ContainerExtraItemsDialog
+                orderId={model.orderId}
+                customerId={model.orderDetail?.customerId ?? verification?.order?.customerId}
+                status={verification?.order?.status || model.orderDetail?.status}
+              />
+            ) : null}
             <span className="text-xs text-muted-foreground">Filter:</span>
             {(["OVER_LOADED", "UNDER_LOADED", "MISSING_FROM_LOADED", "LOADED_NOT_IN_PROFORMA"] as const).map((s) => {
               const labels: Record<string, string> = {
@@ -140,7 +148,7 @@ export function FactoryPendingInvoiceVerifyDetailCard({ model }: { model: Model 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div>
                 <h3 className="font-semibold text-sm mb-3" data-testid="text-proforma-header">
-                  Proforma Expected <span className="text-muted-foreground font-normal">(mismatches only)</span>
+                  Container Expected <span className="text-muted-foreground font-normal">(including container-only additions · mismatches only)</span>
                 </h3>
                 {allLeftRows.length > 0 ? (
                   <Table mobileLayout="cards" wrapperClassName="max-h-[50vh] overflow-auto">
@@ -258,7 +266,7 @@ export function FactoryPendingInvoiceVerifyDetailCard({ model }: { model: Model 
                   </Table>
                 ) : (
                   <p className="text-sm text-muted-foreground" data-testid="text-no-proforma-mismatches">
-                    All proforma items matched - no mismatches
+                    All expected container items matched - no mismatches
                   </p>
                 )}
               </div>
