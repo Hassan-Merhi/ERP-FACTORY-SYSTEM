@@ -42,6 +42,20 @@ export async function ensureFactoryTargetBonusPaymentSchema(pool: Pick<Pool, "qu
     CREATE INDEX IF NOT EXISTS factory_target_bonus_payments_date
       ON factory_target_bonus_payments(company_id, payment_date DESC)
   `);
+  // Persist method and category breakdown without creating a second cash claim.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS factory_target_bonus_checkout_details (
+      id BIGSERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      review_id INTEGER NOT NULL REFERENCES factory_target_bonus_reviews(id) ON DELETE RESTRICT,
+      method VARCHAR(12) NOT NULL CHECK (method IN ('standard','category')),
+      breakdown JSONB NOT NULL CHECK (jsonb_typeof(breakdown)='array'),
+      calculation_hash CHAR(64) NOT NULL CHECK (calculation_hash ~ '^[a-f0-9]{64}$'),
+      created_by VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      CONSTRAINT factory_target_bonus_checkout_review_unique UNIQUE (company_id,review_id)
+    )
+  `);
   // Phase 15: distinct one-time claim for an immutable worker/week review.
   // Reversed payments retain the claim and cannot be automatically repaid.
   await pool.query(`

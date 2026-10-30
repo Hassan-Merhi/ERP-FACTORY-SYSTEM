@@ -54,14 +54,34 @@ export function registerProductionTargetBonusCategoryRateRoutes(app: Express): v
         const [versions, known] = await Promise.all([
           readVersions(companyId),
           db.execute(sql`
-            SELECT category FROM (
-              SELECT category FROM factory_staff_tracking_entries
-                WHERE company_id = ${companyId} AND page_type = 'production'
-              UNION
-              SELECT category FROM factory_worker_production_target_defaults
-                WHERE company_id = ${companyId}
-            ) categories
-            WHERE category IS NOT NULL AND BTRIM(category) <> ''
+            -- Show the categories resolved for the selected Production
+            -- Targets date, not every obsolete historic category ever used.
+            WITH latest_defaults AS (
+              SELECT DISTINCT ON (worker_id)
+                worker_id, category
+              FROM factory_worker_production_target_defaults
+              WHERE company_id=${companyId} AND effective_from <= ${asOf}::date
+              ORDER BY worker_id,effective_from DESC,id DESC
+            ), assigned AS (
+              SELECT COALESCE(
+                CASE WHEN e.category_overridden THEN NULLIF(BTRIM(e.category),'') END,
+                d.category,
+                NULLIF(BTRIM(e.category),''),
+                NULLIF(BTRIM(w.position),''),
+                NULLIF(BTRIM(w.department),'')
+              ) AS category
+              FROM factory_workers w
+              LEFT JOIN latest_defaults d ON d.worker_id=w.id
+              LEFT JOIN factory_staff_tracking_entries e
+                ON e.company_id=w.company_id AND e.person_id=w.id
+                AND e.person_type='worker' AND e.page_type='production'
+                AND e.period_type='daily' AND e.period_start=${asOf}::date
+                AND e.period_end=${asOf}::date
+              WHERE w.company_id=${companyId}
+                AND (w.active=TRUE OR e.person_id IS NOT NULL)
+            )
+            SELECT DISTINCT category FROM assigned
+            WHERE category IS NOT NULL AND BTRIM(category)<>''
             ORDER BY category LIMIT 1000
           `),
         ]);

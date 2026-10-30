@@ -14,13 +14,15 @@ describe("Production Bonuses dedicated page and audited Daybook deletion", () =>
     expect(targets).not.toContain("<ProductionTargetBonusPaymentsPanel");
     expect(routes).toContain('path="/factory/production-bonuses"');
     expect(routes).toContain('user?.role === "Admin" || user?.role === "Owner"');
-    for (const tab of ["setup", "review", "pay", "history"]) {
-      expect(workspace).toContain(`key: "${tab}"`);
-    }
-    expect(workspace).toContain("<ProductionBonusWeeklyMethodPanel");
-    expect(workspace).toContain("<ProductionBonusCategoryRatesPanel");
-    expect(workspace).toContain("<ProductionBonusesPanel");
-    expect(workspace).toContain("<ProductionTargetBonusPaymentsPanel");
+    expect(workspace).toContain("<ProductionBonusCheckoutPanel");
+    expect(workspace).toContain("<ProductionBonusHistoryPanel");
+    expect(workspace).not.toContain("<ProductionBonusesPanel");
+    expect(workspace).not.toContain("<ProductionTargetBonusPaymentsPanel");
+    const checkout = source("client/src/pages/factory/productiontargets/ProductionBonusCheckoutPanel.tsx");
+    expect(checkout).toContain("<ProductionBonusCategoryRatesPanel");
+    expect(checkout).toContain('t("reviewPay")');
+    expect(checkout).toContain("/checkout");
+    expect(checkout).toContain('method==="category"');
     expect(workspace).toContain('/factory/stock-entry?tab=production-targets');
     expect(source("client/src/pages/factory/BaleStockEntry.tsx"))
       .toContain('get("tab") === "production-targets"');
@@ -31,7 +33,8 @@ describe("Production Bonuses dedicated page and audited Daybook deletion", () =>
     const editor = source("client/src/pages/factory/productiontargets/ProductionBonusCategoryRatesPanel.tsx");
     const page = source("client/src/pages/factory/FactoryProductionBonuses.tsx");
     expect(rates).toContain("FROM factory_worker_production_target_defaults");
-    expect(rates).toContain("SELECT category FROM factory_staff_tracking_entries");
+    expect(rates).toContain("FROM factory_staff_tracking_entries e");
+    expect(rates).toContain("latest_defaults");
     expect(rates).not.toContain("SELECT name AS category FROM factory_worker_categories");
     expect(rates).toContain("Select an existing category from Production Targets");
     expect(editor).toContain('aria-label="Production Targets category"');
