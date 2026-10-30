@@ -36,6 +36,14 @@ test("LAN captures only explicitly supported USD ledger-only journals", () => {
   }
 });
 
+test("LAN refuses unapplyable calendar dates before writing a voucher", () => {
+  for (const day of ["2026-02-30", "2026-11-31", "2026-13-01", "2026-00-01", "2026-10-30T12:00:00Z"]) {
+    assert.equal(supportsPhase8LanVoucherCapture({
+      ...journal, voucher: { ...journal.voucher, voucherDate: day },
+    }), false);
+  }
+});
+
 test("operator replay cannot activate with ACK alone, invalid epoch, or missing baseline", () => {
   const approved = { siteId, companyId: 6, cloudEpoch: "2", baselineSha256: "a".repeat(64),
     operatorAck: "LAN_FROZEN_AND_CLOUD_EPOCH_APPROVED" };
