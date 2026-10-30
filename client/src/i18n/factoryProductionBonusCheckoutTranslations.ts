@@ -67,6 +67,9 @@ const translations = {
   standardRate: { en: "Standard rate", ar: "السعر القياسي", fr: "Tarif standard" },
   editCategoryHint: { en: "Only categories currently displayed in Production Targets are available. Saved rates do not change previous approved or paid bonuses.", ar: "الفئات الظاهرة في أهداف الإنتاج فقط متاحة. الأسعار المحفوظة لا تغير المدفوعات السابقة.", fr: "Seules les catégories affichées dans les objectifs de production sont disponibles. Les paiements passés ne changent pas." },
   noCategories: { en: "No categories are currently assigned in Production Targets. Assign a category there first.", ar: "لا توجد فئات محددة في أهداف الإنتاج. حدّد الفئة أولاً.", fr: "Aucune catégorie attribuée dans les objectifs de production. Attribuez-en une d’abord." },
+  backToTargets: { en: "Back to Production Targets", ar: "العودة إلى أهداف الإنتاج", fr: "Retour aux objectifs de production" },
+  paymentHistory: { en: "Bonus payment history", ar: "سجل مدفوعات المكافآت", fr: "Historique des primes" },
+  openBonus: { en: "Open Bonus Payroll", ar: "فتح رواتب المكافآت", fr: "Ouvrir la paie des primes" },
 } as const;
 export type ProductionBonusTranslationKey = keyof typeof translations;
 export function bonusText(key: ProductionBonusTranslationKey, language: ApplicationLanguage): string {
