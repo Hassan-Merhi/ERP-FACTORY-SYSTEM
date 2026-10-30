@@ -1,8 +1,23 @@
 /**
  * Phase 8 initial LAN capture is intentionally narrower than the generic
  * voucher HTTP route: USD active journals with ledger accounts only. Other
- * voucher types/currency/attachments/stock remain blocked pending Phase 9.
+ * voucher types, currencies, attachments and stock remain blocked in Phase 9.
+ * The restrictions below guarantee the protected central route handles it.
  */
+const MONEY = /^(?:0|[1-9][0-9]{0,14})(?:\.[0-9]{1,2})?$/;
+const HEADER = new Set([
+  "voucherType", "voucherDate", "currency", "optional", "voucherNumber",
+  "description", "exchangeRate", "locationId", "effectiveDate",
+]);
+const LINE = new Set(["ledgerAccountId", "debitAmount", "creditAmount", "narration"]);
+
+function cents(value) {
+  const text = String(value ?? "0");
+  if (!MONEY.test(text)) return null;
+  const [whole, decimal = ""] = text.split(".");
+  return BigInt(whole) * 100n + BigInt((decimal + "00").slice(0, 2));
+}
+
 export function supportsPhase8LanVoucherCapture(body) {
   if (!body || typeof body !== "object" || Array.isArray(body) ||
       typeof body.clientRequestId !== "string" ||
@@ -12,18 +27,24 @@ export function supportsPhase8LanVoucherCapture(body) {
       Array.isArray(body.voucher) || !Array.isArray(body.entries) ||
       body.entries.length < 2 || body.entries.length > 100) return false;
   const voucher = body.voucher;
-  if (voucher.voucherType !== "Journal" ||
+  if (Object.keys(voucher).some((key) => !HEADER.has(key)) ||
+      voucher.voucherType !== "Journal" ||
       voucher.optional === true || String(voucher.currency ?? "USD") !== "USD" ||
       voucher.locationId != null || voucher.effectiveDate != null ||
-      voucher.deletedAt != null || voucher.sourceModule === "POS" ||
       typeof voucher.voucherDate !== "string" ||
       !/^\d{4}-\d{2}-\d{2}$/.test(voucher.voucherDate)) return false;
-  return body.entries.every((entry) =>
-    entry && typeof entry === "object" && !Array.isArray(entry) &&
-    Number.isSafeInteger(Number(entry.ledgerAccountId)) &&
-    Number(entry.ledgerAccountId) > 0 &&
-    ["bankAccountId","fixedAssetId","supplierId","employeeId","customerId","factorySupplierId"].every(
-      (field) => entry[field] == null
-    )
-  );
+  let debit = 0n;
+  let credit = 0n;
+  for (const entry of body.entries) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry) ||
+        Object.keys(entry).some((key) => !LINE.has(key)) ||
+        !Number.isSafeInteger(Number(entry.ledgerAccountId)) ||
+        Number(entry.ledgerAccountId) < 1) return false;
+    const d = cents(entry.debitAmount);
+    const c = cents(entry.creditAmount);
+    if (d == null || c == null || (d === 0n) === (c === 0n)) return false;
+    debit += d;
+    credit += c;
+  }
+  return debit > 0n && debit === credit;
 }
