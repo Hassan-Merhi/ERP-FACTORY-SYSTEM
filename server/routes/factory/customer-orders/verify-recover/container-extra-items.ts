@@ -155,12 +155,41 @@ export function registerContainerExtraExpectedLineRoutes(app: Express) {
         const order = await findOrder(tx, companyId, orderId, true);
         if (!["DRAFT", "LOADING", "PENDING_VERIFICATION", "VERIFIED"].includes(order.status))
           throw new HttpError(409, "Container items cannot be changed after finalization");
-        return resultRows<{ id: number }>(await tx.execute(sql`
+        const removed = resultRows<{ id: number }>(await tx.execute(sql`
           DELETE FROM customer_order_extra_expected_lines
           WHERE company_id = ${companyId} AND order_id = ${orderId}
             AND UPPER(TRIM(article_code)) = ${articleCode}
           RETURNING id
         `));
+        if (!removed.length) return removed;
+
+        // Restore the original proforma price for this article if it belongs
+        // to the master. Removing a supplement must remove its price override.
+        if (order.proforma_id_used) {
+          const restoredBales = resultRows<{ article_code: string }>(await tx.execute(sql`
+            UPDATE customer_order_bales cob
+            SET price_used = CASE
+              WHEN COALESCE(master.pricing_mode, 'per_bale') = 'per_kg'
+                AND COALESCE(master.price_per_kg, 0) > 0
+              THEN ROUND(COALESCE(cob.weight, 0)::numeric * master.price_per_kg::numeric, 2)
+              ELSE COALESCE(master.price_per_bale, 0)::numeric
+            END
+            FROM LATERAL (
+              SELECT cpl.pricing_mode, cpl.price_per_kg, cpl.price_per_bale
+              FROM customer_proforma_lines cpl
+              WHERE cpl.proforma_id = ${order.proforma_id_used}
+                AND UPPER(TRIM(cpl.article_code)) = ${articleCode}
+              ORDER BY cpl.id DESC LIMIT 1
+            ) master
+            WHERE cob.order_id = ${orderId}
+              AND UPPER(TRIM(cob.article_code)) = ${articleCode}
+            RETURNING cob.article_code
+          `));
+          for (const code of new Set(restoredBales.map((row) => row.article_code))) {
+            await recalculateOrderTotalsForScannedArticle(tx, orderId, code);
+          }
+        }
+        return removed;
       });
       if (!deleted.length) return res.status(404).json({ message: "Extra item not found" });
       return res.json({ deleted: true });
