@@ -26,6 +26,7 @@ export type BonusSheetWorker = {
   weeklyAmount: number;
   weeklyProjected: boolean;
   weeklyApproved: boolean;
+  linkEndedOn: string | null;
   readyDays: number;
   paidDays: number;
   needsSetup: number;
@@ -182,6 +183,10 @@ export function ProductionBonusWeeklySheet({
                           : "border-border/70 bg-muted/70 text-muted-foreground")}>
                         {state}
                       </span>
+                      {worker.linkEndedOn && <span className="mt-1 block max-w-[190px] text-[10px] font-medium leading-snug text-amber-600 dark:text-amber-400"
+                        title="This worker's previous production link is no longer active for the selected dates. Relink the correct team in Production Targets to split shared bales.">
+                        Link ended {worker.linkEndedOn} · relink to split
+                      </span>}
                     </div>
                   </div>
                 </th>
