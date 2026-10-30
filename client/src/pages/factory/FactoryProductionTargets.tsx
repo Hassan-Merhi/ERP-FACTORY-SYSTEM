@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import {
   CalendarClock,
   CalendarDays,
@@ -22,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { useToast } from "@/hooks/use-toast";
+import { bonusText } from "@/i18n/factoryProductionBonusCheckoutTranslations";
 import {
   FACTORY_TRACKING_STATUSES,
   translateFactoryStaffTrackingText,
@@ -49,8 +51,6 @@ import {
 import { ProductionTargetDefaultsDialog } from "./productiontargets/ProductionTargetDefaultsDialog";
 import { ProductionTargetsEditorDialog } from "./productiontargets/ProductionTargetsEditorDialog";
 import { ProductionExcelRangeDialog, type ProductionExportDates } from "./productiontargets/ProductionExcelRangeDialog";
-import { ProductionBonusCheckoutPanel } from "./productiontargets/ProductionBonusCheckoutPanel";
-import { ProductionBonusHistoryPanel } from "./productiontargets/ProductionBonusHistoryPanel";
 import { exportWeeklyProductionExcel, ProductionDateRangeError } from "./productiontargets/productionWeeklyExcel";
 
 function SummaryTile({ label, value, icon }: { label: string; value: string | number; icon: React.ReactNode }) {
@@ -109,6 +109,7 @@ function SummaryGroupTile({
 
 export default function FactoryProductionTargets() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const { language } = useApplicationLanguage();
   const tr = (key: FactoryStaffTrackingTranslationKey) => translateFactoryStaffTrackingText(key, language);
   const [periodType, setPeriodType] = useState<PeriodType>("daily");
@@ -437,8 +438,13 @@ export default function FactoryProductionTargets() {
         />
       </div>
 
-      {periodType === "daily" && <ProductionBonusCheckoutPanel initialDate={referenceDate} productionCategories={rows.map(row => row.category)} />}
-      {periodType === "daily" && <ProductionBonusHistoryPanel />}
+      {periodType === "daily" && (
+        <div className="flex justify-end">
+          <Button variant="outline" onClick={() => navigate("/factory/production-bonuses?date=" + referenceDate)}>
+            {bonusText("openBonus", language)}
+          </Button>
+        </div>
+      )}
 
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
