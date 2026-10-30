@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { randomUUID } from "node:crypto";
+import { mondayOfProductionBonusWeek } from "@shared/productionTargetBonusWeeklyMethod";
 import { sql } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
@@ -131,6 +132,7 @@ export function registerFactoryTargetBonusRoutes(app: Express): void {
           const index = new Map(available.map((row) => [decisionKey(row.date, row.workerId), row]));
           let saved = 0;
           let unchanged = 0;
+          const weeklyModes = new Map<string, string>();
 
           for (const choice of valid) {
             // Category and legacy worker/day bonus reviews are mutually exclusive.
@@ -160,6 +162,21 @@ export function registerFactoryTargetBonusRoutes(app: Express): void {
               }
               throw httpError(409, "This bonus already has an immutable decision");
             }
+            // A company-selected weekly-flat method excludes NEW daily per-bale reviews.
+            // Already reviewed daily rows may still replay their immutable decision above.
+            const monday = mondayOfProductionBonusWeek(choice.date)!;
+            let method = weeklyModes.get(monday);
+            if (method === undefined) {
+              const methodRow = resultRows(await tx.execute(sql`
+                SELECT method FROM factory_production_target_bonus_weekly_methods
+                WHERE company_id = ${companyId} AND effective_week <= ${monday}::date
+                ORDER BY effective_week DESC, id DESC LIMIT 1
+              `)) as Array<{ method: string }>;
+              method = methodRow[0]?.method ?? 'per_extra_bale';
+              weeklyModes.set(monday, method);
+            }
+            if (method === 'weekly_flat')
+              throw httpError(409, 'Weekly flat bonus is selected for this week; daily per-bale reviews are disabled');
             if (Math.round(item.proposedAmount * 100) !== Math.round(choice.expectedAmount * 100)) {
               throw httpError(409, "Bonus amount changed since review; refresh and review again");
             }
