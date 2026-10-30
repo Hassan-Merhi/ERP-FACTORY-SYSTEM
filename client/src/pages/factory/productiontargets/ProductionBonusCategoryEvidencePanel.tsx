@@ -65,6 +65,7 @@ export function ProductionBonusCategoryEvidencePanel({ initialDate }: {initialDa
       toast({title:"Category target allocation saved",description:"Historical allocation locked. No bonus or payment posted."});
       setWorker(null);
       void queryClient.invalidateQueries({queryKey:[evidenceEndpoint,date]});
+      void queryClient.invalidateQueries({queryKey:["/api/factory/production-target-bonuses/category-preview",date]});
     },
     onError:(e:Error)=>toast({title:"Allocation not saved",description:e.message,variant:"destructive"}),
   });
