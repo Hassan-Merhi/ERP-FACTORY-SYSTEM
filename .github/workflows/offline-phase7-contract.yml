@@ -6,6 +6,10 @@ on:
       - feat/offline-mode-integration
     paths:
       - 'server/edge/phase7WriterGate.mjs'
+      - 'server/edge/phase7WriterGate.d.mts'
+      - 'server/edge/edgeRuntimePolicy.d.mts'
+      - 'server/edge/edgeBoundary.ts'
+      - 'server/db.ts'
       - 'server/edge/edgeRuntimePolicy.mjs'
       - 'deploy/lan/phase7-install-writer-fence.sql'
       - 'tests/offline-phase7-writer-gate.test.mjs'
@@ -31,3 +35,7 @@ jobs:
         run: node --test tests/offline-phase7-writer-gate.test.mjs tests/offline-phase7-baseline.test.mjs
       - name: Exercise fenced writes against isolated PostgreSQL 17
         run: bash tests/offline-phase7-postgres-fence.sh
+      - name: Install locked dependencies for TypeScript safety
+        run: npm ci --ignore-scripts
+      - name: Verify TypeScript contracts
+        run: npm run check
