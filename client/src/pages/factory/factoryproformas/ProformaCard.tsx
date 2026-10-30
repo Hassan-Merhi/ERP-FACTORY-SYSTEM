@@ -32,6 +32,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { effectivePricePerBale } from "./utils";
+import { invoicingProformaEditPath } from "@/lib/factoryProformaEditRoutes";
 import type { Proforma, ProformaLine } from "./types";
 import { ProformaLinesTable } from "./ProformaLinesTable";
 
@@ -263,7 +264,7 @@ export function ProformaCard(props: ProformaCardProps) {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => navigate(`/factory/stock-allocation-v5?proformaId=${proforma.id}&openEdit=true`)}
+                onClick={() => navigate(invoicingProformaEditPath(proforma.id, customerId))}
                 data-testid={`button-edit-in-allocation-${proforma.id}`}
               >
                 <Pencil className="mr-1.5 h-3.5 w-3.5" />

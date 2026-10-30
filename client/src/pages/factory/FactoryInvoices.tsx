@@ -217,8 +217,11 @@ export default function FactoryInvoices() {
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Deleted", description: "Invoice deleted successfully." });
+      toast({ title: "Loading deleted", description: "Eligible bales returned to available stock. The loading can be found in Deleted Items." });
       queryClient.invalidateQueries({ predicate: keyStartsWith("/api/factory/customer-orders") });
+      queryClient.invalidateQueries({ predicate: keyStartsWith("/api/factory/stock") });
+      queryClient.invalidateQueries({ predicate: keyStartsWith("/api/factory/bales") });
+      queryClient.invalidateQueries({ predicate: keyStartsWith("/api/factory/locations") });
       invalidateCustomerBalances();
     },
     onError: (error: ClientErrorLike) => {

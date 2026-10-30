@@ -11,6 +11,7 @@ import { registerDependentDeletedItemPermanentRoutes } from "./admin/dependentDe
 import { registerDeletedItemsRoutes } from "./admin/deleted-items";
 import { registerSecurityAnomalyRoutes } from "./admin/securityAnomalyRoutes";
 import { registerSecurityPermissionRoutes } from "./admin/securityPermissionRoutes";
+import { registerGlobalForceRefreshRoutes } from "./admin/globalForceRefreshRoutes";
 import { registerSchemaDiagnosticRoutes } from "./admin/schemaDiagnosticRoutes";
 import { registerConvergenceReconciliationRoutes } from "./admin/convergenceReconciliationRoutes";
 import { requirePrivilegedOperation } from "../services/security/privilegedOperationEnforcementAdapter";
@@ -64,6 +65,7 @@ export function registerAdminRoutes(app: Express) {
   registerDeletedItemsRoutes(app);
   registerSecurityAnomalyRoutes(app);
   registerSecurityPermissionRoutes(app);
+  registerGlobalForceRefreshRoutes(app);
   registerSchemaDiagnosticRoutes(app);
   registerConvergenceReconciliationRoutes(app);
 }

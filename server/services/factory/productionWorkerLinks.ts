@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import { db } from "../../db";
 import { resultRows } from "../../lib/queryResult";
 import { sqlArray } from "../../lib/sqlArray";
-import { resolveUnlinkBaleAllocations, type WorkerBaleAllocation } from "@shared/factoryProductionTargetSplit";
+import { linkedTotalBalesFromPerWorker, resolveUnlinkBaleAllocations, type WorkerBaleAllocation } from "@shared/factoryProductionTargetSplit";
 
 export interface ProductionWorkerLinkMember {
   workerId: number;
@@ -239,14 +239,32 @@ export async function unlinkProductionWorkerLink(input: {
       ORDER BY worker_id
     `);
     const workerIds = resultRows(membersResult).map((row) => Number(row.workerId));
-    // Validate and calculate before changing the link. Transaction rollback protects
-    // the existing link if allocations are incomplete or over the shared total.
-    const splitByWorker = resolveUnlinkBaleAllocations(sharedTarget, workerIds, input.allocations);
+    // The linked target applies to EACH worker (and is summed on the linked
+    // production row). Split the combined total, not a single member's share.
+    // Validate before changing the link so a bad allocation rolls back safely.
+    const combinedTarget = linkedTotalBalesFromPerWorker(sharedTarget, workerIds.length);
+    const splitByWorker = resolveUnlinkBaleAllocations(combinedTarget, workerIds, input.allocations);
 
     await tx.execute(sql`
       UPDATE factory_worker_production_links
       SET effective_to = ${input.effectiveTo}::date, updated_at = now()
       WHERE id = ${input.linkId} AND company_id = ${input.companyId}
+    `);
+
+    // Any target override saved while these workers were linked must not hide
+    // their restored individual fixed targets on the unlink date. Preserve
+    // category overrides and historical/other-day entries.
+    await tx.execute(sql`
+      UPDATE factory_staff_tracking_entries
+      SET target_overridden = false, updated_at = now()
+      WHERE company_id = ${input.companyId}
+        AND page_type = 'production'
+        AND period_type = 'daily'
+        AND period_start = ${input.effectiveTo}::date
+        AND period_end = ${input.effectiveTo}::date
+        AND person_type = 'worker'
+        AND person_id = ANY(${sqlArray(workerIds)})
+        AND target_overridden = true
     `);
 
     for (const workerId of workerIds) {

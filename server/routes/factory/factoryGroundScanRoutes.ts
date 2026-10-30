@@ -10,36 +10,63 @@ export function registerFactoryGroundScanRoutes(app: Express) {
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const locationId = req.query.locationId as string | undefined;
       const locVal = locationId && locationId !== "all" ? parseInt(locationId, 10) : null;
-      const result =
-        locVal !== null
-          ? await pool.query(
-              `SELECT g.id, g.company_id, g.location_id, g.reference_number,
-                    COALESCE(bp.article_code, g.article_code) AS article_code,
-                    COALESCE(g.product_name, bp.name) AS product_name,
-                    g.weight_kg, g.status, g.is_in_loading_order, g.scanned_at, g.scanned_by_user_id,
-                    fb.stock_entry_date::text AS date_bale_produced,
-                    fb.worker_name
-             FROM factory_ground_scan_items g
-             LEFT JOIN factory_bales fb ON fb.reference_number = g.reference_number AND fb.company_id = g.company_id::integer
-             LEFT JOIN bale_products bp ON bp.id = fb.product_id AND bp.company_id = g.company_id::integer
-             WHERE g.company_id = $1 AND g.location_id = $2
-             ORDER BY g.scanned_at DESC`,
-              [companyId, locVal]
-            )
-          : await pool.query(
-              `SELECT g.id, g.company_id, g.location_id, g.reference_number,
-                    COALESCE(bp.article_code, g.article_code) AS article_code,
-                    COALESCE(g.product_name, bp.name) AS product_name,
-                    g.weight_kg, g.status, g.is_in_loading_order, g.scanned_at, g.scanned_by_user_id,
-                    fb.stock_entry_date::text AS date_bale_produced,
-                    fb.worker_name
-             FROM factory_ground_scan_items g
-             LEFT JOIN factory_bales fb ON fb.reference_number = g.reference_number AND fb.company_id = g.company_id::integer
-             LEFT JOIN bale_products bp ON bp.id = fb.product_id AND bp.company_id = g.company_id::integer
-             WHERE g.company_id = $1 AND g.location_id IS NULL
-             ORDER BY g.scanned_at DESC`,
-              [companyId]
-            );
+      // Scan rows are permanent verification evidence, not the source of truth
+      // for stock state. Resolve the current bale and its live outbound order
+      // each read so loading, sale, return, dispatch and deletion show without rescanning.
+      // Keep the snapshot only for legacy label-only scans with no factory_bales row.
+      const query = `
+        SELECT g.id, g.company_id, g.location_id, g.reference_number,
+               COALESCE(NULLIF(bp.article_code, ''), NULLIF(fb.article_code, ''), g.article_code) AS article_code,
+               COALESCE(NULLIF(fb.product_name, ''), NULLIF(g.product_name, ''), bp.name) AS product_name,
+               COALESCE(fb.weight_kg, g.weight_kg) AS weight_kg,
+               CASE
+                 WHEN fb.deleted_at IS NOT NULL THEN 'DELETED'
+                 WHEN fb.status IN ('DELETED', 'REMOVED') THEN fb.status
+                 WHEN fb.status = 'IN_STOCK' AND active_order.status IN ('FINALIZED', 'DISPATCHED', 'SOLD')
+                   THEN 'SOLD'
+                 WHEN fb.status IN ('IN_STOCK', 'RESERVED_FOR_ORDER') AND active_order.status = 'LOADING'
+                   THEN 'LOADING'
+                 WHEN fb.status = 'IN_STOCK' AND active_order.status IN ('PENDING_VERIFICATION', 'VERIFIED')
+                   THEN 'RESERVED_FOR_ORDER'
+                 ELSE COALESCE(fb.status, g.status)
+               END AS status,
+               (fb.id IS NOT NULL
+                 AND fb.deleted_at IS NULL
+                 AND fb.status IN ('IN_STOCK', 'RESERVED_FOR_ORDER')
+                 AND active_order.status = 'LOADING') AS is_in_loading_order,
+               g.scanned_at, g.scanned_by_user_id,
+               fb.stock_entry_date::text AS date_bale_produced,
+               fb.worker_name
+          FROM factory_ground_scan_items g
+          LEFT JOIN factory_bales fb
+            ON fb.reference_number = g.reference_number
+           AND fb.company_id = g.company_id::integer
+          LEFT JOIN bale_products bp
+            ON bp.id = fb.product_id
+           AND bp.company_id = g.company_id::integer
+          LEFT JOIN LATERAL (
+            SELECT co.status
+              FROM customer_order_bales cob
+              JOIN customer_orders co ON co.id = cob.order_id
+             WHERE cob.bale_id = fb.id
+               AND co.company_id = fb.company_id
+               AND co.deleted_at IS NULL
+               AND co.status IN ('LOADING', 'PENDING_VERIFICATION', 'VERIFIED', 'FINALIZED', 'DISPATCHED', 'SOLD')
+             ORDER BY CASE co.status
+               WHEN 'FINALIZED' THEN 0
+               WHEN 'SOLD' THEN 1
+               WHEN 'DISPATCHED' THEN 2
+               WHEN 'VERIFIED' THEN 3
+               WHEN 'PENDING_VERIFICATION' THEN 4
+               WHEN 'LOADING' THEN 5
+               ELSE 9 END
+             LIMIT 1
+          ) active_order ON TRUE
+         WHERE g.company_id = $1
+           AND ${locVal === null ? "g.location_id IS NULL" : "g.location_id = $2"}
+         ORDER BY g.scanned_at DESC
+      `;
+      const result = await pool.query(query, locVal === null ? [companyId] : [companyId, locVal]);
       return res.json(result.rows);
     } catch (e: unknown) {
       return res.status(500).json({ message: getErrorMessage(e) });

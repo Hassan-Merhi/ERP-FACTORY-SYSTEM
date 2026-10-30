@@ -26,8 +26,9 @@ const API_BASE = "/api/factory/cost-centers";
 export function FactoryDaybookCostCenters({ entry }: { entry: DaybookEntry }) {
   const { selectedCompany } = useCompany();
   const role = selectedCompany?.role ?? "";
-  const canRead = ["Admin", "Owner", "Developer", "Manager"].includes(role);
-  const canWrite = ["Admin", "Owner", "Developer"].includes(role);
+  // Keep factory Daybook cost-center allocations developer-only as well.
+  const canRead = role === "Developer";
+  const canWrite = role === "Developer";
   const voucherBacked = entry.referenceTable?.toLowerCase() === "vouchers" && Number(entry.referenceId) > 0;
   const standalone =
     entry.id > 0 &&

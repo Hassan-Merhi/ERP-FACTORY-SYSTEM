@@ -361,11 +361,11 @@ export function InvoiceOrderRow({
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Delete Invoice</AlertDialogTitle>
+                  <AlertDialogTitle>Delete Loading</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will permanently delete invoice {order.invoiceNumber || `#${order.id}`} for{" "}
-                    {order.customerName}. Any bales assigned to this order will be returned to stock. This cannot be
-                    undone.
+                    Delete loading {order.invoiceNumber || `#${order.id}`} for{" "}
+                    {order.customerName}? Its eligible bales will become available in stock again.
+                    The loading is moved to Settings → Deleted Items for recovery; finalized invoices cannot be deleted here.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

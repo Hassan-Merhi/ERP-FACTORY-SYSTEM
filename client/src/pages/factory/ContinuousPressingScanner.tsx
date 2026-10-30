@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { createCameraDecoder, hasCameraAccess, type CameraBarcodeDecoder, type CameraDecoderEngine } from "./pressing-scanner/cameraDecoder";
 import { ContinuousScanGate } from "./pressing-scanner/continuousScanGate";
+import { PRESSING_TIME_ZONE } from "@shared/pressingTimeZone";
 
 export type PressingScanCapture = {
   barcode: string;
@@ -23,6 +24,7 @@ export type PressingScanOutcome = {
   timezoneName?: string;
   weightKg?: string;
   machineName?: string;
+  scannedBy?: string;
 };
 export type PressingScannerAssignment = {
   assignmentId: number;
@@ -41,18 +43,26 @@ type ScreenWakeLockNavigator = Navigator & { wakeLock?: { request(type: "screen"
 
 type TorchCapabilities = MediaTrackCapabilities & { torch?: boolean; focusMode?: string[] };
 
-const SCAN_POLL_MS = 220;
-function capturedTime(iso: string, timeZone?: string): string {
-  try {
-    return new Date(iso).toLocaleTimeString(undefined, {
-      hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit",
-      ...(timeZone ? { timeZone } : {}),
-    });
-  } catch {
-    return new Date(iso).toLocaleTimeString(undefined, {
-      hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit",
-    });
-  }
+// Schedule only after each decoder call finishes; avoid overlapping ZXing work.
+// Native can poll faster because it is hardware accelerated.
+const SCAN_POLL_MS = { native: 70, zxing: 90 } as const;
+function capturedTime(iso: string): string {
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return "—";
+  return date.toLocaleTimeString("en-GB", {
+    hourCycle: "h23", hour: "2-digit", minute: "2-digit", second: "2-digit",
+    timeZone: PRESSING_TIME_ZONE,
+  });
+}
+function capturedDate(iso: string): string {
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return "—";
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    year: "numeric", month: "2-digit", day: "2-digit",
+    timeZone: PRESSING_TIME_ZONE,
+  }).formatToParts(date);
+  const value = (type: string) => parts.find(part => part.type === type)?.value ?? "";
+  return [value("year"), value("month"), value("day")].join("-");
 }
 function cameraErrorMessage(error: unknown): string {
   const name = error instanceof DOMException ? error.name : "";
@@ -69,13 +79,16 @@ function cameraErrorMessage(error: unknown): string {
 }
 
 export function ContinuousPressingScanner({
-  assignment, active, onBarcode,
+  assignment, active, onBarcode, simpleControls = false,
 }: {
   assignment: PressingScannerAssignment | null;
   active: boolean;
   onBarcode: (capture: PressingScanCapture) => Promise<PressingScanOutcome>;
+  simpleControls?: boolean;
 }) {
-  const [requested, setRequested] = useState(false);
+  // The worker's "Open Camera" action mounts this scanner and begins capture.
+  // The parent "Close Camera" unmounts it, releasing the camera stream.
+  const [requested, setRequested] = useState(simpleControls);
   const [retryAttempt, setRetryAttempt] = useState(0);
   const [visible, setVisible] = useState(() => typeof document === "undefined" || !document.hidden);
   const [status, setStatus] = useState<ScannerStatus>("idle");
@@ -83,7 +96,7 @@ export function ContinuousPressingScanner({
   const [last, setLast] = useState<{
     barcode: string; at: string; outcome: ScanFeedback; message: string; intervalSeconds: number | null;
     confirmedAt?: string; timezoneName?: string; weightKg?: string; machineName?: string;
-    confirmationId?: number; productionDate?: string;
+    confirmationId?: number; productionDate?: string; scannedBy?: string;
   } | null>(null);
   const [manualCode, setManualCode] = useState("");
   const [sound, setSound] = useState(true);
@@ -94,7 +107,7 @@ export function ContinuousPressingScanner({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const trackRef = useRef<MediaStreamTrack | null>(null);
   const audioRef = useRef<AudioContextLike | null>(null);
-  const gateRef = useRef(new ContinuousScanGate());
+  const gateRef = useRef(new ContinuousScanGate(1500, 3));
   // The camera must keep decoding DIFFERENT barcodes during slow HTTP.
   // All captures are persisted individually in IndexedDB before submission.
   const inFlightRef = useRef(0);
@@ -191,7 +204,7 @@ export function ContinuousPressingScanner({
         barcode, at: deviceCapturedAt, outcome: result.kind, message: result.message, intervalSeconds,
         confirmedAt: result.confirmedAt, timezoneName: result.timezoneName, weightKg: result.weightKg,
         machineName: result.machineName, confirmationId: result.confirmationId,
-        productionDate: result.productionDate,
+        productionDate: result.productionDate, scannedBy: result.scannedBy,
       });
       feedback(result.kind);
     } catch {
@@ -239,7 +252,7 @@ export function ContinuousPressingScanner({
           if (next) void handleRead(next, currentAssignment);
         } catch { /* A transient bad frame is not a fatal camera error. */ }
       }
-      if (!canceled) timer = setTimeout(() => void tick(detector), SCAN_POLL_MS);
+      if (!canceled) timer = setTimeout(() => void tick(detector), SCAN_POLL_MS[detector.engine]);
     };
 
     const start = async () => {
@@ -248,17 +261,9 @@ export function ContinuousPressingScanner({
         setError("Camera access requires a supported browser and a secure (HTTPS) connection. Manual entry stays available.");
         return;
       }
-      // Native BarcodeDetector where it works; otherwise the bundled ZXing
-      // decoder (iPhone Safari and other browsers without native support).
-      decoder = await createCameraDecoder();
-      if (canceled) { decoder?.dispose(); return; }
-      if (!decoder) {
-        setStatus("manual");
-        setError("Automatic barcode decoding could not start in this browser. Use manual entry below.");
-        return;
-      }
-      setEngine(decoder.engine);
       try {
+        // Open and focus the camera first. Downloading ZXing on iOS can be
+        // slow, but autofocus/preview can start while the decoder loads.
         stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
           audio: false,
@@ -282,6 +287,18 @@ export function ContinuousPressingScanner({
             }).catch(() => {});
           }
         }
+        // Native BarcodeDetector when supported, bundled ZXing on iOS.
+        decoder = await createCameraDecoder();
+        if (canceled) { decoder?.dispose(); return; }
+        if (!decoder) {
+          stream?.getTracks().forEach(track => track.stop());
+          stream = null;
+          if (videoRef.current) videoRef.current.srcObject = null;
+          setStatus("manual");
+          setError("Automatic barcode decoding could not start in this browser. Use manual entry below.");
+          return;
+        }
+        setEngine(decoder.engine);
         setStatus("scanning");
         // Where supported, keep the screen awake during deliberate scanning.
         // Browsers may refuse this request; it is never required for scanning.
@@ -344,7 +361,7 @@ export function ContinuousPressingScanner({
   const badgeColor = last?.outcome === "confirmed" ? "bg-emerald-100 text-emerald-900 border-emerald-400"
     : last?.outcome === "rejected" || last?.outcome === "duplicate"
       ? "bg-red-100 text-red-900 border-red-400"
-      : "bg-amber-100 text-amber-950 border-amber-400";
+      : "bg-slate-100 text-slate-900 border-slate-400 dark:bg-slate-800 dark:text-slate-100";
 
   return (
     <Card className="overflow-hidden" data-testid="continuous-pressing-scanner">
@@ -358,15 +375,12 @@ export function ContinuousPressingScanner({
               activeStatus === "manual" ? "Manual mode" : requested && !visible ? "Paused in background" : "Camera stopped"}
           </Badge>
         </div>
-        <p className="text-xs text-muted-foreground">
-          {assignment ? `${assignment.machineCode} · ${assignment.machineName}` : "No machine assigned"}
-        </p>
       </CardHeader>
       <CardContent className="space-y-3">
         {!usable && (
           <p className="rounded-md border border-amber-400/50 bg-amber-500/10 p-3 text-sm" role="status">
-            {assignment?.machineActive === false ? "This pressing machine is inactive." :
-              "An active machine assignment is required before opening the scanner."}
+            {assignment?.machineActive === false ? "Pressing access is inactive." :
+              "Open Pressing Scan with an authorized Factory account."}
           </p>
         )}
         {running && activeStatus !== "manual" && activeStatus !== "error" && (
@@ -374,8 +388,11 @@ export function ContinuousPressingScanner({
             <video ref={videoRef} muted playsInline autoPlay
               aria-label="Rear camera barcode preview"
               className="aspect-[4/3] max-h-[440px] w-full object-cover" />
-            <div className="pointer-events-none absolute inset-[16%] rounded-md border-2 border-emerald-300/85" aria-hidden="true">
-              <div className="absolute left-0 right-0 top-1/2 border-t border-emerald-400/70" />
+            <div className={"pointer-events-none absolute inset-[16%] rounded-md border-2 " +
+              (last?.outcome === "confirmed" ? "border-emerald-400" :
+                last?.outcome === "duplicate" || last?.outcome === "rejected" ? "border-red-500" : "border-white/70")}
+              aria-hidden="true">
+              <div className="absolute left-0 right-0 top-1/2 border-t border-white/50" />
             </div>
             {activeStatus === "starting" && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-sm text-white">
@@ -384,8 +401,8 @@ export function ContinuousPressingScanner({
             )}
           </div>
         )}
-        {error && running && <p role="alert" className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">{error}</p>}
-        {running && (
+        {error && running && <p role="alert" className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">{simpleControls && activeStatus === "manual" ? "Camera scanning is unavailable on this device. Close and reopen the camera, or allow camera access in your browser." : error}</p>}
+        {!simpleControls && running && (
           <form onSubmit={submitManual} className="flex flex-wrap items-center gap-2">
             <Keyboard className="h-4 w-4 shrink-0 text-muted-foreground" />
             <Input aria-label="Manual bale barcode" placeholder="Manual barcode entry" autoComplete="off"
@@ -396,7 +413,7 @@ export function ContinuousPressingScanner({
             </Button>
           </form>
         )}
-        <div className="flex flex-wrap gap-2">
+        {!simpleControls && <div className="flex flex-wrap gap-2">
           {!requested ? (
             <Button type="button" disabled={!usable} onClick={() => {
               unlockAudio();
@@ -427,24 +444,39 @@ export function ContinuousPressingScanner({
             onClick={() => setVibration(v => !v)}>
             <Vibrate className={vibration ? "h-4 w-4" : "h-4 w-4 opacity-40"} />
           </Button>
-        </div>
+        </div>}
         {last && (
           <div role="status" aria-live="polite" className={`rounded-lg border p-3 ${badgeColor}`}>
             <div className="flex flex-wrap justify-between gap-1">
               <strong className="break-all">{last.barcode}</strong>
-              <span className="font-mono text-sm">
+              <span className="font-mono text-sm" title={"Time in " + PRESSING_TIME_ZONE}>
                 {last.confirmedAt
-                  ? capturedTime(last.confirmedAt, last.timezoneName)
+                  ? capturedTime(last.confirmedAt)
                   : capturedTime(last.at)}
               </span>
             </div>
-            <p className="text-sm">{last.message}</p>
+            <p className="text-base font-bold" data-testid="pressing-camera-scan-status">
+              {last.outcome === "duplicate" ? "ALREADY SCANNED" :
+                last.outcome === "confirmed" ? "SCAN CONFIRMED" :
+                last.outcome === "queued" ? "WAITING FOR SERVER" :
+                last.outcome === "processing" ? "CHECKING…" :
+                last.outcome === "rejected" ? "SCAN REJECTED" : "SCAN PREVIEW"}
+            </p>
+            {last.outcome === "duplicate" && last.scannedBy && (
+              <p className="text-base font-semibold" data-testid="pressing-duplicate-user">
+                Scanned by: {last.scannedBy}
+              </p>
+            )}
+            {last.outcome !== "duplicate" && <p className="text-sm">{last.message}</p>}
+            {last.outcome === "duplicate" && !last.scannedBy && (
+              <p className="text-sm">{last.message}</p>
+            )}
             {last.confirmedAt && (
               <p className="text-xs">
-                Server confirmed: {last.productionDate} {capturedTime(last.confirmedAt, last.timezoneName)}
-                {last.timezoneName ? " (" + last.timezoneName + ")" : ""}
+                Server confirmed: {capturedDate(last.confirmedAt)} {capturedTime(last.confirmedAt)}
+                {" (" + PRESSING_TIME_ZONE + ")"}
                 {last.weightKg ? " · " + last.weightKg + " KG" : ""}
-                {last.machineName ? " · " + last.machineName : ""}
+                
                 {last.confirmationId ? " · Record #" + last.confirmationId : ""}
               </p>
             )}
@@ -453,17 +485,7 @@ export function ContinuousPressingScanner({
             )}
           </div>
         )}
-        <p className="text-xs text-muted-foreground">
-          The camera stays open between reads. Move each bale's barcode into view;
-          repeated frames will not submit the same code again. Leaving this tab,
-          locking the phone, or stopping the scanner releases camera access.
-        </p>
-        <p className="text-xs text-muted-foreground">
-          A green confirmation means the server has saved physical pressing completion with the
-          machine, operator, and exact timestamp. Stock finalization is a separate workflow.
-          Offline scans stay amber until they receive server confirmation. Permanent history and filters are below.
-        </p>
-        {running && engine && (
+        {!simpleControls && running && engine && (
           <p className="text-xs text-muted-foreground" data-testid="pressing-decoder-engine">
             Decoder: {engine === "native" ? "browser native BarcodeDetector" : "bundled ZXing (cross-platform)"}.
           </p>

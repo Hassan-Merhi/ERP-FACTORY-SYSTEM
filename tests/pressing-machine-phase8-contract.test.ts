@@ -5,7 +5,6 @@ const read = (path: string) => readFileSync(path, "utf8");
 const correction = read("server/routes/factory/factoryPressingCorrectionRoutes.ts");
 const confirm = read("server/routes/factory/factoryPressingConfirmationRoutes.ts");
 const report = read("server/routes/factory/factoryPressingReportRoutes.ts");
-const ops = read("server/routes/factory/factoryPressingOperationsRoutes.ts");
 const ui = read("client/src/pages/factory/PressingCorrectionReview.tsx");
 const history = read("client/src/pages/factory/PressingHistoryReport.tsx");
 const queue = read("client/src/pages/factory/PressingOfflineQueueStatus.tsx");
@@ -25,10 +24,10 @@ describe("Pressing Machines Phase 8 correction and audit controls", () => {
     expect(correction).toContain("!SUPERVISORS.has(ctx.role) || ctx.posViewOnly");
   });
 
-  it("requires a detailed reason and refuses double voids", () => {
-    expect(correction).toContain('min(10, "A detailed reason');
-    expect(correction).toContain(".max(1000)");
-    expect(correction).toContain("correctionRequest.parse(req.body)");
+  it("requires no typed explanation for X and refuses double voids", () => {
+    expect(correction).toContain("reason: z.string().trim().max(1000).optional()");
+    expect(correction).toContain("correctionRequest.parse(req.body ?? {})");
+    expect(correction).toContain("Deleted from active pressing scans by supervisor");
     expect(correction).toContain("PRESSING_ALREADY_VOIDED");
     expect(correction).toContain('reason: { old: null, new: reason }');
   });
@@ -73,22 +72,47 @@ describe("Pressing Machines Phase 8 correction and audit controls", () => {
   it("excludes voids from permanent production and machine analytics", () => {
     expect(report).toContain("COUNT(*) FILTER (WHERE c.voided_at IS NULL)");
     expect(report).toContain("SUM(c.weight_kg) FILTER (WHERE c.voided_at IS NULL)");
-    expect(ops).toContain('"voided_at IS NULL"');
+    expect(routes).not.toContain("registerFactoryPressingOperationsRoutes(app)");
     expect(report).toContain('"c.voided_at IS NOT NULL"');
+    expect(report).toContain('AND active.voided_at IS NULL');
+    expect(report).toContain('AS "canReturn"');
+    expect(ui).toContain('row.canReturn !== false');
     expect(report).toContain('c.voided_at AS "voidedAt"');
     expect(queue).toContain("supervisors may subsequently void them");
   });
 
-  it("shows an explicit two-step supervisor UI and immutable correction history", () => {
-    expect(history).toContain("canFilterAll && !isCondensed");
+  it("shows immediate X and Return buttons with immutable correction history", () => {
+    expect(history).toContain("canSeeEveryone");
+    expect(history).toContain("showCorrections");
     expect(history).toContain("<PressingCorrectionReview");
-    expect(ui).toContain("confirmationText.trim().toUpperCase()");
-    expect(ui).toContain("reason.trim().length >= 10");
-    expect(ui).toContain("Void pressing confirmation");
+    expect(ui).toContain('action: "void"');
+    expect(ui).toContain('action: "restore"');
+    expect(ui).toContain('aria-label={"Delete pressing scan "');
+    expect(ui).toContain('aria-label={"Return voided bale "');
+    expect(ui).not.toContain("confirmationText");
+    expect(ui).not.toContain("Mandatory explanation");
     expect(ui).toContain("/corrections?");
     expect(ui).toContain("Original #");
     expect(ui).toContain("Replacement #");
+    expect(ui).toContain('queryKey: [ROOT, "data", companyId, userId]');
     expect(ui).toContain("queryClient.invalidateQueries");
+  });
+
+  it("returns a voided scan without rescan, preserving its operator and original production time", () => {
+    expect(correction).toContain('"/api/factory/pressing-machines/confirmations/:id/restore"');
+    expect(correction).toContain("requireSupervisor(req)");
+    expect(correction).toContain("PRESSING_NOT_VOIDED");
+    expect(correction).toContain("PRESSING_ALREADY_CONFIRMED");
+    expect(correction).toContain("isNull(factoryPressingConfirmations.voidedAt)");
+    expect(correction).toContain("requestId: \"supervisor-restore-\" + randomUUID()");
+    expect(correction).toContain("userId: original.userId");
+    expect(correction).toContain("weightKg: original.weightKg");
+    expect(correction).toContain("confirmedAt: original.confirmedAt");
+    expect(correction).toContain("productionDate: original.productionDate");
+    expect(correction).toContain('action: "RECONFIRM"');
+    expect(correction).toContain("replacementConfirmationId: restored.id");
+    expect(correction).toContain('action: "restore"');
+    expect(correction).toContain("}, tx)");
   });
 
   it("has no accounting, stock, mix or Factory finalize side effects", () => {

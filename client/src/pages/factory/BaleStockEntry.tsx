@@ -16,7 +16,7 @@ import "./factoryTrackingModern.css";
 
 import { StockEntryTab } from "./bale-stock-entry/StockEntryTab";
 import { DailyStockSummary } from "./bale-stock-entry/DailyStockSummary";
-import type { FactoryMyAccess } from "@shared/apiTypes";
+import type { AuthMe, FactoryMyAccess } from "@shared/apiTypes";
 import { canUseFactorySurface } from "@/lib/factoryClientAccess";
 
 export default function BaleStockEntry() {
@@ -41,6 +41,7 @@ export default function BaleStockEntry() {
   });
 
   const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
+  const { data: session } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"], staleTime: 60000 });
   const hiddenTabs = myAccess?.hiddenCostFields ?? [];
 
   const showEntry = settings?.stockEntryTabEntryEnabled !== false && !hiddenTabs.includes("hide_tab_stockentry_entry");
@@ -53,6 +54,12 @@ export default function BaleStockEntry() {
   const canReadProductionSession = canUseFactorySurface(myAccess, "factory/stock-entry", [
     "hide_tab_stockentry_production_targets",
   ]);
+  // With pressing as the only granted Stock Entry section, workers should
+  // enter directly into the two-button scanner instead of stock KPI/print UI.
+  const role = session?.currentRole ?? session?.role;
+  const isPressingOnlyWorker = !!session && !["Admin", "Owner", "Developer"].includes(role || "") &&
+    showPressingMachines && !showEntry && !showHistory && !showGroundScan &&
+    !showDailyScan && !showProductionTargets;
 
   const defaultTab = showEntry
     ? "entry"
@@ -94,6 +101,14 @@ export default function BaleStockEntry() {
     enabled: canReadProductionSession,
   });
 
+  if (isPressingOnlyWorker) {
+    return (
+      <FactoryMobilePage>
+        <PressingMachineManagement active />
+      </FactoryMobilePage>
+    );
+  }
+
   return (
     <FactoryMobilePage>
       <FactoryMobileHeader>
@@ -102,9 +117,9 @@ export default function BaleStockEntry() {
             <ScanLine className="h-5 w-5 text-emerald-500" />
           </div>
           <div className="min-w-0">
-            <h1 className="wrap-break-word text-lg font-bold leading-tight sm:text-xl">Bale Stock Entry</h1>
+            <h1 className="wrap-break-word text-lg font-bold leading-tight sm:text-xl">{activeTab === "pressing-machines" ? "Pressing Machines" : "Bale Stock Entry"}</h1>
             <p className="mt-0.5 wrap-break-word text-sm leading-snug text-muted-foreground">
-              Scan and record bale production
+              {activeTab === "pressing-machines" ? "Scan and record bale production from pressing machines" : "Scan and record bale production"}
             </p>
           </div>
         </div>
@@ -131,7 +146,7 @@ export default function BaleStockEntry() {
         className="min-w-0"
       >
         <div className="erp-mobile-scroll-tabs pb-1">
-          <TabsList aria-label="Bale stock entry sections" className="w-max min-w-full sm:min-w-0 sm:w-fit">
+          <TabsList aria-label="Bale stock entry sections" className="w-max min-w-full rounded-2xl border border-border/70 bg-card/70 p-1 sm:min-w-0 sm:w-fit">
             {showEntry && (
               <TabsTrigger value="entry" data-testid="tab-stock-entry">
                 <ScanLine className="mr-1 h-4 w-4" />
@@ -151,7 +166,7 @@ export default function BaleStockEntry() {
               </TabsTrigger>
             )}
             {showPressingMachines && (
-              <TabsTrigger value="pressing-machines" data-testid="tab-pressing-machines">
+              <TabsTrigger value="pressing-machines" data-testid="tab-pressing-machines" className="rounded-xl px-4 data-[state=active]:bg-blue-600 data-[state=active]:font-bold data-[state=active]:text-white">
                 <Cog className="mr-1 h-4 w-4" />
                 Pressing Machines
               </TabsTrigger>

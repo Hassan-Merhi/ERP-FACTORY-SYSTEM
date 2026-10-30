@@ -32,6 +32,13 @@ export interface PressingServerReceipt {
   requestId: string;
   operatorUserId: string;
 }
+export interface PressingPreviousScan {
+  operatorName?: string;
+  operatorUserId?: string;
+  confirmedAt?: string;
+  referenceNumber?: string;
+}
+
 export interface PressingQueuedScan extends PressingActor {
   requestId: string;
   payload: PressingPayload;
@@ -43,6 +50,7 @@ export interface PressingQueuedScan extends PressingActor {
   nextAttemptAt: number;
   lastError?: string;
   errorCode?: string;
+  previousScan?: PressingPreviousScan;
   receipt?: PressingServerReceipt;
 }
 

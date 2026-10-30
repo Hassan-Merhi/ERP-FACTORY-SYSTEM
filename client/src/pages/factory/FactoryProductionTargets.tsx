@@ -4,6 +4,7 @@ import {
   CalendarClock,
   CalendarDays,
   ClipboardCheck,
+  FileDown,
   Loader2,
   LockKeyhole,
   MessageCircle,
@@ -47,6 +48,8 @@ import {
 } from "./factoryProductionTargetsModel";
 import { ProductionTargetDefaultsDialog } from "./productiontargets/ProductionTargetDefaultsDialog";
 import { ProductionTargetsEditorDialog } from "./productiontargets/ProductionTargetsEditorDialog";
+import { ProductionExcelRangeDialog, type ProductionExportDates } from "./productiontargets/ProductionExcelRangeDialog";
+import { exportWeeklyProductionExcel, ProductionDateRangeError } from "./productiontargets/productionWeeklyExcel";
 
 function SummaryTile({ label, value, icon }: { label: string; value: string | number; icon: React.ReactNode }) {
   return (
@@ -112,6 +115,7 @@ export default function FactoryProductionTargets() {
   const [rows, setRows] = useState<ProductionRow[]>([]);
   const [editorOpen, setEditorOpen] = useState(false);
   const [defaultsEditorOpen, setDefaultsEditorOpen] = useState(false);
+  const [excelRangeOpen, setExcelRangeOpen] = useState(false);
   const productionReportRef = useRef<HTMLDivElement>(null);
   const period = useMemo(() => periodFor(periodType, referenceDate), [periodType, referenceDate]);
 
@@ -221,6 +225,28 @@ export default function FactoryProductionTargets() {
     },
   });
 
+  const exportWeeklyMutation = useMutation({
+    mutationFn: (dates: ProductionExportDates) => exportWeeklyProductionExcel(dates.start, dates.end),
+    onSuccess: ({ start, end }) => {
+      setExcelRangeOpen(false);
+      toast({
+        title: tr("weeklyExcelExported"),
+        description: tr("weeklyExcelRange") + " " + start + " — " + end,
+      });
+    },
+    onError: (error: Error) => {
+      const description =
+        error instanceof ProductionDateRangeError
+          ? error.code === "tooLong"
+            ? tr("exportRangeTooLong")
+            : error.code === "future"
+              ? tr("exportFutureDate")
+              : tr("exportInvalidRange")
+          : error.message;
+      toast({ title: tr("weeklyExcelExportFailed"), description, variant: "destructive" });
+    },
+  });
+
   const collapsedRows = useMemo(() => collapseLinkedProductionRows(rows), [rows]);
 
   const groupedVisibleRows = useMemo<ProductionGroup[]>(() => {
@@ -253,7 +279,7 @@ export default function FactoryProductionTargets() {
     [rows]
   );
 
-  const busy = sendWhatsappMutation.isPending || endProductionMutation.isPending;
+  const busy = sendWhatsappMutation.isPending || endProductionMutation.isPending || exportWeeklyMutation.isPending;
 
   return (
     <div className="space-y-4">
@@ -302,6 +328,21 @@ export default function FactoryProductionTargets() {
               {tr("defaultTargets")}
             </Button>
           )}
+
+          <Button
+            variant="outline"
+            onClick={() => setExcelRangeOpen(true)}
+            disabled={busy}
+            title={tr("weeklyExcelTooltip")}
+            data-testid="button-export-production-weekly-excel"
+          >
+            {exportWeeklyMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <FileDown className="mr-2 h-4 w-4" />
+            )}
+            {exportWeeklyMutation.isPending ? tr("exportingWeeklyExcel") : tr("exportProductionExcel")}
+          </Button>
 
           <Button
             onClick={() => setEditorOpen(true)}
@@ -527,6 +568,13 @@ export default function FactoryProductionTargets() {
           </TableBody>
         </Table>
       </div>
+
+      <ProductionExcelRangeDialog
+        open={excelRangeOpen}
+        onOpenChange={setExcelRangeOpen}
+        exporting={exportWeeklyMutation.isPending}
+        onExport={(dates) => exportWeeklyMutation.mutate(dates)}
+      />
 
       <ProductionTargetDefaultsDialog
         open={defaultsEditorOpen}

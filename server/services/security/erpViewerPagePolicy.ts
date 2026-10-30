@@ -1,15 +1,17 @@
 import { FEATURE_KEYS } from "@shared/schema";
 
 /**
- * For an ERP View Only role, no per-company ERP page allow-list means every
- * business-data page is browseable (except Dashboard, Settings, and Create Voucher). A nonempty list remains restrictive.
- * The global View Only HTTP middleware separately rejects every business write.
+ * View Only always inherits every ERP business-data page, including pages
+ * added after the user's old per-company allow-list was saved. Stale saved
+ * lists must never silently hide newer read pages. Dashboard, Settings, and
+ * the write-only Create Voucher page stay excluded.
+ *
+ * The View Only HTTP middleware separately rejects business mutations.
+ * Other roles continue to use their explicitly assigned ERP page keys.
  */
 export function effectiveErpPageKeys(role: string, savedPageKeys: readonly string[]): string[] {
   if (role === "View Only") {
-    // Even an explicit allow-list must not expose Dashboard or admin/write-only pages.
-    const visible = savedPageKeys.length === 0 ? FEATURE_KEYS : savedPageKeys;
-    return visible.filter((key) => key !== "dashboard" && key !== "settings" && key !== "create");
+    return FEATURE_KEYS.filter((key) => key !== "dashboard" && key !== "settings" && key !== "create");
   }
   return [...savedPageKeys];
 }

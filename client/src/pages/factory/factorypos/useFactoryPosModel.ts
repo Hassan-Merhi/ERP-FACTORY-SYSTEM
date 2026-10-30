@@ -241,6 +241,16 @@ export function useFactoryPosModel() {
     searchRef.current?.focus();
   };
 
+  const scanProductFromCamera = (barcode: string, mobile = false) => {
+    const item = findExactCodeMatch(inventory || [], barcode.trim());
+    if (!item) {
+      toast({ title: "Barcode not found", description: barcode, variant: "destructive" });
+      return;
+    }
+    if (mobile) addProductFromMobile(item);
+    else addProductFromSearch(item);
+  };
+
   // Keyboard handler for the search input
   const handleSearchKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
     if (e.key === "ArrowDown") {
@@ -536,6 +546,7 @@ export function useFactoryPosModel() {
     filteredInventory,
     handleSearchKeyDown,
     addProductFromSearch,
+    scanProductFromCamera,
     // history
     showHistory,
     setShowHistory,
