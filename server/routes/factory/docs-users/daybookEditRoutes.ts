@@ -180,6 +180,13 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
         }
       }
 
+      // Posted bonus Daybook rows are immutable accounting evidence.
+      // Reversal is the only supported correction path for these entries.
+      if (existing.txType.startsWith("PRODUCTION_TARGET_BONUS_") ||
+          existing.txType.startsWith("PRODUCTION_TARGET_WEEKLY_BONUS_")) {
+        return res.status(409).json({message:"Posted bonus Daybook entries cannot be edited. Reverse the payment instead."});
+      }
+
       const beforeJson = JSON.stringify(existing);
 
       const updates: PgUpdateSetSource<typeof factoryDaybookEntries> = {};
