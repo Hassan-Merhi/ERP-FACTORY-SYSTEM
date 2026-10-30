@@ -27,6 +27,8 @@ on:
       - 'server/edge/phase8CapturePolicy.mjs'
       - 'tests/ui/offline-operation-contract.test.ts'
       - 'tests/ui/offline-durable-outbox.test.ts'
+      - 'client/src/lib/offline/voucherCapture.ts'
+      - 'server/edge/edgeVoucherOutbox.ts'
       - 'tests/factory-edge-policy.test.ts'
       - 'scripts/edge/audit-phase9-write-coverage.mjs'
       - 'tests/offline-phase9*.mjs'
@@ -88,6 +90,8 @@ jobs:
         run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-phase9-legacy-banner.test.tsx
       - name: Verify narrow device capture and legacy queue quarantine
         run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-operation-contract.test.ts tests/ui/offline-durable-outbox.test.ts
+      - name: Prove immutable LAN capture cannot substitute operation identity
+        run: node node_modules/vitest/vitest.mjs run tests/offline-phase9-outbox-identity.test.ts
       - name: Test Phase 9 status live-session and membership gating
         run: node node_modules/vitest/vitest.mjs run tests/offline-phase9-status-http.test.ts
       - name: Validate TypeScript on unified branch
