@@ -174,7 +174,9 @@ export async function applyStagedVoucherOnce(queryable, input, applyPosting) {
       FROM phase7_writer.state s
       JOIN pg_roles r ON r.rolname=current_user
       WHERE s.singleton IS TRUE
-      FOR SHARE OF s
+      -- Read-only authority lookup: the restricted runtime login must NEVER
+      -- receive UPDATE privilege on phase7_writer.state. The PostgreSQL
+      -- business-table triggers hold the epoch lock through COMMIT instead.
     `);
     const state = authority.rows[0];
     if (authority.rows.length !== 1 || state.mode !== "cloud-primary" ||
