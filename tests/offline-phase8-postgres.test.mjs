@@ -152,6 +152,12 @@ if (!url) {
         /PHASE8_ACTOR_NOT_AUTHORIZED/
       );
       await admin.query("UPDATE users SET active=true WHERE id='actor-1'");
+      await admin.query("UPDATE user_company_roles SET role='View Only' WHERE user_id='actor-1'");
+      await assert.rejects(
+        applyStagedVoucherOnce(app, { ...base, sequence: "2" }, postFakeJournal),
+        /PHASE8_ACTOR_NOT_AUTHORIZED/
+      );
+      await admin.query("UPDATE user_company_roles SET role='Admin' WHERE user_id='actor-1'");
       const success = await applyStagedVoucherOnce(app, { ...base, sequence: "2" }, postFakeJournal);
       assert.equal(success.replayed, false);
       assert.equal((await admin.query("SELECT count(*)::int AS n FROM vouchers")).rows[0].n, 2);
