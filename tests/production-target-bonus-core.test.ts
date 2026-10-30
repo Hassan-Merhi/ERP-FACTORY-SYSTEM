@@ -38,6 +38,17 @@ describe("Production Targets bonus core: worker-linked production", () => {
       .toEqual([[10, 3, "1.50"], [10, 3, "1.50"]]);
   });
 
+  it("calculates linked workers against their own 10- and 12-bale targets", () => {
+    const result = preview("2026-10-29", [
+      worker(1, 10, 22),
+      worker(2, 12, 22),
+    ], [{ id: 50, workerIds: [1, 2] }]);
+    expect(result.totalProducedBales).toBe(22);
+    expect(result.workers.map((w) => [w.targetBales, w.creditedBales, w.extraBales, w.bonusUsd]))
+      .toEqual([[10, 11, 1, "0.50"], [12, 11, 0, "0.00"]]);
+    expect(result.proposedBonusUsd).toBe("0.50");
+  });
+
   it("does not create a bonus for hitting but not exceeding a target", () => {
     const result = preview("2026-10-29", [worker(1, 7, 7), worker(2, 7, 6), worker(3, 0, 12)]);
     expect(result.proposedBonusUsd).toBe("0.00");
