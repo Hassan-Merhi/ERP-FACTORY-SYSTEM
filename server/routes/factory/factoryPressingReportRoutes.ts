@@ -98,7 +98,7 @@ function conditions(ctx: QueryCtx, filters: PressingReportFilters) {
   }
   return { args, where };
 }
-function invalidDateTimeRange(filters: PressingReportFilters): boolean {
+function invalidDateTimeRange(filters: Pick<PressingReportFilters, "from" | "to" | "fromTime" | "toTime">): boolean {
   return Boolean(
     (filters.fromTime && !filters.from) ||
     (filters.toTime && !filters.to) ||
