@@ -26,6 +26,47 @@ export async function loadLiveTargetBonusRows(
       SELECT day::date AS work_date
       FROM generate_series(${start}::date, ${end}::date, '1 day'::interval) days(day)
       WHERE day::date <= (now() AT TIME ZONE 'Asia/Beirut')::date
+    ),
+    -- Count physical bales ONCE by work date and person. The old correlated
+    -- subquery scanned factory_bales for every worker/day (thousands of times).
+    -- Keeping the two date paths separate also preserves carry-over after
+    -- yesterday's End Production timestamp without duplicating today's bales.
+    bale_work_days AS MATERIALIZED (
+      SELECT b.stock_entry_date AS work_date, b.finalized_by AS worker_id,
+        COUNT(*)::integer AS bales
+      FROM factory_bales b
+      WHERE b.company_id = ${companyId}
+        AND b.finalized_by IS NOT NULL
+        AND b.stock_entry_date BETWEEN ${start}::date AND ${end}::date
+        AND b.status IN (${sql.join(BONUS_CATEGORY_COUNTED_BALE_STATUSES.map(status=>sql`${status}`),sql`, `)})
+      GROUP BY b.stock_entry_date, b.finalized_by
+      UNION ALL
+      SELECT (b.stock_entry_date + 1) AS work_date, b.finalized_by AS worker_id,
+        COUNT(*)::integer AS bales
+      FROM factory_bales b
+      JOIN factory_staff_tracking_period_closures c
+        ON c.company_id = b.company_id
+       AND c.page_type = 'production' AND c.period_type = 'daily'
+       AND c.period_start = b.stock_entry_date AND c.period_end = b.stock_entry_date
+      WHERE b.company_id = ${companyId}
+        AND b.finalized_by IS NOT NULL
+        AND b.stock_entry_date BETWEEN (${start}::date - 1) AND (${end}::date - 1)
+        AND b.status IN (${sql.join(BONUS_CATEGORY_COUNTED_BALE_STATUSES.map(status=>sql`${status}`),sql`, `)})
+        AND COALESCE(b.finalized_at,b.created_at) > c.ended_at
+      GROUP BY b.stock_entry_date, b.finalized_by
+    ),
+    credited_bales AS MATERIALIZED (
+      SELECT work_date, worker_id, SUM(bales)::integer AS bales
+      FROM bale_work_days GROUP BY work_date, worker_id
+    ),
+    -- Preaggregate team totals once per link/day too. Avoid a correlated
+    -- scan of credited_bales for each worker/day in the requested date range.
+    linked_work_totals AS MATERIALIZED (
+      SELECT bc.work_date, lm.link_id, SUM(bc.bales)::integer AS bales
+      FROM credited_bales bc
+      JOIN factory_worker_production_link_members lm
+        ON lm.company_id = ${companyId} AND lm.worker_id = bc.worker_id
+      GROUP BY bc.work_date, lm.link_id
     )
     SELECT d.work_date::text AS date, w.id AS "workerId",
       w.full_name AS "workerName",
@@ -98,28 +139,14 @@ export async function loadLiveTargetBonusRows(
       FROM factory_worker_production_link_members lm
       WHERE lm.company_id=w.company_id AND lm.link_id=link.id
     ) members ON TRUE
-    LEFT JOIN LATERAL (
-      SELECT c.ended_at
-      FROM factory_staff_tracking_period_closures c
-      WHERE c.company_id=w.company_id AND c.page_type='production'
-        AND c.period_type='daily'
-        AND c.period_start=d.work_date - 1 AND c.period_end=d.work_date - 1
-      LIMIT 1
-    ) previous_close ON TRUE
-    LEFT JOIN LATERAL (
-      SELECT COUNT(*)::integer AS bales FROM factory_bales b
-      WHERE b.company_id=w.company_id
-        AND (b.stock_entry_date=d.work_date
-          OR (previous_close.ended_at IS NOT NULL
-            AND b.stock_entry_date=d.work_date - 1
-            AND COALESCE(b.finalized_at,b.created_at)>previous_close.ended_at))
-        AND b.status IN (${sql.join(BONUS_CATEGORY_COUNTED_BALE_STATUSES.map(status=>sql`${status}`),sql`, `)})
-        AND ((link.id IS NULL AND b.finalized_by=w.id)
-          OR (link.id IS NOT NULL AND EXISTS (
-            SELECT 1 FROM factory_worker_production_link_members lm
-            WHERE lm.company_id=w.company_id AND lm.link_id=link.id
-              AND lm.worker_id=b.finalized_by)))
-    ) produced ON TRUE
+    LEFT JOIN credited_bales single_bales
+      ON single_bales.work_date=d.work_date AND single_bales.worker_id=w.id
+    LEFT JOIN linked_work_totals team_bales
+      ON team_bales.work_date=d.work_date AND team_bales.link_id=link.id
+    CROSS JOIN LATERAL (
+      SELECT CASE WHEN link.id IS NULL THEN COALESCE(single_bales.bales,0)
+        ELSE COALESCE(team_bales.bales,0) END AS bales
+    ) produced
     CROSS JOIN LATERAL (
       SELECT CASE WHEN link.id IS NULL THEN produced.bales
         ELSE (FLOOR(produced.bales::numeric/GREATEST(members.member_count,1))
