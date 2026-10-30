@@ -128,17 +128,35 @@ export async function loadTargetBonusRows(
         AND (l.effective_to IS NULL OR l.effective_to > e.period_start)
       ORDER BY l.effective_from DESC, l.id DESC LIMIT 1
     ) links ON true
-    -- Saved linked production repeats the team's total; never divide that
-    -- repeated value. Attribute captured/live physical bales to their finalizer.
+    -- Count each closed day's captured or stock bales only once. A saved
+    -- linked team's shared output is distributed across its effective members;
+    -- immutable approved/paid reviews still override with their frozen values.
     LEFT JOIN captured_days captured_day ON captured_day.production_date=e.period_start
     LEFT JOIN captured_bales captured_credit
       ON captured_credit.work_date=e.period_start AND captured_credit.worker_id=e.person_id
     LEFT JOIN stock_bales own_credit
       ON own_credit.work_date=e.period_start AND own_credit.worker_id=e.person_id
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*)::integer AS member_count,
+        COUNT(*) FILTER (WHERE m.worker_id<=e.person_id)::integer AS member_rank,
+        COALESCE(SUM(CASE WHEN captured_day.production_date IS NOT NULL
+          THEN COALESCE(captured.bales,0)
+          ELSE COALESCE(stock.bales,0) END),0)::integer AS team_bales
+      FROM factory_worker_production_link_members m
+      LEFT JOIN captured_bales captured
+        ON captured.work_date=e.period_start AND captured.worker_id=m.worker_id
+      LEFT JOIN stock_bales stock
+        ON stock.work_date=e.period_start AND stock.worker_id=m.worker_id
+      WHERE m.company_id=e.company_id AND m.link_id=links.id
+    ) table_output ON links.id IS NOT NULL
     CROSS JOIN LATERAL (
-      SELECT CASE WHEN captured_day.production_date IS NOT NULL
-        THEN COALESCE(captured_credit.bales,0)
-        ELSE COALESCE(own_credit.bales,0) END::integer AS count
+      SELECT CASE WHEN links.id IS NOT NULL AND table_output.member_count>0
+        THEN table_output.team_bales / table_output.member_count
+          + CASE WHEN table_output.member_rank <=
+              MOD(table_output.team_bales,table_output.member_count) THEN 1 ELSE 0 END
+        WHEN captured_day.production_date IS NOT NULL THEN COALESCE(captured_credit.bales,0)
+        ELSE COALESCE(own_credit.bales,0)
+      END::integer AS count
     ) output
     -- The review uses the SAME effective-dated company and worker rate
     -- history as the Phase 1/2 read-only bonus calculation.
