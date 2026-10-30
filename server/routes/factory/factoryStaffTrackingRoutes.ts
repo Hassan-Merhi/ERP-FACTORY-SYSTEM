@@ -15,6 +15,8 @@ import { registerProductionBonusCheckoutRoutes } from "./productionBonusCheckout
 import { freezeProductionBonusCategoryEvidence, BONUS_CATEGORY_COUNTED_BALE_STATUSES, type CategoryCaptureCarry } from "../../services/factory/productionBonusCategoryCapture";
 import { factoryStaffTrackingMessages } from "../../i18n/factoryStaffTrackingMessages";
 import { isProductionTargetsRosterWorker } from "../../services/factory/productionTargetsRoster";
+import { loadProductionTargetsRosterIds } from "../../services/factory/productionTargetsRoster";
+import { loadProductionPeriodSummary } from "../../services/factory/productionPeriodSummary";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { resultRows } from "../../lib/queryResult";
 import { sqlArray } from "../../lib/sqlArray";
@@ -323,6 +325,44 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         // The separate ERP employees table is intentionally not included here.
         return savedForPeriod || (person.active && joinedByPeriodEnd(person.dateJoined, query.periodEnd));
       });
+
+      // Weekly/monthly Production Targets are read-only rollups of DAILY
+      // targets, attendance and physical bale credits. A saved weekly row
+      // does not contain the worker's date-effective daily target.
+      if (query.page === "production" && query.periodType !== "daily") {
+        const rosterIds = await loadProductionTargetsRosterIds(db, companyId, query.periodEnd);
+        const periodWorkers = includedWorkers.filter(worker => rosterIds.has(worker.id));
+        const rollup = await loadProductionPeriodSummary(
+          companyId, query.periodStart, query.periodEnd, periodWorkers.map(worker => worker.id),
+        );
+        const periodRows = periodWorkers.map(worker => {
+          const total = rollup.get(worker.id);
+          return {
+            personType: "worker" as const, personId: worker.id,
+            name: worker.fullName, code: worker.employeeCode,
+            groupName: workerGroupNames.get(worker.id)?.[0] ?? "",
+            category: total?.category || worker.position || worker.department || "",
+            targetBales: total?.targetBales ?? null,
+            absentTargetBales: total?.absentTargetBales ?? 0,
+            producedBales: total?.producedBales ?? 0,
+            status: total?.status ?? "Present",
+            absentDays: total?.absentDays ?? 0,
+            notes: "", active: worker.active,
+            // A link can change in the middle of the week/month. Credited
+            // worker totals are already distributed by day, so do not
+            // collapse the entire period under a single link group.
+            linkGroupId: null,
+            linkedWorkerIds: [],
+            linkedWorkers: [],
+          };
+        });
+        res.setHeader("Cache-Control", "private, no-store");
+        return res.json({
+          page: query.page, periodType: query.periodType,
+          periodStart: query.periodStart, periodEnd: query.periodEnd,
+          finalized: false, finalizedAt: null, rows: periodRows,
+        });
+      }
 
       const workerAttendance = new Map<number, string>();
       if (query.periodType === "daily") {
