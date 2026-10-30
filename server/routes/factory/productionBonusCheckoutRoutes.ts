@@ -36,8 +36,6 @@ const rows = (x: unknown): RecordRow[] => resultRows(x) as RecordRow[];
 const fail = (status: number, message: string): never => {
   throw Object.assign(new Error(message), { status });
 };
-const validId = (value: unknown): value is number =>
-  typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 const usd = (value: Decimal.Value) => new Decimal(value).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2);
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const allowed = (req: Request) => ["Admin", "Owner"].includes(String(req.session.currentRole || req.user?.role || ""));
