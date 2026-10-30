@@ -24,6 +24,7 @@ type Offer = {
   extra: number; method: Method; lines: Line[]; amount: string; token: string;
   status: "pending" | "approved" | "paid" | "reversed" | "no_bonus" | "needs_setup" | "blocked" | "rejected" | "weekly";
   issue: string | null;
+  linkEndedOn?: string | null;
   weeklyBonus?: { weekStart: string; amount: string; state: "projected" | "approved" };
 };
 type Preview = { from: string; to: string; method: Method; currency: "USD"; offers: Offer[] };
@@ -48,6 +49,7 @@ const startOfRange=(date:string)=>{
 const payableStatus=(row:Offer)=>row.status==="pending"||row.status==="approved";
 type WorkerGroup={workerId:number;workerName:string;days:Offer[];target:number;produced:number;
   extra:number;amount:number;weeklyAmount:number;weeklyProjected:boolean;weeklyApproved:boolean;
+  linkEndedOn:string|null;
   readyDays:number;paidDays:number;needsSetup:number;blockedDays:number;weeklyDays:number};
 function summarizeByWorker(offers:Offer[]):WorkerGroup[]{
   const map=new Map<number,WorkerGroup>();
@@ -56,10 +58,13 @@ function summarizeByWorker(offers:Offer[]):WorkerGroup[]{
     if(!group){
       group={workerId:row.workerId,workerName:row.workerName,days:[],target:0,
         produced:0,extra:0,amount:0,weeklyAmount:0,weeklyProjected:false,weeklyApproved:false,
+        linkEndedOn:null,
         readyDays:0,paidDays:0,needsSetup:0,blockedDays:0,weeklyDays:0};
       map.set(row.workerId,group);
     }
     group.days.push(row);
+    if(row.linkEndedOn && (!group.linkEndedOn || row.linkEndedOn>group.linkEndedOn))
+      group.linkEndedOn=row.linkEndedOn;
     group.target+=row.target;
     group.produced+=row.produced;
     group.extra+=row.extra;
