@@ -1,6 +1,14 @@
 export type EdgeConfiguration = Readonly<
   | { mode: "cloud"; siteId: null; hostname: null; writeMode: "cloud" | "fenced"; primary: false }
-  | { mode: "lan"; siteId: string; hostname: string; writeMode: "read-only" | "lan-primary"; primary: boolean }
+  | {
+      mode: "lan";
+      siteId: string;
+      hostname: string;
+      writeMode: "read-only" | "lan-primary";
+      primary: boolean;
+      writerEpoch: string | null;
+      baselineSha256: string | null;
+    }
 >;
 export function readFactoryEdgeConfiguration(env?: Record<string, string | undefined>): EdgeConfiguration;
 export function edgeBlocksWrite(config: EdgeConfiguration, method: string, path: string): boolean;
