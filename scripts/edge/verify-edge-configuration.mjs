@@ -20,6 +20,7 @@ export function parseEdgeEnvironment(raw) {
   const allowedKeys = new Set([
     "EDGE_SITE_ID", "EDGE_HOSTNAME", "EDGE_BIND_IP",
     "EDGE_DB_PASSWORD", "EDGE_SESSION_SECRET",
+    "EDGE_RELEASE_SHA", "EDGE_WRITER_EPOCH", "EDGE_BASELINE_SHA256",
     "EDGE_WRITE_MODE", "EDGE_PRIMARY_ACK",
     "EDGE_BACKUP_AGE_RECIPIENT",
     "EDGE_SYNC_REMOTE", "EDGE_SYNC_SIGNING_KEY",
@@ -28,7 +29,7 @@ export function parseEdgeEnvironment(raw) {
   for (const line of raw.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
-    const match = trimmed.match(/^([A-Z_]+)=(.*)$/);
+    const match = trimmed.match(/^([A-Z][A-Z0-9_]*)=(.*)$/);
     if (!match || !allowedKeys.has(match[1])) throw new Error("EDGE_ENV_UNRECOGNIZED_LINE");
     const key = match[1];
     if (Object.hasOwn(result, key)) throw new Error("EDGE_ENV_DUPLICATE_KEY");
@@ -69,6 +70,8 @@ export function verifyEdgeInstallation(env, certPem, keyPem) {
     FACTORY_EDGE_HOSTNAME: env.EDGE_HOSTNAME,
     FACTORY_EDGE_WRITE_MODE: env.EDGE_WRITE_MODE,
     FACTORY_EDGE_PRIMARY_ACK: env.EDGE_PRIMARY_ACK,
+    FACTORY_EDGE_WRITER_EPOCH: env.EDGE_WRITER_EPOCH,
+    FACTORY_EDGE_BASELINE_SHA256: env.EDGE_BASELINE_SHA256,
     PGHOST: "postgres",
     PGPORT: "5432",
     PGUSER: "erp_edge",
