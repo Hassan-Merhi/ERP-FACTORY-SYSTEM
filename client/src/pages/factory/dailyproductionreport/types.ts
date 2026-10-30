@@ -62,6 +62,16 @@ export interface ReportData {
       totalWeightKg: number;
       totalValue: number;
     }[];
+    products: {
+      articleCode: string;
+      productName: string;
+      categoryName: string;
+      qty: number;
+      totalWeightKg: number;
+      costPricePerBale: number;
+      pricePerBale: number;
+      totalValue: number;
+    }[];
   };
   rawMaterial: {
     totalBatches: number;
