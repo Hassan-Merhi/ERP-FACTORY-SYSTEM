@@ -609,7 +609,7 @@ describe("MC-2: intercompany transfer legs", () => {
         `INSERT INTO inter_company_transfers (transfer_type, from_company_id, to_company_id, transfer_date, amount,
                                               from_ledger_account_id, to_ledger_account_id, from_voucher_id, to_voucher_id)
          VALUES ('Cash', $1, $2, '2026-06-10', 100, $3, $4, $5, $6)`,
-        [ctx.companyId, companyB, ctx.salesAccountId, ids.B_OTHER, from, to]
+        [ctx.companyId, companyB, ctx.cashAccountId, ids.B_CASH, from, to]
       );
       return { from, to };
     });
@@ -682,9 +682,9 @@ describe("MC-2: intercompany transfer legs", () => {
          FROM voucher_entries WHERE voucher_id = $1 ORDER BY id`,
       [legs.from]
     );
-    expect(correctedLines.rows).toEqual([
-      { ledger_account_id: replacementAccount, debit: "0", credit: "100" },
-      { ledger_account_id: ctx.salesAccountId, debit: "100", credit: "0" },
+    expect(correctedLines.rows.map((line) => [line.ledger_account_id, Number(line.debit), Number(line.credit)])).toEqual([
+      [replacementAccount, 0, 100],
+      [ctx.salesAccountId, 100, 0],
     ]);
     const linkAfter = await pool.query(
       `SELECT from_ledger_account_id, amount::numeric AS amount
@@ -692,6 +692,7 @@ describe("MC-2: intercompany transfer legs", () => {
       [legs.from]
     );
     expect(Number(linkAfter.rows[0].amount)).toBe(100);
+    expect(linkAfter.rows[0].from_ledger_account_id).toBe(replacementAccount);
     const opposite = await pool.query(
       `SELECT SUM(debit_amount)::numeric AS debit, SUM(credit_amount)::numeric AS credit
          FROM voucher_entries WHERE voucher_id = $1`,
