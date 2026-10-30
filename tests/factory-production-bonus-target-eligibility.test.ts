@@ -66,6 +66,26 @@ describe("Production Targets bonus checkout eligibility", () => {
     expect(combined).toContain("return [...finalizedRows, ...liveRows]");
   });
 
+  it("uses each linked worker's Stock Entry bales, not the linked group's equal split", () => {
+    const live = source("server/services/factory/targetBonusLivePreview.ts");
+    const finalized = source("server/services/factory/targetBonusReview.ts");
+    const category = source("shared/productionBonusCheckoutMath.ts");
+    expect(live).toContain("COALESCE(single_bales.bales,0)::integer AS credited");
+    expect(live).not.toContain("linked_work_totals AS MATERIALIZED");
+    expect(finalized).toContain("factory_target_bonus_category_bale_snapshots");
+    expect(finalized).toContain("captured_credit.worker_id=e.person_id");
+    expect(finalized).toContain("own_credit.worker_id=e.person_id");
+    expect(finalized).not.toContain("FLOOR(COALESCE(e.produced_bales");
+    expect(category).toContain("if(bale.worker!==workerId)continue");
+  });
+
+  it("highlights the whole achieved daily/weekly target cell rather than only the extra text", () => {
+    const sheet = source("client/src/pages/factory/productiontargets/ProductionBonusWeeklySheet.tsx");
+    expect(sheet).toContain("day.target > 0 && day.produced >= day.target");
+    expect(sheet).toContain("worker.target > 0 && worker.produced >= worker.target");
+    expect(sheet).toContain("bg-emerald-600 text-white dark:bg-emerald-700");
+  });
+
   it("marks weekly-flat-covered days as weekly, not an unexplained Needs review error", () => {
     const route = source("server/routes/factory/productionBonusCheckoutRoutes.ts");
     const panel = source("client/src/pages/factory/productiontargets/ProductionBonusCheckoutPanel.tsx");

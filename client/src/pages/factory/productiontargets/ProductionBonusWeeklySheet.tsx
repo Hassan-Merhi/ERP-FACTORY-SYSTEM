@@ -137,31 +137,43 @@ export function ProductionBonusWeeklySheet({
               </th>
               {dates.map(date => {
                 const day = byDate.get(date);
-                return <td key={date} className="border-b border-r px-3 py-2 text-center align-middle tabular-nums">
+                const achieved = !!day && day.target > 0 && day.produced >= day.target;
+                return <td key={date} className={"border-b border-r px-3 py-2 text-center align-middle tabular-nums " +
+                  (achieved ? "bg-emerald-600 text-white dark:bg-emerald-700" : "")}>
                   {day ? <div className="space-y-1">
                     <div className="text-base font-semibold">{day.produced}
-                      <span className="ml-1 text-xs font-normal text-muted-foreground">
+                      <span className={"ml-1 text-xs font-normal " +
+                        (achieved ? "text-white/80" : "text-muted-foreground")}>
                         / {day.target} {t("target")}
                       </span>
                     </div>
-                    {day.category && <div className="max-w-[145px] truncate text-xs text-muted-foreground"
+                    {day.category && <div className={"max-w-[145px] truncate text-xs " +
+                      (achieved ? "text-white/85" : "text-muted-foreground")}
                       title={day.category}>{day.category}</div>}
-                    {day.extra > 0 && <div className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                    {day.extra > 0 && <div className={"text-[11px] font-semibold " +
+                      (achieved ? "text-white" : "text-emerald-600 dark:text-emerald-400")}>
                       +{day.extra} {t("extra")}
                     </div>}
-                    {day.issue && <div className="max-w-[145px] truncate text-[11px] text-muted-foreground"
+                    {day.issue && <div className={"max-w-[145px] truncate text-[11px] " +
+                      (achieved ? "text-white/85" : "text-muted-foreground")}
                       title={day.issue}>{day.issue}</div>}
                     {renderDayActions?.(worker.workerId, date)}
                   </div> : <span className="text-muted-foreground/60">—</span>}
                 </td>;
               })}
-              <td className="border-b border-r px-3 py-2 text-right align-middle tabular-nums">
+              <td className={"border-b border-r px-3 py-2 text-right align-middle tabular-nums " +
+                (worker.target > 0 && worker.produced >= worker.target
+                  ? "bg-emerald-600 text-white dark:bg-emerald-700" : "")}>
                 <strong className="block text-base">{worker.produced}</strong>
-                <span className="block text-xs text-muted-foreground">
+                <span className={"block text-xs " +
+                  (worker.target > 0 && worker.produced >= worker.target
+                    ? "text-white/80" : "text-muted-foreground")}>
                   {t("target")}: {worker.target}
                 </span>
                 <span className={"block text-xs font-medium " +
-                  (worker.extra > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>
+                  (worker.target > 0 && worker.produced >= worker.target
+                    ? "text-white" : worker.extra > 0
+                      ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>
                   +{worker.extra} {t("extra")}
                 </span>
               </td>

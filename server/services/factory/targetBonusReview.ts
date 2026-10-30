@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import type { DatabaseOrTransaction } from "../../db";
 import { resultRows } from "../../lib/queryResult";
 import { loadLiveTargetBonusRows } from "./targetBonusLivePreview";
+import { BONUS_CATEGORY_COUNTED_BALE_STATUSES } from "./productionBonusCategoryCapture";
 
 export type TargetBonusStatus = "pending" | "approved" | "rejected";
 
@@ -34,10 +35,10 @@ type DbRow = {
   targetConfigured?: boolean;
 };
 
-/** Finalized daily targets are the source of truth.
- * Linked workers display the team's shared total, which is split into integer
- * shares; unlinked workers keep their individually attributed stock-entry count.
- * Approved/rejected rows keep an immutable, separately stored snapshot.
+/** Finalized daily targets and per-bale worker attribution are the source of truth.
+ * Linked workers retain their OWN Stock Entry credit and individual targets.
+ * A finalized category capture is preferred over mutable live stock statuses.
+ * Previously reviewed rows keep their recorded amounts and credits.
  */
 export async function loadTargetBonusRows(
   executor: DatabaseOrTransaction,
@@ -46,6 +47,47 @@ export async function loadTargetBonusRows(
   end: string
 ): Promise<TargetBonusRow[]> {
   const result = await executor.execute(sql`
+    WITH captured_days AS MATERIALIZED (
+      SELECT production_date FROM factory_target_bonus_category_day_captures
+      WHERE company_id = ${companyId} AND production_date BETWEEN ${start}::date AND ${end}::date
+    ),
+    captured_bales AS MATERIALIZED (
+      SELECT production_date AS work_date, worker_id, COUNT(*)::integer AS bales
+      FROM factory_target_bonus_category_bale_snapshots
+      WHERE company_id = ${companyId} AND production_date BETWEEN ${start}::date AND ${end}::date
+      GROUP BY production_date, worker_id
+    ),
+    stock_bale_days AS MATERIALIZED (
+      -- A closed day's late-scanned bales move to the next day, not both days.
+      SELECT b.stock_entry_date AS work_date, b.finalized_by AS worker_id, COUNT(*)::integer AS bales
+      FROM factory_bales b
+      LEFT JOIN factory_staff_tracking_period_closures c
+        ON c.company_id = b.company_id AND c.page_type = 'production'
+       AND c.period_type = 'daily' AND c.period_start = b.stock_entry_date
+       AND c.period_end = b.stock_entry_date
+      WHERE b.company_id = ${companyId} AND b.finalized_by IS NOT NULL
+        AND b.stock_entry_date BETWEEN ${start}::date AND ${end}::date
+        AND b.status IN (${sql.join(BONUS_CATEGORY_COUNTED_BALE_STATUSES.map(status => sql`${status}`), sql`, `)})
+        AND (c.ended_at IS NULL OR COALESCE(b.finalized_at,b.created_at) <= c.ended_at)
+      GROUP BY b.stock_entry_date, b.finalized_by
+      UNION ALL
+      SELECT (b.stock_entry_date + 1) AS work_date, b.finalized_by AS worker_id,
+        COUNT(*)::integer AS bales
+      FROM factory_bales b
+      JOIN factory_staff_tracking_period_closures c
+        ON c.company_id = b.company_id AND c.page_type = 'production'
+       AND c.period_type = 'daily' AND c.period_start = b.stock_entry_date
+       AND c.period_end = b.stock_entry_date
+      WHERE b.company_id = ${companyId} AND b.finalized_by IS NOT NULL
+        AND b.stock_entry_date BETWEEN (${start}::date - 1) AND (${end}::date - 1)
+        AND b.status IN (${sql.join(BONUS_CATEGORY_COUNTED_BALE_STATUSES.map(status => sql`${status}`), sql`, `)})
+        AND COALESCE(b.finalized_at,b.created_at) > c.ended_at
+      GROUP BY b.stock_entry_date, b.finalized_by
+    ),
+    stock_bales AS MATERIALIZED (
+      SELECT work_date, worker_id, SUM(bales)::integer AS bales
+      FROM stock_bale_days GROUP BY work_date, worker_id
+    )
     SELECT
       e.period_start::text AS date,
       e.person_id AS "workerId",
@@ -85,28 +127,17 @@ export async function loadTargetBonusRows(
         AND (l.effective_to IS NULL OR l.effective_to > e.period_start)
       ORDER BY l.effective_from DESC, l.id DESC LIMIT 1
     ) links ON true
-    -- Finalization already captured stock-entry production in e.produced_bales.
-    -- Linked entries each store the TEAM total. Allocate that total to members
-    -- once, with any odd-bale remainder assigned by stable worker-id order.
-    -- Unlinked entries store their own worker's stock-entry total.
-    LEFT JOIN LATERAL (
-      SELECT
-        COUNT(*)::integer AS members,
-        COUNT(*) FILTER (WHERE lm.worker_id <= e.person_id)::integer AS member_order
-      FROM factory_worker_production_link_members lm
-      WHERE lm.company_id = e.company_id AND lm.link_id = links.id
-    ) assignment ON true
+    -- Saved linked production repeats the team's total; never divide that
+    -- repeated value. Attribute captured/live physical bales to their finalizer.
+    LEFT JOIN captured_days captured_day ON captured_day.production_date=e.period_start
+    LEFT JOIN captured_bales captured_credit
+      ON captured_credit.work_date=e.period_start AND captured_credit.worker_id=e.person_id
+    LEFT JOIN stock_bales own_credit
+      ON own_credit.work_date=e.period_start AND own_credit.worker_id=e.person_id
     CROSS JOIN LATERAL (
-      SELECT CASE
-        WHEN links.id IS NULL THEN COALESCE(e.produced_bales, 0)::integer
-        ELSE (
-          FLOOR(COALESCE(e.produced_bales, 0)::numeric / GREATEST(assignment.members, 1))
-          + CASE
-              WHEN assignment.member_order <=
-                MOD(COALESCE(e.produced_bales, 0)::integer, GREATEST(assignment.members, 1))
-              THEN 1 ELSE 0 END
-        )::integer
-      END AS count
+      SELECT CASE WHEN captured_day.production_date IS NOT NULL
+        THEN COALESCE(captured_credit.bales,0)
+        ELSE COALESCE(own_credit.bales,0) END::integer AS count
     ) output
     -- The review uses the SAME effective-dated company and worker rate
     -- history as the Phase 1/2 read-only bonus calculation.

@@ -59,19 +59,6 @@ export async function loadLiveTargetBonusRows(
       SELECT work_date, worker_id, SUM(bales)::integer AS bales
       FROM bale_work_days GROUP BY work_date, worker_id
     ),
-    -- Preaggregate team totals once per link/day too. Avoid a correlated
-    -- scan of credited_bales for each worker/day in the requested date range.
-    linked_work_totals AS MATERIALIZED (
-      SELECT bc.work_date, lm.link_id, SUM(bc.bales)::integer AS bales
-      FROM credited_bales bc
-      JOIN factory_worker_production_link_members lm
-        ON lm.company_id = ${companyId} AND lm.worker_id = bc.worker_id
-      JOIN factory_worker_production_links active_link
-        ON active_link.id = lm.link_id AND active_link.company_id = lm.company_id
-        AND active_link.effective_from <= bc.work_date
-        AND (active_link.effective_to IS NULL OR active_link.effective_to > bc.work_date)
-      GROUP BY bc.work_date, lm.link_id
-    )
     SELECT d.work_date::text AS date, w.id AS "workerId",
       w.full_name AS "workerName",
       COALESCE(CASE WHEN saved.category_overridden THEN saved.category
@@ -117,8 +104,7 @@ export async function loadLiveTargetBonusRows(
         AND x.effective_from<=d.work_date
       ORDER BY x.effective_from DESC,x.id DESC LIMIT 1
     ) link_default ON TRUE
-    -- Daily overrides and worker defaults are individual even when workers
-    -- share a table. Another link member must never replace this worker's target.
+    -- A linked table never replaces an individual's saved/default target.
     CROSS JOIN LATERAL (
       SELECT CASE
         WHEN saved.target_overridden THEN saved.target_bales
@@ -127,26 +113,12 @@ export async function loadLiveTargetBonusRows(
         ELSE saved.target_bales
       END AS target
     ) resolved
-    LEFT JOIN LATERAL (
-      SELECT COUNT(*)::integer AS member_count,
-        COUNT(*) FILTER (WHERE lm.worker_id<=w.id)::integer AS member_order
-      FROM factory_worker_production_link_members lm
-      WHERE lm.company_id=w.company_id AND lm.link_id=link.id
-    ) members ON TRUE
+    -- Link membership only affects table/roster metadata, NEVER bonus credit.
+    -- Stock Entry already records the worker who finalized each physical bale.
     LEFT JOIN credited_bales single_bales
       ON single_bales.work_date=d.work_date AND single_bales.worker_id=w.id
-    LEFT JOIN linked_work_totals team_bales
-      ON team_bales.work_date=d.work_date AND team_bales.link_id=link.id
     CROSS JOIN LATERAL (
-      SELECT CASE WHEN link.id IS NULL THEN COALESCE(single_bales.bales,0)
-        ELSE COALESCE(team_bales.bales,0) END AS bales
-    ) produced
-    CROSS JOIN LATERAL (
-      SELECT CASE WHEN link.id IS NULL THEN produced.bales
-        ELSE (FLOOR(produced.bales::numeric/GREATEST(members.member_count,1))
-          + CASE WHEN members.member_order<=
-              MOD(produced.bales,GREATEST(members.member_count,1)) THEN 1 ELSE 0 END)::integer
-      END AS credited
+      SELECT COALESCE(single_bales.bales,0)::integer AS credited
     ) credit
     LEFT JOIN LATERAL (
       SELECT CASE WHEN r.enabled THEN r.rate_per_extra_bale ELSE NULL END AS rate_per_bale

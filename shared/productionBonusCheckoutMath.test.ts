@@ -12,6 +12,20 @@ describe("Production Targets bonus category allocation",()=>{
     expect(second.reduce((n,r)=>n+r.count,0)).toBe(7);
     expect(first[0].count+second[0].count).toBe(14);
   });
+  it("keeps unequal linked worker output exactly as recorded in Stock Entry",()=>{
+    const bales=[
+      ...Array.from({length:11},(_,i)=>({id:i+1,worker:10,category:i<8?"Bags":"Toys"})),
+      ...Array.from({length:3},(_,i)=>({id:i+12,worker:11,category:"Shoes"})),
+    ];
+    expect(workerCategoryCredits(bales,[10,11],10)).toEqual([
+      {category:"Bags",count:8},{category:"Toys",count:3},
+    ]);
+    expect(workerCategoryCredits(bales,[10,11],11)).toEqual([
+      {category:"Shoes",count:3},
+    ]);
+    expect(workerCategoryCredits(bales,[10,11],10).reduce((n,r)=>n+r.count,0)+
+      workerCategoryCredits(bales,[10,11],11).reduce((n,r)=>n+r.count,0)).toBe(14);
+  });
   it("preserves category switches without counting the same linked bale twice",()=>{
     const bales=Array.from({length:10},(_,i)=>({
       id:i+1,worker:i%2?3:2,category:i<6?"Bags":"Shoes",

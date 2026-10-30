@@ -1,22 +1,20 @@
 import { productionBonusCheckoutErrors as errors } from "./i18n/productionBonusCheckoutErrors";
 import Decimal from "decimal.js";
 import { mondayOfProductionBonusWeek } from "./productionTargetBonusWeeklyMethod";
-/** Deterministic category attribution for linked worker groups.
- * Each physical bale belongs to one worker, and the floor/remainder split
- * agrees with the existing Production Targets linked-worker count.
+/** Attribute each Stock Entry bale to the worker who finalized it.
+ * Linking workers at the same table does not transfer or split their bonus
+ * credits; category totals must match the individual preview exactly.
  */
 export function workerCategoryCredits(
   bales: ReadonlyArray<{id:number;worker:number|null;category:string|null}>,
   members: readonly number[],
   workerId: number,
 ): Array<{category:string;count:number}> {
-  const ids=[...new Set(members)].sort((a,b)=>a-b);
-  const rank=ids.indexOf(workerId);
-  if(rank<0)throw new Error(errors.missingLink);
+  const ids=[...new Set(members)];
+  if(!ids.includes(workerId))throw new Error(errors.missingLink);
   const group=new Map<string,number>();
-  for(let i=0;i<bales.length;i++){
-    const bale=bales[i];
-    if(ids.length===1 ? bale.worker!==workerId : i%ids.length!==rank)continue;
+  for(const bale of bales){
+    if(bale.worker!==workerId)continue;
     const name=(bale.category??"").normalize("NFC").trim().replace(/\s+/gu," ");
     if(!name)throw new Error(errors.missingCategory);
     group.set(name,(group.get(name)??0)+1);
