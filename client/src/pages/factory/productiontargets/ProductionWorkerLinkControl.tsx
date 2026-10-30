@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { evenSplitBales, isValidBaleTarget, linkedTotalBalesFromPerWorker } from "@shared/factoryProductionTargetSplit";
+import { evenSplitBales, isValidBaleTarget } from "@shared/factoryProductionTargetSplit";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
@@ -28,7 +28,6 @@ interface ProductionWorkerLinkControlProps {
   row: ProductionRow;
   rows: ProductionRow[];
   effectiveFrom: string;
-  targetBales?: number | null;
   disabled?: boolean;
 }
 
@@ -38,7 +37,6 @@ export function ProductionWorkerLinkControl({
   row,
   rows,
   effectiveFrom,
-  targetBales,
   disabled = false,
 }: ProductionWorkerLinkControlProps) {
   const { toast } = useToast();
@@ -98,16 +96,18 @@ export function ProductionWorkerLinkControl({
   };
 
   const openUnlinkDialog = () => {
-    // The linked table counts each worker's fixed target. Reconstruct its
-    // combined total before splitting, e.g. two workers at 7 = 14 total.
-    // Daily Edit Targets overrides must not replace the repeating fixed target.
-    const combined = linkedTotalBalesFromPerWorker(row.defaultTargetBales ?? null, currentMemberIds.length);
+    // Start with each person's own repeating fixed target, never an average.
+    const fixedTargets = currentMemberIds.map(
+      (workerId) => rows.find((candidate) => candidate.personId === workerId)?.defaultTargetBales ?? null
+    );
+    const complete = fixedTargets.every((value) => value !== null && isValidBaleTarget(value));
+    const combined = complete
+      ? fixedTargets.reduce<number>((sum, value) => sum + Math.round((value ?? 0) * 100), 0) / 100
+      : null;
     setUnlinkTarget(combined);
-    if (combined !== null && isValidBaleTarget(combined)) {
-      fillEvenSplit(combined);
-    } else {
-      setUnlinkDraft({});
-    }
+    setUnlinkDraft(complete
+      ? Object.fromEntries(currentMemberIds.map((workerId, index) => [workerId, String(fixedTargets[index])]))
+      : {});
     setUnlinkOpen(true);
   };
 
@@ -164,14 +164,9 @@ export function ProductionWorkerLinkControl({
         throw new Error(tr("workerLinkFailed"));
       }
 
-      const sharedTargetBales =
-        targetBales === undefined
-          ? (row.targetBales ?? partners.find((partner) => partner.targetBales != null)?.targetBales ?? null)
-          : targetBales;
       const response = await factoryApiRequest("POST", "/api/factory/staff-tracking/production-worker-links", {
         effectiveFrom,
         workerIds,
-        targetBales: sharedTargetBales,
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
@@ -198,14 +193,17 @@ export function ProductionWorkerLinkControl({
         `/api/factory/staff-tracking/production-worker-links/${row.linkGroupId}/unlink`,
         {
           effectiveTo: effectiveFrom,
-          ...(unlinkTarget === null
-            ? {}
-            : {
+          ...(unlinkTarget !== null && unlinkMembers.some((member) =>
+            Number(unlinkDraft[member.workerId]) !==
+              (rows.find((candidate) => candidate.personId === member.workerId)?.defaultTargetBales ?? null)
+          )
+            ? {
                 allocations: unlinkMembers.map((member) => ({
                   workerId: member.workerId,
                   targetBales: Number(unlinkDraft[member.workerId]),
                 })),
-              }),
+              }
+            : {}),
         }
       );
       if (!response.ok) {

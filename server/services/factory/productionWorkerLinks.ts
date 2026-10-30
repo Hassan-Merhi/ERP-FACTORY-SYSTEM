@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import { db } from "../../db";
 import { resultRows } from "../../lib/queryResult";
 import { sqlArray } from "../../lib/sqlArray";
-import { linkedTotalBalesFromPerWorker, resolveUnlinkBaleAllocations, type WorkerBaleAllocation } from "@shared/factoryProductionTargetSplit";
+import { resolveUnlinkBaleAllocations, type WorkerBaleAllocation } from "@shared/factoryProductionTargetSplit";
 
 export interface ProductionWorkerLinkMember {
   workerId: number;
@@ -220,18 +220,6 @@ export async function unlinkProductionWorkerLink(input: {
       throw new Error("Unlink date cannot be before the link start date");
     }
 
-    const targetResult = await tx.execute(sql`
-      SELECT target_bales AS "targetBales"
-      FROM factory_worker_production_link_target_defaults
-      WHERE company_id = ${input.companyId}
-        AND link_id = ${input.linkId}
-        AND effective_from <= ${input.effectiveTo}::date
-      ORDER BY effective_from DESC, id DESC
-      LIMIT 1
-    `);
-    const targetRaw = resultRows(targetResult)[0]?.targetBales;
-    const sharedTarget = targetRaw == null ? null : Number(targetRaw);
-
     const membersResult = await tx.execute(sql`
       SELECT worker_id AS "workerId"
       FROM factory_worker_production_link_members
@@ -239,11 +227,32 @@ export async function unlinkProductionWorkerLink(input: {
       ORDER BY worker_id
     `);
     const workerIds = resultRows(membersResult).map((row) => Number(row.workerId));
-    // The linked target applies to EACH worker (and is summed on the linked
-    // production row). Split the combined total, not a single member's share.
-    // Validate before changing the link so a bad allocation rolls back safely.
-    const combinedTarget = linkedTotalBalesFromPerWorker(sharedTarget, workerIds.length);
-    const splitByWorker = resolveUnlinkBaleAllocations(combinedTarget, workerIds, input.allocations);
+
+    // Link membership never changes the target owned by each individual worker.
+    // Only an explicit reallocation on unlink may change their defaults.
+    let splitByWorker: Map<number, number | null> | null = null;
+    if (input.allocations !== undefined) {
+      const defaultsResult = await tx.execute(sql`
+        SELECT DISTINCT ON (worker_id)
+          worker_id AS "workerId", target_bales AS "targetBales"
+        FROM factory_worker_production_target_defaults
+        WHERE company_id = ${input.companyId}
+          AND worker_id = ANY(${sqlArray(workerIds)})
+          AND effective_from <= ${input.effectiveTo}::date
+        ORDER BY worker_id, effective_from DESC, id DESC
+      `);
+      const existingTargets = new Map(
+        resultRows(defaultsResult).map((row) => [
+          Number(row.workerId),
+          row.targetBales == null ? null : Number(row.targetBales),
+        ])
+      );
+      const targetValues = workerIds.map((id) => existingTargets.get(id) ?? null);
+      const combinedTarget = targetValues.every((value) => value !== null)
+        ? targetValues.reduce((total, value) => total + Math.round((value ?? 0) * 100), 0) / 100
+        : null;
+      splitByWorker = resolveUnlinkBaleAllocations(combinedTarget, workerIds, input.allocations);
+    }
 
     await tx.execute(sql`
       UPDATE factory_worker_production_links
@@ -251,21 +260,22 @@ export async function unlinkProductionWorkerLink(input: {
       WHERE id = ${input.linkId} AND company_id = ${input.companyId}
     `);
 
-    // Any target override saved while these workers were linked must not hide
-    // their restored individual fixed targets on the unlink date. Preserve
-    // category overrides and historical/other-day entries.
-    await tx.execute(sql`
-      UPDATE factory_staff_tracking_entries
-      SET target_overridden = false, updated_at = now()
-      WHERE company_id = ${input.companyId}
-        AND page_type = 'production'
-        AND period_type = 'daily'
-        AND period_start = ${input.effectiveTo}::date
-        AND period_end = ${input.effectiveTo}::date
-        AND person_type = 'worker'
-        AND person_id = ANY(${sqlArray(workerIds)})
-        AND target_overridden = true
-    `);
+    // Preserve the workers' existing defaults and their daily overrides on an
+    // ordinary unlink. Only save new defaults if the supervisor explicitly
+    // redistributed the target when unlinking.
+    if (splitByWorker) {
+      await tx.execute(sql`
+        UPDATE factory_staff_tracking_entries
+        SET target_overridden = false, updated_at = now()
+        WHERE company_id = ${input.companyId}
+          AND page_type = 'production'
+          AND period_type = 'daily'
+          AND period_start = ${input.effectiveTo}::date
+          AND period_end = ${input.effectiveTo}::date
+          AND person_type = 'worker'
+          AND person_id = ANY(${sqlArray(workerIds)})
+          AND target_overridden = true
+      `);
 
     for (const workerId of workerIds) {
       const existingDefaultResult = await tx.execute(sql`
@@ -304,6 +314,7 @@ export async function unlinkProductionWorkerLink(input: {
           created_by = EXCLUDED.created_by,
           updated_at = now()
       `);
+    }
     }
 
     return true;

@@ -66,10 +66,22 @@ function RowStatus({ validation }: { validation: PosImportItem | undefined }) {
       </div>
     );
   }
+  // The validate endpoint already returns stock after this imported sale line,
+  // scoped to the selected location. Only show it for successful validations.
+  const remaining = validation.remainingStock;
+  const hasRemainingStock = typeof remaining === "number" && Number.isFinite(remaining);
+
   return (
-    <div className="flex items-center gap-1 text-green-600">
-      <CheckCircle className="h-4 w-4" />
-      <span className="text-sm">OK</span>
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+      <span className="inline-flex items-center gap-1 text-green-600">
+        <CheckCircle className="h-4 w-4" />
+        <span className="text-sm font-medium">OK</span>
+      </span>
+      {hasRemainingStock && (
+        <span className="text-sm text-muted-foreground" data-testid="pos-import-remaining-stock">
+          — {formatNumber(remaining, 6)}{validation.stockItemUom ? ` ${validation.stockItemUom}` : ""} remaining
+        </span>
+      )}
     </div>
   );
 }

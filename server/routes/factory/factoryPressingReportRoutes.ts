@@ -21,7 +21,7 @@ import {
 import { factoryLocalDate } from "../../services/factory/pressingShiftTime";
 import { PRESSING_TIME_ZONE } from "@shared/pressingTimeZone";
 
-// Individual worker history stays scoped; Admin, Owner and Developer can view company reports.
+// Individual worker history stays scoped. View Only can read company-wide reports but never correct scans.
 const MANAGER_ROLES = new Set(["Admin", "Owner", "Developer"]);
 type QueryCtx = { companyId: number; userId: string; supervisor: boolean; canCorrect: boolean };
 type Param = string | number;
@@ -63,7 +63,7 @@ async function context(req: Request): Promise<QueryCtx> {
   return {
     companyId: ctx.companyId,
     userId: ctx.userId,
-    supervisor: MANAGER_ROLES.has(ctx.role) && !ctx.posViewOnly,
+    supervisor: (MANAGER_ROLES.has(ctx.role) && !ctx.posViewOnly) || ctx.role === "View Only",
     canCorrect: (ctx.role === "Admin" || ctx.role === "Owner") && !ctx.posViewOnly,
   };
 }
@@ -261,7 +261,7 @@ async function report(ctx: QueryCtx, filters: PressingReportFilters) {
   // Resolve current company-scoped display names for every historical row and
   // summary, so renamed workers are shown correctly without rewriting evidence.
   const operatorIds = [
-    ...new Set(
+    ...new Set<string>(
       [
         ...rows.rows.map((row) => row.operatorUserId),
         ...filteredSummary.byOperator.map((row: { userId: string }) => row.userId),

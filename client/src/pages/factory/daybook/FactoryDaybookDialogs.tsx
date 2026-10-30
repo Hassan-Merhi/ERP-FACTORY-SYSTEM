@@ -306,9 +306,14 @@ export function FactoryDaybookDialogs({ model }: { model: FactoryDaybookModel })
       >
         <AlertDialogContent data-testid="dialog-delete-entry">
           <AlertDialogHeader>
-            <AlertDialogTitle>Permanently delete this entry?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {deleteEntry?.txType.startsWith("PRODUCTION_TARGET_")
+                ? "Remove bonus payment and reverse accounting?" : "Permanently delete this entry?"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently remove the daybook entry. This action cannot be undone.
+              {deleteEntry?.txType.startsWith("PRODUCTION_TARGET_")
+                ? "This removes the posted bonus from the active Daybook and posts a reversing Receipt to restore Cash / Bank and Payroll Deposit Expense. The original voucher and reversal are retained for audit. The same worker bonus cannot be paid twice."
+                : "This will permanently remove the daybook entry. This action cannot be undone."}
               {deleteEntry && (
                 <span className="block mt-2 font-medium text-foreground">{formatDaybookDescription(deleteEntry)}</span>
               )}
@@ -322,7 +327,8 @@ export function FactoryDaybookDialogs({ model }: { model: FactoryDaybookModel })
               className="bg-destructive text-destructive-foreground"
               data-testid="button-confirm-delete"
             >
-              {model.deleteMutation.isPending ? "Deleting..." : "Delete Entry"}
+              {model.deleteMutation.isPending ? "Processing..." :
+                deleteEntry?.txType.startsWith("PRODUCTION_TARGET_") ? "Reverse & Remove" : "Delete Entry"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

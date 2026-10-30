@@ -580,61 +580,20 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
 
         {/* Production by Category (each category expands to show its products) */}
         {(() => {
-          const wgCats: { categoryName: string; qty: number; totalWeightKg: number; totalValue: number }[] = [];
-          const wgProds: {
-            articleCode: string;
-            productName: string;
-            categoryName: string;
-            qty: number;
-            totalWeightKg: number;
-            costPricePerBale: number;
-            pricePerBale: number;
-            totalValue: number;
-          }[] = [];
-          if (data) {
-            const wipersRows = data.wipersGarbage.rows.filter((r) => r.subType === "wiper");
-            const garbageRows = data.wipersGarbage.rows.filter((r) => r.subType !== "wiper");
-            if (wipersRows.length > 0) {
-              wgCats.push({
-                categoryName: "Wipers",
-                qty: wipersRows.reduce((s: number, r) => s + r.qty, 0),
-                totalWeightKg: wipersRows.reduce((s: number, r) => s + r.totalWeightKg, 0),
-                totalValue: wipersRows.reduce((s: number, r) => s + r.totalValue, 0),
-              });
-              wgProds.push(
-                ...wipersRows.map((r) => ({
-                  articleCode: r.categoryName.replace(/\s+/g, "-").toUpperCase(),
-                  productName: r.categoryName,
-                  categoryName: "Wipers",
-                  qty: r.qty,
-                  totalWeightKg: r.totalWeightKg,
-                  costPricePerBale: 0,
-                  pricePerBale: r.qty > 0 ? r.totalValue / r.qty : 0,
-                  totalValue: r.totalValue,
-                }))
-              );
-            }
-            if (garbageRows.length > 0) {
-              wgCats.push({
-                categoryName: "Garbage",
-                qty: garbageRows.reduce((s: number, r) => s + r.qty, 0),
-                totalWeightKg: garbageRows.reduce((s: number, r) => s + r.totalWeightKg, 0),
-                totalValue: garbageRows.reduce((s: number, r) => s + r.totalValue, 0),
-              });
-              wgProds.push(
-                ...garbageRows.map((r) => ({
-                  articleCode: r.categoryName.replace(/\s+/g, "-").toUpperCase(),
-                  productName: r.categoryName,
-                  categoryName: "Garbage",
-                  qty: r.qty,
-                  totalWeightKg: r.totalWeightKg,
-                  costPricePerBale: 0,
-                  pricePerBale: r.qty > 0 ? r.totalValue / r.qty : 0,
-                  totalValue: r.totalValue,
-                }))
-              );
-            }
-          }
+          // One expandable category, matching Location Inventory. The API supplies
+          // real wiper/garbage products rather than synthetic category-name rows.
+          const wgCats = data && data.wipersGarbage.rows.length > 0
+            ? [{
+                categoryName: "Wipers & Garbage",
+                qty: data.wipersGarbage.totalWipersQty + data.wipersGarbage.totalGarbageQty,
+                totalWeightKg: data.wipersGarbage.totalWeightKg,
+                totalValue: data.wipersGarbage.totalValue,
+              }]
+            : [];
+          const wgProds = (data?.wipersGarbage.products ?? []).map((product) => ({
+            ...product,
+            categoryName: "Wipers & Garbage",
+          }));
           const mergedCategories = [...(data?.production.byCategory ?? []), ...wgCats];
           const mergedProducts = [...(data?.production.byProduct ?? []), ...wgProds];
           const mergedTotalBales = (data?.production.totalBales ?? 0) + wgCats.reduce((s, c) => s + c.qty, 0);

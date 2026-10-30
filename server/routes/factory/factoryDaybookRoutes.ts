@@ -125,6 +125,18 @@ export function registerFactoryDaybookRoutes(app: Express) {
           'CONTRACT_REACTIVATED',
           'CONTRACT_ENDED'
         )`,
+        // Deleted bonus payments are reversed, never erased. Hide the offsetting payment and reversal entries from the active Daybook
+        // as a net-zero deletion; preserve both in audit history.
+        sql`NOT (
+          (${factoryDaybookEntries.txType} IN ('PRODUCTION_TARGET_BONUS_PAYMENT','PRODUCTION_TARGET_BONUS_REVERSAL')
+            AND EXISTS (SELECT 1 FROM factory_target_bonus_payments p
+              WHERE p.company_id = ${companyId} AND p.id = ${factoryDaybookEntries.referenceId}
+                AND p.status = 'REVERSED'))
+          OR (${factoryDaybookEntries.txType} IN ('PRODUCTION_TARGET_WEEKLY_BONUS_PAYMENT','PRODUCTION_TARGET_WEEKLY_BONUS_REVERSAL')
+            AND EXISTS (SELECT 1 FROM factory_target_bonus_weekly_payments p
+              WHERE p.company_id = ${companyId} AND p.id = ${factoryDaybookEntries.referenceId}
+                AND p.status = 'REVERSED'))
+        )`,
         // Hide zero-amount payroll payment entries — no money moved, nothing to show
         sql`NOT (
           ${factoryDaybookEntries.txType} = 'PAYROLL_PAYMENT'
@@ -344,6 +356,16 @@ export function registerFactoryDaybookRoutes(app: Express) {
 
         const voucherConds = [
           eq(vouchers.companyId, companyId),
+          // Bonus claims have dedicated source-backed Daybook entries.
+          // Suppress synthetic Payment/Receipt duplicates for both posted and reversed claims.
+          sql`NOT EXISTS (
+            SELECT 1 FROM factory_target_bonus_payments p WHERE p.company_id = ${companyId}
+              AND (p.payment_voucher_id = ${vouchers.id} OR p.reversal_voucher_id = ${vouchers.id})
+          )`,
+          sql`NOT EXISTS (
+            SELECT 1 FROM factory_target_bonus_weekly_payments p WHERE p.company_id = ${companyId}
+              AND (p.payment_voucher_id = ${vouchers.id} OR p.reversal_voucher_id = ${vouchers.id})
+          )`,
           sql`${vouchers.deletedAt} IS NULL`,
           inArray(vouchers.voucherType, ["Payment", "Receipt", "Journal"]),
         ];

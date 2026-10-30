@@ -10,7 +10,7 @@ import { db } from "../../db";
 import { requireAuth } from "../../auth";
 import {
   factoryBales, factoryPressingMachines, factoryPressingAssignments,
-  factoryPressingSessions, factoryPressingConfirmations, factorySettings,
+  factoryPressingSessions, factoryPressingConfirmations,
   factoryPressingCorrections, factoryUserProfiles,
   users,
 } from "@shared/schema";
@@ -46,11 +46,6 @@ function safeDeviceTimestamp(value: string | undefined): Date | null {
   if (!value) return null;
   const parsed = new Date(value);
   return Number.isFinite(parsed.getTime()) ? parsed : null;
-}
-function isNonBalePriorityProduct(extra: unknown, productId: number | null): boolean {
-  if (!productId || !extra || typeof extra !== "object" || Array.isArray(extra)) return false;
-  const excluded = (extra as Record<string, unknown>).nonBalePriorityProductIds;
-  return Array.isArray(excluded) && excluded.some(id => Number(id) === productId);
 }
 function sendFailure(res: Response, error: unknown): void {
   if (error instanceof ConfirmationError) {
@@ -169,13 +164,11 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
             eq(factoryBales.referenceNumber, reference),
             isNull(factoryBales.deletedAt))).for("update");
         if (!bale || bale.status === "DELETED") {
-          throw new ConfirmationError(404, "PRESSING_BALE_NOT_FOUND", "This reference is not an active factory bale");
+          throw new ConfirmationError(404, "PRESSING_BALE_NOT_FOUND", "This reference is not an active factory item");
         }
-        const [settings] = await tx.select({ extraSettings: factorySettings.extraSettings })
-          .from(factorySettings).where(eq(factorySettings.companyId, companyId)).limit(1);
-        if (isNonBalePriorityProduct(settings?.extraSettings, bale.productId)) {
-          throw new ConfirmationError(422, "PRESSING_NON_BALE_ITEM", "Non-bale priority products cannot be recorded as pressed bales");
-        }
+        // Non-bale Priority products are also represented by factory_bales
+        // references. Permit them through the same immutable pressing evidence
+        // and duplicate-protection path, without altering stock or accounting.
         const [alreadyPressed] = await tx.select().from(factoryPressingConfirmations)
           .where(and(eq(factoryPressingConfirmations.companyId, companyId),
             eq(factoryPressingConfirmations.baleId, bale.id),
@@ -198,8 +191,9 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
         }
 
         // Physical pressing is independent of inventory lifecycle. Every
-        // active, non-deleted factory bale is eligible for its first pressing
-        // confirmation, including stocked, reserved, sold and dispatched bales.
+        // active, non-deleted factory item is eligible for its first pressing
+        // confirmation, including stocked, reserved, sold, dispatched and
+        // configured non-bale Priority products.
         // The company/bale checks and lifetime duplicate guard above still apply.
 
         // The logged-in user is the production operator. No configured

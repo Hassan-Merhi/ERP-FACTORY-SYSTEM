@@ -46,8 +46,8 @@ The response additionally includes company-scoped bale, machine, assignment, use
 - **409 PRESSING_CONFIRMATION_VOIDED:** Exact old idempotency request points to a voided record and must not return an active success response. Supervisor correction/reconfirmation is a later phase.
 - **409 PRESSING_ASSIGNMENT_CHANGED / PRESSING_SESSION_STALE:** User's assignment changed, or their prior session no longer matches.
 - **403 PRESSING_WRITE_DENIED / PRESSING_USER_INACTIVE:** Read-only users or inactive accounts cannot confirm pressing.
-- **404 PRESSING_BALE_NOT_FOUND:** Unknown, company-mismatched, or deleted bale.
-- **422 PRESSING_NON_BALE_ITEM / PRESSING_MACHINE_INACTIVE:** Non-bale product or inactive machine; inventory lifecycle status never blocks a valid pressing scan.
+- **404 PRESSING_BALE_NOT_FOUND:** Unknown, company-mismatched, or deleted factory item reference.
+- **422 PRESSING_MACHINE_INACTIVE:** Inactive machine; inventory lifecycle status never blocks a valid pressing scan.
 
 ### Concurrency and authoritative evidence
 
@@ -74,3 +74,7 @@ The pressing confirmation endpoint accepts any active, company-owned factory bal
 ## Verification required before merge or deploy
 
 Run `npx vitest run tests/pressing-machine-phase4-contract.test.ts` and `npm run test:frontend -- client/src/pages/factory/pressing-scanner/pressingConfirmClient.test.ts` on a checked-out branch, plus existing Phases 1–3 tests, TypeScript checking and migration validation. Against isolated Postgres, race two workers on different presses confirming the same bale and ensure exactly one 201; repeat the same request ID and expect original 200 with no new rows; alter identity with same ID and expect 409; attempt inactive, cross-company, non-bale and deleted bales; verify finalized and other non-deleted statuses are accepted once; assert no stock, voucher or mix changes.
+
+## Eligibility update (2026-10-30): Non-bale Priority products
+
+Factory products configured in `factory_settings.extra_settings.nonBalePriorityProductIds` can now be scanned through Pressing Machines as long as their factory item reference exists in `factory_bales`, belongs to the active company and is not deleted. The classification no longer rejects the scan; the original same-reference duplicate protection, immutable pressing confirmation, user attribution, Beirut timestamp and idempotent retry still apply. These confirmations do not finalize stock, consume inventory or post vouchers. Pressing totals represent scanned items (regular bales plus non-bale Priority products). Ground Scan exclusion and Priority Scan rules are unchanged.
