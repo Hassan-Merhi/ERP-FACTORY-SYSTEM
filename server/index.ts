@@ -14,6 +14,8 @@ import express from "express";
 import { createHttpApp } from "./httpApp";
 import { registerFactoryEdgeBoundary } from "./edge/edgeBoundary";
 import { ensureEdgeVoucherOutboxSchema } from "./edge/edgeVoucherOutbox";
+import { ensureCloudEdgeStageSchema } from "./edge/edgeCloudStaging";
+import { readCloudSyncStageConfiguration } from "./edge/edgeSyncStageProtocol.mjs";
 import { readFactoryEdgeConfiguration, shouldStartEdgeBackgroundJobs } from "./edge/edgeRuntimePolicy.mjs";
 import compression from "compression";
 import { securityHeadersMiddleware } from "./security/securityHeaders";
@@ -303,6 +305,7 @@ let migrationsDone = false;
       await ensureCanonicalStockMovementJournal(pool);
       await ensureRuntimeSchema(pool);
       await ensureEdgeVoucherOutboxSchema(pool);
+      await ensureCloudEdgeStageSchema(pool, readCloudSyncStageConfiguration().enabled);
       // Needs fiscal_period_closures from ensureRuntimeSchema. Fatal on failure:
       // serving writes without the closed-period lock would let closed books change.
       await ensureClosedPeriodGuard(pool);
