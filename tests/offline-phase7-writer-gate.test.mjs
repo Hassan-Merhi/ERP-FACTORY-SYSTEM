@@ -66,6 +66,17 @@ test("manual operator ACK without epoch and digest is refused", () => {
   }).writerEpoch, "2");
 });
 
+test("restricted app role setup is DBA-only, NOLOGIN and denies DDL/state privilege", () => {
+  const sql = readFileSync(new URL("../deploy/lan/phase7-prepare-restricted-role.sql", import.meta.url), "utf8");
+  assert.match(sql, /CREATE ROLE erp_edge_runtime NOLOGIN NOSUPERUSER NOCREATEDB/);
+  assert.match(sql, /REVOKE CREATE ON SCHEMA public FROM PUBLIC/);
+  assert.match(sql, /REVOKE CREATE ON DATABASE/);
+  assert.match(sql, /GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public/);
+  assert.match(sql, /GRANT SELECT ON phase7_writer\.state TO erp_edge_runtime/);
+  assert.match(sql, /PHASE7_ROLE_SETUP_REQUIRES_FENCED_STATE/);
+  assert.doesNotMatch(sql, /GRANT ALL PRIVILEGES|GRANT CREATE|GRANT TRIGGER|GRANT TRUNCATE/);
+});
+
 test("DBA SQL locks writer-state rows per transaction and fences every current public table", () => {
   const sql = readFileSync(new URL("../deploy/lan/phase7-install-writer-fence.sql", import.meta.url), "utf8");
   assert.match(sql, /FOR SHARE/);
