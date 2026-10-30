@@ -4,6 +4,7 @@ import { Coins, Loader2, Pencil, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Select, SelectTrigger, SelectContent, SelectValue, SelectItem } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { factoryApiRequest } from "@/lib/factoryApi";
@@ -76,7 +77,7 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
     onError: (cause: Error) => toast({ title: "Category rate not saved", description: cause.message, variant: "destructive" }),
   });
   const validRate = parseBonusCategoryRate(rate);
-  const canSave = Boolean(category.trim()) && isBonusCategoryDate(effectiveFrom) &&
+  const canSave = Boolean(data?.categories.some(item => item.categoryLabel === category)) && isBonusCategoryDate(effectiveFrom) &&
     validRate !== null && (!enabled || Number(validRate) > 0) &&
     !save.isPending;
 
@@ -136,7 +137,7 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
               ))}
               {!isLoading && data && data.categories.length === 0 && <tr>
                 <td colSpan={5} className="px-3 py-4 text-center text-muted-foreground">
-                  No production categories yet. Add a named category to configure its rate.
+                  No production categories yet. Add categories under Production Targets first.
                 </td>
               </tr>}
             </tbody>
@@ -163,8 +164,17 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
               </DialogDescription>
             </DialogHeader>
             <label className="space-y-1 text-sm">Category
-              <Input aria-label="Production bonus category" value={category} maxLength={100}
-                onChange={event => setCategory(event.target.value)} placeholder="e.g. Bags or Toys" />
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger aria-label="Production Targets category">
+                  <SelectValue placeholder="Choose a Production Targets category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(data?.categories ?? []).map(item =>
+                    <SelectItem key={item.categoryKey} value={item.categoryLabel}>
+                      {item.categoryLabel}
+                    </SelectItem>)}
+                </SelectContent>
+              </Select>
             </label>
             <label className="space-y-1 text-sm">Effective from
               <Input aria-label="Category rate effective from" type="date" value={effectiveFrom}
