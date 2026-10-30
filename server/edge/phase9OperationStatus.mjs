@@ -73,8 +73,8 @@ export async function readPhase9OperationStatus(queryable, scope) {
      Number(row.applied_company_id) === scope.companyId &&
      Number(row.applied_local_voucher_id) === Number(row.local_voucher_id) &&
      Number.isSafeInteger(Number(row.cloud_voucher_id)) && Number(row.cloud_voucher_id) > 0 &&
-     ISO_DATE.test(String(row.business_date ?? "")) &&
-     row.applied_business_date === row.business_date);
+     ISO_DATE.test(String(row.business_date ?? "").slice(0, 10)) &&
+     String(row.applied_business_date).slice(0, 10) === String(row.business_date).slice(0, 10));
   const state = !originalValid || !stageValid || !appliedValid
     ? "conflict" : appliedPresent ? "cloud-applied" : stagePresent ? "staged" : "local-only";
   return {
