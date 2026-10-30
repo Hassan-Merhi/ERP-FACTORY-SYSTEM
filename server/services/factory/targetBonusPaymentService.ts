@@ -90,13 +90,7 @@ async function getReviewTx(tx: DbTransaction, companyId: number, date: string, w
     FROM factory_workers WHERE id = ${workerId} AND company_id = ${companyId}
   `));
   if (!worker) conflict("Worker no longer belongs to this factory");
-  const finalized = first(await tx.execute(sql`
-    SELECT 1 AS ready FROM factory_staff_tracking_period_closures
-    WHERE company_id = ${companyId} AND page_type='production' AND period_type='daily'
-      AND period_start = ${date}::date AND period_end = ${date}::date
-    LIMIT 1
-  `));
-  if (!finalized) conflict("Production must be finalized before paying a bonus");
+  // A reviewed worker/day is an immutable snapshot even if production remains open.
   return {
     id: Number(review.id),
     workerId,
@@ -151,7 +145,15 @@ export async function postTargetBonusPayments(
 ) {
   if (!positiveId(companyId)) throw new HttpError(400, "Factory company required");
   if (!actor.userId) throw new HttpError(401, "A signed-in approver is required");
-  return db.transaction(async (tx) => {
+  return db.transaction((tx) => postTargetBonusPaymentsInTransaction(tx, companyId, command, actor));
+}
+
+/** The checkout route uses this inside the same transaction that freezes new
+ * approvals. An exception rolls back reviews, voucher, cash and Daybook alike. */
+export async function postTargetBonusPaymentsInTransaction(
+  tx: DbTransaction, companyId: number, command: TargetBonusPaymentCommand,
+  actor: TargetBonusPaymentActor,
+) {
     // Same company lock used by Phase 4 decision endpoint. Prevents two
     // administrators choosing incompatible payouts for the same worker/day.
     await tx.execute(sql`SELECT pg_advisory_xact_lock(84023, ${companyId})`);
@@ -247,7 +249,6 @@ export async function postTargetBonusPayments(
       cashAccountId: cashId, results,
       posted: results.filter((row) => !row.replayed).length,
       replayed: results.filter((row) => row.replayed).length };
-  });
 }
 
 export async function reverseTargetBonusPayment(
