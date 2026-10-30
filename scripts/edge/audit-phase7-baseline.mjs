@@ -114,6 +114,13 @@ async function captureClone({ connectionString, scope, uploadsDir, snapshotSha25
     if (!/^erp_phase7_rehearsal_[a-z0-9_]+$/.test(identity.rows[0]?.db ?? "")) {
       throw new Error("PHASE7_BASELINE_DISPOSABLE_DATABASE_REQUIRED");
     }
+    // An ordinary tenant-scoped app user may silently see only one company.
+    // This privileged audit is ONLY safe because the database name and operator
+    // controls require a stopped, disposable clone, never the live factory DB.
+    const role = await client.query(
+      "SELECT rolsuper OR rolbypassrls AS complete FROM pg_roles WHERE rolname=current_user"
+    );
+    if (role.rows[0]?.complete !== true) throw new Error("PHASE7_BASELINE_FULL_SCOPE_ROLE_REQUIRED");
     await client.query("BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY");
     try {
       await client.query("SET LOCAL statement_timeout = '300s'");
