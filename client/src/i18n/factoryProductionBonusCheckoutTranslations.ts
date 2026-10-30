@@ -22,7 +22,7 @@ const translations = {
   needsSetup: { en: "Needs setup", ar: "يحتاج إعداد", fr: "Configuration requise" },
   needsReview: { en: "Needs review", ar: "بحاجة إلى مراجعة", fr: "Vérification requise" },
   weeklyStatus: { en: "Weekly bonus", ar: "مكافأة أسبوعية", fr: "Prime hebdomadaire" },
-  noBonus: { en: "No bonus — target not exceeded", ar: "لا مكافأة — لم يتم تجاوز الهدف", fr: "Pas de prime — objectif non dépassé" },
+  noBonus: { en: "No bonus — weekly target not exceeded", ar: "لا مكافأة — لم يتم تجاوز الهدف الأسبوعي", fr: "Pas de prime — objectif hebdomadaire non dépassé" },
   paidStatus: { en: "Paid", ar: "مدفوع", fr: "Payé" },
   daysNeedSetup: { en: "days need target/rate setup", ar: "أيام تحتاج إلى إعداد الهدف أو السعر", fr: "jours nécessitent un objectif ou un tarif" },
   daysNeedReview: { en: "days need review", ar: "أيام تحتاج إلى مراجعة", fr: "jours nécessitent une vérification" },
