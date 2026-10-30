@@ -28,6 +28,9 @@ describe("Production bonus live calculation and manual-only WhatsApp", () => {
     expect(routes).toContain("loadTargetBonusRows(tx, companyId");
     expect(routes).toContain("Set a valid production target before approving this live bonus");
     expect(routes).toContain("Math.round(item.proposedAmount * 100)");
+    expect(routes).toContain("item.producedBales !== choice.expectedProducedBales");
+    expect(routes).toContain("Math.round(item.targetBales * 100)");
+    expect(panel).toContain("expectedProducedBales: row.producedBales");
     expect(routes).toContain("INSERT INTO factory_target_bonus_reviews");
     const panel = source("client/src/pages/factory/productiontargets/ProductionBonusesPanel.tsx");
     expect(panel).toContain("Live production");
