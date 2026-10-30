@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
+import { localDateStr } from "../factoryProductionTargetsModel";
 import { isBonusCategoryDate, parseBonusCategoryRate } from "@shared/productionTargetBonusCategoryRates";
 
 interface CategoryRate {
@@ -42,7 +43,7 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
   const [asOf, setAsOf] = useState(initialDate);
   const [editing, setEditing] = useState(false);
   const [category, setCategory] = useState("");
-  const [effectiveFrom, setEffectiveFrom] = useState(initialDate);
+  const [effectiveFrom, setEffectiveFrom] = useState(()=>localDateStr(new Date()));
   const [rate, setRate] = useState("");
   const [enabled, setEnabled] = useState(true);
   const [note, setNote] = useState("");
@@ -56,7 +57,7 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
   });
   function openEditor(label = "", current: CategoryRate | null = null) {
     setCategory(label);
-    setEffectiveFrom(initialDate);
+    setEffectiveFrom(localDateStr(new Date()));
     setRate(current?.ratePerExtraBale ?? "");
     setEnabled(current?.enabled ?? true);
     setNote("");
@@ -70,7 +71,7 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
     }),
     onSuccess: () => {
       setEditing(false);
-      toast({ title: "Category rate saved", description: "Saved as an effective-dated rate version. Existing bonus payments are unchanged." });
+      toast({ title: "Category rate saved", description: "Unpaid bonus weeks now use the new rate. Paid and reversed bonuses keep their original amounts." });
       void queryClient.invalidateQueries({ queryKey: [endpoint] });
       void queryClient.invalidateQueries({ queryKey: ["/api/factory/production-target-bonuses/category-preview"] });
       void queryClient.invalidateQueries({ queryKey: ["/api/factory/production-target-bonuses/checkout"] });
@@ -89,9 +90,8 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
       </summary>
       <div className="space-y-3 border-t px-4 py-4">
         <p className="text-xs text-muted-foreground">
-          Set a different USD amount per extra bale for each category. Rates are saved by effective date.
-          Allocating targets and production when a worker switches categories is handled separately;
-          these saved rates do not change existing approvals or post money.
+          The latest saved rate applies immediately to every unpaid bonus week, even previous dates.
+          Paid or reversed bonuses stay locked. Saving a rate never posts a payment.
         </p>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <label className="space-y-1 text-xs text-muted-foreground">
@@ -160,8 +160,8 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
             <DialogHeader>
               <DialogTitle>Category bonus rate</DialogTitle>
               <DialogDescription>
-                Save the amount for this category from the selected date forward.
-                Previous saved versions and reviewed bonuses remain unchanged.
+                Saving updates the bonus calculation for every unpaid week, including previous dates.
+                Paid or reversed bonuses retain their original amount.
               </DialogDescription>
             </DialogHeader>
             <label className="space-y-1 text-sm">Category
@@ -178,7 +178,7 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
               </Select>
             </label>
             <label className="space-y-1 text-sm">Effective from
-              <Input aria-label="Category rate effective from" type="date" value={effectiveFrom}
+              <Input aria-label="Category rate change recorded on" type="date" value={effectiveFrom}
                 onChange={event => setEffectiveFrom(event.target.value)} />
             </label>
             <label className="space-y-1 text-sm">Amount per extra bale (USD)
