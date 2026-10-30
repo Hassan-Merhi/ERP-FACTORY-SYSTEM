@@ -50,10 +50,40 @@ GRANT USAGE ON SCHEMA phase7_writer TO phase7_app;
 GRANT SELECT ON phase7_writer.state TO phase7_app;
 SQL
 
+# DBA-only role preparation must fail without an installed FENCED write guard.
+# The role starts NOLOGIN: even after grants, it cannot be used until a DBA
+# deliberately provisions a separate secret and completes startup-DDL migration.
+docker cp deploy/lan/phase7-prepare-restricted-role.sql "$container":/tmp/phase7-role.sql
+admin -f /tmp/phase7-role.sql >/dev/null
+[[ "$(admin -At -c "SELECT rolcanlogin FROM pg_roles WHERE rolname='erp_edge_runtime'")" == f ]]
+# Idempotence in the same fenced rehearsal.
+admin -f /tmp/phase7-role.sql >/dev/null
+admin -c "ALTER ROLE erp_edge_runtime LOGIN PASSWORD 'phase7-test-runtime-password'" >/dev/null
+runtime() {
+  local epoch="$1" sql="$2"
+  docker exec -e PGPASSWORD=phase7-test-runtime-password \
+    -e "PGOPTIONS=-c phase7_writer.mode=cloud-primary -c phase7_writer.site_id=cloud -c phase7_writer.epoch=$epoch" \
+    "$container" psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U erp_edge_runtime -d postgres -c "$sql"
+}
+reject_runtime() {
+  if runtime "$1" "$2" >/dev/null 2>&1; then
+    echo "PHASE7_RESTRICTED_RUNTIME_BYPASS: $2" >&2
+    exit 1
+  fi
+}
+runtime 1 'SELECT id FROM public.phase7_test_business' >/dev/null
+reject_runtime 1 'INSERT INTO public.phase7_test_business(id) VALUES (6)'
+reject_runtime 1 'CREATE TABLE public.phase7_rogue(id integer)'
+reject_runtime 1 'ALTER TABLE public.phase7_test_business DISABLE TRIGGER phase7_writer_fence'
+reject_runtime 1 "UPDATE phase7_writer.state SET mode='cloud-primary' WHERE singleton"
+reject_runtime 1 'TRUNCATE public.phase7_test_business'
+
 # Initial installation fences rather than silently enabling old cloud writers.
 reject_app 1 'INSERT INTO public.phase7_test_business(id) VALUES (1)'
 admin -c "UPDATE phase7_writer.state SET mode='cloud-primary', site_id='cloud', epoch=1, baseline_sha256=repeat('a',64) WHERE singleton" >/dev/null
 app 1 'INSERT INTO public.phase7_test_business(id) VALUES (1)' >/dev/null
+runtime 1 'INSERT INTO public.phase7_test_business(id) VALUES (6)' >/dev/null
+reject_runtime 2 'INSERT INTO public.phase7_test_business(id) VALUES (7)'
 # Exercise the ACTUAL verifier catalog SQL using the unprivileged runtime role.
 # A mocked JS row cannot catch missing catalog functions or role grants.
 authority_file="$(mktemp)"
@@ -97,5 +127,5 @@ reject_app 1 'INSERT INTO public.phase7_test_new_table(id) VALUES (1)'
 admin -c "UPDATE phase7_writer.state SET mode='cloud-primary', epoch=2 WHERE singleton" >/dev/null
 reject_app 1 'INSERT INTO public.phase7_test_business(id) VALUES (4)'
 app 2 'INSERT INTO public.phase7_test_business(id) VALUES (4)' >/dev/null
-[[ "$(admin -At -c 'SELECT count(*) FROM public.phase7_test_business')" == 3 ]]
+[[ "$(admin -At -c 'SELECT count(*) FROM public.phase7_test_business')" == 4 ]]
 echo "PHASE7_POSTGRES_FENCE_OK: initial fence, authority transfer, role denial and DDL coverage"
