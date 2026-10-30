@@ -33,6 +33,7 @@ type Offer = {
   extra: number; method: Method; lines: BonusLine[]; amount: string; token: string;
   status: "pending" | "approved" | "paid" | "reversed" | "no_bonus" | "needs_setup" | "blocked" | "rejected" | "weekly";
   issue: string | null;
+  linkEndedOn?: string | null;
   /** Read-only weekly amount. Daily payment checkout never uses this field. */
   weeklyBonus?: { weekStart: string; amount: string; state: "projected" | "approved" };
 };
@@ -390,6 +391,7 @@ async function calculateOffers(
       ? weeklyDisplays.get(weekKey) : undefined;
     if (weeklyBonus) shownWeekly.add(weekKey);
     result.push({...offerCore, category:item.category, weeklyBonus,
+       linkEndedOn:item.linkGroupId===null ? item.linkEndedOn??null : null,
       token:claim?.paymentStatus && typeof claim.calculationHash==="string"
         ? claim.calculationHash : hash(offerCore),
       status,issue});
