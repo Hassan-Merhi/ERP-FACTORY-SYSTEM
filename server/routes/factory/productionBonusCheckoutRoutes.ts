@@ -17,6 +17,7 @@ import { resultRows } from "../../lib/queryResult";
 import { logger } from "../../lib/logger";
 import { errorStatus, translateDatabaseError } from "../../lib/httpHandlers";
 import { loadTargetBonusRows, targetBonusValidRange } from "../../services/factory/targetBonusReview";
+import { loadProductionTargetsRosterIds } from "../../services/factory/productionTargetsRoster";
 import { postTargetBonusPaymentsInTransaction } from "../../services/factory/targetBonusPaymentService";
 import { parseTargetBonusPaymentCommand } from "../../services/factory/targetBonusPaymentPolicy";
 import { normalizeBonusCategory } from "@shared/productionTargetBonusCategoryRates";
@@ -100,9 +101,13 @@ async function creditedCategories(
 
 async function calculateOffers(
   tx: DatabaseOrTransaction, companyId: number, from: string, to: string, method: Method,
+  rosterDate: string = to,
 ): Promise<Offer[]> {
   // Always fetch COMPLETE Mon-Sun weeks, even when the selected range is
   // shorter. This includes live production with no End Production requirement.
+  // Show the exact worker roster from Production Targets on the selected
+  // date, rather than everyone seen during the historical checkout range.
+  const rosterWorkerIds=await loadProductionTargetsRosterIds(tx,companyId,rosterDate);
   const weekFrom=mondayOfProductionBonusWeek(from)!;
   const endMonday=mondayOfProductionBonusWeek(to)!;
   const sunday=new Date(endMonday+"T12:00:00.000Z");
@@ -186,7 +191,8 @@ async function calculateOffers(
   };
   const result: Offer[] = [];
   for(const source of daily) {
-    if(source.date<from || source.date>to)continue;
+    if(source.date<from || source.date>to ||
+       !rosterWorkerIds.has(source.workerId))continue;
     const date=source.date;
     const key=date+":"+source.workerId;
     const claim=claimsByDay.get(key);
@@ -377,11 +383,16 @@ export function registerProductionBonusCheckoutRoutes(app:Express):void {
           fail(400,"Refresh the bonus calculation before paying");
         const firstDate=command.selections[0].date;
         const lastDate=command.selections[command.selections.length-1].date;
-        if(!targetBonusValidRange(firstDate,lastDate))
+        const rosterDate=req.body?.rosterDate??lastDate;
+        // The exact as-of date used for the preview must also be used during
+        // the locked payment recheck, even if only an earlier day is selected.
+        if(!targetBonusValidRange(firstDate,lastDate) ||
+           !targetBonusValidRange(firstDate,rosterDate) ||
+           rosterDate<lastDate)
           fail(400,"Select production dates within a 32-day window");
         const result=await db.transaction(async tx=>{
           await tx.execute(sql`SELECT pg_advisory_xact_lock(84023,${id})`);
-          const quotes=await calculateOffers(tx,id,firstDate,lastDate,method);
+          const quotes=await calculateOffers(tx,id,firstDate,lastDate,method,rosterDate);
           const quotedByDay=new Map(quotes.map(quote=>[quote.date+":"+quote.workerId,quote]));
           for(const selection of command.selections) {
             const date=selection.date;
