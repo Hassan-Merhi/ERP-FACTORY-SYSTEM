@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Banknote, Calculator, CheckCircle2, Loader2, Pencil, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -42,7 +40,8 @@ const daysApart=(from:string,to:string)=>Math.round(
 const startOfRange=(date:string)=>{
   if(!isDate(date))return date;
   const d=new Date(date+"T12:00:00Z");
-  d.setUTCDate(d.getUTCDate()-6);
+  // The default checkout period follows the production week (Monday onward).
+  d.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7));
   return d.toISOString().slice(0,10);
 };
 const payableStatus=(row:Offer)=>row.status==="pending"||row.status==="approved";
@@ -86,7 +85,6 @@ async function request<T>(method:"GET"|"POST",path:string,body?:unknown):Promise
 /** A single checkout: select workers, verify locked amounts, then approve and post. */
 export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}) {
   const {toast}=useToast();
-  const [,navigate]=useLocation();
   const {language}=useApplicationLanguage();
   const t=(key:ProductionBonusTranslationKey)=>bonusText(key,language);
   const [from,setFrom]=useState(()=>startOfRange(initialDate));
@@ -255,14 +253,13 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
               <TableHead>{t("worker")}</TableHead>
               <TableHead>{t("productionSummary")}</TableHead>
               <TableHead className="text-right">{t("bonus")}</TableHead>
-              <TableHead>{t("statusAction")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading&&<TableRow><TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+            {isLoading&&<TableRow><TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
               <Loader2 className="mr-2 inline h-4 w-4 animate-spin"/>{t("loading")}
             </TableCell></TableRow>}
-            {!isLoading&&!error&&!visibleGroups.length&&<TableRow><TableCell colSpan={5} className="py-12 text-center text-muted-foreground">
+            {!isLoading&&!error&&!visibleGroups.length&&<TableRow><TableCell colSpan={4} className="py-12 text-center text-muted-foreground">
               {search.trim()?t("noMatches"):!showAll&&groups.length?t("noPayable"):t("noRows")}
               {!showAll&&groups.length>0&&<div className="mt-3">
                 <Button type="button" size="sm" variant="outline" onClick={()=>setShowAll(true)}>{t("showEveryone")}</Button>
@@ -270,9 +267,6 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
             </TableCell></TableRow>}
             {!isLoading&&visibleGroups.map(group=>{
               const ready=group.readyDays>0;
-              const label=ready?t("ready"):group.needsSetup>0?t("needsSetup"):
-                group.blockedDays>0?t("needsReview"):group.paidDays>0?t("paidStatus"):
-                group.weeklyDays>0?t("weeklyStatus"):t("noBonus");
               return <TableRow key={group.workerId} className="align-top">
                 <TableCell>
                   <Checkbox aria-label={t("selectBonus")+" "+group.workerName}
@@ -324,20 +318,6 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
                   </div>
                 </TableCell>
                 <TableCell className="text-right text-base font-semibold tabular-nums">{usd(group.amount)}</TableCell>
-                <TableCell>
-                  <Badge variant={ready?"default":"secondary"}>{label}</Badge>
-                  {group.needsSetup>0&&<p className="mt-1 text-xs text-amber-600">
-                    {group.needsSetup} {t("daysNeedSetup")}</p>}
-                  {group.blockedDays>0&&<p className="mt-1 text-xs text-destructive">
-                    {group.blockedDays} {t("daysNeedReview")}</p>}
-                  {group.weeklyDays>0&&<p className="mt-1 text-xs text-muted-foreground">
-                    {group.weeklyDays} {t("daysWeekly")}</p>}
-                  {group.needsSetup>0&&group.days.some(day=>day.issue?.startsWith("Save a positive"))&&
-                    <Button variant="outline" size="sm" className="mt-1 h-7"
-                      onClick={()=>navigate("/factory/stock-entry?tab=production-targets")}>
-                      {t("editTargets")}
-                    </Button>}
-                </TableCell>
               </TableRow>;
             })}
           </TableBody>

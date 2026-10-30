@@ -17,6 +17,19 @@ describe("Production Targets bonus checkout eligibility", () => {
     expect(live).toContain("factory_staff_tracking_period_closures");
   });
 
+  it("uses full production weeks even if the requested dates are partial or production is still open", () => {
+    const route = source("server/routes/factory/productionBonusCheckoutRoutes.ts");
+    const combined = source("server/services/factory/targetBonusReview.ts");
+    const live = source("server/services/factory/targetBonusLivePreview.ts");
+    expect(route).toContain("mondayOfProductionBonusWeek(from)");
+    expect(route).toContain("loadTargetBonusRows(tx, companyId, weekFrom, weekTo)");
+    expect(route).toContain("allocateWeeklyExtraBales(daily.map(day=>");
+    expect(route).toContain("weeklyExtras.get(key)??0");
+    expect(route).toContain("if(source.date<from || source.date>to)continue");
+    expect(combined).toContain("return [...finalizedRows, ...liveRows]");
+    expect(live).toContain("AND NOT EXISTS (");
+  });
+
   it("does not replace someone's individual target with their linked teammate's target", () => {
     const live = source("server/services/factory/targetBonusLivePreview.ts");
     expect(live).toContain("WHEN saved.target_overridden THEN saved.target_bales");
@@ -37,7 +50,7 @@ describe("Production Targets bonus checkout eligibility", () => {
     expect(route).toContain('handledByWeekly ? "weekly"');
     expect(route).toContain("weeklyFlat || weeklyClaim");
     expect(panel).toContain('if(row.status==="weekly")group.weeklyDays++');
-    expect(panel).toContain('group.weeklyDays>0?t("weeklyStatus")');
+    expect(panel).not.toContain('t("statusAction")');
     expect(language).toContain("days covered by the weekly bonus (not payable here)");
     // Preserve duplicate-payment prevention by allowing only payable statuses.
     expect(panel).toContain('row.status==="pending"||row.status==="approved"');

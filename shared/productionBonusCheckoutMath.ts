@@ -1,4 +1,6 @@
 import { productionBonusCheckoutErrors as errors } from "./i18n/productionBonusCheckoutErrors";
+import Decimal from "decimal.js";
+import { mondayOfProductionBonusWeek } from "./productionTargetBonusWeeklyMethod";
 /** Deterministic category attribution for linked worker groups.
  * Each physical bale belongs to one worker, and the floor/remainder split
  * agrees with the existing Production Targets linked-worker count.
@@ -49,4 +51,49 @@ export function splitExtraBalesByCategory(
     item.extra++;remainder--;
   }
   return split.map(({category,count,extra})=>({category,count,extra}));
+}
+
+/**
+ * Calculate one worker's payable extra bales across a MONDAY–SUNDAY production
+ * week, instead of adding positive daily overages while ignoring short days.
+ *
+ * Daily assignments are only accounting/category attribution for the earned
+ * weekly surplus. Allocate against positive daily contributions, newest first;
+ * a day below target can never invent extra bales. Already posted/reversed
+ * claims reserve their frozen extra bales and cannot be paid twice.
+ */
+export type WeeklyBonusDay = {
+  date: string; workerId: number; target: number; produced: number;
+  targetConfigured: boolean; frozenExtra?: number;
+};
+export function allocateWeeklyExtraBales(days: readonly WeeklyBonusDay[]): Map<string,number> {
+  const result=new Map<string,number>();
+  const weeks=new Map<string,WeeklyBonusDay[]>();
+  for(const day of days){
+    const monday=mondayOfProductionBonusWeek(day.date);
+    if(!monday)throw new Error("Invalid production week date");
+    const key=monday+":"+day.workerId;
+    result.set(day.date+":"+day.workerId,0);
+    const bucket=weeks.get(key)??[];
+    bucket.push(day);
+    weeks.set(key,bucket);
+  }
+  for(const weekDays of weeks.values()){
+    // A missing target on a day that actually produced bales must not become
+    // an artificial positive weekly difference.
+    if(weekDays.some(day=>day.produced>0 && (!day.targetConfigured || day.target<=0)))continue;
+    const produced=weekDays.reduce((sum,day)=>sum.plus(day.produced),new Decimal(0));
+    const target=weekDays.reduce((sum,day)=>sum.plus(day.target),new Decimal(0));
+    const frozen=weekDays.reduce((sum,day)=>sum.plus(Math.max(0,day.frozenExtra??0)),new Decimal(0));
+    let remaining=Decimal.max(0,produced.minus(target).minus(frozen));
+    for(const day of [...weekDays].sort((a,b)=>b.date.localeCompare(a.date))){
+      if(day.frozenExtra!==undefined)continue;
+      const positive=Decimal.max(0,new Decimal(day.produced).minus(day.target));
+      const allocated=Decimal.min(positive,remaining);
+      result.set(day.date+":"+day.workerId,Number(allocated.toDecimalPlaces(6).toString()));
+      remaining=remaining.minus(allocated);
+      if(remaining.lte(0))break;
+    }
+  }
+  return result;
 }
