@@ -30,7 +30,7 @@ type BonusLine = { category: string; produced: number; extra: number; rate: stri
 type Offer = {
   date: string; workerId: number; workerName: string; target: number; produced: number;
   extra: number; method: Method; lines: BonusLine[]; amount: string; token: string;
-  status: "pending" | "approved" | "paid" | "reversed" | "no_bonus" | "needs_setup" | "blocked" | "rejected";
+  status: "pending" | "approved" | "paid" | "reversed" | "no_bonus" | "needs_setup" | "blocked" | "rejected" | "weekly";
   issue: string | null;
 };
 type RecordRow = Record<string, unknown>;
@@ -182,6 +182,7 @@ async function calculateOffers(
       String(row.start).slice(0,10)<=date && String(row.end).slice(0,10)>=date);
     const lines: BonusLine[] = [];
     let issue: string | null = null;
+    let handledByWeekly = false;
     let amount = "0.00";
     if (claim) {
       if (claim.checkoutMethod && claim.checkoutMethod !== method) issue="Already reviewed using another bonus method";
@@ -224,7 +225,12 @@ async function calculateOffers(
         }
       }
     } else if (weeklyFlat || weeklyClaim) {
-      issue="A weekly flat-bonus method/review already covers this worker";
+      // Weekly-flat is a separate payment workflow, not missing production
+      // evidence. Keep this day non-payable without presenting a false warning.
+      handledByWeekly=true;
+      issue=weeklyClaim
+        ? "Already covered by a weekly bonus review"
+        : "This week uses the weekly flat bonus; pay through Weekly Bonus Payroll";
     } else if (categoryClaims.has(key)) {
       issue="An older category-bonus review already exists; reconcile before paying";
     } else if (!item.targetConfigured || item.targetBales <= 0 ||
@@ -282,6 +288,7 @@ async function calculateOffers(
     const status: Offer["status"] = claim?.paymentStatus === "POSTED" ? "paid" :
       claim?.paymentStatus === "REVERSED" ? "reversed" :
       claim?.status === "rejected" ? "rejected" :
+      handledByWeekly ? "weekly" :
       issue === "Target not exceeded" || (item.targetBales <= 0 && item.producedBales === 0 && !claim)
         ? "no_bonus" :
       issue?.startsWith("Save a positive") || issue?.startsWith("Set the worker") ||
