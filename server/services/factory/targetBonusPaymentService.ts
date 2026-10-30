@@ -261,7 +261,22 @@ export async function reverseTargetBonusPayment(
   if (!positiveId(companyId) || !positiveId(paymentId)) throw new HttpError(400, "Invalid payment reference");
   if (!isRealBonusDate(reversalDate)) throw new HttpError(400, "Choose a valid reversal date");
   if (typeof reason !== "string" || !reason.trim()) throw new HttpError(400, "A reversal explanation is required");
-  return db.transaction(async (tx) => {
+  return db.transaction(tx => reverseTargetBonusPaymentInTransaction(
+    tx, companyId, paymentId, reversalDate, reason, actor,
+  ));
+}
+
+export async function reverseTargetBonusPaymentInTransaction(
+  tx: DbTransaction,
+  companyId: number,
+  paymentId: number,
+  reversalDate: string,
+  reason: string,
+  actor: TargetBonusPaymentActor,
+) {
+    if (!positiveId(companyId) || !positiveId(paymentId)) throw new HttpError(400, "Invalid payment reference");
+    if (!isRealBonusDate(reversalDate)) throw new HttpError(400, "Choose a valid reversal date");
+    if (!reason.trim()) throw new HttpError(400, "Reversal explanation is required");
     await tx.execute(sql`SELECT pg_advisory_xact_lock(84023, ${companyId})`);
     const row = first(await tx.execute(sql`
       SELECT id, review_id AS "reviewId", bonus_amount::text AS amount, worker_id AS "workerId",
@@ -310,5 +325,4 @@ export async function reverseTargetBonusPayment(
       changes: { status: { old: "POSTED", new: "REVERSED" }, reversalVoucherId: { old: null, new: voucher.id } },
     }, tx);
     return { paymentId, reversed: true, replayed: false, voucherId: voucher.id };
-  });
 }
