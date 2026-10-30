@@ -203,6 +203,7 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
                 }
               }
             }
+            let hasContainerPrice = false;
             if (order.proformaIdUsed && effectiveArticleCode) {
               const extra = resultRows<{ price: string }>(await tx.execute(sql`
                 SELECT price_per_bale::text AS price
@@ -212,9 +213,9 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
                 LIMIT 1
               `))[0];
               // Container-local agreed price wins over the reusable proforma.
-              if (extra) priceUsed = extra.price;
+              if (extra) { priceUsed = extra.price; hasContainerPrice = true; }
             }
-            if (priceUsed === "0" && bale.productId) {
+            if (priceUsed === "0" && !hasContainerPrice && bale.productId) {
               const product = allProducts.find((p) => p.id === bale.productId);
               if (product?.sellingPrice) priceUsed = product.sellingPrice;
             }
@@ -439,9 +440,9 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
                 LIMIT 1
               `))[0];
               // Container-local agreed price wins over the reusable proforma.
-              if (extra) priceUsed = extra.price;
+              if (extra) { priceUsed = extra.price; hasContainerPrice = true; }
             }
-            if (priceUsed === "0" && bale.productId) {
+            if (priceUsed === "0" && !hasContainerPrice && bale.productId) {
               const product = allProducts.find((p) => p.id === bale.productId);
               if (product?.sellingPrice) priceUsed = product.sellingPrice;
             }
