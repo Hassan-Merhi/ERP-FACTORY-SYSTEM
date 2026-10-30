@@ -87,6 +87,44 @@ describe("factory LAN edge deployment policy", () => {
     expect(edgeBlocksWrite(p, "POST", "/api/auth/set-company")).toBe(false);
     expect(edgeBlocksWrite(p, "POST", "/api/csp-report")).toBe(false);
   });
+  it("blocks alternate HTTP verbs on session exemptions and every unapproved business path", () => {
+    for (const mode of ["read-only", "lan-primary"] as const) {
+      const input = {
+        ...safe,
+        FACTORY_EDGE_WRITE_MODE: mode,
+        ...(mode === "lan-primary"
+          ? {
+              FACTORY_EDGE_PRIMARY_ACK: "CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED",
+              FACTORY_EDGE_WRITER_EPOCH: "2",
+              FACTORY_EDGE_BASELINE_SHA256: "a".repeat(64),
+            }
+          : {}),
+      };
+      const config = readFactoryEdgeConfiguration(input);
+      for (const path of [
+        "/api/auth/login",
+        "/api/auth/logout",
+        "/api/auth/set-company",
+        "/api/csp-report",
+      ]) {
+        expect(edgeBlocksWrite(config, "POST", path)).toBe(false);
+        for (const verb of ["PUT", "PATCH", "DELETE"]) {
+          expect(edgeBlocksWrite(config, verb, path)).toBe(true);
+        }
+      }
+      for (const path of [
+        "/api/factory/pressing-machines/confirm",
+        "/api/pos/sales",
+        "/api/inventory/quick-adjust",
+        "/api/attachments",
+        "/api/payments",
+      ]) {
+        for (const verb of ["POST", "PUT", "PATCH", "DELETE"]) {
+          expect(edgeBlocksWrite(config, verb, path)).toBe(true);
+        }
+      }
+    }
+  });
   it("never claims cloud sync", () => {
     const p = readFactoryEdgeConfiguration(safe);
     expect(edgeStatusPayload(p, false)).toMatchObject({
