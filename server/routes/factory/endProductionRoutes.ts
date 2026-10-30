@@ -128,25 +128,9 @@ export function registerEndProductionRoutes(app: Express, requireAuth: RequestHa
 
         const groups = await fetchBaleGroupsForDate(companyId, date, language);
         if (!groups.length) return res.status(404).json({ message: "No stock entry session found for today." });
-        const chatId = await getProductionWaGroupId(companyId);
-        if (!chatId) return res.status(400).json({ message: "No production WhatsApp group configured." });
-
-        const companyName = await getCompanyName(companyId);
-        const pdfBuffer = await generateBilingualWorkerBalesPdf(groups, date, companyName, language);
-        const fileName = safeFileName(companyName, date, language);
-        const waResult = await sendWhatsAppFileByUploadPos(
-          chatId,
-          pdfBuffer,
-          fileName,
-          caption(companyName, date, language),
-          "application/pdf"
-        );
-        if (!waResult?.success) {
-          return res.status(502).json({
-            message: `Worker Matrix WhatsApp send failed. Production was not ended. ${waResult?.error ?? ""}`.trim(),
-          });
-        }
-
+        // End Production must not depend on WhatsApp connectivity or recipient
+        // settings. Sending the worker report remains an explicit, separate
+        // action at /api/factory/bales/send-worker-pdf-whatsapp.
         const now = new Date();
         const [session] = await db
           .insert(factoryProductionSessions)
@@ -155,8 +139,7 @@ export function registerEndProductionRoutes(app: Express, requireAuth: RequestHa
             sessionDate: date,
             productionEndedAt: now,
             productionEndedBy: endedBy ? String(endedBy) : null,
-            workerMatrixWhatsappSentAt: now,
-            workerMatrixWhatsappMessageId: null,
+
             updatedAt: now,
           })
           .onConflictDoUpdate({
@@ -171,10 +154,10 @@ export function registerEndProductionRoutes(app: Express, requireAuth: RequestHa
           })
           .returning();
         res.json({
-          message: "Production ended. Worker Matrix PDF sent to WhatsApp.",
+          message: "Production ended. No WhatsApp message was sent.",
           language,
           session,
-          whatsapp: waResult,
+          whatsappSent: false,
         });
       } catch (err: unknown) {
         logger.error("[endProduction] POST end-production error:", { error: err });
