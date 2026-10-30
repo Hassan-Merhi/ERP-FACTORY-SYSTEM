@@ -15,7 +15,7 @@ export type PeriodTargetDay = {
 export type ProductionPeriodWorker = {
   workerId: number; targetBales: number | null; absentTargetBales: number;
   producedBales: number; category: string; status: "Present" | "Absent" | "New";
-  absentDays: number; days: number;
+  absentDays: number; days: number; missingTargetDays: number;
 };
 type SqlDay = {
   date: string; workerId: number | string; target: string | number | null;
@@ -33,9 +33,10 @@ export function aggregateProductionPeriodDays(
     let worker=workers.get(day.workerId);
     if(!worker){
       worker={workerId:day.workerId,targetBales:null,absentTargetBales:0,
-        producedBales:0,category:"",status:"Present",absentDays:0,days:0};
+        producedBales:0,category:"",status:"Present",absentDays:0,days:0,missingTargetDays:0};
       workers.set(day.workerId,worker);
     }
+    if(day.target===null)worker.missingTargetDays++;
     if(day.target!==null){
       worker.targetBales=(worker.targetBales??0)+day.target;
       if(day.status==="Absent")worker.absentTargetBales+=day.target;
@@ -78,7 +79,7 @@ export async function loadProductionPeriodSummary(
           WHEN closed.ended_at IS NOT NULL THEN saved.target_bales
           WHEN saved.target_overridden IS TRUE THEN saved.target_bales
           WHEN defaults.found IS TRUE THEN defaults.target_bales
-          WHEN link.id IS NOT NULL THEN link_default.target_bales
+          WHEN link_default.target_bales IS NOT NULL THEN link_default.target_bales
           ELSE saved.target_bales
         END AS target,
         CASE
