@@ -115,7 +115,7 @@ export function registerProductionTargetBonusWeeklyReconciliationRoutes(app:Expr
           ORDER BY p.week_start DESC,p.id
           LIMIT 3001
         `);
-        const payments=resultRows(result) as WeeklyBonusLedgerRow[];
+        const payments=resultRows(result) as unknown as WeeklyBonusLedgerRow[];
         if(payments.length>3000)return res.status(413).json({message:"Narrow the reconciliation date range"});
         const audits=payments.map(reconcileWeeklyBonusLedger);
         const discrepancies=audits.filter(row=>!row.reconciled);
