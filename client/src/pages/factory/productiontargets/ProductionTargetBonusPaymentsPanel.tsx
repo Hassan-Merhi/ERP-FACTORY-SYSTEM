@@ -29,6 +29,10 @@ type PaymentRow = {
   workerName: string;
   decisionStatus: "approved" | "rejected";
   approvedAmount: string;
+  targetBales: string;
+  creditedBales: number;
+  extraBales: string;
+  ratePerBale: string;
   paymentId: number | null;
   paymentStatus: "POSTED" | "REVERSED" | null;
   paymentDate: string | null;
@@ -259,6 +263,11 @@ export function ProductionTargetBonusPaymentsPanel({ initialDate }: { initialDat
                     {row.voucherId && <div>Voucher #{row.voucherId}</div>}
                   </TableCell>
                   <TableCell className="text-right">
+                    {unpaid && <Button type="button" size="sm"
+                      data-testid={`pay-daily-production-bonus-${row.reviewId}`}
+                      onClick={() => { setSelected([row.reviewId]); setReviewOpen(true); }}>
+                      <Banknote className="mr-1 h-3.5 w-3.5" /> Pay
+                    </Button>}
                     {row.paymentStatus === "POSTED" && <Button variant="outline" size="sm" type="button"
                       onClick={() => { setReverseRow(row); setReversalDate(localDateStr(new Date())); setReversalReason(""); }}>
                       <RotateCcw className="mr-1 h-3.5 w-3.5" /> Reverse
@@ -286,12 +295,32 @@ export function ProductionTargetBonusPaymentsPanel({ initialDate }: { initialDat
               It also records each payment in Factory Daybook. Review before posting.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="max-h-52 space-y-2 overflow-y-auto rounded-md border p-3 text-sm">
+            <p className="font-semibold">Verified calculation · approved daily review</p>
+            {chosen.map(row => <div key={row.reviewId} className="border-t pt-2" data-testid={`daily-payment-calculation-${row.reviewId}`}>
+              <div className="font-medium">{row.workerName} · {row.date}</div>
+              <div className="text-xs text-muted-foreground">
+                Target {row.targetBales} · credited {row.creditedBales} ·
+                extra {row.extraBales} × {fmtAmount(row.ratePerBale)} per bale
+              </div>
+              <div className="font-semibold">Approved to pay: {fmtAmount(row.approvedAmount)}</div>
+            </div>)}
+          </div>
+          <label className="space-y-1 text-sm">
+            Pay from Cash / Bank (USD)
+            <Select value={accountId} onValueChange={setAccountId}>
+              <SelectTrigger aria-label="Confirm daily bonus paying account"><SelectValue placeholder="Choose paying account" /></SelectTrigger>
+              <SelectContent>{cashAccounts.map(account =>
+                <SelectItem key={account.id} value={String(account.id)}>{account.name} ({account.code})</SelectItem>
+              )}</SelectContent>
+            </Select>
+          </label>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={postMutation.isPending}>Cancel</AlertDialogCancel>
             <AlertDialogAction disabled={!canPost || postMutation.isPending}
               onClick={(event) => { event.preventDefault(); postMutation.mutate(); }}>
               {postMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Confirm and Post
+              Approve Payment & Pay
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
