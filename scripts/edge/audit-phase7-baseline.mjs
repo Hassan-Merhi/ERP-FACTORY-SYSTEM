@@ -171,8 +171,8 @@ async function captureClone({ connectionString, scope, uploadsDir, snapshotSha25
         tables.push({ name, rows, sha256: h.digest("hex") });
       }
       await client.query("COMMIT");
-      tables.sort((a, b) => a.name.localeCompare(b.name, "en"));
-      sequences.sort((a, b) => a.name.localeCompare(b.name, "en"));
+      tables.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+      sequences.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
       // Clones + file tree MUST be frozen, else DB and files may not represent
       // a single point in time. This cannot prove atomic DB/uploads capture.
       const uploads = await uploadFingerprint(uploadsDir);
