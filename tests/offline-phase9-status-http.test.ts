@@ -21,7 +21,11 @@ vi.mock("../server/db", () => ({
   },
 }));
 vi.mock("../server/auth", () => ({
-  requireAuth: (req: { session?: { userId?: string } }, res: { status: (n: number) => { end: () => void } }, next: () => void) => {
+  requireAuth: (
+    req: { session?: { userId?: string } },
+    res: { status: (n: number) => { end: () => void } },
+    next: () => void
+  ) => {
     state.authChecks++;
     if (!req.session?.userId) return res.status(401).end();
     return next();
