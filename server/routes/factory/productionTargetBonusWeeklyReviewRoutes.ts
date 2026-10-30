@@ -85,7 +85,7 @@ export function registerProductionTargetBonusWeeklyReviewRoutes(app: Express): v
           FROM factory_target_bonus_weekly_reviews
           WHERE company_id = ${companyId} AND week_start = ${weekStart}::date
           ORDER BY worker_id
-        `)) as StoredReview[];
+        `)) as unknown as StoredReview[];
         res.setHeader("Cache-Control", "private, no-store");
         return res.json({
           weekStart, currency: "USD", approvalDoesNotPost: true, paymentEnabled: true,
