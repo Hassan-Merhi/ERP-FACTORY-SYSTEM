@@ -308,6 +308,12 @@ export function usePosImportModel() {
     setValidationResult(null);
   };
 
+  const handleLocationChange = (locationId: string) => {
+    setSelectedLocation(locationId);
+    // Remaining stock in the validation result belongs to the former location.
+    setValidationResult(null);
+  };
+
   const warn = (title: string, description: string) => {
     toast({ title, description, variant: "destructive" });
   };
@@ -472,7 +478,7 @@ export function usePosImportModel() {
     isCreditSale,
     toggleCreditSale,
     selectedLocation,
-    setSelectedLocation,
+    setSelectedLocation: handleLocationChange,
     selectedCashAccount,
     setSelectedCashAccount,
     selectedCustomer,
