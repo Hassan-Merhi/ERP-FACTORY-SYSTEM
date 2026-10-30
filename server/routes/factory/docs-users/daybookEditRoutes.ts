@@ -37,6 +37,7 @@ import { MoneyDecimal, parseMoneyInput, toMoney, type MoneyInput } from "../../.
 import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
 import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 import { cancelFxAgentSettlementVoucherTx } from "../../../services/factory/fxAgentSettlementCancellation";
+import { reverseTargetBonusPaymentInTransaction } from "../../../services/factory/targetBonusPaymentService";
 import {
   editPostedFactoryVoucherTx,
   sendVoucherCorrectionRefusal,
@@ -558,9 +559,6 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
       const companyId = session.factoryCompanyId || session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const role = (session.currentRole || session.role || "").toLowerCase();
-      if (role !== "admin" && role !== "developer") {
-        return res.status(403).json({ message: "Only Admin or Developer can permanently delete entries" });
-      }
       const id = Number(req.params.id);
       if (isNaN(id) || id <= 0)
         return res
@@ -572,6 +570,39 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
         .from(factoryDaybookEntries)
         .where(and(eq(factoryDaybookEntries.id, id), eq(factoryDaybookEntries.companyId, companyId)));
       if (!entry) return res.status(404).json({ message: "Entry not found" });
+      const isProductionBonus = entry.referenceTable === "factory_target_bonus_payments" &&
+        entry.txType === "PRODUCTION_TARGET_BONUS_PAYMENT" && Boolean(entry.referenceId);
+      if (role !== "admin" && role !== "developer" && !(role === "owner" && isProductionBonus)) {
+        return res.status(403).json({ message: "Only Admin/Developer, or Owner for a bonus payment, can delete entries" });
+      }
+
+      // Do not orphan a posted cash/expense voucher by deleting just its visible
+      // daybook line. Reversal and hiding both daybook lines share one transaction;
+      // immutable voucher and payment claims remain for financial audit.
+      if (isProductionBonus) {
+        const paymentId = Number(entry.referenceId);
+        await db.transaction(async tx => {
+          await reverseTargetBonusPaymentInTransaction(
+            tx, Number(companyId), paymentId, getClientDate(req),
+            "Deleted Production Targets bonus from Factory Daybook",
+            {userId: String(req.session.userId || ""),
+             username: String(req.session.username || req.session.userId || "")},
+          );
+          await tx.update(factoryDaybookEntries)
+            .set({txType:"PRODUCTION_TARGET_BONUS_PAYMENT_DELETED"})
+            .where(and(eq(factoryDaybookEntries.id,id),eq(factoryDaybookEntries.companyId,companyId)));
+          await tx.update(factoryDaybookEntries)
+            .set({txType:"PRODUCTION_TARGET_BONUS_REVERSAL_DELETED"})
+            .where(and(
+              eq(factoryDaybookEntries.companyId,companyId),
+              eq(factoryDaybookEntries.txType,"PRODUCTION_TARGET_BONUS_REVERSAL"),
+              eq(factoryDaybookEntries.referenceTable,"factory_target_bonus_payments"),
+              eq(factoryDaybookEntries.referenceId,paymentId),
+            ));
+        });
+        return res.json({success:true,reversed:true,
+          message:"Bonus payment reversed and removed from Daybook. Accounting audit retained."});
+      }
 
       if (entry.referenceTable === "vouchers" && entry.referenceId) {
         return res.status(400).json({ message: "Voucher-backed entries must be voided, not deleted" });
