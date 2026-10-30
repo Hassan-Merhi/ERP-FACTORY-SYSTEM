@@ -63,8 +63,7 @@ function summarizeByWorker(offers:Offer[]):WorkerGroup[]{
       map.set(row.workerId,group);
     }
     group.days.push(row);
-    if(row.linkEndedOn && (!group.linkEndedOn || row.linkEndedOn>group.linkEndedOn))
-      group.linkEndedOn=row.linkEndedOn;
+
     group.target+=row.target;
     group.produced+=row.produced;
     group.extra+=row.extra;
@@ -83,7 +82,8 @@ function summarizeByWorker(offers:Offer[]):WorkerGroup[]{
     }
   }
   return [...map.values()].map(g=>({...g,amount:g.amount/100,weeklyAmount:g.weeklyAmount/100,
-    days:g.days.sort((a,b)=>a.date.localeCompare(b.date))}))
+    days:g.days.sort((a,b)=>a.date.localeCompare(b.date)),
+    linkEndedOn:[...g.days].sort((a,b)=>b.date.localeCompare(a.date))[0]?.linkEndedOn??null}))
     .sort((a,b)=>a.workerName.localeCompare(b.workerName));
 }
 const usd=(amount:string|number)=>Number(amount).toLocaleString("en-US",{
