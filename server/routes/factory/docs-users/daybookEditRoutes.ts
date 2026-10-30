@@ -38,6 +38,7 @@ import { syncContainerCommissionJournalTx } from "../../../services/factory/cont
 import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 import { cancelFxAgentSettlementVoucherTx } from "../../../services/factory/fxAgentSettlementCancellation";
 import { reverseTargetBonusPaymentInTransaction } from "../../../services/factory/targetBonusPaymentService";
+import { bonusServerText } from "../../../i18n/productionBonusCheckoutMessages";
 import {
   editPostedFactoryVoucherTx,
   sendVoucherCorrectionRefusal,
@@ -573,7 +574,7 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
       const isProductionBonus = entry.referenceTable === "factory_target_bonus_payments" &&
         entry.txType === "PRODUCTION_TARGET_BONUS_PAYMENT" && Boolean(entry.referenceId);
       if (role !== "admin" && role !== "developer" && !(role === "owner" && isProductionBonus)) {
-        return res.status(403).json({ message: "Only Admin/Developer, or Owner for a bonus payment, can delete entries" });
+        return res.status(403).json({ message: bonusServerText(req.headers["accept-language"], "daybookForbidden") });
       }
 
       // Do not orphan a posted cash/expense voucher by deleting just its visible
@@ -601,7 +602,7 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
             ));
         });
         return res.json({success:true,reversed:true,
-          message:"Bonus payment reversed and removed from Daybook. Accounting audit retained."});
+          message:bonusServerText(req.headers["accept-language"],"daybookReversed")});
       }
 
       if (entry.referenceTable === "vouchers" && entry.referenceId) {
