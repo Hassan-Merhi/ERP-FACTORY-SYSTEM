@@ -49,9 +49,9 @@ testDatabase("Phase 4 LAN durable database outbox", () => {
   it("persists a unique site/operation pair and rejects duplicate local vouchers", async () => {
     const insert = `
       INSERT INTO factory_edge_voucher_outbox
-        (site_id, operation_id, company_id, actor_user_id,
+        (sequence, site_id, operation_id, company_id, actor_user_id,
          local_voucher_id, payload, payload_sha256)
-      VALUES ($1, $2, 20, 'operator', 10, '{"voucher":{"id":10},"entries":[]}'::jsonb, $3)
+      VALUES (1, $1, $2, 20, 'operator', 10, '{"voucher":{"id":10},"entries":[]}'::jsonb, $3)
     `;
     await client.query(insert, [siteId, operationId, "a".repeat(64)]);
     const result = await client.query("SELECT count(*)::integer AS count FROM factory_edge_voucher_outbox");
