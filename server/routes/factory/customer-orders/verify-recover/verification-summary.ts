@@ -329,7 +329,16 @@ export function registerOrderVerificationSummaryRoutes(app: Express) {
               order.createdAt
             );
 
-        for (const pl of planLines) {
+        // Isolated per-container supplements are additive to the reusable
+        // proforma/continuation plan, never edits to customer_proforma_lines.
+        const extraPlanResult = await db.execute(sql`
+          SELECT article_code, product_name, expected_qty AS quantity,
+                 price_per_bale::text AS price_per_bale, 'per_bale' AS pricing_mode
+          FROM customer_order_extra_expected_lines
+          WHERE company_id = ${companyId} AND order_id = ${orderId}
+        `);
+        const extraPlanLines = resultRows<RawProformaLineRow>(extraPlanResult);
+        for (const pl of [...planLines, ...extraPlanLines]) {
           const articleCode = String(pl.article_code ?? pl.articleCode ?? "").trim();
           if (!articleCode) continue;
           const pMode = pl.pricing_mode ?? pl.pricingMode ?? "per_bale";
