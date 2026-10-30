@@ -387,7 +387,7 @@ const FACTORY_BONUS_CATEGORY_REVIEW_SQL = `
   $$;
 `;
 
-/** Phase 14: approved/rejected weekly worker decisions are immutable audit-only records. */
+/** Phase 14: immutable weekly review/approval audit. Never posts a payment. */
 const FACTORY_BONUS_WEEKLY_REVIEW_SQL = `
   CREATE TABLE IF NOT EXISTS factory_target_bonus_weekly_reviews (
     id BIGSERIAL PRIMARY KEY,
@@ -454,7 +454,7 @@ export async function ensureFactoryStaffTrackingSchema(database: StartupQueryabl
   // Ensure immutable Phase 11 category reviews after their allocation and legacy schemas.
   await database.query(FACTORY_BONUS_CATEGORY_REVIEW_SQL);
 
-  // Phase 14 weekly audit records are ensured after method and daily review tables.
+  // Phase 14 weekly reviews are available without optional startup migration jobs.
   await database.query(FACTORY_BONUS_WEEKLY_REVIEW_SQL);
 
   // Production can run with RUN_STARTUP_MIGRATIONS=false. Supplier tracking
@@ -485,7 +485,7 @@ export async function ensureFactoryStaffTrackingSchema(database: StartupQueryabl
   BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_trigger WHERE tgname = 'factory_bonus_weekly_review_immutable'
-      AND tgrelid = 'factory_target_bonus_weekly_reviews'::regclass AND NOT tgisinternal
+        AND tgrelid = 'factory_target_bonus_weekly_reviews'::regclass AND NOT tgisinternal
     ) THEN
       CREATE TRIGGER factory_bonus_weekly_review_immutable
         BEFORE UPDATE OR DELETE ON factory_target_bonus_weekly_reviews
