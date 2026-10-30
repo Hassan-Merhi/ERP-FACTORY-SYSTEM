@@ -248,7 +248,7 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
                 <TableCell>
                   <Badge variant={offer.status==="paid"?"default":"secondary"}>{offer.status}</Badge>
                   {offer.issue&&<p className="mt-1 max-w-[240px] text-xs text-destructive">{offer.issue}</p>}
-                  {method==="standard"&&offer.status==="pending"&&
+                  {method==="standard"&&(offer.status==="pending" || (offer.status==="blocked" && offer.extra>0 && !!offer.issue?.includes("rate")))&&
                     <Button size="sm" variant="ghost" className="mt-1 h-7" onClick={()=>{
                       setEditingRate(offer);setNewRate(offer.lines[0]?.rate??"");
                     }}><Pencil className="mr-1 h-3 w-3"/> {t("editRate")}</Button>}
