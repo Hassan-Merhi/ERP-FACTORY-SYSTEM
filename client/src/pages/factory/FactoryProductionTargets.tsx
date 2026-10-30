@@ -49,8 +49,7 @@ import {
 import { ProductionTargetDefaultsDialog } from "./productiontargets/ProductionTargetDefaultsDialog";
 import { ProductionTargetsEditorDialog } from "./productiontargets/ProductionTargetsEditorDialog";
 import { ProductionExcelRangeDialog, type ProductionExportDates } from "./productiontargets/ProductionExcelRangeDialog";
-import { ProductionBonusesPanel } from "./productiontargets/ProductionBonusesPanel";
-import { ProductionTargetBonusPaymentsPanel } from "./productiontargets/ProductionTargetBonusPaymentsPanel";
+import { ProductionBonusCheckoutPanel } from "./productiontargets/ProductionBonusCheckoutPanel";
 import { ProductionBonusHistoryPanel } from "./productiontargets/ProductionBonusHistoryPanel";
 import { exportWeeklyProductionExcel, ProductionDateRangeError } from "./productiontargets/productionWeeklyExcel";
 
@@ -438,8 +437,7 @@ export default function FactoryProductionTargets() {
         />
       </div>
 
-      {periodType === "daily" && <ProductionBonusesPanel initialDate={referenceDate} productionCategories={rows.map(row => row.category)} />}
-      {periodType === "daily" && <ProductionTargetBonusPaymentsPanel initialDate={referenceDate} />}
+      {periodType === "daily" && <ProductionBonusCheckoutPanel initialDate={referenceDate} productionCategories={rows.map(row => row.category)} />}
       {periodType === "daily" && <ProductionBonusHistoryPanel />}
 
       <div className="relative max-w-md">
