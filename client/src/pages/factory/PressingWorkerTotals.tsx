@@ -77,11 +77,11 @@ export default function PressingWorkerTotals({ active, companyId, userId }: {
     <section className="min-w-0 space-y-3" data-testid="pressing-worker-totals">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3 className="text-base font-semibold">Scanned Bales by Worker</h3>
+          <h3 className="text-base font-semibold">Scanned Items by Worker</h3>
           <p className="text-xs text-muted-foreground">Daily confirmed scans (Beirut time) · ranked by KG</p>
         </div>
         <div className="flex items-center gap-2">
-          <Input aria-label="Scanned bales date" type="date"
+          <Input aria-label="Scanned items date" type="date"
             data-testid="input-pressing-worker-date"
             max={totals.data?.serverToday}
             className="h-9 w-[145px] text-xs"
@@ -107,7 +107,7 @@ export default function PressingWorkerTotals({ active, companyId, userId }: {
             <thead className="bg-muted">
               <tr>
                 <th scope="col" className="p-3 font-medium">Worker</th>
-                <th scope="col" className="p-3 text-right font-medium">Total Bales</th>
+                <th scope="col" className="p-3 text-right font-medium">Total Items</th>
                 <th scope="col" className="p-3 text-right font-medium">Total KG</th>
               </tr>
             </thead>
