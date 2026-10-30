@@ -7,6 +7,7 @@ import { db } from "../../db";
 import { resultRows } from "../../lib/queryResult";
 import { sqlArray } from "../../lib/sqlArray";
 import { loadTargetBonusRows, type TargetBonusRow } from "./targetBonusReview";
+import { isProductionWorkday } from "@shared/productionTargetBonusWeeklyMethod";
 
 export type PeriodTargetDay = {
   date: string; workerId: number; target: number | null; category: string;
@@ -30,6 +31,7 @@ export function aggregateProductionPeriodDays(
   const workers=new Map<number,ProductionPeriodWorker>();
   const latest=new Map<number,string>();
   for(const day of days){
+    if (!isProductionWorkday(day.date)) continue;
     let worker=workers.get(day.workerId);
     if(!worker){
       worker={workerId:day.workerId,targetBales:null,absentTargetBales:0,
@@ -50,6 +52,7 @@ export function aggregateProductionPeriodDays(
     }
   }
   for(const row of credited){
+    if (!isProductionWorkday(row.date)) continue;
     const worker=workers.get(row.workerId);
     if(worker)worker.producedBales+=row.producedBales;
   }
@@ -73,6 +76,7 @@ export async function loadProductionPeriodSummary(
       WITH work_days AS (
         SELECT day::date AS work_date
         FROM generate_series(${start}::date,${end}::date,'1 day'::interval) dates(day)
+        WHERE EXTRACT(ISODOW FROM day::date) <> 7
       )
       SELECT d.work_date::text AS date, w.id AS "workerId",
         CASE

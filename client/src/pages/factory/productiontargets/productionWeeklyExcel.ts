@@ -1,4 +1,5 @@
 import type ExcelJS from "exceljs";
+import { isProductionWorkday } from "@shared/productionTargetBonusWeeklyMethod";
 import {
   addIsoDays,
   collapseLinkedProductionRows,
@@ -25,10 +26,13 @@ export function getProductionRangeDates(start: string, end: string, today: strin
   if (end > today) throw new ProductionDateRangeError("future");
 
   const dates: string[] = [];
+  let calendarDays = 0;
   for (let date = start; date <= end; date = addIsoDays(date, 1)) {
-    if (dates.length >= 84) throw new ProductionDateRangeError("tooLong");
-    dates.push(date);
+    // The export limit remains twelve CALENDAR weeks; Sunday is skipped, not charged.
+    if (++calendarDays > 84) throw new ProductionDateRangeError("tooLong");
+    if (isProductionWorkday(date)) dates.push(date);
   }
+  if (!dates.length) throw new ProductionDateRangeError("invalid");
   return dates;
 }
 
@@ -104,6 +108,7 @@ export function buildWeeklyProductionData(days: ProductionReportDay[]) {
   }>();
 
   for (const { date, snapshot } of [...days].sort((a, b) => a.date.localeCompare(b.date))) {
+    if (!isProductionWorkday(date)) continue;
     const totals = summarizeProductionRows(snapshot.rows);
     const absentCount = snapshot.rows.filter((row) => row.status === "Absent").length;
     const dayStatus = snapshot.finalized ? "Finalized" : "Open / live";

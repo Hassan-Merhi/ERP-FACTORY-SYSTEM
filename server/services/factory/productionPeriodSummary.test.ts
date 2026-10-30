@@ -14,9 +14,19 @@ describe("weekly and monthly Production Targets rollup",()=>{
     ],[{date:"2026-10-26",workerId:7,producedBales:12},
        {date:"2026-10-27",workerId:7,producedBales:10}]);
     const worker=summary.get(7)!;
-    expect(worker.targetBales).toBe(70);
+    expect(worker.targetBales).toBe(60); // Sunday holiday excluded
     expect(worker.producedBales).toBe(22);
-    expect(worker.producedBales-worker.targetBales!).toBe(-48);
+    expect(worker.producedBales-worker.targetBales!).toBe(-38);
+  });
+
+  it("ignores Sunday target, absence and bales even when saved",()=>{
+    const summary=aggregateProductionPeriodDays([
+      day("2026-10-31",4,8),day("2026-11-01",4,100,"Absent"),
+    ],[
+      {date:"2026-10-31",workerId:4,producedBales:10},
+      {date:"2026-11-01",workerId:4,producedBales:200},
+    ]);
+    expect(summary.get(4)).toMatchObject({targetBales:8,producedBales:10,days:1,absentDays:0});
   });
 
   it("honors midweek changed targets and subtracts only the absent day's target",()=>{

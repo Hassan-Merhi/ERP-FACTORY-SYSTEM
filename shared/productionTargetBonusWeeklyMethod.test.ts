@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  mondayOfProductionBonusWeek, parseWeeklyFlatBonusUsd,
+  isProductionWorkday, mondayOfProductionBonusWeek, parseWeeklyFlatBonusUsd,
   resolveProductionBonusWeeklyMethod,
   type ProductionBonusWeeklyMethodVersion,
 } from "./productionTargetBonusWeeklyMethod";
@@ -13,6 +13,14 @@ const versions: ProductionBonusWeeklyMethodVersion[] = [
 ];
 
 describe("Phase 12 weekly Production Targets bonus method configuration", () => {
+  it("treats every Sunday as a non-counted production holiday", () => {
+    expect(isProductionWorkday("2026-10-26")).toBe(true);
+    expect(isProductionWorkday("2026-10-31")).toBe(true);
+    expect(isProductionWorkday("2026-11-01")).toBe(false);
+    expect(isProductionWorkday("2026-11-02")).toBe(true);
+    expect(isProductionWorkday("bad-date")).toBe(false);
+  });
+
   it("defines Monday through Sunday without local browser time zone shifts", () => {
     expect(mondayOfProductionBonusWeek("2026-10-26")).toBe("2026-10-26");
     expect(mondayOfProductionBonusWeek("2026-10-30")).toBe("2026-10-26");

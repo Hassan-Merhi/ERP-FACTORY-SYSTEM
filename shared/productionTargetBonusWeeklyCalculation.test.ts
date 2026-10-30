@@ -85,6 +85,22 @@ describe("Phase 13 weekly flat eligibility (read-only)", () => {
     expect(proposal.workers[0].creditedBales).toBe(57);
     expect(proposal.totalProposedBonusUsd).toBe("15.00");
   });
+  it("excludes Sunday physical bales, target and missing capture from flat weekly eligibility", () => {
+    const input = fixture(29);
+    const sunday = {
+      ...day("2026-11-01", 100, "Bags"),
+      finalized: false, captured: false, verified: false,
+    };
+    input.days.push(sunday);
+    input.unfinalizedDates.push("2026-11-01");
+    const actual = calculateWeeklyFlatBonus(input);
+    expect(actual.globalIssues).not.toContain("UNFINALIZED_DAY");
+    expect(actual.globalIssues).not.toContain("MISSING_FROZEN_EVIDENCE");
+    expect(actual.totalCreditedBales).toBe(85);
+    expect(actual.workers.find(worker => worker.workerId === 10)?.targetBales).toBe("56.00");
+    expect(actual.workers.find(worker => worker.workerId === 10)?.creditedBales).toBe(57);
+    expect(actual.totalProposedBonusUsd).toBe("15.00");
+  });
   it("blocks the current week, unset method, unfinalized days and missing frozen evidence", () => {
     const pending = calculateWeeklyFlatBonus({ ...fixture(), todayBeirut: "2026-10-30" });
     expect(pending.workers[0].eligible).toBe(false);

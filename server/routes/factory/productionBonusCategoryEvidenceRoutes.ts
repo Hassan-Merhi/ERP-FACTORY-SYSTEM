@@ -6,6 +6,7 @@ import { resultRows } from "../../lib/queryResult";
 import { logger } from "../../lib/logger";
 import { requireFactoryTabAccess } from "../../lib/factoryAccessControl";
 import { isBonusCategoryDate } from "@shared/productionTargetBonusCategoryRates";
+import { isProductionWorkday } from "@shared/productionTargetBonusWeeklyMethod";
 import { validateCategoryTargetSplit } from "@shared/productionTargetBonusCategoryAttribution";
 import { loadProductionBonusCategoryEvidence } from "../../services/factory/productionBonusCategoryEvidenceService";
 import { previewProductionBonusCategories } from "../../services/factory/productionBonusCategoryCalculator";
@@ -37,6 +38,7 @@ export function registerProductionBonusCategoryEvidenceRoutes(app:Express):void 
       if(!companyId)return res.status(400).json({message:"Factory company required"});
       const date=req.query.date;
       if(!isBonusCategoryDate(date))return res.status(400).json({message:"Valid production date required"});
+      if (!isProductionWorkday(date)) return res.status(400).json({message:"Sunday is a production holiday; no bonus proposal is calculated"});
       try {
         res.setHeader("Cache-Control","private, no-store");
         return res.json(await previewProductionBonusCategories(companyId,date));
@@ -66,7 +68,7 @@ export function registerProductionBonusCategoryEvidenceRoutes(app:Express):void 
       const date=req.body?.date;
       const workerId=Number(req.body?.workerId);
       const raw=req.body?.allocations;
-      if(!isBonusCategoryDate(date)||!Number.isSafeInteger(workerId)||workerId<=0||
+      if(!isBonusCategoryDate(date)||!isProductionWorkday(date)||!Number.isSafeInteger(workerId)||workerId<=0||
          !Array.isArray(raw)||raw.length<1||raw.length>100||req.body?.confirm!==true) {
         return res.status(400).json({message:"Confirm one worker/day and 1–100 category target allocations"});
       }

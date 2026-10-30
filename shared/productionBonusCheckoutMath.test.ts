@@ -79,15 +79,22 @@ describe("weekly production bonus netting",()=>{
     expect(result.get("2026-10-21:7")).toBe(5);
     expect(result.get("2026-10-19:7")).toBe(0);
   });
-  it("keeps workers and Monday-Sunday weeks independent",()=>{
+  it("keeps workers independent and ignores all Sunday targets and output",()=>{
     const result=allocateWeeklyExtraBales([
       day("2026-10-25",12,10),day("2026-10-26",7,10),
       day("2026-10-25",7,10,8),day("2026-10-26",12,10,8),
     ]);
-    expect(result.get("2026-10-25:7")).toBe(2);
+    expect(result.get("2026-10-25:7")).toBe(0);
     expect(result.get("2026-10-26:7")).toBe(0);
     expect(result.get("2026-10-25:8")).toBe(0);
     expect(result.get("2026-10-26:8")).toBe(2);
+  });
+  it("cannot use a Sunday shortfall to reduce a Monday-Saturday surplus",()=>{
+    const result=allocateWeeklyExtraBales([
+      day("2026-10-26",12,10),day("2026-10-31",10,10),day("2026-11-01",0,40),
+    ]);
+    expect(result.get("2026-10-26:7")).toBe(2);
+    expect(result.get("2026-11-01:7")).toBe(0);
   });
   it("reserves previously posted entitlement to prevent paying it a second time",()=>{
     const result=allocateWeeklyExtraBales([

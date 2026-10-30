@@ -23,7 +23,7 @@ import { parseTargetBonusPaymentCommand } from "../../services/factory/targetBon
 import { normalizeBonusCategory } from "@shared/productionTargetBonusCategoryRates";
 import { allocateWeeklyExtraBales, splitExtraBalesByCategory, workerCategoryCredits } from "@shared/productionBonusCheckoutMath";
 import { latestUnpaidWorkerRate, rateChangeMayRepriceReview } from "@shared/productionBonusUnpaidRatePolicy";
-import { mondayOfProductionBonusWeek } from "@shared/productionTargetBonusWeeklyMethod";
+import { isProductionWorkday, mondayOfProductionBonusWeek } from "@shared/productionTargetBonusWeeklyMethod";
 
 const guard = requireFactoryTabAccess("factory/stock-entry", "hide_tab_stockentry_production_targets");
 type Method = "standard" | "category";
@@ -115,7 +115,7 @@ async function calculateOffers(
   const sunday=new Date(endMonday+"T12:00:00.000Z");
   sunday.setUTCDate(sunday.getUTCDate()+6);
   const weekTo=sunday.toISOString().slice(0,10);
-  const [daily, claimsResult, methodsResult, weeklyReviewsResult, categoryReviewsResult, standardRatesResult] = await Promise.all([
+  const [dailyRows, claimsResult, methodsResult, weeklyReviewsResult, categoryReviewsResult, standardRatesResult] = await Promise.all([
     loadTargetBonusRows(tx, companyId, weekFrom, weekTo),
     tx.execute(sql`
       SELECT rv.production_date::text AS date, rv.worker_id AS "workerId",
@@ -162,6 +162,9 @@ async function calculateOffers(
       ORDER BY scope,worker_id,id DESC
     `),
   ]);
+  // Never count Sunday production or targets in new bonus previews and payments.
+  // Previously posted financial history is left untouched in its own ledger.
+  const daily = dailyRows.filter(day => isProductionWorkday(day.date));
   const claimsByDay = new Map(rows(claimsResult).map(row => [String(row.date).slice(0,10)+":"+Number(row.workerId),row]));
   const weeklyMethods=rows(methodsResult);
   const weeklyReviews=rows(weeklyReviewsResult);
