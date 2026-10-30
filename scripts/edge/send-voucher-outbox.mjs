@@ -7,6 +7,7 @@
  * dedicated 48+ byte shared secret. Does not mutate any business ledger.
  */
 import { Client } from "pg";
+import { isIP } from "node:net";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import {
@@ -23,7 +24,8 @@ export function readSenderConfiguration(env = process.env) {
   }
   const url = new URL(env.FACTORY_SYNC_CLOUD_URL ?? "");
   if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash ||
-      url.pathname !== "/" || url.port || !url.hostname.includes(".")) {
+      url.pathname !== "/" || url.port || !url.hostname.includes(".") ||
+      isIP(url.hostname) || url.hostname.endsWith(".localhost") || url.hostname.endsWith(".internal")) {
     throw new Error("EDGE_SYNC_CLOUD_URL_INVALID");
   }
   if (typeof env.FACTORY_EDGE_SITE_ID !== "string" ||
