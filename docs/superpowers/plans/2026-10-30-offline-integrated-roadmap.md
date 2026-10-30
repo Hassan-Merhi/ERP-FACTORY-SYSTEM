@@ -22,6 +22,17 @@ Additional Phase 7 development: reviewed-fence-only DBA SQL now prepares a NOLOG
 - Reconcile voucher ID mappings, ledger, business dates, immutable outbox sequence, uploaded files and user/company authority without re-posting money or stock.
 - Prove real PostgreSQL read-after-apply correctness, duplicate/out-of-order rejection, and safe WAN outage recovery.
 
+### Phase 8 development status — 2026-10-30 (RELEASE BLOCKED)
+
+Committed on the unified branch, not on `main`:
+
+- Phase 8 cloud applied-voucher cursor, immutable receipts and local-voucher-to-cloud-voucher mappings are written **in the same PostgreSQL transaction** as the initial accounting posting. The operator path replays only contiguous pre-staged events, returns the stored receipt after lost ACK, rejects divergent replay and rolls back partial business effects on errors.
+- The supervised adapter uses the existing central posting engine and its target-company, balanced-journal, fiscal-period and idempotency validators, with a narrower USD, active Journal / ledger-only allowlist. A Phase 8 LAN capture admission guard prevents unsupported voucher types from entering that claimed path. Central protected voucher posts now capture LAN outbox evidence transactionally.
+- Applied receipts can be fetched through a signed, read-only cloud endpoint and compared against immutable LAN source evidence; only independently verified receipts persist as `cloud-applied` in a separate append-only LAN log. Staging receipts do not change meaning.
+- Dedicated tests include contract-level rejection, business-date/tenant/payload checks, disposal-only PostgreSQL tests for sequence ordering, missing approvals, role revocation, rollback after a failed business statement, durable read-after-apply and ACK-loss replay. CI verification is required on the exact final head.
+
+**Production gate remains blocked:** This is a manual frozen-LAN failback/replay foundation, **not automatic cloud sync while factory laptops keep writing**. The Phase 7 trusted baseline, independently arbitrated single-writer epochs, restricted runtime/migration role split and actual factory hardware are not certified. The PostgreSQL acceptance callback uses a disposable minimal voucher fixture; the real central accounting adapter still requires full migrated-ERP read-after-apply and financial reconciliation tests. There is no approved uploads transfer, non-USD, stock, supplier, factory/POS or universal business apply. Do not enable `FACTORY_PHASE8_APPLY_ENABLED`, `FACTORY_PHASE8_RECEIPTS_ENABLED`, `OFFLINE_MODE_ENABLED`, LAN-primary or merge the draft PR into `main` until the external gates are independently satisfied.
+
 ## Phase 9 — Complete ERP / Factory / POS offline business coverage
 - Audit every write endpoint and add explicitly supported atomic capture/apply policies, including inventory, production, scanner, purchasing, retail/POS, payments, attachments and document operations.
 - Provide precise UI status: local only, staged, cloud-applied, conflict, or blocked. Unsupported operations fail closed, never pretend to sync.
