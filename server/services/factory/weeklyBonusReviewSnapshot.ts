@@ -41,6 +41,6 @@ function canonicalJson(value: unknown): string {
   }
   return JSON.stringify(value) ?? "null";
 }
-export function weeklyBonusReviewToken(snapshot: ReturnType<typeof weeklyBonusReviewSnapshot>): string {
+export function weeklyBonusReviewToken(snapshot: unknown): string {
   return createHash("sha256").update(canonicalJson(snapshot)).digest("hex");
 }
