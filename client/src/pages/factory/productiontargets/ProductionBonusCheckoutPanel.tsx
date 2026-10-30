@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { bonusText, type ProductionBonusTranslationKey } from "@/i18n/factoryProductionBonusCheckoutTranslations";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
 import { localDateStr } from "../factoryProductionTargetsModel";
@@ -43,6 +45,8 @@ export function ProductionBonusCheckoutPanel({
   initialDate,productionCategories,
 }: { initialDate:string;productionCategories:string[] }) {
   const {toast}=useToast();
+  const {language}=useApplicationLanguage();
+  const t=(key:ProductionBonusTranslationKey)=>bonusText(key,language);
   const [date,setDate]=useState(initialDate);
   const [method,setMethod]=useState<Method>("standard");
   const [selected,setSelected]=useState<number[]>([]);
@@ -94,15 +98,15 @@ export function ProductionBonusCheckoutPanel({
     }),
     onSuccess:result=>{
       setConfirmPay(false);setSelected([]);
-      toast({title:"Production bonuses paid",
-        description:result.posted+" payments posted; "+result.replayed+" safe retries. See Daybook."});
+      toast({title:t("paidToast"),
+        description:result.posted+" "+t("paidDesc")+" "+result.replayed+" "+t("retryDesc")});
       void queryClient.invalidateQueries({queryKey:[endpoint]});
       void queryClient.invalidateQueries({queryKey:["/api/factory/staff-tracking/production-bonuses"]});
       void queryClient.invalidateQueries({queryKey:["/api/factory/production-target-bonuses/report"]});
       void queryClient.invalidateQueries({queryKey:["/api/factory/worker-bonuses"]});
     },
     onError:(error:Error)=>{
-      setConfirmPay(false);toast({title:"Nothing was paid",description:error.message,variant:"destructive"});
+      setConfirmPay(false);toast({title:t("payFailed"),description:error.message,variant:"destructive"});
       void queryClient.invalidateQueries({queryKey:[endpoint]});
     },
   });
@@ -111,10 +115,10 @@ export function ProductionBonusCheckoutPanel({
       workerId:editingRate!.workerId,effectiveFrom:date,ratePerBale:newRate,
     }),
     onSuccess:()=>{
-      setEditingRate(null);toast({title:"Standard per-bale rate saved"});
+      setEditingRate(null);toast({title:t("rateSaved")});
       void queryClient.invalidateQueries({queryKey:[endpoint]});
     },
-    onError:(error:Error)=>toast({title:"Rate not saved",description:error.message,variant:"destructive"}),
+    onError:(error:Error)=>toast({title:t("rateFailed"),description:error.message,variant:"destructive"}),
   });
   const reverseMutation=useMutation({
     mutationFn:()=>request("POST",
@@ -122,43 +126,42 @@ export function ProductionBonusCheckoutPanel({
         confirm:true,reversalDate:paymentDate,reason:reverseReason,
       }),
     onSuccess:()=>{
-      setReverse(null);setReverseReason("");toast({title:"Payment reversed in Daybook"});
+      setReverse(null);setReverseReason("");toast({title:t("reversedToast")});
       void queryClient.invalidateQueries({queryKey:[endpoint]});
       void queryClient.invalidateQueries({queryKey:["/api/factory/staff-tracking/production-bonuses/payments"]});
     },
-    onError:(error:Error)=>toast({title:"Reversal failed",description:error.message,variant:"destructive"}),
+    onError:(error:Error)=>toast({title:t("reverseFailed"),description:error.message,variant:"destructive"}),
   });
   if(!canUse)return null;
   return <Card data-testid="production-bonus-checkout" className="overflow-hidden shadow-none">
     <CardHeader className="border-b bg-muted/20">
-      <CardTitle className="flex items-center gap-2 text-lg"><Banknote className="h-5 w-5 text-primary"/>Production Bonus Payroll</CardTitle>
+      <CardTitle className="flex items-center gap-2 text-lg"><Banknote className="h-5 w-5 text-primary"/>{t("title")}</CardTitle>
       <p className="text-sm text-muted-foreground">
-        Select workers, verify the target and extra-bale calculation, then Pay. Approval and payment are one
-        confirmed transaction. A saved open Production Targets day can be paid without End Production.
+        {t("intro")}
       </p>
     </CardHeader>
     <CardContent className="space-y-4 pt-4">
       <div className="flex flex-wrap items-end gap-3">
-        <label className="space-y-1 text-xs text-muted-foreground">Production date
-          <Input aria-label="Bonus production date" type="date" value={date}
+        <label className="space-y-1 text-xs text-muted-foreground">{t("prodDate")}
+          <Input aria-label={t("prodDate")} type="date" value={date}
             onChange={event=>{setDate(event.target.value);setSelected([]);}} className="w-[170px]"/>
         </label>
-        <label className="space-y-1 text-xs text-muted-foreground">Bonus calculation
+        <label className="space-y-1 text-xs text-muted-foreground">{t("method")}
           <Select value={method} onValueChange={value=>{setMethod(value as Method);setSelected([]);}}>
             <SelectTrigger className="min-w-[220px]"><SelectValue/></SelectTrigger>
             <SelectContent>
-              <SelectItem value="standard">Standard · per extra bale</SelectItem>
-              <SelectItem value="category">Category rate · per extra bale</SelectItem>
+              <SelectItem value="standard">{t("standard")}</SelectItem>
+              <SelectItem value="category">{t("category")}</SelectItem>
             </SelectContent>
           </Select>
         </label>
-        <label className="space-y-1 text-xs text-muted-foreground">Payment date
-          <Input aria-label="Bonus payment date" type="date" value={paymentDate}
+        <label className="space-y-1 text-xs text-muted-foreground">{t("paymentDate")}
+          <Input aria-label={t("paymentDate")} type="date" value={paymentDate}
             onChange={event=>setPaymentDate(event.target.value)} className="w-[170px]"/>
         </label>
-        <label className="min-w-[230px] flex-1 space-y-1 text-xs text-muted-foreground">Pay from Cash / Bank (USD)
+        <label className="min-w-[230px] flex-1 space-y-1 text-xs text-muted-foreground">{t("payFrom")}
           <Select value={accountId} onValueChange={setAccountId}>
-            <SelectTrigger><SelectValue placeholder="Select paying account"/></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder={t("chooseAccount")}/></SelectTrigger>
             <SelectContent>
               {cashAccounts.map(account=><SelectItem key={account.id} value={String(account.id)}>
                 {account.name} ({account.code})
@@ -168,13 +171,12 @@ export function ProductionBonusCheckoutPanel({
         </label>
       </div>
       <details className="rounded-lg border bg-muted/10">
-        <summary className="cursor-pointer px-4 py-3 text-sm font-medium">Bonus rates and settings</summary>
+        <summary className="cursor-pointer px-4 py-3 text-sm font-medium">{t("settings")}</summary>
         <div className="space-y-3 border-t p-3">
-          <p className="text-xs text-muted-foreground">Standard rates are editable per worker in the table.
-            Category rates use only categories shown in Production Targets.</p>
+          <p className="text-xs text-muted-foreground">{t("settingsHint")}</p>
           <ProductionBonusCategoryRatesPanel initialDate={date} productionCategories={productionCategories}/>
           <details className="rounded-lg border">
-            <summary className="cursor-pointer px-3 py-2 text-xs">Historical weekly-flat method configuration</summary>
+            <summary className="cursor-pointer px-3 py-2 text-xs">{t("legacy")}</summary>
             <ProductionBonusWeeklyMethodPanel initialDate={date}/>
           </details>
         </div>
@@ -199,31 +201,31 @@ export function ProductionBonusCheckoutPanel({
         <span className="ml-auto text-sm font-semibold">{chosen.length} selected · {usd(total)}</span>
         <Button disabled={!chosen.length||!accountId||!paymentDate||pay.isPending}
           onClick={()=>setConfirmPay(true)}>
-          <CheckCircle2 className="mr-2 h-4 w-4"/> Review &amp; Pay
+          <CheckCircle2 className="mr-2 h-4 w-4"/> {t("reviewPay")}
         </Button>
       </div>
       <div className="overflow-x-auto rounded-lg border">
         <Table>
           <TableHeader><TableRow>
-            <TableHead className="w-12">Select</TableHead><TableHead>Worker / Category</TableHead>
-            <TableHead className="text-right">Target</TableHead>
-            <TableHead className="text-right">Made</TableHead>
-            <TableHead className="text-right">Extra</TableHead>
-            <TableHead className="text-right">Bonus</TableHead>
-            <TableHead>Status / Action</TableHead>
+            <TableHead className="w-12">{t("select")}</TableHead><TableHead>{t("workerCategory")}</TableHead>
+            <TableHead className="text-right">{t("target")}</TableHead>
+            <TableHead className="text-right">{t("made")}</TableHead>
+            <TableHead className="text-right">{t("extra")}</TableHead>
+            <TableHead className="text-right">{t("bonus")}</TableHead>
+            <TableHead>{t("statusAction")}</TableHead>
           </TableRow></TableHeader>
           <TableBody>
             {isLoading&&<TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
-              <Loader2 className="mr-2 inline h-4 w-4 animate-spin"/>Calculating bonus…
+              <Loader2 className="mr-2 inline h-4 w-4 animate-spin"/>{t("loading")}
             </TableCell></TableRow>}
             {!isLoading&&!offers.length&&<TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
-              No saved Production Targets workers for this date. Save the targets to calculate bonuses.
+              {t("noRows")}
             </TableCell></TableRow>}
             {offers.map(offer=>{
               const ready=offer.status==="pending"||offer.status==="approved";
               const payment=(payments?.payments??[]).find(p=>p.workerId===offer.workerId);
               return <TableRow key={offer.workerId} className="align-top">
-                <TableCell><Checkbox aria-label={"Select bonus "+offer.workerName}
+                <TableCell><Checkbox aria-label={t("selectBonus")+" "+offer.workerName}
                   checked={selected.includes(offer.workerId)} disabled={!ready}
                   onCheckedChange={checked=>setSelected(previous=>checked?
                     [...new Set([...previous,offer.workerId])]:
@@ -232,11 +234,11 @@ export function ProductionBonusCheckoutPanel({
                   <div className="font-medium">{offer.workerName}</div>
                   {offer.lines.length>0&&<details className="mt-1 text-xs">
                     <summary className="cursor-pointer text-muted-foreground">
-                      <Calculator className="mr-1 inline h-3 w-3"/>Show calculation
+                      <Calculator className="mr-1 inline h-3 w-3"/>{t("showCalc")}
                     </summary>
                     <div className="mt-2 space-y-1 whitespace-nowrap">
                       {offer.lines.map(line=><div key={line.category}>
-                        {line.category}: {line.produced} made · {line.extra} extra × {usd(line.rate)} = {usd(line.bonus)}
+                        {line.category}: {line.produced} {t("lineMade")} · {line.extra} {t("lineExtra")} × {usd(line.rate)} = {usd(line.bonus)}
                       </div>)}
                     </div>
                   </details>}
@@ -251,13 +253,13 @@ export function ProductionBonusCheckoutPanel({
                   {method==="standard"&&offer.status==="pending"&&
                     <Button size="sm" variant="ghost" className="mt-1 h-7" onClick={()=>{
                       setEditingRate(offer);setNewRate(offer.lines[0]?.rate??"");
-                    }}><Pencil className="mr-1 h-3 w-3"/> Edit rate</Button>}
+                    }}><Pencil className="mr-1 h-3 w-3"/> {t("editRate")}</Button>}
                   {payment?.paymentStatus==="POSTED"&&
                     <Button size="sm" variant="outline" className="mt-1 h-7" onClick={()=>{
                       setReverse(payment);setReverseReason("");
-                    }}><RotateCcw className="mr-1 h-3 w-3"/> Reverse</Button>}
+                    }}><RotateCcw className="mr-1 h-3 w-3"/> {t("reverse")}</Button>}
                   {payment?.voucherId&&<p className="mt-1 text-[11px] text-muted-foreground">
-                    Voucher #{payment.voucherId} · {payment.cashAccountName}
+                    {t("voucher")} #{payment.voucherId} · {payment.cashAccountName}
                   </p>}
                 </TableCell>
               </TableRow>;
@@ -266,58 +268,55 @@ export function ProductionBonusCheckoutPanel({
         </Table>
       </div>
       <p className="text-xs text-muted-foreground">
-        Posting debits Payroll Deposit Expense and credits the selected Cash/Bank account.
-        A paid worker/date is locked against duplicate payment. Reversals create a compensating receipt,
-        not a second bonus or a deletion of historical audit records.
+        {t("historyHint")}
       </p>
     </CardContent>
     <Dialog open={confirmPay} onOpenChange={setConfirmPay}>
       <DialogContent className="max-w-xl">
-        <DialogHeader><DialogTitle>Verify and pay production bonuses</DialogTitle>
-          <DialogDescription>Check the workers, calculations and paying account before posting.
-            This action approves and pays together.</DialogDescription>
+        <DialogHeader><DialogTitle>{t("confirmTitle")}</DialogTitle>
+          <DialogDescription>{t("confirmHint")}</DialogDescription>
         </DialogHeader>
         <div className="max-h-[300px] overflow-y-auto rounded-lg border">
           {chosen.map(row=><div key={row.workerId} className="flex justify-between gap-2 border-b px-3 py-2 text-sm">
             <div><div className="font-medium">{row.workerName}</div>
-              <div className="text-xs text-muted-foreground">{row.extra} extra bales · {row.method==="category"?"Category rates":"Standard rate"}</div>
+              <div className="text-xs text-muted-foreground">{row.extra} {t("extraBales")} · {row.method==="category"?t("categoryRates"):t("standardRate")}</div>
             </div><strong className="tabular-nums">{usd(row.amount)}</strong>
           </div>)}
         </div>
-        <div className="flex justify-between text-sm"><span>Payment from</span>
-          <strong>{cashAccounts.find(a=>String(a.id)===accountId)?.name??"Not selected"}</strong></div>
-        <div className="flex justify-between text-base font-bold"><span>Total</span><span>{usd(total)}</span></div>
+        <div className="flex justify-between text-sm"><span>{t("payingFrom")}</span>
+          <strong>{cashAccounts.find(a=>String(a.id)===accountId)?.name??t("notSelected")}</strong></div>
+        <div className="flex justify-between text-base font-bold"><span>{t("total")}</span><span>{usd(total)}</span></div>
         <DialogFooter>
-          <Button variant="outline" onClick={()=>setConfirmPay(false)}>Cancel</Button>
+          <Button variant="outline" onClick={()=>setConfirmPay(false)}>{t("cancel")}</Button>
           <Button disabled={pay.isPending||!chosen.length} onClick={()=>pay.mutate()}>
-            {pay.isPending&&<Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Approve &amp; Pay {usd(total)}
+            {pay.isPending&&<Loader2 className="mr-2 h-4 w-4 animate-spin"/>}{t("approvePay")} {usd(total)}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
     <Dialog open={Boolean(editingRate)} onOpenChange={open=>{if(!open)setEditingRate(null);}}>
-      <DialogContent><DialogHeader><DialogTitle>Set per-extra-bale rate</DialogTitle>
-        <DialogDescription>Save the dated rate for {editingRate?.workerName}.</DialogDescription>
+      <DialogContent><DialogHeader><DialogTitle>{t("rateTitle")}</DialogTitle>
+        <DialogDescription>{t("rateHint")} {editingRate?.workerName}.</DialogDescription>
       </DialogHeader>
-      <label className="space-y-1 text-sm">USD per extra bale
+      <label className="space-y-1 text-sm">{t("perExtra")}
         <Input type="number" min="0.0001" max="10000" step="0.0001" value={newRate}
           onChange={e=>setNewRate(e.target.value)}/>
       </label>
-      <DialogFooter><Button variant="outline" onClick={()=>setEditingRate(null)}>Cancel</Button>
+      <DialogFooter><Button variant="outline" onClick={()=>setEditingRate(null)}>{t("cancel")}</Button>
         <Button disabled={saveRate.isPending||!/^\d+(?:\.\d{1,4})?$/.test(newRate)||Number(newRate)<=0}
-          onClick={()=>saveRate.mutate()}>Save rate</Button></DialogFooter>
+          onClick={()=>saveRate.mutate()}>{t("saveRate")}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
     <Dialog open={Boolean(reverse)} onOpenChange={open=>{if(!open)setReverse(null);}}>
-      <DialogContent><DialogHeader><DialogTitle>Reverse bonus payment</DialogTitle>
-        <DialogDescription>Post a reversing accounting voucher and Daybook entry. This does not erase the audit trail.</DialogDescription>
+      <DialogContent><DialogHeader><DialogTitle>{t("reverseTitle")}</DialogTitle>
+        <DialogDescription>{t("reverseHint")}</DialogDescription>
       </DialogHeader>
-      <label className="space-y-1 text-sm">Reason
+      <label className="space-y-1 text-sm">{t("reason")}
         <Input value={reverseReason} onChange={event=>setReverseReason(event.target.value)}
-          placeholder="Reason for reversing this payment"/></label>
-      <DialogFooter><Button variant="outline" onClick={()=>setReverse(null)}>Cancel</Button>
+          placeholder={t("reasonHint")}/></label>
+      <DialogFooter><Button variant="outline" onClick={()=>setReverse(null)}>{t("cancel")}</Button>
         <Button variant="destructive" disabled={!reverseReason.trim()||reverseMutation.isPending}
-          onClick={()=>reverseMutation.mutate()}>Confirm reversal</Button>
+          onClick={()=>reverseMutation.mutate()}>{t("confirmReverse")}</Button>
       </DialogFooter>
     </Dialog>
   </Card>;
