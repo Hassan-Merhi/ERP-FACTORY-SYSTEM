@@ -61,7 +61,7 @@ export function ProductionTargetWeeklyBonusPaymentsPanel({initialDate}:{initialD
   const {data,error,isLoading}=useQuery<WeeklyHistory>({
     queryKey:[base,start,end],
     enabled:valid,
-    queryFn:()=>api("GET",base+"?"+new URLSearchParams({start,end})),
+    queryFn:()=>api("GET",base+"?"+new URLSearchParams({start,end}).toString()),
   });
   const {data:accountData,error:accountError}=useQuery<Accounts>({
     queryKey:["/api/factory/staff-tracking/production-bonuses/payment-accounts"],
