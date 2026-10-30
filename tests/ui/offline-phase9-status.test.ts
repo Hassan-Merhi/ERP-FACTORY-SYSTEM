@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import { visiblePhase9Status } from "@/lib/offline/phase9Status";
 
 const op = { id: "e53cdbd1-7c4b-4b5c-9a60-b4f9de710b8c", companyId: 3, state: "acknowledged" as const };
-const proof = { operationId: op.id, companyId: 3, state: "cloud-applied" as const, evidence: "verified-local-cloud-receipt" as const };
+const proof = {
+  operationId: op.id,
+  companyId: 3,
+  state: "cloud-applied" as const,
+  evidence: "verified-local-cloud-receipt" as const,
+};
 
 describe("Phase 9 browser-visible offline state", () => {
   it("never interprets queue acknowledgement or a stage ACK as cloud apply", () => {
