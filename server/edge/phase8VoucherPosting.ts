@@ -15,6 +15,7 @@ import { postBalancedVoucherTx } from "../services/accounting/centralPostingEngi
 import { createDatabasePostingDependencies } from "../services/accounting/databasePostingDependencies";
 import { buildGenericVoucherPostingRequest } from "../services/accounting/genericVoucherPosting";
 import { Phase8ApplyRefusal } from "./phase8ApplyStore.mjs";
+import { approvedPhase8JournalShape } from "./phase8VoucherPolicy.mjs";
 
 type Phase8VoucherEvent = {
   siteId?: string;
@@ -27,51 +28,6 @@ type Phase8VoucherEvent = {
   payload: { voucher: Record<string, unknown>; entries: Array<Record<string, unknown>> };
 };
 
-function isoDate(raw: unknown): string {
-  if (typeof raw !== "string" || !/^\d{4}-\d{2}-\d{2}(?:T00:00:00(?:\.000)?Z)?$/.test(raw)) {
-    throw new Phase8ApplyRefusal("PHASE8_VOUCHER_DATE_UNSUPPORTED");
-  }
-  const day = raw.slice(0, 10);
-  if (Number.isNaN(Date.parse(day + "T00:00:00Z")) ||
-      new Date(day + "T00:00:00Z").toISOString().slice(0, 10) !== day) {
-    throw new Phase8ApplyRefusal("PHASE8_VOUCHER_DATE_INVALID");
-  }
-  return day;
-}
-
-export function approvedPhase8JournalShape(event: Phase8VoucherEvent) {
-  const voucher = event.payload?.voucher;
-  const entries = event.payload?.entries;
-  if (!voucher || !Array.isArray(entries) || entries.length < 2 || entries.length > 100 ||
-      voucher.id !== event.localVoucherId || voucher.companyId !== event.companyId ||
-      voucher.optional === true || voucher.voucherType !== "Journal" ||
-      String(voucher.currency ?? "USD") !== "USD" ||
-      voucher.locationId != null || voucher.effectiveDate != null ||
-      voucher.deletedAt != null || voucher.sourceModule === "POS") {
-    throw new Phase8ApplyRefusal("PHASE8_UNSUPPORTED_VOUCHER_SHAPE");
-  }
-  const date = isoDate(voucher.voucherDate);
-  const targetIds = new Set<number>();
-  const sanitizedEntries = entries.map((entry) => {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry) ||
-        !Number.isSafeInteger(Number(entry.ledgerAccountId)) ||
-        Number(entry.ledgerAccountId) < 1 ||
-        ["bankAccountId","fixedAssetId","supplierId","employeeId","customerId","factorySupplierId"].some(
-          (field) => entry[field] != null
-        )) {
-      throw new Phase8ApplyRefusal("PHASE8_LEDGER_ONLY_TARGETS_REQUIRED");
-    }
-    const accountId = Number(entry.ledgerAccountId);
-    targetIds.add(accountId);
-    return {
-      ledgerAccountId: accountId,
-      debitAmount: String(entry.debitAmount ?? "0"),
-      creditAmount: String(entry.creditAmount ?? "0"),
-      narration: typeof entry.narration === "string" ? entry.narration : null,
-    };
-  });
-  return { voucher, date, entries: sanitizedEntries, ledgerAccountIds: [...targetIds] };
-}
 
 const postingDeps = createDatabasePostingDependencies();
 
@@ -123,7 +79,9 @@ export async function postApprovedPhase8Journal(
     // without the receipt is ambiguous and must NOT be silently acknowledged.
     throw new Phase8ApplyRefusal("PHASE8_ORPHANED_POSTING_IDENTITY");
   }
-  const cloudDate = String(posted.voucher.voucherDate).slice(0, 10);
+  const cloudDate = posted.voucher.voucherDate instanceof Date
+    ? posted.voucher.voucherDate.toISOString().slice(0, 10)
+    : String(posted.voucher.voucherDate).slice(0, 10);
   if (cloudDate !== shape.date || posted.voucher.companyId !== event.companyId ||
       posted.entries.length !== shape.entries.length) {
     throw new Phase8ApplyRefusal("PHASE8_POSTING_RECONCILIATION_FAILED");
