@@ -8,6 +8,7 @@ type LiveRow = {
   date: string; workerId: number | string; workerName: string;
   category: string | null; linkGroupId: number | string | null;
   targetBales: number | string | null; producedBales: number | string;
+  linkEndedOn: string | null;
   extraBales: number | string; ratePerBale: number | string | null;
   proposedAmount: number | string; status: TargetBonusStatus | null;
   reviewedBy: string | null; reviewedAt: string | null;
@@ -64,6 +65,7 @@ export async function loadLiveTargetBonusRows(
       COALESCE(CASE WHEN saved.category_overridden THEN saved.category
         ELSE defaults.category END, w.position, w.department, '') AS category,
       link.id AS "linkGroupId",
+      previous_link.ended AS "linkEndedOn",
       COALESCE(review.target_bales, resolved.target, 0)::numeric AS "targetBales",
       COALESCE(review.produced_bales, credit.credited, 0)::integer AS "producedBales",
       COALESCE(review.extra_bales,
@@ -98,6 +100,14 @@ export async function loadLiveTargetBonusRows(
         AND (l.effective_to IS NULL OR l.effective_to>d.work_date)
       ORDER BY l.effective_from DESC,l.id DESC LIMIT 1
     ) link ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT MAX(l.effective_to)::text AS ended
+      FROM factory_worker_production_links l
+      JOIN factory_worker_production_link_members m
+        ON m.company_id=l.company_id AND m.link_id=l.id
+      WHERE l.company_id=w.company_id AND m.worker_id=w.id
+        AND l.effective_to<=d.work_date
+    ) previous_link ON link.id IS NULL
     LEFT JOIN LATERAL (
       SELECT x.target_bales FROM factory_worker_production_link_target_defaults x
       WHERE x.company_id=w.company_id AND x.link_id=link.id
@@ -173,6 +183,7 @@ export async function loadLiveTargetBonusRows(
     date:String(row.date).slice(0,10),workerId:Number(row.workerId),
     workerName:String(row.workerName),category:String(row.category??""),
     linkGroupId:row.linkGroupId==null?null:Number(row.linkGroupId),
+    linkEndedOn:row.linkEndedOn,
     targetBales:Number(row.targetBales),producedBales:Number(row.producedBales),
     extraBales:Number(row.extraBales),
     ratePerBale:row.ratePerBale==null?null:Number(row.ratePerBale),
