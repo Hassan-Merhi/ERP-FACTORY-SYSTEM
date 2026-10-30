@@ -74,6 +74,25 @@ The proposed DBA-only SQL is `deploy/lan/phase7-install-writer-fence.sql`. It is
 
 Before any DBA changes or LAN-primary operation, all of the following must be independently evidenced:
 
+For a **disposable rehearsal only**, use `scripts/edge/audit-phase7-baseline.mjs` to capture read-only, deterministic table-content, schema, sequence and uploads hashes from separately restored, quiesced copies. The database name must begin `erp_phase7_rehearsal_` or `erp_edge_rehearsal_`, and the auditing role must be able to see all companies (a separate privileged auditor on these isolated clones, never a live business-app credential). Example:
+
+```bash
+# Both commands use separate isolated clone databases and uploads directories.
+# Do not use the active cloud/factory database. Use an approved ciphertext
+# checkpoint manifest SHA-256, independently verified before comparison.
+PHASE7_AUDIT_DATABASE_URL='postgresql://.../erp_phase7_rehearsal_source' \
+PHASE7_AUDIT_SCOPE=source PHASE7_AUDIT_SNAPSHOT_SHA256='<64-char-approved-manifest-sha256>' \
+node scripts/edge/audit-phase7-baseline.mjs capture /isolated/source/uploads /private/phase7-source.json
+
+PHASE7_AUDIT_DATABASE_URL='postgresql://.../erp_phase7_rehearsal_factory' \
+PHASE7_AUDIT_SCOPE=restore PHASE7_AUDIT_SNAPSHOT_SHA256='<same-approved-manifest-sha256>' \
+node scripts/edge/audit-phase7-baseline.mjs capture /isolated/factory/uploads /private/phase7-restore.json
+
+node scripts/edge/audit-phase7-baseline.mjs compare /private/phase7-source.json /private/phase7-restore.json
+```
+
+The comparator reports **only** matching fingerprints, never approval. It cannot establish that the two source snapshots are authentic or that uploads/database were captured atomically; an independent trusted cloud backup, archive signature/provenance, secure key handling, tenant-permission review and balance/file reconciliation remain mandatory. Keep reports private.
+
 1. A transactionally consistent, encrypted cloud database **and uploads** snapshot (including tenants/users/roles, journals, inventory, sequences and backups), its source approval and hash, isolated PostgreSQL restore, and count/balance/permission/file reconciliations.
 2. Separate DBA/migration and **restricted application** database roles on both sites. The current sample Compose deployment uses `POSTGRES_USER=erp_edge` as a superuser and also as the app login; it **does not qualify**. Startup schema migrations currently use the application connection and need a separately provisioned migration step before a restricted role can be enabled.
 3. Database fence installation on every business table and verification after schema changes, including cron, WebSocket, integration and direct-writer paths. Privileged DBA writes, DDL changes and non-Postgres file effects require separate operational controls. The HTTP session store is excluded from the business-write fence.
