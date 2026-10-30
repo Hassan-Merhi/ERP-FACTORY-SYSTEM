@@ -102,6 +102,66 @@ export function isVettedOfflineVoucherPayload(input: unknown): boolean {
   return debits > 0n && debits === credits;
 }
 
+/**
+ * A 2xx alone is not an accepted posting receipt: proxies, wrong-company
+ * sessions and legacy fallbacks may return unrelated JSON. The receipt must
+ * echo the exact immutable operation ID, tenant and ledger journal shape.
+ * A mismatch is ambiguous (the server might have committed), so callers
+ * quarantine rather than automatically retry the same money movement.
+ */
+export function matchesOfflineVoucherAcknowledgement(
+  operation: Pick<OfflineOperation, "id" | "companyId" | "payload">,
+  responseText: string
+): boolean {
+  let source: unknown;
+  let received: unknown;
+  try {
+    source = JSON.parse(operation.payload);
+    received = JSON.parse(responseText);
+  } catch {
+    return false;
+  }
+  if (!isVettedOfflineVoucherPayload(source) ||
+      !source || typeof source !== "object" || Array.isArray(source) ||
+      !received || typeof received !== "object" || Array.isArray(received)) return false;
+  const original = source as Record<string, unknown>;
+  const receipt = received as Record<string, unknown>;
+  const posted = receipt.voucher;
+  if (!posted || typeof posted !== "object" || Array.isArray(posted)) return false;
+  const voucher = posted as Record<string, unknown>;
+  const requested = original.voucher as Record<string, unknown>;
+  const date = typeof voucher.voucherDate === "string"
+    ? voucher.voucherDate
+    : null;
+  if (receipt.clientRequestId !== operation.id ||
+      original.clientRequestId !== operation.id ||
+      voucher.companyId !== operation.companyId ||
+      !Number.isSafeInteger(voucher.id) || Number(voucher.id) <= 0 ||
+      voucher.voucherType !== "Journal" ||
+      String(voucher.currency ?? "USD") !== "USD" ||
+      !date ||
+      date.slice(0, 10) !== requested.voucherDate ||
+      !Array.isArray(receipt.entries) ||
+      receipt.entries.length !== (original.entries as unknown[]).length) return false;
+
+  function signatures(entries: unknown[]): string[] | null {
+    const result: string[] = [];
+    for (const line of entries) {
+      if (!line || typeof line !== "object" || Array.isArray(line)) return null;
+      const row = line as Record<string, unknown>;
+      const id = Number(row.ledgerAccountId);
+      const debit = offlineJournalCents(row.debitAmount);
+      const credit = offlineJournalCents(row.creditAmount);
+      if (!Number.isSafeInteger(id) || id <= 0 || debit === null || credit === null) return null;
+      result.push(`${id}:${debit}:${credit}`);
+    }
+    return result.sort();
+  }
+  const left = signatures(original.entries as unknown[]);
+  const right = signatures(receipt.entries);
+  return !!left && !!right && left.every((key, index) => key === right[index]);
+}
+
 const SENSITIVE_KEY =
   /^(?:password|passwd|pwd|oldPassword|currentPassword|newPassword|confirmPassword|managerPassword|supervisorPassword|passwordHash|authorization|apiKey|apiToken|accessToken|refreshToken|clientSecret|secret|cvv|cardNumber|pin)$/i;
 
