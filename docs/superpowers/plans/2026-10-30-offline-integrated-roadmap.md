@@ -68,6 +68,14 @@ Committed on the unified branch, not on `main`:
 - The Phase 9 sync engine no longer advances the global `lastSyncedAt` timestamp on LAN/server acknowledgement. A distinct verified cloud-applied receipt is required before claiming cloud sync. CI includes explicit regression checks for this separation.
 - **Status: Phase 9 still incomplete, not certified.** Only the existing constrained voucher route has a transactional LAN capture/apply development path; no stock, scan, POS, factory, financial payment or document/attachment route was enabled. Do not turn on the feature flag, LAN-primary, or merge the PR.
 
+### Phase 9 Factory pressing confirmation — atomic source capture development
+
+- Introduced a strict `pressing.confirmation.v1` envelope for source-confirmed physical scans, with exact company/actor/request UUID, source confirmation ID, bale, machine, assignment, reference, timestamps and shift production day. The payload explicitly declares `inventoryFinalized: false`; it never authorizes stock, voucher, mix-cost or bale-state changes.
+- On a LAN instance, startup provisions an independent `factory_edge_pressing_counter` and immutable `factory_edge_pressing_outbox`. These tables are **separate from the Phase 8 voucher cursor** so a pressing event cannot create gaps in financial replay. Unique constraints cover site/operation and source confirmation; triggers forbid UPDATE/DELETE.
+- The existing pressing confirmation handler captures this immutable evidence **inside its original transaction**, after its audit. If the evidence insert fails, the business scan and audit roll back together; idempotent replay does not append a duplicate capture. Cloud and read-only modes do not emit these rows.
+- Added schema, envelope, rollback and transaction-sharing tests to both Phase 8/9 contract workflows.
+- **Not an approved offline route:** The LAN writer guard still rejects `POST /api/factory/pressing-machines/confirm`. A typed authenticated cloud staging receiver, exclusive-fence-proven exactly-once posting, applied receipts, source-to-cloud mappings, scan corrections/voids and tenant/hardware reconciliation must all be implemented and verified before the route can be unblocked. The overall remaining business write backlog stays open.
+
 ## Phase 10 — Offline identity, conflicts, secure storage and server controls
 - Implement reviewed local-session/cold-start policy, encrypted legacy-cache migration, authorization/role revocation, and scoped credentials and browser/device protections.
 - Add deterministic multi-device conflict review with no silent financial/stock overwrites.
