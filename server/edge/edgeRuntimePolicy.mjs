@@ -2,7 +2,14 @@
 const SAFE_EDGE_HOSTS = new Set(["postgres", "db", "localhost", "127.0.0.1", "::1"]);
 const PRIMARY_ACK = "CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED";
 const CLOUD_FENCE_ACK = "CLOUD_WRITES_DISABLED_FOR_FACTORY_HANDOFF";
-const SAFE_SESSION_PATHS = new Set(["/api/auth/login", "/api/auth/logout", "/api/auth/set-company", "/api/csp-report"]);
+// Only the reviewed HTTP verb + path pairs escape a read-only LAN fence.
+// A future PUT/PATCH/DELETE route must never inherit a POST session exemption.
+const SAFE_SESSION_WRITES = new Set([
+  "POST /api/auth/login",
+  "POST /api/auth/logout",
+  "POST /api/auth/set-company",
+  "POST /api/csp-report",
+]);
 
 function parseSite(value) {
   return (
@@ -112,7 +119,7 @@ const LAN_PRIMARY_CAPTURE_ALLOWLIST = new Set(["POST /api/vouchers/with-entries"
 export function edgeBlocksWrite(config, method, path) {
   const verb = String(method).toUpperCase();
   if (["GET", "HEAD", "OPTIONS"].includes(verb)) return false;
-  if (SAFE_SESSION_PATHS.has(path)) return false;
+  if (SAFE_SESSION_WRITES.has(`${verb} ${path}`)) return false;
   if (config.mode === "cloud") return config.writeMode === "fenced";
   if (!config.primary) return true;
   return !LAN_PRIMARY_CAPTURE_ALLOWLIST.has(`${verb} ${path}`);
