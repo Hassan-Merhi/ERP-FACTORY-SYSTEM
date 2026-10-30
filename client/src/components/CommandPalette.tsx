@@ -40,8 +40,9 @@ import {
 import { useAppMode } from "@/contexts/AppModeContext";
 import { isRetailHiddenErpPath, useErpVisibleSections } from "@/components/AppSidebar";
 import { useCompany } from "@/contexts/CompanyContext";
+import { getAccountingToolLinks, getDeveloperMaintenanceLinks } from "@/lib/accountingToolboxNavigation";
 import { useFactoryVisibleSections } from "@/components/FactorySidebar";
-import { PROPERTIES_NAV_SECTIONS } from "@/components/PropertiesSidebar";
+import { getPropertiesVisibleNavSections } from "@/components/PropertiesSidebar";
 import type { NavItem, NavSection } from "@/components/sidebar/sidebarPrimitives";
 
 interface CommandPaletteUser {
@@ -152,6 +153,36 @@ const ERP_HUB_TABS: PageEntry[] = [
   { label: "Customers", description: "Customer accounts", path: "/parties?tab=customers", icon: Users },
 ];
 
+/** Keep relocated tools directly searchable even when their sidebar shortcuts collapse into parent hubs. */
+const ERP_CONTEXT_ITEMS: NavItem[] = [
+  { title: "Stock", url: "/stock", icon: Box },
+  { title: "Optional Vouchers", url: "/optional-vouchers", icon: FileText },
+  { title: "Supplier Profit Check", url: "/supplier-profit-check", icon: PieChart },
+  { title: "POS Item Replacement", url: "/pos-item-replacement", icon: Archive },
+  { title: "Stock In & Sales", url: "/stock-in-sales-report", icon: BarChart3 },
+  { title: "Item Market Analysis", url: "/item-market-analysis", icon: BarChart3 },
+];
+
+// Keep every original developer accounting destination searchable after collapsing the sidebar.
+const ERP_ACCOUNTING_CONTEXT_ITEMS: NavItem[] = getAccountingToolLinks("erp").map((item) => ({
+  title: item.label, url: item.path, icon: ShieldCheck,
+}));
+const FACTORY_ACCOUNTING_CONTEXT: PageEntry[] = [
+  { label: "Factory Accounting Toolbox", description: "Accounting, audit and maintenance tools", path: "/factory/accounting/toolbox", icon: ShieldCheck },
+  ...getAccountingToolLinks("factory").map((item) => ({
+    label: item.label, description: item.description, path: item.path, icon: ShieldCheck,
+  })),
+];
+const PROPERTIES_ACCOUNTING_CONTEXT: PageEntry[] = getAccountingToolLinks("properties").map((item) => ({
+  label: item.label, description: item.description, path: item.path, icon: ShieldCheck,
+}));
+const FACTORY_MAINTENANCE_CONTEXT: PageEntry[] = getDeveloperMaintenanceLinks("factory").map((item) => ({
+  label: item.label, description: item.description, path: item.path, icon: ShieldCheck,
+}));
+const PROPERTIES_MAINTENANCE_CONTEXT: PageEntry[] = getDeveloperMaintenanceLinks("properties").map((item) => ({
+  label: item.label, description: item.description, path: item.path, icon: ShieldCheck,
+}));
+
 /** Factory routes that aren't in FACTORY_NAV_SECTIONS but were historically in the palette. */
 const FACTORY_EXTRAS_ALWAYS: PageEntry[] = [
   { label: "Factory Daybook", description: DESCRIPTIONS["/factory/daybook"], path: "/factory/daybook", icon: Calendar },
@@ -162,6 +193,18 @@ const FACTORY_EXTRAS_ALWAYS: PageEntry[] = [
     path: "/factory/bale-relabeling",
     icon: Archive,
   },
+];
+
+/** Factory destinations whose standalone sidebar links are now contextual or pinned. */
+const FACTORY_CONTEXT_SEARCH: PageEntry[] = [
+  { label: "Factory Overview", path: "/factory/production-report", icon: BarChart3 },
+  { label: "Factory Agent Ledger", path: "/factory/agents", icon: Users },
+  { label: "Factory Accounts", path: "/factory/accounts", icon: PieChart },
+  { label: "Factory Vouchers", path: "/factory/vouchers", icon: FileText },
+  { label: "Factory Contacts", path: "/factory/contacts", icon: Users },
+  { label: "Factory Stock Allocation", path: "/factory/stock-allocation-v5", icon: Box },
+  { label: "Factory Sheets & Sacks", path: "/factory/sheets-sacks", icon: Box },
+  { label: "Factory Cost Centers", path: "/factory/cost-centers", icon: PieChart },
 ];
 
 /** Factory hub tab entries — each tab in a hub page gets its own searchable entry. */
@@ -178,12 +221,6 @@ const FACTORY_HUB_TABS: PageEntry[] = [
     description: DESCRIPTIONS["/factory/bale-products"],
     path: "/factory/bales-hub?tab=products",
     icon: Box,
-  },
-  {
-    label: "Import History",
-    description: "Bale import history",
-    path: "/factory/bales-hub?tab=imports",
-    icon: Archive,
   },
   { label: "Proformas", description: "Proforma invoices", path: "/factory/invoicing?tab=proformas", icon: FileText },
   {
@@ -313,7 +350,13 @@ const PROPERTIES_EXTRAS: PageEntry[] = [
     icon: LayoutDashboard,
   },
   { label: "Properties Analytics", description: "Properties analytics", path: "/properties/analytics", icon: PieChart },
-  { label: "My Settings", description: "Personal preferences", path: "/my-settings", icon: Settings },
+  { label: "Rental Shops", description: "Shops rented out", path: "/properties/rentals?tab=shops", icon: Users },
+  { label: "Rental Payments", description: "Rentals payment log", path: "/properties/rentals?tab=payments", icon: FileText },
+  { label: "My Settings", description: "Personal preferences", path: "/properties/my-settings", icon: Settings },
+];
+
+const PROPERTIES_DEVELOPER_EXTRAS: PageEntry[] = [
+  { label: "Cash Transfer", description: "Transfer funds between properties", path: "/properties/transfer", icon: ArrowLeftRight },
 ];
 
 const PROPERTIES_ADMIN_EXTRAS: PageEntry[] = [
@@ -381,6 +424,19 @@ const adminPages: PageEntry[] = [
   },
 ];
 
+// These are registered in the Factory shell; ERP-only admin paths otherwise
+// redirect to the Factory default page before their component can render.
+const factoryAdminPages: PageEntry[] = [
+  { label: "Factory Settings", description: "Factory configuration", path: "/factory/settings", icon: Settings },
+  { label: "Factory Chatbot Settings", description: "Factory chatbot configuration", path: "/factory/chatbot-settings", icon: Bot },
+  { label: "Deleted Items", description: "Restore or review deleted Factory records", path: "/factory/deleted-items", icon: Trash2 },
+  { label: "Orphaned Records", description: "Factory records missing references", path: "/factory/orphaned-records", icon: LinkIcon },
+  { label: "Inventory Repair", description: "Investigate Factory inventory discrepancies", path: "/factory/inventory-repair", icon: Wrench },
+  { label: "Import Cycle Diagnostics", description: "Inspect Factory import issues", path: "/factory/import-cycle-diagnostics", icon: AlertTriangle },
+  { label: "Account Groups", description: "Factory account group settings", path: "/factory/account-groups", icon: PieChart },
+  { label: "Company Data Reset", description: "Restricted Factory maintenance", path: "/factory/company-data-reset", icon: Wrench },
+];
+
 const intercompanyPages: PageEntry[] = [
   {
     label: "Intercompany Requests",
@@ -391,10 +447,18 @@ const intercompanyPages: PageEntry[] = [
 ];
 
 const posPages: PageEntry[] = [
-  { label: "Point of Sale", description: "POS interface", path: "/", icon: ShoppingCart },
+  { label: "Point of Sale", description: "Cashier checkout", path: "/pos", icon: ShoppingCart },
   { label: "POS Daybook", description: "Daily POS log", path: "/pos-daybook", icon: Calendar },
   { label: "Location Inventory", description: "Stock levels by location", path: "/location-inventory", icon: MapPin },
-  { label: "Chat", description: "Internal messaging", path: "/pos-chat", icon: MessageSquare },
+  { label: "Transfer Orders", description: "POS stock transfer orders", path: "/pos-transfer-orders", icon: Truck },
+  { label: "Price List", description: "Location pricing", path: "/pos-price-list", icon: Tag },
+  { label: "Stock Transfer", description: "Transfer stock between locations", path: "/vouchers?tab=transfer", icon: ArrowLeftRight },
+  { label: "Containers OTW", description: "On-the-way containers", path: "/pos-containers", icon: Ship },
+  { label: "My Settings", description: "Personal settings", path: "/pos-settings", icon: Settings },
+];
+const retailPosPages: PageEntry[] = [
+  { label: "Retail POS", description: "Retail checkout", path: "/retail/pos", icon: ShoppingCart },
+  { label: "My Settings", description: "Personal preferences", path: "/my-settings", icon: Settings },
 ];
 
 function navItemToEntry(item: NavItem): PageEntry {
@@ -464,7 +528,10 @@ export function CommandPalette({
   const appMode = useAppMode();
   const [, setLocation] = useLocation();
   const effectiveRole = user?.currentRole ?? user?.role ?? "";
-  const canSeeAdminCommands = effectiveRole === "Admin" || effectiveRole === "Developer";
+  // FactoryRoutes and PropertiesRoutes guard pages using user.role; their
+  // command search must not grant a route based on a different role field.
+  const shellRole = appMode === "factory" || appMode === "properties" ? (user?.role ?? "") : effectiveRole;
+  const canSeeAdminCommands = shellRole === "Admin" || shellRole === "Developer";
 
   const isControlled = externalOpen !== undefined;
   const open = isControlled ? externalOpen : internalOpen;
@@ -508,30 +575,49 @@ export function CommandPalette({
       buildEntries(
         erpVis.sections,
         [
-          ...ERP_EXTRAS,
-          // Hub tabs bypass the sidebar visibility rules, so retail companies filter them here.
-          ...ERP_HUB_TABS.filter((tab) => !isRetailCompany || !isRetailHiddenErpPath(tab.path)),
+          ...ERP_EXTRAS.filter((entry) => {
+            if (entry.path === "/") return canSeeAdminCommands;
+            return erpVis.isItemVisible({ title: entry.label, url: entry.path, icon: LayoutDashboard });
+          }),
+          // A link to one part of a composite hub must not disclose another
+          // part that this user's actual ERP feature grants don't permit.
+          ...ERP_HUB_TABS.filter((tab) => {
+            if (isRetailCompany && isRetailHiddenErpPath(tab.path)) return false;
+            const accessPath = tab.path === "/parties?tab=suppliers"
+              ? "/suppliers"
+              : tab.path === "/parties?tab=customers"
+                ? "/customers"
+                : tab.path;
+            return erpVis.isItemVisible({ title: tab.label, url: accessPath, icon: LayoutDashboard });
+          }),
         ],
-        [...erpVis.visiblePinnedItems, ...erpVis.visibleUtilityItems]
+        [...erpVis.visiblePinnedItems, ...erpVis.visibleUtilityItems, ...ERP_CONTEXT_ITEMS.filter(erpVis.isItemVisible), ...ERP_ACCOUNTING_CONTEXT_ITEMS.filter(erpVis.isItemVisible)]
       ).map((page) =>
         isRetailCompany && page.path === "/vouchers"
           ? { ...page, description: "Payment and receipt vouchers; automatic journals are read-only" }
           : page
       ),
-    [erpVis.sections, erpVis.visiblePinnedItems, erpVis.visibleUtilityItems, isRetailCompany]
+    [erpVis.sections, erpVis.visiblePinnedItems, erpVis.visibleUtilityItems, erpVis.isItemVisible, isRetailCompany, canSeeAdminCommands]
   );
 
   const factoryPages = useMemo(() => {
-    return buildEntries(factoryVis.sections, [...FACTORY_EXTRAS_ALWAYS, ...FACTORY_HUB_TABS]);
-  }, [factoryVis.sections]);
+    const accessibleExtras = [...FACTORY_EXTRAS_ALWAYS, ...FACTORY_CONTEXT_SEARCH, ...FACTORY_HUB_TABS].filter((entry) =>
+      factoryVis.isPinnedVisible({ url: entry.path }) && factoryVis.isHubTabVisible(entry.path)
+    );
+    return buildEntries(factoryVis.sections, [
+      ...accessibleExtras,
+      ...(shellRole === "Developer" ? [...FACTORY_ACCOUNTING_CONTEXT, ...FACTORY_MAINTENANCE_CONTEXT] : []),
+    ]);
+  }, [factoryVis.sections, factoryVis.isPinnedVisible, factoryVis.isHubTabVisible, shellRole]);
 
   const propertiesPages = useMemo(
     () =>
-      buildEntries(PROPERTIES_NAV_SECTIONS, [
-        ...PROPERTIES_EXTRAS.filter((entry) => user?.role !== "ERP Tester" || entry.path !== "/my-settings"),
+      buildEntries(getPropertiesVisibleNavSections(shellRole === "Developer"), [
+        ...PROPERTIES_EXTRAS.filter((entry) => shellRole !== "ERP Tester" || entry.path !== "/properties/my-settings"),
+        ...(shellRole === "Developer" ? [...PROPERTIES_DEVELOPER_EXTRAS, ...PROPERTIES_ACCOUNTING_CONTEXT, ...PROPERTIES_MAINTENANCE_CONTEXT] : []),
         ...(canSeeAdminCommands ? PROPERTIES_ADMIN_EXTRAS : []),
       ]),
-    [canSeeAdminCommands, user?.role]
+    [canSeeAdminCommands, shellRole]
   );
 
   const showErp = !isPOS && hasErpAccess;
@@ -544,9 +630,12 @@ export function CommandPalette({
   // shell: under a factory company the guard redirects the unprefixed path away,
   // so offering them means offering a command that goes somewhere else.
   const visibleAdminPages = useMemo(
-    () => adminPages.filter((page) => !page.erpShellOnly || appMode === "erp"),
+    () => appMode === "factory"
+      ? factoryAdminPages
+      : adminPages.filter((page) => !page.erpShellOnly || appMode === "erp"),
     [appMode]
   );
+  const showIntercompany = !isPOS && (showErp || showFactory);
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen}>
@@ -556,7 +645,7 @@ export function CommandPalette({
 
         {isPOS && (
           <CommandGroup heading="POS">
-            {posPages.map((p) => (
+            {(isRetailCompany ? retailPosPages : posPages).map((p) => (
               <PaletteItem key={p.path} page={p} onSelect={navigate} />
             ))}
           </CommandGroup>
@@ -600,12 +689,14 @@ export function CommandPalette({
           </CommandGroup>
         )}
 
-        <CommandSeparator />
-        <CommandGroup heading="Intercompany">
-          {intercompanyPages.map((p) => (
-            <PaletteItem key={p.path} page={p} onSelect={navigate} />
-          ))}
-        </CommandGroup>
+        {showIntercompany && <CommandSeparator />}
+        {showIntercompany && (
+          <CommandGroup heading="Intercompany">
+            {intercompanyPages.map((p) => (
+              <PaletteItem key={p.path} page={p} onSelect={navigate} />
+            ))}
+          </CommandGroup>
+        )}
 
         <CommandSeparator />
         <CommandGroup heading="AI Assistant">

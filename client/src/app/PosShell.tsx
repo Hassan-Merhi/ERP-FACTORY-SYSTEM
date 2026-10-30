@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useMainContentFocus } from "@/hooks/use-main-content-focus";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -31,7 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SkipLink } from "@/components/ui/responsive-accessibility";
 import { WorkspaceRouteBoundary } from "@/components/ui/workspace-route-boundary";
-import { ArrowLeft, LogOut, Search, ShoppingCart } from "lucide-react";
+import { ArrowLeft, LogOut, Search, ShoppingCart, ChevronDown } from "lucide-react";
 import { usePosNavigationItems } from "./usePosNavigationItems";
 import { canUseAdminSearch, type ShellUser } from "./shellUser";
 import "@/styles/pos-sidebar-modern.css";
@@ -78,13 +78,20 @@ export function PosShell({
   const [currentLocation] = useLocation();
   const { selectedCompany } = useCompany();
   const { t } = useApplicationLanguage();
-  const posNavItems = usePosNavigationItems({ user, posImportEnabled, chatUnread });
+  const posNavItems = usePosNavigationItems({ user, posImportEnabled, chatUnread, companyType: selectedCompany?.companyType });
+  const primaryNavItems = posNavItems.filter((item) => item.group === "primary");
+  const toolNavItems = posNavItems.filter((item) => item.group === "tools");
+  const [toolsExpanded, setToolsExpanded] = useState(false);
+  useEffect(() => {
+    if (toolNavItems.some((item) => item.active)) setToolsExpanded(true);
+  }, [currentLocation, selectedCompany?.id]);
 
   const posStyle = { "--sidebar-width": "14rem", "--sidebar-width-icon": "3.5rem" };
   const isFullHeightRoute =
     currentLocation === "/" ||
     currentLocation === "/pos" ||
     currentLocation === "/pos/" ||
+    currentLocation === "/retail/pos" ||
     currentLocation.startsWith("/pos/edit/");
   const hasAdminSearch = canUseAdminSearch(user);
   const userMenuUser = { username: user.username, role: user.role ?? "POS" };
@@ -131,7 +138,7 @@ export function PosShell({
                 </SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu aria-label="Point of sale navigation">
-                    {posNavItems.map((item) => (
+                    {primaryNavItems.map((item) => (
                       <SidebarMenuItem key={item.label}>
                         <SidebarMenuButton
                           isActive={item.active}
@@ -159,6 +166,52 @@ export function PosShell({
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>
+              {toolNavItems.length > 0 && (
+                <SidebarGroup className="mt-2 border-t border-sidebar-border/60 p-0 pt-2">
+                  <button
+                    type="button"
+                    aria-expanded={toolsExpanded}
+                    aria-controls="pos-secondary-tools"
+                    onClick={() => setToolsExpanded((expanded) => !expanded)}
+                    className="mb-1 flex min-h-10 w-full items-center justify-between rounded-lg px-3 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/65 hover:bg-sidebar-accent/40"
+                    data-testid="button-pos-more-tools"
+                  >
+                    More tools
+                    <ChevronDown className={toolsExpanded ? "h-4 w-4 rotate-180" : "h-4 w-4"} aria-hidden="true" />
+                  </button>
+                  {toolsExpanded && (
+                    <SidebarGroupContent id="pos-secondary-tools">
+                      <SidebarMenu aria-label="Additional point of sale tools">
+                    {toolNavItems.map((item) => (
+                      <SidebarMenuItem key={item.label}>
+                        <SidebarMenuButton
+                          isActive={item.active}
+                          onClick={item.onClick}
+                          aria-current={item.active ? "page" : undefined}
+                          data-testid={item.testId}
+                        >
+                          <span data-pos-nav-icon>
+                            <item.icon className="h-4 w-4" aria-hidden="true" />
+                          </span>
+                          <span className="flex-1 truncate">{item.label}</span>
+                          {item.badge !== undefined && item.badge > 0 && (
+                            <Badge
+                              variant={item.active ? "secondary" : "default"}
+                              className="min-w-5 justify-center rounded-full px-1.5 text-[11px]"
+                              aria-label={`${item.badge} unread`}
+                              data-testid="badge-chat-unread-pos"
+                            >
+                              {item.badge}
+                            </Badge>
+                          )}
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  )}
+                </SidebarGroup>
+              )}
             </SidebarContent>
             <SidebarFooter data-pos-sidebar-footer-card className="pb-[max(0.5rem,env(safe-area-inset-bottom))]">
               <div className="space-y-2">

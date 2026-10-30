@@ -76,8 +76,6 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
     items: [
       { title: "Inventory", url: "/inventory", icon: Layers },
       { title: "Stock", url: "/stock", icon: Package },
-      { title: "Optional Vouchers", url: "/optional-vouchers", icon: FileText },
-      { title: "Profit Check", url: "/supplier-profit-check", icon: Calculator },
     ],
   },
   {
@@ -96,26 +94,16 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
       { title: "Accounts", url: "/accounts", icon: Wallet },
       { title: "Cost Centers", url: "/cost-centers", icon: ListTree },
       { title: "Parties", url: "/parties", icon: Handshake },
+      { title: "Profit Check", url: "/supplier-profit-check", icon: Calculator },
+      { title: "Optional Vouchers", url: "/optional-vouchers", icon: FileText },
       { title: "Payroll", url: "/payroll", icon: UserCheck },
     ],
   },
   {
-    label: "Accounting Reconciliation",
+    label: "Accounting Tools",
     color: NAV_COLOR.accounting,
-    items: [
-      { title: "Open Items", url: "/accounting/open-items", icon: Receipt },
-      { title: "Bank & Cash Reconciliation", url: "/accounting/cash-bank", icon: Calculator },
-      { title: "Multi-Currency Accounting", url: "/accounting/monetary-fx", icon: Calculator },
-      { title: "Inventory & COGS Accounting", url: "/accounting/erp-inventory", icon: Layers },
-      { title: "Factory Production Accounting", url: "/accounting/factory-production", icon: Layers },
-      { title: "Rental Accounting", url: "/accounting/rentals", icon: Calculator },
-      { title: "Intercompany & Consolidation", url: "/accounting/consolidation", icon: Layers },
-      { title: "Historical Accounting", url: "/accounting/history", icon: CalendarDays },
-      { title: "Financial Statements", url: "/accounting/statements", icon: FileText },
-      { title: "Fiscal Closing & Audit", url: "/accounting/fiscal-review", icon: ShieldCheck },
-      { title: "Unified Accounting Dashboard", url: "/accounting/dashboard", icon: LayoutDashboard },
-      { title: "Unified Accounting Rollout", url: "/accounting/rollout", icon: ShieldCheck },
-    ],
+    devOnly: true,
+    items: [{ title: "Accounting Toolbox", url: "/accounting/toolbox", icon: ShieldCheck }],
   },
   {
     label: "Analytics",
@@ -215,7 +203,8 @@ export function useErpVisibleSections(user?: SidebarUser): {
     const isOwner = effectiveRole === "Owner";
     const featureKeys = getErpRouteFeatureKeys(item.url);
 
-    // Never show Dashboard to ERP View Only, including pinned and recently visited links.
+    // Match the View Only Dashboard restriction already enforced on main.
+    // Shared by desktop, mobile, recent links and command search.
     if (effectiveRole === "View Only" && item.url === "/financial-overview") return false;
     if (selectedCompany?.companyType === "retail" && RETAIL_HIDDEN_ERP_ROUTES.has(item.url)) return false;
     if (effectiveRole === "ERP Tester" && item.url === "/transaction-journal") return false;
@@ -230,6 +219,7 @@ export function useErpVisibleSections(user?: SidebarUser): {
       selectedCompany?.companyType !== "factory_v2"
     )
       return false;
+    if (item.url === "/accounting/toolbox") return isDeveloper;
     if (item.url === "/net-profit-report") return isDeveloper;
     if (item.url === "/company-transfer") return isDeveloper;
     if (item.url === "/spreadsheet") return isDeveloper;
@@ -273,9 +263,30 @@ export function useErpVisibleSections(user?: SidebarUser): {
 
   const isDeveloper = (user?.currentRole ?? user?.role) === "Developer";
 
+  // Only suppress a standalone link when the user can actually open its parent hub.
+  // Users with narrowly granted permissions must retain their direct navigation fallback.
+  const isStandaloneNavVisible = (item: NavItem): boolean => {
+    if (!isItemVisible(item)) return false;
+    switch (item.url) {
+      case "/stock":
+        return !isItemVisible({ title: "Inventory", url: "/inventory", icon: Layers });
+      case "/optional-vouchers":
+        return !isItemVisible({ title: "Vouchers", url: "/vouchers", icon: Receipt });
+      case "/supplier-profit-check":
+        return !isItemVisible({ title: "Parties", url: "/parties", icon: Handshake });
+      case "/pos-item-replacement":
+        return !isItemVisible({ title: "Sales Tools", url: "/sales-tools", icon: LayoutGrid });
+      case "/stock-in-sales-report":
+      case "/item-market-analysis":
+        return !isItemVisible({ title: "Sales Report", url: "/sales-report", icon: PieChart });
+      default:
+        return true;
+    }
+  };
+
   const sections = ERP_NAV_SECTIONS.map((s) => ({
     ...s,
-    items: s.items.filter(isItemVisible),
+    items: s.items.filter(isStandaloneNavVisible),
   })).filter((s) => s.items.length > 0 && (!s.devOnly || isDeveloper));
 
   return {

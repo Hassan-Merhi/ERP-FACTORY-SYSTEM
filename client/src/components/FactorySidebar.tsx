@@ -111,10 +111,15 @@ const FACTORY_NAV_ICONS: Record<string, typeof Package> = {
   "factory/intelligence/settings": Settings,
 };
 
-const FACTORY_SIDEBAR_GROUP_ORDER = ["Production", "Sales", "Inventory", "Finance", "Rentals", "Intelligence"] as const;
+// UI grouping only: do not change the canonical registry's permission keys or Settings grouping.
+const FACTORY_SIDEBAR_GROUP_ORDER = ["Production", "Inventory", "Sales & Loading", "Finance", "Rentals", "Intelligence"] as const;
+function visibleFactoryGroup(page: (typeof FACTORY_SIDEBAR_PAGES)[number]): string {
+  if (page.key === "factory/bales-hub") return "Inventory";
+  return page.group === "Sales" ? "Sales & Loading" : page.group;
+}
 const FACTORY_SIDEBAR_COLORS: Record<string, string> = {
   Production: NAV_COLOR.operations,
-  Sales: NAV_COLOR.sales,
+  "Sales & Loading": NAV_COLOR.sales,
   Inventory: NAV_COLOR.inventory,
   Finance: NAV_COLOR.finance,
   Rentals: NAV_COLOR.rentals,
@@ -122,13 +127,13 @@ const FACTORY_SIDEBAR_COLORS: Record<string, string> = {
 };
 
 export const FACTORY_NAV_SECTIONS: FactoryNavSection[] = FACTORY_SIDEBAR_GROUP_ORDER.map((label) => {
-  const pages = FACTORY_SIDEBAR_PAGES.filter((page) => page.group === label);
+  const pages = FACTORY_SIDEBAR_PAGES.filter((page) => visibleFactoryGroup(page) === label && !page.pinned);
   return {
     label,
     color: FACTORY_SIDEBAR_COLORS[label],
     developerOnly: pages.length > 0 && pages.every((page) => page.accessLevel === "developer"),
     items: pages.map((page) => ({
-      title: page.label,
+      title: page.key === "factory/invoicing" ? "Invoicing & Loadings" : page.label,
       url: page.route,
       icon: FACTORY_NAV_ICONS[page.key] ?? FileText,
       accessKey: page.key,
@@ -154,6 +159,7 @@ interface FactorySidebarUser {
 export function useFactoryVisibleSections(user?: FactorySidebarUser): {
   sections: FactoryNavSection[];
   isPinnedVisible: (item: Pick<NavItem, "url">) => boolean;
+  isHubTabVisible: (url: string) => boolean;
   isAdmin: boolean;
   isDeveloper: boolean;
   isPrivileged: boolean;
@@ -184,16 +190,77 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
 
   const isPinnedVisible = (item: Pick<NavItem, "url">): boolean => {
     const page = resolveFactoryPage(item.url);
-    if (!page) return false;
+    if (!page || !myAccess) return false; // Never show destinations before company grants resolve.
     if (!factoryPageAllowsRole(page, user?.role)) return false;
+    if (
+      page.key === "factory/cost-centers" &&
+      !["Admin", "Owner", "Developer", "Manager"].includes(user?.role ?? "")
+    ) return false;
     if (page.featureFlag) {
       const defaultOn = !!page.featureFlagDefaultOn;
       const enabled = defaultOn ? settings?.[page.featureFlag] !== false : settings?.[page.featureFlag] === true;
       if (!enabled) return false;
     }
-    if (myAccess && !myAccess.fullAccess && !hasFactoryPageKey(page, myAccess.pageKeys)) {
+    // Cost Centers deliberately has stricter route-level grants even for
+    // privileged roles. Match the FactoryRoutes condition before any bypass.
+    if (page.key === "factory/cost-centers") {
+      return myAccess.fullAccess ||
+        myAccess.pageKeys.includes("factory/cost-centers") ||
+        myAccess.pageKeys.includes("factory/accounts");
+    }
+    // The ordinary Factory route guard bypasses per-user page lists for these roles.
+    const privilegedRole = ["Admin", "Owner", "Developer"].includes(user?.role ?? "");
+    if (!privilegedRole && !myAccess.fullAccess && !hasFactoryPageKey(page, myAccess.pageKeys)) {
       return false;
     }
+    return true;
+  };
+
+  const isHubTabVisible = (url: string): boolean => {
+    if (!myAccess) return false;
+    const [pathname, query = ""] = url.split("?", 2);
+    const params = new URLSearchParams(query);
+    const tab = params.get("tab");
+    const section = params.get("section");
+    const hidden = myAccess.hiddenCostFields ?? [];
+    const hiddenKeyByTab: Record<string, Record<string, string>> = {
+      "/factory/bales-hub": {
+        history: "hide_tab_bales_history",
+        barcode: "hide_tab_bales_barcode",
+        products: "hide_tab_bales_products",
+        "customer-loading": "hide_tab_bales_customer_loading",
+      },
+      "/factory/invoicing": {
+        proformas: "hide_invoicing_proformas_tab",
+        invoices: "hide_invoicing_invoices_tab",
+        loadings: "hide_invoicing_loadings_tab",
+        pending: "hide_tab_loadings_pending",
+        priority: "hide_tab_loadings_pending",
+      },
+      "/factory/sales/loadings": {
+        loadings: "hide_invoicing_loadings_tab",
+        pending: "hide_tab_loadings_pending",
+        priority: "hide_tab_loadings_pending",
+      },
+      "/factory/parties": {
+        customers: "hide_tab_parties_customers",
+        suppliers: "hide_tab_parties_suppliers",
+      },
+      "/factory/payroll-hub": {
+        workers: "hide_tab_payrollhub_workers",
+        employees: "hide_tab_payrollhub_employees",
+        insurance: "hide_tab_payrollhub_insurance",
+      },
+    };
+    const value = tab ?? section;
+    const hideKey = value ? hiddenKeyByTab[pathname]?.[value] : undefined;
+    if (hideKey && hidden.includes(hideKey)) return false;
+    if (pathname === "/factory/invoicing" && ["pending", "priority"].includes(tab ?? "") &&
+        (hidden.includes("hide_invoicing_loadings_tab") || settings?.loadingsTabPendingEnabled === false)) return false;
+    if (pathname === "/factory/sales/loadings" && ["pending", "priority"].includes(tab ?? "") &&
+        settings?.loadingsTabPendingEnabled === false) return false;
+    if (pathname === "/factory/bales-hub" && tab === "barcode" &&
+        settings?.balesTabBarcodeEnabled === false) return false;
     return true;
   };
 
@@ -201,39 +268,43 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
     .map((s) => ({
       ...s,
       items: s.items.filter((item) => {
-        if (item.developerOnly && !isDeveloper) return false;
-        if (item.adminOnly && !isAdmin) return false;
+        // Use the same role, feature-flag, and per-company allow-list check as
+        // pinned and recent navigation. An empty grant list remains default-deny.
+        if (!isPinnedVisible({ url: item.url })) return false;
+        if (item.hideKey && myAccess?.hiddenCostFields?.includes(item.hideKey)) return false;
+
+        // Relocate lower-traffic specialty pages into their owning workflow.
+        // Keep the standalone link if the user cannot open any parent page.
+        const relatedParentVisible = (url: string) => isPinnedVisible({ url });
+        // Contacts must remain directly reachable when the Parties hub has no
+        // visible tabs; otherwise the hub returns before rendering related links.
+        const partiesHasVisibleTab =
+          !myAccess?.hiddenCostFields?.includes("hide_tab_parties_customers") ||
+          !myAccess?.hiddenCostFields?.includes("hide_tab_parties_suppliers");
         if (
-          item.accessKey === "factory/cost-centers" &&
-          !["Admin", "Owner", "Developer", "Manager"].includes(user?.role || "")
-        )
-          return false;
-        if (item.featureFlag) {
-          if (item.featureFlagDefaultOn) {
-            if (settings && settings[item.featureFlag] === false) return false;
-          } else {
-            if (!settings || settings[item.featureFlag] !== true) return false;
-          }
-        }
-        const page = resolveFactoryPage(item.url);
-        if (!page || !factoryPageAllowsRole(page, user?.role)) return false;
-        if (
-          myAccess &&
-          !myAccess.fullAccess &&
-          myAccess.pageKeys.length > 0 &&
-          !hasFactoryPageKey(page, myAccess.pageKeys) &&
-          !(item.accessKey === "factory/cost-centers" && myAccess.pageKeys.includes("factory/accounts"))
+          item.accessKey === "factory/contacts" &&
+          partiesHasVisibleTab &&
+          relatedParentVisible("/factory/parties")
         ) {
           return false;
         }
-        if (item.hideKey && myAccess?.hiddenCostFields?.includes(item.hideKey)) return false;
+        if (item.accessKey === "factory/cost-centers" && relatedParentVisible("/factory/accounts")) return false;
+        if (item.accessKey === "factory/sheets-sacks" && relatedParentVisible("/factory/location-inventory")) {
+          return false;
+        }
+        if (
+          item.accessKey === "factory/stock-allocation-v5" &&
+          (relatedParentVisible("/factory/location-inventory") || relatedParentVisible("/factory/containers-hub"))
+        ) {
+          return false;
+        }
         return true;
       }),
     }))
     .filter((s) => s.items.length > 0);
 
   const isPrivileged = isAdmin || myAccess?.fullAccess === true;
-  return { sections, isPinnedVisible, isAdmin, isDeveloper, isPrivileged };
+  return { sections, isPinnedVisible, isHubTabVisible, isAdmin, isDeveloper, isPrivileged };
 }
 
 export function FactorySidebar({
@@ -327,6 +398,15 @@ export function FactorySidebar({
         )}
 
         <div className="mt-4 pt-3 border-t border-sidebar-border/60 space-y-0.5">
+          {isDeveloper && (
+            <SidebarFlatLink
+              href="/factory/accounting/toolbox"
+              icon={FileText}
+              label="Accounting Toolbox"
+              color={NAV_COLOR.accounting}
+              testId="link-factory-accounting-toolbox"
+            />
+          )}
           {isDeveloper && (
             <SidebarFlatLink
               href="/factory/spreadsheet"

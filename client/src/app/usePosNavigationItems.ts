@@ -10,12 +10,14 @@ import {
   Upload,
   MessageSquare,
   Cog,
+  KeyRound,
   Tag,
   ClipboardList,
 } from "lucide-react";
 
 export interface PosNavItem {
   label: string;
+  group: "primary" | "tools";
   icon: ComponentType<{ className?: string }>;
   active: boolean;
   testId: string;
@@ -32,6 +34,7 @@ interface UsePosNavigationItemsParams {
   user: PosNavigationUser;
   posImportEnabled: boolean;
   chatUnread: { count: number } | undefined;
+  companyType?: string | null;
 }
 
 /**
@@ -42,8 +45,30 @@ export function usePosNavigationItems({
   user,
   posImportEnabled,
   chatUnread,
+  companyType,
 }: UsePosNavigationItemsParams): PosNavItem[] {
   const [currentLocation, setLocation] = useLocation();
+  // Retail's POS route tree intentionally has fewer registered pages.
+  if (companyType === "retail") {
+    return [
+      {
+        label: "Point of Sale",
+        group: "primary",
+        icon: ShoppingCart,
+        active: currentLocation === "/" || currentLocation === "/pos" || currentLocation === "/retail/pos",
+        testId: "button-pos-tab",
+        onClick: () => setLocation("/retail/pos"),
+      },
+      {
+        label: "My Settings",
+        group: "tools",
+        icon: KeyRound,
+        active: currentLocation === "/my-settings",
+        testId: "button-pos-my-settings-tab",
+        onClick: () => setLocation("/my-settings"),
+      },
+    ];
+  }
 
   const isOnContainers = currentLocation === "/" || currentLocation.startsWith("/pos-containers");
   const isOnPOS = currentLocation === "/pos" || currentLocation === "/pos/" || currentLocation.startsWith("/pos/edit/");
@@ -59,14 +84,8 @@ export function usePosNavigationItems({
 
   const items: PosNavItem[] = [
     {
-      label: "Containers OTW",
-      icon: Ship,
-      active: isOnContainers,
-      testId: "button-pos-containers-tab",
-      onClick: () => setLocation("/pos-containers"),
-    },
-    {
       label: "Point of Sale",
+      group: "primary",
       icon: ShoppingCart,
       active: isOnPOS,
       testId: "button-pos-tab",
@@ -74,6 +93,7 @@ export function usePosNavigationItems({
     },
     {
       label: "Daybook",
+      group: "primary",
       icon: BookOpen,
       active: isOnDaybook,
       testId: "button-daybook-tab",
@@ -81,6 +101,7 @@ export function usePosNavigationItems({
     },
     {
       label: "Inventory",
+      group: "primary",
       icon: MapPin,
       active: isOnInventory,
       testId: "button-inventory-tab",
@@ -88,6 +109,7 @@ export function usePosNavigationItems({
     },
     {
       label: "Price List",
+      group: "tools",
       icon: Tag,
       active: isOnPriceList,
       testId: "button-price-list-tab",
@@ -95,6 +117,7 @@ export function usePosNavigationItems({
     },
     {
       label: "Transfer",
+      group: "tools",
       icon: Package,
       active: isOnTransfer,
       testId: "button-stock-transfer-tab",
@@ -102,15 +125,25 @@ export function usePosNavigationItems({
     },
     {
       label: "Orders",
+      group: "primary",
       icon: ClipboardList,
       active: isOnTransferOrders,
       testId: "button-transfer-orders-tab",
       onClick: () => setLocation("/pos-transfer-orders"),
     },
+    {
+      label: "Containers OTW",
+      group: "primary",
+      icon: Ship,
+      active: isOnContainers,
+      testId: "button-pos-containers-tab",
+      onClick: () => setLocation("/pos-containers"),
+    },
     ...(user?.canAccessCustomers
       ? [
           {
             label: "Customers",
+            group: "tools" as const,
             icon: Users,
             active: isOnCustomers,
             testId: "button-customers-tab",
@@ -122,6 +155,7 @@ export function usePosNavigationItems({
       ? [
           {
             label: "Import",
+            group: "tools" as const,
             icon: Upload,
             active: isOnImport,
             testId: "button-pos-import-tab",
@@ -133,6 +167,7 @@ export function usePosNavigationItems({
       ? [
           {
             label: "Chat",
+            group: "tools" as const,
             icon: MessageSquare,
             active: isOnChat,
             testId: "button-chat-tab",
@@ -143,6 +178,7 @@ export function usePosNavigationItems({
       : []),
     {
       label: "Settings",
+      group: "tools",
       icon: Cog,
       active: isOnSettings,
       testId: "button-settings-tab",

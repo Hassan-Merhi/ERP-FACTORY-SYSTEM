@@ -72,8 +72,8 @@ async function actorStillAuthenticated(actor: PressingActor): Promise<boolean> {
     if (!response.ok) return false;
     const current: unknown = await response.json();
     if (!current || typeof current !== "object") return false;
-    const session = current as { companyId?: number; userId?: string };
-    return session.companyId === actor.companyId && session.userId === actor.userId;
+    const session = current as { companyId?: number; userId?: string; canScan?: boolean };
+    return session.companyId === actor.companyId && session.userId === actor.userId && session.canScan === true;
   } catch {
     return false;
   }

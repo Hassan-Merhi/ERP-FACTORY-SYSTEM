@@ -7,7 +7,7 @@ import { format } from "date-fns";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useZmwVoucherRate } from "@/hooks/useZmwVoucherRate";
 import { useReactToPrint } from "react-to-print";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
 import { VoucherEditDialog } from "@/components/VoucherEditDialog";
 import type { Account } from "@/components/AccountSidebar";
@@ -56,6 +56,7 @@ import { ErrorState } from "@/components/ui/page-state";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { isRetailManualVoucherTabHidden, isRetailManualVoucherTypeHidden } from "@/lib/retailVoucherPolicy";
 import { shouldShowFactoryVoucherTab } from "@/pages/vouchers/factoryVoucherPolicy";
+import type { ErpFeatureAccess } from "@/app/erpAccess";
 
 type VoucherTab = "payment" | "receipt" | "journal" | "transfer" | "transferorder" | "adjustment" | "creditnote";
 
@@ -102,6 +103,13 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   const [, setLocation] = useLocation();
   const printRef = useRef<HTMLDivElement>(null);
   const isPOS = !!posUser;
+  const { data: erpPageAccess } = useQuery<ErpFeatureAccess>({
+    queryKey: ["/api/my-erp-pages"],
+    enabled: !isPOS && appMode === "erp",
+  });
+  const showOptionalDrafts =
+    !isPOS && appMode === "erp" && !isRetailCompany &&
+    (erpPageAccess?.fullAccess === true || erpPageAccess?.pageKeys.includes("optional_vouchers") === true);
   const posLocationId = posUser?.assignedLocationId;
 
   const sidebarGroups: VoucherSidebarGroup[] = buildVoucherSidebarGroups();
@@ -605,7 +613,17 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
       {isPOS ? (
         <PageHeader title="Stock Transfer" subtitle="Transfer stock between locations" />
       ) : !isFactoryMode ? (
-        <PageHeader title="Vouchers" />
+        <PageHeader title="Vouchers">
+          {showOptionalDrafts && (
+            <Link
+              href="/optional-vouchers"
+              className="inline-flex min-h-10 items-center rounded-lg border bg-card px-3 text-sm font-medium hover:bg-muted"
+              data-testid="link-vouchers-optional-drafts"
+            >
+              Optional voucher drafts
+            </Link>
+          )}
+        </PageHeader>
       ) : (
         <div className="flex items-start justify-between gap-3 pb-4 border-b">
           <div>

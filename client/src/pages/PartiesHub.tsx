@@ -1,23 +1,30 @@
 import { Suspense } from "react";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Truck, Users } from "lucide-react";
+import { Truck, Users, Calculator } from "lucide-react";
+import { useCompany } from "@/contexts/CompanyContext";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { canAccessErpFeature, type ErpFeatureAccess } from "@/app/erpAccess";
 import { RestrictedTabsState } from "@/components/RestrictedTabsState";
 
 const Suppliers = lazy(() => import("@/pages/Suppliers"));
 const Customers = lazy(() => import("@/pages/Customers"));
+const SupplierProfitCheck = lazy(() => import("@/pages/SupplierProfitCheck"));
 
 const TABS = [
   { key: "suppliers", label: "Suppliers", icon: Truck, featureKey: "suppliers" as const },
   { key: "customers", label: "Customers", icon: Users, featureKey: "customers" as const },
+  { key: "profit-check", label: "Profit Check", icon: Calculator, featureKey: "suppliers" as const },
 ] as const;
 
 const TAB_KEYS = TABS.map((tab) => tab.key);
 
 export default function PartiesHub({ access }: { access?: ErpFeatureAccess }) {
-  const visibleTabs = TABS.filter((tab) => canAccessErpFeature(access, tab.featureKey));
+  const { selectedCompany } = useCompany();
+  const visibleTabs = TABS.filter(
+    (tab) => canAccessErpFeature(access, tab.featureKey) &&
+      (tab.key !== "profit-check" || selectedCompany?.companyType !== "retail")
+  );
   const visibleKeys = visibleTabs.map((tab) => tab.key);
 
   const [activeTab, setTab] = useHubQueryState({
@@ -56,6 +63,7 @@ export default function PartiesHub({ access }: { access?: ErpFeatureAccess }) {
             <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading…</div>}>
               {t.key === "suppliers" && <Suppliers />}
               {t.key === "customers" && <Customers />}
+              {t.key === "profit-check" && <SupplierProfitCheck />}
             </Suspense>
           </TabsContent>
         ))}
