@@ -13,6 +13,11 @@ on:
       - 'server/edge/edgeBoundary.ts'
       - 'server/edge/edgeSyncReceiver.ts'
       - 'server/edge/edgeVoucherOutbox.ts'
+      - 'server/edge/phase9PressingOutbox.ts'
+      - 'server/edge/phase9PressingEnvelope.mjs'
+      - 'server/edge/phase9PressingEnvelope.d.mts'
+      - 'server/routes/factory/factoryPressingConfirmationRoutes.ts'
+      - 'server/index.ts'
       - 'server/routes/vouchers/centralGenericVoucherCreateRoute.ts'
       - 'scripts/edge/fetch-applied-receipts.mjs'
       - 'tests/offline-phase8*.mjs'
@@ -29,6 +34,11 @@ on:
       - 'tests/ui/offline-durable-outbox.test.ts'
       - 'client/src/lib/offline/voucherCapture.ts'
       - 'server/edge/edgeVoucherOutbox.ts'
+      - 'server/edge/phase9PressingOutbox.ts'
+      - 'server/edge/phase9PressingEnvelope.mjs'
+      - 'server/edge/phase9PressingEnvelope.d.mts'
+      - 'server/routes/factory/factoryPressingConfirmationRoutes.ts'
+      - 'server/index.ts'
       - 'tests/factory-edge-policy.test.ts'
       - 'scripts/edge/audit-phase9-write-coverage.mjs'
       - 'tests/offline-phase9*.mjs'
@@ -54,6 +64,11 @@ on:
       - 'server/edge/edgeBoundary.ts'
       - 'server/edge/edgeSyncReceiver.ts'
       - 'server/edge/edgeVoucherOutbox.ts'
+      - 'server/edge/phase9PressingOutbox.ts'
+      - 'server/edge/phase9PressingEnvelope.mjs'
+      - 'server/edge/phase9PressingEnvelope.d.mts'
+      - 'server/routes/factory/factoryPressingConfirmationRoutes.ts'
+      - 'server/index.ts'
       - 'server/routes/vouchers/centralGenericVoucherCreateRoute.ts'
       - 'scripts/edge/fetch-applied-receipts.mjs'
       - 'tests/offline-phase8*.mjs'
@@ -70,6 +85,11 @@ on:
       - 'tests/ui/offline-durable-outbox.test.ts'
       - 'client/src/lib/offline/voucherCapture.ts'
       - 'server/edge/edgeVoucherOutbox.ts'
+      - 'server/edge/phase9PressingOutbox.ts'
+      - 'server/edge/phase9PressingEnvelope.mjs'
+      - 'server/edge/phase9PressingEnvelope.d.mts'
+      - 'server/routes/factory/factoryPressingConfirmationRoutes.ts'
+      - 'server/index.ts'
       - 'tests/factory-edge-policy.test.ts'
       - 'scripts/edge/audit-phase9-write-coverage.mjs'
       - 'tests/offline-phase9*.mjs'
@@ -126,6 +146,10 @@ jobs:
         env:
           PHASE8_TEST_DATABASE_URL: postgresql://postgres:phase8-test-admin-pass@127.0.0.1:55433/postgres
         run: node --test tests/offline-phase8-postgres.test.mjs
+      - name: Prove isolated physical pressing capture and LAN route fence
+        run: |
+          node --test tests/offline-phase9-pressing-envelope.test.mjs
+          node node_modules/vitest/vitest.mjs run tests/offline-phase9-pressing-outbox.test.ts
       - name: Report unverified post evidence as review-required
         run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-phase9-voucher-capture.test.ts
       - name: Do not stamp cloud sync time on LAN-only acceptance
