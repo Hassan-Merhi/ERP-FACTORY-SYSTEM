@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { ComparisonItem } from "../types";
+import { ContainerExtraItemsDialog } from "../../ContainerExtraItemsDialog";
 import { fmtNum } from "../utils";
 import type { useFactoryPendingInvoiceVerifyModel } from "../useFactoryPendingInvoiceVerifyModel";
 
@@ -14,6 +15,11 @@ export function FactoryPendingInvoiceVerifyDetailCard({ model }: { model: Model 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle className="text-lg">Proforma vs Loaded</CardTitle>
           <div className="flex flex-wrap items-center gap-2">
+            <ContainerExtraItemsDialog
+              orderId={model.orderId}
+              customerId={model.orderDetail?.customerId ?? verification?.order?.customerId}
+              status={verification?.order?.status || model.orderDetail?.status}
+            />
             <span className="text-xs text-muted-foreground">Filter:</span>
             {(["OVER_LOADED", "UNDER_LOADED", "MISSING_FROM_LOADED", "LOADED_NOT_IN_PROFORMA"] as const).map((s) => {
               const labels: Record<string, string> = {
