@@ -33,6 +33,38 @@ on:
       - 'client/src/lib/syncEngine.ts'
       - 'client/src/components/PendingSyncIndicator.tsx'
       - '.github/workflows/offline-phase9-contract.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'server/edge/phase9*.mjs'
+      - 'server/edge/phase9*.d.mts'
+      - 'server/edge/edgeBoundary.ts'
+      - 'server/edge/edgeRuntimePolicy.mjs'
+      - 'client/src/lib/offline/phase9Status.ts'
+      - 'client/src/lib/offline/operationContract.ts'
+      - 'client/src/lib/offline/durableOutbox.ts'
+      - 'server/edge/phase8CapturePolicy.mjs'
+      - 'tests/ui/offline-operation-contract.test.ts'
+      - 'tests/ui/offline-durable-outbox.test.ts'
+      - 'client/src/lib/offline/voucherCapture.ts'
+      - 'server/edge/edgeVoucherOutbox.ts'
+      - 'tests/factory-edge-policy.test.ts'
+      - 'client/src/components/OfflineWriteStatusPanel.tsx'
+      - 'client/src/components/OfflinePrepPanel.tsx'
+      - 'scripts/edge/audit-phase9-write-coverage.mjs'
+      - 'config/route-manifest.json'
+      - 'tests/offline-phase9*.mjs'
+      - 'tests/offline-phase9*.ts'
+      - 'tests/ui/offline-phase9*.ts'
+      - 'tests/ui/offline-phase9*.tsx'
+      - 'client/src/components/OfflineBanner.tsx'
+      - 'client/src/contexts/ConnectivityContext.tsx'
+      - 'client/src/lib/offlineQueue.ts'
+      - 'client/src/lib/db.ts'
+      - 'client/src/lib/syncEngine.ts'
+      - 'client/src/components/PendingSyncIndicator.tsx'
+      - '.github/workflows/offline-phase9-contract.yml'
   workflow_dispatch:
 
 permissions:
