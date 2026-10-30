@@ -8,7 +8,7 @@ import type { Express, Request, Response } from "express";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { asRecord, isNonEmptyString, toPositiveInteger } from "@shared/typeGuards";
 import { getClientDate } from "../../../lib/dateUtils";
-import { getErrorMessage } from "../../../lib/httpHandlers";
+import { errorStatus, getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { resultRows } from "../../../lib/queryResult";
@@ -598,6 +598,10 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
         .where(and(eq(factoryDaybookEntries.id, id), eq(factoryDaybookEntries.companyId, companyId)));
       if (!entry) return res.status(404).json({ message: "Entry not found" });
 
+      if (entry.txType === "PRODUCTION_TARGET_BONUS_REVERSAL" ||
+          entry.txType === "PRODUCTION_TARGET_WEEKLY_BONUS_REVERSAL") {
+        return res.status(409).json({message:"Reversal audit entries cannot be deleted"});
+      }
       const bonus = bonusSource(entry.referenceTable, entry.referenceId);
       if (bonus) {
         if (role !== "admin" && role !== "owner")
