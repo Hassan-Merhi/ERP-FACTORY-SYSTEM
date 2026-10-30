@@ -53,6 +53,14 @@ Committed on the unified branch, not on `main`:
 - Expanded Node/HTTP/Vitest tests and Phase 8/9 workflows for stale sessions, revoked company access, false cloud-applied receipts, unsupported write guards, invalid voucher dates, payload drift, and saved device tampering. Full CI on the exact latest head is required before any green claim.
 - **No new business route was approved.** This is risk reduction, not a claim that Phase 9 production/stock/POS/attachments coverage is finished. Existing Phase 7/8 and security/factory sign-offs remain blockers.
 
+### Phase 9 continuation — legacy replay closure and receipt proof
+
+- Closed the separate OfflineBanner legacy localStorage replay button and its destructive auto-delete/success claims. The UI now exposes only verified actor/company durable vouchers and offers the versioned outbox engine as its sole retry action. Legacy localStorage and IndexedDB queue entries are retained but shown as **blocked, not syncable**, with no exposed record contents or HTTP replay. The connectivity counters also distinguish those blocked records from actually retryable requests.
+- While the new offline feature flag is enabled, the old localStorage `enqueueRequest` and IndexedDB `addToSyncQueue` APIs refuse new unscoped offline writes. When the flag is disabled, existing legacy behavior remains unchanged; neither path is approved for cutover.
+- Strengthened the saved browser voucher delivery contract: HTTP 2xx must return the **original operation UUID, matching company, valid posted Journal voucher, accounting date and matching ledger lines/amounts** before being acknowledged on the device. Mismatched or malformed 2xx responses remain as `needs_review` to prevent silent duplicate money posting on retry.
+- Strengthened atomic LAN voucher outbox capture: missing/invalid request UUID now throws inside the source transaction rather than minting a fresh unrelated operation ID. Entry admission and HTTP capture already require matching UUIDs. Added targeted frontend and server tests plus workflow triggers.
+- **Release gate unchanged:** This does not approve or implement inventory, production, scanning, purchasing, POS, payments, documents or file attachments. Existing factory capture/apply and cross-site reconciliation is incomplete. The feature flag remains disabled and Phase 9 remains open.
+
 ## Phase 10 — Offline identity, conflicts, secure storage and server controls
 - Implement reviewed local-session/cold-start policy, encrypted legacy-cache migration, authorization/role revocation, and scoped credentials and browser/device protections.
 - Add deterministic multi-device conflict review with no silent financial/stock overwrites.
