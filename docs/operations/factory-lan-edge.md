@@ -60,14 +60,27 @@ Open `https://<EDGE_HOSTNAME>` from each factory laptop and sign in with its **l
 
 ## 5. Exclusive primary writes — prohibit until cross-site cutover
 
-Only after the **cloud application has stopped accepting writes for these companies**, the local database has been fully seeded and verified, and an authorized owner has documented cutover may the operator set:
+**Phase 7 update (development branch; no production cutover approval):** The old two-setting acknowledgment is no longer enough. LAN-primary must also provide an exact writer epoch and restored-baseline SHA-256, and the database itself must contain a DBA-installed transaction fence. The runtime refuses mutation requests when the app database login is a superuser, a table owner, a privileged DDL-capable role, or any current public business table lacks its enabled Phase 7 trigger.
 
 ```ini
-EDGE_WRITE_MODE=lan-primary
-EDGE_PRIMARY_ACK=CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED
+# These remain EMPTY/disabled until a supervised, independently reviewed cutover.
+EDGE_WRITE_MODE=read-only
+EDGE_PRIMARY_ACK=
+EDGE_WRITER_EPOCH=
+EDGE_BASELINE_SHA256=
 ```
 
-Then restart the LAN app in a maintenance window. This acknowledgment is a human operational control, **not a cryptographic or automatic cloud write fence**. Running cloud-primary and LAN-primary simultaneously without replication creates split-brain balances and duplicate inventory postings. Never enable during Phase 3 evaluation.
+The proposed DBA-only SQL is `deploy/lan/phase7-install-writer-fence.sql`. It is **not executed by application startup**. It initializes with a *fenced* state; installing it on a live writable cloud database can interrupt transactions, so a planned maintenance window and rollback are mandatory. The database trigger holds a shared lock on the persisted epoch state for each covered business statement, so a DBA fence transition waits for in-flight transactions to finish. The app pool announces its exact site/mode/epoch; stale cloud instances and direct SQL without the matching epoch cannot write covered tables **if** the trigger is installed under a separate, protected DBA role.
+
+Before any DBA changes or LAN-primary operation, all of the following must be independently evidenced:
+
+1. A transactionally consistent, encrypted cloud database **and uploads** snapshot (including tenants/users/roles, journals, inventory, sequences and backups), its source approval and hash, isolated PostgreSQL restore, and count/balance/permission/file reconciliations.
+2. Separate DBA/migration and **restricted application** database roles on both sites. The current sample Compose deployment uses `POSTGRES_USER=erp_edge` as a superuser and also as the app login; it **does not qualify**. Startup schema migrations currently use the application connection and need a separately provisioned migration step before a restricted role can be enabled.
+3. Database fence installation on every business table and verification after schema changes, including cron, WebSocket, integration and direct-writer paths. Privileged DBA writes, DDL changes and non-Postgres file effects require separate operational controls. The HTTP session store is excluded from the business-write fence.
+4. Cloud write epoch transitioned durably to `fenced`, all cloud app/worker connections drained, independent cloud read-only verification, then approval for a higher **LAN** epoch only after the trusted restore. An env ACK, HMAC staging receipt or a populated users table is *not* cloud fencing evidence.
+5. A supervised failback plan: freeze LAN first, reconcile all LAN-created financial, stock and uploaded-file changes into cloud (Phase 8 onward), then enable a **newer** cloud epoch. Do not simply restart the cloud writer; two independent PostgreSQL databases cannot arbitrate a partition without an external operator/consensus handoff.
+
+This Phase 7 implementation is a **fail-closed development foundation**, not a certified cross-site lease or a production-ready active factory restore. Until the role split, independent cloud fence, audited data baseline and live two-site tests exist, keep LAN read-only and `OFFLINE_MODE_ENABLED=false`.
 
 ## 6. Backup, recovery and upgrades
 
