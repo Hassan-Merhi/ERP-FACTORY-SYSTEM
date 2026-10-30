@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "environment": "staging",
+  "releaseSha": "REPLACE_WITH_EXACT_40_CHARACTER_COMMIT_SHA",
+  "siteId": "REPLACE_WITH_FACTORY_SITE_UUID",
+  "edgeOrigin": "https://erp.factory.internal",
+  "expectedWriteMode": "read-only",
+  "drills": {}
+}

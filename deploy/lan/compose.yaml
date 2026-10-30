@@ -29,6 +29,8 @@ services:
       NODE_ENV: production
       PORT: "5000"
       FACTORY_EDGE_MODE: lan
+      # Phase 6: operator-supplied staging build identifier; not a provenance signature.
+      BUILD_VERSION: ${EDGE_RELEASE_SHA:-dev}
       FACTORY_EDGE_SITE_ID: ${EDGE_SITE_ID:?Set EDGE_SITE_ID in deploy/lan/.env}
       FACTORY_EDGE_HOSTNAME: ${EDGE_HOSTNAME:?Set EDGE_HOSTNAME in deploy/lan/.env}
       FACTORY_EDGE_WRITE_MODE: ${EDGE_WRITE_MODE:-read-only}

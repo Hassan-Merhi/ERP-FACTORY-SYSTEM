@@ -47,7 +47,7 @@ export function FactoryLanOriginBadge() {
     return () => controller.abort();
   }, []);
 
-  if (!status) return null;
+  if (!status || !status.siteId) return null;
 
   return (
     <div

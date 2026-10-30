@@ -129,9 +129,9 @@ export function FixedProductionPlannerDialog({
     refetchInterval: false,
   });
 
-  const refetchPlan = planQuery.refetch;
-  const refetchOtw = otwQuery.refetch;
-  const refetchCategories = categoryQuery.refetch;
+  const { refetch: refetchPlan } = planQuery;
+  const { refetch: refetchOtw } = otwQuery;
+  const { refetch: refetchCategories } = categoryQuery;
 
   // Each opening starts a single fresh snapshot. Disabled React Query observers
   // never refetch due to Factory-wide invalidation, polling, or reconnect.
@@ -323,8 +323,7 @@ export function FixedProductionPlannerDialog({
 
   // Ignore background query errors after the original values have been
   // captured. Only the explicit Refresh button may replace these snapshots.
-  const snapshotError = (stockSnapshot === null && rawStockError) ||
-    (supplierSnapshot === null && suppliersError);
+  const snapshotError = (stockSnapshot === null && rawStockError) || (supplierSnapshot === null && suppliersError);
   const locked = planQuery.data?.locked ?? false;
   const ready =
     !!planQuery.data &&
@@ -480,11 +479,7 @@ export function FixedProductionPlannerDialog({
               {tr("loadError")}
             </div>
           ) : null}
-          {!ready &&
-          !planQuery.isError &&
-          !otwQuery.isError &&
-          !categoryQuery.isError &&
-          !snapshotError ? (
+          {!ready && !planQuery.isError && !otwQuery.isError && !categoryQuery.isError && !snapshotError ? (
             <p className="py-6 text-center text-sm text-muted-foreground">{tr("loading")}</p>
           ) : (
             <div className="min-h-0 overflow-auto rounded-lg border">
