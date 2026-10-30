@@ -9,6 +9,12 @@ The existing Phase 4 cloud transport **stages evidence only**; it does not apply
 - Implement a durable, database-enforced primary epoch/lease across **all** cloud API instances, background workers, WebSocket routes, cron, integrations and direct writes, then explicit operator-driven LAN cutover and failback.
 - Prove no dual-primary transactions can commit. Factory server remains read-only by default.
 
+### Phase 7 development status — 2026-10-30 (NOT CERTIFIED)
+
+Implemented on the unified branch (not main): fail-closed LAN-primary authority checks, explicit site/baseline/epoch configuration; a DBA-only PostgreSQL state-row write fence with transaction-held locks, current-table triggers and optional-by-capability DDL event-trigger guard; pooled connection epoch announcements; a disposable PostgreSQL 17 contract suite exercising denial, in-flight transaction fencing, DDL coverage and stale epochs; plus a read-only, privacy-preserving comparison of all disposable-clone public table contents, schema metadata, sequences and uploads. Phase 7 contract CI is separate from release certification.
+
+**Release gate still BLOCKED:** The current LAN Compose app/database login is a PostgreSQL superuser and startup schema ensures require DDL rights. Production needs a reviewed split between privileged migration/DBA duties and a restricted runtime database role on cloud and LAN, with a compatible migration path and managed Postgres event-trigger capability review. No approved, transactionally consistent CLOUD database+uploads baseline has been provisioned to a factory server or independently reconciled. No independent cloud fence, real hardware / outage / two-site transaction proof, production cutover, failback, DBA/security review or operator sign-off has happened. The existing source/baseline digest setting is not a cryptographic attestation. The Phase 7 work MUST remain draft, with `OFFLINE_MODE_ENABLED=false` and the LAN in `read-only`.
+
 ## Phase 8 — Transactionally safe LAN → cloud business apply
 - Finish the cloud receiver beyond staged evidence: validated, exactly-once business posting for the initial approved voucher route, idempotent durable applied receipts and acknowledgement-loss retry handling.
 - Reconcile voucher ID mappings, ledger, business dates, immutable outbox sequence, uploaded files and user/company authority without re-posting money or stock.
