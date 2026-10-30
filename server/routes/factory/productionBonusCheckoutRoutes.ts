@@ -218,7 +218,7 @@ async function calculateOffers(
 export function registerProductionBonusCheckoutRoutes(app:Express):void {
   app.get("/api/factory/production-target-bonuses/checkout",
     requireAuth,guard,async(req:Request,res:Response)=>{
-      if(!allowed(req))return res.status(403).json({message:"Admin or Owner required"});
+      if(!allowed(req))return res.status(403).json({message:bonusServerText(req.headers["accept-language"],"adminOnly")});
       const id=company(req),date=req.query.date,method=req.query.method;
       if(!id)return res.status(400).json({message:bonusServerText(req.headers["accept-language"],"checkoutCompany")});
       if(!targetBonusIsValidDate(date) || (method!=="standard" && method!=="category"))
@@ -234,11 +234,11 @@ export function registerProductionBonusCheckoutRoutes(app:Express):void {
     });
   app.post("/api/factory/production-target-bonuses/checkout/pay",
     requireAuth,guard,async(req:Request,res:Response)=>{
-      if(!allowed(req))return res.status(403).json({message:"Admin or Owner required"});
+      if(!allowed(req))return res.status(403).json({message:bonusServerText(req.headers["accept-language"],"adminOnly")});
       const id=company(req),method=req.body?.method;
       if(!id)return res.status(400).json({message:bonusServerText(req.headers["accept-language"],"checkoutCompany")});
       if(method!=="standard" && method!=="category")
-        return res.status(400).json({message:"Choose standard or category per-bale bonus"});
+        return res.status(400).json({message:bonusServerText(req.headers["accept-language"],"chooseBonusMethod")});
       try {
         const command=parseTargetBonusPaymentCommand(req.body);
         const input=req.body.selections as Array<Record<string,unknown>>;
@@ -290,7 +290,7 @@ export function registerProductionBonusCheckoutRoutes(app:Express):void {
         if(status===500)logger.error("Production bonus checkout payment failed",{error});
         return res.status(status).json({message:status===500?
           bonusServerText(req.headers["accept-language"],"paymentFailed"):
-          translated?.message ?? (error instanceof Error?error.message:"Invalid bonus payment")});
+          translated?.message ?? (error instanceof Error?error.message:bonusServerText(req.headers["accept-language"],"invalidBonusPayment"))});
       }
     });
 }
