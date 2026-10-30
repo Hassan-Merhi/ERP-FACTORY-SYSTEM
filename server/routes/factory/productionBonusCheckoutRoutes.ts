@@ -33,6 +33,8 @@ type Offer = {
   extra: number; method: Method; lines: BonusLine[]; amount: string; token: string;
   status: "pending" | "approved" | "paid" | "reversed" | "no_bonus" | "needs_setup" | "blocked" | "rejected" | "weekly";
   issue: string | null;
+  /** Read-only weekly amount. Daily payment checkout never uses this field. */
+  weeklyBonus?: { weekStart: string; amount: string; state: "projected" | "approved" };
 };
 type RecordRow = Record<string, unknown>;
 const rows = (x: unknown): RecordRow[] => resultRows(x) as RecordRow[];
@@ -131,13 +133,14 @@ async function calculateOffers(
         AND rv.production_date BETWEEN ${weekFrom}::date AND ${weekTo}::date
     `),
     tx.execute(sql`
-      SELECT effective_week::text AS week, method
+      SELECT effective_week::text AS week, method, flat_bonus_usd::text AS "flatBonusUsd"
       FROM factory_production_target_bonus_weekly_methods
       WHERE company_id=${companyId} AND effective_week<=${weekTo}::date
       ORDER BY effective_week DESC,id DESC
     `),
     tx.execute(sql`
-      SELECT worker_id AS id, week_start::text AS start, week_end::text AS "end"
+      SELECT worker_id AS id, week_start::text AS start, week_end::text AS "end",
+        status, bonus_amount::text AS amount
       FROM factory_target_bonus_weekly_reviews
       WHERE company_id=${companyId}
         AND week_start<=${weekTo}::date AND week_end>=${weekFrom}::date
@@ -171,6 +174,40 @@ async function calculateOffers(
       produced:day.producedBales,targetConfigured:day.targetConfigured===true,
       frozenExtra:frozen?Number(claim?.extraBales??0):undefined};
   }));
+  // A worker earns at most one flat fee per complete Monday-Sunday total,
+  // regardless of the number of surplus bales or production days displayed.
+  // The in-progress figure below is a read-only projection; actual approval
+  // remains exclusively in the frozen weekly review and payroll workflows.
+  type WeeklyDisplay = { weekStart: string; amount: string; state: "projected" | "approved" };
+  const weeklyDisplays = new Map<string, WeeklyDisplay>();
+  const summaries = new Map<string, { extra: number; dailyClaim: boolean }>();
+  for (const row of daily) {
+    const monday = mondayOfProductionBonusWeek(row.date)!;
+    const key = monday + ":" + row.workerId;
+    const previous = summaries.get(key) ?? { extra: 0, dailyClaim: false };
+    previous.extra += weeklyExtras.get(row.date + ":" + row.workerId) ?? 0;
+    previous.dailyClaim ||= claimsByDay.has(row.date + ":" + row.workerId) ||
+      categoryClaims.has(row.date + ":" + row.workerId);
+    summaries.set(key, previous);
+  }
+  for (const [key, summary] of summaries) {
+    const weekStart = key.slice(0, 10);
+    const workerId = Number(key.slice(11));
+    const review = weeklyReviews.find(row => Number(row.id) === workerId &&
+      String(row.start).slice(0, 10) === weekStart);
+    if (review) {
+      // A rejected or already reviewed week must never be recalculated.
+      if (review.status === "approved" && Number(review.amount) > 0)
+        weeklyDisplays.set(key, { weekStart, amount: usd(String(review.amount)), state: "approved" });
+      continue;
+    }
+    const version = weeklyMethods.find(row => String(row.week).slice(0, 10) <= weekStart);
+    if (version?.method !== "weekly_flat" || summary.extra <= 0 || summary.dailyClaim) continue;
+    const fee = Number(version.flatBonusUsd);
+    if (!Number.isFinite(fee) || fee <= 0) continue;
+    weeklyDisplays.set(key, { weekStart, amount: usd(String(version.flatBonusUsd)), state: "projected" });
+  }
+  const shownWeekly = new Set<string>();
   const rateForWorker=(workerId:number)=>{
     const rate=latestUnpaidWorkerRate(activeStandardRates,workerId);
     return rate===null?null:new Decimal(rate);
@@ -344,7 +381,12 @@ async function calculateOffers(
     const offerCore={date,workerId:item.workerId,workerName:item.workerName,
       target:item.targetBales,produced:item.producedBales,extra:item.extraBales,
       method,lines,amount};
-    result.push({...offerCore, category:item.category,
+    // The sheet renders the fee once per worker/week, without adding it to any daily checkout.
+    const weekKey = weekStart + ":" + item.workerId;
+    const weeklyBonus = (weeklyFlat || weeklyClaim) && !shownWeekly.has(weekKey)
+      ? weeklyDisplays.get(weekKey) : undefined;
+    if (weeklyBonus) shownWeekly.add(weekKey);
+    result.push({...offerCore, category:item.category, weeklyBonus,
       token:claim?.paymentStatus && typeof claim.calculationHash==="string"
         ? claim.calculationHash : hash(offerCore),
       status,issue});
