@@ -111,7 +111,7 @@ async function captureClone({ connectionString, scope, uploadsDir, snapshotSha25
   await client.connect();
   try {
     const identity = await client.query("SELECT current_database() AS db, pg_is_in_recovery() AS recovering");
-    if (!/^erp_phase7_rehearsal_[a-z0-9_]+$/.test(identity.rows[0]?.db ?? "")) {
+    if (!/^erp_(?:phase7|edge)_rehearsal_[a-z0-9_]+$/.test(identity.rows[0]?.db ?? "")) {
       throw new Error("PHASE7_BASELINE_DISPOSABLE_DATABASE_REQUIRED");
     }
     // An ordinary tenant-scoped app user may silently see only one company.
