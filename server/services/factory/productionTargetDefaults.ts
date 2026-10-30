@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { db } from "../../db";
 import { resultRows } from "../../lib/queryResult";
+import { loadActiveProductionWorkerLinks } from "./productionWorkerLinks";
 
 type ProductionTargetDefaultRow = {
   workerId: number | string;
@@ -35,6 +36,19 @@ export async function loadProductionTargetDefaults(
       category: row.category,
       targetBales: row.targetBales === null || row.targetBales === undefined ? null : Number(row.targetBales),
     });
+  }
+
+  // Older links may have a shared target but no per-worker target history.
+  // Retain that value only as a fallback for genuinely missing worker records;
+  // never replace an individual's own target (including an explicitly blank one).
+  const activeLinks = await loadActiveProductionWorkerLinks(companyId, asOf);
+  for (const link of activeLinks) {
+    if (link.sharedTargetBales == null) continue;
+    for (const member of link.members) {
+      if (!defaults.has(member.workerId)) {
+        defaults.set(member.workerId, { category: null, targetBales: link.sharedTargetBales });
+      }
+    }
   }
 
   return defaults;
