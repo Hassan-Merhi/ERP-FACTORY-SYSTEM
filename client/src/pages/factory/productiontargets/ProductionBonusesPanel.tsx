@@ -97,6 +97,10 @@ export function ProductionBonusesPanel({ initialDate }: { initialDate: string })
         new URLSearchParams({ start, end }).toString()
     ),
     enabled: rangeValid,
+    // Open production continues changing while scanning; refresh previews
+    // without changing any already approved, immutable bonus amounts.
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
 
   const rows = data?.rows ?? EMPTY_BONUS_ROWS;
@@ -311,10 +315,10 @@ export function ProductionBonusesPanel({ initialDate }: { initialDate: string })
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={9} className="py-8 text-center text-muted-foreground">Loading finalized production...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="py-8 text-center text-muted-foreground">Loading production bonuses...</TableCell></TableRow>
               ) : visible.length === 0 ? (
                 <TableRow><TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
-                  No finalized worker production in this range.
+                  No production bonus records for the selected dates.
                 </TableCell></TableRow>
               ) : visible.map((row) => {
                 const actionable = row.status === "pending" && row.extraBales > 0 && row.targetConfigured !== false;
