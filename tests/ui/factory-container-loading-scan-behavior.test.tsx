@@ -176,6 +176,7 @@ vi.mock("@/components/ui/dialog", () => ({
   DialogHeader: ({ children }: any) => <div>{children}</div>,
   DialogTitle: ({ children }: any) => <div>{children}</div>,
   DialogDescription: ({ children }: any) => <div>{children}</div>,
+  DialogTrigger: ({ children }: any) => <>{children}</>,
 }));
 vi.mock("@/components/ui/alert-dialog", () => ({
   AlertDialog: ({ children, open }: any) => (
