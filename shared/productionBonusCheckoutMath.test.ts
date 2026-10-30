@@ -1,5 +1,5 @@
 import {describe,expect,it} from "vitest";
-import {splitExtraBalesByCategory,workerCategoryCredits} from "./productionBonusCheckoutMath";
+import {allocateWeeklyExtraBales,splitExtraBalesByCategory,workerCategoryCredits} from "./productionBonusCheckoutMath";
 
 describe("Production Targets bonus category allocation",()=>{
   it("credits 14 linked bales exactly once, seven to each worker",()=>{
@@ -11,6 +11,20 @@ describe("Production Targets bonus category allocation",()=>{
     expect(first.reduce((n,r)=>n+r.count,0)).toBe(7);
     expect(second.reduce((n,r)=>n+r.count,0)).toBe(7);
     expect(first[0].count+second[0].count).toBe(14);
+  });
+  it("keeps unequal linked worker output exactly as recorded in Stock Entry",()=>{
+    const bales=[
+      ...Array.from({length:11},(_,i)=>({id:i+1,worker:10,category:i<8?"Bags":"Toys"})),
+      ...Array.from({length:3},(_,i)=>({id:i+12,worker:11,category:"Shoes"})),
+    ];
+    expect(workerCategoryCredits(bales,[10,11],10)).toEqual([
+      {category:"Bags",count:8},{category:"Toys",count:3},
+    ]);
+    expect(workerCategoryCredits(bales,[10,11],11)).toEqual([
+      {category:"Shoes",count:3},
+    ]);
+    expect(workerCategoryCredits(bales,[10,11],10).reduce((n,r)=>n+r.count,0)+
+      workerCategoryCredits(bales,[10,11],11).reduce((n,r)=>n+r.count,0)).toBe(14);
   });
   it("preserves category switches without counting the same linked bale twice",()=>{
     const bales=Array.from({length:10},(_,i)=>({
@@ -42,5 +56,63 @@ describe("Production Targets bonus category allocation",()=>{
     expect(()=>splitExtraBalesByCategory(7,[{category:"Bags",count:3}])).toThrow();
     expect(()=>splitExtraBalesByCategory(-1,[{category:"Bags",count:3}])).toThrow();
     expect(()=>workerCategoryCredits([{id:1,worker:2,category:null}],[2],2)).toThrow();
+  });
+});
+
+describe("weekly production bonus netting",()=>{
+  const day=(date:string,produced:number,target:number,workerId=7,frozenExtra?:number)=>({
+    date,workerId,produced,target,targetConfigured:true,frozenExtra,
+  });
+  it("never awards daily surplus when the week's total is below the target",()=>{
+    const result=allocateWeeklyExtraBales([
+      day("2026-10-19",10,10),day("2026-10-20",9,10),
+      day("2026-10-21",12,10),day("2026-10-22",10,10),day("2026-10-23",11,15),
+    ]);
+    expect(result.get("2026-10-21:7")).toBe(0);
+    expect([...result.values()].reduce((sum,value)=>sum+value,0)).toBe(0);
+  });
+  it("allocates only the net weekly surplus to daily positive contributions",()=>{
+    const result=allocateWeeklyExtraBales([
+      day("2026-10-19",12,10),day("2026-10-20",8,10),day("2026-10-21",15,10),
+    ]);
+    // 35 produced - 30 target = 5 payable, NOT the 7 positive daily differences.
+    expect(result.get("2026-10-21:7")).toBe(5);
+    expect(result.get("2026-10-19:7")).toBe(0);
+  });
+  it("keeps workers independent and ignores all Sunday targets and output",()=>{
+    const result=allocateWeeklyExtraBales([
+      day("2026-10-25",12,10),day("2026-10-26",7,10),
+      day("2026-10-25",7,10,8),day("2026-10-26",12,10,8),
+    ]);
+    expect(result.get("2026-10-25:7")).toBe(0);
+    expect(result.get("2026-10-26:7")).toBe(0);
+    expect(result.get("2026-10-25:8")).toBe(0);
+    expect(result.get("2026-10-26:8")).toBe(2);
+  });
+  it("cannot use a Sunday shortfall to reduce a Monday-Saturday surplus",()=>{
+    const result=allocateWeeklyExtraBales([
+      day("2026-10-26",12,10),day("2026-10-31",10,10),day("2026-11-01",0,40),
+    ]);
+    expect(result.get("2026-10-26:7")).toBe(2);
+    expect(result.get("2026-11-01:7")).toBe(0);
+  });
+  it("reserves previously posted entitlement to prevent paying it a second time",()=>{
+    const result=allocateWeeklyExtraBales([
+      day("2026-10-19",13,10,7,3),day("2026-10-20",12,10),
+    ]);
+    expect(result.get("2026-10-19:7")).toBe(0);
+    expect(result.get("2026-10-20:7")).toBe(2);
+  });
+  it("blocks new bonuses if a worker produced bales without a configured target",()=>{
+    const result=allocateWeeklyExtraBales([
+      day("2026-10-19",12,10),{...day("2026-10-20",5,0),targetConfigured:false},
+    ]);
+    expect(result.get("2026-10-19:7")).toBe(0);
+  });
+  it("supports fractional linked targets without rounding surplus up",()=>{
+    const result=allocateWeeklyExtraBales([
+      day("2026-10-19",8,7.5),day("2026-10-20",8,7.5),
+    ]);
+    expect([...result.values()].reduce((sum,value)=>sum+value,0)).toBe(1);
   });
 });

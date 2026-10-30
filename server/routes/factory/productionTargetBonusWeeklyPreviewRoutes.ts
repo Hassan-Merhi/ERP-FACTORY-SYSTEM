@@ -6,7 +6,7 @@ import { logger } from "../../lib/logger";
 import { resultRows } from "../../lib/queryResult";
 import { requireFactoryTabAccess } from "../../lib/factoryAccessControl";
 import { isBonusCategoryDate } from "@shared/productionTargetBonusCategoryRates";
-import { mondayOfProductionBonusWeek, type ProductionBonusMethod } from "@shared/productionTargetBonusWeeklyMethod";
+import { isProductionWorkday, mondayOfProductionBonusWeek, type ProductionBonusMethod } from "@shared/productionTargetBonusWeeklyMethod";
 import { calculateWeeklyFlatBonus, type WeeklyFlatDayEvidence } from "@shared/productionTargetBonusWeeklyCalculation";
 import { loadProductionBonusCategoryEvidence } from "../../services/factory/productionBonusCategoryEvidenceService";
 import { weeklyBonusReviewSnapshot, weeklyBonusReviewToken } from "../../services/factory/weeklyBonusReviewSnapshot";
@@ -97,12 +97,14 @@ export async function loadWeeklyFlatBonusProposal(
             FROM factory_target_bonus_category_bale_snapshots
             WHERE company_id = ${companyId}
               AND production_date BETWEEN ${weekStart}::date AND ${weekEnd}::date
+              AND EXTRACT(ISODOW FROM production_date) <> 7
             GROUP BY bale_id HAVING COUNT(DISTINCT production_date) > 1
             LIMIT 1
           `),
         ]);
         const method = (resultRows(methodResult) as MethodRow[])[0];
-        const activity = resultRows(activityResult) as ActivityRow[];
+        const activity = (resultRows(activityResult) as ActivityRow[])
+          .filter(day => isProductionWorkday(day.date));
         const dayEvidence = await Promise.all(activity.map(async (day): Promise<WeeklyFlatDayEvidence> => {
           const evidence = await loadProductionBonusCategoryEvidence(executor, companyId, day.date);
           return {

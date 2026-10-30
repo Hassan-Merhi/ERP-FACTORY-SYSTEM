@@ -26,6 +26,38 @@ export async function loadLiveTargetBonusRows(
       SELECT day::date AS work_date
       FROM generate_series(${start}::date, ${end}::date, '1 day'::interval) days(day)
       WHERE day::date <= (now() AT TIME ZONE 'Asia/Beirut')::date
+    ),
+    -- Count physical bales ONCE by work date and person. The old correlated
+    -- subquery scanned factory_bales for every worker/day (thousands of times).
+    -- Keeping the two date paths separate also preserves carry-over after
+    -- yesterday's End Production timestamp without duplicating today's bales.
+    bale_work_days AS MATERIALIZED (
+      SELECT b.stock_entry_date AS work_date, b.finalized_by AS worker_id,
+        COUNT(*)::integer AS bales
+      FROM factory_bales b
+      WHERE b.company_id = ${companyId}
+        AND b.finalized_by IS NOT NULL
+        AND b.stock_entry_date BETWEEN ${start}::date AND ${end}::date
+        AND b.status IN (${sql.join(BONUS_CATEGORY_COUNTED_BALE_STATUSES.map(status=>sql`${status}`),sql`, `)})
+      GROUP BY b.stock_entry_date, b.finalized_by
+      UNION ALL
+      SELECT (b.stock_entry_date + 1) AS work_date, b.finalized_by AS worker_id,
+        COUNT(*)::integer AS bales
+      FROM factory_bales b
+      JOIN factory_staff_tracking_period_closures c
+        ON c.company_id = b.company_id
+       AND c.page_type = 'production' AND c.period_type = 'daily'
+       AND c.period_start = b.stock_entry_date AND c.period_end = b.stock_entry_date
+      WHERE b.company_id = ${companyId}
+        AND b.finalized_by IS NOT NULL
+        AND b.stock_entry_date BETWEEN (${start}::date - 1) AND (${end}::date - 1)
+        AND b.status IN (${sql.join(BONUS_CATEGORY_COUNTED_BALE_STATUSES.map(status=>sql`${status}`),sql`, `)})
+        AND COALESCE(b.finalized_at,b.created_at) > c.ended_at
+      GROUP BY b.stock_entry_date, b.finalized_by
+    ),
+    credited_bales AS MATERIALIZED (
+      SELECT work_date, worker_id, SUM(bales)::integer AS bales
+      FROM bale_work_days GROUP BY work_date, worker_id
     )
     SELECT d.work_date::text AS date, w.id AS "workerId",
       w.full_name AS "workerName",
@@ -47,14 +79,13 @@ export async function loadLiveTargetBonusRows(
       (resolved.target IS NOT NULL OR review.id IS NOT NULL) AS "targetConfigured"
     FROM work_days d
     JOIN factory_workers w ON w.company_id = ${companyId}
-      AND (w.date_joined IS NULL OR w.date_joined <= d.work_date)
     LEFT JOIN factory_staff_tracking_entries saved
       ON saved.company_id=w.company_id AND saved.person_id=w.id
       AND saved.person_type='worker' AND saved.page_type='production'
       AND saved.period_type='daily' AND saved.period_start=d.work_date
       AND saved.period_end=d.work_date
     LEFT JOIN LATERAL (
-      SELECT x.target_bales, x.category FROM factory_worker_production_target_defaults x
+      SELECT TRUE AS found, x.target_bales, x.category FROM factory_worker_production_target_defaults x
       WHERE x.company_id=w.company_id AND x.worker_id=w.id
         AND x.effective_from<=d.work_date
       ORDER BY x.effective_from DESC,x.id DESC LIMIT 1
@@ -73,59 +104,21 @@ export async function loadLiveTargetBonusRows(
         AND x.effective_from<=d.work_date
       ORDER BY x.effective_from DESC,x.id DESC LIMIT 1
     ) link_default ON TRUE
-    LEFT JOIN LATERAL (
-      SELECT TRUE AS found,e.target_bales
-      FROM factory_worker_production_link_members lm
-      JOIN factory_staff_tracking_entries e
-        ON e.company_id=lm.company_id AND e.person_id=lm.worker_id
-        AND e.person_type='worker' AND e.page_type='production'
-        AND e.period_type='daily' AND e.period_start=d.work_date
-        AND e.period_end=d.work_date AND e.target_overridden=TRUE
-      WHERE lm.company_id=w.company_id AND lm.link_id=link.id
-      ORDER BY e.person_id LIMIT 1
-    ) link_override ON TRUE
+    -- A linked table never replaces an individual's saved/default target.
     CROSS JOIN LATERAL (
       SELECT CASE
-        WHEN link_override.found THEN link_override.target_bales
         WHEN saved.target_overridden THEN saved.target_bales
+        WHEN defaults.found THEN defaults.target_bales
         WHEN link.id IS NOT NULL THEN link_default.target_bales
-        ELSE COALESCE(defaults.target_bales,saved.target_bales)
+        ELSE saved.target_bales
       END AS target
     ) resolved
-    LEFT JOIN LATERAL (
-      SELECT COUNT(*)::integer AS member_count,
-        COUNT(*) FILTER (WHERE lm.worker_id<=w.id)::integer AS member_order
-      FROM factory_worker_production_link_members lm
-      WHERE lm.company_id=w.company_id AND lm.link_id=link.id
-    ) members ON TRUE
-    LEFT JOIN LATERAL (
-      SELECT c.ended_at
-      FROM factory_staff_tracking_period_closures c
-      WHERE c.company_id=w.company_id AND c.page_type='production'
-        AND c.period_type='daily'
-        AND c.period_start=d.work_date - 1 AND c.period_end=d.work_date - 1
-      LIMIT 1
-    ) previous_close ON TRUE
-    LEFT JOIN LATERAL (
-      SELECT COUNT(*)::integer AS bales FROM factory_bales b
-      WHERE b.company_id=w.company_id
-        AND (b.stock_entry_date=d.work_date
-          OR (previous_close.ended_at IS NOT NULL
-            AND b.stock_entry_date=d.work_date - 1
-            AND COALESCE(b.finalized_at,b.created_at)>previous_close.ended_at))
-        AND b.status IN (${sql.join(BONUS_CATEGORY_COUNTED_BALE_STATUSES.map(status=>sql`${status}`),sql`, `)})
-        AND ((link.id IS NULL AND b.finalized_by=w.id)
-          OR (link.id IS NOT NULL AND EXISTS (
-            SELECT 1 FROM factory_worker_production_link_members lm
-            WHERE lm.company_id=w.company_id AND lm.link_id=link.id
-              AND lm.worker_id=b.finalized_by)))
-    ) produced ON TRUE
+    -- Link membership only affects table/roster metadata, NEVER bonus credit.
+    -- Stock Entry already records the worker who finalized each physical bale.
+    LEFT JOIN credited_bales single_bales
+      ON single_bales.work_date=d.work_date AND single_bales.worker_id=w.id
     CROSS JOIN LATERAL (
-      SELECT CASE WHEN link.id IS NULL THEN produced.bales
-        ELSE (FLOOR(produced.bales::numeric/GREATEST(members.member_count,1))
-          + CASE WHEN members.member_order<=
-              MOD(produced.bales,GREATEST(members.member_count,1)) THEN 1 ELSE 0 END)::integer
-      END AS credited
+      SELECT COALESCE(single_bales.bales,0)::integer AS credited
     ) credit
     LEFT JOIN LATERAL (
       SELECT CASE WHEN r.enabled THEN r.rate_per_extra_bale ELSE NULL END AS rate_per_bale
@@ -138,15 +131,27 @@ export async function loadLiveTargetBonusRows(
     LEFT JOIN factory_target_bonus_reviews review
       ON review.company_id=w.company_id AND review.production_date=d.work_date
       AND review.worker_id=w.id
-    WHERE NOT EXISTS (
+    WHERE EXISTS (
+      -- Production Targets only lists workers assigned to a saved Production
+      -- Planner group; other Stock Entry workers are not bonus candidates.
+      SELECT 1 FROM factory_worker_categories planner
+      WHERE planner.company_id=w.company_id
+        AND (
+          planner.worker_ids @> jsonb_build_array(w.id)
+          OR planner.worker_ids @> jsonb_build_array(w.id::text)
+        )
+    )
+      AND NOT EXISTS (
       SELECT 1 FROM factory_staff_tracking_period_closures c
       WHERE c.company_id=w.company_id AND c.page_type='production'
         AND c.period_type='daily' AND c.period_start=d.work_date
         AND c.period_end=d.work_date
     )
-      AND (w.active=TRUE OR saved.person_id IS NOT NULL)
-      AND (saved.person_id IS NOT NULL OR defaults.target_bales IS NOT NULL
-        OR link.id IS NOT NULL OR credit.credited>0 OR review.id IS NOT NULL)
+      -- Mirror the Production Targets daily roster: all current planner
+      -- workers are listed, even when their target and made counts are 0.
+      -- Saved day records and linked workers remain visible if inactive.
+      AND (saved.person_id IS NOT NULL OR link.id IS NOT NULL OR
+           (w.active=TRUE AND (w.date_joined IS NULL OR w.date_joined<=d.work_date)))
     ORDER BY d.work_date DESC,w.full_name,w.id
   `);
   return (resultRows(result) as LiveRow[]).map(row=>({

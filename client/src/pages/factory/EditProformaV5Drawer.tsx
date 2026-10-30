@@ -375,22 +375,24 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
 
   const visibleTotalBalance = visibleRows.reduce((s, r) => s + r.freeToPromise, 0);
 
-  const filledLines = articleRows.filter((r) => {
+  // Display-only totals must match the currently visible stock-allocation rows.
+  // Saving still includes quantities for every article, even if a filter hides it.
+  const filledLines = visibleRows.filter((r) => {
     const v = quantities[r.articleCode];
     return v && parseInt(v) > 0;
   }).length;
-  const totalQty = articleRows.reduce((s, r) => {
+  const totalQty = visibleRows.reduce((s, r) => {
     const v = parseInt(quantities[r.articleCode] || "0");
     return s + (isNaN(v) || v < 0 ? 0 : v);
   }, 0);
-  const totalKg = articleRows.reduce((s, r) => {
+  const totalKg = visibleRows.reduce((s, r) => {
     const qty = parseInt(quantities[r.articleCode] || "0");
     if (isNaN(qty) || qty <= 0) return s;
     const p = map.get(r.articleCode);
     const w = parseFloat(p?.weightPerBaleKg || "0");
     return s + qty * w;
   }, 0);
-  const totalValue = articleRows.reduce((s, r) => {
+  const totalValue = visibleRows.reduce((s, r) => {
     const qty = parseInt(quantities[r.articleCode] || "0");
     if (isNaN(qty) || qty <= 0) return s;
     const mode = pricingModes[r.articleCode] ?? "per_bale";
@@ -403,7 +405,7 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
     const price = parseFloat(prices[r.articleCode] || "0");
     return s + qty * price;
   }, 0);
-  const warningCount = articleRows.filter((r) => {
+  const warningCount = visibleRows.filter((r) => {
     const qty = parseInt(quantities[r.articleCode] || "0");
     return !isNaN(qty) && qty > 0 && r.freeToPromise < 0;
   }).length;
@@ -764,7 +766,7 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
                 </tbody>
                 <tfoot>
                   <tr className="sticky bottom-0 z-20 border-t-2 bg-slate-100 text-xs font-semibold dark:bg-slate-800">
-                    <td className="sticky left-0 z-10 border-r bg-slate-100 px-4 py-3 dark:bg-slate-800"><span className="text-foreground">Totals</span><span className="ml-1.5 font-normal text-muted-foreground">({visibleRows.length} products)</span></td>
+                    <td className="sticky left-0 z-10 border-r bg-slate-100 px-4 py-3 dark:bg-slate-800"><span className="text-foreground">Totals</span><span className="ml-1.5 font-normal text-muted-foreground">({visibleRows.length} visible products)</span></td>
                     <td className="border-r px-3 py-3 text-xs text-muted-foreground">Total</td>
                     <td
                       className={cn(
@@ -807,10 +809,10 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
               <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
                 <span>
                   <span className="font-semibold text-foreground">{filledLines}</span> line
-                  {filledLines !== 1 ? "s" : ""}
+                  {filledLines !== 1 ? "s" : ""} visible
                 </span>
                 <span>
-                  <span className="font-semibold text-foreground">{totalQty}</span> bales/container
+                  <span className="font-semibold text-foreground">{totalQty}</span> visible bales
                 </span>
                 {totalKg > 0 && (
                   <span>

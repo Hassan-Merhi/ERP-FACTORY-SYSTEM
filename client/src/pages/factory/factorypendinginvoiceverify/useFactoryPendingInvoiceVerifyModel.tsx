@@ -133,6 +133,25 @@ export function useFactoryPendingInvoiceVerifyModel() {
     staleTime: 60_000,
   });
 
+  // Read the actual reusable master separately: the verification summary
+  // intentionally includes container-only supplements, but "View Proforma"
+  // must never present those supplements as edits to the master.
+  const { data: viewedMasterProforma } = useQuery<{
+    name: string;
+    lines: Array<{ articleCode: string; productName: string; quantity: number; pricePerBale: string }>;
+  }>({
+    queryKey: ["/api/factory/customer-proformas", orderDetail?.proformaIdUsed, "master-view"],
+    queryFn: async () => {
+      const response = await fetch(`/api/factory/customer-proformas/${orderDetail!.proformaIdUsed}`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Could not load the original proforma");
+      return response.json();
+    },
+    enabled: showViewProformaDialog && !!orderDetail?.proformaIdUsed,
+    staleTime: 60_000,
+  });
+
   useEffect(() => {
     if (!orderDetail) return;
 
@@ -636,6 +655,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
     setShowProformaDialog,
     showViewProformaDialog,
     setShowViewProformaDialog,
+    viewedMasterProforma,
     selectedProformaId,
     setSelectedProformaId,
     statusFilter,

@@ -46,9 +46,9 @@ export interface CategoryEvidenceResult {
   readyForTargetAllocation: boolean;
 }
 
-/** Every physical bale is counted exactly once. Linked-team category bale
- * remainders rotate across categories to preserve the worker's whole-day
- * share; no worker can receive a category multiple times from one bale.
+/** Every physical bale is counted exactly once for its recorded finalizer.
+ * Linked workers keep their own Stock Entry credits and categories; linking
+ * their table must not redistribute a bale to a different employee.
  */
 export function buildCategoryEvidence(
   workers: CategoryEvidenceWorker[],
@@ -105,36 +105,19 @@ export function buildCategoryEvidence(
         prev.lastFinalizedAt = timestamp;
     }
   };
-  const byGroup = new Map<number, typeof validBales>();
+  const categorySourceCounts = new Map<string, number>();
   for (const bale of validBales) {
-    const groupId = groups.get(bale.workerId!);
-    if (groupId == null) { give(bale.workerId!, bale, 1); continue; }
-    const existing = byGroup.get(groupId) ?? [];
-    existing.push(bale); byGroup.set(groupId, existing);
+    const key = bale.workerId + ":" + bale.categoryKey;
+    categorySourceCounts.set(key, (categorySourceCounts.get(key) ?? 0) + 1);
+  }
+  for (const bale of validBales) {
+    give(bale.workerId!, bale, categorySourceCounts.get(bale.workerId + ":" + bale.categoryKey)!);
   }
   for (const link of links) {
-    const source = byGroup.get(link.id) ?? [];
-    const members = [...new Set(link.workerIds)].sort((a,b) => a-b);
-    const present = members.filter(id => byWorker.get(id)?.status !== "Absent" && byWorker.has(id));
-    if (!present.length && source.length) { global.add("NO_PRESENT_LINK_MEMBER"); continue; }
-    if (!present.length) continue;
-    const byCat = new Map<string, typeof validBales>();
-    for (const bale of source) {
-      const list = byCat.get(bale.categoryKey) ?? [];
-      list.push(bale); byCat.set(bale.categoryKey,list);
-    }
-    // Rotating remainder avoids awarding every odd-category bale to the first worker.
-    let cursor = 0;
-    for (const [categoryKey, rows] of [...byCat].sort(([a],[b]) => a.localeCompare(b))) {
-      rows.sort((a,b) => a.baleId-b.baleId);
-      const n = rows.length;
-      for (let i=0;i<n;i++) {
-        const recipient = present[(cursor+i)%present.length];
-        give(recipient, rows[i], n);
-      }
-      cursor = (cursor+n)%present.length;
-      void categoryKey;
-    }
+    const ids = new Set(link.workerIds);
+    const present = [...ids].some(id => byWorker.has(id) && byWorker.get(id)?.status !== "Absent");
+    if (!present && validBales.some(bale => ids.has(bale.workerId!)))
+      global.add("NO_PRESENT_LINK_MEMBER");
   }
   const outputs: CategoryWorkerEvidence[] = workers.map(w => {
     const own = credit.get(w.workerId);

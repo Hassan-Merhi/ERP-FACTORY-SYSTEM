@@ -17,25 +17,28 @@ import { resultRows } from "../../lib/queryResult";
 import { logger } from "../../lib/logger";
 import { errorStatus, translateDatabaseError } from "../../lib/httpHandlers";
 import { loadTargetBonusRows, targetBonusValidRange } from "../../services/factory/targetBonusReview";
+import { loadProductionTargetsRosterIds } from "../../services/factory/productionTargetsRoster";
 import { postTargetBonusPaymentsInTransaction } from "../../services/factory/targetBonusPaymentService";
 import { parseTargetBonusPaymentCommand } from "../../services/factory/targetBonusPaymentPolicy";
 import { normalizeBonusCategory } from "@shared/productionTargetBonusCategoryRates";
-import { splitExtraBalesByCategory, workerCategoryCredits } from "@shared/productionBonusCheckoutMath";
+import { allocateWeeklyExtraBales, splitExtraBalesByCategory, workerCategoryCredits } from "@shared/productionBonusCheckoutMath";
 import {
   latestUnpaidWorkerRate,
   rateChangeMayRepriceReview,
   type LatestBonusRateVersion,
 } from "@shared/productionBonusUnpaidRatePolicy";
-import { mondayOfProductionBonusWeek } from "@shared/productionTargetBonusWeeklyMethod";
+import { isProductionWorkday, mondayOfProductionBonusWeek } from "@shared/productionTargetBonusWeeklyMethod";
 
 const guard = requireFactoryTabAccess("factory/stock-entry", "hide_tab_stockentry_production_targets");
 type Method = "standard" | "category";
 type BonusLine = { category: string; produced: number; extra: number; rate: string; bonus: string };
 type Offer = {
-  date: string; workerId: number; workerName: string; target: number; produced: number;
+  date: string; workerId: number; workerName: string; category: string; target: number; produced: number;
   extra: number; method: Method; lines: BonusLine[]; amount: string; token: string;
-  status: "pending" | "approved" | "paid" | "reversed" | "no_bonus" | "needs_setup" | "blocked" | "rejected";
+  status: "pending" | "approved" | "paid" | "reversed" | "no_bonus" | "needs_setup" | "blocked" | "rejected" | "weekly";
   issue: string | null;
+  /** Read-only weekly amount. Daily payment checkout never uses this field. */
+  weeklyBonus?: { weekStart: string; amount: string; state: "projected" | "approved" };
 };
 type RecordRow = Record<string, unknown>;
 const rows = (x: unknown): RecordRow[] => resultRows(x) as RecordRow[];
@@ -104,14 +107,24 @@ async function creditedCategories(
 
 async function calculateOffers(
   tx: DatabaseOrTransaction, companyId: number, from: string, to: string, method: Method,
+  rosterDate: string = to,
 ): Promise<Offer[]> {
-  // One range read for closed and open days; each worker/day remains an individual
-  // frozen accounting entitlement even when displayed as a range total.
-  const [daily, claimsResult, methodsResult, weeklyReviewsResult, categoryReviewsResult, standardRatesResult] = await Promise.all([
-    loadTargetBonusRows(tx, companyId, from, to),
+  // Always fetch COMPLETE Mon-Sun weeks, even when the selected range is
+  // shorter. This includes live production with no End Production requirement.
+  // Show the exact worker roster from Production Targets on the selected
+  // date, rather than everyone seen during the historical checkout range.
+  const rosterWorkerIds=await loadProductionTargetsRosterIds(tx,companyId,rosterDate);
+  const weekFrom=mondayOfProductionBonusWeek(from)!;
+  const endMonday=mondayOfProductionBonusWeek(to)!;
+  const sunday=new Date(endMonday+"T12:00:00.000Z");
+  sunday.setUTCDate(sunday.getUTCDate()+6);
+  const weekTo=sunday.toISOString().slice(0,10);
+  const [dailyRows, claimsResult, methodsResult, weeklyReviewsResult, categoryReviewsResult, standardRatesResult] = await Promise.all([
+    loadTargetBonusRows(tx, companyId, weekFrom, weekTo),
     tx.execute(sql`
       SELECT rv.production_date::text AS date, rv.worker_id AS "workerId",
         rv.status, rv.bonus_amount::text AS amount,
+        rv.extra_bales::text AS "extraBales",
         rv.rate_per_bale::text AS "ratePerBale",
         p.status AS "paymentStatus", details.method AS "checkoutMethod",
         details.breakdown AS breakdown, details.calculation_hash AS "calculationHash"
@@ -121,25 +134,26 @@ async function calculateOffers(
       LEFT JOIN factory_target_bonus_checkout_details details
         ON details.company_id=rv.company_id AND details.review_id=rv.id
       WHERE rv.company_id=${companyId}
-        AND rv.production_date BETWEEN ${from}::date AND ${to}::date
+        AND rv.production_date BETWEEN ${weekFrom}::date AND ${weekTo}::date
     `),
     tx.execute(sql`
-      SELECT effective_week::text AS week, method
+      SELECT effective_week::text AS week, method, flat_bonus_usd::text AS "flatBonusUsd"
       FROM factory_production_target_bonus_weekly_methods
-      WHERE company_id=${companyId} AND effective_week<=${to}::date
+      WHERE company_id=${companyId} AND effective_week<=${weekTo}::date
       ORDER BY effective_week DESC,id DESC
     `),
     tx.execute(sql`
-      SELECT worker_id AS id, week_start::text AS start, week_end::text AS "end"
+      SELECT worker_id AS id, week_start::text AS start, week_end::text AS "end",
+        status, bonus_amount::text AS amount
       FROM factory_target_bonus_weekly_reviews
       WHERE company_id=${companyId}
-        AND week_start<=${to}::date AND week_end>=${from}::date
+        AND week_start<=${weekTo}::date AND week_end>=${weekFrom}::date
     `),
     tx.execute(sql`
       SELECT worker_id AS id, production_date::text AS date
       FROM factory_target_bonus_category_reviews
       WHERE company_id=${companyId}
-        AND production_date BETWEEN ${from}::date AND ${to}::date
+        AND production_date BETWEEN ${weekFrom}::date AND ${weekTo}::date
     `),
     // The most recently SAVED rate applies to all unpaid worker-days, even
     // older weeks. Do not filter by production_date: that was the original bug.
@@ -152,12 +166,56 @@ async function calculateOffers(
       ORDER BY scope,worker_id,id DESC
     `),
   ]);
+  // Never count Sunday production or targets in new bonus previews and payments.
+  // Previously posted financial history is left untouched in its own ledger.
+  const daily = dailyRows.filter(day => isProductionWorkday(day.date));
   const claimsByDay = new Map(rows(claimsResult).map(row => [String(row.date).slice(0,10)+":"+Number(row.workerId),row]));
   const weeklyMethods=rows(methodsResult);
   const weeklyReviews=rows(weeklyReviewsResult);
   const categoryClaims=new Set(rows(categoryReviewsResult).map(row=>String(row.date).slice(0,10)+":"+Number(row.id)));
-  // Each row is selected with the scope/workerId/enabled/rate aliases above.
+// Each row is selected with the scope/workerId/enabled/rate aliases above.
   const activeStandardRates=rows(standardRatesResult) as (RecordRow & LatestBonusRateVersion)[];
+  const weeklyExtras=allocateWeeklyExtraBales(daily.map(day=>{
+    const claim=claimsByDay.get(day.date+":"+day.workerId);
+    const frozen=claim?.paymentStatus==="POSTED" || claim?.paymentStatus==="REVERSED";
+    return {date:day.date,workerId:day.workerId,target:day.targetBales,
+      produced:day.producedBales,targetConfigured:day.targetConfigured===true,
+      frozenExtra:frozen?Number(claim?.extraBales??0):undefined};
+  }));
+  // A worker earns at most one flat fee per complete Monday-Sunday total,
+  // regardless of the number of surplus bales or production days displayed.
+  // The in-progress figure below is a read-only projection; actual approval
+  // remains exclusively in the frozen weekly review and payroll workflows.
+  type WeeklyDisplay = { weekStart: string; amount: string; state: "projected" | "approved" };
+  const weeklyDisplays = new Map<string, WeeklyDisplay>();
+  const summaries = new Map<string, { extra: number; dailyClaim: boolean }>();
+  for (const row of daily) {
+    const monday = mondayOfProductionBonusWeek(row.date)!;
+    const key = monday + ":" + row.workerId;
+    const previous = summaries.get(key) ?? { extra: 0, dailyClaim: false };
+    previous.extra += weeklyExtras.get(row.date + ":" + row.workerId) ?? 0;
+    previous.dailyClaim ||= claimsByDay.has(row.date + ":" + row.workerId) ||
+      categoryClaims.has(row.date + ":" + row.workerId);
+    summaries.set(key, previous);
+  }
+  for (const [key, summary] of summaries) {
+    const weekStart = key.slice(0, 10);
+    const workerId = Number(key.slice(11));
+    const review = weeklyReviews.find(row => Number(row.id) === workerId &&
+      String(row.start).slice(0, 10) === weekStart);
+    if (review) {
+      // A rejected or already reviewed week must never be recalculated.
+      if (review.status === "approved" && Number(review.amount) > 0)
+        weeklyDisplays.set(key, { weekStart, amount: usd(String(review.amount)), state: "approved" });
+      continue;
+    }
+    const version = weeklyMethods.find(row => String(row.week).slice(0, 10) <= weekStart);
+    if (version?.method !== "weekly_flat" || summary.extra <= 0 || summary.dailyClaim) continue;
+    const fee = Number(version.flatBonusUsd);
+    if (!Number.isFinite(fee) || fee <= 0) continue;
+    weeklyDisplays.set(key, { weekStart, amount: usd(String(version.flatBonusUsd)), state: "projected" });
+  }
+  const shownWeekly = new Set<string>();
   const rateForWorker=(workerId:number)=>{
     const rate=latestUnpaidWorkerRate(activeStandardRates,workerId);
     return rate===null?null:new Decimal(rate);
@@ -177,16 +235,22 @@ async function calculateOffers(
     return rate;
   };
   const result: Offer[] = [];
-  for(const item of daily) {
-    const date=item.date;
-    const key=date+":"+item.workerId;
+  for(const source of daily) {
+    if(source.date<from || source.date>to ||
+       !rosterWorkerIds.has(source.workerId))continue;
+    const date=source.date;
+    const key=date+":"+source.workerId;
     const claim=claimsByDay.get(key);
+    const frozen=claim?.paymentStatus==="POSTED" || claim?.paymentStatus==="REVERSED";
+    const item={...source,extraBales:frozen
+      ?Number(claim?.extraBales??source.extraBales) :weeklyExtras.get(key)??0};
     const weekStart=mondayOfProductionBonusWeek(date)!;
     const weeklyFlat=weeklyMethods.find(row=>String(row.week).slice(0,10)<=weekStart)?.method==="weekly_flat";
     const weeklyClaim=weeklyReviews.some(row=>Number(row.id)===item.workerId &&
       String(row.start).slice(0,10)<=date && String(row.end).slice(0,10)>=date);
     const lines: BonusLine[] = [];
     let issue: string | null = null;
+    let handledByWeekly = false;
     let amount = "0.00";
     if (claim) {
       if (claim.checkoutMethod && claim.checkoutMethod !== method) issue="Already reviewed using another bonus method";
@@ -196,7 +260,16 @@ async function calculateOffers(
         if(line && typeof line==="object") lines.push(line as unknown as BonusLine);
       }
       amount=usd(String(claim.amount));
-      if (!rateChangeMayRepriceReview(claim.status,claim.paymentStatus)) {
+      const canReprice=rateChangeMayRepriceReview(claim.status,claim.paymentStatus);
+      if(canReprice){
+        if(method==="standard")lines.length=0;
+        if(item.extraBales<=0){
+          issue="Weekly target not exceeded";
+          amount="0.00";
+          lines.length=0;
+        }
+      }
+      if (!canReprice) {
         // Once a payment claim exists, neither reversal nor later edits can
         // rewrite its originally reviewed amount and category breakdown.
         if(method==="standard" && lines.length===0 && item.extraBales>0)
@@ -212,24 +285,43 @@ async function calculateOffers(
         }
       } else if(!issue && method==="category") {
         if(!lines.length)issue="Missing approved category breakdown; reconcile before paying";
+        else if(!Number.isSafeInteger(item.extraBales))
+          issue="Category bonus needs a whole number of weekly extra bales";
         else {
-          let total=new Decimal(0);
-          const priced: BonusLine[]=[];
-          for(const line of lines) {
-            if(!Number.isSafeInteger(line.extra)||line.extra<0){issue="Invalid approved category breakdown";break;}
-            if(line.extra===0){priced.push({...line,rate:"0.0000",bonus:"0.00"});continue;}
-            const category=normalizeBonusCategory(line.category);
-            const rate=category?await rateForCategory(category.key):null;
-            if(!rate){issue="Set a positive category rate for "+line.category;break;}
-            const subtotal=usd(rate.times(line.extra));
-            total=total.plus(subtotal);
-            priced.push({...line,rate:rate.toFixed(4),bonus:subtotal});
+          // Previously approved but unpaid category records are repriced using
+          // this week's NET surplus, never the obsolete individual-day extras.
+          const counts=lines.map(line=>({category:line.category,count:line.produced}));
+          if(counts.some(row=>!Number.isSafeInteger(row.count)||row.count<0) ||
+             counts.reduce((sum,row)=>sum+row.count,0)!==item.producedBales)
+            issue="Invalid approved category breakdown; reconcile stock entry";
+          else {
+            const portions=splitExtraBalesByCategory(item.extraBales,counts);
+            let total=new Decimal(0);
+            const priced: BonusLine[]=[];
+            for(const line of portions) {
+              if(line.extra===0){
+                priced.push({category:line.category,produced:line.count,extra:0,rate:"0.0000",bonus:"0.00"});
+                continue;
+              }
+              const category=normalizeBonusCategory(line.category);
+              const rate=category?await rateForCategory(category.key):null;
+              if(!rate){issue="Set a positive category rate for "+line.category;break;}
+              const subtotal=usd(rate.times(line.extra));
+              total=total.plus(subtotal);
+              priced.push({category:line.category,produced:line.count,extra:line.extra,
+                rate:rate.toFixed(4),bonus:subtotal});
+            }
+            if(!issue){amount=usd(total);lines.splice(0,lines.length,...priced);}
           }
-          if(!issue){amount=usd(total);lines.splice(0,lines.length,...priced);}
         }
       }
     } else if (weeklyFlat || weeklyClaim) {
-      issue="A weekly flat-bonus method/review already covers this worker";
+      // Weekly-flat is a separate payment workflow, not missing production
+      // evidence. Keep this day non-payable without presenting a false warning.
+      handledByWeekly=true;
+      issue=weeklyClaim
+        ? "Already covered by a weekly bonus review"
+        : "This week uses the weekly flat bonus; pay through Weekly Bonus Payroll";
     } else if (categoryClaims.has(key)) {
       issue="An older category-bonus review already exists; reconcile before paying";
     } else if (!item.targetConfigured || item.targetBales <= 0 ||
@@ -237,9 +329,9 @@ async function calculateOffers(
       // Zero production with no target is not a payable claim and not a
       // configuration error needing a warning for that day.
       issue=item.producedBales>0
-        ? "Save a positive Production Targets target first" : "Target not exceeded";
+        ? "Save a positive Production Targets target first" : "Weekly target not exceeded";
     } else if (item.extraBales <= 0) {
-      issue="Target not exceeded";
+      issue="Weekly target not exceeded";
     } else if (method==="standard") {
       const rate=rateForWorker(item.workerId);
       if(!rate)issue="Set the worker/company per-bale rate first";
@@ -287,7 +379,8 @@ async function calculateOffers(
     const status: Offer["status"] = claim?.paymentStatus === "POSTED" ? "paid" :
       claim?.paymentStatus === "REVERSED" ? "reversed" :
       claim?.status === "rejected" ? "rejected" :
-      issue === "Target not exceeded" || (item.targetBales <= 0 && item.producedBales === 0 && !claim)
+      handledByWeekly ? "weekly" :
+      issue === "Weekly target not exceeded" || (item.targetBales <= 0 && item.producedBales === 0 && !claim)
         ? "no_bonus" :
       issue?.startsWith("Save a positive") || issue?.startsWith("Set the worker") ||
       issue?.startsWith("Set a positive category") ? "needs_setup" :
@@ -296,7 +389,12 @@ async function calculateOffers(
     const offerCore={date,workerId:item.workerId,workerName:item.workerName,
       target:item.targetBales,produced:item.producedBales,extra:item.extraBales,
       method,lines,amount};
-    result.push({...offerCore,
+    // The sheet renders the fee once per worker/week, without adding it to any daily checkout.
+    const weekKey = weekStart + ":" + item.workerId;
+    const weeklyBonus = (weeklyFlat || weeklyClaim) && !shownWeekly.has(weekKey)
+      ? weeklyDisplays.get(weekKey) : undefined;
+    if (weeklyBonus) shownWeekly.add(weekKey);
+    result.push({...offerCore, category:item.category, weeklyBonus,
       token:claim?.paymentStatus && typeof claim.calculationHash==="string"
         ? claim.calculationHash : hash(offerCore),
       status,issue});
@@ -336,11 +434,16 @@ export function registerProductionBonusCheckoutRoutes(app:Express):void {
           fail(400,"Refresh the bonus calculation before paying");
         const firstDate=command.selections[0].date;
         const lastDate=command.selections[command.selections.length-1].date;
-        if(!targetBonusValidRange(firstDate,lastDate))
+        const rosterDate=req.body?.rosterDate??lastDate;
+        // The exact as-of date used for the preview must also be used during
+        // the locked payment recheck, even if only an earlier day is selected.
+        if(!targetBonusValidRange(firstDate,lastDate) ||
+           !targetBonusValidRange(firstDate,rosterDate) ||
+           rosterDate<lastDate)
           fail(400,"Select production dates within a 32-day window");
         const result=await db.transaction(async tx=>{
           await tx.execute(sql`SELECT pg_advisory_xact_lock(84023,${id})`);
-          const quotes=await calculateOffers(tx,id,firstDate,lastDate,method);
+          const quotes=await calculateOffers(tx,id,firstDate,lastDate,method,rosterDate);
           const quotedByDay=new Map(quotes.map(quote=>[quote.date+":"+quote.workerId,quote]));
           for(const selection of command.selections) {
             const date=selection.date;
@@ -375,6 +478,7 @@ export function registerProductionBonusCheckoutRoutes(app:Express):void {
               // amount to an append-only audit table before changing it.
               const original=rows(await tx.execute(sql`
                 SELECT rv.id,rv.bonus_amount::text AS amount,
+                  rv.extra_bales::text AS "extraBales",
                   rv.rate_per_bale::text AS rate,
                   details.breakdown AS breakdown
                 FROM factory_target_bonus_reviews rv
@@ -396,7 +500,7 @@ export function registerProductionBonusCheckoutRoutes(app:Express):void {
               const repricedRate=quote.extra>0 ?
                 new Decimal(quote.amount).div(quote.extra)
                   .toDecimalPlaces(4,Decimal.ROUND_HALF_UP).toFixed(4):"0.0000";
-              if(oldAmount!==quote.amount ||
+              if(oldAmount!==quote.amount || Number(original.extraBales)!==quote.extra ||
                  (oldLinesJson!==null && oldLinesJson!==newLines)) {
                 await tx.execute(sql`
                   INSERT INTO factory_target_bonus_unpaid_rate_revisions
@@ -410,7 +514,9 @@ export function registerProductionBonusCheckoutRoutes(app:Express):void {
                 `);
                 await tx.execute(sql`
                   UPDATE factory_target_bonus_reviews
-                  SET bonus_amount=${quote.amount}::numeric,rate_per_bale=${repricedRate}::numeric
+                  SET target_bales=${quote.target}::numeric,
+                    produced_bales=${quote.produced}::integer,extra_bales=${quote.extra}::numeric,
+                    bonus_amount=${quote.amount}::numeric,rate_per_bale=${repricedRate}::numeric
                   WHERE id=${Number(original.id)} AND company_id=${id}
                 `);
               }

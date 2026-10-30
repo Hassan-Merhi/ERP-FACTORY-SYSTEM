@@ -11,12 +11,32 @@ export interface ProductionBonusWeeklyMethodVersion {
   flatBonusUsd: string;
 }
 
+/** Accept keyboard-entered ISO or US-style dates without changing partial input. */
+export function parseTypedProductionBonusDate(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(text);
+  const us = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text);
+  if (!iso && !us) return null;
+  const year = iso ? iso[1] : us![3];
+  const month = iso ? iso[2] : us![1];
+  const day = iso ? iso[3] : us![2];
+  const normalized = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  return isBonusCategoryDate(normalized) ? normalized : null;
+}
+
 export function mondayOfProductionBonusWeek(day: unknown): string | null {
   if (!isBonusCategoryDate(day)) return null;
   const date = new Date(day + "T12:00:00.000Z");
   const weekday = date.getUTCDay();
   date.setUTCDate(date.getUTCDate() - ((weekday + 6) % 7));
   return date.toISOString().slice(0, 10);
+}
+
+/** Sunday is a factory holiday: exclude it from production targets and new bonus calculations. */
+export function isProductionWorkday(date: string): boolean {
+  if (!isBonusCategoryDate(date)) return false;
+  return new Date(date + "T12:00:00.000Z").getUTCDay() !== 0;
 }
 
 export function parseWeeklyFlatBonusUsd(value: unknown): string | null {

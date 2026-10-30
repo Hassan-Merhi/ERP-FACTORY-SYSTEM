@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 import { isBonusCategoryDate, normalizeBonusCategory } from "./productionTargetBonusCategoryRates";
-import { mondayOfProductionBonusWeek, type ProductionBonusMethod } from "./productionTargetBonusWeeklyMethod";
+import { isProductionWorkday, mondayOfProductionBonusWeek, type ProductionBonusMethod } from "./productionTargetBonusWeeklyMethod";
 
 export const WEEKLY_FLAT_BONUS_CALCULATION_VERSION = "production-target-weekly-flat-v1" as const;
 
@@ -127,10 +127,15 @@ export function calculateWeeklyFlatBonus(input: WeeklyFlatBonusInput): WeeklyFla
       !new Decimal(input.flatBonusUsd).greaterThan(0) ||
       new Decimal(input.flatBonusUsd).greaterThan(100000))
     global.add("NO_FLAT_BONUS_METHOD");
-  if (!input.days.length) global.add("NO_PRODUCTION_DAYS");
+  // Sunday is a factory holiday, not an absent shift or a required capture.
+  if (input.days.some(day => !isBonusCategoryDate(day.date) ||
+      day.date < input.weekStart || day.date > weekEnd))
+    throw new Error("Invalid weekly source date");
+  const workingDays = input.days.filter(day => isProductionWorkday(day.date));
+  if (!workingDays.length) global.add("NO_PRODUCTION_DAYS");
   if (input.unfinalizedDates.some(date => !isBonusCategoryDate(date) || date < input.weekStart || date > weekEnd))
     throw new Error("Unfinalized source outside selected production week");
-  if (input.unfinalizedDates.length) global.add("UNFINALIZED_DAY");
+  if (input.unfinalizedDates.some(date => isProductionWorkday(date))) global.add("UNFINALIZED_DAY");
   if (input.repeatedBaleInWeek) global.add("DUPLICATE_SOURCE_BALE");
 
   const seenDates = new Set<string>();
@@ -142,7 +147,7 @@ export function calculateWeeklyFlatBonus(input: WeeklyFlatBonusInput): WeeklyFla
     reasons: Set<WeeklyFlatBonusIssue>;
   }>();
   let physicalTotal = 0;
-  for (const day of [...input.days].sort((a, b) => a.date.localeCompare(b.date))) {
+  for (const day of [...workingDays].sort((a, b) => a.date.localeCompare(b.date))) {
     if (!isBonusCategoryDate(day.date) || day.date < input.weekStart || day.date > weekEnd ||
         seenDates.has(day.date)) throw new Error("Duplicated or invalid weekly source date");
     seenDates.add(day.date);
