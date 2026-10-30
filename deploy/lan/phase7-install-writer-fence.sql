@@ -24,7 +24,11 @@ REVOKE ALL ON phase7_writer.state FROM PUBLIC;
 -- owner-controlled step, after role isolation and out-of-band cloud fencing proof.
 INSERT INTO phase7_writer.state(singleton, mode, site_id, epoch, baseline_sha256)
 VALUES (true, 'fenced', 'unassigned', 0, repeat('0', 64))
-ON CONFLICT (singleton) DO NOTHING;
+ON CONFLICT (singleton) DO UPDATE SET
+  mode = 'fenced',
+  changed_at = clock_timestamp();
+-- On re-install, preserve the highest recorded epoch and source digest, but
+-- FORCE a fresh reviewed transition. Never silently leave an existing writer on.
 
 CREATE OR REPLACE FUNCTION phase7_writer.assert_current_epoch()
 RETURNS trigger
