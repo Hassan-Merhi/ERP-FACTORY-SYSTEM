@@ -140,7 +140,17 @@ async function ensureDatabaseClientScope(client: PoolClient): Promise<void> {
   // voucher_entries and audit_log read them; a lease without an actor clears
   // them, so one request's actor never reaches another's writes.
   const actor = auditActorSettingValues();
-  const signature = `${desired.signature}|${actor.signature}`;
+  // Phase 7: every connection leased by the application pool announces its
+  // exact DB writer epoch. PostgreSQL row/statement triggers, not the browser
+  // guard or these spoofable session settings, are the final write authority.
+  // An absent/mismatched epoch is rejected once the DBA installs the fence.
+  const writerMode = process.env.FACTORY_EDGE_MODE === "lan" ? "lan-primary" : "cloud-primary";
+  const writerSite = process.env.FACTORY_EDGE_MODE === "lan" ? process.env.FACTORY_EDGE_SITE_ID || "" : "cloud";
+  const writerEpoch =
+    process.env.FACTORY_EDGE_MODE === "lan"
+      ? process.env.FACTORY_EDGE_WRITER_EPOCH || ""
+      : process.env.FACTORY_CLOUD_WRITER_EPOCH || "";
+  const signature = `${desired.signature}|${actor.signature}|${writerMode}|${writerSite}|${writerEpoch}`;
   if (clientScopeSignatures.get(client) === signature) return;
 
   await client.query(
@@ -153,8 +163,12 @@ async function ensureDatabaseClientScope(client: PoolClient): Promise<void> {
        set_config('app.request_id', $6, false),
        set_config('app.request_ip', $7, false),
        set_config('app.session_hash', $8, false),
-       set_config('app.audit_reason', $9, false)`,
-    [desired.maintenance, desired.companyId, desired.authorizedCompanyIds, ...actor.values]
+       set_config('app.audit_reason', $9, false),
+       set_config('phase7_writer.mode', $10, false),
+       set_config('phase7_writer.site_id', $11, false),
+       set_config('phase7_writer.epoch', $12, false)`,
+    [desired.maintenance, desired.companyId, desired.authorizedCompanyIds, ...actor.values,
+     writerMode, writerSite, writerEpoch]
   );
   clientScopeSignatures.set(client, signature);
 }
