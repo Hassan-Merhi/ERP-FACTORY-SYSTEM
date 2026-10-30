@@ -58,6 +58,9 @@ export function registerFactoryPressingMachineManagementRoutes(app: Express) {
         companyId: ctx.companyId, userId: ctx.userId,
         // Company-wide dashboard and scanner for Admin, Owner and Developer.
         canManage: ["Admin", "Owner", "Developer"].includes(ctx.role) && !ctx.posViewOnly,
+        // Read-only accounts must not auto-activate a station or capture scans.
+        // This mirrors the POST /activate role guard and the global write policy.
+        canScan: !ctx.posViewOnly && !["View Only", "ERP Tester"].includes(ctx.role),
         assignment: await db.transaction(async tx => currentAssignment(ctx.companyId, ctx.userId, tx)),
       });
     } catch (error) { return sendError(res, error); }

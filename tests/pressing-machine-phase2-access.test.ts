@@ -7,6 +7,7 @@ const routes = read("server/routes/factoryRoutes.ts");
 const catalog = read("shared/factoryPermissionCatalog.ts");
 const hub = read("client/src/pages/factory/BaleStockEntry.tsx");
 const page = read("client/src/pages/factory/PressingMachineManagement.tsx");
+const report = read("server/routes/factory/factoryPressingReportRoutes.ts");
 
 describe("Simple pressing access — page-authorized user controls",()=>{
   it("uses existing Factory tab access and lazy mount, just like Ground Scan",()=>{
@@ -33,6 +34,16 @@ describe("Simple pressing access — page-authorized user controls",()=>{
     expect(backend).toContain('if (!user?.active)');
     expect(backend).toContain('"PRESSING_WRITE_DENIED"');
     expect(backend).toContain("requireAuth");
+  });
+  it("keeps View Only in read-only pressing overview without station setup or scanning",()=>{
+    expect(backend).toContain('canScan: !ctx.posViewOnly && !["View Only", "ERP Tester"].includes(ctx.role)');
+    expect(page).toContain("if (active && access.data && validCompany && !assignment && canScan) void activate()");
+    expect(page).toContain("{canScan && !assignment && !access.isLoading");
+    expect(page).toContain("{canScan && <div");
+    expect(page).toContain("fullControls || viewOnly");
+    expect(page).toContain('data-testid="pressing-view-only-notice"');
+    expect(report).toContain('ctx.role === "View Only"');
+    expect(report).toContain('canCorrect: (ctx.role === "Admin" || ctx.role === "Owner")');
   });
   it("has NO shift, downtime, machine target or manual user assignment interfaces",()=>{
     expect(page).not.toContain("PressingShiftAnalytics");
