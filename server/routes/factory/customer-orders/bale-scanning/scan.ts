@@ -35,7 +35,7 @@ import {
   customerOrderBaleRemovals,
 } from "@shared/schema";
 import { eq, and, or, sql } from "drizzle-orm";
-import { firstRow } from "../../../../lib/queryResult";
+import { firstRow, resultRows } from "../../../../lib/queryResult";
 import { isFactorySessionLocation } from "../../../helpers/companyOwnership";
 import { toMoney } from "../../../../lib/money";
 
