@@ -155,9 +155,8 @@ export function FactoryDaybookEntryRow({
               <Trash2 className="h-3 w-3" />
             </Button>
           )}
-          {/* Hard-delete button for non-voucher entries (admin/developer only).
-          SUPPLIER_FX_TRANSFER must be deleted from the supplier management
-          page so the underlying transfer record is also removed. */}
+          {/* Source-backed bonus rows use the reversal transaction, never hard delete.
+          All other non-voucher rows retain their existing admin delete flow. */}
           {isAdminOrOwner &&
             entry.id > 0 &&
             entry.txType !== "SUPPLIER_FX_TRANSFER" &&
@@ -165,8 +164,10 @@ export function FactoryDaybookEntryRow({
               <Button
                 size="icon"
                 variant="ghost"
-                title="Delete entry"
-                aria-label="Delete entry"
+                title={entry.txType.startsWith("PRODUCTION_TARGET_")
+                  ? "Remove bonus payment and reverse accounting" : "Delete entry"}
+                aria-label={entry.txType.startsWith("PRODUCTION_TARGET_")
+                  ? "Remove bonus payment and reverse accounting" : "Delete entry"}
                 onClick={(e) => {
                   e.stopPropagation();
                   model.setDeleteEntry(de._source as DaybookEntry);
