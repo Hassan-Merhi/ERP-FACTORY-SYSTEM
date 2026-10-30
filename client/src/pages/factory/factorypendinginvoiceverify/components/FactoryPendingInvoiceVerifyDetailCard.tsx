@@ -15,11 +15,13 @@ export function FactoryPendingInvoiceVerifyDetailCard({ model }: { model: Model 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle className="text-lg">Proforma vs Loaded</CardTitle>
           <div className="flex flex-wrap items-center gap-2">
-            <ContainerExtraItemsDialog
-              orderId={model.orderId}
-              customerId={model.orderDetail?.customerId ?? verification?.order?.customerId}
-              status={verification?.order?.status || model.orderDetail?.status}
-            />
+            {(model.orderDetail?.proformaIdUsed || verification?.order?.proformaIdUsed) ? (
+              <ContainerExtraItemsDialog
+                orderId={model.orderId}
+                customerId={model.orderDetail?.customerId ?? verification?.order?.customerId}
+                status={verification?.order?.status || model.orderDetail?.status}
+              />
+            ) : null}
             <span className="text-xs text-muted-foreground">Filter:</span>
             {(["OVER_LOADED", "UNDER_LOADED", "MISSING_FROM_LOADED", "LOADED_NOT_IN_PROFORMA"] as const).map((s) => {
               const labels: Record<string, string> = {
