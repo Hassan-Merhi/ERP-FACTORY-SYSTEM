@@ -139,7 +139,6 @@ export function registerEndProductionRoutes(app: Express, requireAuth: RequestHa
             sessionDate: date,
             productionEndedAt: now,
             productionEndedBy: endedBy ? String(endedBy) : null,
-
             updatedAt: now,
           })
           .onConflictDoUpdate({
@@ -147,8 +146,6 @@ export function registerEndProductionRoutes(app: Express, requireAuth: RequestHa
             set: {
               productionEndedAt: now,
               productionEndedBy: endedBy ? String(endedBy) : null,
-              workerMatrixWhatsappSentAt: now,
-              workerMatrixWhatsappMessageId: null,
               updatedAt: now,
             },
           })
