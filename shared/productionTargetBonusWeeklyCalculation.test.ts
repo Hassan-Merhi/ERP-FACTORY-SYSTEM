@@ -68,6 +68,23 @@ describe("Phase 13 weekly flat eligibility (read-only)", () => {
     expect(calculateWeeklyFlatBonus(fixture(28)).workers[0].proposedBonusUsd).toBe("0.00");
     expect(calculateWeeklyFlatBonus(fixture(27)).workers[0].proposedBonusUsd).toBe("0.00");
   });
+  it("combines a same-day Bags/Toys switch with Shoes later in the week without adding a second fee", () => {
+    const input = fixture();
+    const monday = input.days[0];
+    const workers = monday.workers.map(worker => worker.workerId === 10 ? {
+      ...worker, categories: [
+        { categoryKey: "bags", categoryLabel: "Bags", creditedBales: 14 },
+        { categoryKey: "toys", categoryLabel: "Toys", creditedBales: 14 },
+      ],
+    } : worker);
+    input.days[0] = { ...monday, workers };
+    const proposal = calculateWeeklyFlatBonus(input);
+    expect(proposal.workers[0].categories.map(cat => cat.categoryKey)).toEqual([
+      "bags", "shoes", "toys",
+    ]);
+    expect(proposal.workers[0].creditedBales).toBe(57);
+    expect(proposal.totalProposedBonusUsd).toBe("15.00");
+  });
   it("blocks the current week, unset method, unfinalized days and missing frozen evidence", () => {
     const pending = calculateWeeklyFlatBonus({ ...fixture(), todayBeirut: "2026-10-30" });
     expect(pending.workers[0].eligible).toBe(false);
