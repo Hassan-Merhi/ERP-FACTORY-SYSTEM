@@ -152,7 +152,6 @@ export async function loadTargetBonusRows(
   return [...finalizedRows, ...liveRows].sort((a,b) =>
     b.date.localeCompare(a.date) || a.workerName.localeCompare(b.workerName) || a.workerId - b.workerId);
 }
-}
 
 export function targetBonusIsValidDate(date: unknown): date is string {
   if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
