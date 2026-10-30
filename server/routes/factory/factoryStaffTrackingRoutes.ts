@@ -347,6 +347,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
             producedBales: total?.producedBales ?? 0,
             status: total?.status ?? "Present",
             absentDays: total?.absentDays ?? 0,
+            periodDays: total?.days ?? 0,
             notes: "", active: worker.active,
             // A link can change in the middle of the week/month. Credited
             // worker totals are already distributed by day, so do not
