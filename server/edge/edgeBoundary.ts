@@ -3,6 +3,7 @@ import { pool } from "../db";
 import { edgeBlocksWrite, edgeStatusPayload, readFactoryEdgeConfiguration } from "./edgeRuntimePolicy.mjs";
 import { hasFactoryEdgeData } from "./edgeDatabaseProof.mjs";
 import { hasVerifiedPhase7WriterAuthority } from "./phase7WriterGate.mjs";
+import { supportsPhase8LanVoucherCapture } from "./phase8CapturePolicy.mjs";
 import { registerCloudEdgeSyncReceiver } from "./edgeSyncReceiver";
 
 type EdgeConfiguration = ReturnType<typeof readFactoryEdgeConfiguration>;
@@ -17,6 +18,15 @@ export function makeFactoryEdgeWriteGuard(
     if (edgeBlocksWrite(config, req.method, path)) {
       const code = config.mode === "cloud" ? "CLOUD_WRITES_FENCED" : config.primary ? "EDGE_SYNC_UNSUPPORTED_OPERATION" : "EDGE_READ_ONLY";
       return res.status(423).json({ code, message: code });
+    }
+
+    // Phase 8 supports only the protected central USD journal route.
+    // Do not let the legacy compatibility fallback or arbitrary voucher
+    // payloads create local records that Phase 8 cannot safely replay.
+    if (config.mode === "lan" && config.primary &&
+        req.method.toUpperCase() === "POST" && path === "/api/vouchers/with-entries" &&
+        !supportsPhase8LanVoucherCapture(req.body)) {
+      return res.status(423).json({ code: "EDGE_PHASE8_CAPTURE_UNSUPPORTED" });
     }
 
     // When operator cutover was explicitly acknowledged, still reject writes
