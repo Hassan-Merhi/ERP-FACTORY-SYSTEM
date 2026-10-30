@@ -20,8 +20,9 @@ import { edgeBlocksWrite } from "../../server/edge/edgeRuntimePolicy.mjs";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const MANIFEST = resolve(ROOT, "config/route-manifest.json");
 const WRITES = new Set(["POST", "PUT", "PATCH", "DELETE"]);
-const SAFE_SESSION_PATHS = new Set([
-  "/api/auth/login", "/api/auth/logout", "/api/auth/set-company", "/api/csp-report",
+const SAFE_SESSION_WRITES = new Set([
+  "POST /api/auth/login", "POST /api/auth/logout",
+  "POST /api/auth/set-company", "POST /api/csp-report",
 ]);
 const SUPPORTED = new Map([
   ["POST /api/vouchers/with-entries", {
@@ -61,7 +62,7 @@ export function auditPhase9WriteCoverage(manifest, guard = edgeBlocksWrite) {
     if (seen.has(key)) continue;
     seen.add(key);
     const supported = SUPPORTED.get(key);
-    const sessionExempt = SAFE_SESSION_PATHS.has(path);
+    const sessionExempt = SAFE_SESSION_WRITES.has(key);
     const blockedByGuard = guard(config, method, path);
     // The guard must match the reviewed capture map EXACTLY; otherwise a
     // new route could commit locally without a durable cloud apply protocol.
