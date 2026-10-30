@@ -21,6 +21,7 @@ const lan = {
 };
 
 function setLan(primary = true) {
+  vi.stubEnv("DATABASE_URL", undefined);
   for (const [key, value] of Object.entries(lan)) {
     if (key === "FACTORY_EDGE_WRITE_MODE" && !primary) vi.stubEnv(key, "read-only");
     else if (key === "FACTORY_EDGE_PRIMARY_ACK" && !primary) vi.stubEnv(key, "");
