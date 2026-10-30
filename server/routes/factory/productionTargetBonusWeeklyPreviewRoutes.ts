@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { sql } from "drizzle-orm";
 import { requireAuth } from "../../auth";
-import { db } from "../../db";
+import { db, type DatabaseOrTransaction } from "../../db";
 import { logger } from "../../lib/logger";
 import { resultRows } from "../../lib/queryResult";
 import { requireFactoryTabAccess } from "../../lib/factoryAccessControl";
@@ -33,29 +33,21 @@ type ActivityRow = { date: string; finalized: boolean };
 type ReviewRow = { date: string; workerId: string | number };
 type MethodRow = { id: string | number; method: ProductionBonusMethod; flatBonusUsd: string };
 
-/** Phase 13: read-only, finalized-week eligibility. No new award or payment path. */
-export function registerProductionTargetBonusWeeklyPreviewRoutes(app: Express): void {
-  app.get("/api/factory/production-target-bonuses/weekly-preview",
-    requireAuth, guard, async (req: Request, res: Response) => {
-      if (!allowed(req)) return res.status(403).json({ message: "Admin or Owner required" });
-      const companyId = companyFor(req);
-      if (!companyId) return res.status(400).json({ message: "Factory company required" });
-      const weekOf = req.query.weekOf;
-      const today = todayBeirut();
-      if (!isBonusCategoryDate(weekOf) || weekOf > today)
-        return res.status(400).json({ message: "Select a valid past or current production date" });
-      const weekStart = mondayOfProductionBonusWeek(weekOf)!;
-      const weekEnd = addDays(weekStart, 6);
-      try {
+/** Shared authoritative transactional source for Phase 13 preview and Phase 14 approval. */
+export async function loadWeeklyFlatBonusProposal(
+  companyId: number, weekStart: string, executor: DatabaseOrTransaction = db,
+) {
+  const today = todayBeirut();
+  const weekEnd = addDays(weekStart, 6);
         // Resolve the correct historical method independently of history-list limits.
         const [methodResult, activityResult, reviewResult, payrollResult, duplicateResult] = await Promise.all([
-          db.execute(sql`
+          executor.execute(sql`
             SELECT id, method, flat_bonus_usd::text AS "flatBonusUsd"
             FROM factory_production_target_bonus_weekly_methods
             WHERE company_id = ${companyId} AND effective_week <= ${weekStart}::date
             ORDER BY effective_week DESC, id DESC LIMIT 1
           `),
-          db.execute(sql`
+          executor.execute(sql`
             SELECT source_date::text AS date, bool_or(finalized) AS finalized
             FROM (
               SELECT period_start AS source_date, FALSE AS finalized
@@ -78,7 +70,7 @@ export function registerProductionTargetBonusWeeklyPreviewRoutes(app: Express): 
             ) source
             GROUP BY source_date ORDER BY source_date
           `),
-          db.execute(sql`
+          executor.execute(sql`
             SELECT production_date::text AS date, worker_id AS "workerId"
             FROM factory_target_bonus_reviews
             WHERE company_id = ${companyId}
@@ -89,7 +81,7 @@ export function registerProductionTargetBonusWeeklyPreviewRoutes(app: Express): 
             WHERE company_id = ${companyId}
               AND production_date BETWEEN ${weekStart}::date AND ${weekEnd}::date
           `),
-          db.execute(sql`
+          executor.execute(sql`
             SELECT run.production_date::text AS date, a.worker_id AS "workerId"
             FROM factory_production_bonus_allocations a
             JOIN factory_production_bonus_runs run ON run.id = a.run_id
@@ -99,7 +91,7 @@ export function registerProductionTargetBonusWeeklyPreviewRoutes(app: Express): 
               AND a.amount > 0
               AND (a.decision_status = 'APPROVED' OR a.payroll_id IS NOT NULL)
           `),
-          db.execute(sql`
+          executor.execute(sql`
             SELECT 1
             FROM factory_target_bonus_category_bale_snapshots
             WHERE company_id = ${companyId}
@@ -111,7 +103,7 @@ export function registerProductionTargetBonusWeeklyPreviewRoutes(app: Express): 
         const method = (resultRows(methodResult) as MethodRow[])[0];
         const activity = resultRows(activityResult) as ActivityRow[];
         const dayEvidence = await Promise.all(activity.map(async (day): Promise<WeeklyFlatDayEvidence> => {
-          const evidence = await loadProductionBonusCategoryEvidence(db, companyId, day.date);
+          const evidence = await loadProductionBonusCategoryEvidence(executor, companyId, day.date);
           return {
             date: day.date,
             finalized: Boolean(day.finalized) && evidence.finalized,
@@ -146,12 +138,29 @@ export function registerProductionTargetBonusWeeklyPreviewRoutes(app: Express): 
           previouslyReviewedWorkerDays: toKeys(resultRows(reviewResult) as ReviewRow[]),
           payrollClaimedWorkerDays: toKeys(resultRows(payrollResult) as ReviewRow[]),
         });
-        res.setHeader("Cache-Control", "private, no-store");
-        return res.json({
+        return {
           ...proposal, dayCount: dayEvidence.length, weekStartsOn: "Monday",
           source: "immutable-finalized-physical-bale-category-evidence",
-          note: "Phase 13 calculates a weekly proposal only. No approval, claim, voucher, expense or payment is created.",
-        });
+          note: "Phase 14 review is audit-only. Posting and payment are not available.",
+        };
+
+}
+
+/** Phase 13: read-only, finalized-week eligibility. No new award or payment path. */
+export function registerProductionTargetBonusWeeklyPreviewRoutes(app: Express): void {
+  app.get("/api/factory/production-target-bonuses/weekly-preview",
+    requireAuth, guard, async (req: Request, res: Response) => {
+      if (!allowed(req)) return res.status(403).json({ message: "Admin or Owner required" });
+      const companyId = companyFor(req);
+      if (!companyId) return res.status(400).json({ message: "Factory company required" });
+      const weekOf = req.query.weekOf;
+      if (!isBonusCategoryDate(weekOf) || weekOf > todayBeirut())
+        return res.status(400).json({ message: "Select a valid past or current production date" });
+      const weekStart = mondayOfProductionBonusWeek(weekOf)!;
+      try {
+        const proposal = await loadWeeklyFlatBonusProposal(companyId, weekStart);
+        res.setHeader("Cache-Control", "private, no-store");
+        return res.json(proposal);
       } catch (error) {
         logger.error("Production Targets weekly bonus preview failed", { error });
         return res.status(500).json({ message: "Could not calculate weekly bonus eligibility" });
