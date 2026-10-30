@@ -513,7 +513,9 @@ export function useFactoryDaybookModel() {
   const deleteMutation = useMutation({
     mutationFn: async (entryId: number) => {
       const res = await factoryApiRequest("DELETE", `/api/factory/daybook/entry/${entryId}`);
-      return res.json();
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.message || "Daybook deletion / reversal failed");
+      return result;
     },
     onSuccess: (result: {reversed?:boolean;replayed?:boolean}) => {
       void queryClient.invalidateQueries({ queryKey: ["/api/factory/daybook"] });
