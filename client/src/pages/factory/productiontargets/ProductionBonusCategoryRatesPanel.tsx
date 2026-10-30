@@ -6,6 +6,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { bonusText } from "@/i18n/factoryProductionBonusCheckoutTranslations";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
 import { isBonusCategoryDate, normalizeBonusCategory, parseBonusCategoryRate } from "@shared/productionTargetBonusCategoryRates";
@@ -38,6 +40,7 @@ async function api<T>(method: "GET" | "POST", url: string, body?: unknown): Prom
  */
 export function ProductionBonusCategoryRatesPanel({ initialDate, productionCategories }: { initialDate: string; productionCategories: string[] }) {
   const { toast } = useToast();
+  const { language } = useApplicationLanguage();
   const [asOf, setAsOf] = useState(initialDate);
   const [editing, setEditing] = useState(false);
   const [category, setCategory] = useState("");
@@ -102,8 +105,7 @@ export function ProductionBonusCategoryRatesPanel({ initialDate, productionCateg
       <div className="space-y-3 border-t px-4 py-4">
         <p className="text-xs text-muted-foreground">
           Set a different USD amount per extra bale for each category. Rates are saved by effective date.
-          Only categories currently displayed in Production Targets are available.
-          Saved rates do not change previous approved or paid bonuses.
+          {bonusText("editCategoryHint",language)}
         </p>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <label className="space-y-1 text-xs text-muted-foreground">
@@ -147,7 +149,7 @@ export function ProductionBonusCategoryRatesPanel({ initialDate, productionCateg
               ))}
               {!isLoading && visibleCategories.length === 0 && <tr>
                 <td colSpan={5} className="px-3 py-4 text-center text-muted-foreground">
-                  No categories are currently assigned in Production Targets. Assign a category there first.
+                  {bonusText("noCategories",language)}
                 </td>
               </tr>}
             </tbody>
