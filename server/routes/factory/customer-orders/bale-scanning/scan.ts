@@ -35,7 +35,7 @@ import {
   customerOrderBaleRemovals,
 } from "@shared/schema";
 import { eq, and, or, sql } from "drizzle-orm";
-import { firstRow } from "../../../../lib/queryResult";
+import { firstRow, resultRows } from "../../../../lib/queryResult";
 import { isFactorySessionLocation } from "../../../helpers/companyOwnership";
 import { toMoney } from "../../../../lib/money";
 
@@ -377,7 +377,18 @@ export function registerOrderBaleScanRoutes(app: Express) {
               )
             );
           const pricingLine = matchingProformaLines[0] || null;
-          if (pricingLine) {
+          // A loading-specific override wins over the reusable master price
+          // for THIS order only, including articles already on its master.
+          const extraPrice = resultRows<{ price_per_bale: string }>(await tx.execute(sql`
+            SELECT price_per_bale::text AS price_per_bale
+            FROM customer_order_extra_expected_lines
+            WHERE company_id = ${companyId} AND order_id = ${orderId}
+              AND UPPER(TRIM(article_code)) = UPPER(TRIM(${effectiveArticleCode}))
+            LIMIT 1
+          `))[0];
+          if (extraPrice) {
+            priceUsed = extraPrice.price_per_bale;
+          } else if (pricingLine) {
             const pricingMode = pricingLine.pricingMode ?? "per_bale";
             const perKgVal = pricingLine.pricePerKg;
             if (pricingMode === "per_kg" && perKgVal) {

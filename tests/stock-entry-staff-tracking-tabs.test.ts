@@ -91,6 +91,7 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(route).toContain("factory_worker_production_target_defaults");
     expect(targetDefaultsService).toContain("effective_from <=");
     expect(targetDefaultsService).toContain("loadActiveProductionWorkerLinks");
+    expect(targetDefaultsService).toContain("!defaults.has(member.workerId)");
     expect(route).toContain('category_overridden AS "categoryOverridden"');
     expect(route).toContain('target_overridden AS "targetBalesOverridden"');
     expect(route).toContain("defaultCategory");
@@ -106,7 +107,7 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(startup).toContain("target_overridden boolean NOT NULL DEFAULT false");
   });
 
-  it("supports effective-dated linked production workers with one shared target", () => {
+  it("keeps effective-dated linked production workers with individual targets", () => {
     const editor = src("client/src/pages/factory/productiontargets/ProductionTargetsEditorDialog.tsx");
     const defaultsEditor = src("client/src/pages/factory/productiontargets/ProductionTargetDefaultsDialog.tsx");
     const linkControl = src("client/src/pages/factory/productiontargets/ProductionWorkerLinkControl.tsx");
@@ -136,7 +137,10 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(production).toContain("row.displayMembers");
     expect(model).toContain("summarizeProductionRows");
     expect(route).toContain("loadActiveProductionWorkerLinks");
-    expect(route).toContain("saveProductionLinkTargetDefault");
+    expect(route).not.toContain("saveProductionLinkTargetDefault");
+    expect(route).not.toContain("Linked workers must share one target");
+    expect(defaultsEditor).toContain("[row.personId]");
+    expect(editor).toContain("row.personId === personId");
     expect(linkRoute).toContain("unlinkProductionWorkerLink");
     expect(linkRoute).toContain("hasFinalizedProductionOnOrAfter");
     expect(linkRoute).toContain("finalized production history");

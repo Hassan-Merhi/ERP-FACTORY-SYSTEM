@@ -38,13 +38,16 @@ export async function loadProductionTargetDefaults(
     });
   }
 
-  // A worker link owns one repeating shared target while every worker keeps
-  // their own category default.
+  // Older links may have a shared target but no per-worker target history.
+  // Retain that value only as a fallback for genuinely missing worker records;
+  // never replace an individual's own target (including an explicitly blank one).
   const activeLinks = await loadActiveProductionWorkerLinks(companyId, asOf);
   for (const link of activeLinks) {
+    if (link.sharedTargetBales == null) continue;
     for (const member of link.members) {
-      const existing = defaults.get(member.workerId) ?? { category: null, targetBales: null };
-      defaults.set(member.workerId, { ...existing, targetBales: link.sharedTargetBales });
+      if (!defaults.has(member.workerId)) {
+        defaults.set(member.workerId, { category: null, targetBales: link.sharedTargetBales });
+      }
     }
   }
 

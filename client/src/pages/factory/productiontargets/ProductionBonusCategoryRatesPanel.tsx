@@ -1,0 +1,206 @@
+import { useEffect, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Coins, Loader2, Pencil, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Select, SelectTrigger, SelectContent, SelectValue, SelectItem } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useToast } from "@/hooks/use-toast";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { bonusText } from "@/i18n/factoryProductionBonusCheckoutTranslations";
+import { factoryApiRequest } from "@/lib/factoryApi";
+import { queryClient } from "@/lib/queryClient";
+import { localDateStr } from "../factoryProductionTargetsModel";
+import { isBonusCategoryDate, parseBonusCategoryRate } from "@shared/productionTargetBonusCategoryRates";
+
+interface CategoryRate {
+  id: number; categoryKey: string; categoryLabel: string;
+  effectiveFrom: string; enabled: boolean; ratePerExtraBale: string;
+  note?: string | null; createdAt?: string;
+}
+interface CategoryResponse {
+  currency: string;
+  categories: Array<{ categoryKey: string; categoryLabel: string; effective: CategoryRate | null }>;
+  history: CategoryRate[];
+  historyTruncated: boolean;
+  configuredForPayments: boolean;
+}
+
+const endpoint = "/api/factory/production-target-bonuses/category-rates";
+async function api<T>(method: "GET" | "POST", url: string, body?: unknown): Promise<T> {
+  const response = await factoryApiRequest(method, url, body);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.message || "Category bonus settings request failed");
+  }
+  return response.json() as Promise<T>;
+}
+
+/** Only mounted inside the admin/owner Production Bonuses view. This configures
+ * future category bonus rules; it does not modify existing reviewed payments.
+ */
+export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate: string }) {
+  const { toast } = useToast();
+  const { language } = useApplicationLanguage();
+  const [asOf, setAsOf] = useState(initialDate);
+  const [editing, setEditing] = useState(false);
+  const [category, setCategory] = useState("");
+  const [effectiveFrom, setEffectiveFrom] = useState(()=>localDateStr(new Date()));
+  const [rate, setRate] = useState("");
+  const [enabled, setEnabled] = useState(true);
+  const [note, setNote] = useState("");
+  const [requestKey, setRequestKey] = useState("");
+  useEffect(() => setAsOf(initialDate), [initialDate]);
+
+  const { data, isLoading, error } = useQuery<CategoryResponse>({
+    queryKey: [endpoint, asOf],
+    enabled: isBonusCategoryDate(asOf),
+    queryFn: () => api("GET", endpoint + "?" + new URLSearchParams({ asOf })),
+  });
+  function openEditor(label = "", current: CategoryRate | null = null) {
+    setCategory(label);
+    setEffectiveFrom(localDateStr(new Date()));
+    setRate(current?.ratePerExtraBale ?? "");
+    setEnabled(current?.enabled ?? true);
+    setNote("");
+    setRequestKey(crypto.randomUUID());
+    setEditing(true);
+  }
+  const save = useMutation({
+    mutationFn: () => api("POST", endpoint, {
+      category, effectiveFrom, enabled, ratePerExtraBale: rate,
+      note, requestKey,
+    }),
+    onSuccess: () => {
+      setEditing(false);
+      toast({ title: "Category rate saved", description: bonusText("categorySavedToast",language) });
+      void queryClient.invalidateQueries({ queryKey: [endpoint] });
+      void queryClient.invalidateQueries({ queryKey: ["/api/factory/production-target-bonuses/category-preview"] });
+      void queryClient.invalidateQueries({ queryKey: ["/api/factory/production-target-bonuses/checkout"] });
+    },
+    onError: (cause: Error) => toast({ title: "Category rate not saved", description: cause.message, variant: "destructive" }),
+  });
+  const validRate = parseBonusCategoryRate(rate);
+  const canSave = Boolean(data?.categories.some(item => item.categoryLabel === category)) && isBonusCategoryDate(effectiveFrom) &&
+    validRate !== null && (!enabled || Number(validRate) > 0) &&
+    !save.isPending;
+
+  return (
+    <details className="rounded-lg border bg-muted/10" data-testid="production-bonus-category-rates">
+      <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
+        <Coins className="mr-2 inline h-4 w-4" /> Category rates — Bags, Toys, Shoes and more
+      </summary>
+      <div className="space-y-3 border-t px-4 py-4">
+        <p className="text-xs text-muted-foreground">
+          {bonusText("categoryLatestHint",language)}
+        </p>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <label className="space-y-1 text-xs text-muted-foreground">
+            Rates on date
+            <Input aria-label="Category bonus rates as of" type="date" value={asOf}
+              onChange={event => setAsOf(event.target.value)} className="w-[165px]" />
+          </label>
+          <Button type="button" size="sm" variant="outline" onClick={() => openEditor()}>
+            <Plus className="mr-1.5 h-4 w-4" /> Add category rate
+          </Button>
+        </div>
+        {error && <p role="alert" className="text-sm text-destructive">{(error as Error).message}</p>}
+        {!isBonusCategoryDate(asOf) && <p role="alert" className="text-sm text-destructive">Choose a valid date.</p>}
+        <div className="overflow-x-auto rounded-md border">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40 text-left">
+              <tr>
+                <th className="px-3 py-2">Category</th>
+                <th className="px-3 py-2">Rate / extra bale</th>
+                <th className="px-3 py-2">Version date</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2 text-right">Edit</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading && <tr><td colSpan={5} className="px-3 py-4 text-center text-muted-foreground">
+                <Loader2 className="mr-1.5 inline h-4 w-4 animate-spin" /> Loading category rates…
+              </td></tr>}
+              {data?.categories.map(item => (
+                <tr className="border-t" key={item.categoryKey}>
+                  <td className="px-3 py-2 font-medium">{item.categoryLabel}</td>
+                  <td className="px-3 py-2 tabular-nums">
+                    {item.effective ? "$" + item.effective.ratePerExtraBale : "Not set"}
+                  </td>
+                  <td className="px-3 py-2 tabular-nums">{item.effective?.effectiveFrom ?? "—"}</td>
+                  <td className="px-3 py-2">{!item.effective ? "Unconfigured" : item.effective.enabled ? "Enabled" : "Disabled"}</td>
+                  <td className="px-3 py-2 text-right">
+                    <Button type="button" size="sm" variant="ghost" aria-label={"Edit rate for " + item.categoryLabel}
+                      onClick={() => openEditor(item.categoryLabel, item.effective)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+              {!isLoading && data && data.categories.length === 0 && <tr>
+                <td colSpan={5} className="px-3 py-4 text-center text-muted-foreground">
+                  No production categories yet. Add categories under Production Targets first.
+                </td>
+              </tr>}
+            </tbody>
+          </table>
+        </div>
+        {data && data.history.length > 0 && (
+          <details className="text-xs">
+            <summary className="cursor-pointer text-muted-foreground">Rate change history ({data.history.length}{data.historyTruncated ? "+" : ""})</summary>
+            <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+              {data.history.map(version => <div key={version.id} className="flex flex-wrap justify-between gap-3 border-b py-1">
+                <span>{version.categoryLabel} · {version.effectiveFrom}</span>
+                <span className="tabular-nums">{version.enabled ? "$" + version.ratePerExtraBale : "Disabled"}</span>
+              </div>)}
+            </div>
+          </details>
+        )}
+        <Dialog open={editing} onOpenChange={open => { if (!open) setEditing(false); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Category bonus rate</DialogTitle>
+              <DialogDescription>
+                {bonusText("categoryEditHelp",language)}
+              </DialogDescription>
+            </DialogHeader>
+            <label className="space-y-1 text-sm">Category
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger aria-label="Production Targets category">
+                  <SelectValue placeholder="Choose a Production Targets category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(data?.categories ?? []).map(item =>
+                    <SelectItem key={item.categoryKey} value={item.categoryLabel}>
+                      {item.categoryLabel}
+                    </SelectItem>)}
+                </SelectContent>
+              </Select>
+            </label>
+            <label className="space-y-1 text-sm">Amount per extra bale (USD)
+              <Input aria-label="Category rate USD per extra bale" type="number"
+                min="0" max="10000" step="0.0001" value={rate}
+                onChange={event => setRate(event.target.value)} />
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={enabled} onCheckedChange={value => setEnabled(value === true)} />
+              Enabled
+            </label>
+            <label className="space-y-1 text-sm">Reason / note (optional)
+              <Input aria-label="Category rate note" value={note} maxLength={500}
+                onChange={event => setNote(event.target.value)} />
+            </label>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setEditing(false)}>Cancel</Button>
+              <Button type="button" disabled={!canSave} onClick={() => save.mutate()}>
+                {save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save rate
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </details>
+  );
+}

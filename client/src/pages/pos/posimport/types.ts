@@ -28,9 +28,12 @@ export interface PosImportItem {
   rate: number | string;
   stockItemName?: string;
   stockItemId?: number;
+  stockItemUom?: string;
   error?: string;
   warning?: string;
   currentStock?: number;
+  /** Projected quantity at the selected location after selling this line. */
+  remainingStock?: number;
   [key: string]: unknown;
 }
 

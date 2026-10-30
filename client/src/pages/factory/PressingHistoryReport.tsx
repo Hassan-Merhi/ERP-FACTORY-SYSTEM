@@ -175,7 +175,7 @@ export default function PressingHistoryReport({
           <div>
             <h3 className="text-lg font-bold tracking-tight">Pressing Overview</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Confirmed bales and KG · totals cover the complete selected period
+              Confirmed items and KG · totals cover the complete selected period
             </p>
           </div>
         </div>
@@ -245,7 +245,7 @@ export default function PressingHistoryReport({
                 <strong className="text-3xl font-extrabold leading-none tracking-tight tabular-nums">
                   {countText(worker.bales)}
                 </strong>
-                <span className="text-xs text-muted-foreground">Total bales</span>
+                <span className="text-xs text-muted-foreground">Total items</span>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-2 border-t border-border/60 pt-3">
                 <div className="min-w-0">
@@ -289,7 +289,7 @@ export default function PressingHistoryReport({
             <strong className="text-3xl font-extrabold leading-none tracking-tight tabular-nums">
               {countText(allWorkerBales)}
             </strong>
-            <span className="text-xs text-muted-foreground">Total bales</span>
+            <span className="text-xs text-muted-foreground">Total items</span>
           </div>
           <div className="mt-4 grid grid-cols-2 gap-2 border-t border-border/60 pt-3">
             <div className="min-w-0">
@@ -426,7 +426,7 @@ export default function PressingHistoryReport({
               </label>
             )}
             <label className="space-y-1 text-xs font-medium text-muted-foreground">
-              Bale weight
+              Item weight
               <select
                 aria-label="Pressing KG filter"
                 value={filters.weightKg === undefined ? "" : String(filters.weightKg)}
@@ -477,7 +477,7 @@ export default function PressingHistoryReport({
           )}
           {filters.status !== "active" && (
             <p className="mt-2 text-xs text-muted-foreground">
-              KPI totals count confirmed bales only. The history below follows your selected status.
+              KPI totals count confirmed items only. The history below follows your selected status.
             </p>
           )}
           {Number(summary?.voidedBales || 0) > 0 && (
@@ -501,7 +501,7 @@ export default function PressingHistoryReport({
               <LayoutList className="h-4 w-4 text-muted-foreground" />
             </span>
             <span className="min-w-0">
-              <span className="block font-semibold">Scanned Bales</span>
+              <span className="block font-semibold">Scanned Items</span>
               <span className="block text-xs text-muted-foreground">
                 {countText(report.data?.total)} {filters.mode === "condensed" ? "groups" : "scans"} ·{" "}
                 {historyExpanded ? "Collapse history" : "Open history to view scans"}
@@ -562,7 +562,7 @@ export default function PressingHistoryReport({
                   <>
                     <thead className="bg-muted/70">
                       <tr>
-                        <th className="p-3">Bale Ref</th>
+                        <th className="p-3">Reference</th>
                         <th className="p-3">Article</th>
                         <th className="p-3">Product</th>
                         <th className="p-3 text-right">KG</th>
@@ -584,7 +584,7 @@ export default function PressingHistoryReport({
                       {!detail.length && !report.isFetching && (
                         <tr>
                           <td colSpan={6} className="p-5 text-center text-muted-foreground">
-                            No scanned bales for these filters.
+                            No scanned items for these filters.
                           </td>
                         </tr>
                       )}
@@ -596,8 +596,8 @@ export default function PressingHistoryReport({
                       <tr>
                         <th className="p-3">Day</th>
                         <th className="p-3">Worker</th>
-                        <th className="p-3">Bale name</th>
-                        <th className="p-3 text-right">Bales</th>
+                        <th className="p-3">Product name</th>
+                        <th className="p-3 text-right">Items</th>
                         <th className="p-3 text-right">KG</th>
                         <th className="p-3">First scan (Beirut)</th>
                         <th className="p-3">Last scan (Beirut)</th>
@@ -633,7 +633,7 @@ export default function PressingHistoryReport({
                       {!condensed.length && !report.isFetching && (
                         <tr>
                           <td colSpan={7} className="p-5 text-center text-muted-foreground">
-                            No scanned bales for these filters.
+                            No scanned items for these filters.
                           </td>
                         </tr>
                       )}

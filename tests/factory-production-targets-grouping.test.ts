@@ -68,6 +68,36 @@ describe("Production Targets category grouping", () => {
     ]);
   });
 
+  it("sums two different linked targets without averaging either worker", () => {
+    const ali = {
+      ...row(1, "Ali", "BLOUSE"),
+      linkGroupId: 77,
+      linkedWorkerIds: [1, 2],
+      targetBales: 10,
+      producedBales: 22,
+    };
+    const mohammad = {
+      ...row(2, "Mohammad", "BLOUSE"),
+      linkGroupId: 77,
+      linkedWorkerIds: [1, 2],
+      targetBales: 12,
+      producedBales: 22,
+    };
+
+    expect([ali.targetBales, mohammad.targetBales]).toEqual([10, 12]);
+    const collapsed = collapseLinkedProductionRows([ali, mohammad]);
+    expect(collapsed).toHaveLength(1);
+    expect(collapsed[0].targetBales).toBe(22);
+    expect(collapsed[0].producedBales).toBe(22);
+    expect(summarizeProductionRows([ali, mohammad])).toEqual({
+      target: 22,
+      absentTarget: 0,
+      expected: 22,
+      produced: 22,
+      difference: 0,
+    });
+  });
+
   it("subtracts a linked unit's shared target once when a member is absent", () => {
     const linkedA = {
       ...row(1, "Worker A", "BLOUSE"),
@@ -98,6 +128,18 @@ describe("Production Targets category grouping", () => {
       expected: 16,
       produced: 5,
       difference: -11,
+    });
+  });
+
+  it("uses only absent workday targets in weekly KPI and credits linked workers separately", () => {
+    const worker1 = { ...row(1, "Worker A", "BLOUSE"),
+      targetBales: 70, absentTargetBales: 10, absentDays: 1, producedBales: 55 };
+    const worker2 = { ...row(2, "Worker B", "BLOUSE"),
+      targetBales: 84, absentTargetBales: 0, absentDays: 0, producedBales: 73 };
+    // Weekly credit is per worker. Grouping all 7 days under the last linked
+    // pair would double-count physical team output when membership changed.
+    expect(summarizeProductionRows([worker1, worker2])).toEqual({
+      target: 154, absentTarget: 10, expected: 144, produced: 128, difference: -16,
     });
   });
 
