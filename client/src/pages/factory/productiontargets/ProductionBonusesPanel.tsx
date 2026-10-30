@@ -148,6 +148,7 @@ export function ProductionBonusesPanel({ initialDate }: { initialDate: string })
         "POST", "/api/factory/staff-tracking/production-bonuses/decide",
         { decisions: selectedRows.map((row) => ({
           date: row.date, workerId: row.workerId, decision, expectedAmount: row.proposedAmount,
+          expectedProducedBales: row.producedBales, expectedTargetBales: row.targetBales,
         })) }
       ),
     onSuccess: ({ saved, unchanged }) => {
