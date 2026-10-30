@@ -6,7 +6,7 @@
  * A matching report is NOT source provenance or operator approval.
  */
 import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
+import { constants } from "node:fs";
 import { lstat, readdir, readFile, open } from "node:fs/promises";
 import { resolve, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -87,10 +87,19 @@ async function uploadFingerprint(root) {
   for (const file of files) {
     const name = relative(abs, file.path).split(sep).join("/");
     const fileHash = createHash("sha256");
-    for await (const chunk of createReadStream(file.path)) fileHash.update(chunk);
-    const after = await lstat(file.path);
-    if (after.size !== file.stat.size || after.mtimeMs !== file.stat.mtimeMs ||
-        after.ino !== file.stat.ino) throw new Error("PHASE7_UPLOAD_CHANGED_DURING_AUDIT");
+    // O_NOFOLLOW prevents changing an already-listed upload into a symlink
+    // between the directory walk and the actual hashing stream.
+    const handle = await open(file.path, constants.O_RDONLY | constants.O_NOFOLLOW);
+    try {
+      const before = await handle.stat();
+      if (!before.isFile() || before.ino !== file.stat.ino || before.size !== file.stat.size) {
+        throw new Error("PHASE7_UPLOAD_CHANGED_DURING_AUDIT");
+      }
+      for await (const chunk of handle.createReadStream({ autoClose: false })) fileHash.update(chunk);
+      const after = await handle.stat();
+      if (after.size !== file.stat.size || after.mtimeMs !== file.stat.mtimeMs ||
+          after.ino !== file.stat.ino) throw new Error("PHASE7_UPLOAD_CHANGED_DURING_AUDIT");
+    } finally { await handle.close(); }
     hashUpdate(aggregate, name);
     hashUpdate(aggregate, String(file.stat.size));
     hashUpdate(aggregate, fileHash.digest("hex"));
