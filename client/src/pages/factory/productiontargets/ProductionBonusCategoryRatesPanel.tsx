@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Coins, Loader2, Pencil, Plus } from "lucide-react";
+import { Coins, Loader2, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
-import { isBonusCategoryDate, parseBonusCategoryRate } from "@shared/productionTargetBonusCategoryRates";
+import { isBonusCategoryDate, normalizeBonusCategory, parseBonusCategoryRate } from "@shared/productionTargetBonusCategoryRates";
 
 interface CategoryRate {
   id: number; categoryKey: string; categoryLabel: string;
@@ -36,7 +36,7 @@ async function api<T>(method: "GET" | "POST", url: string, body?: unknown): Prom
 /** Only mounted inside the admin/owner Production Bonuses view. This configures
  * future category bonus rules; it does not modify existing reviewed payments.
  */
-export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate: string }) {
+export function ProductionBonusCategoryRatesPanel({ initialDate, productionCategories }: { initialDate: string; productionCategories: string[] }) {
   const { toast } = useToast();
   const [asOf, setAsOf] = useState(initialDate);
   const [editing, setEditing] = useState(false);
@@ -53,7 +53,21 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
     enabled: isBonusCategoryDate(asOf),
     queryFn: () => api("GET", endpoint + "?" + new URLSearchParams({ asOf })),
   });
-  function openEditor(label = "", current: CategoryRate | null = null) {
+  // Production Targets is the only category catalog shown here; historical
+  // tracking and obsolete bonus settings must not create selectable categories.
+  const visibleCategories = useMemo(() => {
+    const names = new Map<string, string>();
+    for (const category of productionCategories) {
+      const normalized = normalizeBonusCategory(category);
+      if (normalized && !names.has(normalized.key)) names.set(normalized.key, normalized.label);
+    }
+    return [...names].map(([key, label]) => ({
+      categoryKey: key, categoryLabel: label,
+      effective: data?.categories.find(row => row.categoryKey === key)?.effective ?? null,
+    })).sort((a, b) => a.categoryLabel.localeCompare(b.categoryLabel, undefined, { sensitivity: "base" }));
+  }, [productionCategories, data]);
+
+  function openEditor(label: string, current: CategoryRate | null = null) {
     setCategory(label);
     setEffectiveFrom(initialDate);
     setRate(current?.ratePerExtraBale ?? "");
@@ -88,8 +102,8 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
       <div className="space-y-3 border-t px-4 py-4">
         <p className="text-xs text-muted-foreground">
           Set a different USD amount per extra bale for each category. Rates are saved by effective date.
-          Allocating targets and production when a worker switches categories is handled separately;
-          these saved rates do not change existing approvals or post money.
+          Only categories currently displayed in Production Targets are available.
+          Saved rates do not change previous approved or paid bonuses.
         </p>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <label className="space-y-1 text-xs text-muted-foreground">
@@ -97,9 +111,6 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
             <Input aria-label="Category bonus rates as of" type="date" value={asOf}
               onChange={event => setAsOf(event.target.value)} className="w-[165px]" />
           </label>
-          <Button type="button" size="sm" variant="outline" onClick={() => openEditor()}>
-            <Plus className="mr-1.5 h-4 w-4" /> Add category rate
-          </Button>
         </div>
         {error && <p role="alert" className="text-sm text-destructive">{(error as Error).message}</p>}
         {!isBonusCategoryDate(asOf) && <p role="alert" className="text-sm text-destructive">Choose a valid date.</p>}
@@ -118,7 +129,7 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
               {isLoading && <tr><td colSpan={5} className="px-3 py-4 text-center text-muted-foreground">
                 <Loader2 className="mr-1.5 inline h-4 w-4 animate-spin" /> Loading category rates…
               </td></tr>}
-              {data?.categories.map(item => (
+              {visibleCategories.map(item => (
                 <tr className="border-t" key={item.categoryKey}>
                   <td className="px-3 py-2 font-medium">{item.categoryLabel}</td>
                   <td className="px-3 py-2 tabular-nums">
@@ -134,9 +145,9 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
                   </td>
                 </tr>
               ))}
-              {!isLoading && data && data.categories.length === 0 && <tr>
+              {!isLoading && visibleCategories.length === 0 && <tr>
                 <td colSpan={5} className="px-3 py-4 text-center text-muted-foreground">
-                  No production categories yet. Add a named category to configure its rate.
+                  No categories are currently assigned in Production Targets. Assign a category there first.
                 </td>
               </tr>}
             </tbody>
@@ -163,8 +174,7 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
               </DialogDescription>
             </DialogHeader>
             <label className="space-y-1 text-sm">Category
-              <Input aria-label="Production bonus category" value={category} maxLength={100}
-                onChange={event => setCategory(event.target.value)} placeholder="e.g. Bags or Toys" />
+              <Input aria-label="Production bonus category" value={category} readOnly />
             </label>
             <label className="space-y-1 text-sm">Effective from
               <Input aria-label="Category rate effective from" type="date" value={effectiveFrom}
