@@ -1,4 +1,13 @@
 import { offlineError } from "./offlineError";
+import {
+  deriveOfflineVaultKey,
+  isSealedOfflineVaultBody,
+  OFFLINE_VAULT_SCHEME,
+  openOfflineVaultBody,
+  sealOfflineVaultBody,
+  vaultCheckScope,
+  type OfflineVaultKey,
+} from "./secureSnapshotVault";
 import { db, type OfflineReadGrant, type OfflineReadSnapshot } from "../db";
 import {
   classifyOfflineReadFallback,
@@ -21,12 +30,71 @@ export interface ReadBatchInput extends OfflineReadActor {
 const MAX_OFFLINE_READ_AGE = 8 * 60 * 60 * 1000;
 let verifiedScope: (OfflineReadActor & { expiresAt: number }) | null = null;
 let verificationVersion = 0;
+const VAULT_CHECK_VALUE = "erp-offline-vault-check-v1";
+let unlockedVault: (OfflineReadActor & { vault: OfflineVaultKey }) | null = null;
+
+export function lockVerifiedOfflineReadVault(): void {
+  unlockedVault = null;
+}
+
+export function isVerifiedOfflineReadVaultUnlocked(actor: OfflineReadActor): boolean {
+  return (
+    getVerifiedOfflineReadScope()?.userId === actor.userId &&
+    getVerifiedOfflineReadScope()?.companyId === actor.companyId &&
+    unlockedVault?.userId === actor.userId &&
+    unlockedVault?.companyId === actor.companyId
+  );
+}
+
+/**
+ * An unlock never creates authentication: it needs the live, verified scope
+ * established by Phase 2. Lost passphrases require a fresh online preparation.
+ */
+export async function unlockVerifiedOfflineReadVault(passphrase: string): Promise<boolean> {
+  lockVerifiedOfflineReadVault();
+  const scope = getVerifiedOfflineReadScope();
+  if (!scope) return false;
+  const currentVersion = verificationVersion;
+  try {
+    const grant = await getOfflineReadGrant(scope);
+    if (
+      !grant ||
+      grant.status !== "ready" ||
+      grant.expiresAt <= Date.now() ||
+      grant.protection !== OFFLINE_VAULT_SCHEME ||
+      !grant.vaultSalt ||
+      !grant.vaultCheck
+    )
+      return false;
+    const vault = await deriveOfflineVaultKey(passphrase, grant.vaultSalt);
+    const check = await openOfflineVaultBody(
+      grant.vaultCheck,
+      vault,
+      vaultCheckScope(scope, grant.preparedAt, grant.expiresAt)
+    );
+    const verified = getVerifiedOfflineReadScope();
+    if (
+      check !== VAULT_CHECK_VALUE ||
+      verificationVersion !== currentVersion ||
+      verified?.userId !== scope.userId ||
+      verified?.companyId !== scope.companyId
+    )
+      return false;
+    unlockedVault = { ...scope, vault };
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** In-memory scope only. Never restore authenticated status from IndexedDB. */
 export function activateVerifiedOfflineReadScope(actor: OfflineReadActor, ttlMs = MAX_OFFLINE_READ_AGE): void {
   if (!Number.isSafeInteger(actor.companyId) || actor.companyId <= 0 || !actor.userId.trim()) {
     throw offlineError("OFFLINE_READ_ACTOR_INVALID");
   }
+  // A fresh verification invalidates in-flight reads and unlocks.
+  verificationVersion++;
+  lockVerifiedOfflineReadVault();
   verifiedScope = {
     companyId: actor.companyId,
     userId: actor.userId,
@@ -37,11 +105,13 @@ export function activateVerifiedOfflineReadScope(actor: OfflineReadActor, ttlMs 
 export function revokeOfflineReadScope(): void {
   verificationVersion++;
   verifiedScope = null;
+  lockVerifiedOfflineReadVault();
 }
 
 export function getVerifiedOfflineReadScope(): OfflineReadActor | null {
   if (!verifiedScope || verifiedScope.expiresAt <= Date.now()) {
     verifiedScope = null;
+    lockVerifiedOfflineReadVault();
     return null;
   }
   return { companyId: verifiedScope.companyId, userId: verifiedScope.userId };
@@ -86,7 +156,7 @@ export async function verifyOfflineReadScope(companyId: number): Promise<Offline
 }
 
 /** Atomically promote a complete set of downloaded JSON snapshots. */
-export async function saveVerifiedOfflineReadBatch(input: ReadBatchInput): Promise<void> {
+export async function saveVerifiedOfflineReadBatch(input: ReadBatchInput, passphrase?: string): Promise<void> {
   const scope = getVerifiedOfflineReadScope();
   if (!scope || scope.userId !== input.userId || scope.companyId !== input.companyId) {
     throw offlineError("OFFLINE_READ_SCOPE_MISMATCH");
@@ -95,6 +165,7 @@ export async function saveVerifiedOfflineReadBatch(input: ReadBatchInput): Promi
     throw offlineError("OFFLINE_READ_DATASET_INCOMPLETE");
   }
   const seen = new Set<string>();
+  const currentVersion = verificationVersion;
   const now = Date.now();
   const rows: OfflineReadSnapshot[] = input.snapshots.map(({ url, body }) => {
     if (normalizeOfflineReadUrl(url) !== url || seen.has(url)) {
@@ -113,6 +184,29 @@ export async function saveVerifiedOfflineReadBatch(input: ReadBatchInput): Promi
       expiresAt: now + MAX_OFFLINE_READ_AGE,
     };
   });
+  // Perform all expensive PBKDF2 and AES-GCM work BEFORE the IndexedDB
+  // transaction; Dexie transactions must not wait on unrelated async crypto.
+  let vault: OfflineVaultKey | null = null;
+  let vaultCheck: string | undefined;
+  if (passphrase !== undefined) {
+    vault = await deriveOfflineVaultKey(passphrase);
+    for (const row of rows) {
+      row.body = await sealOfflineVaultBody(row.body, vault, row);
+    }
+    vaultCheck = await sealOfflineVaultBody(
+      VAULT_CHECK_VALUE,
+      vault,
+      vaultCheckScope(input, now, now + MAX_OFFLINE_READ_AGE)
+    );
+  }
+  const stillVerified = getVerifiedOfflineReadScope();
+  if (
+    verificationVersion !== currentVersion ||
+    stillVerified?.companyId !== input.companyId ||
+    stillVerified?.userId !== input.userId
+  ) {
+    throw offlineError("OFFLINE_READ_SCOPE_MISMATCH");
+  }
   const grant: OfflineReadGrant = {
     key: offlineReadinessKey(input.companyId, input.userId),
     userId: input.userId,
@@ -124,11 +218,28 @@ export async function saveVerifiedOfflineReadBatch(input: ReadBatchInput): Promi
     total: input.total,
     errors: "[]",
     packSummary: JSON.stringify(input.packSummary ?? {}),
+    protection: vault ? OFFLINE_VAULT_SCHEME : undefined,
+    vaultSalt: vault?.salt,
+    vaultCheck,
   };
   await db.transaction("rw", db.offlineReadSnapshots, db.offlineReadGrants, async () => {
+    const previous = await db.offlineReadGrants.get(grant.key);
+    if (previous?.protection && !vault) {
+      throw offlineError("OFFLINE_VAULT_PROTECTION_REQUIRED");
+    }
     await db.offlineReadSnapshots.bulkPut(rows);
     await db.offlineReadGrants.put(grant);
   });
+  lockVerifiedOfflineReadVault();
+  const verifiedAfterSave = getVerifiedOfflineReadScope();
+  if (
+    vault &&
+    verifiedAfterSave?.companyId === input.companyId &&
+    verifiedAfterSave?.userId === input.userId &&
+    currentVersion === verificationVersion
+  ) {
+    unlockedVault = { companyId: input.companyId, userId: input.userId, vault };
+  }
 }
 
 export async function getOfflineReadGrant(actor: OfflineReadActor): Promise<OfflineReadGrant | null> {
@@ -141,6 +252,7 @@ export async function readPreparedOfflineResponse(method: string, url: string): 
   if (!classifyOfflineReadFallback(method, url, "network")) return null;
   const actor = getVerifiedOfflineReadScope();
   if (!actor) return null;
+  const requestVersion = verificationVersion;
   try {
     const grant = await getOfflineReadGrant(actor);
     if (!grant || grant.status !== "ready" || grant.expiresAt <= Date.now()) return null;
@@ -151,10 +263,36 @@ export async function readPreparedOfflineResponse(method: string, url: string): 
       row.userId !== actor.userId ||
       row.url !== url ||
       row.expiresAt <= Date.now() ||
-      row.cachedAt > Date.now()
+      row.cachedAt > Date.now() ||
+      row.cachedAt !== grant.preparedAt ||
+      row.expiresAt !== grant.expiresAt
     )
       return null;
-    return new Response(row.body, {
+    let body = row.body;
+    if (grant.protection) {
+      if (
+        grant.protection !== OFFLINE_VAULT_SCHEME ||
+        !grant.vaultSalt ||
+        !unlockedVault ||
+        unlockedVault.userId !== actor.userId ||
+        unlockedVault.companyId !== actor.companyId ||
+        unlockedVault.vault.salt !== grant.vaultSalt
+      )
+        return null;
+      body = await openOfflineVaultBody(body, unlockedVault.vault, row);
+    } else if (isSealedOfflineVaultBody(body)) {
+      // A sealed row without a matching grant must never downgrade to plaintext.
+      return null;
+    }
+    // Sign-out/company-switch may happen while IndexedDB or WebCrypto awaits.
+    const finalActor = getVerifiedOfflineReadScope();
+    if (
+      verificationVersion !== requestVersion ||
+      finalActor?.companyId !== actor.companyId ||
+      finalActor?.userId !== actor.userId
+    )
+      return null;
+    return new Response(body, {
       status: 200,
       headers: {
         "Content-Type": "application/json",
