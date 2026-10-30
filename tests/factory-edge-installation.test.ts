@@ -17,6 +17,12 @@ describe("LAN edge operator preflight", () => {
     expect(() => parseEdgeEnvironment("EDGE_X=$(curl attacker)")).toThrow("EDGE_ENV_UNRECOGNIZED_LINE");
     expect(() => parseEdgeEnvironment("EDGE_HOSTNAME=x\nEDGE_HOSTNAME=y")).toThrow("EDGE_ENV_DUPLICATE_KEY");
     expect(() => parseEdgeEnvironment("EDGE_HOSTNAME=$ENV")).toThrow("EDGE_ENV_UNSAFE_VALUE");
+    const sample = readFileSync("deploy/lan/factory-edge.env.sample", "utf8");
+    const parsed = parseEdgeEnvironment(sample);
+    expect(parsed).toHaveProperty("EDGE_RELEASE_SHA");
+    expect(parsed).toHaveProperty("EDGE_WRITER_EPOCH");
+    expect(parsed).toHaveProperty("EDGE_BASELINE_SHA256");
+    expect(() => parseEdgeEnvironment("EDGE_WRITER_EPOCH=1\\nEDGE_BASELINE_SHA256=" + "a".repeat(64))).not.toThrow();
   });
   it("rejects a nonprivate LAN bind IP before reading credentials", () => {
     expect(() => verifyEdgeInstallation({ EDGE_BIND_IP: "0.0.0.0" }, "", "")).toThrow("EDGE_BIND_IP_NOT_PRIVATE");
