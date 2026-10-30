@@ -33,10 +33,10 @@ vi.mock("@/lib/db", () => ({
 
 const actor = { companyId: 6, userId: "operator-1" };
 const payload = {
-  voucher: { narration: "Test", currency: "USD" },
+  voucher: { voucherType: "Journal", voucherDate: "2026-10-29", description: "Test", currency: "USD" },
   entries: [
-    { debitAmount: "20", creditAmount: "0" },
-    { debitAmount: "0", creditAmount: "20" },
+    { ledgerAccountId: 11, debitAmount: "20", creditAmount: "0" },
+    { ledgerAccountId: 12, debitAmount: "0", creditAmount: "20" },
   ],
 };
 
