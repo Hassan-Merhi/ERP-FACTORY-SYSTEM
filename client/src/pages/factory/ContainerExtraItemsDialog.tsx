@@ -13,8 +13,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { queryClient, keyStartsWith } from "@/lib/queryClient";
+import { ContainerExtraExcelPanel } from "./ContainerExtraExcelPanel";
 
-type Product = { id: number; articleCode: string | null; name: string; active?: boolean };
+type Product = { id: number; articleCode: string | null; name: string; active?: boolean; sellingPrice?: string | null };
 type ExtraItem = { articleCode: string; productName: string; expectedQty: number; pricePerBale: string };
 type AgreedPrice = { article_code: string; price_per_bale: string };
 
@@ -34,6 +35,7 @@ export function ContainerExtraItemsDialog({
   const [search, setSearch] = useState("");
   const [selectedCode, setSelectedCode] = useState("");
   const [quantity, setQuantity] = useState("1");
+  const [priceInput, setPriceInput] = useState("");
   const { data: user } = useQuery<{ role?: string }>({ queryKey: ["/api/auth/me"], retry: false });
   const authorized = ["Admin", "Owner", "Developer"].includes(user?.role ?? "");
   const editable = ["DRAFT", "LOADING", "PENDING_VERIFICATION", "VERIFIED"].includes(status || "");
@@ -75,6 +77,9 @@ export function ContainerExtraItemsDialog({
   );
   const selectedProduct = products.find((p) => p.articleCode?.trim().toUpperCase() === selectedCode);
   const price = selectedCode ? priceByCode.get(selectedCode) : undefined;
+  const selling = Number(selectedProduct?.sellingPrice ?? 0);
+  const suggestedPrice = Number(price ?? 0) > 0 ? Number(price) : selling > 0 ? selling : 0;
+  const manualPriceValid = !priceInput.trim() || (/^\d+(?:\.\d{1,4})?$/.test(priceInput.trim()) && Number(priceInput) <= 99999999);
   const matchingProducts = useMemo(() => {
     const term = search.trim().toLowerCase();
     return products
@@ -90,7 +95,8 @@ export function ContainerExtraItemsDialog({
   };
   const save = useMutation({
     mutationFn: async () => {
-      const res = await request("PUT", endpoint, { articleCode: selectedCode, quantity: Number(quantity) });
+      const res = await request("PUT", endpoint, { articleCode: selectedCode, quantity: Number(quantity),
+        ...(priceInput.trim() ? { pricePerBale: priceInput.trim() } : {}) });
       return res.json();
     },
     onSuccess: () => {
@@ -98,6 +104,7 @@ export function ContainerExtraItemsDialog({
       toast({ title: "Container item saved", description: "Only this loading's expected items were changed." });
       setSelectedCode("");
       setQuantity("1");
+      setPriceInput("");
       setSearch("");
     },
     onError: (error: Error) => toast({ title: "Could not save extra item", description: error.message, variant: "destructive" }),
@@ -130,9 +137,11 @@ export function ContainerExtraItemsDialog({
           <DialogTitle>Additional items for Loading #{orderId}</DialogTitle>
           <DialogDescription>
             These quantities apply only to this container's expected list and comparison.
-            The original proforma is unchanged. Prices come from the customer's saved agreed price list.
+            The original proforma stays unchanged. Prices use the customer agreed rate, catalog selling rate, or a manual amount.
           </DialogDescription>
         </DialogHeader>
+
+        <ContainerExtraExcelPanel endpoint={endpoint} products={products} prices={prices} onImported={refresh} />
 
         <div className="space-y-3">
           <Label htmlFor="extra-article-search">Find article by code or product name</Label>
@@ -141,18 +150,20 @@ export function ContainerExtraItemsDialog({
           <div className="max-h-44 space-y-1 overflow-y-auto rounded-md border p-1">
             {matchingProducts.map((p) => {
               const code = p.articleCode!.trim().toUpperCase();
-              const agreed = priceByCode.get(code);
+              const agreed = Number(priceByCode.get(code) ?? 0);
+              const selling = Number(p.sellingPrice ?? 0);
               return (
                 <button type="button" key={p.id} onClick={() => {
                     setSelectedCode(code);
                     const existing = extras.find((e) => e.articleCode.trim().toUpperCase() === code);
                     setQuantity(String(existing?.expectedQty ?? 1));
+                    setPriceInput(existing ? String(existing.pricePerBale) : "");
                   }}
                   className={`flex w-full items-center justify-between gap-3 rounded px-3 py-2 text-left text-xs hover:bg-muted ${selectedCode === code ? "bg-primary/10 ring-1 ring-primary/30" : ""}`}
                   data-testid={`select-container-extra-${code}`}
                 >
                   <span className="min-w-0 truncate"><strong className="mr-2 font-mono">{code}</strong>{p.name}</span>
-                  <span className="shrink-0 tabular-nums">{agreed && Number(agreed) > 0 ? `$${Number(agreed).toFixed(2)}` : "No agreed price"}</span>
+                  <span className="shrink-0 tabular-nums">{agreed > 0 ? `${agreed.toFixed(2)} agreed` : selling > 0 ? `${selling.toFixed(2)} selling` : "Unpriced"}</span>
                 </button>
               );
             })}
@@ -169,19 +180,27 @@ export function ContainerExtraItemsDialog({
                 <Input id="container-extra-qty" type="number" min="1" max="100000" step="1" value={quantity}
                   onChange={(e) => setQuantity(e.target.value)} data-testid="input-container-extra-qty" />
               </div>
-              <p className="flex-1 text-sm text-muted-foreground">
-                Saved agreed price: <strong>{hasAgreedPrice ? `$${Number(price).toFixed(2)} / bale` : "Not set"}</strong>
-              </p>
-              <Button disabled={!validQty || !hasAgreedPrice || save.isPending} onClick={() => save.mutate()}
+              <div className="min-w-[160px] flex-1 space-y-1">
+                <Label htmlFor="container-extra-price">Price per bale (optional)</Label>
+                <Input id="container-extra-price" value={priceInput} inputMode="decimal"
+                  placeholder={suggestedPrice > 0 ? suggestedPrice.toFixed(2) + " auto" : "0.00"}
+                  onChange={(e) => setPriceInput(e.target.value)} data-testid="input-container-extra-price" />
+              </div>
+              <Button disabled={!validQty || !manualPriceValid || save.isPending} onClick={() => save.mutate()}
                 data-testid="button-save-container-extra">
                 {save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Save to this container
               </Button>
             </div>
-            {!hasAgreedPrice && (
-              <p className="text-xs text-amber-600">
-                Save an agreed price for this customer and article in the price list before adding it.
-              </p>
+            <p className="text-xs text-muted-foreground">
+              {hasAgreedPrice ? "Agreed price: $" + Number(price).toFixed(2)
+                : selling > 0 ? "No agreed price · Selling price: $" + selling.toFixed(2)
+                  : "No agreed or selling price"}
+              {" · Leave blank to use automatic price, or enter a manual price (including 0)."}
+            </p>
+            {!manualPriceValid && <p className="text-xs text-destructive">Enter a valid non-negative price with up to 4 decimals.</p>}
+            {!suggestedPrice && !priceInput.trim() && (
+              <p className="text-xs text-amber-600">No price set. You can still save now, then edit the price later.</p>
             )}
             <p className="text-xs text-muted-foreground">
               Saving an existing row replaces its extra quantity; it does not change the master's requested quantity.
@@ -196,13 +215,14 @@ export function ContainerExtraItemsDialog({
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{item.articleCode} — {item.productName}</p>
                 <p className="text-xs text-muted-foreground">
-                  +{item.expectedQty} bales • ${Number(item.pricePerBale).toFixed(2)} agreed / bale
+                  +{item.expectedQty} bales • {Number(item.pricePerBale) > 0 ? "$" + Number(item.pricePerBale).toFixed(2) + " / bale" : "Unpriced — edit to set price"}
                 </p>
               </div>
               <Button variant="outline" size="sm" onClick={() => {
                 setSearch(item.articleCode);
                 setSelectedCode(item.articleCode.trim().toUpperCase());
                 setQuantity(String(item.expectedQty));
+                setPriceInput(String(item.pricePerBale));
               }}>Edit</Button>
               <Button variant="ghost" size="icon" aria-label={`Remove ${item.articleCode}`}
                 disabled={remove.isPending} onClick={() => remove.mutate(item.articleCode)}>
