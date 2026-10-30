@@ -187,11 +187,11 @@ export function registerFactoryDaybookPaginationRoutes(app: Express): void {
         `NOT (f.tx_type = 'PAYROLL_PAYMENT' AND COALESCE(f.amount_currency, 0) = 0)`,
         `(f.reference_table IS DISTINCT FROM 'vouchers' OR f.reference_id IS NULL OR live_voucher.id IS NOT NULL)`,
         // A Daybook delete reverses and retains the payment claim. Active view
-        // excludes original positive bonus payments after the reversing Receipt.
-        `NOT (f.tx_type = 'PRODUCTION_TARGET_BONUS_PAYMENT' AND EXISTS (
+        // excludes both sides of reversed bonuses so Daybook totals remain net zero.
+        `NOT (f.tx_type IN ('PRODUCTION_TARGET_BONUS_PAYMENT','PRODUCTION_TARGET_BONUS_REVERSAL') AND EXISTS (
           SELECT 1 FROM factory_target_bonus_payments p
           WHERE p.company_id = f.company_id AND p.id = f.reference_id AND p.status = 'REVERSED'))`,
-        `NOT (f.tx_type = 'PRODUCTION_TARGET_WEEKLY_BONUS_PAYMENT' AND EXISTS (
+        `NOT (f.tx_type IN ('PRODUCTION_TARGET_WEEKLY_BONUS_PAYMENT','PRODUCTION_TARGET_WEEKLY_BONUS_REVERSAL') AND EXISTS (
           SELECT 1 FROM factory_target_bonus_weekly_payments p
           WHERE p.company_id = f.company_id AND p.id = f.reference_id AND p.status = 'REVERSED'))`,
         // Shared source-integrity conditions — generated from the central registry.
