@@ -18,6 +18,7 @@ import {
   ActiveCompanyPermissionContextError, getActiveCompanyPermissionContext,
 } from "../../services/security/activeCompanyPermissionContext";
 import { logAudit } from "../helpers/auditHelpers";
+import { capturePhase9PressingTx } from "../../edge/phase9PressingOutbox";
 import { logger } from "../../lib/logger";
 import { factoryLocalDate } from "../../services/factory/pressingShiftTime";
 import { PRESSING_TIME_ZONE } from "@shared/pressingTimeZone";
@@ -309,6 +310,24 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
             pressedAt: { old: null, new: created.confirmedAt.toISOString() },
           },
         }, tx);
+        // Phase 9: record a distinct, immutable physical-scan event inside
+        // the SAME transaction as the confirmation and its audit. Failure
+        // rolls the scan back. The LAN policy still blocks this route until
+        // independent cloud apply and reconciliation are certified.
+        await capturePhase9PressingTx(tx, {
+          companyId,
+          actorUserId: userId,
+          localConfirmationId: created.id,
+          requestId: created.requestId,
+          baleId: created.baleId,
+          machineId: created.machineId,
+          assignmentId: created.assignmentId,
+          referenceNumber: created.referenceNumber,
+          confirmedAt: created.confirmedAt.toISOString(),
+          deviceCapturedAt: created.deviceCapturedAt?.toISOString() ?? null,
+          productionDate: created.productionDate,
+          timezoneName: created.timezoneName,
+        });
         return { row: created, replayed: false };
       });
       return res.status(result.replayed ? 200 : 201).json(receipt(result.row, result.replayed));
