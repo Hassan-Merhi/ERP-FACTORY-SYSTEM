@@ -58,7 +58,7 @@ export async function loadLiveTargetBonusRows(
     credited_bales AS MATERIALIZED (
       SELECT work_date, worker_id, SUM(bales)::integer AS bales
       FROM bale_work_days GROUP BY work_date, worker_id
-    ),
+    )
     SELECT d.work_date::text AS date, w.id AS "workerId",
       w.full_name AS "workerName",
       COALESCE(CASE WHEN saved.category_overridden THEN saved.category
