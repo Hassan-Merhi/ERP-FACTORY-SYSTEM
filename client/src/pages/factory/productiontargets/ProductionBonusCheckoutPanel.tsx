@@ -23,6 +23,7 @@ type Offer = {
   extra: number; method: Method; lines: Line[]; amount: string; token: string;
   status: "pending" | "approved" | "paid" | "reversed" | "no_bonus" | "needs_setup" | "blocked" | "rejected" | "weekly";
   issue: string | null;
+  weeklyBonus?: { weekStart: string; amount: string; state: "projected" | "approved" };
 };
 type Preview = { from: string; to: string; method: Method; currency: "USD"; offers: Offer[] };
 type Account = { id: number; name: string; code: string; openingCurrency: string | null };
@@ -45,14 +46,16 @@ const startOfRange=(date:string)=>{
 };
 const payableStatus=(row:Offer)=>row.status==="pending"||row.status==="approved";
 type WorkerGroup={workerId:number;workerName:string;days:Offer[];target:number;produced:number;
-  extra:number;amount:number;readyDays:number;paidDays:number;needsSetup:number;blockedDays:number;weeklyDays:number};
+  extra:number;amount:number;weeklyAmount:number;weeklyProjected:boolean;weeklyApproved:boolean;
+  readyDays:number;paidDays:number;needsSetup:number;blockedDays:number;weeklyDays:number};
 function summarizeByWorker(offers:Offer[]):WorkerGroup[]{
   const map=new Map<number,WorkerGroup>();
   for(const row of offers){
     let group=map.get(row.workerId);
     if(!group){
       group={workerId:row.workerId,workerName:row.workerName,days:[],target:0,
-        produced:0,extra:0,amount:0,readyDays:0,paidDays:0,needsSetup:0,blockedDays:0,weeklyDays:0};
+        produced:0,extra:0,amount:0,weeklyAmount:0,weeklyProjected:false,weeklyApproved:false,
+        readyDays:0,paidDays:0,needsSetup:0,blockedDays:0,weeklyDays:0};
       map.set(row.workerId,group);
     }
     group.days.push(row);
@@ -67,8 +70,13 @@ function summarizeByWorker(offers:Offer[]):WorkerGroup[]{
     if(row.status==="needs_setup")group.needsSetup++;
     if(row.status==="blocked")group.blockedDays++;
     if(row.status==="weekly")group.weeklyDays++;
+    if(row.weeklyBonus){
+      group.weeklyAmount+=Math.round(Number(row.weeklyBonus.amount)*100);
+      if(row.weeklyBonus.state==="projected")group.weeklyProjected=true;
+      if(row.weeklyBonus.state==="approved")group.weeklyApproved=true;
+    }
   }
-  return [...map.values()].map(g=>({...g,amount:g.amount/100,
+  return [...map.values()].map(g=>({...g,amount:g.amount/100,weeklyAmount:g.weeklyAmount/100,
     days:g.days.sort((a,b)=>a.date.localeCompare(b.date))}))
     .sort((a,b)=>a.workerName.localeCompare(b.workerName));
 }
