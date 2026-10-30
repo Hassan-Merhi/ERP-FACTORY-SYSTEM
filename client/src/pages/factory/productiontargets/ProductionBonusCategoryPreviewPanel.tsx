@@ -24,12 +24,23 @@ async function fetchProposal(date: string): Promise<CategoryBonusDayProposal> {
   return response.json() as Promise<CategoryBonusDayProposal>;
 }
 
+interface FrozenCategoryReviewLine {
+  categoryKey: string; categoryLabel: string; creditedBales: number;
+  targetBales: string; extraBales: string; ratePerExtraBaleUsd: string | null;
+  unroundedBonusUsd: string; rateVersionId: number | null;
+  rateEffectiveFrom: string | null; enabled: boolean;
+  issue?: string | null;
+}
+interface FrozenCategoryReviewSnapshot {
+  workerName: string | null; targetBales: string | null; creditedBales: number;
+  extraBales: string; bonusUsd: string; categoryLines: FrozenCategoryReviewLine[];
+}
 interface CategoryReviewRecord {
   id: number;
   workerId: number;
   status: "approved" | "rejected";
   amount: string;
-  snapshot: unknown;
+  snapshot: FrozenCategoryReviewSnapshot;
   snapshotHash: string;
   reviewedAt: string;
   reviewedBy: string;
@@ -73,6 +84,12 @@ export function ProductionBonusCategoryPreviewPanel({initialDate}: {initialDate:
     queryFn:()=>fetchCategoryReviews(date),
   });
   const reviewByWorker=new Map((existingReviews?.reviews??[]).map(row=>[row.workerId,row]));
+  const unreviewedTotal=(data?.workers??[])
+    .filter(worker=>!reviewByWorker.has(worker.workerId))
+    .reduce((sum,worker)=>sum+Number(worker.proposedBonusUsd),0).toFixed(2);
+  const lockedApprovedTotal=(existingReviews?.reviews??[])
+    .filter(row=>row.status==="approved")
+    .reduce((sum,row)=>sum+Number(row.amount),0).toFixed(2);
   const selectedWorker=data?.workers.find(item=>item.workerId===decision?.workerId);
   const mutation=useMutation({
     mutationFn:async()=>{
@@ -126,7 +143,8 @@ export function ProductionBonusCategoryPreviewPanel({initialDate}: {initialDate:
       </p>}
       {data&&<>
         <div className="flex flex-wrap gap-4 text-sm">
-          <span><strong className="tabular-nums">{data.totalProposedBonusUsd} USD</strong> proposed</span>
+          <span><strong className="tabular-nums">{unreviewedTotal} USD</strong> unreviewed proposal</span>
+          <span><strong className="tabular-nums">{lockedApprovedTotal} USD</strong> locked approvals (unpaid)</span>
           <span className="tabular-nums">{data.workers.length} workers</span>
           <span className={data.blockedWorkerCount?"text-destructive":"text-muted-foreground"}>
             {data.blockedWorkerCount} blocked
@@ -150,18 +168,23 @@ export function ProductionBonusCategoryPreviewPanel({initialDate}: {initialDate:
               </tr>
             </thead>
             <tbody>
-              {data.workers.map(worker=><Fragment key={worker.workerId}>
+              {data.workers.map(worker=>{
+                const recorded=reviewByWorker.get(worker.workerId);
+                const locked=recorded?.snapshot && Array.isArray(recorded.snapshot.categoryLines)
+                  ? recorded.snapshot : null;
+                const visibleLines=locked?.categoryLines??worker.lines;
+                return <Fragment key={worker.workerId}>
                 <tr key={"worker:"+worker.workerId} className="border-t bg-muted/20">
                   <td className="px-3 py-2 font-medium">
-                    {worker.workerName||"Worker #"+worker.workerId}
-                    {worker.blocked&&<span className="ml-2 text-xs font-normal text-destructive">Blocked</span>}
+                    {locked?.workerName||worker.workerName||"Worker #"+worker.workerId}
+                    {worker.blocked&&!recorded&&<span className="ml-2 text-xs font-normal text-destructive">Blocked</span>}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums">{worker.creditedBales}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{worker.targetBales??"—"}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{worker.extraBales}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{locked?.creditedBales??worker.creditedBales}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{locked?.targetBales??worker.targetBales??"—"}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{locked?.extraBales??worker.extraBales}</td>
                   <td className="px-3 py-2 text-right">—</td>
                   <td className="px-3 py-2 text-right font-semibold tabular-nums">
-                    {worker.proposedBonusUsd}
+                    {recorded?.amount??worker.proposedBonusUsd}
                   </td>
                   <td className="px-3 py-2 text-right">
                     {reviewByWorker.has(worker.workerId)
@@ -169,7 +192,7 @@ export function ProductionBonusCategoryPreviewPanel({initialDate}: {initialDate:
                           {reviewByWorker.get(worker.workerId)?.status === "approved"
                             ? "Approved · not paid" : "Rejected"}
                         </span>
-                      : !worker.blocked && worker.reviewToken && !reviewsError
+                      : !worker.blocked && worker.reviewToken && existingReviews && !reviewsError
                         ? <div className="flex justify-end gap-1">
                             <Button type="button" size="sm" variant="outline"
                               onClick={()=>{setReviewNote("");setDecision({workerId:worker.workerId,status:"rejected"});}}>
@@ -183,7 +206,7 @@ export function ProductionBonusCategoryPreviewPanel({initialDate}: {initialDate:
                         : <span className="text-xs text-muted-foreground">Unavailable</span>}
                   </td>
                 </tr>
-                {worker.lines.map(line=><tr key={worker.workerId+":"+line.categoryKey} className="border-t">
+                {visibleLines.map(line=><tr key={worker.workerId+":"+line.categoryKey} className="border-t">
                   <td className="px-3 py-2 pl-6">{line.categoryLabel}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{line.creditedBales}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{line.targetBales}</td>
@@ -195,12 +218,12 @@ export function ProductionBonusCategoryPreviewPanel({initialDate}: {initialDate:
                   <td className="px-3 py-2 text-right tabular-nums">{line.unroundedBonusUsd}</td>
                   <td className="px-3 py-2 text-right">—</td>
                 </tr>)}
-                {worker.reasons.length>0&&<tr key={"reason:"+worker.workerId} className="border-t">
+                {!recorded && worker.reasons.length>0&&<tr key={"reason:"+worker.workerId} className="border-t">
                   <td colSpan={7} className="px-3 py-2 text-xs text-destructive" role="status">
                     Not payable: {worker.reasons.map(s=>s.replaceAll("_"," ")).join(", ")}.
                   </td>
                 </tr>}
-              </Fragment>)}
+              </Fragment>;})}
               {data.workers.length===0&&<tr>
                 <td colSpan={7} className="px-3 py-4 text-center text-muted-foreground">No finalized workers for this date.</td>
               </tr>}
