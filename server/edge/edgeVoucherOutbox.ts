@@ -36,6 +36,17 @@ export async function ensureEdgeVoucherOutboxSchema(queryable: Pick<Pool, "query
         CHECK (operation_kind = 'voucher.with-entries.v1')
     )
   `);
+  await queryable.query(`
+    CREATE TABLE IF NOT EXISTS factory_edge_stage_receipts (
+      site_id UUID NOT NULL,
+      sequence BIGINT NOT NULL CHECK(sequence > 0),
+      operation_id UUID NOT NULL,
+      payload_sha256 CHAR(64) NOT NULL,
+      state TEXT NOT NULL CHECK(state = 'staged-not-applied'),
+      received_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY(site_id, sequence)
+    )
+  `);
   // This outbox is evidence; the normal application must not rewrite
   // confirmed local operations. Receipts belong to a separate append-only log.
   await queryable.query(`
@@ -52,6 +63,15 @@ export async function ensureEdgeVoucherOutboxSchema(queryable: Pick<Pool, "query
   await queryable.query(`
     CREATE TRIGGER factory_edge_voucher_outbox_no_mutation
     BEFORE UPDATE OR DELETE ON factory_edge_voucher_outbox
+    FOR EACH ROW EXECUTE FUNCTION factory_edge_voucher_outbox_immutable()
+  `);
+  await queryable.query(`
+    DROP TRIGGER IF EXISTS factory_edge_stage_receipt_no_mutation
+    ON factory_edge_stage_receipts
+  `);
+  await queryable.query(`
+    CREATE TRIGGER factory_edge_stage_receipt_no_mutation
+    BEFORE UPDATE OR DELETE ON factory_edge_stage_receipts
     FOR EACH ROW EXECUTE FUNCTION factory_edge_voucher_outbox_immutable()
   `);
 }
