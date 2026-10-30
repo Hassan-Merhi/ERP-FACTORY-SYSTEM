@@ -690,7 +690,7 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
         WHERE company_id = ${companyId}
           AND (payment_voucher_id = ${voucherId} OR reversal_voucher_id = ${voucherId})
         LIMIT 1
-      `)) as Array<{id:number;kind:"daily"|"weekly";paymentVoucherId:number;reversalVoucherId:number|null}>;
+      `)) as unknown as Array<{id:number;kind:"daily"|"weekly";paymentVoucherId:number;reversalVoucherId:number|null}>;
       if (bonusVoucher.length) {
         if (role !== "admin" && role !== "owner")
           return res.status(403).json({message:"Only Admin or Owner can reverse bonuses"});
