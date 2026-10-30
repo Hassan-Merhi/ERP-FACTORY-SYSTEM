@@ -237,3 +237,20 @@ document/stock/production mutations, dual-writer conflict resolution, live
 failover, and automatic cloud-to-factory ERP data merging. The sender is a
 staging-only, deliberately limited Phase 4 building block; do not interpret
 the relay running as the factory being fully synchronized.
+
+### Local staging receipt reconciliation (non-destructive)
+
+From a running LAN deployment, use the app container's existing private DB
+credentials and the configured site identity:
+
+```sh
+docker compose --env-file deploy/lan/.env -f deploy/lan/compose.yaml exec -T app \
+  node scripts/edge/audit-voucher-outbox.mjs
+```
+
+This read-only audit checks the local gapless sequence, pending/staged counts
+and receipt identity/hash agreement in a repeatable-read PostgreSQL snapshot.
+It reports `cloudVouchersApplied: "not-verified"` by design. It cannot prove
+that the cloud retains the staged evidence after a backup restore, nor that
+any cloud voucher is posted. An outbox audit error blocks manual cutover
+pending reconciliation—never delete or skip source records to hide a gap.
