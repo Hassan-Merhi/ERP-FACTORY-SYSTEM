@@ -170,6 +170,26 @@ export async function applyStagedVoucherOnce(queryable, input, applyPosting) {
              NOT (r.rolsuper OR r.rolbypassrls OR r.rolcreaterole)
                 AND NOT has_schema_privilege(current_user,'public','CREATE')
                 AND NOT has_database_privilege(current_user,current_database(),'CREATE')
+                AND NOT pg_has_role(current_user,'pg_write_all_data','MEMBER')
+                AND NOT has_table_privilege(current_user,
+                  'factory_edge_apply_approvals','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+                AND NOT has_table_privilege(current_user,
+                  'phase7_writer.state','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+                AND NOT EXISTS (
+                  SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+                  WHERE n.nspname='public' AND c.relkind IN ('r','p')
+                    AND pg_has_role(current_user,c.relowner,'MEMBER')
+                )
+                AND EXISTS (SELECT 1 FROM pg_event_trigger
+                            WHERE evtname='phase7_writer_guard_ddl' AND evtenabled='O')
+                AND NOT EXISTS (
+                  SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+                  WHERE n.nspname='public' AND c.relkind IN ('r','p')
+                    AND c.relname <> 'session'
+                    AND NOT EXISTS (SELECT 1 FROM pg_trigger t
+                      WHERE t.tgrelid=c.oid AND t.tgname='phase7_writer_fence'
+                        AND t.tgenabled='O' AND NOT t.tgisinternal)
+                )
                 AS restricted_role
       FROM phase7_writer.state s
       JOIN pg_roles r ON r.rolname=current_user
