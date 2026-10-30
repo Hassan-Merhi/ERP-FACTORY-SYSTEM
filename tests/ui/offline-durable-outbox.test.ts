@@ -117,6 +117,30 @@ describe("durable outbox — capture before delivery", () => {
     expect(state.records.size).toBe(0);
   });
 
+  it("quarantines stale or altered saved requests before any HTTP mutation", async () => {
+    const { deliverOfflineOperations } = await import("@/lib/offline/durableOutbox");
+    for (const changed of [
+      { payload: JSON.stringify({ ...payload, clientRequestId: "wrong" }) },
+      { payload: JSON.stringify({ ...payload, file: { name: "secret.pdf" } }) },
+      { payload: JSON.stringify({ ...payload, voucher: { ...payload.voucher, voucherType: "Payment" } }) },
+      { payload: "corrupted-json" },
+      { mode: "pos" },
+      { entityType: "unverified-stock" },
+    ]) {
+      state.records.clear();
+      const row = await queue();
+      Object.assign(state.records.get(row.id), changed);
+      const { transport, calls } = transportFor();
+      expect(await deliverOfflineOperations(transport)).toMatchObject({ rejected: 1 });
+      expect(state.records.get(row.id)).toMatchObject({
+        state: "needs_review",
+        lastError: "OFFLINE_SAVED_OPERATION_SHAPE_UNSUPPORTED",
+      });
+      expect(calls).toHaveLength(2); // auth lookups only; no business POST
+      expect(state.records.size).toBe(1);
+    }
+  });
+
   it("retains an acknowledged receipt instead of deleting operation history", async () => {
     const row = await queue();
     const { transport, calls } = transportFor();
