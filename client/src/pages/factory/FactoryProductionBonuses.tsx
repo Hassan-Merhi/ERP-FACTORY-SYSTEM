@@ -31,7 +31,7 @@ export default function FactoryProductionBonuses() {
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
         <Button type="button" variant="ghost" size="sm" className="-ml-2 mb-2 gap-2"
-          onClick={() => navigate("/factory/stock-entry")}>
+          onClick={() => navigate("/factory/stock-entry?tab=production-targets")}>
           <ArrowLeft className="h-4 w-4" /> Back to Production Targets
         </Button>
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
