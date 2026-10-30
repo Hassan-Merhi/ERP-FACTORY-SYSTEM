@@ -203,6 +203,17 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
                 }
               }
             }
+            if (order.proformaIdUsed && effectiveArticleCode) {
+              const extra = resultRows<{ price: string }>(await tx.execute(sql`
+                SELECT price_per_bale::text AS price
+                FROM customer_order_extra_expected_lines
+                WHERE company_id = ${companyId} AND order_id = ${orderId}
+                  AND UPPER(TRIM(article_code)) = UPPER(TRIM(${effectiveArticleCode}))
+                LIMIT 1
+              `))[0];
+              // Container-local agreed price wins over the reusable proforma.
+              if (extra) priceUsed = extra.price;
+            }
             if (priceUsed === "0" && bale.productId) {
               const product = allProducts.find((p) => p.id === bale.productId);
               if (product?.sellingPrice) priceUsed = product.sellingPrice;
@@ -418,6 +429,17 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
                   priceUsed = pl.pricePerBale;
                 }
               }
+            }
+            if (order.proformaIdUsed && effectiveArticleCode) {
+              const extra = resultRows<{ price: string }>(await tx.execute(sql`
+                SELECT price_per_bale::text AS price
+                FROM customer_order_extra_expected_lines
+                WHERE company_id = ${companyId} AND order_id = ${orderId}
+                  AND UPPER(TRIM(article_code)) = UPPER(TRIM(${effectiveArticleCode}))
+                LIMIT 1
+              `))[0];
+              // Container-local agreed price wins over the reusable proforma.
+              if (extra) priceUsed = extra.price;
             }
             if (priceUsed === "0" && bale.productId) {
               const product = allProducts.find((p) => p.id === bale.productId);
