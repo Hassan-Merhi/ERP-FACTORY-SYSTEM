@@ -35,7 +35,11 @@ export async function ensurePhase9PressingOutboxSchema(queryable: Pick<Pool, "qu
       created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
       PRIMARY KEY (site_id, sequence),
       UNIQUE (site_id, operation_id),
-      UNIQUE (site_id, company_id, local_confirmation_id)
+      UNIQUE (site_id, company_id, local_confirmation_id),
+      CONSTRAINT factory_edge_pressing_source_fk
+        FOREIGN KEY (company_id, local_confirmation_id)
+        REFERENCES factory_pressing_confirmations(company_id, id)
+        ON DELETE RESTRICT
     )
   `);
   await queryable.query(`
