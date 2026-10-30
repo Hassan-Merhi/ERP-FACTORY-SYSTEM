@@ -13,8 +13,14 @@ export async function ensureEdgeVoucherOutboxSchema(queryable: Pick<Pool, "query
   const config = readFactoryEdgeConfiguration();
   if (config.mode !== "lan") return;
   await queryable.query(`
+    CREATE TABLE IF NOT EXISTS factory_edge_outbox_counter (
+      site_id UUID PRIMARY KEY,
+      last_sequence BIGINT NOT NULL CHECK(last_sequence > 0)
+    )
+  `);
+  await queryable.query(`
     CREATE TABLE IF NOT EXISTS factory_edge_voucher_outbox (
-      sequence BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      sequence BIGINT NOT NULL PRIMARY KEY CHECK(sequence > 0),
       site_id UUID NOT NULL,
       operation_id UUID NOT NULL,
       company_id INTEGER NOT NULL,
@@ -95,11 +101,19 @@ export async function captureEdgeVoucherTx(tx: DbTransaction, evidence: EdgeVouc
   // advance past unconfirmed rows.
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('factory-edge-voucher-outbox-order'))`);
   await tx.execute(sql`
+    WITH next_sequence AS (
+      INSERT INTO factory_edge_outbox_counter(site_id, last_sequence)
+      VALUES (${config.siteId}::uuid, 1)
+      ON CONFLICT (site_id)
+        DO UPDATE SET last_sequence = factory_edge_outbox_counter.last_sequence + 1
+      RETURNING last_sequence
+    )
     INSERT INTO factory_edge_voucher_outbox
-      (site_id, operation_id, company_id, actor_user_id,
+      (sequence, site_id, operation_id, company_id, actor_user_id,
        local_voucher_id, payload, payload_sha256)
-    VALUES
-      (${config.siteId}, ${operationId}, ${evidence.companyId}, ${evidence.actorUserId},
-       ${evidence.localVoucherId}, ${payload}::jsonb, ${hash})
+    SELECT next_sequence.last_sequence, ${config.siteId}::uuid, ${operationId}::uuid,
+      ${evidence.companyId}, ${evidence.actorUserId},
+      ${evidence.localVoucherId}, ${payload}::jsonb, ${hash}
+    FROM next_sequence
   `);
 }
