@@ -316,6 +316,7 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
         <Button variant="destructive" disabled={!reverseReason.trim()||reverseMutation.isPending}
           onClick={()=>reverseMutation.mutate()}>{t("confirmReverse")}</Button>
       </DialogFooter>
+      </DialogContent>
     </Dialog>
   </Card>;
 }
