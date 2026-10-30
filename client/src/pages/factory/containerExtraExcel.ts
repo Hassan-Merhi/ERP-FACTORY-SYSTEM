@@ -20,7 +20,7 @@ function asNumber(value: unknown): number {
 }
 
 export async function parseContainerExtraExcel(file: File): Promise<ContainerExtraImportRow[]> {
-  if (!/\\.xlsx$/i.test(file.name)) throw new Error("Choose an .xlsx Excel workbook");
+  if (!/\.xlsx$/i.test(file.name)) throw new Error("Choose an .xlsx Excel workbook");
   if (file.size > 5 * 1024 * 1024) throw new Error("Workbook is too large (maximum 5 MB)");
   const book = await XLSX.read(await file.arrayBuffer(), { type: "array" });
   const sheet = book.Sheets[book.SheetNames[0]];
@@ -48,7 +48,7 @@ export async function parseContainerExtraExcel(file: File): Promise<ContainerExt
       throw new Error(`Excel row ${index + 2}: duplicate ${code}. Combine the quantities into one row.`);
     seen.add(code);
     const priceInput = String(optionalPrice ?? "").trim().replace(/[$,]/g, "");
-    if (priceInput && (!/^\\d+(?:\\.\\d{1,4})?$/.test(priceInput) || Number(priceInput) > 99999999))
+    if (priceInput && (!/^\d+(?:\.\d{1,4})?$/.test(priceInput) || Number(priceInput) > 99999999))
       throw new Error(`Excel row ${index + 2}: price must be non-negative, with up to four decimals`);
     imported.push({ articleCode: code, quantity: qty, priceInput });
   });
