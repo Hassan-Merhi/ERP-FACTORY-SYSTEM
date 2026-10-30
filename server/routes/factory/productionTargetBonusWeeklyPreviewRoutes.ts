@@ -9,6 +9,7 @@ import { isBonusCategoryDate } from "@shared/productionTargetBonusCategoryRates"
 import { mondayOfProductionBonusWeek, type ProductionBonusMethod } from "@shared/productionTargetBonusWeeklyMethod";
 import { calculateWeeklyFlatBonus, type WeeklyFlatDayEvidence } from "@shared/productionTargetBonusWeeklyCalculation";
 import { loadProductionBonusCategoryEvidence } from "../../services/factory/productionBonusCategoryEvidenceService";
+import { weeklyBonusReviewSnapshot, weeklyBonusReviewToken } from "../../services/factory/weeklyBonusReviewSnapshot";
 
 const guard = requireFactoryTabAccess("factory/stock-entry", "hide_tab_stockentry_production_targets");
 const allowed = (req: Request): boolean =>
@@ -159,8 +160,14 @@ export function registerProductionTargetBonusWeeklyPreviewRoutes(app: Express): 
       const weekStart = mondayOfProductionBonusWeek(weekOf)!;
       try {
         const proposal = await loadWeeklyFlatBonusProposal(companyId, weekStart);
+        const workers = proposal.workers.map(worker => ({
+          ...worker,
+          reviewToken: worker.eligible
+            ? weeklyBonusReviewToken(weeklyBonusReviewSnapshot(companyId, proposal, worker))
+            : null,
+        }));
         res.setHeader("Cache-Control", "private, no-store");
-        return res.json(proposal);
+        return res.json({ ...proposal, workers });
       } catch (error) {
         logger.error("Production Targets weekly bonus preview failed", { error });
         return res.status(500).json({ message: "Could not calculate weekly bonus eligibility" });
