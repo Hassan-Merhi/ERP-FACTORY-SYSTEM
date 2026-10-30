@@ -126,6 +126,8 @@ export function registerProductionTargetBonusCategoryRateRoutes(app: Express): v
       }
       try {
         const result = await db.transaction(async tx => {
+          // Serialize rate changes with bonus payment/approval posting.
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(84023, ${companyId})`);
           await tx.execute(sql`SELECT pg_advisory_xact_lock(7642, ${companyId})`);
           // Category rates may only be set for categories explicitly used by
           // Production Targets. Worker groups and arbitrary new labels are not rates.
