@@ -211,16 +211,13 @@ export async function runSync(): Promise<void> {
       // protection and may have no trustworthy actor identity.
       const { deliverOfflineOperations } = await import("./offline/durableOutbox");
       const result = await deliverOfflineOperations();
-      const allClear =
-        result.acknowledged > 0 &&
-        !result.paused &&
-        result.retried === 0 &&
-        result.conflicts === 0 &&
-        result.rejected === 0;
+      // The device's HTTP 2xx only confirms an approved LAN/cloud server
+      // accepted the voucher request. It does NOT prove Phase 8 cloud apply.
+      // Never stamp the global "last synced" field until a separately
+      // verified, scoped cloud-applied receipt establishes that fact.
       emitSyncEvent({
         syncing: false,
         conflictDetected: result.conflicts > 0,
-        ...(allClear ? { lastSyncedAt: Date.now() } : {}),
       });
     } catch (error) {
       emitSyncEvent({
