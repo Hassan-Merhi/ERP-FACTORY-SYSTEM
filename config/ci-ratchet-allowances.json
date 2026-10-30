@@ -6,7 +6,15 @@
     "server/routes/retailRoutes.ts": 962,
     "server/routes/containers/containerFreightWriteRoutes.ts": 913
   },
-  "routeManifestAdditions": [],
+  "routeManifestAdditions": [
+    "GET /api/permissions-v2/catalog [requireAuth > <anonymous>]",
+    "GET /api/permissions-v2/roles [requireAuth > <anonymous>]",
+    "GET /api/permissions-v2/users/:userId/overrides [requireAuth > <anonymous>]",
+    "GET /api/permissions-v2/preview [requireAuth > <anonymous>]",
+    "GET /api/permissions-v2/audit [requireAuth > <anonymous>]",
+    "PUT /api/permissions-v2/role-rules [requireAuth > <anonymous>]",
+    "PUT /api/permissions-v2/user-overrides [requireAuth > <anonymous>]"
+  ],
   "routeManifestMountAdditions": [],
   "routeManifestReplacements": [],
   "sourceTextAssertionDelta": {
