@@ -61,6 +61,15 @@ interface ExecuteAccountResult {
   wasRenamed: boolean;
 }
 
+interface PendingMigration {
+  migrationId: string;
+  srcCompanyId: number;
+  destCompanyId: number;
+  accountIds: number[];
+  movedVoucherIds: number[];
+  accounts: Array<{ accountId: number; originalCode: string; finalCode: string }>;
+}
+
 interface ExecuteResult {
   success: boolean;
   srcCompanyId: number;
@@ -288,9 +297,7 @@ export default function AccountMigration() {
   const [selectedAccountIds, setSelectedAccountIds] = useState<number[]>([]);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [undoConfirmOpen, setUndoConfirmOpen] = useState(false);
-  const [lastResult, setLastResult] = useState<ExecuteResult | null>(null);
-  const [undoDone, setUndoDone] = useState(false);
+  const [undoTarget, setUndoTarget] = useState<PendingMigration | null>(null);
 
   const {
     data: companies = [],
@@ -323,7 +330,7 @@ export default function AccountMigration() {
   } = useQuery<LedgerAccount[]>({
     queryKey: ["/api/admin/account-migration/accounts", srcCompanyId],
     queryFn: async () => {
-      const res = await fetch(`/api/ledger-accounts?companyId=${encodeURIComponent(srcCompanyId)}&includeHidden=true`, {
+      const res = await fetch(`/api/admin/account-migration/accounts/${encodeURIComponent(srcCompanyId)}`, {
         credentials: "include",
         cache: "no-store",
       });
@@ -336,6 +343,31 @@ export default function AccountMigration() {
     },
     enabled: !!srcCompanyId,
   });
+
+  const {
+    data: pendingMigrationsResponse,
+    isLoading: loadingPending,
+    isError: pendingError,
+    refetch: refetchPendingMigrations,
+  } = useQuery<PendingMigration[]>({
+    queryKey: ["/api/admin/account-migration/pending"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/account-migration/pending", {
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || `Failed to load active migrations (${res.status})`);
+      }
+      return res.json() as Promise<PendingMigration[]>;
+    },
+    staleTime: 0,
+  });
+
+  const pendingMigrations: PendingMigration[] = Array.isArray(pendingMigrationsResponse)
+    ? pendingMigrationsResponse
+    : [];
 
   const previewMutation = useMutation({
     mutationFn: async () => {
@@ -363,8 +395,7 @@ export default function AccountMigration() {
       return res.json() as Promise<ExecuteResult>;
     },
     onSuccess: (data) => {
-      setLastResult(data);
-      setUndoDone(false);
+      void refetchPendingMigrations();
       setConfirmOpen(false);
       setPreview(null);
       setSelectedAccountIds([]);
@@ -385,30 +416,30 @@ export default function AccountMigration() {
 
   const undoMutation = useMutation({
     mutationFn: async () => {
-      if (!lastResult) throw new Error("Nothing to undo");
+      if (!undoTarget) throw new Error("Select a migration to move back");
       const res = await apiRequest("POST", "/api/admin/account-migration/undo", {
-        accounts: lastResult.accounts.map((a) => ({
+        accounts: undoTarget.accounts.map((a) => ({
           accountId: a.accountId,
           originalCode: a.originalCode,
         })),
-        movedVoucherIds: lastResult.movedVoucherIds,
-        srcCompanyId: lastResult.srcCompanyId,
-        destCompanyId: lastResult.destCompanyId,
+        movedVoucherIds: undoTarget.movedVoucherIds,
+        srcCompanyId: undoTarget.srcCompanyId,
+        destCompanyId: undoTarget.destCompanyId,
       });
       return res.json();
     },
     onSuccess: () => {
-      setUndoConfirmOpen(false);
-      setUndoDone(true);
+      const returnedCount = undoTarget?.accounts.length ?? 0;
+      setUndoTarget(null);
+      void refetchPendingMigrations();
       toast({
-        title: "Migration undone",
-        description: `${lastResult?.accounts.length} account${lastResult?.accounts.length === 1 ? "" : "s"} moved back to the original company.`,
+        title: "Account moved back",
+        description: `${returnedCount} account${returnedCount === 1 ? "" : "s"} returned to the original company.`,
       });
     },
     onError: (err: Error) => {
       if ((err as { _handledGlobally?: boolean })?._handledGlobally) return;
-      setUndoConfirmOpen(false);
-      toast({ title: "Undo failed", description: err.message, variant: "destructive" });
+      toast({ title: "Move back failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -600,22 +631,48 @@ export default function AccountMigration() {
         </Card>
       )}
 
-      {lastResult && (
+      {(loadingPending || pendingError || pendingMigrations.length > 0) && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5" /> Migration complete
+              <CheckCircle className="h-5 w-5" /> Active migrations — move accounts back
             </CardTitle>
+            <CardDescription>
+              Return an account after posting transactions in the temporary company. This list remains available after
+              you leave the page.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              {lastResult.accounts.length} account{lastResult.accounts.length === 1 ? "" : "s"} and{" "}
-              {lastResult.totalEntries} entries were moved.
-            </p>
-            {!undoDone && (
-              <Button variant="outline" onClick={() => setUndoConfirmOpen(true)}>
-                <Undo2 className="mr-2 h-4 w-4" /> Undo migration
+            {loadingPending ? (
+              <Skeleton className="h-12 w-full" />
+            ) : pendingError ? (
+              <Button variant="outline" onClick={() => refetchPendingMigrations()}>
+                Retry loading migrations
               </Button>
+            ) : (
+              pendingMigrations.map((migration) => {
+                const source = companies.find((c) => c.id === migration.srcCompanyId);
+                const destination = companies.find((c) => c.id === migration.destCompanyId);
+                return (
+                  <div
+                    key={migration.migrationId}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
+                  >
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">
+                        {source?.name ?? `Company ${migration.srcCompanyId}`} <ArrowRight className="inline h-3 w-3" />{" "}
+                        {destination?.name ?? `Company ${migration.destCompanyId}`}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {migration.accounts.map((account) => account.originalCode).join(", ")}
+                      </p>
+                    </div>
+                    <Button variant="outline" onClick={() => setUndoTarget(migration)}>
+                      <Undo2 className="mr-2 h-4 w-4" /> Move back to {source?.name ?? "original company"}
+                    </Button>
+                  </div>
+                );
+              })
             )}
           </CardContent>
         </Card>
@@ -641,20 +698,31 @@ export default function AccountMigration() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={undoConfirmOpen} onOpenChange={setUndoConfirmOpen}>
+      <Dialog
+        open={!!undoTarget}
+        onOpenChange={(open) => {
+          if (!open) setUndoTarget(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Undo migration?</DialogTitle>
+            <DialogTitle>Move accounts back?</DialogTitle>
             <DialogDescription>
-              This moves the migrated accounts and vouchers back to the original company.
+              Return {undoTarget?.accounts.length ?? 0} account(s) to{" "}
+              {companies.find((company) => company.id === undoTarget?.srcCompanyId)?.name ?? "the original company"},
+              including any new transactions posted while they were away.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setUndoConfirmOpen(false)}>
+            <Button variant="outline" onClick={() => setUndoTarget(null)}>
               Cancel
             </Button>
-            <Button variant="destructive" disabled={undoMutation.isPending} onClick={() => undoMutation.mutate()}>
-              {undoMutation.isPending ? "Undoing..." : "Undo migration"}
+            <Button
+              variant="destructive"
+              disabled={undoMutation.isPending || !undoTarget}
+              onClick={() => undoMutation.mutate()}
+            >
+              {undoMutation.isPending ? "Moving back..." : "Confirm move back"}
             </Button>
           </DialogFooter>
         </DialogContent>

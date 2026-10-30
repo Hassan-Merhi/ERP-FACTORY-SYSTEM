@@ -12,6 +12,7 @@ export interface NotInLedgerRow {
   voucherNumber: string;
   voucherDate: string;
   voucherDescription: string;
+  destination?: string | null;
   debitAmount: string;
   creditAmount: string;
   currency?: string | null;

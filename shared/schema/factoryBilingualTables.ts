@@ -10,6 +10,7 @@ import {
   text,
   timestamp,
   uniqueIndex,
+  unique,
   varchar,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
@@ -151,6 +152,11 @@ export const factoryBales = pgTable(
   },
   (t) => ({
     uniqueCompanyRef: uniqueIndex("factory_bales_company_ref_unique").on(t.companyId, t.referenceNumber),
+    // Tenant-paired FK target for physical pressing confirmations. Declared as
+    // a table constraint so drizzle-kit creates it inline, before the composite
+    // foreign key in factory_pressing_confirmations references it. Startup
+    // stage 037 creates the same-named unique index for the runtime path.
+    pressingTenantIdUnique: unique("factory_bales_pressing_tenant_id_uk").on(t.companyId, t.id),
     statusIdx: index("factory_bales_status_idx").on(t.status),
     pressingBatchIdx: index("factory_bales_pressing_batch_idx").on(t.pressingBatchId),
     mixBatchIdx: index("factory_bales_mix_batch_idx").on(t.mixBatchId),

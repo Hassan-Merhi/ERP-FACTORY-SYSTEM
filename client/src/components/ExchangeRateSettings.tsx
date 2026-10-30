@@ -14,7 +14,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
+import { invalidateExchangeRateReadModels } from "@/lib/invalidateExchangeRateReadModels";
 import { RefreshCw, Plus, TrendingUp } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useDateFormat } from "@/contexts/DateFormatContext";
@@ -118,29 +119,29 @@ export function ExchangeRateSettings() {
       if (!canEditRate || !hasPair || !todayRateCheck?.today) {
         throw new Error("Company exchange-rate settings or business date are unavailable.");
       }
-      return apiRequest("POST", "/api/exchange-rates", {
+      const savedCompanyId = Number(activeCompanyId);
+      // Capture the company at submission time: a later company switch must
+      // not invalidate a different company's rate cache.
+      const response = await apiRequest("POST", "/api/exchange-rates", {
         fromCurrency: baseCurrency,
         toCurrency: displayCurrency,
         rate: data.rate,
         effectiveDate: data.effectiveDate,
       });
+      return { response, savedCompanyId, savedDate: data.effectiveDate };
     },
-    onSuccess: async () => {
+    onSuccess: async ({ savedCompanyId, savedDate }) => {
       toast({
         title: "Exchange rate saved",
-        description:
-          "Saved for the selected date. Historical vouchers are unchanged; current cash/bank translations update in reports.",
+        description: "Rate-dependent USD views are refreshing. Native balances and historical vouchers are unchanged.",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/exchange-rates"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/exchange-rates/check-today", activeCompanyId] });
-      await queryClient.refetchQueries({ queryKey: ["/api/exchange-rates/latest"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stats/import-cycle-balance"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/accounts/all"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/balance-sheet"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts"] });
-      form.reset({ rate: "", effectiveDate: todayRateCheck?.today || "" });
-      setShowForm(false);
+      await invalidateExchangeRateReadModels(savedCompanyId);
+      // Don't reset an in-progress draft for a different company if the user
+      // switched while this request was in flight.
+      if (Number(activeCompanyId) === savedCompanyId) {
+        form.reset({ rate: "", effectiveDate: todayRateCheck?.today || savedDate });
+        setShowForm(false);
+      }
     },
     onError: (error: ClientErrorLike) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;

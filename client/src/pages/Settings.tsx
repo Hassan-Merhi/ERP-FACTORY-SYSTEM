@@ -1,6 +1,7 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { PageHeader } from "@/components/PageHeader";
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
@@ -25,6 +26,7 @@ import {
   MessageSquareText,
   LayoutPanelLeft,
   Printer,
+  Images,
   Clock,
 } from "lucide-react";
 
@@ -72,10 +74,12 @@ interface SettingsSidebarItem {
   icon: LucideIcon;
   devOnly?: boolean;
   adminOnly?: boolean;
+  href?: string;
 }
 
 export default function Settings() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const companyContext = useCompany();
   const selectedCompany = companyContext?.selectedCompany ?? null;
   const { dateFormat, setDateFormat, isPending: isDateFormatPending } = useDateFormat();
@@ -164,6 +168,7 @@ export default function Settings() {
         appMode === "factory"
           ? [
               { key: "automatic-priority-printing", label: "Automatic Priority Printing", icon: Printer },
+              { key: "label-banner-images", label: "Label Banner Images", icon: Images, href: "/factory/label-banners", adminOnly: true },
               { key: "fx-rates", label: "FX Rates", icon: TrendingUp },
               ...(canManageCompanyTimezone
                 ? [{ key: "company-timezone", label: "Company Timezone", icon: Clock }]
@@ -181,6 +186,15 @@ export default function Settings() {
     items.filter((item) => (!item.devOnly || currentUser?.role === "Developer") && (!item.adminOnly || canManageSessions));
   const canManageTrackingDefaults = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
 
+  const openSection = (key: string) => {
+    const item = sidebarGroups.flatMap((group) => allowedItems(group.items)).find((entry) => entry.key === key);
+    if (item?.href) {
+      navigate(item.href);
+      return;
+    }
+    setActiveSection(key);
+  };
+
   const activeSectionLabel = sidebarGroups
     .flatMap((group) => allowedItems(group.items))
     .find((item) => item.key === activeSection)?.label;
@@ -194,7 +208,7 @@ export default function Settings() {
       )}
       <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
         <div className="sm:hidden border-b pb-3 flex items-center gap-2">
-          <Select value={activeSection} onValueChange={setActiveSection}>
+          <Select value={activeSection} onValueChange={openSection}>
             <SelectTrigger className="flex-1">
               <SelectValue />
             </SelectTrigger>
@@ -223,7 +237,7 @@ export default function Settings() {
                     return (
                       <button
                         key={item.key}
-                        onClick={() => setActiveSection(item.key)}
+                        onClick={() => openSection(item.key)}
                         className={`flex items-center gap-2 w-full rounded-md px-2 py-1.5 text-sm transition-colors ${activeSection === item.key ? "bg-background font-medium shadow-xs" : "text-muted-foreground hover:bg-muted/50"}`}
                       >
                         <Icon className="h-4 w-4 shrink-0" />

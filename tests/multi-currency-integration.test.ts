@@ -207,10 +207,15 @@ describe("cash/bank revaluation safety source checks", () => {
     expect(source).toContain("currentRateMissing");
   });
 
-  it("applies current translation only to live cash/bank Net Position rows", () => {
+  it("applies current translation only to live monetary Net Position rows, by canonical owner", () => {
     const source = read("server/routes/stats/statsMultiCurrencyRoutes.ts");
-    expect(source).toContain("resolvedLedgerIds");
-    expect(source).toContain("Cash / Bank (Current Translation)");
+    const overlay = read("server/services/accounting/monetaryFxReportOverlay.ts");
+    // Four monetary categories (cash/bank, customers, loans, approved monetary
+    // assets) replace their own row by owner key; nothing is appended twice.
+    expect(overlay).toContain("monetaryReportRowKey");
+    expect(overlay).toContain("duplicate_report_row");
+    expect(overlay).toContain("currencyRevalued: true");
+    expect(source).toContain("applyVerifiedMonetaryFxOverlay");
     expect(source).toContain("req.query.toDate");
     expect(source).not.toMatch(/incomeTotal\s*=/);
     expect(source).not.toMatch(/expensesTotal\s*=/);

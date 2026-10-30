@@ -27,7 +27,9 @@ import { SettingsPopover } from "./transporterstatement/components/SettingsPopov
 export default function TransporterStatement({ embedded }: { embedded?: boolean }) {
   const { toast } = useToast();
   const { data: viewer } = useQuery(authenticatedUserQueryOptions());
-  const isTester = (viewer?.currentRole ?? viewer?.role) === "ERP Tester";
+  const role = viewer?.currentRole ?? viewer?.role;
+  const isTester = role === "ERP Tester";
+  const isViewer = role === "View Only";
   const queryClient = useQueryClient();
   const { formatDisplayDate: formatDate } = useDateFormat();
 
@@ -87,6 +89,7 @@ export default function TransporterStatement({ embedded }: { embedded?: boolean 
   });
 
   function handleDueDateSave(entryId: number, dueDate: string | null) {
+    if (isViewer) return;
     dueDateMutation.mutate({ entryId, dueDate });
   }
 
@@ -476,7 +479,7 @@ export default function TransporterStatement({ embedded }: { embedded?: boolean 
           <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
             {selectedAccountId && (
               <>
-                <Button
+                {!isViewer && <Button
                   variant="outline"
                   onClick={() => reallocateMutation.mutate()}
                   disabled={reallocateMutation.isPending}
@@ -484,8 +487,8 @@ export default function TransporterStatement({ embedded }: { embedded?: boolean 
                 >
                   <RefreshCw className={cn("h-4 w-4 mr-2", reallocateMutation.isPending && "animate-spin")} />
                   {reallocateMutation.isPending ? "Running…" : "Reallocate"}
-                </Button>
-                <Button
+                </Button>}
+                {!isViewer && <Button
                   variant="outline"
                   onClick={handleSendWhatsApp}
                   disabled={waSending || !statement}
@@ -493,7 +496,7 @@ export default function TransporterStatement({ embedded }: { embedded?: boolean 
                 >
                   <MessageCircle className={cn("h-4 w-4 mr-2", waSending && "animate-pulse")} />
                   {waSending ? "Sending…" : "Send WhatsApp"}
-                </Button>
+                </Button>}
                 <Button
                   variant="outline"
                   onClick={handleExportPDF}
@@ -505,7 +508,7 @@ export default function TransporterStatement({ embedded }: { embedded?: boolean 
                 </Button>
               </>
             )}
-            {selectedAccountId && statement && !isTester && (
+            {selectedAccountId && statement && !isTester && !isViewer && (
               <SettingsPopover
                 accountId={parseInt(selectedAccountId)}
                 paymentTermsDays={statement.paymentTermsDays}
@@ -652,7 +655,7 @@ export default function TransporterStatement({ embedded }: { embedded?: boolean 
                           {fmtNum(row.runningBalance)}
                         </TableCell>
                         <TableCell>
-                          <DueDateCell row={row} onSave={handleDueDateSave} />
+                          {isViewer ? <span className="text-sm">{row.dateToBePaid ? formatDate(row.dateToBePaid) : "—"}</span> : <DueDateCell row={row} onSave={handleDueDateSave} />}
                         </TableCell>
                         <TableCell>
                           <StatusBadge status={row.status} paidAmount={row.paidAmount} total={row.credit} />

@@ -101,6 +101,7 @@ const compatibilityTranslationFiles = [
   "client/src/i18n/wave8ReleaseTranslations.part3.ts",
   "client/src/i18n/wave8ReleaseTranslations.part4.ts",
   "client/src/i18n/payrollUiTranslations.ts",
+  "client/src/i18n/supplierProfitReconciliationTranslations.ts",
 ];
 
 const reviewedTechnicalValues = new Set([

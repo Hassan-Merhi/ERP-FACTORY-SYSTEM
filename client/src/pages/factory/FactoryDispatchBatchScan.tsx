@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation, useRoute } from "wouter";
 import { Button } from "@/components/ui/button";
+import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -353,7 +354,8 @@ export default function FactoryDispatchBatchScan() {
             </div>
 
             {canScan && (
-              <div className="relative min-w-0">
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="relative min-w-0 flex-1">
                 <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
                   ref={scanRef}
@@ -371,6 +373,8 @@ export default function FactoryDispatchBatchScan() {
                     Scanning...
                   </span>
                 )}
+                </div>
+                <MobileBarcodeScanner onScan={(code) => scanMutation.mutate(code)} disabled={scanMutation.isPending} className="h-12 w-12 shrink-0" />
               </div>
             )}
 

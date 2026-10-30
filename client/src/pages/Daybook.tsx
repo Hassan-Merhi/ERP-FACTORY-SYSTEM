@@ -511,6 +511,16 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
       ...(voucherPage === 1 && includeOffloads ? offloads.map((o) => ({ _type: "offload" as const, data: o })) : []),
     ];
     return rows.sort((a, b) => {
+      // Daybook > Offload is a container-number list, not a date/record-ID list.
+      // Sort the entire selected date range A–Z before display limits are applied.
+      if (filters.voucherType === "Offload" && a._type === "offload" && b._type === "offload") {
+        return (
+          (a.data.containerNumber ?? "").localeCompare(b.data.containerNumber ?? "", undefined, {
+            numeric: true,
+            sensitivity: "base",
+          }) || a.data.id - b.data.id
+        );
+      }
       const da = a._type === "voucher" ? a.data.voucherDate : a.data.offloadedAt.slice(0, 10);
       const db = b._type === "voucher" ? b.data.voucherDate : b.data.offloadedAt.slice(0, 10);
       if (da !== db) return filters.sortOrder === "asc" ? da.localeCompare(db) : db.localeCompare(da);
@@ -674,7 +684,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
                   <EyeOff className="w-4 h-4" />
                   {showHidden ? "Showing hidden" : "Show hidden"}
                 </Button>
-                <div className="flex border rounded-md overflow-hidden">
+                <div className="flex border border-border/80 rounded-md overflow-hidden bg-muted/20">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -682,7 +692,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
                       setViewMode("detailed");
                       saveDaybookState({ viewMode: "detailed" });
                     }}
-                    className={cn("rounded-none gap-1.5", viewMode === "detailed" && "bg-muted font-medium")}
+                    className={cn("rounded-none gap-1.5", viewMode === "detailed" && "bg-primary/10 text-primary font-semibold dark:bg-primary/20")}
                     data-testid="button-view-detailed"
                     data-remote-control-safe="true"
                     data-remote-control-action="toggle-view"
@@ -697,7 +707,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
                       setViewMode("condensed");
                       saveDaybookState({ viewMode: "condensed" });
                     }}
-                    className={cn("rounded-none gap-1.5", viewMode === "condensed" && "bg-muted font-medium")}
+                    className={cn("rounded-none gap-1.5", viewMode === "condensed" && "bg-primary/10 text-primary font-semibold dark:bg-primary/20")}
                     data-testid="button-view-condensed"
                     data-remote-control-safe="true"
                     data-remote-control-action="toggle-view"
@@ -711,6 +721,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
             <DaybookTable
               displayedRows={displayedRows}
               visibleRows={visibleRows}
+              offloadAlphabetical={filters.voucherType === "Offload"}
               viewMode={viewMode}
               selectedRowId={selectedRowId}
               setSelectedRowId={setSelectedRowId}

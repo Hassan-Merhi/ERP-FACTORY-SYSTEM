@@ -1,5 +1,5 @@
 import { getErrorDetails } from "@shared/errorUtils";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { FormSubmitButton } from "@/components/FormSubmitButton";
@@ -112,6 +112,9 @@ export function ContainerFormDialog({
   const [fxRate, setFxRate] = useState("1");
   const [fxRateSource, setFxRateSource] = useState<"auto" | "manual">("auto");
   const [fxEffectiveDate, setFxEffectiveDate] = useState("");
+  // Hydrating an edit happens after the first render. The FX effect must not
+  // apply the previous (usually USD/auto) state over that stored manual rate.
+  const skipFxEffectForEditId = useRef<number | null>(null);
   const [otherChargeLines, setOtherChargeLines] = useState<OtherChargeLine[]>([]);
 
   const resetForm = () => {
@@ -125,9 +128,11 @@ export function ContainerFormDialog({
 
   useEffect(() => {
     if (!editingContainer) {
+      skipFxEffectForEditId.current = null;
       resetForm();
       return;
     }
+    skipFxEffectForEditId.current = editingContainer.id;
     const c = editingContainer as unknown as { containerNumber: string | null | undefined } & {
       supplierId: { toString: (...args: unknown[]) => string };
     } & { origin: string | null | undefined } & { totalKg: string | number | null | undefined } & {
@@ -209,6 +214,14 @@ export function ContainerFormDialog({
   }, [editingContainer]);
 
   useEffect(() => {
+    // On the render where editingContainer changes, currency and fxRateSource
+    // still belong to the previous form. The initialization effect above has
+    // just loaded the persisted FX fields; do not overwrite them with USD=1
+    // (or fetch an unrelated auto quote) using those stale render values.
+    if (editingContainer && skipFxEffectForEditId.current === editingContainer.id) {
+      skipFxEffectForEditId.current = null;
+      return;
+    }
     if (currency === "USD") {
       setFxRate("1");
       setFxEffectiveDate("");

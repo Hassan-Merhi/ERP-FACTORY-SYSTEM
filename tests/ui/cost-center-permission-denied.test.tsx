@@ -8,11 +8,14 @@ import { render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { readCostCenterApi } = vi.hoisted(() => ({ readCostCenterApi: vi.fn() }));
+const { readCostCenterApi, currentRole } = vi.hoisted(() => ({
+  readCostCenterApi: vi.fn(),
+  currentRole: { value: "Developer" },
+}));
 
 vi.mock("@/api/costCentersApi", () => ({ readCostCenterApi, writeCostCenterApi: vi.fn() }));
 vi.mock("@/contexts/CompanyContext", () => ({
-  useCompany: () => ({ selectedCompany: { id: 7, role: "Manager" } }),
+  useCompany: () => ({ selectedCompany: { id: 7, role: currentRole.value } }),
 }));
 vi.mock("@/contexts/AppModeContext", () => ({ useAppMode: () => "factory" }));
 vi.mock("@/lib/queryClient", () => ({ queryClient: { invalidateQueries: vi.fn() } }));
@@ -45,6 +48,40 @@ const standalone = {
 describe("Cost Center panels when the server denies the page", () => {
   beforeEach(() => {
     readCostCenterApi.mockReset();
+    currentRole.value = "Developer";
+  });
+
+  it.each(["Admin", "Owner", "Manager", "User", "POS"])(
+    "hides both inline cost-center panels and skips API requests for %s",
+    (role) => {
+      currentRole.value = role;
+      const voucher = wrap(<VoucherCostCenters voucherId={12} />);
+      const daybook = wrap(<FactoryDaybookCostCenters entry={standalone} />);
+      expect(voucher.container.textContent).toBe("");
+      expect(daybook.container.textContent).toBe("");
+      expect(readCostCenterApi).not.toHaveBeenCalled();
+    }
+  );
+
+  it("shows voucher allocations to a Developer", async () => {
+    readCostCenterApi.mockResolvedValue({
+      entries: [{
+        entryId: 44,
+        accountName: "Fuel",
+        accountCode: "EXP",
+        accountType: "Expense",
+        costTreatment: "EXPENSE",
+        currency: "USD",
+        amountNative: "50",
+        amountBase: "50",
+        allocatedNative: "0",
+        allocatedBase: "0",
+        allocationCount: 0,
+      }],
+    });
+    wrap(<VoucherCostCenters voucherId={12} />);
+    expect(await screen.findByRole("region", { name: "Voucher cost center allocations" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Assign / Split" })).toBeInTheDocument();
   });
 
   it("hides voucher allocations for a viewer without the owning page", async () => {

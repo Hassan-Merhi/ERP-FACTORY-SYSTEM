@@ -5,7 +5,7 @@
     "GET /api/stats/net-profit": {
       "status": 200,
       "shape": "{currency,currencyRevaluation,equity,expenses,expensesTotal,forUs,forUsTotal,income,incomeTotal,netPosition,netPositionBreakdown,netPositionLabel,netProfit,netWorth,notInLedger,onUs,onUsTotal,ownersCapital,spPosProfit,totalExpenses,totalIncome}",
-      "hash": "e470a389a4c3c3e54c1703e9b9a6e2f6c8fe897c74119a5ffca00780f1450a9d"
+      "hash": "7777717f450d10cbe7c4af15b80a2bdf9059b66df1dbc42ce4d443e5505eedff"
     },
     "GET /api/reports/net-profit-excel": {
       "status": 200,
@@ -14,8 +14,8 @@
     },
     "GET /api/factory/net-position": {
       "status": 200,
-      "shape": "{asOf,balanceOnTableValue,businessToday,companyId,forUs,forUsTotal,fxAgentWalletWarnings,fxAgentWallets,historyBasis,historyCompleteness,historyCoverage,historyWarnings,inventoryValue,ledgerAssets,ledgerLiabilities,loadingOrders,loadingTotal,netPosition,netPositionLabel,onUs,onUsTotal,payrollPayable,pendingOrders,pendingTotal,rawMaterialValue,stockOtwValue,supplierLiabilities,supplierOverpayments,timeZone,valuationMode,verifiedOrders,verifiedTotal}",
-      "hash": "d51be985cd2f4f00de223c5ddba6d23c554712c4dd7a3717ebc5f9ac9af775c1"
+      "shape": "{asOf,balanceOnTableValue,businessToday,companyId,currencyRevaluation,forUs,forUsTotal,fxAgentWalletWarnings,fxAgentWallets,historyBasis,historyCompleteness,historyCoverage,historyWarnings,inventoryValue,ledgerAssets,ledgerLiabilities,loadingOrders,loadingTotal,netPosition,netPositionLabel,onUs,onUsTotal,payrollPayable,pendingOrders,pendingTotal,rawMaterialValue,stockOtwValue,supplierLiabilities,supplierOverpayments,timeZone,valuationMode,verifiedOrders,verifiedTotal}",
+      "hash": "106c37491bd8d7e28206a4a005a652e6a68961a7697362f0cd0d0966872d047a"
     },
     "GET /api/factory/suppliers/:supplierId/statement": {
       "status": 200,

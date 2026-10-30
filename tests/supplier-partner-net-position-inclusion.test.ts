@@ -19,11 +19,15 @@ describe("supplier partner net position inclusion", () => {
     );
   });
 
-  it("does not let current-cash translation erase supplier-partner equity", () => {
+  it("does not let current monetary translation erase supplier-partner equity", () => {
+    // The live translation of /api/stats/net-profit is applied by the
+    // monetary overlay (four categories since the FX monetary valuation
+    // feature); the route keeps the cash/bank compatibility fields.
+    const overlay = read("server/services/accounting/monetaryFxReportOverlay.ts");
+    expect(overlay).toContain("payload.equity?.includedInNetPosition === true");
+    expect(overlay).toContain("plus(equityContribution)");
+    expect(overlay).toContain("payload.netWorth = netPosition");
     const source = read("server/routes/stats/statsMultiCurrencyRoutes.ts");
-    expect(source).toContain("payload.equity?.includedInNetPosition === true");
-    expect(source).toContain("plus(equityContribution)");
-    expect(source).toContain("payload.netWorth = netPosition");
     expect(source).toContain("currentTranslatedLedgerAccountIds");
     expect(source).toContain("currentCashBankTranslationDifference");
   });

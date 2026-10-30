@@ -1,5 +1,6 @@
 import { AlertTriangle, ChevronDown, ChevronRight, Container, Link2, Pencil, Plus, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -16,6 +17,7 @@ type Model = ReturnType<typeof useFactoryStockAllocationV5Model>;
  * itself to one of them will match twice.
  */
 export function FactoryStockAllocationV5MobileList({ model }: { model: Model }) {
+  const [, navigate] = useLocation();
   const {
     rows,
     totals,
@@ -27,7 +29,6 @@ export function FactoryStockAllocationV5MobileList({ model }: { model: Model }) 
     setCancelDialog,
     setCancelSuperPass,
     setCancelSuperUser,
-    setEditDrawerProformaId,
     setLinkDialog,
     setLinkSelected,
   } = model;
@@ -199,7 +200,7 @@ export function FactoryStockAllocationV5MobileList({ model }: { model: Model }) 
                             size="sm"
                             variant="outline"
                             data-testid={`button-v5-mobile-edit-proforma-${proforma.proformaId}`}
-                            onClick={() => setEditDrawerProformaId(proforma.proformaId)}
+                            onClick={() => navigate(`/factory/stock-allocation-v5/proformas/${proforma.proformaId}/edit`)}
                           >
                             <Pencil className="h-3.5 w-3.5 mr-1" />
                             Edit Proforma

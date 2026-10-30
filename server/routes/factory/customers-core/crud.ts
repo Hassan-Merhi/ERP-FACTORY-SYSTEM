@@ -13,6 +13,8 @@ import { customers, insertCustomerSchema, ledgerAccounts } from "@shared/schema"
 import { eq, and, asc, desc, sql } from "drizzle-orm";
 import { getCustomerLedgerAndMemo, splitBalanceFields } from "./customerLedgerSplit";
 import { registerFactoryDaybookRoutes } from "../factoryDaybookRoutes";
+import { getMonetaryFxValuation } from "../../../services/accounting/monetaryFxValuationService";
+import { applyCurrentCustomerFxOverlay } from "../../../services/accounting/monetaryFxReportOverlay";
 
 export function registerFactoryCustomerCrudRoutes(app: Express) {
   registerFactoryDaybookRoutes(app);
@@ -45,7 +47,18 @@ export function registerFactoryCustomerCrudRoutes(app: Express) {
         ...splitBalanceFields(figures.get(customer.id)),
       }));
 
-      res.json(customersWithBalances);
+      // Only the active company's verified posted customer balance may be
+      // translated. Factory operational memo/held charges have no single
+      // proven original currency and remain at their current USD book basis.
+      if (Number(req.session?.currentCompanyId) === companyId) {
+        try {
+          const valuation = await getMonetaryFxValuation(companyId);
+          return res.json(applyCurrentCustomerFxOverlay(customersWithBalances, valuation));
+        } catch (error) {
+          logger.error("[factory/customers] USD valuation unavailable; preserving book balances", { companyId, error });
+        }
+      }
+      return res.json(customersWithBalances);
     } catch (error: unknown) {
       logger.error("Error fetching factory customers:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });

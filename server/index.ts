@@ -21,6 +21,7 @@ import { blockErpTesterSettings, blockViewOnlyWrites } from "./auth";
 import { registerWebSocketHttpFallback, setupWS } from "./wsServer";
 import { startScheduler } from "./services/scheduler";
 import { pool } from "./db";
+import { readGlobalForceRefreshToken } from "./services/globalForceRefresh";
 import { requestLogger } from "./middleware/requestLogger";
 import { bandwidthDebugMiddleware } from "./middleware/bandwidthDebug";
 import { apiRateLimit } from "./middleware/apiRateLimit";
@@ -66,6 +67,8 @@ import { runApprovedAboSobhiGoods82 } from "./startup/runApprovedAboSobhiGoods82
 import { runApprovedAboJaberPayableFix } from "./startup/runApprovedAboJaberPayableFix";
 import { runApprovedUkBasma38 } from "./startup/runApprovedUkBasma38";
 import { runApprovedHmdEurogulfFreightRepair } from "./startup/runApprovedHmdEurogulfFreightRepair";
+import { runApprovedFactoryDestinationNormalization } from "./startup/runApprovedFactoryDestinationNormalization";
+import { runApprovedMali53DestinationNormalization } from "./startup/runApprovedMali53DestinationNormalization";
 import { ensureFactorySheetsSacksSchema } from "./startup/factorySheetsSacksSchema";
 import { ensureSpGitTracking } from "./lib/spGitTracking";
 import { ensureRecurringJournalSchema } from "./services/accounting/ensureRecurringJournalSchema";
@@ -191,8 +194,22 @@ let migrationsDone = false;
   registerDbHealthRoute(app, () => migrationsDone);
 
   // Build info endpoint for frontend version checking (must be before registerRoutes)
-  app.get("/api/build-info", (_req, res) => {
-    res.json({ version: BUILD_VERSION });
+  app.get("/api/build-info", async (req, res) => {
+    try {
+      // The server selects the signal using the authenticated session's
+      // effective role. Never trust a client-provided role for this decision.
+      const target = req.session?.userId &&
+        ["Admin", "Owner", "Developer"].includes(req.session.currentRole ?? "")
+          ? "privileged"
+          : "regular";
+      const forceRefreshToken = await readGlobalForceRefreshToken(target);
+      res.json({ version: BUILD_VERSION, forceRefreshToken });
+    } catch (error) {
+      logger.warn("[GlobalForceRefresh] Build info token unavailable", { error });
+      // Keep normal build update detection working during a transient DB issue.
+      // Omitting the token makes the client ignore this failed check.
+      res.json({ version: BUILD_VERSION });
+    }
   });
 
   // Boot ID endpoint — returns a random ID generated once per server process start.
@@ -362,6 +379,11 @@ let migrationsDone = false;
       await runApprovedUkBasma38();
       // Owner-approved EUROGULF freight reclass; no-op without exact Render opt-in.
       await runApprovedHmdEurogulfFreightRepair();
+      // Owner-approved Factory customer order destination spelling consolidation.
+      // Opt-in only; exact company, database, before-images and audit are verified.
+      await runApprovedFactoryDestinationNormalization(pool);
+      // One-time, audited destination label consolidation on the finalized MALI 53 order.
+      await runApprovedMali53DestinationNormalization(pool);
       if (migrationsEnabled) {
         try {
           await runMigrations();

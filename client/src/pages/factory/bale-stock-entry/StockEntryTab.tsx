@@ -684,6 +684,7 @@ export function StockEntryTab({ showHistory = false, onOpenHistory }: StockEntry
                 setShowDropdown(true);
               }}
               onScanKeyDown={handleScanKeyDown}
+              onCameraScan={handleScan}
               scanError={scanError}
               showDropdown={showDropdown}
               filteredProducts={filteredProducts}

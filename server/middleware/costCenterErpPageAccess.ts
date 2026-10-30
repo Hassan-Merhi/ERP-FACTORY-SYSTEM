@@ -6,6 +6,7 @@
  */
 import type { NextFunction, Request, Response } from "express";
 import { getErpUserPageAccess } from "../storage/auth";
+import { effectiveErpPageKeys } from "../services/security/erpViewerPagePolicy";
 import {
   ActiveCompanyPermissionContextError,
   getActiveCompanyPermissionContext,
@@ -17,12 +18,13 @@ export const COST_CENTER_ERP_PAGE_KEY = "accounts";
 
 /**
  * Mirrors /api/my-erp-pages for one company: Admin/Developer have full ERP
- * access, every other role needs an explicit accounts assignment there.
+ * access. View Only inherits the ERP Accounts read page regardless of a
+ * stale per-user allow-list; other non-privileged roles require an explicit assignment.
  */
 export async function hasCostCenterErpPageAccess(companyId: number, userId: string, role: string): Promise<boolean> {
   if (role === "Admin" || role === "Developer") return true;
   const pages = await getErpUserPageAccess(companyId, userId);
-  return pages.includes(COST_CENTER_ERP_PAGE_KEY);
+  return effectiveErpPageKeys(role, pages).includes(COST_CENTER_ERP_PAGE_KEY);
 }
 
 export async function enforceCostCenterErpPageAccess(req: Request, res: Response, next: NextFunction): Promise<void> {

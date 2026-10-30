@@ -69,6 +69,7 @@ describe("GIT continuous listing route", () => {
   it("permits ERP Tester on read-only GIT reporting routes", () => {
     expect(harness.allowedRoles).toHaveLength(6);
     expect(harness.allowedRoles.every((roles) => roles.includes("ERP Tester"))).toBe(true);
+    expect(harness.allowedRoles.every((roles) => roles.includes("View Only"))).toBe(true);
     expect(harness.handlers.has("/api/git/containers")).toBe(true);
     expect(harness.handlers.has("/api/git/agent-duty-summary")).toBe(true);
   });

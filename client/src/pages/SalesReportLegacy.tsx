@@ -6,22 +6,19 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-import { PeriodFilter, PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
+import {
+  PeriodFilter,
+  PeriodFilterValue,
+  getDefaultPeriodValue,
+  parsePeriodFilterDate,
+} from "@/components/ui/period-filter";
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
 import { useDateJump } from "@/hooks/use-date-jump";
 
 import { useToast } from "@/hooks/use-toast";
 import { PageHeader } from "@/components/PageHeader";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import {
-  FileSpreadsheet,
-  FileText,
-  TrendingUp,
-  TrendingDown,
-  ChevronRight,
-  ChevronDown,
-  Download,
-} from "lucide-react";
+import { FileSpreadsheet, FileText, TrendingUp, TrendingDown, ChevronRight, ChevronDown, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -45,14 +42,38 @@ import {
   type SalesReportFilterControlsProps,
 } from "./salesreportlegacy/SalesReportFilterControls";
 import type { ApiListRow } from "@shared/apiTypes";
+
+function getInitialSalesReportPeriod(): PeriodFilterValue {
+  if (typeof window === "undefined") return getDefaultPeriodValue("today");
+  const query = new URLSearchParams(window.location.search);
+  if (!query.has("startDate") && !query.has("endDate")) return getDefaultPeriodValue("today");
+  const fromDate = query.get("startDate") ?? "";
+  const toDate = query.get("endDate") ?? "";
+  if (!fromDate && !toDate) return getDefaultPeriodValue("all_time");
+  if (
+    (fromDate && !parsePeriodFilterDate(fromDate)) ||
+    (toDate && !parsePeriodFilterDate(toDate)) ||
+    (fromDate && toDate && fromDate > toDate)
+  ) {
+    return getDefaultPeriodValue("today");
+  }
+  return { fromDate, toDate, preset: "custom" };
+}
+
+function getInitialSalesReportGroups(): string[] {
+  if (typeof window === "undefined") return [];
+  const groupId = new URLSearchParams(window.location.search).get("stockGroupId");
+  return groupId && /^[1-9]\d*$/.test(groupId) ? [groupId] : [];
+}
+
 export default function SalesReport() {
-  const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>(() => getDefaultPeriodValue("today"));
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>(getInitialSalesReportPeriod);
   useDateJump((date) => setPeriodFilter({ fromDate: date, toDate: date, preset: "custom" }));
 
   useSalesReportDateKeyboard(setPeriodFilter);
 
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
-  const [selectedStockGroups, setSelectedStockGroups] = useState<string[]>([]);
+  const [selectedStockGroups, setSelectedStockGroups] = useState<string[]>(getInitialSalesReportGroups);
   const [searchTerm, setSearchTerm] = useState("");
   const [grouping, setGrouping] = useState<GroupingType>("daily");
   const [profitFilter, setProfitFilter] = useState<ProfitFilter>("all");
@@ -299,10 +320,10 @@ export default function SalesReport() {
     setSelectedCompanies([]);
   };
 
-  // Keep the reconciliation calculation in the background, but expose one Cost Profit KPI.
-  // On the all-time view this is the reconciled/adjusted profit; filtered views keep their scoped profit.
-  const displayedCostProfit =
-    isAllTimeReconciliationView && cogsReconciliation ? cogsReconciliation.adjustedCostProfit : totals.costProfit;
+  // The primary Cost Profit KPI always equals recorded sales minus recorded COGS.
+  // The separate inventory-based reconciliation is a diagnostic, not a replacement
+  // for the booked profit (especially while historical source coverage is partial).
+  const displayedCostProfit = totals.costProfit;
 
   // Declared after handleClearFilters: the build-time bandwidth transform
   // replaces the block that ends there. Counts what "Clear filters" resets;

@@ -470,6 +470,49 @@ describe("Phase 33E :companyId path boundary", () => {
     expect(denied.next).not.toHaveBeenCalled();
   });
 
+  it("allows only an assigned Admin to read migration accounts in a different company", async () => {
+    harness.getActiveCompanyPermissionContext.mockResolvedValue(canonicalContext({ role: "Admin" }));
+    harness.storage.getUserCompaniesWithRoles.mockResolvedValue([
+      { companyId: 10, role: "Admin" },
+      { companyId: 20, role: "Admin" },
+    ]);
+    harness.storage.getUser.mockResolvedValue({ id: "user-1", role: "Admin" });
+    const allowed = await runParam(
+      request({ path: "/api/admin/account-migration/accounts/20", method: "GET", currentRole: "Admin" }),
+      "20"
+    );
+    expect(allowed.next).toHaveBeenCalledOnce();
+
+    harness.storage.getUserCompaniesWithRoles.mockResolvedValue([{ companyId: 10, role: "Admin" }]);
+    const denied = await runParam(
+      request({ path: "/api/admin/account-migration/accounts/20", method: "GET", currentRole: "Admin" }),
+      "20"
+    );
+    expect(denied.res.statusCode).toBe(403);
+    expect(denied.res.body).toMatchObject({ code: "COMPANY_ACCESS_DENIED" });
+    expect(denied.next).not.toHaveBeenCalled();
+  });
+
+  it("does not grant a Manager or unrelated cross-company route migration access", async () => {
+    harness.getActiveCompanyPermissionContext.mockResolvedValue(canonicalContext({ role: "Manager" }));
+    harness.storage.getUserCompaniesWithRoles.mockResolvedValue([
+      { companyId: 10, role: "Manager" },
+      { companyId: 20, role: "Manager" },
+    ]);
+    const manager = await runParam(request({ path: "/api/admin/account-migration/accounts/20", method: "GET" }), "20");
+    expect(manager.res.body).toMatchObject({ code: "ACCOUNT_MIGRATION_ROLE_REQUIRED" });
+    expect(manager.next).not.toHaveBeenCalled();
+
+    harness.getActiveCompanyPermissionContext.mockResolvedValue(canonicalContext({ role: "Admin" }));
+    const unrelated = await runParam(
+      request({ path: "/api/companies/20/accounts", method: "GET", currentRole: "Admin" }),
+      "20"
+    );
+    expect(unrelated.res.statusCode).toBe(403);
+    expect(unrelated.res.body).toMatchObject({ code: "CROSS_COMPANY_ACCESS_DENIED" });
+    expect(unrelated.next).not.toHaveBeenCalled();
+  });
+
   it("returns canonical context errors and forwards unknown errors", async () => {
     harness.getActiveCompanyPermissionContext.mockRejectedValueOnce(
       new ActiveCompanyPermissionContextError("Missing company role", 403, "ACTIVE_COMPANY_ROLE_REQUIRED")

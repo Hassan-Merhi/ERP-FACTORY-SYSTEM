@@ -8,6 +8,9 @@ import {
   parseCustomerId,
 } from "./customerRequestContext";
 import { customerService } from "./customerService";
+import { logger } from "../../lib/logger";
+import { getMonetaryFxValuation } from "../../services/accounting/monetaryFxValuationService";
+import { applyCurrentCustomerFxOverlay } from "../../services/accounting/monetaryFxReportOverlay";
 
 export function registerCustomerMasterRoutes(app: Express) {
   app.get("/api/customers/for-pos", requireAuth, async (req, res) => {
@@ -32,7 +35,15 @@ export function registerCustomerMasterRoutes(app: Express) {
   app.get("/api/customers/stats", requireAuth, requireNonPOS, async (req, res) => {
     try {
       const companyId = getActiveCustomerCompanyId(req);
-      return res.json(await customerService.stats(companyId));
+      const bookRows = await customerService.stats(companyId);
+      try {
+        const valuation = await getMonetaryFxValuation(companyId);
+        return res.json(applyCurrentCustomerFxOverlay(bookRows, valuation));
+      } catch (error) {
+        // Customer ledgers remain readable when native evidence or FX is missing.
+        logger.error("[customers/stats] Monetary USD projection unavailable; preserving book balances", { companyId, error });
+        return res.json(bookRows);
+      }
     } catch (error: unknown) {
       return sendCustomerRouteError(res, error, 500);
     }

@@ -23,6 +23,7 @@ const AUTOLOAD_THRESHOLD_PX = 600;
 export interface V5AllocationRow {
   articleCode: string;
   productName: string;
+  categoryName?: string;
   stockAvailable: number;
   totalLoaded: number;
   expectedToLoad: number;

@@ -24,7 +24,7 @@ import {
   fixedAssets,
   factorySuppliers,
 } from "../../shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   assertCompanyAccess,
   getAccessibleCompanyIds,
@@ -215,7 +215,7 @@ export function registerGlobalTransactionRoutes(app: Express, requireAuth: Reque
             sellingPrice: salesItems.sellingPrice,
             costPrice: salesItems.costPrice,
             totalSales: salesItems.totalSales,
-            profit: salesItems.profit,
+            profit: sql<string>`(${salesItems.totalSales}::numeric - ${salesItems.totalCost}::numeric)`,
             configuredPrice: salesItems.configuredPrice,
             stockItemName: stockItems.name,
             stockItemCode: stockItems.code,
