@@ -56,7 +56,7 @@ export function registerProductionTargetBonusWeeklyPaymentRoutes(app: Express): 
             rv.target_bales::text AS "targetBales", rv.credited_bales AS "creditedBales",
             rv.extra_bales::text AS "extraBales", rv.bonus_amount::text AS "approvedAmount",
             rv.method_version_id AS "methodVersionId", rv.status AS "decisionStatus",
-            rv.snapshot_hash AS "snapshotHash", rv.reviewed_at::text AS "reviewedAt",
+            rv.snapshot_hash AS "snapshotHash", rv.snapshot_json AS snapshot, rv.reviewed_at::text AS "reviewedAt",
             rv.reviewed_by AS "reviewedBy",
             p.id AS "paymentId", p.status AS "paymentStatus",
             p.payment_date::text AS "paymentDate",
