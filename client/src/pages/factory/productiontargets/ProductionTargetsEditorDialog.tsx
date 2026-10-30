@@ -115,18 +115,10 @@ export function ProductionTargetsEditorDialog({
   }, [draftRows, search, categoryFilter, originalById]);
 
   const updateRow = (personId: number, patch: Partial<ProductionRow>) => {
-    setDraftRows((current) => {
-      const source = current.find((row) => row.personId === personId);
-      if (!source) return current;
-
-      if (Object.prototype.hasOwnProperty.call(patch, "targetBales") && source.linkGroupId != null) {
-        return current.map((row) =>
-          row.linkGroupId === source.linkGroupId ? { ...row, targetBales: patch.targetBales ?? null } : row
-        );
-      }
-
-      return current.map((row) => (row.personId === personId ? { ...row, ...patch } : row));
-    });
+    // Linked tablemates can have different daily targets.
+    setDraftRows((current) =>
+      current.map((row) => (row.personId === personId ? { ...row, ...patch } : row))
+    );
   };
 
   const categoryOverrideState = (row: ProductionRow) => {
