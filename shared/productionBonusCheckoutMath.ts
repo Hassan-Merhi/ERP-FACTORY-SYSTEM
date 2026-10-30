@@ -41,7 +41,7 @@ export function workerCategoryCredits(
     // Linked members share their joint output; solo workers keep their own.
     const assignee=ids.length===1 ? bale.worker : ids[index%ids.length];
     if(assignee!==workerId)return;
-    const name=(bale.category??"").normalize("NFC").trim().replace(/\\s+/gu," ");
+    const name=(bale.category??"").normalize("NFC").trim().replace(/\s+/gu," ");
     if(!name)throw new Error(errors.missingCategory);
     group.set(name,(group.get(name)??0)+1);
   });
