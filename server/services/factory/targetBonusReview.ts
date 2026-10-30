@@ -63,7 +63,7 @@ export async function loadTargetBonusRows(
       review.reviewed_at::text AS "reviewedAt",
       review.bonus_amount AS "lockedAmount"
     FROM factory_staff_tracking_entries e
-    JOIN factory_staff_tracking_period_closures closure
+    LEFT JOIN factory_staff_tracking_period_closures closure
       ON closure.company_id = e.company_id
      AND closure.page_type = 'production'
      AND closure.period_type = 'daily'
@@ -80,7 +80,7 @@ export async function loadTargetBonusRows(
         AND (l.effective_to IS NULL OR l.effective_to > e.period_start)
       ORDER BY l.effective_from DESC, l.id DESC LIMIT 1
     ) links ON true
-    -- Finalization already captured stock-entry production in e.produced_bales.
+    -- Finalization captures e.produced_bales; open days use live stock entry.
     -- Linked entries each store the TEAM total. Allocate that total to members
     -- once, with any odd-bale remainder assigned by stable worker-id order.
     -- Unlinked entries store their own worker's stock-entry total.
@@ -91,15 +91,45 @@ export async function loadTargetBonusRows(
       FROM factory_worker_production_link_members lm
       WHERE lm.company_id = e.company_id AND lm.link_id = links.id
     ) assignment ON true
+    -- Open days use live physical bales; the latest saved target remains the
+    -- source of truth. Closing the day freezes its existing saved count.
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*)::integer AS count
+      FROM factory_bales fb
+      WHERE fb.company_id = e.company_id
+        AND fb.status IN ('IN_STOCK','SOLD','RESERVED_FOR_ORDER','DISPATCHED','FINALIZED')
+        AND (
+          fb.stock_entry_date = e.period_start
+          OR (fb.stock_entry_date = e.period_start - 1 AND
+              COALESCE(fb.finalized_at, fb.created_at) >
+                (SELECT c.ended_at FROM factory_staff_tracking_period_closures c
+                 WHERE c.company_id = e.company_id AND c.page_type='production'
+                   AND c.period_type='daily' AND c.period_start = e.period_start - 1
+                   AND c.period_end = e.period_start - 1 LIMIT 1))
+        )
+        AND (
+          (links.id IS NULL AND fb.finalized_by = e.person_id) OR
+          (links.id IS NOT NULL AND EXISTS (
+             SELECT 1 FROM factory_worker_production_link_members lm
+             WHERE lm.company_id = e.company_id AND lm.link_id = links.id
+               AND lm.worker_id = fb.finalized_by
+          ))
+        )
+    ) live ON closure.company_id IS NULL
     CROSS JOIN LATERAL (
       SELECT CASE
-        WHEN links.id IS NULL THEN COALESCE(e.produced_bales, 0)::integer
+        WHEN links.id IS NULL THEN
+          CASE WHEN closure.company_id IS NULL THEN COALESCE(live.count, 0)
+               ELSE COALESCE(e.produced_bales, 0)::integer END
         ELSE (
-          FLOOR(COALESCE(e.produced_bales, 0)::numeric / GREATEST(assignment.members, 1))
-          + CASE
-              WHEN assignment.member_order <=
-                MOD(COALESCE(e.produced_bales, 0)::integer, GREATEST(assignment.members, 1))
-              THEN 1 ELSE 0 END
+          FLOOR((CASE WHEN closure.company_id IS NULL THEN COALESCE(live.count, 0)
+                      ELSE COALESCE(e.produced_bales, 0)::integer END)::numeric /
+                      GREATEST(assignment.members, 1))
+          + CASE WHEN assignment.member_order <=
+               MOD((CASE WHEN closure.company_id IS NULL THEN COALESCE(live.count, 0)
+                         ELSE COALESCE(e.produced_bales, 0)::integer END),
+                         GREATEST(assignment.members, 1))
+            THEN 1 ELSE 0 END
         )::integer
       END AS count
     ) output
