@@ -63,6 +63,8 @@ describe("Phase 9 physical scan capture (not LAN write approval)", () => {
     expect(statements.join("\n")).toContain("factory_edge_pressing_counter");
     expect(statements.join("\n")).toContain("factory_edge_pressing_outbox");
     expect(statements.join("\n")).toContain("BEFORE UPDATE OR DELETE");
+    expect(statements.join("\n")).toContain("FOREIGN KEY (company_id, local_confirmation_id)");
+    expect(statements.join("\n")).toContain("ON DELETE RESTRICT");
     expect(statements.join("\n")).not.toContain("factory_edge_outbox_counter");
     statements.length = 0;
     env.mode = "cloud";
