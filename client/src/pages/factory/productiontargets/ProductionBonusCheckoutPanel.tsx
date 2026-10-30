@@ -290,7 +290,7 @@ export function ProductionBonusCheckoutPanel({
         <DialogFooter>
           <Button variant="outline" onClick={()=>setConfirmPay(false)}>Cancel</Button>
           <Button disabled={pay.isPending||!chosen.length} onClick={()=>pay.mutate()}>
-            {pay.isPending&&<Loader2 className="mr-2 h-4 w-4 animate-spin"/>Approve &amp; Pay {usd(total)}
+            {pay.isPending&&<Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Approve &amp; Pay {usd(total)}
           </Button>
         </DialogFooter>
       </DialogContent>
