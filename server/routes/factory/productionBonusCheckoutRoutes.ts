@@ -213,7 +213,7 @@ async function calculateOffers(
       if(canReprice){
         if(method==="standard")lines.length=0;
         if(item.extraBales<=0){
-          issue="Target not exceeded";
+          issue="Weekly target not exceeded";
           amount="0.00";
           lines.length=0;
         }
@@ -278,9 +278,9 @@ async function calculateOffers(
       // Zero production with no target is not a payable claim and not a
       // configuration error needing a warning for that day.
       issue=item.producedBales>0
-        ? "Save a positive Production Targets target first" : "Target not exceeded";
+        ? "Save a positive Production Targets target first" : "Weekly target not exceeded";
     } else if (item.extraBales <= 0) {
-      issue="Target not exceeded";
+      issue="Weekly target not exceeded";
     } else if (method==="standard") {
       const rate=rateForWorker(item.workerId);
       if(!rate)issue="Set the worker/company per-bale rate first";
@@ -329,7 +329,7 @@ async function calculateOffers(
       claim?.paymentStatus === "REVERSED" ? "reversed" :
       claim?.status === "rejected" ? "rejected" :
       handledByWeekly ? "weekly" :
-      issue === "Target not exceeded" || (item.targetBales <= 0 && item.producedBales === 0 && !claim)
+      issue === "Weekly target not exceeded" || (item.targetBales <= 0 && item.producedBales === 0 && !claim)
         ? "no_bonus" :
       issue?.startsWith("Save a positive") || issue?.startsWith("Set the worker") ||
       issue?.startsWith("Set a positive category") ? "needs_setup" :
