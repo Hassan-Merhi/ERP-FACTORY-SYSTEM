@@ -69,6 +69,37 @@ services:
     security_opt:
       - no-new-privileges:true
 
+
+  # Opt-in only: docker compose --profile sync up -d relay.
+  # This sends signed voucher EVIDENCE to the cloud inbox, never ledger writes.
+  relay:
+    profiles: ["sync"]
+    build:
+      context: ../..
+      dockerfile: deploy/lan/Dockerfile
+    restart: unless-stopped
+    command: ["node", "scripts/edge/run-voucher-relay-loop.mjs"]
+    environment:
+      FACTORY_EDGE_MODE: lan
+      FACTORY_EDGE_SITE_ID: ${EDGE_SITE_ID:?Set EDGE_SITE_ID in deploy/lan/.env}
+      FACTORY_SYNC_SENDER_ENABLED: "1"
+      FACTORY_SYNC_CLOUD_URL: ${EDGE_SYNC_CLOUD_URL:-}
+      FACTORY_SYNC_HMAC_KEY: ${EDGE_SYNC_API_KEY:-}
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: erp_edge
+      PGPASSWORD: ${EDGE_DB_PASSWORD:?Set EDGE_DB_PASSWORD in deploy/lan/.env}
+      PGDATABASE: erp_edge
+      PGSSLMODE: disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - edge_database
+      - edge_https
+    security_opt:
+      - no-new-privileges:true
+
   https:
     image: caddy:2-alpine
     restart: unless-stopped
