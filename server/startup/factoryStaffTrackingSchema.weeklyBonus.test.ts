@@ -17,7 +17,7 @@ describe("Phase 14 weekly bonus schema startup", () => {
     expect(weekly).toBeDefined();
     expect(statements.indexOf(method!)).toBeLessThan(statements.indexOf(weekly!));
     expect(weekly).toContain("UNIQUE (company_id, week_start, worker_id)");
-    expect(weekly).toContain("FOREIGN KEY");
+    expect(weekly).toContain("REFERENCES factory_production_target_bonus_weekly_methods(id)");
   });
 
   it("registers immutable review triggers and proper PostgreSQL quoted blocks", async () => {
