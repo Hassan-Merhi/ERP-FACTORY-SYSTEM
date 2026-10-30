@@ -16,7 +16,7 @@ import {
 
 const siteId = "027d7472-4a29-4bb3-a4aa-5b30e4ad631f";
 const key = "phase4-test-only-shared-voucher-stage-key-".repeat(2);
-const payload = { voucher: { id: 30, amount: "5.00" }, entries: [{ debit: "5.00" }] };
+const payload = { voucher: { id: 30, companyId: 5, amount: "5.00" }, entries: [{ debit: "5.00" }] };
 const event = {
   sequence: "1",
   operationId: "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
@@ -52,7 +52,7 @@ describe("Phase 4 signed transport", () => {
       .toThrow("EDGE_SYNC_ORDER_INVALID");
     expect(() => validateStageEnvelope({ ...envelope, events: [{ ...event, sequence: "1;DROP" }] }, siteId))
       .toThrow("EDGE_SYNC_EVENT_INVALID");
-    const reordered = { entries: [{ debit: "5.00" }], voucher: { amount: "5.00", id: 30 } };
+    const reordered = { entries: [{ debit: "5.00" }], voucher: { amount: "5.00", companyId: 5, id: 30 } };
     expect(hashEvidence(reordered)).toBe(event.payloadSha256);
   });
 
