@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from "express";
+import { bonusServerText } from "../../i18n/productionBonusCheckoutMessages";
 import { sql } from "drizzle-orm";
 import { requireAuth } from "../../auth";
 import { db } from "../../db";
@@ -142,7 +143,7 @@ export function registerProductionTargetBonusCategoryRateRoutes(app: Express): v
             WHERE LOWER(BTRIM(category))=${category.key} LIMIT 1
           `));
           if (!assigned.length)
-            return { status: 409, message: "Assign this category in Production Targets before setting a rate" };
+            return { status: 409, message: bonusServerText(req.headers["accept-language"], "categoryRequired") };
           const inserted = resultRows(await tx.execute(sql`
             INSERT INTO factory_production_target_bonus_category_rates (
               company_id, category_key, category_label, effective_from,
