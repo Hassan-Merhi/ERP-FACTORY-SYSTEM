@@ -22,7 +22,7 @@ type Assignment = {
   machineName: string; machineActive: boolean; assignedAt: string;
 };
 type MyAccess = {
-  companyId: number; userId: string; canManage: boolean; assignment: Assignment | null;
+  companyId: number; userId: string; canManage: boolean; canScan: boolean; assignment: Assignment | null;
 };
 const problem = (error: unknown) => error instanceof Error ? error.message : "Unable to open pressing scan";
 
@@ -56,13 +56,15 @@ export default function PressingMachineManagement({ active }: { active: boolean 
   const validCompany = companyId === selectedCompany?.id;
   const assignment = validCompany ? access.data?.assignment ?? null : null;
   const fullControls = validCompany && access.data?.canManage === true;
+  const canScan = validCompany && access.data?.canScan === true;
+  const viewOnly = validCompany && access.data?.canScan === false;
   const scanner = usePressingOfflineSync(
-    active && validCompany && companyId !== undefined && userId
+    active && validCompany && canScan && companyId !== undefined && userId
       ? { companyId, userId } : null, active,
   );
 
   const activate = useCallback(async () => {
-    if (!active || !validCompany || !access.data || assignment) return;
+    if (!active || !validCompany || !access.data || assignment || !canScan) return;
     const key = String(companyId) + ":" + String(userId);
     if (activating.current === key) return;
     activating.current = key;
@@ -75,11 +77,11 @@ export default function PressingMachineManagement({ active }: { active: boolean 
     } catch (error) {
       setActivationError(problem(error));
     }
-  }, [active, validCompany, access.data, assignment, companyId, userId, selectedCompany?.id]);
+  }, [active, validCompany, access.data, assignment, canScan, companyId, userId, selectedCompany?.id]);
 
   useEffect(() => {
-    if (active && access.data && validCompany && !assignment) void activate();
-  }, [active, access.data, validCompany, assignment, activate]);
+    if (active && access.data && validCompany && !assignment && canScan) void activate();
+  }, [active, access.data, validCompany, assignment, canScan, activate]);
 
   useEffect(() => {
     activating.current = null;
@@ -89,12 +91,17 @@ export default function PressingMachineManagement({ active }: { active: boolean 
   }, [selectedCompany?.id]);
 
   useEffect(() => {
-    if (active && assignment && !showCamera) inputRef.current?.focus();
-  }, [active, assignment, showCamera]);
+    // Also release the camera immediately when switching to a read-only role.
+    if (!canScan) setShowCamera(false);
+  }, [canScan]);
+
+  useEffect(() => {
+    if (active && assignment && canScan && !showCamera) inputRef.current?.focus();
+  }, [active, assignment, canScan, showCamera]);
 
   const scanOne = async (code: string) => {
     const value = code.trim().toUpperCase();
-    if (!value || !assignment || submitting || !active) return;
+    if (!value || !assignment || submitting || !active || !canScan) return;
     setSubmitting(true);
     setBarcode("");
     try {
@@ -138,7 +145,7 @@ export default function PressingMachineManagement({ active }: { active: boolean 
 
       {access.isLoading && <p className="text-sm">Checking pressing access…</p>}
       {access.isError && <p className="text-sm text-destructive" role="alert">{problem(access.error)}</p>}
-      {!assignment && !access.isLoading && !access.isError && (
+      {canScan && !assignment && !access.isLoading && !access.isError && (
         <div className="rounded-md border p-3 text-sm">
           {activationError ? (
             <>
@@ -152,7 +159,13 @@ export default function PressingMachineManagement({ active }: { active: boolean 
         </div>
       )}
 
-      <div className="space-y-3 rounded-2xl border border-border/70 bg-gradient-to-br from-card via-card to-sky-500/[0.045] p-3 shadow-[0_14px_38px_-28px_rgba(14,165,233,0.55)] sm:p-4">
+      {viewOnly && (
+        <div role="status" data-testid="pressing-view-only-notice" className="rounded-xl border bg-muted/30 p-3 text-sm text-muted-foreground">
+          View Only access — scanning and changes are disabled. You can review pressing results and hourly targets below.
+        </div>
+      )}
+
+      {canScan && <div className="space-y-3 rounded-2xl border border-border/70 bg-gradient-to-br from-card via-card to-sky-500/[0.045] p-3 shadow-[0_14px_38px_-28px_rgba(14,165,233,0.55)] sm:p-4">
         {fullControls && (
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="inline-flex rounded-xl border border-border/70 bg-background/45 p-1">
@@ -213,15 +226,15 @@ export default function PressingMachineManagement({ active }: { active: boolean 
             <RefreshCw className="mr-1 h-4 w-4" />Retry
           </Button>}
         </div>}
-      </div>
-      {showCamera && assignment && (
+      </div>}
+      {showCamera && canScan && assignment && (
         <ContinuousPressingScanner active={active} assignment={assignment} onBarcode={cameraRead} simpleControls={!fullControls} />
       )}
       {fullControls && showSync && <PressingOfflineQueueStatus snapshot={scanner.snapshot}
         retryNow={scanner.retryNow} />}
 
       {active && validCompany && companyId !== undefined && userId && (
-        fullControls
+        fullControls || viewOnly
           ? <PressingHistoryReport key={companyId + ":" + userId}
               active={active} companyId={companyId} userId={userId} />
           : assignment
