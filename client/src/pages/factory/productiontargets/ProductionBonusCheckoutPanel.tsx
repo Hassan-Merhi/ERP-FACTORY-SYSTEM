@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Banknote, Calculator, CheckCircle2, LayoutList, Loader2, Pencil, RotateCcw, Table2 } from "lucide-react";
+import { Banknote, CheckCircle2, Loader2, Pencil, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
@@ -92,8 +90,7 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
   const [to,setTo]=useState(initialDate);
   const [method,setMethod]=useState<Method>("standard");
   const [selected,setSelected]=useState<number[]>([]);
-  const [showAll,setShowAll]=useState(false);
-  const [sheetView,setSheetView]=useState(false);
+  const [showAll,setShowAll]=useState(true);
   const [search,setSearch]=useState("");
   const [accountId,setAccountId]=useState("");
   const [paymentDate,setPaymentDate]=useState(()=>localDateStr(new Date()));
@@ -102,7 +99,7 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
   const [newRate,setNewRate]=useState("");
   const [reverse,setReverse]=useState<PaymentRow|null>(null);
   const [reverseReason,setReverseReason]=useState("");
-  useEffect(()=>{setFrom(startOfRange(initialDate));setTo(initialDate);setSelected([]);setSearch("");setShowAll(false);},[initialDate]);
+  useEffect(()=>{setFrom(startOfRange(initialDate));setTo(initialDate);setSelected([]);setSearch("");setShowAll(true);},[initialDate]);
   const validRange=isDate(from)&&isDate(to)&&from<=to&&daysApart(from,to)<=31;
   const {data:access}=useQuery<{canDecide:boolean}>({
     queryKey:["/api/factory/staff-tracking/production-bonuses",from,from],
@@ -198,16 +195,7 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
           <h2 className="text-lg font-semibold">{t("payWorkers")}</h2>
           <p className="text-sm text-muted-foreground">{t("payIntro")}</p>
         </div>
-        <div className="ml-auto flex items-center gap-1 rounded-lg border border-border/70 bg-muted/30 p-1">
-          <Button type="button" size="sm" variant={!sheetView?"secondary":"ghost"}
-            aria-pressed={!sheetView} onClick={()=>setSheetView(false)}>
-            <LayoutList className="mr-1.5 h-4 w-4"/>{t("listView")}
-          </Button>
-          <Button type="button" size="sm" variant={sheetView?"secondary":"ghost"}
-            aria-pressed={sheetView} onClick={()=>{setSheetView(true);setShowAll(true);}}>
-            <Table2 className="mr-1.5 h-4 w-4"/>{t("sheetView")}
-          </Button>
-        </div>
+
       </div>
 
       <div className="grid gap-3 rounded-xl border border-border/70 bg-card/60 p-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -257,89 +245,31 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
         </div>
       </div>
 
-      {sheetView ? <ProductionBonusWeeklySheet from={from} to={to}
+      <ProductionBonusWeeklySheet from={from} to={to}
         workers={visibleGroups} loading={isLoading} selected={selected}
         onToggle={(workerId,checked)=>setSelected(previous=>checked?
           [...new Set([...previous,workerId])]:
-          previous.filter(id=>id!==workerId))}/>
-        : <div className="overflow-x-auto rounded-xl border border-border/70">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/30">
-              <TableHead className="w-12">{t("select")}</TableHead>
-              <TableHead>{t("worker")}</TableHead>
-              <TableHead>{t("productionSummary")}</TableHead>
-              <TableHead className="text-right">{t("bonus")}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading&&<TableRow><TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
-              <Loader2 className="mr-2 inline h-4 w-4 animate-spin"/>{t("loading")}
-            </TableCell></TableRow>}
-            {!isLoading&&!error&&!visibleGroups.length&&<TableRow><TableCell colSpan={4} className="py-12 text-center text-muted-foreground">
-              {search.trim()?t("noMatches"):!showAll&&groups.length?t("noPayable"):t("noRows")}
-              {!showAll&&groups.length>0&&<div className="mt-3">
-                <Button type="button" size="sm" variant="outline" onClick={()=>setShowAll(true)}>{t("showEveryone")}</Button>
-              </div>}
-            </TableCell></TableRow>}
-            {!isLoading&&visibleGroups.map(group=>{
-              const ready=group.readyDays>0;
-              return <TableRow key={group.workerId} className="align-top">
-                <TableCell>
-                  <Checkbox aria-label={t("selectBonus")+" "+group.workerName}
-                    checked={selected.includes(group.workerId)} disabled={!ready}
-                    onCheckedChange={checked=>setSelected(previous=>checked?
-                      [...new Set([...previous,group.workerId])]:
-                      previous.filter(id=>id!==group.workerId))}/>
-                </TableCell>
-                <TableCell className="min-w-[180px]">
-                  <div className="font-medium">{group.workerName}</div>
-                  <details className="mt-1 text-xs">
-                    <summary className="inline-flex cursor-pointer items-center text-primary hover:underline">
-                      <Calculator className="mr-1 h-3 w-3"/>{t("dailyDetails")}
-                    </summary>
-                    <div className="mt-2 min-w-[280px] space-y-2">
-                      {group.days.map(day=>{
-                        const payment=(payments?.payments??[]).find(p=>p.workerId===day.workerId&&p.date===day.date);
-                        return <div key={day.date} className="rounded-lg border p-2">
-                          <div className="font-medium">{day.date}: {t("target")} {day.target}, {t("made")} {day.produced},
-                            {" "}{t("extra")} {day.extra} · {usd(day.amount)}</div>
-                          <div className="text-muted-foreground">{day.issue??(
-                            day.status==="paid"?t("paidStatus"):day.status==="no_bonus"?t("noBonus"):day.status)}</div>
-                          {day.lines.map(line=><div key={line.category} className="text-muted-foreground">
-                            {line.category}: {line.produced} {t("lineMade")} · {line.extra} {t("lineExtra")}
-                            {" "}× {usd(line.rate)} = {usd(line.bonus)}
-                          </div>)}
-                          {method==="standard" && day.extra>0 &&
-                           (day.status==="pending" || day.status==="approved" ||
-                            (day.status==="needs_setup" && day.issue?.includes("rate")))&&
-                            <Button size="sm" variant="outline" className="mt-1 h-7"
-                              onClick={()=>{setEditingRate(day);setNewRate(day.lines[0]?.rate??"");}}>
-                              <Pencil className="mr-1 h-3 w-3"/>{t("editRate")}
-                            </Button>}
-                          {payment?.paymentStatus==="POSTED"&&<Button size="sm" variant="outline"
-                            className="mt-1 h-7" onClick={()=>{setReverse(payment);setReverseReason("");}}>
-                            <RotateCcw className="mr-1 h-3 w-3"/>{t("reverse")}
-                          </Button>}
-                        </div>;
-                      })}
-                    </div>
-                  </details>
-                </TableCell>
-                <TableCell className="min-w-[185px]">
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm tabular-nums">
-                    <div><span className="block text-xs text-muted-foreground">{t("target")}</span>{group.target}</div>
-                    <div><span className="block text-xs text-muted-foreground">{t("made")}</span>{group.produced}</div>
-                    <div><span className="block text-xs text-muted-foreground">{t("extra")}</span>
-                      <strong>{group.extra}</strong></div>
-                  </div>
-                </TableCell>
-                <TableCell className="text-right text-base font-semibold tabular-nums">{usd(group.amount)}</TableCell>
-              </TableRow>;
-            })}
-          </TableBody>
-        </Table>
-      </div>}
+          previous.filter(id=>id!==workerId))}
+        renderDayActions={(workerId,date)=>{
+          const day=offers.find(row=>row.workerId===workerId&&row.date===date);
+          if(!day)return null;
+          const payment=(payments?.payments??[]).find(row=>
+            row.workerId===workerId&&row.date===date);
+          const canEditRate=method==="standard"&&day.extra>0&&(
+            day.status==="pending"||day.status==="approved"||
+            (day.status==="needs_setup"&&day.issue?.includes("rate")));
+          if(!canEditRate&&payment?.paymentStatus!=="POSTED")return null;
+          return <div className="mt-1 flex flex-wrap justify-center gap-1">
+            {canEditRate&&<Button type="button" size="sm" variant="outline" className="h-7 px-2 text-xs"
+              onClick={()=>{setEditingRate(day);setNewRate(day.lines[0]?.rate??"");}}>
+              <Pencil className="mr-1 h-3 w-3"/>{t("editRate")}
+            </Button>}
+            {payment?.paymentStatus==="POSTED"&&<Button type="button" size="sm" variant="outline"
+              className="h-7 px-2 text-xs" onClick={()=>{setReverse(payment);setReverseReason("");}}>
+              <RotateCcw className="mr-1 h-3 w-3"/>{t("reverse")}
+            </Button>}
+          </div>;
+        }}/>
 
       <div className="flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
