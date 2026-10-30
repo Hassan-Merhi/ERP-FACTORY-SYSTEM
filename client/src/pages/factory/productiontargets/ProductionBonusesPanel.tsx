@@ -17,8 +17,6 @@ import { useToast } from "@/hooks/use-toast";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { ProductionBonusCategoryRatesPanel } from "./ProductionBonusCategoryRatesPanel";
 import { ProductionBonusWeeklyMethodPanel } from "./ProductionBonusWeeklyMethodPanel";
-import { ProductionBonusWeeklyPreviewPanel } from "./ProductionBonusWeeklyPreviewPanel";
-import { ProductionBonusCategoryEvidencePanel } from "./ProductionBonusCategoryEvidencePanel";
 import { ProductionBonusCategoryPreviewPanel } from "./ProductionBonusCategoryPreviewPanel";
 import { queryClient } from "@/lib/queryClient";
 
@@ -68,7 +66,7 @@ async function api<T>(method: "GET" | "POST", path: string, body?: unknown): Pro
  * Production Targets bonus review — NOT a payout surface.
  * The server is the sole calculation/authorization authority.
  */
-export function ProductionBonusesPanel({ initialDate }: { initialDate: string }) {
+export function ProductionBonusesPanel({ initialDate, productionCategories }: { initialDate: string; productionCategories: string[] }) {
   const { toast } = useToast();
   const [start, setStart] = useState(initialDate);
   const [end, setEnd] = useState(initialDate);
@@ -190,9 +188,7 @@ export function ProductionBonusesPanel({ initialDate }: { initialDate: string })
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
         {data?.canDecide && <ProductionBonusWeeklyMethodPanel initialDate={initialDate} />}
-        {data?.canDecide && <ProductionBonusWeeklyPreviewPanel initialDate={initialDate} />}
-        {data?.canDecide && <ProductionBonusCategoryRatesPanel initialDate={initialDate} />}
-        {data?.canDecide && <ProductionBonusCategoryEvidencePanel initialDate={initialDate} />}
+        {data?.canDecide && <ProductionBonusCategoryRatesPanel initialDate={initialDate} productionCategories={productionCategories} />}
         {data?.canDecide && <ProductionBonusCategoryPreviewPanel initialDate={initialDate} />}
         <div className="flex flex-wrap items-end gap-3">
           <label className="space-y-1 text-xs text-muted-foreground">
