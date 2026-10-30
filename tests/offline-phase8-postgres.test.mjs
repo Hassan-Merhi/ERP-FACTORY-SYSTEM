@@ -66,6 +66,7 @@ if (!url) {
           site_id uuid, sequence bigint, operation_id uuid, company_id integer,
           actor_user_id text, local_voucher_id integer, operation_kind text,
           payload jsonb, payload_sha256 char(64),
+          staged_at timestamptz NOT NULL DEFAULT now(),
           PRIMARY KEY (site_id, sequence));
         INSERT INTO users(id,active) VALUES('actor-1',true);
         INSERT INTO user_company_roles VALUES('actor-1',6,'Admin');
