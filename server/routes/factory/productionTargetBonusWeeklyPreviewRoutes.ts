@@ -48,7 +48,7 @@ export function registerProductionTargetBonusWeeklyPreviewRoutes(app: Express): 
       const weekEnd = addDays(weekStart, 6);
       try {
         // Resolve the correct historical method independently of history-list limits.
-        const [methodResult, activityResult, reviewResult, payrollResult] = await Promise.all([
+        const [methodResult, activityResult, reviewResult, payrollResult, duplicateResult] = await Promise.all([
           db.execute(sql`
             SELECT id, method, flat_bonus_usd::text AS "flatBonusUsd"
             FROM factory_production_target_bonus_weekly_methods
@@ -99,6 +99,14 @@ export function registerProductionTargetBonusWeeklyPreviewRoutes(app: Express): 
               AND a.amount > 0
               AND (a.decision_status = 'APPROVED' OR a.payroll_id IS NOT NULL)
           `),
+          db.execute(sql`
+            SELECT 1
+            FROM factory_target_bonus_category_bale_snapshots
+            WHERE company_id = ${companyId}
+              AND production_date BETWEEN ${weekStart}::date AND ${weekEnd}::date
+            GROUP BY bale_id HAVING COUNT(DISTINCT production_date) > 1
+            LIMIT 1
+          `),
         ]);
         const method = (resultRows(methodResult) as MethodRow[])[0];
         const activity = resultRows(activityResult) as ActivityRow[];
@@ -134,6 +142,7 @@ export function registerProductionTargetBonusWeeklyPreviewRoutes(app: Express): 
           flatBonusUsd: method?.flatBonusUsd ?? "0.00",
           days: dayEvidence,
           unfinalizedDates: activity.filter(day => !day.finalized).map(day => day.date),
+          repeatedBaleInWeek: resultRows(duplicateResult).length > 0,
           previouslyReviewedWorkerDays: toKeys(resultRows(reviewResult) as ReviewRow[]),
           payrollClaimedWorkerDays: toKeys(resultRows(payrollResult) as ReviewRow[]),
         });
