@@ -57,6 +57,8 @@ jobs:
         run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-phase9-status.test.ts
       - name: Test LAN write boundary
         run: node node_modules/vitest/vitest.mjs run tests/factory-edge-boundary.test.ts
+      - name: Report unverified post evidence as review-required
+        run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-phase9-voucher-capture.test.ts
       - name: Do not stamp cloud sync time on LAN-only acceptance
         run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/offline-phase9-sync-event.test.ts
       - name: Refuse new unverified legacy browser queue entries
