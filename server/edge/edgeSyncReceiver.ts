@@ -21,6 +21,11 @@ export function registerCloudEdgeSyncReceiver(app: Express): void {
       return res.status(403).json({ code: "EDGE_SYNC_HTTPS_REQUIRED" });
     }
     try {
+      // Express rawBody is declared unknown, and a missing/non-buffer raw
+      // payload cannot be authenticated. Reject rather than coercing it.
+      if (!Buffer.isBuffer(req.rawBody)) {
+        return res.status(401).json({ code: "EDGE_SYNC_AUTH_FAILED" });
+      }
       verifyStageSignature(
         req.rawBody,
         req.get("X-Factory-Sync-Timestamp") ?? "",
