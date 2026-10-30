@@ -311,7 +311,6 @@ export function ProductionTargetsEditorDialog({
                               row={row}
                               rows={draftRows}
                               effectiveFrom={periodStart}
-                              targetBales={row.targetBales}
                               disabled={!canManageLinks || busy}
                             />
                           </div>
