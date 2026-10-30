@@ -32,8 +32,11 @@ type Account = { id: number; name: string; code: string; openingCurrency: string
 type PaymentRow = { reviewId: number; workerId: number; date: string; paymentId: number | null;
   paymentStatus: "POSTED" | "REVERSED" | null; cashAccountName: string | null; voucherId: number | null };
 const endpoint="/api/factory/production-target-bonuses/checkout";
-const isDate=(date:string)=>/^\d{4}-\d{2}-\d{2}$/.test(date) &&
-  new Date(date+"T12:00:00Z").toISOString().slice(0,10)===date;
+const isDate=(date:string)=>{
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return false;
+  const timestamp=Date.parse(date+"T12:00:00Z");
+  return Number.isFinite(timestamp)&&new Date(timestamp).toISOString().slice(0,10)===date;
+};
 const daysApart=(from:string,to:string)=>Math.round(
   (Date.parse(to+"T00:00:00Z")-Date.parse(from+"T00:00:00Z"))/86400000);
 const startOfRange=(date:string)=>{
