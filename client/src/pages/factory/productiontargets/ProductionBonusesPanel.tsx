@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { ProductionBonusCategoryRatesPanel } from "./ProductionBonusCategoryRatesPanel";
 import { ProductionBonusWeeklyMethodPanel } from "./ProductionBonusWeeklyMethodPanel";
+import { ProductionBonusWeeklyPreviewPanel } from "./ProductionBonusWeeklyPreviewPanel";
 import { ProductionBonusCategoryEvidencePanel } from "./ProductionBonusCategoryEvidencePanel";
 import { ProductionBonusCategoryPreviewPanel } from "./ProductionBonusCategoryPreviewPanel";
 import { queryClient } from "@/lib/queryClient";
@@ -190,6 +191,7 @@ export function ProductionBonusesPanel({ initialDate }: { initialDate: string })
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
         {data?.canDecide && <ProductionBonusWeeklyMethodPanel initialDate={initialDate} />}
+        {data?.canDecide && <ProductionBonusWeeklyPreviewPanel initialDate={initialDate} />}
         {data?.canDecide && <ProductionBonusCategoryRatesPanel initialDate={initialDate} />}
         {data?.canDecide && <ProductionBonusCategoryEvidencePanel initialDate={initialDate} />}
         {data?.canDecide && <ProductionBonusCategoryPreviewPanel initialDate={initialDate} />}
