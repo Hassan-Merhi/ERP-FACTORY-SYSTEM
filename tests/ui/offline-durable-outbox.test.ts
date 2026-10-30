@@ -64,7 +64,13 @@ function transportFor(
       return new Response(JSON.stringify({ companyId: sessionActor.companyId }), { status: 200 });
     }
     if (status === "network") throw new TypeError("Connection lost after sending");
-    return new Response(JSON.stringify({ voucherId: 71 }), { status });
+    const original = JSON.parse(String(init?.body ?? "{}")) as { clientRequestId?: string };
+    return new Response(JSON.stringify({
+      clientRequestId: original.clientRequestId,
+      voucher: { id: 71, companyId: sessionActor.companyId, voucherType: "Journal",
+        voucherDate: payload.voucher.voucherDate, currency: "USD" },
+      entries: payload.entries,
+    }), { status });
   }) as typeof fetch;
   return { transport, calls };
 }
@@ -148,7 +154,11 @@ describe("durable outbox — capture before delivery", () => {
     expect(await deliverOfflineOperations(transport)).toMatchObject({ acknowledged: 1 });
     expect(state.records.get(row.id)).toMatchObject({
       state: "acknowledged",
-      response: JSON.stringify({ voucherId: 71 }),
+      response: JSON.stringify({
+        clientRequestId: row.id,
+        voucher: { id: 71, companyId: 6, voucherType: "Journal", voucherDate: "2026-10-29", currency: "USD" },
+        entries: payload.entries,
+      }),
       lastError: null,
     });
     const sent = calls.find((call) => call.url === "/api/vouchers/with-entries");
@@ -156,6 +166,42 @@ describe("durable outbox — capture before delivery", () => {
     expect(new Headers(sent?.init?.headers).get("X-Client-Date")).toBe("2026-10-29");
     expect(sent?.init?.body).toBe(JSON.stringify({ ...payload, clientRequestId: row.id }));
     expect(calls).toHaveLength(3);
+  });
+
+  it("quarantines a successful HTTP response with missing, wrong-tenant or altered ledger proof", async () => {
+    const { deliverOfflineOperations } = await import("@/lib/offline/durableOutbox");
+    for (const response of [
+      { voucherId: 71 },
+      { clientRequestId: "another-operation", voucher: { id: 71, companyId: 6,
+        voucherType: "Journal", voucherDate: "2026-10-29" }, entries: payload.entries },
+      { clientRequestId: "original", voucher: { id: 71, companyId: 999,
+        voucherType: "Journal", voucherDate: "2026-10-29" }, entries: payload.entries },
+      { clientRequestId: "original", voucher: { id: 71, companyId: 6,
+        voucherType: "Journal", voucherDate: "2026-10-29" },
+        entries: [{ ...payload.entries[0], debitAmount: "100" }, payload.entries[1]] },
+    ]) {
+      state.records.clear();
+      const row = await queue();
+      const altered = {
+        ...response,
+        clientRequestId: response.clientRequestId === "original" ? row.id : response.clientRequestId,
+      };
+      const { transport, calls } = transportFor();
+      const mismatch = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+        if (String(url) === "/api/vouchers/with-entries") {
+          return new Response(JSON.stringify(altered), { status: 200 });
+        }
+        return transport(url, init);
+      }) as typeof fetch;
+      const result = await deliverOfflineOperations(mismatch);
+      expect(result).toMatchObject({ acknowledged: 0, rejected: 1 });
+      expect(state.records.get(row.id)).toMatchObject({
+        state: "needs_review", lastError: "OFFLINE_RECEIPT_UNVERIFIED",
+      });
+      expect(state.records.size).toBe(1);
+      expect(mismatch).toHaveBeenCalledTimes(3);
+      expect(calls).toHaveLength(2);
+    }
   });
 
   it("keeps the original ID after a lost acknowledgement and replays safely later", async () => {
