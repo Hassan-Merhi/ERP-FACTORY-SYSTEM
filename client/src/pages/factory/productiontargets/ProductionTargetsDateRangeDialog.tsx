@@ -37,12 +37,13 @@ export function ProductionTargetsDateRangeDialog({
   const [firstDay, setFirstDay] = useState<string | null>(null);
   const [error, setError] = useState("");
 
+  const { start, end } = range;
   useEffect(() => {
     if (!open) return;
-    setSelected(range);
+    setSelected({ start, end });
     setFirstDay(null);
     setError("");
-  }, [open, range.start, range.end]);
+  }, [open, start, end]);
 
   const pickDate = (date: Date) => {
     const day = localDateStr(date);

@@ -128,8 +128,8 @@ describe("pressing machine Phase 6 reporting contracts", () => {
     expect(client).toContain('filters.fromTime ? " " + filters.fromTime');
     expect(page).toContain('aria-label="Pressing user filter"');
     expect(page).toContain("All users");
-    expect(page).toContain("Scanned Bales");
-    expect(page).toContain('<th className="p-3">Bale name</th>');
+    expect(page).toContain("Scanned Items");
+    expect(page).toContain('<th className="p-3">Product name</th>');
     expect(page).toContain('{row.productName || "—"}');
     expect(page).toMatch(/"operatorName",\s+"productName",\s+"bales"/);
     expect(page).toContain("useState(false)");

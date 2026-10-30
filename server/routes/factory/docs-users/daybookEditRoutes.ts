@@ -614,7 +614,7 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
         if (role !== "admin" && role !== "owner")
           return res.status(403).json({message:"Only Admin or Owner can reverse bonuses"});
         const result = await reverseBonusFromDaybook(req, Number(companyId), bonus);
-        return res.json({success:true,reversed:true,retainedAudit:true,...result});
+        return res.json({success:true,retainedAudit:true,...result});
       }
       if (entry.txType.startsWith("PRODUCTION_TARGET_")) {
         return res.status(409).json({message:"Production bonus audit entries cannot be hard-deleted"});
@@ -698,7 +698,7 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
         if (Number(claimed.reversalVoucherId) === voucherId)
           return res.status(409).json({message:"This is an accounting reversal voucher and must remain in audit history"});
         const result = await reverseBonusFromDaybook(req,Number(companyId),{kind:claimed.kind,id:Number(claimed.id)});
-        return res.json({success:true,reversed:true,retainedAudit:true,...result});
+        return res.json({success:true,retainedAudit:true,...result});
       }
       const vNum = voucher.voucherNumber || "";
       const voucherTxTypeMap: Record<string, string> = { Payment: "PAYMENT", Receipt: "RECEIPT", Journal: "JOURNAL" };

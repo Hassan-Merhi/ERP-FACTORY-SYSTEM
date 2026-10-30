@@ -268,11 +268,15 @@ async function report(ctx: QueryCtx, filters: PressingReportFilters) {
   }
   // Resolve current company-scoped display names for every historical row and
   // summary, so renamed workers are shown correctly without rewriting evidence.
-  const operatorIds = [...new Set<string>([
-    ...rows.rows.map(row => row.operatorUserId),
-    ...filteredSummary.byOperator.map(row => row.userId),
-    ...overview.byOperator.map(row => row.userId),
-  ].filter((value): value is string => typeof value === "string" && value.length > 0))];
+  const operatorIds = [
+    ...new Set<string>(
+      [
+        ...rows.rows.map((row) => row.operatorUserId),
+        ...filteredSummary.byOperator.map((row) => row.userId),
+        ...overview.byOperator.map((row) => row.userId),
+      ].filter((value): value is string => typeof value === "string" && value.length > 0)
+    ),
+  ];
   const profiles = operatorIds.length
     ? await pool.query(
         'SELECT user_id AS "userId", NULLIF(BTRIM(display_name), \'\') AS "displayName" ' +

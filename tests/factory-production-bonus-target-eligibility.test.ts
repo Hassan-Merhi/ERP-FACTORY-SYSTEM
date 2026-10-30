@@ -82,8 +82,9 @@ describe("Production Targets bonus checkout eligibility", () => {
   it("highlights the whole achieved daily/weekly target cell rather than only the extra text", () => {
     const sheet = source("client/src/pages/factory/productiontargets/ProductionBonusWeeklySheet.tsx");
     expect(sheet).toContain("day.target > 0 && day.produced >= day.target");
-    expect(sheet).toContain("worker.target > 0 && worker.produced >= worker.target");
-    expect(sheet).toContain("bg-emerald-600 text-white dark:bg-emerald-700");
+    expect(sheet).toContain("const achievedWeek = target > 0 && made >= target;");
+    // The Daily Production Sheet redesign (#2647) tints the whole achieved cell.
+    expect(sheet).toContain("border-emerald-500/30 bg-emerald-500/15 dark:bg-emerald-800/35");
   });
 
   it("marks weekly-flat-covered days as weekly, not an unexplained Needs review error", () => {

@@ -5,8 +5,10 @@ import { bonusMoneyToCents, buildProductionTargetBonusReport } from "@shared/pro
 // Use typed text cells for source-controlled names/references; never let an
 // external worker name become a spreadsheet formula.
 function safeText(value: string | null | undefined): string {
-  const text = String(value ?? "").replace(/[\u0000-\u001F]/g, " ").slice(0, 1000);
-  return /^[=+@\-]/.test(text) ? "'" + text : text;
+  const text = Array.from(String(value ?? ""), (c) => (c.charCodeAt(0) < 32 ? " " : c))
+    .join("")
+    .slice(0, 1000);
+  return /^[=+@-]/.test(text) ? "'" + text : text;
 }
 const amount = (value: string) => bonusMoneyToCents(value) / 100;
 const NAVY = "FF183153";

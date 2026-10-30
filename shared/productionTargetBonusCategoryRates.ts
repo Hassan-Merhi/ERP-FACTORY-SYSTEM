@@ -16,7 +16,7 @@ export interface ProductionBonusCategoryRateVersion {
 export function normalizeBonusCategory(value: unknown): { key: string; label: string } | null {
   if (typeof value !== "string") return null;
   const label = value.normalize("NFC").trim().replace(/\s+/gu, " ");
-  if (!label || label.length > 100 || /[\u0000-\u001F\u007F]/u.test(label)) return null;
+  if (!label || label.length > 100 || Array.from(label).some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127)) return null;
   return { key: label.toLocaleLowerCase("en-US"), label };
 }
 

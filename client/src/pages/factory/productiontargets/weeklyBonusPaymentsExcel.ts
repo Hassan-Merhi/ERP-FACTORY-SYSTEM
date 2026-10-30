@@ -27,7 +27,9 @@ export interface WeeklyBonusPaymentExportRow {
 }
 const NAVY = "FF17324F", PALE = "FFF1F5F9", WHITE = "FFFFFFFF";
 const safeText = (text: string | null | undefined) => {
-  const value = String(text ?? "").replace(/[\u0000-\u001F]/g, " ").slice(0, 1000);
+  const value = Array.from(String(text ?? ""), (c) => (c.charCodeAt(0) < 32 ? " " : c))
+    .join("")
+    .slice(0, 1000);
   return /^[=+\-@]/.test(value) ? "'" + value : value;
 };
 const money = (value: string | number) => Math.round(Number(value) * 100) / 100;

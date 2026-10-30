@@ -102,7 +102,7 @@ export function ProductionWorkerLinkControl({
     );
     const complete = fixedTargets.every((value) => value !== null && isValidBaleTarget(value));
     const combined = complete
-      ? fixedTargets.reduce((sum, value) => sum + Math.round((value ?? 0) * 100), 0) / 100
+      ? fixedTargets.reduce<number>((sum, value) => sum + Math.round((value ?? 0) * 100), 0) / 100
       : null;
     setUnlinkTarget(combined);
     setUnlinkDraft(complete

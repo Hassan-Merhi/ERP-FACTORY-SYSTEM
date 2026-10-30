@@ -183,16 +183,16 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
     ] as Array<[string, number, string, boolean]>) {
       await fixtureBale(key, company, status, deleted);
     }
-    const priorityProductId=await one(sql`INSERT INTO factory_bale_products(company_id,code,article_code,name)
-      VALUES(${companies.a},${"PRIORITY-"+suffix},${"NBI-"+suffix},'Non-bale Priority item') RETURNING id`);
+    const priorityProductId = await one(sql`INSERT INTO factory_bale_products(company_id,code,article_code,name)
+      VALUES(${companies.a},${"PRIORITY-" + suffix},${"NBI-" + suffix},'Non-bale Priority item') RETURNING id`);
     await db.execute(sql`UPDATE factory_bales SET product_id=${priorityProductId}
       WHERE company_id=${companies.a} AND id=${bales.priority.id}`);
     await db.execute(sql`UPDATE factory_settings
       SET extra_settings=jsonb_set(extra_settings,'{nonBalePriorityProductIds}',jsonb_build_array(${priorityProductId}))
       WHERE company_id=${companies.a}`);
-    const [count]=await rows(sql`SELECT COUNT(*)::int AS total FROM vouchers`);
-    voucherCountBefore=count.total;
-  },60000);
+    const [count] = await rows(sql`SELECT COUNT(*)::int AS total FROM vouchers`);
+    voucherCountBefore = count.total;
+  }, 60000);
 
   afterAll(async () => {
     if (!companies.a) return;
@@ -369,24 +369,24 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
     }
   });
 
-  it("confirms configured non-bale Priority product references without stock or voucher changes",async()=>{
-    const first=await scan(actors.opA2,"priority");
+  it("confirms configured non-bale Priority product references without stock or voucher changes", async () => {
+    const first = await scan(actors.opA2, "priority");
     expect(first.statusCode).toBe(201);
     expect(first.body).toMatchObject({
-      status:"PRESSING_COMPLETED",
-      referenceNumber:bales.priority.ref,
-      weightKg:"45.500",
-      inventoryFinalized:false,
+      status: "PRESSING_COMPLETED",
+      referenceNumber: bales.priority.ref,
+      weightKg: "45.500",
+      inventoryFinalized: false,
     });
     await baleUnchanged("priority");
-    const again=await scan(actors.opA1,"priority");
+    const again = await scan(actors.opA1, "priority");
     expect(again.statusCode).toBe(409);
     expect(again.body.code).toBe("PRESSING_ALREADY_CONFIRMED");
-    const history=await call("GET /api/factory/pressing-machines/report",actors.supA,{
-      query:{mode:"detailed",status:"active",search:bales.priority.ref},
+    const history = await call("GET /api/factory/pressing-machines/report", actors.supA, {
+      query: { mode: "detailed", status: "active", search: bales.priority.ref },
     });
     expect(history.statusCode).toBe(200);
-    expect(history.body.rows.some((row:any)=>row.referenceNumber===bales.priority.ref)).toBe(true);
+    expect(history.body.rows.some((row: any) => row.referenceNumber === bales.priority.ref)).toBe(true);
   });
 
   it("allows one and only one accepted scan in simultaneous user races", async () => {

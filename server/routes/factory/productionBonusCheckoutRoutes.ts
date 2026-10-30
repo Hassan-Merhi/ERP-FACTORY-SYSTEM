@@ -22,7 +22,11 @@ import { postTargetBonusPaymentsInTransaction } from "../../services/factory/tar
 import { parseTargetBonusPaymentCommand } from "../../services/factory/targetBonusPaymentPolicy";
 import { normalizeBonusCategory } from "@shared/productionTargetBonusCategoryRates";
 import { allocateWeeklyExtraBales, splitExtraBalesByCategory, workerCategoryCredits } from "@shared/productionBonusCheckoutMath";
-import { latestUnpaidWorkerRate, rateChangeMayRepriceReview } from "@shared/productionBonusUnpaidRatePolicy";
+import {
+  latestUnpaidWorkerRate,
+  rateChangeMayRepriceReview,
+  type LatestBonusRateVersion,
+} from "@shared/productionBonusUnpaidRatePolicy";
 import { isProductionWorkday, mondayOfProductionBonusWeek } from "@shared/productionTargetBonusWeeklyMethod";
 
 const guard = requireFactoryTabAccess("factory/stock-entry", "hide_tab_stockentry_production_targets");
@@ -38,9 +42,10 @@ type Offer = {
 };
 type RecordRow = Record<string, unknown>;
 const rows = (x: unknown): RecordRow[] => resultRows(x) as RecordRow[];
-const fail = (status: number, message: string): never => {
+// A function declaration (not an arrow) so TypeScript narrows after a call.
+function fail(status: number, message: string): never {
   throw Object.assign(new Error(message), { status });
-};
+}
 const usd = (value: Decimal.Value) => new Decimal(value).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2);
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const allowed = (req: Request) => ["Admin", "Owner"].includes(String(req.session.currentRole || req.user?.role || ""));
@@ -169,7 +174,8 @@ async function calculateOffers(
   const weeklyMethods=rows(methodsResult);
   const weeklyReviews=rows(weeklyReviewsResult);
   const categoryClaims=new Set(rows(categoryReviewsResult).map(row=>String(row.date).slice(0,10)+":"+Number(row.id)));
-  const activeStandardRates=rows(standardRatesResult);
+  const activeStandardRates:LatestBonusRateVersion[]=rows(standardRatesResult)
+    .map(({scope,workerId,enabled,rate})=>({scope,workerId,enabled,rate}));
   const weeklyExtras=allocateWeeklyExtraBales(daily.map(day=>{
     const claim=claimsByDay.get(day.date+":"+day.workerId);
     const frozen=claim?.paymentStatus==="POSTED" || claim?.paymentStatus==="REVERSED";
@@ -406,7 +412,7 @@ export function registerProductionBonusCheckoutRoutes(app:Express):void {
       if(!targetBonusValidRange(from,to) || (method!=="standard" && method!=="category"))
         return res.status(400).json({message:bonusServerText(req.headers["accept-language"],"checkoutMethod")});
       try {
-        const offers=await calculateOffers(db,id,from,to,method);
+        const offers=await calculateOffers(db,id,String(from),String(to),method);
         res.setHeader("Cache-Control","private, no-store");
         return res.json({from,to,method,currency:"USD",offers});
       } catch(error) {

@@ -39,7 +39,7 @@ describe("Simplified pressing workflow replaces Phase 7 operational configuratio
     expect(access).toContain("eq(factoryPressingAssignments.userId, userId)");
     expect(access).toContain("pg_advisory_xact_lock");
     expect(page).toContain("activate()");
-    expect(page).toContain("Scan bale reference / barcode...");
+    expect(page).toContain("Scan bale or priority product barcode...");
   });
   it("historical pressing rows remain queryable and no Factory financial writes are introduced", () => {
     expect(report).toContain("FROM factory_pressing_confirmations c");
