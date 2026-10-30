@@ -210,6 +210,33 @@ export async function deliverOfflineOperations(transport: typeof fetch = fetch):
       // An earlier operation may be in backoff or leased by another tab.
       // Never overtake it with a later business write.
       if (!item) break;
+      // Previously persisted records can predate the narrower Phase 9
+      // capture policy, or be tampered with while the device is offline.
+      // Revalidate the SAVED bytes and original operation identity before
+      // every network attempt; never silently rewrite those original bytes.
+      let savedPayload: unknown;
+      try {
+        savedPayload = JSON.parse(item.payload);
+      } catch {
+        savedPayload = null;
+      }
+      const savedId =
+        savedPayload && typeof savedPayload === "object" && !Array.isArray(savedPayload)
+          ? (savedPayload as Record<string, unknown>).clientRequestId
+          : undefined;
+      if (
+        item.mode !== "erp" ||
+        item.entityType !== "voucher-with-entries" ||
+        savedId !== item.id ||
+        !validateOfflinePayload(savedPayload) ||
+        !isVettedOfflineVoucherPayload(savedPayload)
+      ) {
+        await settleOperation(item.id, "needs_review", {
+          lastError: "OFFLINE_SAVED_OPERATION_SHAPE_UNSUPPORTED",
+        });
+        summary.rejected++;
+        break;
+      }
       try {
         const response = await transport(item.url, {
           method: item.method,
