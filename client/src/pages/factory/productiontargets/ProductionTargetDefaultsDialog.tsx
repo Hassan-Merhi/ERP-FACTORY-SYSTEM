@@ -148,23 +148,14 @@ export function ProductionTargetDefaultsDialog({
   }, [rows, search, draftDefaults, defaultsById]);
 
   const updateTargetDefault = (row: ProductionRow, targetBales: number | null) => {
-    setDraftDefaults((current) => {
-      const next = { ...current };
-      const affectedRows =
-        row.linkGroupId != null ? rows.filter((member) => member.linkGroupId === row.linkGroupId) : [row];
-
-      for (const member of affectedRows) {
-        next[member.personId] = {
-          category:
-            current[member.personId]?.category ??
-            member.defaultCategory ??
-            member.category ??
-            "",
-          targetBales,
-        };
-      }
-      return next;
-    });
+    // Linking workers combines the table, not their saved individual targets.
+    setDraftDefaults((current) => ({
+      ...current,
+      [row.personId]: {
+        category: current[row.personId]?.category ?? row.defaultCategory ?? row.category ?? "",
+        targetBales,
+      },
+    }));
   };
 
   const saveMutation = useMutation({
