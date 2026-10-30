@@ -622,7 +622,7 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
       await db.delete(factoryDaybookEntries).where(eq(factoryDaybookEntries.id, id));
       res.json({ success: true });
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
 
