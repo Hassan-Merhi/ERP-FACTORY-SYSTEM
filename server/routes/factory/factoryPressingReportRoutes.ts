@@ -14,7 +14,7 @@ import { pressingReportFiltersSchema, pressingSavedViewSchema, type PressingRepo
 import { factoryLocalDate } from "../../services/factory/pressingShiftTime";
 import { PRESSING_TIME_ZONE } from "@shared/pressingTimeZone";
 
-// Individual worker history stays scoped; Admin, Owner and Developer can view company reports.
+// Individual worker history stays scoped. View Only can read company-wide reports but never correct scans.
 const MANAGER_ROLES = new Set(["Admin", "Owner", "Developer"]);
 type QueryCtx = { companyId: number; userId: string; supervisor: boolean; canCorrect: boolean };
 type Param = string | number;
@@ -44,7 +44,7 @@ function handleError(res: Response, error: unknown) {
 async function context(req: Request): Promise<QueryCtx> {
   const ctx = await getActiveCompanyPermissionContext(req);
   return { companyId: ctx.companyId, userId: ctx.userId,
-    supervisor: MANAGER_ROLES.has(ctx.role) && !ctx.posViewOnly,
+    supervisor: (MANAGER_ROLES.has(ctx.role) || ctx.role === "View Only") && !ctx.posViewOnly,
     canCorrect: (ctx.role === "Admin" || ctx.role === "Owner") && !ctx.posViewOnly };
 }
 function escapeLike(text: string): string {
