@@ -73,6 +73,7 @@ export function ProductionBonusCategoryRatesPanel({ initialDate }: { initialDate
       toast({ title: "Category rate saved", description: "Saved as an effective-dated rate version. Existing bonus payments are unchanged." });
       void queryClient.invalidateQueries({ queryKey: [endpoint] });
       void queryClient.invalidateQueries({ queryKey: ["/api/factory/production-target-bonuses/category-preview"] });
+      void queryClient.invalidateQueries({ queryKey: ["/api/factory/production-target-bonuses/checkout"] });
     },
     onError: (cause: Error) => toast({ title: "Category rate not saved", description: cause.message, variant: "destructive" }),
   });
