@@ -80,11 +80,13 @@ const enabled = Boolean(process.env.DATABASE_URL);
   });
 
   it("keeps business tables untouched and rejects mutation to staged evidence", async () => {
-    await client.query("SAVEPOINT staged_immutable").catch(() => undefined);
+    await client.query("BEGIN");
+    await client.query("SAVEPOINT staged_immutable");
     await expect(client.query("DELETE FROM factory_edge_staged_vouchers")).rejects.toMatchObject({
       code: "23514",
     });
-    await client.query("ROLLBACK").catch(() => undefined);
+    await client.query("ROLLBACK TO SAVEPOINT staged_immutable");
+    await client.query("COMMIT");
     // No business-posting SQL appears in the staging implementation.
     const rows = await client.query("SELECT COUNT(*)::integer AS count FROM factory_edge_staged_vouchers");
     expect(rows.rows[0].count).toBe(1);
