@@ -431,6 +431,7 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
                 }
               }
             }
+            let hasContainerPrice = false;
             if (order.proformaIdUsed && effectiveArticleCode) {
               const extra = resultRows<{ price: string }>(await tx.execute(sql`
                 SELECT price_per_bale::text AS price
