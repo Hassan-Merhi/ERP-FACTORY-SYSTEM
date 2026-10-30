@@ -24,6 +24,7 @@ on:
       - 'client/src/lib/offline/phase9Status.ts'
       - 'scripts/edge/audit-phase9-write-coverage.mjs'
       - 'tests/offline-phase9*.mjs'
+      - 'tests/offline-phase9*.ts'
       - 'tests/ui/offline-phase9*.ts'
       - '.github/workflows/offline-phase8-contract.yml'
   workflow_dispatch:
@@ -69,5 +70,7 @@ jobs:
         env:
           PHASE8_TEST_DATABASE_URL: postgresql://postgres:phase8-test-admin-pass@127.0.0.1:55433/postgres
         run: node --test tests/offline-phase8-postgres.test.mjs
+      - name: Test Phase 9 status live-session and membership gating
+        run: node node_modules/vitest/vitest.mjs run tests/offline-phase9-status-http.test.ts
       - name: Validate TypeScript on unified branch
         run: npm run check
