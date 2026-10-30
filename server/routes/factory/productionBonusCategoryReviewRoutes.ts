@@ -127,6 +127,14 @@ export function registerProductionBonusCategoryReviewRoutes(app: Express): void 
           `));
           if (legacy.length) fail(409,"Legacy worker/day bonus was already reviewed; cannot approve it again");
 
+          const weekly = resultRows(await tx.execute(sql`
+            SELECT id FROM factory_target_bonus_weekly_reviews
+            WHERE company_id = ${companyId} AND worker_id = ${command.workerId}
+              AND ${command.date}::date BETWEEN week_start AND week_end
+            LIMIT 1
+          `));
+          if (weekly.length) fail(409, "This worker/week already has a weekly flat bonus review");
+
           const proposal = await previewProductionBonusCategories(companyId, command.date, tx);
           const worker = proposal.workers.find(item => item.workerId === command.workerId);
           if (!worker || worker.blocked || !proposal.finalized || !proposal.evidenceVerified ||
