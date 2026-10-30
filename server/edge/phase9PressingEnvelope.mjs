@@ -23,8 +23,9 @@ function positive(value) {
 }
 
 function validDay(date) {
-  return typeof date === "string" && DAY.test(date) &&
-    new Date(date + "T00:00:00.000Z").toISOString().slice(0, 10) === date;
+  if (typeof date !== "string" || !DAY.test(date)) return false;
+  const value = new Date(date + "T00:00:00.000Z");
+  return Number.isFinite(value.getTime()) && value.toISOString().slice(0, 10) === date;
 }
 
 /**
@@ -46,11 +47,13 @@ export function phase9PressingEnvelope(evidence) {
       evidence.timezoneName.length < 1 || evidence.timezoneName.length > 80 ||
       typeof evidence.confirmedAt !== "string" ||
       !UTC.test(evidence.confirmedAt) ||
-      Number.isNaN(Date.parse(evidence.confirmedAt)) ||
+      !Number.isFinite(Date.parse(evidence.confirmedAt)) ||
+      new Date(evidence.confirmedAt).toISOString() !== evidence.confirmedAt ||
       (evidence.deviceCapturedAt !== null &&
        (typeof evidence.deviceCapturedAt !== "string" ||
         !UTC.test(evidence.deviceCapturedAt) ||
-        Number.isNaN(Date.parse(evidence.deviceCapturedAt))))) {
+        !Number.isFinite(Date.parse(evidence.deviceCapturedAt)) ||
+        new Date(evidence.deviceCapturedAt).toISOString() !== evidence.deviceCapturedAt))) {
     throw new Phase9PressingRefusal("PHASE9_PRESSING_EVIDENCE_INVALID");
   }
   return {
