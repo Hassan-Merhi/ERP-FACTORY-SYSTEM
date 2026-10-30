@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/featureFlags", () => ({ OFFLINE_MODE_ENABLED: true }));
 
-import { enqueueRequest, getQueue } from "@/lib/offlineQueue";
+import { enqueueRequest, getQueue, isSafeToQueue } from "@/lib/offlineQueue";
 import { addToSyncQueue, db } from "@/lib/db";
 
 beforeEach(() => {
@@ -27,6 +27,16 @@ describe("Phase 9 legacy queue admission policy", () => {
         .toThrow("OFFLINE_LEGACY_QUEUE_BLOCKED");
     }
     expect(getQueue()).toEqual([original]);
+  });
+
+  it("does not advertise any old replay pattern as Phase 9 safe", () => {
+    for (const [method, url] of [
+      ["POST", "/api/pos/sales"], ["POST", "/api/inventory/quick-adjust"],
+      ["POST", "/api/vouchers/with-entries"], ["PATCH", "/api/factory/bales/10"],
+      ["POST", "/api/auth/set-company"],
+    ]) {
+      expect(isSafeToQueue(method, url)).toBe(false);
+    }
   });
 
   it("rejects legacy IndexedDB admission without touching the sync table", async () => {
