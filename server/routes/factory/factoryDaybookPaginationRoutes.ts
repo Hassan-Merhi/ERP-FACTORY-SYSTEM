@@ -186,6 +186,14 @@ export function registerFactoryDaybookPaginationRoutes(app: Express): void {
         `f.tx_type NOT IN ('LOADING_SUBMITTED','ORDER_VERIFIED','INVOICE_REVERTED','SUPPLIER_FX_TRANSFER_DELETE','WORKER_CREATED','ORDER_CANCELLED','CONTRACT_SETTLED','CONTRACT_REACTIVATED','CONTRACT_ENDED')`,
         `NOT (f.tx_type = 'PAYROLL_PAYMENT' AND COALESCE(f.amount_currency, 0) = 0)`,
         `(f.reference_table IS DISTINCT FROM 'vouchers' OR f.reference_id IS NULL OR live_voucher.id IS NOT NULL)`,
+        // A Daybook delete reverses and retains the payment claim. Active view
+        // excludes original positive bonus payments after the reversing Receipt.
+        `NOT (f.tx_type = 'PRODUCTION_TARGET_BONUS_PAYMENT' AND EXISTS (
+          SELECT 1 FROM factory_target_bonus_payments p
+          WHERE p.company_id = f.company_id AND p.id = f.reference_id AND p.status = 'REVERSED'))`,
+        `NOT (f.tx_type = 'PRODUCTION_TARGET_WEEKLY_BONUS_PAYMENT' AND EXISTS (
+          SELECT 1 FROM factory_target_bonus_weekly_payments p
+          WHERE p.company_id = f.company_id AND p.id = f.reference_id AND p.status = 'REVERSED'))`,
         // Shared source-integrity conditions — generated from the central registry.
         // Covers all source-backed txTypes (payrolls, advances, repayments, containers,
         // mix batches, customer orders, commissions, raw stock, etc.).
@@ -195,6 +203,12 @@ export function registerFactoryDaybookPaginationRoutes(app: Express): void {
         `v.company_id = ${companyParam}`,
         `v.deleted_at IS NULL`,
         `v.voucher_type IN ('Payment','Receipt','Journal')`,
+        // Dedicated bonus Daybook rows represent the voucher. Do not display
+        // another synthetic voucher row that would bypass the bonus reversal action.
+        `NOT EXISTS (SELECT 1 FROM factory_target_bonus_payments p WHERE p.company_id = v.company_id
+          AND (p.payment_voucher_id = v.id OR p.reversal_voucher_id = v.id))`,
+        `NOT EXISTS (SELECT 1 FROM factory_target_bonus_weekly_payments p WHERE p.company_id = v.company_id
+          AND (p.payment_voucher_id = v.id OR p.reversal_voucher_id = v.id))`,
       ];
 
       if (startDate) {
