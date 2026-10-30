@@ -68,6 +68,19 @@ fi
 reject_app 2 'INSERT INTO public.phase7_test_business(id) VALUES (2)'
 reject_app 1 "UPDATE phase7_writer.state SET mode='fenced' WHERE singleton"
 
+# Handoff cannot overtake the last transaction from the old writer. The
+# statement-level trigger takes a SHARED row lock held until COMMIT, while the
+# DBA transition needs an exclusive row lock. A short-lock-timeout transition
+# must fail while an old-epoch transaction is still in flight.
+app 1 'BEGIN; INSERT INTO public.phase7_test_business(id) VALUES (5); SELECT pg_sleep(2); COMMIT;' >/dev/null &
+writer_pid=$!
+sleep 0.5
+if admin -c "BEGIN; SET LOCAL lock_timeout = '200ms'; UPDATE phase7_writer.state SET mode='fenced' WHERE singleton; COMMIT;" >/dev/null 2>&1; then
+  echo "PHASE7_INFLIGHT_WRITER_NOT_FENCED" >&2
+  exit 1
+fi
+wait "$writer_pid"
+
 # DBA freeze blocks the cloud even though the app still announces primary.
 admin -c "UPDATE phase7_writer.state SET mode='fenced' WHERE singleton" >/dev/null
 reject_app 1 'INSERT INTO public.phase7_test_business(id) VALUES (3)'
@@ -84,5 +97,5 @@ reject_app 1 'INSERT INTO public.phase7_test_new_table(id) VALUES (1)'
 admin -c "UPDATE phase7_writer.state SET mode='cloud-primary', epoch=2 WHERE singleton" >/dev/null
 reject_app 1 'INSERT INTO public.phase7_test_business(id) VALUES (4)'
 app 2 'INSERT INTO public.phase7_test_business(id) VALUES (4)' >/dev/null
-[[ "$(admin -At -c 'SELECT count(*) FROM public.phase7_test_business')" == 2 ]]
+[[ "$(admin -At -c 'SELECT count(*) FROM public.phase7_test_business')" == 3 ]]
 echo "PHASE7_POSTGRES_FENCE_OK: initial fence, authority transfer, role denial and DDL coverage"
