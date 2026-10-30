@@ -6,6 +6,7 @@ import { registerProductionTargetBonusCoreRoutes } from "./productionTargetBonus
 import { registerProductionTargetBonusCategoryRateRoutes } from "./productionTargetBonusCategoryRateRoutes";
 import { registerProductionTargetBonusWeeklyMethodRoutes } from "./productionTargetBonusWeeklyMethodRoutes";
 import { registerProductionTargetBonusWeeklyPreviewRoutes } from "./productionTargetBonusWeeklyPreviewRoutes";
+import { registerProductionTargetBonusWeeklyReviewRoutes } from "./productionTargetBonusWeeklyReviewRoutes";
 import { registerProductionBonusCategoryEvidenceRoutes } from "./productionBonusCategoryEvidenceRoutes";
 import { registerProductionBonusCategoryReviewRoutes } from "./productionBonusCategoryReviewRoutes";
 import { freezeProductionBonusCategoryEvidence, BONUS_CATEGORY_COUNTED_BALE_STATUSES, type CategoryCaptureCarry } from "../../services/factory/productionBonusCategoryCapture";
@@ -235,6 +236,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
   registerProductionTargetBonusCategoryRateRoutes(app);
   registerProductionTargetBonusWeeklyMethodRoutes(app);
   registerProductionTargetBonusWeeklyPreviewRoutes(app);
+  registerProductionTargetBonusWeeklyReviewRoutes(app);
   registerProductionBonusCategoryEvidenceRoutes(app);
   registerProductionBonusCategoryReviewRoutes(app);
   app.get("/api/factory/staff-tracking", requireAuth, async (req: Request, res: Response) => {
