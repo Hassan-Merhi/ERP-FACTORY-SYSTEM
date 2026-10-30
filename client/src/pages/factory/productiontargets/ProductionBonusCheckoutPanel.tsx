@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Banknote, Calculator, CheckCircle2, Loader2, Pencil, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,14 +24,55 @@ type Line = { category: string; produced: number; extra: number; rate: string; b
 type Offer = {
   date: string; workerId: number; workerName: string; target: number; produced: number;
   extra: number; method: Method; lines: Line[]; amount: string; token: string;
-  status: "pending" | "approved" | "paid" | "reversed" | "blocked" | "rejected";
+  status: "pending" | "approved" | "paid" | "reversed" | "no_bonus" | "needs_setup" | "blocked" | "rejected";
   issue: string | null;
 };
-type Preview = { date: string; method: Method; currency: "USD"; offers: Offer[] };
+type Preview = { from: string; to: string; method: Method; currency: "USD"; offers: Offer[] };
 type Account = { id: number; name: string; code: string; openingCurrency: string | null };
-type PaymentRow = { reviewId: number; workerId: number; paymentId: number | null;
+type PaymentRow = { reviewId: number; workerId: number; date: string; paymentId: number | null;
   paymentStatus: "POSTED" | "REVERSED" | null; cashAccountName: string | null; voucherId: number | null };
 const endpoint="/api/factory/production-target-bonuses/checkout";
+const isDate=(date:string)=>{
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return false;
+  const timestamp=Date.parse(date+"T12:00:00Z");
+  return Number.isFinite(timestamp)&&new Date(timestamp).toISOString().slice(0,10)===date;
+};
+const daysApart=(from:string,to:string)=>Math.round(
+  (Date.parse(to+"T00:00:00Z")-Date.parse(from+"T00:00:00Z"))/86400000);
+const startOfRange=(date:string)=>{
+  if(!isDate(date))return date;
+  const d=new Date(date+"T12:00:00Z");
+  d.setUTCDate(d.getUTCDate()-6);
+  return d.toISOString().slice(0,10);
+};
+const payableStatus=(row:Offer)=>row.status==="pending"||row.status==="approved";
+type WorkerGroup={workerId:number;workerName:string;days:Offer[];target:number;produced:number;
+  extra:number;amount:number;readyDays:number;paidDays:number;needsSetup:number;blockedDays:number};
+function summarizeByWorker(offers:Offer[]):WorkerGroup[]{
+  const map=new Map<number,WorkerGroup>();
+  for(const row of offers){
+    let group=map.get(row.workerId);
+    if(!group){
+      group={workerId:row.workerId,workerName:row.workerName,days:[],target:0,
+        produced:0,extra:0,amount:0,readyDays:0,paidDays:0,needsSetup:0,blockedDays:0};
+      map.set(row.workerId,group);
+    }
+    group.days.push(row);
+    group.target+=row.target;
+    group.produced+=row.produced;
+    group.extra+=row.extra;
+    if(payableStatus(row)){
+      group.readyDays++;
+      group.amount+=Math.round(Number(row.amount)*100);
+    }
+    if(row.status==="paid")group.paidDays++;
+    if(row.status==="needs_setup")group.needsSetup++;
+    if(row.status==="blocked")group.blockedDays++;
+  }
+  return [...map.values()].map(g=>({...g,amount:g.amount/100,
+    days:g.days.sort((a,b)=>a.date.localeCompare(b.date))}))
+    .sort((a,b)=>a.workerName.localeCompare(b.workerName));
+}
 const usd=(amount:string|number)=>Number(amount).toLocaleString("en-US",{
   style:"currency",currency:"USD",minimumFractionDigits:2,maximumFractionDigits:2
 });
@@ -43,9 +85,11 @@ async function request<T>(method:"GET"|"POST",path:string,body?:unknown):Promise
 /** A single checkout: select workers, verify locked amounts, then approve and post. */
 export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}) {
   const {toast}=useToast();
+  const [,navigate]=useLocation();
   const {language}=useApplicationLanguage();
   const t=(key:ProductionBonusTranslationKey)=>bonusText(key,language);
-  const [date,setDate]=useState(initialDate);
+  const [from,setFrom]=useState(()=>startOfRange(initialDate));
+  const [to,setTo]=useState(initialDate);
   const [method,setMethod]=useState<Method>("standard");
   const [selected,setSelected]=useState<number[]>([]);
   const [accountId,setAccountId]=useState("");
@@ -55,18 +99,19 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
   const [newRate,setNewRate]=useState("");
   const [reverse,setReverse]=useState<PaymentRow|null>(null);
   const [reverseReason,setReverseReason]=useState("");
-  useEffect(()=>{setDate(initialDate);setSelected([]);},[initialDate]);
+  useEffect(()=>{setFrom(startOfRange(initialDate));setTo(initialDate);setSelected([]);},[initialDate]);
+  const validRange=isDate(from)&&isDate(to)&&from<=to&&daysApart(from,to)<=31;
   const {data:access}=useQuery<{canDecide:boolean}>({
-    queryKey:["/api/factory/staff-tracking/production-bonuses",date,date],
+    queryKey:["/api/factory/staff-tracking/production-bonuses",from,from],
     queryFn:()=>request("GET","/api/factory/staff-tracking/production-bonuses?"+
-      new URLSearchParams({start:date,end:date})),
-    enabled:Boolean(date),
+      new URLSearchParams({start:from,end:from})),
+    enabled:validRange,
   });
   const canUse=access?.canDecide===true;
   const {data,error,isLoading}=useQuery<Preview>({
-    queryKey:[endpoint,date,method],
-    queryFn:()=>request("GET",endpoint+"?"+new URLSearchParams({date,method})),
-    enabled:canUse&&Boolean(date),
+    queryKey:[endpoint,from,to,method],
+    queryFn:()=>request("GET",endpoint+"?"+new URLSearchParams({from,to,method})),
+    enabled:canUse&&validRange,
   });
   const {data:accounts}=useQuery<{accounts:Account[]}>({
     queryKey:["/api/factory/staff-tracking/production-bonuses/payment-accounts"],
@@ -74,20 +119,24 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
     enabled:canUse,
   });
   const {data:payments}=useQuery<{payments:PaymentRow[]}>({
-    queryKey:["/api/factory/staff-tracking/production-bonuses/payments",date,date],
+    queryKey:["/api/factory/staff-tracking/production-bonuses/payments",from,to],
     queryFn:()=>request("GET","/api/factory/staff-tracking/production-bonuses/payments?"+
-      new URLSearchParams({start:date,end:date})),
-    enabled:canUse&&Boolean(date),
+      new URLSearchParams({start:from,end:to})),
+    enabled:canUse&&validRange,
   });
   const cashAccounts=(accounts?.accounts??[]).filter(a=>
     !a.openingCurrency||a.openingCurrency.toUpperCase()==="USD");
   const offers=data?.offers??[];
-  const payable=offers.filter(row=>row.status==="pending"||row.status==="approved");
+  const groups=useMemo(()=>summarizeByWorker(offers),[offers]);
+  const payable=offers.filter(payableStatus);
   const chosen=useMemo(()=>offers.filter(row=>
-    selected.includes(row.workerId)&&(row.status==="pending"||row.status==="approved")),
+    selected.includes(row.workerId)&&payableStatus(row)),
   [offers,selected]);
+  const selectedGroups=groups.filter(group=>selected.includes(group.workerId)&&group.readyDays>0);
   const total=chosen.reduce((sum,row)=>sum+Math.round(Number(row.amount)*100),0)/100;
-  const allSelected=payable.length>0&&payable.every(row=>selected.includes(row.workerId));
+  const allSelected=payable.length>0&&groups.filter(group=>group.readyDays>0)
+    .every(group=>selected.includes(group.workerId));
+  const tooMany=chosen.length>100;
   const pay=useMutation({
     mutationFn:()=>request<{posted:number;replayed:number}>("POST",endpoint+"/pay",{ // data-no-translate: TypeScript generic, not user-visible JSX
       method,confirm:true,currency:"USD",paymentDate,cashAccountId:Number(accountId),
@@ -110,7 +159,7 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
   });
   const saveRate=useMutation({
     mutationFn:()=>request("POST","/api/factory/staff-tracking/production-bonuses/rate",{
-      workerId:editingRate!.workerId,effectiveFrom:date,ratePerBale:newRate,
+      workerId:editingRate!.workerId,effectiveFrom:editingRate!.date,ratePerBale:newRate,
     }),
     onSuccess:()=>{
       setEditingRate(null);toast({title:t("rateSaved")});
@@ -140,9 +189,13 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
     </CardHeader>
     <CardContent className="space-y-4 pt-4">
       <div className="flex flex-wrap items-end gap-3">
-        <label className="space-y-1 text-xs text-muted-foreground">{t("prodDate")}
-          <Input aria-label={t("prodDate")} type="date" value={date}
-            onChange={event=>{setDate(event.target.value);setSelected([]);}} className="w-[170px]"/>
+        <label className="space-y-1 text-xs text-muted-foreground">{t("fromDate")}
+          <Input aria-label={t("fromDate")} type="date" value={from}
+            onChange={event=>{setFrom(event.target.value);setSelected([]);}} className="w-[170px]"/>
+        </label>
+        <label className="space-y-1 text-xs text-muted-foreground">{t("toDate")}
+          <Input aria-label={t("toDate")} type="date" value={to}
+            onChange={event=>{setTo(event.target.value);setSelected([]);}} className="w-[170px]"/>
         </label>
         <label className="space-y-1 text-xs text-muted-foreground">{t("method")}
           <Select value={method} onValueChange={value=>{setMethod(value as Method);setSelected([]);}}>
@@ -172,19 +225,21 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
         <summary className="cursor-pointer px-4 py-3 text-sm font-medium">{t("settings")}</summary>
         <div className="space-y-3 border-t p-3">
           <p className="text-xs text-muted-foreground">{t("settingsHint")}</p>
-          <ProductionBonusCategoryRatesPanel initialDate={date}/>
+          <ProductionBonusCategoryRatesPanel initialDate={from}/>
           <details className="rounded-lg border">
             <summary className="cursor-pointer px-3 py-2 text-xs">{t("legacy")}</summary>
-            <ProductionBonusWeeklyMethodPanel initialDate={date}/>
+            <ProductionBonusWeeklyMethodPanel initialDate={to}/>
           </details>
         </div>
       </details>
+      {!validRange&&<p role="alert" className="text-sm text-destructive">{t("invalidRange")}</p>}
       {error&&<p role="alert" className="text-sm text-destructive">{(error as Error).message}</p>}
+      <p className="text-xs text-muted-foreground">{t("rangeExplanation")}</p>
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
         {([
-          [t("workersExtra"),String(offers.filter(row=>row.extra>0).length)],
-          [t("ready"),String(payable.length)],
-          [t("selected"),String(chosen.length)],
+          [t("workersExtra"),String(groups.filter(group=>group.extra>0).length)],
+          [t("ready"),String(groups.filter(group=>group.readyDays>0).length)],
+          [t("selected"),String(selectedGroups.length)],
           [t("totalPay"),usd(total)],
         ] as const).map(([label,value])=><div key={label} className="rounded-lg border p-3">
           <div className="text-xs text-muted-foreground">{label}</div>
@@ -193,15 +248,16 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="outline" size="sm" disabled={!payable.length}
-          onClick={()=>setSelected(allSelected?[]:payable.map(row=>row.workerId))}>
+          onClick={()=>setSelected(allSelected?[]:groups.filter(group=>group.readyDays>0).map(group=>group.workerId))}>
           {allSelected?t("clear"):t("selectAll")}
         </Button>
-        <span className="ml-auto text-sm font-semibold">{chosen.length} selected · {usd(total)}</span>
-        <Button disabled={!chosen.length||!accountId||!paymentDate||pay.isPending}
+        <span className="ml-auto text-sm font-semibold">{selectedGroups.length} {t("selected")} · {usd(total)}</span>
+        <Button disabled={!chosen.length||!accountId||!paymentDate||!validRange||tooMany||pay.isPending}
           onClick={()=>setConfirmPay(true)}>
           <CheckCircle2 className="mr-2 h-4 w-4"/> {t("reviewPay")}
         </Button>
       </div>
+      {tooMany&&<p role="alert" className="text-sm text-destructive">{t("max100")}</p>}
       <div className="overflow-x-auto rounded-lg border">
         <Table>
           <TableHeader><TableRow>
@@ -216,49 +272,68 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
             {isLoading&&<TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
               <Loader2 className="mr-2 inline h-4 w-4 animate-spin"/>{t("loading")}
             </TableCell></TableRow>}
-            {!isLoading&&!offers.length&&<TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+            {!isLoading&&!groups.length&&<TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
               {t("noRows")}
             </TableCell></TableRow>}
-            {offers.map(offer=>{
-              const ready=offer.status==="pending"||offer.status==="approved";
-              const payment=(payments?.payments??[]).find(p=>p.workerId===offer.workerId);
-              return <TableRow key={offer.workerId} className="align-top">
-                <TableCell><Checkbox aria-label={t("selectBonus")+" "+offer.workerName}
-                  checked={selected.includes(offer.workerId)} disabled={!ready}
+            {groups.map(group=>{
+              const ready=group.readyDays>0;
+              const label=ready?t("ready"):group.needsSetup>0?t("needsSetup"):
+                group.blockedDays>0?t("needsReview"):group.paidDays>0?t("paidStatus"):t("noBonus");
+              return <TableRow key={group.workerId} className="align-top">
+                <TableCell><Checkbox aria-label={t("selectBonus")+" "+group.workerName}
+                  checked={selected.includes(group.workerId)} disabled={!ready}
                   onCheckedChange={checked=>setSelected(previous=>checked?
-                    [...new Set([...previous,offer.workerId])]:
-                    previous.filter(id=>id!==offer.workerId))}/></TableCell>
+                    [...new Set([...previous,group.workerId])]:
+                    previous.filter(id=>id!==group.workerId))}/></TableCell>
                 <TableCell>
-                  <div className="font-medium">{offer.workerName}</div>
-                  {offer.lines.length>0&&<details className="mt-1 text-xs">
+                  <div className="font-medium">{group.workerName}</div>
+                  <details className="mt-1 text-xs">
                     <summary className="cursor-pointer text-muted-foreground">
-                      <Calculator className="mr-1 inline h-3 w-3"/>{t("showCalc")}
+                      <Calculator className="mr-1 inline h-3 w-3"/>{t("dailyDetails")}
                     </summary>
-                    <div className="mt-2 space-y-1 whitespace-nowrap">
-                      {offer.lines.map(line=><div key={line.category}>
-                        {line.category}: {line.produced} {t("lineMade")} · {line.extra} {t("lineExtra")} × {usd(line.rate)} = {usd(line.bonus)}
-                      </div>)}
+                    <div className="mt-2 space-y-2 min-w-[290px]">
+                      {group.days.map(day=>{
+                        const payment=(payments?.payments??[]).find(p=>p.workerId===day.workerId&&p.date===day.date);
+                        return <div key={day.date} className="rounded border p-2">
+                          <div className="font-medium">{day.date}: {t("target")} {day.target}, {t("made")} {day.produced},
+                            {" "}{t("extra")} {day.extra} · {usd(day.amount)}</div>
+                          <div className="text-muted-foreground">{day.issue??(
+                            day.status==="paid"?t("paidStatus"):day.status==="no_bonus"?t("noBonus"):day.status)}</div>
+                          {day.lines.map(line=><div key={line.category} className="text-muted-foreground">
+                            {line.category}: {line.produced} {t("lineMade")} · {line.extra} {t("lineExtra")}
+                            {" "}× {usd(line.rate)} = {usd(line.bonus)}
+                          </div>)}
+                          {method==="standard" && day.extra>0 && day.status==="needs_setup" &&
+                           day.issue?.includes("rate")&&<Button size="sm" variant="outline" className="mt-1 h-7"
+                             onClick={()=>{setEditingRate(day);setNewRate(day.lines[0]?.rate??"");}}>
+                              <Pencil className="mr-1 h-3 w-3"/>{t("editRate")}
+                            </Button>}
+                          {payment?.paymentStatus==="POSTED"&&<Button size="sm" variant="outline"
+                            className="mt-1 h-7" onClick={()=>{setReverse(payment);setReverseReason("");}}>
+                            <RotateCcw className="mr-1 h-3 w-3"/>{t("reverse")}
+                          </Button>}
+                        </div>;
+                      })}
                     </div>
-                  </details>}
+                  </details>
                 </TableCell>
-                <TableCell className="text-right tabular-nums">{offer.target}</TableCell>
-                <TableCell className="text-right tabular-nums">{offer.produced}</TableCell>
-                <TableCell className="text-right font-semibold tabular-nums">{offer.extra}</TableCell>
-                <TableCell className="text-right font-semibold tabular-nums">{usd(offer.amount)}</TableCell>
+                <TableCell className="text-right tabular-nums">{group.target}</TableCell>
+                <TableCell className="text-right tabular-nums">{group.produced}</TableCell>
+                <TableCell className="text-right font-semibold tabular-nums">{group.extra}</TableCell>
+                <TableCell className="text-right font-semibold tabular-nums">{usd(group.amount)}</TableCell>
                 <TableCell>
-                  <Badge variant={offer.status==="paid"?"default":"secondary"}>{offer.status}</Badge>
-                  {offer.issue&&<p className="mt-1 max-w-[240px] text-xs text-destructive">{offer.issue}</p>}
-                  {method==="standard"&&(offer.status==="pending" || (offer.status==="blocked" && offer.extra>0 && !!offer.issue?.includes("rate")))&&
-                    <Button size="sm" variant="ghost" className="mt-1 h-7" onClick={()=>{
-                      setEditingRate(offer);setNewRate(offer.lines[0]?.rate??"");
-                    }}><Pencil className="mr-1 h-3 w-3"/> {t("editRate")}</Button>}
-                  {payment?.paymentStatus==="POSTED"&&
-                    <Button size="sm" variant="outline" className="mt-1 h-7" onClick={()=>{
-                      setReverse(payment);setReverseReason("");
-                    }}><RotateCcw className="mr-1 h-3 w-3"/> {t("reverse")}</Button>}
-                  {payment?.voucherId&&<p className="mt-1 text-[11px] text-muted-foreground">
-                    {t("voucher")} #{payment.voucherId} · {payment.cashAccountName}
-                  </p>}
+                  <Badge variant={ready?"default":"secondary"}>{label}</Badge>
+                  {group.needsSetup>0&&<p className="mt-1 text-xs text-amber-600">
+                    {group.needsSetup} {t("daysNeedSetup")}</p>}
+                  {group.blockedDays>0&&<p className="mt-1 text-xs text-destructive">
+                    {group.blockedDays} {t("daysNeedReview")}</p>}
+                  {group.needsSetup>0&&group.days.some(day=>day.issue?.startsWith("Save a positive"))&&
+                    <Button variant="outline" size="sm" className="mt-1 h-7"
+                      onClick={()=>navigate("/factory/stock-entry?tab=production-targets")}>
+                      {t("editTargets")}
+                    </Button>}
+                  {ready&&<p className="mt-1 text-xs text-muted-foreground">
+                    {group.readyDays} {t("payableDays")}</p>}
                 </TableCell>
               </TableRow>;
             })}
@@ -275,9 +350,9 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
           <DialogDescription>{t("confirmHint")}</DialogDescription>
         </DialogHeader>
         <div className="max-h-[300px] overflow-y-auto rounded-lg border">
-          {chosen.map(row=><div key={row.workerId} className="flex justify-between gap-2 border-b px-3 py-2 text-sm">
+          {chosen.map(row=><div key={row.date+":"+row.workerId} className="flex justify-between gap-2 border-b px-3 py-2 text-sm">
             <div><div className="font-medium">{row.workerName}</div>
-              <div className="text-xs text-muted-foreground">{row.extra} {t("extraBales")} · {row.method==="category"?t("categoryRates"):t("standardRate")}</div>
+              <div className="text-xs text-muted-foreground">{row.date} · {row.extra} {t("extraBales")} · {row.method==="category"?t("categoryRates"):t("standardRate")}</div>
             </div><strong className="tabular-nums">{usd(row.amount)}</strong>
           </div>)}
         </div>
@@ -286,7 +361,7 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
         <div className="flex justify-between text-base font-bold"><span>{t("total")}</span><span>{usd(total)}</span></div>
         <DialogFooter>
           <Button variant="outline" onClick={()=>setConfirmPay(false)}>{t("cancel")}</Button>
-          <Button disabled={pay.isPending||!chosen.length} onClick={()=>pay.mutate()}>
+          <Button disabled={pay.isPending||!chosen.length||tooMany} onClick={()=>pay.mutate()}>
             {pay.isPending&&<Loader2 className="mr-2 h-4 w-4 animate-spin"/>}{t("approvePay")} {usd(total)}
           </Button>
         </DialogFooter>
