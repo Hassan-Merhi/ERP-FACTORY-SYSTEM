@@ -63,7 +63,7 @@ const harness = vi.hoisted(() => {
     },
   };
 
-  return { db, execute, executeResults, select, selectResults, tables };
+  return { db, tx, execute, executeResults, select, selectResults, tables };
 });
 
 vi.mock("../server/db", () => ({ db: harness.db }));
@@ -154,6 +154,17 @@ describe("immutable stock transfer revision review lifecycle", () => {
       inventoryApplied: true,
       totalAmount: "21.75",
     });
+  });
+
+  it("uses the supplied parent transaction without opening a nested transaction", async () => {
+    harness.executeResults.push({ rows: [lockedRevision("approved")] });
+    harness.selectResults.push([{ quantity: "3", rate: "7.25" }]);
+
+    const result = await approveImmutableStockTransferRevision(4, 41, "reviewer-1", undefined, harness.tx);
+
+    expect(result.transition).toBe("no-op");
+    expect(result.totalAmount).toBe("21.75");
+    expect(harness.db.transaction).not.toHaveBeenCalled();
   });
 
   it("rejects review attempts outside the active company", async () => {
