@@ -89,6 +89,7 @@ export default function FactoryShippingContainers() {
 
   interface AuthMe {
     id: number;
+    role?: string;
     currentCompanyId?: number | null;
     companyId?: number | null;
   }
@@ -332,6 +333,8 @@ export default function FactoryShippingContainers() {
           onDateFrom={setDateFrom}
           onDateTo={setDateTo}
           onOpenInvoicing={() => navigate("/factory/sales/new")}
+          allowNewOrder={Boolean(me?.role && me.role !== "View Only")}
+          showOrderValue={colVis.containerCost}
         />
         {/* ── Compact search + controls ── */}
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-card p-2.5 shadow-sm dark:bg-[#101c30]">
