@@ -137,6 +137,39 @@ export function registerPosTransferDelegatedApprovalRoutes(
     }
   });
 
+  // Read-only delivery preflight: never approve revisions or send a message.
+  // Admins can use this before assigning a POS approver or before a live order.
+  app.get("/api/settings/pos-transfer-approval/delivery-health", requireAuth, async (req, res) => {
+    try {
+      const actor = await context(req);
+      if (!["Admin", "Owner", "Developer"].includes(actor.role)) return res.sendStatus(403);
+      await setup();
+      const saved = await pool.query(
+        'SELECT s.user_id AS "userId", grp.name AS "groupName", grp.chat_id AS "chatId" ' +
+          'FROM pos_transfer_approval_settings s ' +
+          'LEFT JOIN stock_transfer_export_wa_groups grp ON grp.id=s.group_id AND grp.company_id=s.company_id ' +
+          'WHERE s.company_id=$1',
+        [actor.companyId]
+      );
+      const settings = saved.rows[0];
+      const wa = await getWaSettings();
+      const credentialsConfigured = Boolean(wa?.instanceId && wa.apiToken && wa.enabled);
+      const state = credentialsConfigured
+        ? await getGreenInstanceState(wa!.instanceId, wa!.apiToken)
+        : "notConfigured";
+      return res.json({
+        delegateConfigured: Boolean(settings?.userId),
+        groupConfigured: Boolean(settings?.chatId),
+        groupName: settings?.groupName || null,
+        whatsappState: state,
+        ready: Boolean(settings?.userId && settings?.chatId && state === "authorized"),
+        note: "Read-only connection preflight. No inventory changes or WhatsApp messages were sent. Delivery still requires a successful provider response.",
+      });
+    } catch (error) {
+      return errorResponse(res, error);
+    }
+  });
+
   // One row per transfer, never one row per revision. The lifecycle approval method
   // co-approves all pending revisions in a single transaction (latest wins per item).
   // No before/after figures, prices or rates leave this endpoint.
