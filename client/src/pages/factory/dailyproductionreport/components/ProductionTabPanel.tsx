@@ -1,4 +1,5 @@
 import { useState } from "react";
+import "./production-overview-premium.css";
 import { useQuery } from "@tanstack/react-query";
 import type { FactoryMixBatch } from "@shared/schema";
 import { EditMixBatchDialog } from "@/components/EditMixBatchDialog";
@@ -12,6 +13,7 @@ import { TabsContent } from "@/components/ui/tabs";
 import {
   ChevronRight,
   ChevronLeft,
+  CalendarDays,
   FlaskConical,
   PackageCheck,
   Scale,
@@ -75,11 +77,15 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
       {/* ── Production tab ── */}
       <TabsContent
         value="production"
-        className="flex-1 overflow-y-auto p-4 gap-4 flex flex-col mt-0 data-[state=inactive]:hidden"
+        className="factory-production-premium flex-1 overflow-y-auto p-4 gap-3 flex flex-col mt-0 data-[state=inactive]:hidden"
       >
-        {/* Date filter + Pie chart row */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="flex flex-wrap items-center gap-2">
+        {/* Presentation-only controls: existing date and valuation handlers are unchanged. */}
+        <div className="production-premium-topbar">
+          <div className="production-premium-heading">
+            <h2>Production <span>Overview</span></h2>
+            <p>Monitor production, batches, costs and profitability</p>
+          </div>
+          <div className="production-premium-controls">
             <Button
               size="icon"
               variant="outline"
@@ -92,6 +98,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
 
             <Select value={preset} onValueChange={(v) => setPreset(v as Preset)}>
               <SelectTrigger className="w-40" data-testid="select-preset">
+                <CalendarDays className="h-4 w-4 shrink-0 text-blue-500" aria-hidden="true" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -161,8 +168,9 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
               </div>
             )}
           </div>
+        </div>
 
-          {/* Compact pie charts — same row as date picker */}
+        {/* Production charts — derived from exactly the same report data as before. */}
           {!isLoading &&
             data &&
             (() => {
@@ -182,13 +190,13 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
               const hasData = gradeRows.some((r) => r.totalWeightKg > 0);
               if (!hasData) return null;
               return (
-                <div className="flex flex-wrap gap-6">
+                <div className="production-premium-chart-grid">
                   <CategoryPieChart
                     byCategory={data.production.byCategory}
                     wipersGarbageKg={data.wipersGarbage.totalWeightKg}
                   />
                   <MiniPieChart
-                    title="By Grade"
+                    title="Production by Grade"
                     allRows={gradeRows}
                     classifyFn={classifyByGrade}
                     order={GRADE_ORDER}
@@ -198,7 +206,6 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                 </div>
               );
             })()}
-        </div>
 
         {/* ── Top Summary Bar ── */}
         <Card data-testid="card-summary-bar">
@@ -213,7 +220,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
               <div className="flex flex-col gap-2">
                 {/* Row 1 — money summary */}
                 {showMoneySummary && (
-                  <div className="flex flex-wrap items-center gap-6">
+                  <div className="production-premium-metrics">
                     {(!isOwner || valuationMode === "cost") && (
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -292,8 +299,8 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                     <div
                       className={
                         showMoneySummary
-                          ? "flex flex-wrap items-center gap-5 pt-2 border-t border-border"
-                          : "flex flex-wrap items-center gap-5"
+                          ? "production-premium-weights flex flex-wrap items-center gap-5 pt-2 border-t border-border"
+                          : "production-premium-weights flex flex-wrap items-center gap-5"
                       }
                     >
                       <div className="flex items-center gap-2">
@@ -330,7 +337,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
         <SalaryOverviewSection report={report} />
 
         {/* Four matching KPI cards. The fourth contains both table balances. */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="production-premium-kpis grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
           {/* 1 — Original Batches */}
           <Card
             className="border-amber-200 dark:border-amber-800/50 bg-amber-50/60 dark:bg-amber-950/20"
