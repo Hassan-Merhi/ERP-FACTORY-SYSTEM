@@ -9,7 +9,7 @@ import { pool, db } from "../db";
 import { logger } from "../lib/logger";
 import { getActiveCompanyPermissionContext } from "../services/security/activeCompanyPermissionContext";
 import { approveImmutableStockTransferRevision } from "../services/immutableStockTransferRevisionLifecycle";
-import { getWaSettings, getGreenInstanceState, sendWhatsAppFileToChatId } from "../services/whatsappService";
+import { getWaSettings, getGreenInstanceState, fetchGreenApiChats, sendWhatsAppFileToChatId } from "../services/whatsappService";
 import { logAudit } from "./_helpers";
 
 type NoCostItem = { stockItemName: string; sourceLocationName: string; quantity: number };
@@ -157,13 +157,26 @@ export function registerPosTransferDelegatedApprovalRoutes(
       const state = credentialsConfigured
         ? await getGreenInstanceState(wa!.instanceId, wa!.apiToken)
         : "notConfigured";
+      let groupVisible: boolean | null = null;
+      if (state === "authorized" && settings?.chatId) {
+        try {
+          const chats = await fetchGreenApiChats(wa!.instanceId, wa!.apiToken);
+          groupVisible = chats.some((chat) => chat.id === settings.chatId);
+        } catch (error) {
+          logger.warn("[PosTransferApproval] Read-only WhatsApp group lookup unavailable", {
+            companyId: actor.companyId,
+            error,
+          });
+        }
+      }
       return res.json({
         delegateConfigured: Boolean(settings?.userId),
         groupConfigured: Boolean(settings?.chatId),
         groupName: settings?.groupName || null,
         whatsappState: state,
-        ready: Boolean(settings?.userId && settings?.chatId && state === "authorized"),
-        note: "Read-only connection preflight. No inventory changes or WhatsApp messages were sent. Delivery still requires a successful provider response.",
+        groupVisible,
+        ready: Boolean(settings?.userId && settings?.chatId && state === "authorized" && groupVisible === true),
+        note: "Read-only check: no inventory changes or WhatsApp sends. A visible group and authorized instance reduce delivery risk but do not guarantee receipt.",
       });
     } catch (error) {
       return errorResponse(res, error);
