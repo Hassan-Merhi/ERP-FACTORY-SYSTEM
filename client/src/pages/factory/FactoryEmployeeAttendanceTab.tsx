@@ -68,9 +68,6 @@ const STATUS_COLORS: Record<string, string> = {
 function localDateStr(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
-function todayStr() {
-  return localDateStr(new Date());
-}
 function generateDateRange(start: string, end: string): string[] {
   const dates: string[] = [];
   const cur = new Date(start + "T00:00:00");
