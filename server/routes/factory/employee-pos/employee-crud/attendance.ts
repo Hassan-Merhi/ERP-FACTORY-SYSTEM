@@ -11,7 +11,7 @@ import { requireAuth } from "../../../../auth";
 import { employees } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { sqlArray } from "../../../../lib/sqlArray";
-import { requireAttendanceEditApproval } from "../../attendanceEditPolicy";
+import { attendanceApprovalRateLimiter, requireAttendanceEditApproval } from "../../attendanceEditPolicy";
 import { logAudit } from "../../../helpers/auditWriteAdapter";
 import { inArray } from "drizzle-orm";
 
@@ -64,7 +64,7 @@ export function registerFactoryEmployeeAttendanceRoutes(app: Express) {
     }
   });
 
-  app.post("/api/factory/employee-attendance/bulk", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/factory/employee-attendance/bulk", requireAuth, attendanceApprovalRateLimiter, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
