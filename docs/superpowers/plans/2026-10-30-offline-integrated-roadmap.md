@@ -103,7 +103,7 @@ Done on the branch:
 Still open (not started or needs external review):
 - Reviewed local-session/cold-start policy for laptops that cannot reach the LAN server (browser-only offline beyond the Phase 5 encrypted read cache and the narrow voucher outbox).
 - Encrypted migration of legacy localStorage/IndexedDB queue entries (currently quarantined, never replayed).
-- Operator UI screens for pause/resume and conflict decisions (status is available over HTTP; changes are CLI/DBA).
+- Operator UI for pause/resume and conflict *decisions* (changes stay CLI/DBA by design). The read-only operator view is done: `FactoryEdgeOperatorPanel` in the Offline panel shows per-stream pending / staged / applied / rejected counts, relay pause state (who and why) and handover readiness from `GET /api/edge/operator/status`; it renders nothing on the cloud or for non-Admin/Owner users, and never reports handover ready while anything is pending (`tests/ui/offline-phase10-operator-panel.test.tsx`).
 
 ## Phase 11 — End-to-end factory certification and rollout
 - Integrate Phases 7–10 and run full repository CI, schema/migration, security and release tests on the exact integration release SHA.
@@ -124,6 +124,6 @@ Still open (not started or needs external review):
 
 1. Check PR #2613 CI on the latest head; fix anything red that this branch owns.
 2. Next workflow candidates for the event framework, in order: stock adjustments (needs an expected-prior-quantity conflict model), POS cash sales, supplier receiving. Each needs capture + kind + handler + drill before its route joins the allowlist.
-3. Phase 10 UI for pause/resume, conflicts and handover status.
+3. Phase 10 UI write controls for pause/resume and conflict decisions (read-only status panel done).
 4. Phase 6 hardware drills, security/DBA review and owner sign-off — external.
 

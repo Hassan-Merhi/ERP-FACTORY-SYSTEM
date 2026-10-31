@@ -209,7 +209,7 @@ no request ID or active bale appears twice. Voucher reconciliation follows
 |---|---|---|
 | LAN mode and data proof | `GET /api/edge/status` | mode/writeMode not as planned |
 | Per-operation state | `GET /api/edge/status?operationId=<uuid>` (authenticated) | `conflict` |
-| LAN backlog | `factory-handover-preflight.mjs status`, or `GET /api/edge/operator/status` (LAN, Admin/Owner) | `pendingTotal` grows during WAN-up time |
+| LAN backlog | `factory-handover-preflight.mjs status`, or `GET /api/edge/operator/status` (LAN, Admin/Owner; also shown in the Offline panel as "Factory server sync status") | `pendingTotal` grows during WAN-up time |
 | Cloud streams | `phase9OperatorApply.ts status` | `openConflicts > 0` |
 | Relay paused | `relayPaused: true` in the preflight report | paused longer than planned |
 
