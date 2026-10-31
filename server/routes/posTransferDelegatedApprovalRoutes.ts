@@ -149,23 +149,32 @@ export function registerPosTransferDelegatedApprovalRoutes(
         "SELECT user_id,group_id FROM pos_transfer_approval_settings WHERE company_id=$1",
         [actor.companyId]
       );
-      if (settings.rows[0]?.user_id !== actor.userId) return res.json({ enabled: false, transfers: [] });
-      if (!settings.rows[0]?.group_id) return res.json({ enabled: false, needsGroup: true, transfers: [] });
+      if (settings.rows[0]?.user_id !== actor.userId) return res.json({ enabled: false, destinations: [] });
+      if (!settings.rows[0]?.group_id) return res.json({ enabled: false, needsGroup: true, destinations: [] });
+      // One displayed approval group per receiving destination. An individual
+      // destination can have several underlying stock-transfer vouchers; they
+      // must still be approved as separate accounting/inventory transactions.
       const data = await pool.query(
-        'SELECT t.id AS "transferId", MAX(r.id)::int AS "revisionId", ' +
-          'COUNT(*)::int AS "pendingRevisionCount", ' +
-          'v.voucher_number AS "voucherNumber", d.name AS "destinationName", ' +
-          'MIN(r.revision_date) AS "createdAt" ' +
+        'WITH pending_transfers AS ( ' +
+          'SELECT t.id AS transfer_id, t.destination_location_id AS destination_id, ' +
+          'd.name AS destination_name, v.voucher_number, ' +
+          'MAX(r.id)::int AS revision_id, COUNT(*)::int AS revision_count, ' +
+          'MIN(r.revision_date) AS first_date ' +
           'FROM stock_transfer_revisions r ' +
           'JOIN stock_transfer_vouchers t ON t.id=r.transfer_id ' +
           'JOIN vouchers v ON v.id=t.voucher_id ' +
           'JOIN locations d ON d.id=t.destination_location_id ' +
           "WHERE v.company_id=$1 AND v.deleted_at IS NULL AND r.status='pending' " +
-          'GROUP BY t.id, v.voucher_number, d.name ' +
-          'ORDER BY MIN(r.revision_date) ASC, t.id ASC LIMIT 100',
+          'GROUP BY t.id,t.destination_location_id,d.name,v.voucher_number) ' +
+        'SELECT destination_id AS "destinationId", destination_name AS "destinationName", ' +
+          'COUNT(*)::int AS "transferCount", SUM(revision_count)::int AS "pendingRevisionCount", ' +
+          'json_agg(json_build_object(\'transferId\',transfer_id,\'voucherNumber\',voucher_number, ' +
+          '\'pendingRevisionCount\',revision_count) ORDER BY voucher_number) AS transfers ' +
+        'FROM pending_transfers GROUP BY destination_id,destination_name ' +
+        'ORDER BY MIN(first_date) ASC,destination_id ASC LIMIT 100',
         [actor.companyId]
       );
-      return res.json({ enabled: true, transfers: data.rows });
+      return res.json({ enabled: true, destinations: data.rows });
     } catch (error) {
       return errorResponse(res, error);
     }
