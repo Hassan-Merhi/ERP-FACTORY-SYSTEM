@@ -34,14 +34,14 @@ export function SalaryOverviewSection({ report }: { report: DailyProductionRepor
         const dayRange = ms ? `Day ${ms.currentDay} / ${ms.daysInMonth}` : "";
 
         return (
-          <div className="space-y-2">
+          <div className="production-premium-payroll space-y-2">
             <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60 px-0.5">
               Payroll Overview — {presetLabel}
               {dayRange ? ` (${dayRange})` : ""}
             </p>
 
-            {/* Row 1 — Workers (combined + collapsible) */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* One responsive KPI row with four payroll cards. Calculations are unchanged. */}
+            <div className="payroll-cards-grid grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
               {/* Combined: Worker Expected + Transport */}
               <Collapsible open={workerPayrollOpen} onOpenChange={setWorkerPayrollOpen}>
                 <Card data-testid="card-worker-expected-salary">
@@ -201,10 +201,7 @@ export function SalaryOverviewSection({ report }: { report: DailyProductionRepor
                   )}
                 </CardContent>
               </Card>
-            </div>
 
-            {/* Row 2 — Employees */}
-            <div className="grid grid-cols-1 gap-3">
               {/* Employee Expected — collapsible */}
               <Collapsible open={empPayrollOpen} onOpenChange={setEmpPayrollOpen}>
                 <Card data-testid="card-employee-expected-salary">
