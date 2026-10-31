@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ShieldCheck, MessageCircle, Save } from "lucide-react";
+import { ShieldCheck, MessageCircle, Save, Activity } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,6 +15,15 @@ type ApprovalSettings = {
   groups: Array<{ id: number; name: string }>;
 };
 
+type DeliveryHealth = {
+  delegateConfigured: boolean;
+  groupConfigured: boolean;
+  groupName: string | null;
+  whatsappState: string;
+  ready: boolean;
+  note: string;
+};
+
 export function PosTransferApprovalSettingsCard() {
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
@@ -23,6 +32,7 @@ export function PosTransferApprovalSettingsCard() {
   useEffect(() => {
     setUserChoice(null);
     setGroupChoice(null);
+    setHealth(null);
   }, [selectedCompany?.id]);
   const url = "/api/settings/pos-transfer-approval";
   const key = [url, selectedCompany?.id];
@@ -36,6 +46,22 @@ export function PosTransferApprovalSettingsCard() {
       return response.json();
     },
   });
+  const [health, setHealth] = useState<DeliveryHealth | null>(null);
+  const [checkingHealth, setCheckingHealth] = useState(false);
+  const checkDelivery = async () => {
+    setHealth(null);
+    setCheckingHealth(true);
+    try {
+      const response = await apiRequest("GET", "/api/settings/pos-transfer-approval/delivery-health");
+      if (!response.ok) throw new Error("Could not check WhatsApp connection.");
+      const result: DeliveryHealth = await response.json();
+      setHealth(result);
+    } catch (error) {
+      toast({ title: "Connection check failed", description: error instanceof Error ? error.message : "Connection unavailable.", variant: "destructive" });
+    } finally {
+      setCheckingHealth(false);
+    }
+  };
   const userId = userChoice ?? (settings.data?.userId || "none");
   const groupId = groupChoice ?? (settings.data?.groupId ? String(settings.data.groupId) : "none");
   const save = useMutation({
@@ -48,6 +74,7 @@ export function PosTransferApprovalSettingsCard() {
       return response.json();
     },
     onSuccess: () => {
+      setHealth(null);
       setUserChoice(null);
       setGroupChoice(null);
       queryClient.invalidateQueries({ queryKey: key });
@@ -97,11 +124,24 @@ export function PosTransferApprovalSettingsCard() {
       <p className="text-xs text-muted-foreground">
         Add WhatsApp groups first in Settings → Export Center. The delegate cannot approve until a group is selected and WhatsApp is connected. This does not grant access to other ERP administration screens.
       </p>
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Button variant="outline" onClick={checkDelivery} disabled={checkingHealth || settings.isLoading || save.isPending} data-testid="check-pos-transfer-whatsapp-health">
+          <Activity className="mr-2 h-4 w-4" />
+          {checkingHealth ? "Checking connection…" : "Check WhatsApp connection"}
+        </Button>
         <Button onClick={() => save.mutate()} disabled={settings.isLoading || save.isPending} data-testid="save-pos-transfer-approver">
           <Save className="mr-2 h-4 w-4" /> {save.isPending ? "Saving…" : "Save delegate"}
         </Button>
       </div>
+      {health && (
+        <div className="space-y-1 border-t pt-3 text-sm" role="status" data-testid="pos-transfer-whatsapp-health-result">
+          <p className={health.ready ? "font-medium text-green-600" : "font-medium text-amber-600"}>
+            {health.ready ? "Ready for approval-to-WhatsApp" : "Not ready for approval-to-WhatsApp"}
+          </p>
+          <p>WhatsApp: {health.whatsappState} · Group: {health.groupName || "Not configured"} · POS delegate: {health.delegateConfigured ? "Assigned" : "Not assigned"}</p>
+          <p className="text-xs text-muted-foreground">{health.note}</p>
+        </div>
+      )}
     </Card>
   );
 }
