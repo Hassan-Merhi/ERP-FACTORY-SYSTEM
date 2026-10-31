@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {} from "@/components/ui/command";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertTriangle, ChevronDown, Package, Scale } from "lucide-react";
+import { AlertTriangle, ChevronDown, Package, Scale, BarChart3, TrendingUp, Coins, Download, Layers3 } from "lucide-react";
 import React from "react";
 import { cn } from "@/lib/utils";
 import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
@@ -34,6 +34,8 @@ import { BaleComparisonFilters } from "./productioncomparison/components/BaleCom
 import { DiffCell } from "./productioncomparison/components/DiffCell";
 import { StatCard } from "./productioncomparison/components/StatCard";
 import { ComparisonPresetPicker } from "./productioncomparison/components/ComparisonPresetPicker";
+import { PeriodOverviewCard } from "./productioncomparison/components/PeriodOverviewCard";
+import { SupplierDailyTrend } from "./productioncomparison/components/SupplierDailyTrend";
 import { buildWorkerSummaryByArticle, WorkerSummaryHover } from "./productioncomparison/components/WorkerSummaryHover";
 // ── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -327,29 +329,75 @@ export default function ProductionComparison() {
 
   const hasSupplierFilter = filterSuppliers.length > 0;
 
+  /** CSV respects the selected supplier filter and cost-field permissions. */
+  function exportSupplierCsv() {
+    const header = ["Supplier", labelA + " KG", labelB + " KG", "KG Difference", "KG Change %"];
+    if (!costsHidden) header.push(labelA + " Cost USD", labelA + " Rate/KG", labelB + " Cost USD", labelB + " Rate/KG", "Cost Difference USD");
+    const rows = supplierSummary.map((row) => {
+      const values = [
+        row.supplier,
+        String(row.aKg),
+        String(row.bKg),
+        String(row.aKg - row.bKg),
+        row.bKg > 0 ? String(((row.aKg - row.bKg) / row.bKg) * 100) : "",
+      ];
+      if (!costsHidden) {
+        values.push(
+          String(row.aCost),
+          row.aKg > 0 ? String(row.aCost / row.aKg) : "",
+          String(row.bCost),
+          row.bKg > 0 ? String(row.bCost / row.bKg) : "",
+          String(row.aCost - row.bCost)
+        );
+      }
+      return values;
+    });
+    const escapeCell = (value: string) => {
+      // Avoid CSV formula injection when opening supplier names in Excel.
+      const safe = /^[\s]*[=+\-@\t\r]/.test(value) ? "'" + value : value;
+      return '"' + safe.replace(/"/g, '""') + '"';
+    };
+    const csv = [header, ...rows].map((row) => row.map(escapeCell).join(",")).join("\r\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "production-supplier-comparison.csv";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6">
+    <div className="flex min-w-0 flex-col gap-4 p-3 sm:p-4 lg:p-5" data-testid="production-comparison-dashboard">
       {/* Header + preset buttons */}
-      <PageHeader title="Production Comparison" subtitle="Compare output across two time periods">
-        <ComparisonPresetPicker preset={preset} onChange={setPreset} />
-      </PageHeader>
+      <div className="relative overflow-hidden rounded-2xl border border-blue-500/20 bg-gradient-to-r from-blue-50 via-slate-50 to-indigo-50 p-4 dark:from-[#101d31] dark:via-[#111b2c] dark:to-[#161c35] sm:p-5">
+        <div className="pointer-events-none absolute -right-10 -top-16 h-48 w-72 rounded-full bg-blue-400/10 blur-3xl" />
+        <div className="relative flex min-w-0 items-center gap-3 [&_[data-testid=page-header]]:mb-0 [&_[data-testid=page-header]]:w-full [&_[data-testid=page-header]]:border-none [&_[data-testid=page-header]]:pb-0">
+          <PageHeader
+            title="Production Comparison"
+            subtitle="Compare output, weight, cost and profit across selected periods"
+            icon={<span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 text-white shadow-md shadow-blue-500/20"><BarChart3 className="h-6 w-6" /></span>}
+          >
+            <ComparisonPresetPicker preset={preset} onChange={setPreset} />
+          </PageHeader>
+        </div>
+      </div>
 
       {/* Custom date pickers */}
       {preset === "custom" && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border bg-muted/40 p-4">
+        <div className="grid grid-cols-1 gap-4 rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:grid-cols-2">
           <div className="space-y-2">
             <p className="text-sm font-semibold">Period A</p>
             <div className="flex flex-wrap items-center gap-2">
               <input
                 type="date"
-                className="rounded-md border bg-background px-2.5 py-1.5 text-sm"
+                className="rounded-lg border bg-background px-3 py-2 text-sm"
                 value={customA[0]}
                 onChange={(e) => setCustomA([e.target.value, customA[1]])}
               />
               <span className="text-sm text-muted-foreground">to</span>
               <input
                 type="date"
-                className="rounded-md border bg-background px-2.5 py-1.5 text-sm"
+                className="rounded-lg border bg-background px-3 py-2 text-sm"
                 value={customA[1]}
                 onChange={(e) => setCustomA([customA[0], e.target.value])}
               />
@@ -360,14 +408,14 @@ export default function ProductionComparison() {
             <div className="flex flex-wrap items-center gap-2">
               <input
                 type="date"
-                className="rounded-md border bg-background px-2.5 py-1.5 text-sm"
+                className="rounded-lg border bg-background px-3 py-2 text-sm"
                 value={customB[0]}
                 onChange={(e) => setCustomB([e.target.value, customB[1]])}
               />
               <span className="text-sm text-muted-foreground">to</span>
               <input
                 type="date"
-                className="rounded-md border bg-background px-2.5 py-1.5 text-sm"
+                className="rounded-lg border bg-background px-3 py-2 text-sm"
                 value={customB[1]}
                 onChange={(e) => setCustomB([customB[0], e.target.value])}
               />
@@ -402,106 +450,84 @@ export default function ProductionComparison() {
       {/* Content */}
       {!isLoading && !fetchError && (
         <>
-          {/* Row 1: Period A & B — bales with kg underneath */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <StatCard
-              title={labelA}
-              value={fmtNum(totalABales) + " bales"}
-              sub={fmtDateRange(rangeA[0], rangeA[1])}
-              icon={<Package className="h-4 w-4" />}
-              extraLine={{ label: "Weight:", value: `${fmtKg(totalAKg)} kg` }}
+          {/* Period cards: the bars represent real product quantities, not invented history. */}
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+            <PeriodOverviewCard
+              label={labelA}
+              range={fmtDateRange(rangeA[0], rangeA[1])}
+              bales={totalABales}
+              kilograms={totalAKg}
+              products={qA.data?.production.byProduct ?? []}
+              tone="blue"
             />
-            <StatCard
-              title={labelB}
-              value={fmtNum(totalBBales) + " bales"}
-              sub={fmtDateRange(rangeB[0], rangeB[1])}
-              icon={<Package className="h-4 w-4" />}
-              extraLine={{ label: "Weight:", value: `${fmtKg(totalBKg)} kg` }}
+            <PeriodOverviewCard
+              label={labelB}
+              range={fmtDateRange(rangeB[0], rangeB[1])}
+              bales={totalBBales}
+              kilograms={totalBKg}
+              products={qB.data?.production.byProduct ?? []}
+              tone="violet"
             />
           </div>
 
-          {/* Row 2: bale diff, kg diff, batches / batch amount */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
             <StatCard
               title="Bale Difference"
-              value={`${baleDiff > 0 ? "+" : ""}${fmtNum(baleDiff)}`}
-              sub={`${labelA} vs ${labelB}`}
+              value={(baleDiff > 0 ? "+" : "") + fmtNum(baleDiff)}
+              sub={labelA + " vs " + labelB + (totalBBales > 0 ? " · " + ((baleDiff / totalBBales) * 100).toFixed(1) + "%" : "")}
               accent={baleDiff > 0 ? "green" : baleDiff < 0 ? "red" : "neutral"}
-              icon={<Package className="h-4 w-4" />}
-              valueClass={baleDiff > 0 ? "text-emerald-600" : baleDiff < 0 ? "text-red-500" : "text-muted-foreground"}
+              tone="emerald"
+              icon={<Package className="h-5 w-5" />}
+              valueClass={baleDiff > 0 ? "text-emerald-600 dark:text-emerald-300" : baleDiff < 0 ? "text-red-600 dark:text-red-300" : ""}
             />
             <StatCard
               title="Kilogram Difference"
-              value={`${kgDiff > 0 ? "+" : ""}${fmtKg(kgDiff)} kg`}
-              sub={`${labelA} vs ${labelB}`}
+              value={(kgDiff > 0 ? "+" : "") + fmtKg(kgDiff) + " kg"}
+              sub={labelA + " vs " + labelB + (totalBKg > 0 ? " · " + ((kgDiff / totalBKg) * 100).toFixed(1) + "%" : "")}
               accent={kgDiff > 0 ? "green" : kgDiff < 0 ? "red" : "neutral"}
-              icon={<Scale className="h-4 w-4" />}
-              valueClass={kgDiff > 0 ? "text-emerald-600" : kgDiff < 0 ? "text-red-500" : "text-muted-foreground"}
+              tone="blue"
+              icon={<Scale className="h-5 w-5" />}
+              valueClass={kgDiff > 0 ? "text-emerald-600 dark:text-emerald-300" : kgDiff < 0 ? "text-red-600 dark:text-red-300" : ""}
             />
-            <StatCard
-              title={`${labelA} — Batches / Batch Amount`}
-              value={`${fmtNum(totalABatches)} / ${fmtKg(totalABatchAmount)} kg`}
-              extraLine={{
-                label: `${labelB}:`,
-                value: `${fmtNum(totalBBatches)} / ${fmtKg(totalBBatchAmount)} kg`,
-              }}
-              sub="Updates with the selected production filters"
-              icon={<Package className="h-4 w-4" />}
-            />
+            {!costsHidden && (profitA != null || profitB != null) && (
+              <>
+                <StatCard
+                  title={labelA + " — Production Profit"}
+                  value={profitA != null ? fmtMoney(profitA) : "—"}
+                  sub={fmtDateRange(rangeA[0], rangeA[1])}
+                  tone="amber"
+                  accent={profitA != null ? profitA > 0 ? "green" : profitA < 0 ? "red" : "neutral" : "neutral"}
+                  valueClass={profitA != null ? profitA > 0 ? "text-emerald-600 dark:text-emerald-300" : profitA < 0 ? "text-red-600 dark:text-red-300" : "" : ""}
+                  icon={<Coins className="h-5 w-5" />}
+                />
+                <StatCard
+                  title={labelB + " — Production Profit"}
+                  value={profitB != null ? fmtMoney(profitB) : "—"}
+                  sub={fmtDateRange(rangeB[0], rangeB[1])}
+                  tone="violet"
+                  accent={profitB != null ? profitB > 0 ? "green" : profitB < 0 ? "red" : "neutral" : "neutral"}
+                  valueClass={profitB != null ? profitB > 0 ? "text-emerald-600 dark:text-emerald-300" : profitB < 0 ? "text-red-600 dark:text-red-300" : "" : ""}
+                  icon={<Coins className="h-5 w-5" />}
+                />
+                <StatCard
+                  title="Profit Difference"
+                  value={profitDiff != null ? fmtMoney(profitDiff) : "—"}
+                  sub={labelA + " vs " + labelB + (profitDiff != null && profitB != null && profitB !== 0 ? " · " + ((profitDiff / Math.abs(profitB)) * 100).toFixed(1) + "%" : "")}
+                  tone="teal"
+                  accent={profitDiff != null ? profitDiff > 0 ? "green" : profitDiff < 0 ? "red" : "neutral" : "neutral"}
+                  valueClass={profitDiff != null ? profitDiff > 0 ? "text-emerald-600 dark:text-emerald-300" : profitDiff < 0 ? "text-red-600 dark:text-red-300" : "" : ""}
+                  icon={<TrendingUp className="h-5 w-5" />}
+                />
+              </>
+            )}
           </div>
-
-          {/* Row 3: Production Profit */}
-          {!costsHidden && (profitA != null || profitB != null) && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <StatCard
-                title={`${labelA} — Production Profit`}
-                value={profitA != null ? fmtMoney(profitA) : "—"}
-                sub={fmtDateRange(rangeA[0], rangeA[1])}
-                accent={profitA != null ? (profitA > 0 ? "green" : profitA < 0 ? "red" : "neutral") : undefined}
-                valueClass={
-                  profitA == null
-                    ? "text-muted-foreground"
-                    : profitA > 0
-                      ? "text-emerald-600"
-                      : profitA < 0
-                        ? "text-red-500"
-                        : "text-muted-foreground"
-                }
-              />
-              <StatCard
-                title={`${labelB} — Production Profit`}
-                value={profitB != null ? fmtMoney(profitB) : "—"}
-                sub={fmtDateRange(rangeB[0], rangeB[1])}
-                accent={profitB != null ? (profitB > 0 ? "green" : profitB < 0 ? "red" : "neutral") : undefined}
-                valueClass={
-                  profitB == null
-                    ? "text-muted-foreground"
-                    : profitB > 0
-                      ? "text-emerald-600"
-                      : profitB < 0
-                        ? "text-red-500"
-                        : "text-muted-foreground"
-                }
-              />
-              <StatCard
-                title="Profit Difference"
-                value={profitDiff != null ? fmtMoney(profitDiff) : "—"}
-                sub={`${labelA} vs ${labelB}`}
-                accent={
-                  profitDiff != null ? (profitDiff > 0 ? "green" : profitDiff < 0 ? "red" : "neutral") : undefined
-                }
-                valueClass={
-                  profitDiff == null
-                    ? "text-muted-foreground"
-                    : profitDiff > 0
-                      ? "text-emerald-600"
-                      : profitDiff < 0
-                        ? "text-red-500"
-                        : "text-muted-foreground"
-                }
-              />
-            </div>
-          )}
+          {/* Existing batch metrics remain available and keep the same filters. */}
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-border/60 bg-muted/25 px-4 py-3 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-2 font-semibold text-foreground"><Layers3 className="h-4 w-4 text-blue-500" /> Mix batches</span>
+            <span><strong className="text-foreground">{labelA}:</strong> {fmtNum(totalABatches)} batches / {fmtKg(totalABatchAmount)} kg</span>
+            <span><strong className="text-foreground">{labelB}:</strong> {fmtNum(totalBBatches)} batches / {fmtKg(totalBBatchAmount)} kg</span>
+            <span className="sm:ml-auto">Responds to production filters</span>
+          </div>
 
           {/* ── Mix by Supplier ── */}
           {(supplierBreakdownA.length > 0 || supplierBreakdownB.length > 0) && (
