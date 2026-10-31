@@ -200,6 +200,7 @@ export function ProductionBonusManualPaymentPanel({rosterDate,workers,selected,a
         <Button variant="destructive" disabled={!reverseReason.trim()||reverse.isPending||Boolean(reverseRow&&paymentDate<reverseRow.paymentDate)}
           onClick={()=>reverse.mutate()}>Confirm reversal</Button>
       </DialogFooter>
+    </DialogContent>
     </Dialog>
   </Card>;
 }
