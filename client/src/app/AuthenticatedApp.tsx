@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { useOfflineReadScopeLifecycle } from "./useOfflineReadScopeLifecycle";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { useMobilePerformanceLifecycle } from "@/hooks/use-mobile-performance-lifecycle";
 import { useLocation, Redirect } from "wouter";
@@ -25,6 +26,7 @@ interface AuthenticatedAppProps {
 
 export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) {
   const { selectedCompany, isLoading: companyLoading } = useCompany();
+  useOfflineReadScopeLifecycle(selectedCompany?.id ?? null, String(user.id));
   useMobilePerformanceLifecycle();
   useWsInvalidation();
 

@@ -173,7 +173,11 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(production).toContain('tr("totalAbsent")');
     expect(production).toContain('tr("totalPresent")');
     expect(production).toContain('tr("diff")');
-    expect(production).toContain("grid-cols-3");
+    // Summary tile layout lives in its own module since the page was split.
+    expect(
+      readFileSync("client/src/pages/factory/productiontargets/ProductionTargetSummaryTiles.tsx", "utf8")
+    ).toContain("grid-cols-3");
+    expect(production).toContain("<SummaryGroupTile");
     expect(production).toContain("sm:grid-cols-2 xl:grid-cols-6");
     expect(model).toContain("absentTarget");
     expect(model).toContain("const expected = target - absentTarget");

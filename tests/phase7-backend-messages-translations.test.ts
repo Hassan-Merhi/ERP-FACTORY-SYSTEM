@@ -17,10 +17,11 @@ describe("Phase 7 backend-message translations", () => {
     // legacy move guards that replaced the free-text color length message
     // (#2141), plus the 15 fail-closed post-offload, duty and reversal guards
     // (#2241) and the 2 dedicated freight-payee guards (#2245), plus the 5
-    // intercompany parent-journal guards for purchase-order edits (#2261), for a
-    // total of 750.
-    expect(backendMessagesPhase7Translations).toHaveLength(750);
-    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(750);
+    // intercompany parent-journal guards for purchase-order edits (#2261) (750),
+    // plus 8 reviewed entries (with Arabic/French) merged on main by
+    // 2026-10-30, for a total of 758.
+    expect(backendMessagesPhase7Translations).toHaveLength(758);
+    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(758);
 
     for (const entry of backendMessagesPhase7Translations) {
       expect(entry.en.trim()).not.toBe("");

@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -49,67 +48,16 @@ import {
 import { ProductionTargetDefaultsDialog } from "./productiontargets/ProductionTargetDefaultsDialog";
 import { ProductionTargetsEditorDialog } from "./productiontargets/ProductionTargetsEditorDialog";
 import { ProductionExcelRangeDialog, type ProductionExportDates } from "./productiontargets/ProductionExcelRangeDialog";
-import { ProductionTargetsDateRangeDialog, type ProductionTargetsDateRange } from "./productiontargets/ProductionTargetsDateRangeDialog";
+import {
+  ProductionTargetsDateRangeDialog,
+  type ProductionTargetsDateRange,
+} from "./productiontargets/ProductionTargetsDateRangeDialog";
 import { Coins } from "lucide-react";
 import { useLocation } from "wouter";
 import type { AuthMe } from "@shared/apiTypes";
 
-
 import { exportWeeklyProductionExcel, ProductionDateRangeError } from "./productiontargets/productionWeeklyExcel";
-
-function SummaryTile({ label, value, icon }: { label: string; value: string | number; icon: React.ReactNode }) {
-  return (
-    <Card className="h-full shadow-none sm:col-span-1 xl:col-span-1">
-      <CardContent className="flex min-h-[108px] items-center justify-between gap-3 px-4 py-3">
-        <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-          <p className="mt-2 text-3xl font-semibold leading-none tabular-nums">{value}</p>
-        </div>
-        <div className="shrink-0 rounded-lg border bg-muted/30 p-2 text-muted-foreground">{icon}</div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function SummaryGroupTile({
-  label,
-  icon,
-  metrics,
-}: {
-  label: string;
-  icon: React.ReactNode;
-  metrics: Array<{ label: string; value: string | number; title?: string }>;
-}) {
-  return (
-    <Card className="h-full overflow-hidden shadow-none sm:col-span-2 xl:col-span-2">
-      <CardContent className="px-4 py-3">
-        <div className="flex items-center justify-between gap-3">
-          <p className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-          <div className="shrink-0 rounded-lg border bg-muted/30 p-2 text-muted-foreground">{icon}</div>
-        </div>
-        <div className="mt-3 grid w-full grid-cols-3 gap-2">
-          {metrics.map((metric) => (
-            <div
-              key={metric.label}
-              className="min-w-0 rounded-lg border border-border/60 bg-muted/20 px-2.5 py-2.5 text-center"
-              title={metric.title ?? metric.label}
-            >
-              <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">
-                {metric.label}
-              </p>
-              <p
-                className="mt-2 text-2xl font-semibold leading-none tabular-nums sm:text-3xl"
-                title={String(metric.value)}
-              >
-                {metric.value}
-              </p>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
+import { SummaryGroupTile, SummaryTile } from "./productiontargets/ProductionTargetSummaryTiles";
 
 export default function FactoryProductionTargets() {
   const { toast } = useToast();
@@ -129,9 +77,13 @@ export default function FactoryProductionTargets() {
   const [defaultsEditorOpen, setDefaultsEditorOpen] = useState(false);
   const [excelRangeOpen, setExcelRangeOpen] = useState(false);
   const productionReportRef = useRef<HTMLDivElement>(null);
-  const period = useMemo(() =>
-    periodType === "daily" ? periodFor("daily", referenceDate) : (customRange ?? periodFor(periodType, referenceDate)),
-  [periodType, referenceDate, customRange]);
+  const period = useMemo(
+    () =>
+      periodType === "daily"
+        ? periodFor("daily", referenceDate)
+        : (customRange ?? periodFor(periodType, referenceDate)),
+    [periodType, referenceDate, customRange]
+  );
 
   const { data, isLoading } = useQuery<ProductionResponse>({
     queryKey: ["/api/factory/staff-tracking", "production", periodType, period.start, period.end],
@@ -285,20 +237,18 @@ export default function FactoryProductionTargets() {
 
   const totals = useMemo(() => summarizeProductionRows(rows), [rows]);
   const missingTargetDays = useMemo(
-    () => periodType === "daily"
-      ? 0
-      : rows.reduce((sum, row) => sum + (row.missingTargetDays ?? 0), 0),
-    [rows, periodType],
+    () => (periodType === "daily" ? 0 : rows.reduce((sum, row) => sum + (row.missingTargetDays ?? 0), 0)),
+    [rows, periodType]
   );
   const workerTotals = useMemo(
     () => ({
       total: rows.length,
-      present: rows.filter((row) => periodType === "daily"
-        ? row.status === FACTORY_TRACKING_STATUSES.present
-        : (row.absentDays ?? 0) === 0).length,
-      absent: rows.filter((row) => periodType === "daily"
-        ? row.status === FACTORY_TRACKING_STATUSES.absent
-        : (row.absentDays ?? 0) > 0).length,
+      present: rows.filter((row) =>
+        periodType === "daily" ? row.status === FACTORY_TRACKING_STATUSES.present : (row.absentDays ?? 0) === 0
+      ).length,
+      absent: rows.filter((row) =>
+        periodType === "daily" ? row.status === FACTORY_TRACKING_STATUSES.absent : (row.absentDays ?? 0) > 0
+      ).length,
     }),
     [rows, periodType]
   );
@@ -319,10 +269,14 @@ export default function FactoryProductionTargets() {
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground">{tr("period")}</p>
-            <Select value={periodType} onValueChange={(value) => {
-              setPeriodType(value as PeriodType);
-              setCustomRange(null);
-            }} disabled={busy}>
+            <Select
+              value={periodType}
+              onValueChange={(value) => {
+                setPeriodType(value as PeriodType);
+                setCustomRange(null);
+              }}
+              disabled={busy}
+            >
               <SelectTrigger className="w-[130px]" data-testid="select-production-period-type">
                 <SelectValue />
               </SelectTrigger>
@@ -334,7 +288,9 @@ export default function FactoryProductionTargets() {
             </Select>
           </div>
           <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">{periodType === "daily" ? tr("referenceDate") : "Date range"}</p>
+            <p className="text-xs text-muted-foreground">
+              {periodType === "daily" ? tr("referenceDate") : "Date range"}
+            </p>
             {periodType === "daily" ? (
               <Input
                 type="date"
@@ -410,7 +366,9 @@ export default function FactoryProductionTargets() {
               setEditorOpen(true);
             }}
             disabled={finalized || rows.length === 0 || busy}
-            title={periodType === "daily" ? undefined : "Period targets are a sum of daily targets. Switch to Daily to edit."}
+            title={
+              periodType === "daily" ? undefined : "Period targets are a sum of daily targets. Switch to Daily to edit."
+            }
             data-testid="button-edit-production-targets"
           >
             <SlidersHorizontal className="mr-2 h-4 w-4" />
@@ -455,15 +413,20 @@ export default function FactoryProductionTargets() {
         <CalendarDays className="mr-1.5 inline h-3.5 w-3.5" />
         {period.start}
         {period.end !== period.start ? ` — ${period.end}` : ""}
-        <span className="ml-3">{periodType === "daily" ? tr("useEditorToManageTargets")
-          : "Targets and attendance are summed from each date in this period; edit individual days in Daily view."}</span>
+        <span className="ml-3">
+          {periodType === "daily"
+            ? tr("useEditorToManageTargets")
+            : "Targets and attendance are summed from each date in this period; edit individual days in Daily view."}
+        </span>
       </div>
 
       {periodType !== "daily" && missingTargetDays > 0 && !isLoading && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300" role="status">
-          {missingTargetDays} worker-day targets are not configured in this range.
-          The target and expected totals include only recorded daily targets;
-          differences are withheld until the missing targets are set.
+        <div
+          className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300"
+          role="status"
+        >
+          {missingTargetDays} worker-day targets are not configured in this range. The target and expected totals
+          include only recorded daily targets; differences are withheld until the missing targets are set.
         </div>
       )}
 
@@ -509,9 +472,14 @@ export default function FactoryProductionTargets() {
       </div>
 
       {periodType === "daily" && canManageBonuses && (
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card p-4" data-testid="production-bonuses-launcher">
+        <div
+          className="flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card p-4"
+          data-testid="production-bonuses-launcher"
+        >
           <div className="flex items-center gap-3">
-            <div className="rounded-lg border bg-muted/40 p-2"><Coins className="h-5 w-5 text-primary" /></div>
+            <div className="rounded-lg border bg-muted/40 p-2">
+              <Coins className="h-5 w-5 text-primary" />
+            </div>
             <div>
               <p className="font-semibold">Production Bonuses</p>
               <p className="text-xs text-muted-foreground">
@@ -519,8 +487,13 @@ export default function FactoryProductionTargets() {
               </p>
             </div>
           </div>
-          <Button type="button" onClick={() => navigate("/factory/production-bonuses?date=" + referenceDate)}
-            data-testid="button-open-production-bonuses">Open Production Bonuses</Button>
+          <Button
+            type="button"
+            onClick={() => navigate("/factory/production-bonuses?date=" + referenceDate)}
+            data-testid="button-open-production-bonuses"
+          >
+            Open Production Bonuses
+          </Button>
         </div>
       )}
 
@@ -592,14 +565,16 @@ export default function FactoryProductionTargets() {
                         active: row.active,
                       },
                     ];
-                    const isAbsent = periodType !== "daily"
-                      ? (row.absentDays ?? 0) > 0
-                      : members.some((member) => member.status === FACTORY_TRACKING_STATUSES.absent);
-                    const comparisonTarget = periodType === "daily"
-                      ? row.targetBales
-                      : (row.missingTargetDays ?? 0) > 0 || row.targetBales == null
-                        ? null
-                        : row.targetBales - (row.absentTargetBales ?? 0);
+                    const isAbsent =
+                      periodType !== "daily"
+                        ? (row.absentDays ?? 0) > 0
+                        : members.some((member) => member.status === FACTORY_TRACKING_STATUSES.absent);
+                    const comparisonTarget =
+                      periodType === "daily"
+                        ? row.targetBales
+                        : (row.missingTargetDays ?? 0) > 0 || row.targetBales == null
+                          ? null
+                          : row.targetBales - (row.absentTargetBales ?? 0);
                     return (
                       <TableRow
                         key={row.linkGroupId != null ? `link-${row.linkGroupId}` : `worker-${row.personId}`}
@@ -636,9 +611,10 @@ export default function FactoryProductionTargets() {
                         <TableCell>
                           <div className="space-y-1.5">
                             {members.map((member) => {
-                              const memberAbsent = periodType !== "daily"
-                                ? (row.absentDays ?? 0) > 0
-                                : member.status === FACTORY_TRACKING_STATUSES.absent;
+                              const memberAbsent =
+                                periodType !== "daily"
+                                  ? (row.absentDays ?? 0) > 0
+                                  : member.status === FACTORY_TRACKING_STATUSES.absent;
                               return (
                                 <div
                                   key={member.personId}
@@ -648,16 +624,20 @@ export default function FactoryProductionTargets() {
                                       : "border-border bg-muted/70 text-muted-foreground"
                                   }`}
                                   aria-disabled="true"
-                                  title={periodType === "daily"
-                                    ? `${member.name}: ${tr("statusControlledFromAttendance")}`
-                                    : `${member.name}: ${row.absentDays ?? 0} absent out of ${row.periodDays ?? 0} roster days`}
+                                  title={
+                                    periodType === "daily"
+                                      ? `${member.name}: ${tr("statusControlledFromAttendance")}`
+                                      : `${member.name}: ${row.absentDays ?? 0} absent out of ${row.periodDays ?? 0} roster days`
+                                  }
                                 >
                                   <LockKeyhole className="h-3.5 w-3.5 shrink-0" />
-                                  <span>{periodType === "daily"
-                                    ? tr(statusTranslationKey(member.status))
-                                    : (row.absentDays ?? 0) > 0
-                                      ? `${tr("absent")} ${row.absentDays}/${row.periodDays ?? 0}`
-                                      : tr("present")}</span>
+                                  <span>
+                                    {periodType === "daily"
+                                      ? tr(statusTranslationKey(member.status))
+                                      : (row.absentDays ?? 0) > 0
+                                        ? `${tr("absent")} ${row.absentDays}/${row.periodDays ?? 0}`
+                                        : tr("present")}
+                                  </span>
                                 </div>
                               );
                             })}

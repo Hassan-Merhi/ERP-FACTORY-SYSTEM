@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { enforceOfflineOperationScope } from "../middleware/offlineOperationScope";
 import { isValidIsoDate } from "../lib/requestValidation";
 import { registerDaybookPaginationRoutes } from "./daybookPaginationRoutes";
 import { registerSupplierPurchaseOrderPaginationRoutes } from "./vouchers/supplierPurchaseOrderPaginationRoutes";
@@ -106,6 +107,9 @@ export function registerVoucherRoutes(app: Express) {
   // behind an authenticated session so malformed unauthenticated requests still
   // receive the normal 401 from the route's auth middleware.
   registerVoucherCreateDateValidation(app);
+
+  // Verify offline actor and request identity in the SAME request that posts.
+  app.use("/api/vouchers/with-entries", enforceOfflineOperationScope);
 
   // Program 2 protected creation handlers call next() for unsupported legacy
   // compatibility shapes, so they must be registered before the old creators.

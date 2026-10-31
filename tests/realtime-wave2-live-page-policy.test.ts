@@ -57,8 +57,11 @@ describe("Wave 2 live-page policy", () => {
 
     expect(dailyScan).toContain("visibleTabInterval(90_000)");
     expect(dailyScan).toContain("refetchIntervalInBackground: false");
-    expect(groundScan).toContain("visibleTabInterval(30_000)");
+    // #2564: 15s visible-tab fallback keeps live bale status current; realtime
+    // invalidation does the immediate work. Never poll at 5s or faster.
+    expect(groundScan).toContain("visibleTabInterval(15_000)");
     expect(groundScan).toContain("refetchIntervalInBackground: false");
+    expect(groundScan).not.toMatch(/visibleTabInterval\((?:1_?000|2_?000|3_?000|4_?000|5_?000)\)/);
     expect(dailyScan).not.toMatch(/visibleTabInterval\((?:1_?000|2_?000|3_?000|4_?000|5_?000)\)/);
     expect(groundScan).not.toMatch(/visibleTabInterval\((?:1_?000|2_?000|3_?000|4_?000|5_?000)\)/);
   });

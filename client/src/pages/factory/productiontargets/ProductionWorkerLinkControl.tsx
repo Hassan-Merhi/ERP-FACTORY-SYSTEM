@@ -102,12 +102,14 @@ export function ProductionWorkerLinkControl({
     );
     const complete = fixedTargets.every((value) => value !== null && isValidBaleTarget(value));
     const combined = complete
-      ? fixedTargets.reduce((sum, value) => sum + Math.round((value ?? 0) * 100), 0) / 100
+      ? fixedTargets.reduce<number>((sum, value) => sum + Math.round((value ?? 0) * 100), 0) / 100
       : null;
     setUnlinkTarget(combined);
-    setUnlinkDraft(complete
-      ? Object.fromEntries(currentMemberIds.map((workerId, index) => [workerId, String(fixedTargets[index])]))
-      : {});
+    setUnlinkDraft(
+      complete
+        ? Object.fromEntries(currentMemberIds.map((workerId, index) => [workerId, String(fixedTargets[index])]))
+        : {}
+    );
     setUnlinkOpen(true);
   };
 
@@ -193,8 +195,10 @@ export function ProductionWorkerLinkControl({
         `/api/factory/staff-tracking/production-worker-links/${row.linkGroupId}/unlink`,
         {
           effectiveTo: effectiveFrom,
-          ...(unlinkTarget !== null && unlinkMembers.some((member) =>
-            Number(unlinkDraft[member.workerId]) !==
+          ...(unlinkTarget !== null &&
+          unlinkMembers.some(
+            (member) =>
+              Number(unlinkDraft[member.workerId]) !==
               (rows.find((candidate) => candidate.personId === member.workerId)?.defaultTargetBales ?? null)
           )
             ? {

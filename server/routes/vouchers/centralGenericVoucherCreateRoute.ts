@@ -8,6 +8,7 @@ import { logger } from "../../lib/logger";
 import { autoReallocateLoansAccounts } from "../../lib/transporterAllocation";
 import { PostingValidationError, postBalancedVoucherTx } from "../../services/accounting/centralPostingEngine";
 import { createDatabasePostingDependencies } from "../../services/accounting/databasePostingDependencies";
+import { captureEdgeVoucherTx } from "../../edge/edgeVoucherOutbox";
 import { applyEmployeeBalanceDeltasTx } from "../../services/accounting/employeeBalancePosting";
 import {
   buildGenericVoucherPostingRequest,
@@ -141,6 +142,17 @@ async function createCentralGenericVoucher(req: Request, res: Response, next: Ne
           },
           tx
         );
+        // Phase 8: only the central protected path is approved for new LAN
+        // vouchers. Capture immutable evidence in this SAME transaction;
+        // if its outbox insert fails, rollback the voucher and its audit.
+        await captureEdgeVoucherTx(tx, {
+          companyId,
+          actorUserId: String(userId),
+          localVoucherId: posted.voucher.id,
+          requestId: built.clientRequestId,
+          voucher: posted.voucher,
+          entries: posted.entries,
+        });
       }
 
       return { posted, clientRequestId: built.clientRequestId };

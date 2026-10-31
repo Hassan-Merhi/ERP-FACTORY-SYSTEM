@@ -239,6 +239,53 @@ export const applicationEnglishTranslations = {
   "analytics.expenses.netExpense": "Net Expense",
   "analytics.expenses.loadFailed": "Could not load expenses for this period. Please retry the date filter.",
   "analytics.expenses.loadFailedShort": "Could not load expenses for the selected period",
+  "edge.lanServer": "Factory LAN server",
+  "edge.readOnly": "Read-only",
+  "edge.lanPrimary": "LAN primary",
+  "edge.replicationNotConfigured": "Cloud synchronization is not configured.",
+  "edge.operator.title": "Factory server sync status",
+  "edge.operator.handoverReady": "Safe to hand back to cloud",
+  "edge.operator.handoverBlocked": "Not ready for handover",
+  "edge.operator.relayPaused": "Delivery to cloud is paused",
+  "edge.operator.relayRunning": "Delivery to cloud is running",
+  "edge.operator.pendingTotal": "Waiting to reach the cloud",
+  "edge.operator.stream": "Stream",
+  "edge.operator.pending": "Pending",
+  "edge.operator.stagedNotApplied": "Staged",
+  "edge.operator.applied": "Applied",
+  "edge.operator.rejected": "Rejected",
+  "edge.operator.notInstalled": "Not installed on this server",
+  "edge.operator.changesViaTools": "Pause, resume and conflict decisions are made with the audited operator tools.",
+  "offlineReads.writeLimitTitle": "Offline write limits",
+  "offlineVault.passphraseRequiredTitle": "Encryption passphrase required",
+  "offlineVault.passphraseRequiredDetail":
+    "Use a unique passphrase of at least 12 characters before preparing this device.",
+  "offlineVault.passphraseLabel": "Device snapshot encryption passphrase",
+  "offlineVault.passphrasePlaceholder": "At least 12 characters",
+  "offlineVault.passphraseHelp":
+    "Required to encrypt each new preparation and unlock saved data. The passphrase is never saved. Losing it requires preparing again online. This does not enable offline sign-in.",
+  "offlineVault.lock": "Lock prepared data",
+  "offlineVault.unlock": "Unlock prepared data",
+  "offlineDelivery.evidenceTitle": "Offline delivery evidence",
+  "offlineDelivery.evidenceDetail":
+    "A saved request is not server confirmation. A LAN acknowledgement is not proof of cloud posting.",
+  "offlineDelivery.verifyScope": "Verify your current account and company before viewing or delivering saved vouchers.",
+  "offlineDelivery.noRequests": "No durable voucher requests for this account.",
+  "offlineDelivery.panelLabel": "Offline write delivery",
+  "offlineDelivery.panelTitle": "Offline voucher delivery",
+  "offlineDelivery.panelDetail":
+    "A saved device request or LAN acknowledgement is not cloud posting. Staged means cloud evidence only; cloud-applied requires a verified receipt. Inventory, POS, payments and attachments remain blocked.",
+  "offlineReads.writeLimitDetail":
+    "Only explicitly supported operations can be saved for later sync. Factory stock allocation, payments, and arbitrary forms still require the server.",
+  "offlineReads.exactCoverageDetail":
+    "Only previously prepared, unexpired datasets are readable while disconnected. Uncached pages and queries need a connection.",
+  "offlineReads.preparedTitle": "Offline read data prepared",
+  "offlineReads.preparedDetail": "Verified read-only data was saved for your account and company.",
+  "offlineReads.incompleteTitle": "Offline preparation incomplete",
+  "offlineReads.incompleteDetail": "Some records could not be downloaded. An earlier complete snapshot was preserved.",
+  "offlineReads.readyLabel": "Read data ready",
+  "offlineReads.intro":
+    "Save verified read-only data for this account and company. Offline login and uncached pages are not supported yet.",
   "supplierPartner.postOpeningStock": "Post Opening Stock",
 } as const;
 

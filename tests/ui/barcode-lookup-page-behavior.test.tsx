@@ -7,7 +7,9 @@ const harness = vi.hoisted(() => ({
   toast: vi.fn(),
 }));
 
-vi.mock("@tanstack/react-query", () => ({
+vi.mock("@tanstack/react-query", async (importOriginal) => ({
+  // Keep real exports (QueryCache, QueryClient, ...) used by shared modules.
+  ...(await importOriginal<typeof import("@tanstack/react-query")>()),
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
   useQuery: ({ queryKey }: any) => {
     if (queryKey?.[0] === "/api/auth/me") return { data: { role: "Admin" } };

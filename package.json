@@ -59,6 +59,7 @@
     "cap:android": "npm run cap:sync && npx cap open android",
     "cap:ios": "npm run cap:sync && npx cap open ios",
     "test": "node node_modules/vitest/vitest.mjs run && node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts",
+    "test:offline:browser": "node scripts/verify-offline-read-browser.mjs",
     "test:watch": "node node_modules/vitest/vitest.mjs",
     "lint": "node --max-old-space-size=6144 scripts/run-lint.mjs",
     "lint:fix": "node node_modules/eslint/bin/eslint.js \"client/src/**/*.{ts,tsx}\" \"server/**/*.ts\" \"shared/**/*.ts\" --fix",

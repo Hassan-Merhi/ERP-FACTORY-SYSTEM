@@ -1,7 +1,7 @@
+import { offlineError } from "./offline/offlineError";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
 import { QueryClient, QueryFunction, MutationCache, QueryCache } from "@tanstack/react-query";
-import { isSafeToQueue, enqueueRequest, getDescriptionForRequest, containsSensitiveCredentials } from "./offlineQueue";
 import { OFFLINE_MODE_ENABLED } from "@/lib/featureFlags";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -94,6 +94,7 @@ function scheduleSessionExpiredRedirect() {
   // pollers/heartbeats cannot keep generating 401 traffic while navigation
   // to the login page is still settling.
   _sessionExpiredHandled = true;
+  void import("./offline/offlineReadCache").then(({ revokeOfflineReadScope }) => revokeOfflineReadScope());
   resetCsrfToken();
   void queryClient.cancelQueries();
 
@@ -355,11 +356,35 @@ if (
     } catch {
       // Never block a legitimate request because of interceptor errors
     }
-    // GET (and other non-state-changing) requests fall through here.
-    // Capture the response so we can detect session expiry on polling queries.
-    const fallbackRes = await originalFetch(input, effectiveInit);
+    // GET requests may fall back to a verified per-user/company snapshot only
+    // after a real transport failure or the known offline service worker 503.
+    // Never replace 401/403/ordinary server failures with cached business data.
+    const exactReadUrl = method === "GET" && typeof input === "string" && input.startsWith("/api/") ? input : null;
+    const fromOfflineRead = async (): Promise<Response | null> => {
+      if (!OFFLINE_MODE_ENABLED || !exactReadUrl || effectiveInit?.signal?.aborted) return null;
+      const { readPreparedOfflineResponse } = await import("./offline/offlineReadCache");
+      return readPreparedOfflineResponse(method, exactReadUrl);
+    };
+    let fallbackRes: Response;
+    try {
+      fallbackRes = await originalFetch(input, effectiveInit);
+    } catch (error) {
+      const networkFailure =
+        error instanceof TypeError || (error instanceof DOMException && error.name === "NetworkError");
+      if (networkFailure) {
+        const cached = await fromOfflineRead();
+        if (cached) return cached;
+      }
+      throw error;
+    }
+    if (OFFLINE_MODE_ENABLED && exactReadUrl && fallbackRes.status === 503) {
+      const { isServiceWorkerOfflineResponse } = await import("./offline/offlineReadCache");
+      if (await isServiceWorkerOfflineResponse(fallbackRes)) {
+        const cached = await fromOfflineRead();
+        if (cached) return cached;
+      }
+    }
     await applyReferenceMutation(fallbackRes);
-    // Verify session before redirecting — a business 401 must not log users out.
     await handlePossibleSessionExpiry(fallbackRes, pathname, originalFetch);
     return fallbackRes;
   }
@@ -512,6 +537,18 @@ export async function apiRequest(
   _isRetry = false,
   timeoutMs = 300000
 ): Promise<Response> {
+  if (OFFLINE_MODE_ENABLED && method.toUpperCase() === "POST" && url === "/api/vouchers/with-entries") {
+    // The existing authenticated query cache holds the user identity. The
+    // selected company is only a proposed scope: the sync transport always
+    // revalidates it against the active server session before delivery.
+    const user = queryClient.getQueryData<{ id?: string | number }>(["/api/auth/me"]);
+    const companyId = Number(localStorage.getItem("selectedCompanyId"));
+    if (!user?.id || !Number.isSafeInteger(companyId) || companyId <= 0) {
+      throw offlineError("OFFLINE_ACTOR_NOT_PREPARED");
+    }
+    const { submitDurableVoucherWithEntries } = await import("./offline/voucherCapture");
+    return submitDurableVoucherWithEntries({ companyId, userId: String(user.id) }, data, getAppDate());
+  }
   const prepared = await prepareApiRequest(method, url, data, timeoutMs);
 
   try {
@@ -534,13 +571,13 @@ export async function apiRequest(
       });
     }
     const networkFail = getErrorDetails(error).name === "AbortError" ? true : isNetworkError(error);
-    if (OFFLINE_MODE_ENABLED && networkFail && !containsSensitiveCredentials(data) && isSafeToQueue(method, url)) {
-      const description = getDescriptionForRequest(url);
-      const body = data ? JSON.stringify(data) : "";
-      enqueueRequest(url, method, body, description, getAppDate());
-      const offlineError = Object.assign(new Error(`Saved offline — will sync when connected`), { description });
-      offlineError.name = "OfflineQueued";
-      throw offlineError;
+    if (OFFLINE_MODE_ENABLED && networkFail) {
+      // Phase 1: a generic failed request cannot be made safe by replaying its
+      // raw HTTP body. Only explicitly registered operations saved BEFORE
+      // transport may use the durable outbox; never fall back to localStorage.
+      const rejectedWrite = Object.assign(offlineError("OFFLINE_WRITE_NOT_REGISTERED"), { cause: error });
+      rejectedWrite.name = "OfflineWriteNotRegistered";
+      throw rejectedWrite;
     }
     throw error;
   }

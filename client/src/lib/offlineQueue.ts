@@ -1,3 +1,6 @@
+import { OFFLINE_MODE_ENABLED } from "./featureFlags";
+import { offlineError } from "@/lib/offline/offlineError";
+
 const QUEUE_KEY = "erp_offline_queue";
 const LAST_SYNCED_KEY = "erp_last_synced";
 const QUEUE_WARN_THRESHOLD = 50;
@@ -40,6 +43,11 @@ export function enqueueRequest(
   description: string,
   clientDate?: string
 ): string {
+  // Phase 9: the legacy localStorage format has no immutable request ID,
+  // verified actor or tenant scope, and no safe replay proof. While the new
+  // offline system is active, refuse to persist new writes into this format.
+  // Old records remain untouched for supervised recovery.
+  if (OFFLINE_MODE_ENABLED) throw offlineError("OFFLINE_LEGACY_QUEUE_BLOCKED");
   const queue = readQueue();
   const upperMethod = method.toUpperCase();
 
@@ -304,6 +312,9 @@ const SAFE_PATTERNS: Array<{ method: string; pattern: RegExp }> = [
 ];
 
 export function isSafeToQueue(method: string, url: string): boolean {
+  // The old SAFE_PATTERNS list described convenience caching, not exactly-once
+  // LAN -> cloud business replay. It MUST NOT advertise safety under Phase 9.
+  if (OFFLINE_MODE_ENABLED) return false;
   const path = url.split("?", 1)[0];
   if (NEVER_QUEUE_PATTERNS.some((pattern) => pattern.test(path))) return false;
   return SAFE_PATTERNS.some((p) => p.method === method.toUpperCase() && p.pattern.test(path));

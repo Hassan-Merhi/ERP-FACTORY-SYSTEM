@@ -106,6 +106,16 @@ jobs:
           while IFS= read -r -d '' file; do
             lower_file="${file,,}"
             case "$lower_file" in
+              deploy/lan/.env.example)
+                # Reviewed template only: secrets must stay as explicit placeholders.
+                if ! grep -Fxq 'EDGE_DB_PASSWORD=REPLACE_WITH_A_LONG_RANDOM_URL_SAFE_PASSWORD' "$file" ||
+                   ! grep -Fxq 'EDGE_SESSION_SECRET=REPLACE_WITH_AN_INDEPENDENT_RANDOM_64_CHAR_SECRET' "$file" ||
+                   ! grep -Fxq 'EDGE_SITE_ID=REPLACE_WITH_NEW_UUID' "$file"; then
+                  echo "::error file=${file}::Factory edge example contains non-placeholder identity or secrets."
+                  failed=1
+                fi
+                continue
+                ;;
               .env.example|.env.production|client/.env.production|client/.env.capacitor|android/keystore.properties.example)
                 continue
                 ;;

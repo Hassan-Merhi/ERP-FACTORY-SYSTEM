@@ -1,0 +1,30 @@
+name: Offline Phase 6 Contracts
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/offline-phase6-contract.yml"
+      - "scripts/edge/certify-offline-phase6.mjs"
+      - "tests/offline-phase6-certification.node.test.mjs"
+      - "docs/operations/factory-lan-phase6-certification.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  phase6-contract:
+    name: Non-destructive release-gate tests
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.1"
+      - name: Syntax and fail-closed contract tests (no secrets or DB)
+        run: |
+          node --check scripts/edge/certify-offline-phase6.mjs
+          node --check tests/offline-phase6-certification.node.test.mjs
+          node --test tests/offline-phase6-certification.node.test.mjs
+          node scripts/edge/certify-offline-phase6.mjs --help

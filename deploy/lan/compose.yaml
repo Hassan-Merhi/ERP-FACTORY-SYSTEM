@@ -1,0 +1,135 @@
+name: erp-factory-edge
+
+services:
+  postgres:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: erp_edge
+      POSTGRES_USER: erp_edge
+      POSTGRES_PASSWORD: ${EDGE_DB_PASSWORD:?Set EDGE_DB_PASSWORD in deploy/lan/.env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - edge_database
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U erp_edge -d erp_edge"]
+      interval: 5s
+      timeout: 3s
+      retries: 25
+    security_opt:
+      - no-new-privileges:true
+
+  app:
+    build:
+      context: ../..
+      dockerfile: deploy/lan/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "5000"
+      FACTORY_EDGE_MODE: lan
+      # Phase 6: operator-supplied staging build identifier; not a provenance signature.
+      BUILD_VERSION: ${EDGE_RELEASE_SHA:-dev}
+      FACTORY_EDGE_SITE_ID: ${EDGE_SITE_ID:?Set EDGE_SITE_ID in deploy/lan/.env}
+      FACTORY_EDGE_HOSTNAME: ${EDGE_HOSTNAME:?Set EDGE_HOSTNAME in deploy/lan/.env}
+      FACTORY_EDGE_WRITE_MODE: ${EDGE_WRITE_MODE:-read-only}
+      FACTORY_EDGE_PRIMARY_ACK: ${EDGE_PRIMARY_ACK:-}
+      FACTORY_EDGE_WRITER_EPOCH: ${EDGE_WRITER_EPOCH:-}
+      FACTORY_EDGE_BASELINE_SHA256: ${EDGE_BASELINE_SHA256:-}
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: erp_edge
+      PGPASSWORD: ${EDGE_DB_PASSWORD:?Set EDGE_DB_PASSWORD in deploy/lan/.env}
+      PGDATABASE: erp_edge
+      PGSSLMODE: disable
+      SESSION_SECRET: ${EDGE_SESSION_SECRET:?Set EDGE_SESSION_SECRET in deploy/lan/.env}
+      PG_POOL_MAX: "10"
+      PG_POOL_MIN: "1"
+      CSRF_ENFORCE: "1"
+      ENABLE_SCHEDULERS: "false"
+      RUN_STARTUP_MIGRATIONS: "true"
+      PUPPETEER_PREWARM: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/uploads
+    expose:
+      - "5000"
+    networks:
+      - edge_database
+      - edge_https
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:5000/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 20s
+      timeout: 7s
+      retries: 6
+      start_period: 120s
+    security_opt:
+      - no-new-privileges:true
+
+
+  # Opt-in only: docker compose --profile sync up -d relay.
+  # This sends signed voucher EVIDENCE to the cloud inbox, never ledger writes.
+  relay:
+    profiles: ["sync"]
+    build:
+      context: ../..
+      dockerfile: deploy/lan/Dockerfile
+    restart: unless-stopped
+    command: ["node", "scripts/edge/run-voucher-relay-loop.mjs"]
+    environment:
+      FACTORY_EDGE_MODE: lan
+      FACTORY_EDGE_SITE_ID: ${EDGE_SITE_ID:?Set EDGE_SITE_ID in deploy/lan/.env}
+      FACTORY_SYNC_SENDER_ENABLED: "1"
+      FACTORY_SYNC_CLOUD_URL: ${EDGE_SYNC_CLOUD_URL:-}
+      FACTORY_SYNC_HMAC_KEY: ${EDGE_SYNC_API_KEY:-}
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: erp_edge
+      PGPASSWORD: ${EDGE_DB_PASSWORD:?Set EDGE_DB_PASSWORD in deploy/lan/.env}
+      PGDATABASE: erp_edge
+      PGSSLMODE: disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - edge_database
+      - edge_https
+    security_opt:
+      - no-new-privileges:true
+
+  https:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "${EDGE_BIND_IP:?Set EDGE_BIND_IP to your factory server's LAN IP}:443:443/tcp"
+    environment:
+      EDGE_HOSTNAME: ${EDGE_HOSTNAME:?Set EDGE_HOSTNAME in deploy/lan/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    networks:
+      - edge_https
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  edge_database:
+    internal: true
+  edge_https:
+
+volumes:
+  postgres_data:
+  uploads_data:
+  caddy_data:
+  caddy_config:

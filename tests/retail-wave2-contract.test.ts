@@ -221,8 +221,11 @@ describe("Retail Wave 2 — client UI", () => {
 
     const queryClient = read("client/src/lib/queryClient.ts");
     expect(queryClient).toContain("export async function apiRequestPrivileged");
-    // The queueable path refuses credential payloads as defence in depth.
-    expect(queryClient).toContain("!containsSensitiveCredentials(data)");
+    // Offline mode never replays a generic failed request body (credentials
+    // included): only registered durable operations may be saved, so the
+    // generic queue path is gone and failed writes are refused outright.
+    expect(queryClient).not.toContain("enqueueRequest(");
+    expect(queryClient).toContain('offlineError("OFFLINE_WRITE_NOT_REGISTERED")');
 
     const queue = read("client/src/lib/offlineQueue.ts");
     expect(queue).toContain("export function containsSensitiveCredentials");

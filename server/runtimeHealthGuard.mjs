@@ -1,6 +1,7 @@
 import { Server } from "node:http";
 import { Client } from "pg";
-import { deploymentRuntimeConfig } from "./deploymentPreflight.mjs";
+import { deploymentRuntimeConfig, factoryEdgeRuntimeConfig } from "./deploymentPreflight.mjs";
+import { hasFactoryEdgeData } from "./edge/edgeDatabaseProof.mjs";
 import { runtimeReleaseState } from "./runtimeReleaseState.mjs";
 import { resolveDatabaseSsl } from "./lib/databaseSsl.mjs";
 import {
@@ -79,7 +80,8 @@ async function probeDatabase() {
     await client.connect();
     await client.query("SELECT 1");
     const schema = await probeCriticalSchema(client);
-    return { ok: true, schema };
+    const edgeDataProvisioned = factoryEdgeRuntimeConfig.mode !== "lan" || (await hasFactoryEdgeData(client));
+    return { ok: true, schema, edgeDataProvisioned };
   } catch (error) {
     return { ok: false, reason: error?.message || String(error) };
   } finally {
@@ -126,7 +128,13 @@ Server.prototype.emit = function healthAwareEmit(event, ...args) {
 
   if (pathname === "/api/health/ready") {
     void probeDatabase().then((database) => {
-      const ready = listening && !shuttingDown && hasDatabaseConfig && database.ok && database.schema?.ok === true;
+      const ready =
+        listening &&
+        !shuttingDown &&
+        hasDatabaseConfig &&
+        database.ok &&
+        database.schema?.ok === true &&
+        database.edgeDataProvisioned !== false;
       sendJson(res, ready ? 200 : 503, {
         status: ready ? "ready" : "not_ready",
         listening,

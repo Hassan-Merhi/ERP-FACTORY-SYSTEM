@@ -134,6 +134,7 @@ vi.mock("wouter", () => ({
 vi.mock("@/contexts/AppModeContext", () => ({ useAppMode: () => "factory" }));
 vi.mock("@/contexts/ApplicationLanguageContext", () => ({
   useApplicationLanguage: () => ({ language: "en" }),
+  useOptionalApplicationLanguage: () => ({ language: "en" }),
 }));
 vi.mock("@/lib/factoryApi", () => ({ getApiRequest: () => harness.apiRequest }));
 vi.mock("@/lib/queryClient", () => ({
@@ -181,6 +182,8 @@ vi.mock("@/components/ui/dialog", () => ({
   DialogFooter: ({ children }: any) => <div>{children}</div>,
   DialogHeader: ({ children }: any) => <div>{children}</div>,
   DialogTitle: ({ children }: any) => <div>{children}</div>,
+  DialogDescription: ({ children }: any) => <div>{children}</div>,
+  DialogTrigger: ({ children }: any) => <>{children}</>,
 }));
 vi.mock("@/components/ui/alert-dialog", () => ({
   AlertDialog: ({ children, open }: any) => (

@@ -547,6 +547,9 @@ jobs:
         run: |
           set -o pipefail
           npm run test:frontend:coverage 2>&1 | tee frontend-coverage-errors-ci.txt
+      - name: Browser offline snapshot and IndexedDB isolation
+        if: always() && steps.install.outcome == 'success'
+        run: npm run test:offline:browser
       - name: Upload frontend coverage failure log
         if: always() && steps.frontend_coverage.outcome == 'failure'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
