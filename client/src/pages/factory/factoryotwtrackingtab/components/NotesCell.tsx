@@ -1,13 +1,10 @@
-/**
- * NotesCell — extracted sub-component.
- *
- * Extracted from FactoryOtwTrackingTab.tsx during the Phase 4 god-file split.
- */
 import { useState } from "react";
+import type { MouseEvent } from "react";
+import { Pencil } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
-export // ── Inline notes cell ────────────────────────────────────────────────────────
-function NotesCell({
+/** The existing inline note PATCH workflow stays intact. */
+export function NotesCell({
   containerId,
   note,
   onSave,
@@ -20,7 +17,7 @@ function NotesCell({
   const [draft, setDraft] = useState("");
   const current = note ?? "";
 
-  function startEdit(e: React.MouseEvent) {
+  function startEdit(e: MouseEvent<HTMLButtonElement>) {
     e.stopPropagation();
     setDraft(current);
     setEditing(true);
@@ -42,21 +39,23 @@ function NotesCell({
           if (e.key === "Enter") commit();
           if (e.key === "Escape") setEditing(false);
         }}
-        className="h-7 text-xs min-w-[140px]"
-        data-testid={`input-notes-${containerId}`}
+        className="h-8 min-w-[140px] rounded-lg text-xs"
+        data-testid={"input-notes-" + containerId}
       />
     );
   }
+
   return (
-    <span
-      className={`text-xs cursor-pointer rounded-sm px-1 py-0.5 hover-elevate max-w-[140px] truncate block ${current ? "text-foreground" : "text-muted-foreground italic"}`}
+    <button
+      type="button"
+      className="inline-flex min-h-8 w-full max-w-[180px] items-center gap-1.5 rounded-lg border border-border/60 bg-muted/40 px-2.5 py-1 text-left text-xs text-muted-foreground transition-colors hover:border-blue-500/40 hover:bg-blue-500/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
       onClick={startEdit}
-      data-testid={`text-notes-${containerId}`}
-      title={current || "Click to add note"}
+      data-testid={"text-notes-" + containerId}
+      title={current || "Click to add a note"}
+      aria-label={"Edit note for container " + containerId}
     >
-      {current || "Add note…"}
-    </span>
+      <span className="min-w-0 flex-1 truncate">{current || "Add note..."}</span>
+      <Pencil className="h-3 w-3 shrink-0 opacity-50" />
+    </button>
   );
 }
-
-// ── Event Timeline Sheet ─────────────────────────────────────────────────────
