@@ -534,15 +534,24 @@ export default function FactoryInvoices() {
 
         {/* Summary bar */}
         {!isLoading && filteredOrders.length > 0 && (
-          <div className="px-4 pt-3 pb-0">
-            <InvoiceSummaryBar
+          <details className="group border-b border-border/60 bg-muted/[0.06]">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted/20">
+              <span className="inline-flex items-center gap-2">
+                <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform group-open:rotate-0" />
+                Loading analysis · {filteredOrders.length} orders
+              </span>
+              <span className="text-[11px] font-normal">Bales, weight and remaining</span>
+            </summary>
+            <div className="px-3 pt-2">
+              <InvoiceSummaryBar
               orders={filteredOrders}
               hideTotalsUsd={hideTotalsUsd}
               getRemainingBales={getRemainingBales}
               getEstimatedKg={getEstimatedKg}
               getEstimatedPrice={getEstimatedPrice}
-            />
-          </div>
+              />
+            </div>
+          </details>
         )}
 
         {isLoading ? (
@@ -553,9 +562,9 @@ export default function FactoryInvoices() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="text-xs [&_td]:px-2.5 [&_td]:py-2 [&_th]:h-10 [&_th]:px-2.5 [&_th]:py-2">
               <TableHeader>
-                <TableRow className="bg-muted hover:bg-muted border-b-2 border-border/60">
+                <TableRow className="border-b-2 border-border/60 bg-slate-100/80 hover:bg-slate-100/80 dark:bg-[#172940] dark:hover:bg-[#172940]">
                   {/* Drag handle column */}
                   <TableHead className="w-7 px-1" />
                   <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
@@ -572,7 +581,7 @@ export default function FactoryInvoices() {
                   <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     Container
                   </TableHead>
-                  {showBookingInfo && (
+                  {showBookingInfo && !compactView && (
                     <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                       Booking Info
                     </TableHead>
@@ -580,9 +589,9 @@ export default function FactoryInvoices() {
                   <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     Destination
                   </TableHead>
-                  <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  {!compactView && <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     Notes
-                  </TableHead>
+                  </TableHead>}
                   <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     Date
                   </TableHead>
@@ -598,10 +607,10 @@ export default function FactoryInvoices() {
                   <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     Remaining
                   </TableHead>
-                  <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  {!compactView && <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     Extras
-                  </TableHead>
-                  {!hideTotalsUsd && (
+                  </TableHead>}
+                  {!hideTotalsUsd && !compactView && (
                     <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                       Total
                     </TableHead>
@@ -673,7 +682,7 @@ export default function FactoryInvoices() {
         )}
 
         {/* Scheduled containers above existing container availability */}
-        <div className="border-t px-4 py-4 space-y-3">
+        <div className="space-y-3 border-t border-border/60 bg-muted/[0.04] px-3 py-3">
           <ScheduledContainersTable />
           <ShippingAvailabilityTable />
         </div>
