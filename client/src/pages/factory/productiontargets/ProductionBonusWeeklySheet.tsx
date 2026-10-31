@@ -163,21 +163,21 @@ export function ProductionBonusWeeklySheet({
           </span>
         </div>
       </header>
-      <div className="w-full overflow-x-auto">
+      <div className="max-h-[75vh] w-full overflow-auto overscroll-contain" data-testid="production-daily-sheet-scroll-area">
         <table className="w-full min-w-max border-separate border-spacing-0 text-sm">
           <thead>
             <tr className="bg-muted/45 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              <th scope="col" className="sticky left-0 z-20 min-w-[240px] border-b border-r border-border/60 bg-muted px-4 py-4 text-left sm:px-5">
+              <th scope="col" className="sticky left-0 top-0 z-40 min-w-[240px] border-b border-r border-border/60 bg-muted px-4 py-4 text-left sm:px-5">
                 {t("worker")}
               </th>
               {dates.map(date => <th key={date} scope="col"
-                className="min-w-[152px] border-b border-r border-border/50 px-2 py-4 text-center">
+                className="sticky top-0 z-30 min-w-[152px] border-b border-r border-border/50 bg-muted px-2 py-4 text-center">
                 {dayLabel(date)}
               </th>)}
-              <th scope="col" className="min-w-[205px] border-b border-r border-border/50 px-3 py-4 text-right">
+              <th scope="col" className="sticky top-0 z-30 min-w-[205px] border-b border-r border-border/50 bg-muted px-3 py-4 text-right">
                 {t("sheetTotal")}
               </th>
-              <th scope="col" className="min-w-[150px] border-b border-border/50 px-3 py-4 text-right">
+              <th scope="col" className="sticky top-0 z-30 min-w-[150px] border-b border-border/50 bg-muted px-3 py-4 text-right">
                 {t("bonus")}
               </th>
             </tr>
