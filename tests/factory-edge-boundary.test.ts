@@ -1,4 +1,5 @@
 import express from "express";
+import rateLimit from "express-rate-limit";
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
 vi.mock("../server/db", () => ({ pool: { query: vi.fn() } }));
@@ -39,6 +40,9 @@ function fixture(
   const config = readFactoryEdgeConfiguration({ ...env, ...override });
   const app = express();
   app.use(express.json());
+  // Fixture-level limiter (well above test volume) so the stub handlers are
+  // rate-limited like the real edge routes.
+  app.use(rateLimit({ windowMs: 60_000, max: 10_000, standardHeaders: true, legacyHeaders: false }));
   app.use("/api", makeFactoryEdgeWriteGuard(config, provisioned, hasAuthority, hasPressingCapture));
   app.post("/api/factory/pressing-machines/confirm", (_req, res) => res.status(201).json({ ok: true }));
   app.post("/api/vouchers/with-entries", (_req, res) => res.json({ ok: true }));
