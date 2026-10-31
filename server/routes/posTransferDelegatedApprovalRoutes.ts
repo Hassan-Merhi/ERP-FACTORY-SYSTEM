@@ -356,6 +356,7 @@ export function registerPosTransferDelegatedApprovalRoutes(
             approved: approvedIds.length,
             total: records.rows.length,
             sent: false,
+            failures: [],
             message: "Transfers approved, but no item quantities remained for a WhatsApp export.",
           });
         }
@@ -391,6 +392,7 @@ export function registerPosTransferDelegatedApprovalRoutes(
           approved: approvedIds.length,
           total: records.rows.length,
           sent: outcome.success,
+          failures: [],
           message: outcome.success
             ? approvedIds.length + " transfer voucher(s) approved; Green API accepted one consolidated WhatsApp Excel."
             : outcome.deliveryOutcome === "uncertain"
@@ -405,6 +407,7 @@ export function registerPosTransferDelegatedApprovalRoutes(
           approved: approvedIds.length,
           total: records.rows.length,
           sent: false,
+          failures: [],
           message: "Transfers approved, but WhatsApp send status could not be confirmed. Check the group before any manual resend.",
         });
       }
