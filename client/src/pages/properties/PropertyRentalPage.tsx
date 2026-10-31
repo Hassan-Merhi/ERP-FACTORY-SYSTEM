@@ -28,7 +28,6 @@ import { RentalUnitCards } from "./property-rental/components/RentalUnitCards";
 import { ErpMobileActionsMenu, ErpMobileSummaryGrid } from "@/components/ui/erp-mobile-records";
 import {
   HISTORICAL_RENT_COMPANY,
-  HISTORICAL_RENT_CUTOFF_LABEL,
   historicalRentSnapshotTotal,
   type HistoricalRentPayment,
 } from "./property-rental/historicalRentSnapshot";
@@ -407,12 +406,6 @@ export default function PropertyRentalPage({
                 >
                   {paidValue}
                 </div>
-                {showHistoricalPaid && (
-                  <p className="mt-1 text-[11px] text-muted-foreground">
-                    Voucher-backed rent through {HISTORICAL_RENT_CUTOFF_LABEL}; includes ended leases.
-                    Active-contract rent today: ${fmtMoney(totals.totalPaid)}.
-                  </p>
-                )}
               </CardContent>
             </Card>
             <Card>
