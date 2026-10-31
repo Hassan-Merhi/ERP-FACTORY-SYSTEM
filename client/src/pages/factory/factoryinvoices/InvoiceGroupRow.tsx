@@ -46,7 +46,7 @@ export function InvoiceGroupRow({
       {/* Group summary row */}
       <TableRow
         key={`group-${group.customerId}`}
-        className={`cursor-pointer bg-muted/40 font-medium ${
+        className={`cursor-pointer bg-blue-500/[0.055] font-medium hover:bg-blue-500/[0.09] dark:bg-blue-500/[0.08] ${
           isDropTarget ? "border-t-2 border-primary" : ""
         } ${isDragging ? "opacity-40" : ""}`}
         draggable
@@ -77,9 +77,9 @@ export function InvoiceGroupRow({
         <TableCell className="text-muted-foreground text-sm">—</TableCell>
         {!orderRowContext.hideProformaCol && <TableCell />}
         <TableCell />
-        {orderRowContext.showBookingInfo && <TableCell />}
+        {orderRowContext.showBookingInfo && !orderRowContext.compactView && <TableCell />}
         <TableCell />
-        <TableCell />
+        {!orderRowContext.compactView && <TableCell />}
         <TableCell />
         <TableCell />
         <TableCell className="text-right font-mono text-sm font-semibold tabular-nums">
@@ -95,8 +95,8 @@ export function InvoiceGroupRow({
             <span className="text-green-600 dark:text-green-400">Done</span>
           )}
         </TableCell>
-        <TableCell />
-        {!orderRowContext.hideTotalsUsd && (
+        {!orderRowContext.compactView && <TableCell />}
+        {!orderRowContext.hideTotalsUsd && !orderRowContext.compactView && (
           <TableCell className="text-right font-mono">
             $
             {totals.totalAmount.toLocaleString(undefined, {

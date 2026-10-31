@@ -13,7 +13,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useLocation } from "wouter";
 import { useDateFormat } from "@/contexts/DateFormatContext";
-import { Eye, EyeOff, Package } from "lucide-react";
+import { Eye, EyeOff, Package, Search, SlidersHorizontal, ChevronDown, CalendarDays, Filter } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { InvoiceDashboardMetrics } from "./factoryinvoices/InvoiceDashboardMetrics";
 import { queryClient, keyStartsWith, invalidateCustomerBalances } from "@/lib/queryClient";
 import { InvoiceSummaryBar } from "@/components/InvoiceSummaryBar";
 
@@ -25,6 +28,7 @@ import {
   getEstimatedKg,
   getEstimatedPrice,
   getRemainingBales,
+  getFactoryInvoiceDate,
   groupOrdersByCustomer,
   statusFilterCounts,
 } from "./factoryinvoices/invoiceCalculations";
@@ -41,6 +45,11 @@ export default function FactoryInvoices() {
   const modeApiRequest = getApiRequest(appMode);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("LOADING");
   const [customerFilter, setCustomerFilter] = useState<string>("all");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [compactView, setCompactView] = useState(true);
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [changingCustomerOrderId, setChangingCustomerOrderId] = useState<number | null>(null);
   const [newCustomerId, setNewCustomerId] = useState<string>("");
   const [expandedCustomers, setExpandedCustomers] = useState<Set<number>>(new Set());
@@ -253,9 +262,20 @@ export default function FactoryInvoices() {
     },
   });
 
-  const { loading: loadingCount, verified: verifiedCount, finalized: finalizedCount } = statusFilterCounts(allOrders);
-
-  const filteredOrders = filterOrdersByStatus(allOrders, statusFilter);
+  // KPIs, tabs and table use the same search and business-date scope.
+  const scopedOrders = allOrders.filter((order) => {
+    const needle = searchTerm.trim().toLowerCase();
+    if (needle && ![
+      order.customerName, order.invoiceNumber, String(order.id),
+      order.proformaName, order.containerNumber, order.destination,
+    ].some((value) => (value || "").toLowerCase().includes(needle))) return false;
+    const day = (getFactoryInvoiceDate(order) || "").slice(0, 10);
+    if (fromDate && (!day || day < fromDate)) return false;
+    if (toDate && (!day || day > toDate)) return false;
+    return true;
+  });
+  const { loading: loadingCount, verified: verifiedCount, finalized: finalizedCount } = statusFilterCounts(scopedOrders);
+  const filteredOrders = filterOrdersByStatus(scopedOrders, statusFilter);
 
   const statusFilters: { key: StatusFilter; label: string; count: number }[] = [
     { key: "LOADING", label: "Loading", count: loadingCount },
@@ -302,7 +322,8 @@ export default function FactoryInvoices() {
 
   // Column count for colspan calculations
   // +1 for the drag-handle column
-  const colCount = 16 - (hideProformaCol ? 1 : 0) - (hideTotalsUsd ? 1 : 0) - (showBookingInfo ? 0 : 1);
+  const colCount = 16 - (hideProformaCol ? 1 : 0) - (hideTotalsUsd ? 1 : 0) - (showBookingInfo ? 0 : 1)
+    - (compactView ? 2 + (showBookingInfo ? 1 : 0) + (hideTotalsUsd ? 0 : 1) : 0);
 
   // Group orders by customer, preserving first-appearance order
   const customerGroups = groupOrdersByCustomer(filteredOrders);
@@ -339,6 +360,7 @@ export default function FactoryInvoices() {
   };
 
   const orderRowContext = {
+    compactView,
     hideProformaCol,
     showBookingInfo,
     hideTotalsUsd,
@@ -358,7 +380,7 @@ export default function FactoryInvoices() {
   };
 
   return (
-    <div className="flex flex-col h-full p-5 gap-4">
+    <div className="flex min-w-0 flex-col gap-3 p-3 sm:p-4" data-testid="invoicing-modern-dashboard">
       <Dialog open={changingCustomerOrderId !== null} onOpenChange={(open) => { if (!open) setChangingCustomerOrderId(null); }}>
         <DialogContent>
           <DialogHeader>
@@ -394,9 +416,10 @@ export default function FactoryInvoices() {
         </div>
       )}
 
-      <div className="rounded-xl border overflow-hidden flex flex-col">
+      {!isLoading && <InvoiceDashboardMetrics orders={scopedOrders} hideTotalsUsd={hideTotalsUsd} />}
+      <div className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm dark:bg-[#0e1a2b]">
         {/* Toolbar strip */}
-        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b bg-muted/20">
+        <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-border/60 bg-blue-500/[0.025] px-3 py-3">
           <div className="flex flex-wrap items-center gap-1.5" data-testid="filter-tabs">
             {statusFilters.map((f) => (
               <Button
@@ -405,7 +428,11 @@ export default function FactoryInvoices() {
                 size="sm"
                 onClick={() => setStatusFilter(f.key)}
                 data-testid={`button-filter-${f.key.toLowerCase()}`}
-                className="text-xs px-3"
+                className={cn("h-9 rounded-lg border px-3 text-xs font-semibold", statusFilter === f.key && (
+                  f.key === "LOADING" ? "border-blue-500 bg-blue-600 text-white hover:bg-blue-500"
+                    : f.key === "VERIFIED" ? "border-emerald-500 bg-emerald-600 text-white hover:bg-emerald-500"
+                      : "border-violet-500 bg-violet-600 text-white hover:bg-violet-500"
+                ))}
               >
                 {f.label} <span className="ml-1 opacity-70">({f.count})</span>
               </Button>
@@ -415,9 +442,9 @@ export default function FactoryInvoices() {
               size="sm"
               onClick={() => setStatusFilter("ALL")}
               data-testid="button-filter-all"
-              className="text-xs px-3 text-muted-foreground"
+              className="h-9 rounded-lg border px-3 text-xs font-semibold"
             >
-              All ({allOrders.length})
+              All ({scopedOrders.length})
             </Button>
           </div>
 
@@ -427,15 +454,15 @@ export default function FactoryInvoices() {
               size="sm"
               onClick={() => setShowHidden((v) => !v)}
               data-testid="button-toggle-show-hidden"
-              className="text-xs px-3 gap-1.5"
+              className="h-9 rounded-lg px-3 text-xs gap-1.5"
               title={showHidden ? "Hide hidden loadings" : "Show hidden loadings"}
             >
               {showHidden ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
               {showHidden ? "Showing hidden" : "Show hidden"}
             </Button>
-            <div className="w-52">
+            <div className="w-44 sm:w-48">
               <Select value={customerFilter} onValueChange={setCustomerFilter}>
-                <SelectTrigger data-testid="select-customer-filter">
+                <SelectTrigger className="h-9 rounded-lg text-xs" data-testid="select-customer-filter">
                   <SelectValue placeholder="All customers" />
                 </SelectTrigger>
                 <SelectContent>
@@ -451,17 +478,80 @@ export default function FactoryInvoices() {
           </div>
         </div>
 
+        {/* Search and column controls retain all existing invoice actions. */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-border/60 px-3 py-2.5">
+          <div className="relative min-w-[210px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search customer, loading, container, destination..."
+              className="h-9 rounded-lg border-border/70 bg-background/80 pl-9 text-xs"
+              data-testid="input-invoice-search"
+            />
+          </div>
+          <Button
+            size="sm"
+            variant={showMoreFilters || fromDate || toDate ? "secondary" : "outline"}
+            className="h-9 rounded-lg text-xs"
+            onClick={() => setShowMoreFilters((value) => !value)}
+            aria-expanded={showMoreFilters}
+            data-testid="button-invoice-more-filters"
+          >
+            <Filter className="mr-1.5 h-3.5 w-3.5" /> More Filters
+            <ChevronDown className={cn("ml-1.5 h-3.5 w-3.5 transition-transform", showMoreFilters && "rotate-180")} />
+          </Button>
+          <Button
+            size="sm"
+            variant={compactView ? "outline" : "secondary"}
+            className="h-9 rounded-lg text-xs"
+            onClick={() => setCompactView((value) => !value)}
+            aria-pressed={!compactView}
+            title={compactView ? "Show all invoice columns" : "Use compact invoice columns"}
+            data-testid="button-invoice-columns"
+          >
+            <SlidersHorizontal className="mr-1.5 h-3.5 w-3.5" /> {compactView ? "All Columns" : "Compact"}
+          </Button>
+        </div>
+        {showMoreFilters && (
+          <div className="flex flex-wrap items-end gap-3 border-b border-border/60 bg-muted/20 px-3 py-3">
+            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" /> From date</span>
+              <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
+                className="h-9 w-40 rounded-lg bg-background text-xs" data-testid="input-invoice-from-date" />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+              <span>To date</span>
+              <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
+                className="h-9 w-40 rounded-lg bg-background text-xs" data-testid="input-invoice-to-date" />
+            </label>
+            <Button variant="ghost" size="sm" className="h-9 rounded-lg text-xs"
+              onClick={() => { setFromDate(""); setToDate(""); setSearchTerm(""); }} data-testid="button-reset-invoice-filters">
+              Clear dates / search
+            </Button>
+          </div>
+        )}
+
         {/* Summary bar */}
         {!isLoading && filteredOrders.length > 0 && (
-          <div className="px-4 pt-3 pb-0">
-            <InvoiceSummaryBar
+          <details className="group border-b border-border/60 bg-muted/[0.06]">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted/20">
+              <span className="inline-flex items-center gap-2">
+                <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform group-open:rotate-0" />
+                Loading analysis · {filteredOrders.length} orders
+              </span>
+              <span className="text-[11px] font-normal">Bales, weight and remaining</span>
+            </summary>
+            <div className="px-3 pt-2">
+              <InvoiceSummaryBar
               orders={filteredOrders}
               hideTotalsUsd={hideTotalsUsd}
               getRemainingBales={getRemainingBales}
               getEstimatedKg={getEstimatedKg}
               getEstimatedPrice={getEstimatedPrice}
-            />
-          </div>
+              />
+            </div>
+          </details>
         )}
 
         {isLoading ? (
@@ -472,9 +562,9 @@ export default function FactoryInvoices() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="text-xs [&_td]:px-2.5 [&_td]:py-2 [&_th]:h-10 [&_th]:px-2.5 [&_th]:py-2">
               <TableHeader>
-                <TableRow className="bg-muted hover:bg-muted border-b-2 border-border/60">
+                <TableRow className="border-b-2 border-border/60 bg-slate-100/80 hover:bg-slate-100/80 dark:bg-[#172940] dark:hover:bg-[#172940]">
                   {/* Drag handle column */}
                   <TableHead className="w-7 px-1" />
                   <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
@@ -491,7 +581,7 @@ export default function FactoryInvoices() {
                   <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     Container
                   </TableHead>
-                  {showBookingInfo && (
+                  {showBookingInfo && !compactView && (
                     <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                       Booking Info
                     </TableHead>
@@ -499,9 +589,9 @@ export default function FactoryInvoices() {
                   <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     Destination
                   </TableHead>
-                  <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  {!compactView && <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     Notes
-                  </TableHead>
+                  </TableHead>}
                   <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     Date
                   </TableHead>
@@ -517,10 +607,10 @@ export default function FactoryInvoices() {
                   <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     Remaining
                   </TableHead>
-                  <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  {!compactView && <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     Extras
-                  </TableHead>
-                  {!hideTotalsUsd && (
+                  </TableHead>}
+                  {!hideTotalsUsd && !compactView && (
                     <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                       Total
                     </TableHead>
@@ -592,7 +682,7 @@ export default function FactoryInvoices() {
         )}
 
         {/* Scheduled containers above existing container availability */}
-        <div className="border-t px-4 py-4 space-y-3">
+        <div className="space-y-3 border-t border-border/60 bg-muted/[0.04] px-3 py-3">
           <ScheduledContainersTable />
           <ShippingAvailabilityTable />
         </div>

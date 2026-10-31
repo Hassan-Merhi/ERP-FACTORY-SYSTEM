@@ -59,6 +59,7 @@ export function fmtKg(val: string | number | null | undefined) {
 
 /** Page-level callbacks shared by every order row (and the group rows). */
 export interface InvoiceOrderRowContext {
+  compactView: boolean;
   hideProformaCol: boolean;
   showBookingInfo: boolean;
   hideTotalsUsd: boolean;
@@ -95,6 +96,7 @@ export function InvoiceOrderRow({
   onDragOver,
   onDrop,
   onDragEnd,
+  compactView,
   hideProformaCol,
   showBookingInfo,
   hideTotalsUsd,
@@ -120,7 +122,7 @@ export function InvoiceOrderRow({
   return (
     <TableRow
       key={order.id}
-      className={`cursor-pointer ${order.isHidden ? "opacity-50" : ""} ${
+      className={`cursor-pointer transition-colors hover:bg-blue-500/[0.04] dark:hover:bg-blue-400/[0.06] ${order.isHidden ? "opacity-50" : ""} ${
         !indented && isDropTarget ? "border-t-2 border-primary" : ""
       } ${!indented && isDragging ? "opacity-40" : ""}`}
       draggable={!indented}
@@ -152,7 +154,7 @@ export function InvoiceOrderRow({
         <EditableShippingCell orderId={order.id} field="containerNumber" value={order.containerNumber}
           maxLength={100} onSave={onSaveShippingField} />
       </TableCell>
-      {showBookingInfo && (
+      {showBookingInfo && !compactView && (
         <TableCell className="text-sm max-w-[180px]" data-testid={`text-booking-info-${order.id}`}>
           <EditableShippingCell orderId={order.id} field="bookingInfo" value={order.bookingInfo}
             maxLength={2000} onSave={onSaveShippingField} />
@@ -162,10 +164,10 @@ export function InvoiceOrderRow({
         <EditableShippingCell orderId={order.id} field="destination" value={order.destination}
           maxLength={500} onSave={onSaveShippingField} />
       </TableCell>
-      <TableCell className="text-sm max-w-[200px]" data-testid={`text-notes-${order.id}`}>
+      {!compactView && <TableCell className="text-sm max-w-[200px]" data-testid={`text-notes-${order.id}`}>
         <EditableShippingCell orderId={order.id} field="containerNotes" value={order.containerNotes}
           maxLength={10000} multiline onSave={onSaveShippingField} />
-      </TableCell>
+      </TableCell>}
       <TableCell className="font-mono text-sm" data-testid={`text-order-date-${order.id}`}>
         {displayDate}
       </TableCell>
@@ -190,7 +192,7 @@ export function InvoiceOrderRow({
           <span className="text-green-600 dark:text-green-400 font-medium">Done</span>
         )}
       </TableCell>
-      <TableCell className="text-right font-mono text-sm" data-testid={`text-extras-${order.id}`}>
+      {!compactView && <TableCell className="text-right font-mono text-sm" data-testid={`text-extras-${order.id}`}>
         {parseFloat(order.freightAmount || "0") <= 0 && parseFloat(order.otherChargesTotal || "0") <= 0 ? (
           <span className="text-muted-foreground/40">—</span>
         ) : (
@@ -217,8 +219,8 @@ export function InvoiceOrderRow({
             )}
           </div>
         )}
-      </TableCell>
-      {!hideTotalsUsd && (
+      </TableCell>}
+      {!hideTotalsUsd && !compactView && (
         <TableCell className="text-right font-mono font-semibold" data-testid={`text-grand-total-${order.id}`}>
           $
           {parseFloat(order.grandTotal || "0").toLocaleString(undefined, {
