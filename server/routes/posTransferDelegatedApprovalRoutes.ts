@@ -214,55 +214,63 @@ export function registerPosTransferDelegatedApprovalRoutes(
         return res.status(409).json({ message: "This revision was already approved. WhatsApp will not be sent twice." });
       }
 
-      const order = await pool.query(
-        'SELECT c.name AS "companyName", d.name AS "destinationName", ' +
-          "to_char(v.voucher_date, 'YYYY-MM-DD') AS \"transferDate\", " +
-          'i.name AS "stockItemName", COALESCE(src.name, \'Unknown\') AS "sourceLocationName", ' +
-          'ti.quantity::float8 AS "quantity" ' +
-          "FROM stock_transfer_vouchers t " +
-          "JOIN vouchers v ON v.id=t.voucher_id " +
-          "JOIN companies c ON c.id=v.company_id " +
-          "JOIN locations d ON d.id=t.destination_location_id " +
-          "JOIN stock_transfer_items ti ON ti.transfer_id=t.id " +
-          "JOIN stock_items i ON i.id=ti.stock_item_id AND i.company_id=v.company_id " +
-          "LEFT JOIN locations src ON src.id=ti.source_location_id " +
-          "WHERE t.id=$1 AND v.company_id=$2 AND v.deleted_at IS NULL AND ti.quantity>0 " +
-          "ORDER BY src.name,i.name",
-        [result.transferId, actor.companyId]
-      );
+      try {
+        const order = await pool.query(
+          'SELECT c.name AS "companyName", d.name AS "destinationName", ' +
+            "to_char(v.voucher_date, 'YYYY-MM-DD') AS \"transferDate\", " +
+            'i.name AS "stockItemName", COALESCE(src.name, \'Unknown\') AS "sourceLocationName", ' +
+            'ti.quantity::float8 AS "quantity" ' +
+            "FROM stock_transfer_vouchers t " +
+            "JOIN vouchers v ON v.id=t.voucher_id " +
+            "JOIN companies c ON c.id=v.company_id " +
+            "JOIN locations d ON d.id=t.destination_location_id " +
+            "JOIN stock_transfer_items ti ON ti.transfer_id=t.id " +
+            "JOIN stock_items i ON i.id=ti.stock_item_id AND i.company_id=v.company_id " +
+            "LEFT JOIN locations src ON src.id=ti.source_location_id " +
+            "WHERE t.id=$1 AND v.company_id=$2 AND v.deleted_at IS NULL AND ti.quantity>0 " +
+            "ORDER BY src.name,i.name",
+          [result.transferId, actor.companyId]
+        );
 
-      if (!order.rowCount) {
-        logger.error("[PosTransferApproval] Approved but no export rows", { revisionId, companyId: actor.companyId });
-        return res.json({ approved: true, sent: false, message: "Approved, but the transfer had no valid rows to send." });
+        if (!order.rowCount) {
+          logger.error("[PosTransferApproval] Approved but no export rows", { revisionId, companyId: actor.companyId });
+          return res.json({ approved: true, sent: false, message: "Approved, but the transfer had no valid rows to send." });
+        }
+        const first = order.rows[0];
+        const workbook = await dependencies.createNoCostExcel({
+          companyName: first.companyName,
+          destinationName: first.destinationName,
+          transferDate: first.transferDate,
+          items: order.rows.map((item) => ({
+            stockItemName: item.stockItemName,
+            sourceLocationName: item.sourceLocationName,
+            quantity: Number(item.quantity),
+          })),
+        });
+        const filename = "Truck_Trip_" + first.destinationName.replace(/[/\\?%*:|\"<>]/g, "_") +
+          "_" + first.transferDate + "_revision_" + revisionId + ".xlsx";
+        const sent = await sendWhatsAppFileToChatId(
+          configured.rows[0].chatId, workbook, filename,
+          "Approved stock transfer to " + first.destinationName + " (" + first.transferDate + ") — without cost",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        );
+        logger.info("[PosTransferApproval] Delegate approved transfer revision", {
+          companyId: actor.companyId, userId: actor.userId, revisionId, sent: sent.success,
+        });
+        return res.json({
+          approved: true,
+          sent: sent.success,
+          message: sent.success
+            ? "Revision approved and cost-free transfer sent to WhatsApp."
+            : "Revision approved, but WhatsApp delivery failed. Ask an administrator to resend manually.",
+        });
+      } catch (deliveryError) {
+        logger.error("[PosTransferApproval] Revision approved, delivery failed", {
+          companyId: actor.companyId, revisionId, error: deliveryError,
+        });
+        return res.json({ approved: true, sent: false,
+          message: "Revision approved, but WhatsApp delivery failed. Ask an administrator to resend manually." });
       }
-      const first = order.rows[0];
-      const workbook = await dependencies.createNoCostExcel({
-        companyName: first.companyName,
-        destinationName: first.destinationName,
-        transferDate: first.transferDate,
-        items: order.rows.map((item) => ({
-          stockItemName: item.stockItemName,
-          sourceLocationName: item.sourceLocationName,
-          quantity: Number(item.quantity),
-        })),
-      });
-      const filename = "Truck_Trip_" + first.destinationName.replace(/[/\\?%*:|\"<>]/g, "_") +
-        "_" + first.transferDate + "_revision_" + revisionId + ".xlsx";
-      const sent = await sendWhatsAppFileToChatId(
-        configured.rows[0].chatId, workbook, filename,
-        "Approved stock transfer to " + first.destinationName + " (" + first.transferDate + ") — without cost",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-      );
-      logger.info("[PosTransferApproval] Delegate approved transfer revision", {
-        companyId: actor.companyId, userId: actor.userId, revisionId, sent: sent.success,
-      });
-      return res.json({
-        approved: true,
-        sent: sent.success,
-        message: sent.success
-          ? "Revision approved and cost-free transfer sent to WhatsApp."
-          : "Revision approved, but WhatsApp delivery failed. Ask an administrator to resend manually.",
-      });
     } catch (error) {
       return errorResponse(res, error);
     }
