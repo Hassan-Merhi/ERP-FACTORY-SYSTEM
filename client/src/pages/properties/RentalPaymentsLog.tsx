@@ -60,6 +60,20 @@ export default function RentalPaymentsLog({
   const [deleteTarget, setDeleteTarget] = useState<PaymentRow | null>(null);
 
   const queryKey = [apiBase + "/payments", selectedCompany?.id];
+  // The Properties warehouse KPI is the source of truth for active rent paid.
+  // Reuse the exact same units query/key here so the two summary numbers agree.
+  // This does not alter the transaction log or any accounting data.
+  const isPropertiesPayments = apiBase === "/api/properties/rental";
+  const { data: warehouseUnits = [], isLoading: warehouseTotalsLoading, isError: warehouseTotalsError } =
+    useQuery<Array<{ totalPaid?: number | null }>>({
+      queryKey: [apiBase + "/units", { unitType: "WAREHOUSE", companyId: selectedCompany?.id }],
+      queryFn: async () => {
+        const res = await fetch(`${apiBase}/units?unitType=WAREHOUSE`, { credentials: "include" });
+        if (!res.ok) throw new Error("Failed to load warehouse rent totals");
+        return res.json();
+      },
+      enabled: !!selectedCompany && isPropertiesPayments,
+    });
 
   const { data: payments = [], isLoading } = useQuery<PaymentRow[]>({
     queryKey,
@@ -90,6 +104,10 @@ export default function RentalPaymentsLog({
   }, [payments, search]);
 
   const total = filtered.reduce((s, p) => s + Number(p.amount), 0);
+  // The log includes guarantees and ended leases, and can omit ERP-module
+  // rent on active Properties contracts. Its row sum is not the warehouse KPI.
+  const activeWarehouseRentPaid = warehouseUnits.reduce((s, u) => s + Number(u.totalPaid ?? 0), 0);
+  const totalReceived = isPropertiesPayments ? activeWarehouseRentPaid : total;
 
   return (
     <div
@@ -153,8 +171,18 @@ export default function RentalPaymentsLog({
               className="text-2xl font-bold text-green-600 dark:text-green-400"
               data-testid={`stat-${testIdPrefix}-total-amount`}
             >
-              {formatMoneyNumber(total)}
+              {isPropertiesPayments && warehouseTotalsLoading
+                ? "…"
+                : isPropertiesPayments && warehouseTotalsError
+                  ? "Unavailable"
+                  : formatMoneyNumber(totalReceived)}
             </div>
+            {isPropertiesPayments && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Same active warehouse rent total as Total Paid (including ERP payments).
+                <span className="block">Payments listed below: {formatMoneyNumber(total)}</span>
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -247,7 +275,7 @@ export default function RentalPaymentsLog({
                 <tfoot className="sticky bottom-0 z-20 border-t-2 bg-muted/30">
                   <tr>
                     <td className="px-3 py-2 font-semibold" colSpan={3}>
-                      TOTAL
+                      {isPropertiesPayments ? "TOTAL LISTED TRANSACTIONS" : "TOTAL"}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums font-bold text-green-700 dark:text-green-400">
                       {formatMoneyNumber(total)}
