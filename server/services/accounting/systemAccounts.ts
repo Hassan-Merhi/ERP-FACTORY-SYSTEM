@@ -98,6 +98,13 @@ export const SYSTEM_ACCOUNTS: readonly SystemAccountDefinition[] = [
     required: false,
     purpose: "Purchased stock between the purchase posting and its receipt (perpetual inventory).",
   },
+  {
+    code: "FACTORY_PRODUCTION_BONUS_EXPENSE",
+    name: "Production Bonus Expense",
+    accountType: "Indirect Expense",
+    required: false,
+    purpose: "Direct Production Targets daily, weekly and manual worker bonus disbursements.",
+  },
   // Wave 17 B: factory containers expensed before the cut-over and received after it.
   {
     code: ACCOUNTING_CONTROL_ACCOUNTS.FACTORY.goodsInTransit,

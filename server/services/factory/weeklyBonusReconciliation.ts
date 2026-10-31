@@ -91,7 +91,7 @@ export function reconcileWeeklyBonusLedger(
       payment.reviewStatus!=="approved" ||
       !same(payment.reviewAmount,expected))
     errors.add("REVIEW_MISMATCH");
-  if (payment.expenseCode!=="PAYROLL_DEPOSIT_EXPENSE" ||
+  if (!["PAYROLL_DEPOSIT_EXPENSE", "FACTORY_PRODUCTION_BONUS_EXPENSE"].includes(payment.expenseCode??"") ||
       !equalId(payment.companyId,payment.expenseCompanyId) ||
       !equalId(payment.companyId,payment.cashCompanyId) ||
       !["Cash","Bank"].includes(payment.cashType??"") ||

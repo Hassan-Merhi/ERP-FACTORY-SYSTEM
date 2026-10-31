@@ -35,7 +35,9 @@ interface BonusRecord {
   bonusDate: string;
   amount: string;
   notes: string | null;
-  status: "pending" | "paid";
+  status: "pending" | "paid" | "reversed";
+  source?: "worker" | "production_manual" | "production_weekly" | "production_daily";
+  voucherId?: number;
   cashAccountId: number | null;
   cashAccountName: string | null;
   paidDate: string | null;
@@ -256,19 +258,19 @@ export default function FactoryWorkerBonusesTab() {
               </TableHeader>
               <TableBody>
                 {bonuses.map((b) => (
-                  <TableRow key={b.id} data-testid={`row-worker-bonus-${b.id}`}>
+                  <TableRow key={`${b.source ?? "worker"}-${b.id}`} data-testid={`row-worker-bonus-${b.source ?? "worker"}-${b.id}`}>
                     <TableCell className="font-medium">{b.workerName}</TableCell>
                     <TableCell className="text-sm">{b.bonusDate}</TableCell>
                     <TableCell className="text-right font-mono">{fmt(b.amount)}</TableCell>
                     <TableCell>
                       <Badge variant={b.status === "paid" ? "outline" : "secondary"}>
-                        {b.status === "paid" ? "Paid" : "Pending"}
+                        {b.status === "paid" ? "Paid" : b.status === "reversed" ? "Reversed" : "Pending"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground max-w-32 truncate">{b.notes || "—"}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground max-w-32 truncate">{b.notes || "—"}{b.voucherId ? ` · Voucher #${b.voucherId}` : ""}</TableCell>
                     <TableCell>
                       <div className="flex gap-1 justify-end">
-                        {b.status === "pending" && (
+                        {b.status === "pending" && (!b.source || b.source === "worker") && (
                           <Button
                             size="sm"
                             variant="outline"
@@ -281,14 +283,14 @@ export default function FactoryWorkerBonusesTab() {
                             <Banknote className="h-3 w-3 mr-1" /> Pay
                           </Button>
                         )}
-                        <Button
+                        {(!b.source || b.source === "worker") && <Button
                           size="icon"
                           variant="ghost"
                           onClick={() => setDeleteConfirm(b)}
                           data-testid={`button-delete-worker-bonus-${b.id}`}
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        </Button>}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -299,7 +301,7 @@ export default function FactoryWorkerBonusesTab() {
 
           <div className="sm:hidden space-y-2">
             {bonuses.map((b) => (
-              <Card key={b.id} data-testid={`card-worker-bonus-${b.id}`}>
+              <Card key={`${b.source ?? "worker"}-${b.id}`} data-testid={`card-worker-bonus-${b.source ?? "worker"}-${b.id}`}>
                 <CardContent className="p-3 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div>
@@ -309,13 +311,13 @@ export default function FactoryWorkerBonusesTab() {
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="font-mono text-sm font-medium">{fmt(b.amount)}</span>
                       <Badge variant={b.status === "paid" ? "outline" : "secondary"}>
-                        {b.status === "paid" ? "Paid" : "Pending"}
+                        {b.status === "paid" ? "Paid" : b.status === "reversed" ? "Reversed" : "Pending"}
                       </Badge>
                     </div>
                   </div>
                   {b.notes && <p className="text-xs text-muted-foreground">{b.notes}</p>}
                   <div className="flex gap-2 pt-1">
-                    {b.status === "pending" && (
+                    {b.status === "pending" && (!b.source || b.source === "worker") && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -328,9 +330,9 @@ export default function FactoryWorkerBonusesTab() {
                         <Banknote className="h-3 w-3 mr-1" /> Mark Paid
                       </Button>
                     )}
-                    <Button size="icon" variant="ghost" onClick={() => setDeleteConfirm(b)}>
+                    {(!b.source || b.source === "worker") && <Button size="icon" variant="ghost" onClick={() => setDeleteConfirm(b)}>
                       <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    </Button>}
                   </div>
                 </CardContent>
               </Card>
