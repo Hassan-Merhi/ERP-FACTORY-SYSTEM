@@ -22,15 +22,15 @@ import { CalendarDays, CheckCircle, XCircle, Save, UserCheck, UserX, User, Chevr
 import type { AttendanceBulkRecord, AttendanceRecord, WorkerRow } from "../types";
 import { AttendanceAdminApprovalDialog } from "./AttendanceAdminApprovalDialog";
 import { attendancePastDates, attendanceToday, type AttendanceAdminCredentials } from "../attendanceEditPolicy";
-import { generateDateRange, todayStr } from "../utils";
+import { generateDateRange } from "../utils";
 import { SummaryCard } from "./SummaryCard";
 
 export function PerWorkerView() {
   const { toast } = useToast();
   const [selectedWorkerId, setSelectedWorkerId] = useState<string>("");
   const [workerComboOpen, setWorkerComboOpen] = useState(false);
-  const [startDate, setStartDate] = useState<string>(todayStr());
-  const [endDate, setEndDate] = useState<string>(todayStr());
+  const [startDate, setStartDate] = useState<string>(attendanceToday);
+  const [endDate, setEndDate] = useState<string>(attendanceToday);
   const [checkedDates, setCheckedDates] = useState<Record<string, boolean>>({});
   const [approvalOpen, setApprovalOpen] = useState(false);
   const [pendingApprovalRecords, setPendingApprovalRecords] = useState<AttendanceBulkRecord[] | null>(null);
