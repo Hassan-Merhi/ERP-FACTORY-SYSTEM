@@ -488,8 +488,8 @@ function PerEmployeeView() {
   const { toast } = useToast();
   const [selectedEmpId, setSelectedEmpId] = useState<string>("");
   const [empComboOpen, setEmpComboOpen] = useState(false);
-  const [startDate, setStartDate] = useState(todayStr());
-  const [endDate, setEndDate] = useState(todayStr());
+  const [startDate, setStartDate] = useState(attendanceToday);
+  const [endDate, setEndDate] = useState(attendanceToday);
   const [checkedDates, setCheckedDates] = useState<Record<string, boolean>>({});
   const [approvalOpen, setApprovalOpen] = useState(false);
   const [approvalDates, setApprovalDates] = useState<string[]>([]);
