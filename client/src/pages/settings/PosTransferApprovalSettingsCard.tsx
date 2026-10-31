@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ShieldCheck, MessageCircle, Save } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -20,6 +20,10 @@ export function PosTransferApprovalSettingsCard() {
   const { toast } = useToast();
   const [userChoice, setUserChoice] = useState<string | null>(null);
   const [groupChoice, setGroupChoice] = useState<string | null>(null);
+  useEffect(() => {
+    setUserChoice(null);
+    setGroupChoice(null);
+  }, [selectedCompany?.id]);
   const url = "/api/settings/pos-transfer-approval";
   const key = [url, selectedCompany?.id];
   const settings = useQuery<ApprovalSettings>({
