@@ -7,16 +7,26 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
 
-type PendingTransfer = {
+type PendingVoucher = {
   transferId: number;
-  revisionId: number;
-  pendingRevisionCount: number;
   voucherNumber: string;
-  destinationName: string;
-  createdAt: string;
+  pendingRevisionCount: number;
 };
-type Queue = { enabled: boolean; needsGroup?: boolean; transfers: PendingTransfer[] };
-type Result = { approved: boolean; sent: boolean; message: string };
+type DestinationOrder = {
+  destinationId: number;
+  destinationName: string;
+  transferCount: number;
+  pendingRevisionCount: number;
+  transfers: PendingVoucher[];
+};
+type Queue = { enabled: boolean; needsGroup?: boolean; destinations: DestinationOrder[] };
+type ApprovalResult = {
+  approved: number;
+  total: number;
+  sent: boolean;
+  failures: Array<{ voucherNumber: string; message: string }>;
+  message: string;
+};
 
 export function PosTransferApprovalQueue() {
   const { toast } = useToast();
@@ -28,23 +38,28 @@ export function PosTransferApprovalQueue() {
     enabled: !!selectedCompany?.id,
     queryFn: async () => {
       const response = await apiRequest("GET", url);
-      if (!response.ok) throw new Error("Could not load revision approvals.");
+      if (!response.ok) throw new Error("Could not load stock-transfer approvals.");
       return response.json();
     },
     refetchInterval: 30000,
   });
   const approve = useMutation({
-    mutationFn: async (revisionId: number) => {
-      const response = await apiRequest("POST", "/api/pos-transfer-approval/" + revisionId + "/approve-send", {});
-      const result: Result = await response.json();
+    mutationFn: async (destinationId: number) => {
+      const response = await apiRequest(
+        "POST",
+        "/api/pos-transfer-approval/destination/" + destinationId + "/approve-send",
+        {}
+      );
+      const result: ApprovalResult = await response.json();
       if (!response.ok) throw new Error(result.message || "Approval failed.");
       return result;
     },
     onSuccess: (result) => {
+      const fullyApproved = result.approved === result.total && result.failures.length === 0;
       toast({
-        title: result.sent ? "Approved and sent" : "Approved — WhatsApp not sent",
+        title: fullyApproved && result.sent ? "Approved and sent" : "Approval needs attention",
         description: result.message,
-        variant: result.sent ? "default" : "destructive",
+        variant: fullyApproved && result.sent ? "default" : "destructive",
       });
       queryClient.invalidateQueries({ queryKey: key });
       queryClient.invalidateQueries({ queryKey: ["/api/stock-transfers/list"] });
@@ -55,8 +70,9 @@ export function PosTransferApprovalQueue() {
       queryClient.invalidateQueries({ queryKey: key });
     },
   });
-
   if (!queue.data?.enabled) return null;
+  const destinations = queue.data.destinations;
+  const pending = destinations.reduce((sum, destination) => sum + destination.transferCount, 0);
 
   return (
     <Card className="overflow-hidden border-blue-500/30" data-testid="pos-transfer-approval-queue">
@@ -64,35 +80,44 @@ export function PosTransferApprovalQueue() {
         <div className="flex items-center gap-2">
           <ShieldCheck className="h-5 w-5 text-blue-500" />
           <div>
-            <h3 className="font-semibold">Approve Stock Transfer Revisions</h3>
-            <p className="text-xs text-muted-foreground">Approve every pending revision for each transfer, then send one cost-free WhatsApp Excel</p>
+            <h3 className="font-semibold">Approve Stock Transfer Orders</h3>
+            <p className="text-xs text-muted-foreground">
+              One approval for all pending transfer vouchers to each destination.
+              Send one combined WhatsApp Excel without costs.
+            </p>
           </div>
         </div>
-        <Badge variant="secondary">{queue.data.transfers.length} transfers pending</Badge>
+        <Badge variant="secondary">{destinations.length} destinations · {pending} transfers</Badge>
       </div>
-      {queue.data.transfers.length === 0 ? (
-        <p className="p-4 text-sm text-muted-foreground">No pending transfers to approve.</p>
+      {destinations.length === 0 ? (
+        <p className="p-4 text-sm text-muted-foreground">No pending transfer orders to approve.</p>
       ) : (
         <div className="divide-y">
-          {queue.data.transfers.map((transfer) => (
-            <div key={transfer.transferId} className="flex flex-wrap items-center gap-3 p-3 sm:p-4">
+          {destinations.map((destination) => (
+            <div key={destination.destinationId} className="flex flex-wrap items-center gap-3 p-3 sm:p-4">
               <Clock className="h-4 w-4 shrink-0 text-amber-500" />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold">{transfer.voucherNumber}</p>
+                <p className="text-sm font-semibold">{destination.destinationName}</p>
                 <p className="text-xs text-muted-foreground">
-                  To {transfer.destinationName} · {transfer.pendingRevisionCount} pending{" "}
-                  {transfer.pendingRevisionCount === 1 ? "revision" : "revisions"}
+                  {destination.transferCount} {destination.transferCount === 1 ? "transfer" : "transfers"}
+                  {" · "}{destination.pendingRevisionCount} pending{" "}
+                  {destination.pendingRevisionCount === 1 ? "revision" : "revisions"}
+                </p>
+                <p className="mt-1 break-words text-xs text-muted-foreground">
+                  {destination.transfers.map((transfer) => transfer.voucherNumber).join(" · ")}
                 </p>
               </div>
               <Button
                 size="sm"
                 className="min-h-10 gap-1.5"
-                onClick={() => approve.mutate(transfer.revisionId)}
+                onClick={() => approve.mutate(destination.destinationId)}
                 disabled={approve.isPending}
-                data-testid={"approve-send-transfer-" + transfer.transferId}
+                data-testid={"approve-send-destination-" + destination.destinationId}
               >
                 <CheckCheck className="h-4 w-4" />
-                Approve All &amp; Send
+                {approve.isPending && approve.variables === destination.destinationId
+                  ? "Approving & Sending…"
+                  : "Approve All & Send"}
                 <MessageCircle className="h-4 w-4" />
               </Button>
             </div>
