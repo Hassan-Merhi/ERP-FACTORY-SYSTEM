@@ -111,6 +111,12 @@ export async function postManualProductionBonuses(
       `));
       if (!worker) bad(404, "Worker does not belong to this factory");
       await conflictingAwardTx(tx, companyId, selection.workerId, command.weekStart);
+      const priorManual = first(await tx.execute(sql`
+        SELECT 1 FROM factory_target_bonus_manual_payments
+        WHERE company_id=${companyId} AND worker_id=${selection.workerId}
+          AND week_start=${command.weekStart}::date AND status='POSTED' LIMIT 1
+      `));
+      if (priorManual) bad(409, "This worker already has a manual bonus payment for the selected week. Reverse or reconcile it first");
       const narration = `Manual Production Bonus - ${String(worker.name)} - week ${command.weekStart}`;
       const {voucher,replayed} = await postErpVoucherTx(tx, {
         companyId, voucherType:"Payment", voucherDate:command.paymentDate,
