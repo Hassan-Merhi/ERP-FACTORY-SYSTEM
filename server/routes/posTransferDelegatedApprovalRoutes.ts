@@ -191,6 +191,15 @@ export function registerPosTransferDelegatedApprovalRoutes(
       if (!Number.isSafeInteger(destinationId) || destinationId <= 0) {
         return res.status(400).json({ message: "Invalid transfer destination." });
       }
+      // The POS user may exclude an unrelated voucher that has the same
+      // destination. Never approve transfers added to the queue after the
+      // button was clicked or rely on destination equality as an order link.
+      const transferIds: unknown = req.body?.transferIds;
+      if (!Array.isArray(transferIds) || transferIds.length < 1 || transferIds.length > 100 ||
+          new Set(transferIds).size !== transferIds.length ||
+          transferIds.some((value) => !Number.isSafeInteger(value) || value <= 0)) {
+        return res.status(400).json({ message: "Select between 1 and 100 valid transfer vouchers." });
+      }
       await setup();
       const configured = await pool.query(
         'SELECT grp.chat_id AS "chatId" FROM pos_transfer_approval_settings s ' +
@@ -214,11 +223,14 @@ export function registerPosTransferDelegatedApprovalRoutes(
         'JOIN vouchers v ON v.id=t.voucher_id ' +
         'JOIN locations d ON d.id=t.destination_location_id ' +
         "WHERE v.company_id=$1 AND v.deleted_at IS NULL AND r.status='pending' AND t.destination_location_id=$2 " +
+        "AND t.id=ANY($3::int[]) " +
         'GROUP BY t.id,v.voucher_number,d.name ORDER BY t.id ASC LIMIT 101',
-        [actor.companyId, destinationId]
+        [actor.companyId, destinationId, transferIds]
       );
-      if (records.rows.length === 0) {
-        return res.status(409).json({ message: "There are no pending revisions for this destination. Refresh Orders." });
+      if (records.rows.length !== transferIds.length) {
+        return res.status(409).json({
+          message: "One or more selected transfers are no longer pending or belong to a different destination. Refresh Orders.",
+        });
       }
       if (records.rows.length > 100) {
         return res.status(409).json({ message: "More than 100 pending transfer vouchers. Ask an administrator to review the backlog." });
