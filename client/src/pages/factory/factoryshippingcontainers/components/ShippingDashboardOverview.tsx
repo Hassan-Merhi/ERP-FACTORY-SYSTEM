@@ -62,7 +62,7 @@ export function ShippingDashboardOverview({
   rows, today, dateFrom, dateTo, onDateFrom, onDateTo, onOpenInvoicing, allowNewOrder, showOrderValue,
 }: ShippingDashboardOverviewProps) {
   const loading = rows.filter((row) => row.status === "LOADING").length;
-  const notFinalized = rows.filter((row) => row.status !== "FINALIZED" && row.status !== "CANCELLED").length;
+  const notFinalized = rows.filter((row) => !row.finalizedDate && row.status !== "CANCELLED").length;
   const delayed = rows.filter((row) => isShippingEtaOverdue(row, today)).length;
   const withDocs = rows.filter((row) => row.documentCount > 0).length;
   const total = rows.reduce((sum, row) => {
