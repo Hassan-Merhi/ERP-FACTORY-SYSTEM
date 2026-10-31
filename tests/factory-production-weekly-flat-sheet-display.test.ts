@@ -46,7 +46,19 @@ describe("Production Bonuses sheet — weekly flat amounts", () => {
     expect(panel).toContain('group.weeklyAmount+=Math.round(Number(row.weeklyBonus.amount)*100)');
     expect(panel).toContain('selected.includes(row.workerId)&&payableStatus(row)');
     expect(sheet).toContain('dollars(worker.amount + worker.weeklyAmount)');
-    expect(sheet).toContain("Projected · complete week before approval");
-    expect(sheet).toContain("Includes weekly bonuses · not in this payment checkout");
+    expect(sheet).toContain("Projected · finish week and approve before payment");
+    expect(sheet).toContain("Includes weekly estimates · use Weekly Bonus Review & Pay below");
   });
+  it("groups linked workers visually but keeps each worker independently selectable", () => {
+    const checkout = source("client/src/pages/factory/productiontargets/ProductionBonusCheckoutPanel.tsx");
+    const sheet = source("client/src/pages/factory/productiontargets/ProductionBonusWeeklySheet.tsx");
+    const route = source("server/routes/factory/productionBonusCheckoutRoutes.ts");
+    expect(route).toContain("linkGroupId:item.linkGroupId");
+    expect(sheet).toContain("rowSpan={members.length}");
+    expect(sheet).toContain("Linked to {members[0].workerName}");
+    expect(sheet).toContain("onToggle(member.workerId, checked === true)");
+    expect(checkout).toContain("selected.includes(row.workerId)&&payableStatus(row)");
+    expect(checkout).toContain("<ProductionTargetWeeklyBonusPaymentsPanel initialDate={to}/>");
+  });
+
 });
