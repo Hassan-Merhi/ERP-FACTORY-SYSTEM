@@ -11,8 +11,6 @@ const normalizeCode = (code: string) =>
     .replace(/\((\w+)\)=>/g, "$1=>")
     .replace(/,([}\])])/g, "$1");
 const expectCode = (code: string, expected: string) => expect(normalizeCode(code)).toContain(normalizeCode(expected));
-const expectNoCode = (code: string, unexpected: string) =>
-  expect(normalizeCode(code)).not.toContain(normalizeCode(unexpected));
 
 const source = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 
