@@ -26,6 +26,12 @@ import { UnitActionDialog } from "./property-rental/components/UnitActionDialog"
 import { BulkPaymentDialog } from "./property-rental/components/BulkPaymentDialog";
 import { RentalUnitCards } from "./property-rental/components/RentalUnitCards";
 import { ErpMobileActionsMenu, ErpMobileSummaryGrid } from "@/components/ui/erp-mobile-records";
+import {
+  HISTORICAL_RENT_COMPANY,
+  HISTORICAL_RENT_CUTOFF_LABEL,
+  historicalRentSnapshotTotal,
+  type HistoricalRentPayment,
+} from "./property-rental/historicalRentSnapshot";
 export default function PropertyRentalPage({
   unitType,
   pageTitle,
@@ -51,6 +57,20 @@ export default function PropertyRentalPage({
     },
     enabled: !!selectedCompany,
   });
+
+  // Dated, voucher-backed actual rent; no synthetic payment or ledger adjustment.
+  const showHistoricalPaid = apiBase === "/api/properties/rental" &&
+    unitType === "WAREHOUSE" && selectedCompany?.name === HISTORICAL_RENT_COMPANY;
+  const { data: historicalPayments = [], isLoading: historicalLoading, isError: historicalError } =
+    useQuery<HistoricalRentPayment[]>({
+      queryKey: [apiBase + "/payments", { companyId: selectedCompany?.id, view: "warehouse-reconciliation" }],
+      queryFn: async () => {
+        const res = await fetch(`${apiBase}/payments?view=warehouse-reconciliation`, { credentials: "include" });
+        if (!res.ok) throw new Error("Failed to load historical warehouse rent");
+        return res.json();
+      },
+      enabled: !!selectedCompany && showHistoricalPaid,
+    });
 
   const { data: cashAccounts = [] } = useQuery<CashAccount[]>({
     queryKey: [apiBase + "/cash-accounts", selectedCompany?.id],
@@ -94,6 +114,16 @@ export default function PropertyRentalPage({
     });
     return { totalGuarantee, totalOwed, totalCredit, totalPaid, totalMonthlyRent };
   }, [units]);
+
+  const datedHistoricalPaid = useMemo(
+    () => historicalRentSnapshotTotal(historicalPayments),
+    [historicalPayments],
+  );
+  const summaryPaid = showHistoricalPaid ? datedHistoricalPaid : totals.totalPaid;
+  const paidLabel = showHistoricalPaid ? "TOTAL PAID THROUGH 26 OCT" : "TOTAL PAID";
+  const paidValue = showHistoricalPaid && (historicalLoading || historicalError)
+    ? "Unavailable"
+    : "$" + fmtMoney(summaryPaid);
 
   const runMonthly = useMutation({
     mutationFn: () => apiRequest("POST", apiBase + "/run-monthly"),
@@ -317,7 +347,7 @@ export default function PropertyRentalPage({
                 valueClassName: "text-green-600 dark:text-green-400",
               },
               { label: "TOTAL GUARANTEE", value: `$${fmtMoney(totals.totalGuarantee)}` },
-              { label: "TOTAL PAID", value: `$${fmtMoney(totals.totalPaid)}` },
+              { label: paidLabel, value: paidValue },
             ]}
           />
         ) : (
@@ -367,7 +397,7 @@ export default function PropertyRentalPage({
             <Card>
               <CardHeader className="px-3 pt-3 pb-1">
                 <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">
-                  TOTAL PAID
+                  {paidLabel}
                 </CardTitle>
               </CardHeader>
               <CardContent className="px-3 pb-3">
@@ -375,8 +405,14 @@ export default function PropertyRentalPage({
                   className={`text-lg font-bold ${totals.totalPaid > 0 ? "text-green-600 dark:text-green-400" : ""}`}
                   data-testid={`stat-${testIdPrefix}-total-paid`}
                 >
-                  ${fmtMoney(totals.totalPaid)}
+                  {paidValue}
                 </div>
+                {showHistoricalPaid && (
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Voucher-backed rent through {HISTORICAL_RENT_CUTOFF_LABEL}; includes ended leases.
+                    Active-contract rent today: ${fmtMoney(totals.totalPaid)}.
+                  </p>
+                )}
               </CardContent>
             </Card>
             <Card>
