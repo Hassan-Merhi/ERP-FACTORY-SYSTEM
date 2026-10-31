@@ -5,11 +5,11 @@
  */
 import type { Express, Request, Response } from "express";
 import { requireAuth } from "../auth";
-import { pool } from "../db";
+import { pool, db } from "../db";
 import { logger } from "../lib/logger";
 import { getActiveCompanyPermissionContext } from "../services/security/activeCompanyPermissionContext";
 import { approveImmutableStockTransferRevision } from "../services/immutableStockTransferRevisionLifecycle";
-import { getWaSettings, sendWhatsAppFileToChatId } from "../services/whatsappService";
+import { getWaSettings, getGreenInstanceState, sendWhatsAppFileToChatId } from "../services/whatsappService";
 import { logAudit } from "./_helpers";
 
 type NoCostItem = { stockItemName: string; sourceLocationName: string; quantity: number };
@@ -215,6 +215,13 @@ export function registerPosTransferDelegatedApprovalRoutes(
         return res.status(409).json({ message: "WhatsApp is disconnected. Ask the administrator to reconnect it before approving." });
       }
 
+      const greenState = await getGreenInstanceState(wa.instanceId, wa.apiToken);
+      if (greenState !== "authorized") {
+        return res.status(409).json({
+          message: "WhatsApp is not currently connected (state: " + greenState + "). No transfers were approved. Ask the administrator to reconnect it before trying again.",
+        });
+      }
+
       const records = await pool.query(
         'SELECT t.id AS "transferId", MAX(r.id)::int AS "revisionId", ' +
           'v.voucher_number AS "voucherNumber", d.name AS "destinationName" ' +
@@ -236,59 +243,46 @@ export function registerPosTransferDelegatedApprovalRoutes(
         return res.status(409).json({ message: "More than 100 pending transfer vouchers. Ask an administrator to review the backlog." });
       }
 
-      const approvedIds: number[] = [];
-      const failures: Array<{ voucherNumber: string; message: string }> = [];
-      for (const record of records.rows) {
-        try {
-          // Each call applies ALL pending revisions of one canonical transfer
-          // under its own inventory-locked transaction and audit hook.
-          const revisionId = Number(record.revisionId);
-          const approved = await approveImmutableStockTransferRevision(
-            actor.companyId,
-            revisionId,
-            actor.userId,
-            (tx, written) => logAudit({
-              userId: actor.userId,
-              username: req.session.username || req.user?.username || "POS",
-              companyId: actor.companyId,
-              action: "approve",
-              tableName: "stock_transfer_revisions",
-              recordId: revisionId,
-              recordIdentifier: "transfer-" + written.transferId + "-revision-" + written.revisionNumber,
-              changes: {
-                status: { old: written.transition === "no-op" ? "approved" : "pending", new: "approved" },
-                delegatedPosApproval: { new: true },
-                destinationBatchApproval: { new: true },
-                appliedRevisionCount: { new: written.appliedRevisionCount ?? 0 },
-              },
-            }, tx)
-          );
-          if (approved.transition !== "approved") {
-            throw new Error("Revision was already approved or changed. Refresh Orders.");
+      let approvedIds: number[];
+      try {
+        approvedIds = await db.transaction(async (tx) => {
+          const ids: number[] = [];
+          for (const record of records.rows) {
+            const revisionId = Number(record.revisionId);
+            const approved = await approveImmutableStockTransferRevision(
+              actor.companyId,
+              revisionId,
+              actor.userId,
+              (auditTx, written) => logAudit({
+                userId: actor.userId,
+                username: req.session.username || req.user?.username || "POS",
+                companyId: actor.companyId,
+                action: "approve",
+                tableName: "stock_transfer_revisions",
+                recordId: revisionId,
+                recordIdentifier: "transfer-" + written.transferId + "-revision-" + written.revisionNumber,
+                changes: {
+                  status: { old: written.transition === "no-op" ? "approved" : "pending", new: "approved" },
+                  delegatedPosApproval: { new: true },
+                  destinationBatchApproval: { new: true },
+                  appliedRevisionCount: { new: written.appliedRevisionCount ?? 0 },
+                },
+              }, auditTx),
+              tx
+            );
+            if (approved.transition !== "approved") {
+              throw new Error("A selected revision was already approved or changed.");
+            }
+            ids.push(Number(record.transferId));
           }
-          approvedIds.push(Number(record.transferId));
-        } catch (error: unknown) {
-          failures.push({
-            voucherNumber: String(record.voucherNumber),
-            message: error instanceof Error ? error.message : "Approval failed.",
-          });
-        }
-      }
-      // Never send a partial consolidated workbook as if it represented the
-      // complete destination batch. The user sees partial approvals separately.
-      if (failures.length > 0) {
-        logger.warn("[PosTransferApproval] Partial destination approval; export suppressed", {
-          companyId: actor.companyId,
-          destinationId,
-          approved: approvedIds.length,
-          failed: failures.length,
+          return ids;
         });
-        return res.json({
-          approved: approvedIds.length,
-          total: records.rows.length,
-          sent: false,
-          failures,
-          message: "Some transfers could not be approved. No combined WhatsApp export was sent. Ask an administrator to review the partial approval.",
+      } catch (approvalError) {
+        logger.warn("[PosTransferApproval] Atomic destination approval rolled back", {
+          companyId: actor.companyId, destinationId, error: approvalError,
+        });
+        return res.status(409).json({
+          message: "Approval could not be completed for every selected transfer. All changes were rolled back; nothing was sent to WhatsApp. Refresh Orders and review the revisions.",
         });
       }
 
@@ -316,7 +310,6 @@ export function registerPosTransferDelegatedApprovalRoutes(
             approved: approvedIds.length,
             total: records.rows.length,
             sent: false,
-            failures: [],
             message: "Transfers approved, but no item quantities remained for a WhatsApp export.",
           });
         }
@@ -352,10 +345,11 @@ export function registerPosTransferDelegatedApprovalRoutes(
           approved: approvedIds.length,
           total: records.rows.length,
           sent: outcome.success,
-          failures: [],
           message: outcome.success
-            ? approvedIds.length + " transfer voucher(s) approved and one consolidated WhatsApp Excel sent."
-            : "Transfers approved, but WhatsApp delivery failed. Ask an administrator to resend manually.",
+            ? approvedIds.length + " transfer voucher(s) approved; Green API accepted one consolidated WhatsApp Excel."
+            : outcome.deliveryOutcome === "uncertain"
+              ? "Transfers approved. WhatsApp delivery status is UNKNOWN — check the group before attempting a manual resend."
+              : "Transfers approved, but Green API did not accept the WhatsApp file. Ask an administrator to check and resend if needed.",
         });
       } catch (deliveryError) {
         logger.error("[PosTransferApproval] Destination approved, delivery failed", {
@@ -365,8 +359,7 @@ export function registerPosTransferDelegatedApprovalRoutes(
           approved: approvedIds.length,
           total: records.rows.length,
           sent: false,
-          failures: [],
-          message: "Transfers approved, but the combined WhatsApp export failed. Ask an administrator to resend manually.",
+          message: "Transfers approved, but WhatsApp send status could not be confirmed. Check the group before any manual resend.",
         });
       }
     } catch (error) {
