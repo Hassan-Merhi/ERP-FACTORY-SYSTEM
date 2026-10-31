@@ -30,7 +30,7 @@ const RECONCILIATION_VIEWS = [
   { key: "GUARANTEE", label: "Guarantee movements" },
   { key: "ENDED_RENT", label: "Ended leases" },
   { key: "SCHEDULED", label: "Scheduled" },
-  { key: "OTHER", label: "Other" },
+  { key: "OTHER", label: "Other / billing adjustments" },
   { key: "ALL", label: "All records" },
 ] as const;
 type ReconciliationView = (typeof RECONCILIATION_VIEWS)[number]["key"];
@@ -78,9 +78,7 @@ export default function RentalPaymentsLog({
   const [deleteTarget, setDeleteTarget] = useState<PaymentRow | null>(null);
   const [reconciliationView, setReconciliationView] = useState<ReconciliationView>("HISTORICAL_RENT");
 
-  // The Properties warehouse KPI is the source of truth for active rent paid.
-  // Reuse the exact same units query/key here so the two summary numbers agree.
-  // This does not alter the transaction log or any accounting data.
+  // Both pages use the same voucher-backed dated rent snapshot. No payment is created.
   const isPropertiesPayments = apiBase === "/api/properties/rental";
   const isHassanProperties = isPropertiesPayments && selectedCompany?.name === HISTORICAL_RENT_COMPANY;
   const effectiveView = !isHassanProperties && reconciliationView === "HISTORICAL_RENT"
@@ -145,7 +143,7 @@ export default function RentalPaymentsLog({
   // unrelated KPI substituted into the table footer.
   const total = filtered.reduce((s, p) => s + Number(p.amount), 0);
   const activeWarehouseRentPaid = warehouseUnits.reduce((s, u) => s + Number(u.totalPaid ?? 0), 0);
-  const isActiveUnfiltered = isPropertiesPayments && reconciliationView === "ACTIVE_RENT" && !search.trim();
+  const isActiveUnfiltered = isPropertiesPayments && effectiveView === "ACTIVE_RENT" && !search.trim();
   const discrepancy = isActiveUnfiltered && !warehouseTotalsLoading && !warehouseTotalsError
     && !isLoading && Math.abs(total - activeWarehouseRentPaid) > 0.009;
   const currentViewLabel = RECONCILIATION_VIEWS.find((v) => v.key === effectiveView)?.label ?? "Payments";
@@ -224,6 +222,13 @@ export default function RentalPaymentsLog({
         </p>
       )}
 
+      {isHassanProperties && effectiveView === "OTHER" && (
+        <p className="text-xs text-muted-foreground">
+          STE SIARSEGO's $800 billing transition adjustment has no payment voucher.
+          It remains in the original records but is not counted as voucher-backed rent paid.
+        </p>
+      )}
+
       {/* Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Card>
@@ -240,7 +245,8 @@ export default function RentalPaymentsLog({
           <CardHeader className="pb-2">
             <CardTitle className="text-xs text-muted-foreground font-normal">
               {isHassanProperties && effectiveView === "HISTORICAL_RENT"
-                ? "RENT PAID THROUGH 26 OCT" : "TOTAL AMOUNT RECORDED"}
+                ? "RENT PAID THROUGH 26 OCT"
+                : isHassanProperties ? "TOTAL AMOUNT RECORDED" : "TOTAL AMOUNT RECEIVED"}
             </CardTitle>
           </CardHeader>
           <CardContent>
