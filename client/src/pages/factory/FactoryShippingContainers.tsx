@@ -331,7 +331,7 @@ export default function FactoryShippingContainers() {
           dateTo={dateTo}
           onDateFrom={setDateFrom}
           onDateTo={setDateTo}
-          onOpenInvoicing={() => navigate("/factory/invoicing?tab=invoices")}
+          onOpenInvoicing={() => navigate("/factory/sales/new")}
         />
         {/* ── Compact search + controls ── */}
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-card p-2.5 shadow-sm dark:bg-[#101c30]">
