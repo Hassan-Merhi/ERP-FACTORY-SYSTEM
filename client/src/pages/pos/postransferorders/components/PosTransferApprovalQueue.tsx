@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CheckCheck, Clock, MessageCircle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,7 @@ export function PosTransferApprovalQueue() {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
   const [excludedIds, setExcludedIds] = useState<Set<number>>(() => new Set());
+  useEffect(() => { setExcludedIds(new Set()); }, [selectedCompany?.id]);
   const url = "/api/pos-transfer-approval/queue";
   const key = [url, selectedCompany?.id];
   const queue = useQuery<Queue>({
