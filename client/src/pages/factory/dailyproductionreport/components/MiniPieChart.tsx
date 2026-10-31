@@ -4,6 +4,7 @@
  * Extracted from DailyProductionReport.tsx during the Phase 4 god-file split.
  */
 import { useMemo } from "react";
+import { Boxes } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { ResponsiveChartPanel, ResponsiveChartViewport, ResponsiveLegendList } from "@/components/ui/responsive-report";
 
@@ -42,10 +43,8 @@ function MiniPieChart({
 
   return (
     <ResponsiveChartPanel data-testid={testId} aria-label={`${title} chart`}>
-      <span className="block min-w-0 wrap-break-word text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {title}
-      </span>
-      <div className="mt-3 grid min-w-0 grid-cols-1 items-center gap-4 lg:grid-cols-[minmax(0,1fr)_12rem]">
+      <div className="production-premium-chart-title"><Boxes className="h-4 w-4" aria-hidden="true" />{title}</div>
+      <div className="grid min-w-0 grid-cols-1 items-center gap-4 lg:grid-cols-[minmax(0,1fr)_12rem]">
         <ResponsiveLegendList aria-label={`${title} legend`}>
           {slices.map((slice) => {
             const percentage = ((slice.value / total) * 100).toFixed(1);
@@ -69,7 +68,7 @@ function MiniPieChart({
         </ResponsiveLegendList>
 
         <ResponsiveChartViewport label={`${title} pie chart`} className="mx-auto w-full max-w-48">
-          <div className="h-48 w-full min-w-0">
+          <div className="production-donut-area h-48 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={1}>
               <PieChart>
                 <Pie
@@ -92,6 +91,7 @@ function MiniPieChart({
                 />
               </PieChart>
             </ResponsiveContainer>
+            <div className="production-donut-total" aria-hidden="true">{Math.round(total).toLocaleString()} kg<small>Total</small></div>
           </div>
         </ResponsiveChartViewport>
       </div>
