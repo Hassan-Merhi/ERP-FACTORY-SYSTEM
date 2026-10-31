@@ -240,11 +240,11 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
       <div className="grid gap-3 rounded-xl border border-border/70 bg-card/60 p-4 sm:grid-cols-2 xl:grid-cols-3">
         <label className="space-y-1.5 text-xs font-medium text-muted-foreground">{t("fromDate")}
           <Input aria-label={t("fromDate")} type="date" value={from}
-            onChange={event=>{setFrom(event.target.value);setSelected([]);}} className="h-10"/>
+            onChange={event=>{setFrom(event.target.value);setSelected([]);setManualSelected([]);setManualAmounts({});}} className="h-10"/>
         </label>
         <label className="space-y-1.5 text-xs font-medium text-muted-foreground">{t("toDate")}
           <Input aria-label={t("toDate")} type="date" value={to}
-            onChange={event=>{setTo(event.target.value);setSelected([]);}} className="h-10"/>
+            onChange={event=>{setTo(event.target.value);setSelected([]);setManualSelected([]);setManualAmounts({});}} className="h-10"/>
         </label>
         <label className="space-y-1.5 text-xs font-medium text-muted-foreground">{t("method")}
           <Select value={method} onValueChange={value=>{setMethod(value as Method);setSelected([]);}}>
@@ -260,10 +260,14 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
       {!validRange&&<p role="alert" className="text-sm text-destructive">{t("invalidRange")}</p>}
       {error&&<p role="alert" className="text-sm text-destructive">{(error as Error).message}</p>}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <span className="text-sm font-medium">{payableGroups.length} {t("ready")}</span>
+        {manualMode
+          ? <span className="text-sm font-medium">{groups.length-manuallyPaidIds.length} available for manual payment</span>
+          : <span className="text-sm font-medium">{payableGroups.length} {t("ready")}</span>}
         <span className="text-sm text-muted-foreground">{groups.length} {t("totalWorkers")}</span>
         {includesWeeklyBonuses && <span className="rounded-full border border-indigo-500/25 bg-indigo-500/10 px-3 py-1 text-xs font-medium text-indigo-700 dark:text-indigo-300">
-          {projectedWeeklyWorkers} weekly bonuses projected · select after weekly approval below
+          {projectedWeeklyWorkers} weekly bonuses projected · {manualMode
+            ? "enter a separate manual payout or use the calculated weekly approval below"
+            : "select after weekly approval below"}
         </span>}
       </div>
 
@@ -323,6 +327,7 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
           else setSelected(update);
         }}
         renderDayActions={(workerId,date)=>{
+          if(manualMode)return null;
           const day=offers.find(row=>row.workerId===workerId&&row.date===date);
           if(!day)return null;
           const payment=(payments?.payments??[]).find(row=>
