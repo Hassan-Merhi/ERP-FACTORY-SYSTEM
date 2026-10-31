@@ -307,6 +307,7 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
             Weekly Flat Bonus Payments. The calculated amount is locked for accounting;
             change the configured weekly bonus rate before approval if needed.
           </p>
+          <ProductionBonusWeeklyMethodPanel initialDate={to}/>
           <ProductionBonusWeeklyPreviewPanel initialDate={to}/>
           <ProductionTargetWeeklyBonusPaymentsPanel initialDate={to}/>
         </div>
