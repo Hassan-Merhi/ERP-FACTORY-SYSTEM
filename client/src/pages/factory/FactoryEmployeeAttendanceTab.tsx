@@ -12,6 +12,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
+import { AttendanceAdminApprovalDialog } from "./factoryattendance/components/AttendanceAdminApprovalDialog";
+import { attendancePastDates, attendanceToday, type AttendanceAdminCredentials } from "./factoryattendance/attendanceEditPolicy";
 import {
   CalendarDays,
   CheckCircle,
@@ -122,7 +124,10 @@ export default function FactoryEmployeeAttendanceTab() {
   const { toast } = useToast();
   const [mode, setMode] = useState<ViewMode>("daily");
 
-  const [selectedDate, setSelectedDate] = useState(todayStr());
+  const [selectedDate, setSelectedDate] = useState(attendanceToday);
+  const [approvalOpen, setApprovalOpen] = useState(false);
+  const [approvalDates, setApprovalDates] = useState<string[]>([]);
+  const [pendingApprovalRecords, setPendingApprovalRecords] = useState<EmployeeAttendanceBulkRecord[] | null>(null);
   const [shift, setShift] = useState("");
   const [attendanceMap, setAttendanceMap] = useState<Record<number, AttendanceStatus>>({});
   const [notesMap, setNotesMap] = useState<Record<number, string>>({});
@@ -150,9 +155,13 @@ export default function FactoryEmployeeAttendanceTab() {
   }, [data]);
 
   const saveMutation = useMutation({
-    mutationFn: (records: EmployeeAttendanceBulkRecord[]) =>
-      apiRequest("POST", "/api/factory/employee-attendance/bulk", { records }),
+    mutationFn: (payload: { records: EmployeeAttendanceBulkRecord[]; credentials?: AttendanceAdminCredentials }) =>
+      apiRequest("POST", "/api/factory/employee-attendance/bulk", {
+        records: payload.records, ...payload.credentials,
+      }),
     onSuccess: () => {
+      setApprovalOpen(false);
+      setPendingApprovalRecords(null);
       queryClient.invalidateQueries({ queryKey: ["/api/factory/employee-attendance", selectedDate] });
       toast({ title: "Attendance saved", description: `Saved for ${selectedDate}` });
     },
@@ -170,8 +179,19 @@ export default function FactoryEmployeeAttendanceTab() {
       status: attendanceMap[e.id] ?? "Present",
       notes: notesMap[e.id] || undefined,
     }));
-    saveMutation.mutate(records);
+    const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
+    if (priorDates.length) {
+      setApprovalDates(priorDates);
+      setPendingApprovalRecords(records);
+      setApprovalOpen(true);
+    } else {
+      saveMutation.mutate({ records });
+    }
   }, [data, selectedDate, attendanceMap, notesMap, saveMutation]);
+
+  const approveAttendanceSave = (credentials: AttendanceAdminCredentials) => {
+    if (pendingApprovalRecords) saveMutation.mutate({ records: pendingApprovalRecords, credentials });
+  };
 
   const markAll = (status: AttendanceStatus) => {
     if (!data?.employees) return;
@@ -231,6 +251,7 @@ export default function FactoryEmployeeAttendanceTab() {
                   <Label className="text-xs text-muted-foreground">Attendance Date</Label>
                   <Input
                     type="date"
+                    max={attendanceToday()}
                     value={selectedDate}
                     onChange={(e) => setSelectedDate(e.target.value)}
                     className="w-44"
@@ -269,7 +290,7 @@ export default function FactoryEmployeeAttendanceTab() {
                   </Button>
                   <Button
                     onClick={handleSave}
-                    disabled={!emps.length || saveMutation.isPending}
+                    disabled={!emps.length || saveMutation.isPending || selectedDate > attendanceToday()}
                     data-testid="button-save-attendance"
                   >
                     <Save className="h-4 w-4 mr-1" />
@@ -449,6 +470,16 @@ export default function FactoryEmployeeAttendanceTab() {
           </Card>
         </>
       )}
+      {selectedDate < attendanceToday() && (
+        <Badge variant="secondary">Earlier date — Admin approval required to save</Badge>
+      )}
+      <AttendanceAdminApprovalDialog
+        open={approvalOpen}
+        onOpenChange={setApprovalOpen}
+        onApprove={approveAttendanceSave}
+        isPending={saveMutation.isPending}
+        dates={approvalDates}
+      />
     </div>
   );
 }
@@ -460,6 +491,9 @@ function PerEmployeeView() {
   const [startDate, setStartDate] = useState(todayStr());
   const [endDate, setEndDate] = useState(todayStr());
   const [checkedDates, setCheckedDates] = useState<Record<string, boolean>>({});
+  const [approvalOpen, setApprovalOpen] = useState(false);
+  const [approvalDates, setApprovalDates] = useState<string[]>([]);
+  const [pendingApprovalRecords, setPendingApprovalRecords] = useState<EmployeeAttendanceBulkRecord[] | null>(null);
 
   const { data: empList } = useQuery<EmpRow[]>({
     queryKey: ["/api/factory/employees"],
@@ -501,9 +535,13 @@ function PerEmployeeView() {
   const absentCount = dates.length - presentCount;
 
   const saveMutation = useMutation({
-    mutationFn: (records: EmployeeAttendanceBulkRecord[]) =>
-      apiRequest("POST", "/api/factory/employee-attendance/bulk", { records }),
+    mutationFn: (payload: { records: EmployeeAttendanceBulkRecord[]; credentials?: AttendanceAdminCredentials }) =>
+      apiRequest("POST", "/api/factory/employee-attendance/bulk", {
+        records: payload.records, ...payload.credentials,
+      }),
     onSuccess: () => {
+      setApprovalOpen(false);
+      setPendingApprovalRecords(null);
       queryClient.invalidateQueries({
         queryKey: ["/api/factory/employee-attendance/employee", empIdNum, startDate, endDate],
       });
@@ -527,7 +565,18 @@ function PerEmployeeView() {
       }
       return { employeeId: empIdNum, attendanceDate: d, status: "Absent" };
     });
-    saveMutation.mutate(records);
+    const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
+    if (priorDates.length) {
+      setApprovalDates(priorDates);
+      setPendingApprovalRecords(records);
+      setApprovalOpen(true);
+    } else {
+      saveMutation.mutate({ records });
+    }
+  };
+
+  const approveAttendanceSave = (credentials: AttendanceAdminCredentials) => {
+    if (pendingApprovalRecords) saveMutation.mutate({ records: pendingApprovalRecords, credentials });
   };
 
   const selectedEmp = (empList ?? []).find((e) => e.id === empIdNum);
@@ -592,6 +641,7 @@ function PerEmployeeView() {
               <Label className="text-xs text-muted-foreground">From</Label>
               <Input
                 type="date"
+                max={attendanceToday()}
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 className="w-40"
@@ -602,6 +652,7 @@ function PerEmployeeView() {
               <Label className="text-xs text-muted-foreground">To</Label>
               <Input
                 type="date"
+                max={attendanceToday()}
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 className="w-40"
@@ -635,7 +686,7 @@ function PerEmployeeView() {
               </Button>
               <Button
                 onClick={handleSave}
-                disabled={!empIdNum || saveMutation.isPending}
+                disabled={!empIdNum || saveMutation.isPending || dates.some((d) => d > attendanceToday())}
                 data-testid="button-save-per-employee"
               >
                 <Save className="h-4 w-4 mr-1" />
@@ -705,6 +756,16 @@ function PerEmployeeView() {
           </CardContent>
         </Card>
       )}
+      {attendancePastDates(dates).length > 0 && (
+        <Badge variant="secondary">Earlier dates require Admin approval to save</Badge>
+      )}
+      <AttendanceAdminApprovalDialog
+        open={approvalOpen}
+        onOpenChange={setApprovalOpen}
+        onApprove={approveAttendanceSave}
+        isPending={saveMutation.isPending}
+        dates={approvalDates}
+      />
     </div>
   );
 }
