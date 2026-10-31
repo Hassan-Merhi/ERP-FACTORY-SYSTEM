@@ -100,7 +100,7 @@ export function ShippingDashboardOverview({
             </div>
             <Button className="h-10 rounded-xl bg-blue-600 px-4 text-white shadow-sm shadow-blue-500/20 hover:bg-blue-500"
               onClick={onOpenInvoicing} data-testid="button-shipping-open-invoicing">
-              <ClipboardList className="mr-1.5 h-4 w-4" /> Open Invoicing
+              <ClipboardList className="mr-1.5 h-4 w-4" /> New Order
             </Button>
           </div>
         </div>
