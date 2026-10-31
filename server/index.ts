@@ -53,6 +53,7 @@ import { registerProcessErrorHandlers } from "./startup/registerProcessErrorHand
 import { runStartupMigrations, warmupDb } from "./startup/runServerStartupMigrations";
 import { ensureFactoryStaffTrackingSchema } from "./startup/factoryStaffTrackingSchema";
 import { ensureFactoryTargetBonusPaymentSchema } from "./startup/ensureFactoryTargetBonusPaymentSchema";
+import { correctNineProductionBonusExpenseAccounts } from "./services/factory/productionBonusExpenseReclassification";
 import { ensureSupplierTrackingShopDutyDefaults } from "./startup/ensureSupplierTrackingShopDutyDefaults";
 import { ensureZambiaHistoricalPurchaseCost } from "./startup/ensureZambiaHistoricalPurchaseCost";
 import { ensureFactoryContainerPlannerSchemaOnBoot } from "./startup/factoryContainerPlannerSchema";
@@ -355,6 +356,16 @@ let migrationsDone = false;
       // Financial payout table must exist before any posting route becomes reachable.
       // Fatal on error: never serve a deployment with accounting schema missing.
       await ensureFactoryTargetBonusPaymentSchema(pool);
+      // Source-verified, one-time correction of 9 company-12 historical Production
+      // Bonuses. Never run on a development, copied, or non-production service.
+      if (process.env.RENDER_SERVICE_ID === "srv-d6kibgtactks739u7vl0") {
+        const database = await pool.query<{ name: string }>("SELECT current_database() AS name");
+        if (database.rows[0]?.name !== "erp_db_qscj_64lv_e7rz_8744_2lm3") {
+          throw new Error("Historical production bonus expense correction refused: unexpected database");
+        }
+        const bonusCorrection = await correctNineProductionBonusExpenseAccounts();
+        logger.info("[startup] Production bonus expense account correction", bonusCorrection);
+      }
       // The Container Planner's registered migrations are never applied by
       // production's boot path, so ensure its tables here unconditionally. A
       // failure after retries is fatal: the previous deployment stays live rather
