@@ -1,6 +1,7 @@
 import { useMemo, type ReactNode } from "react";
 import { BarChart3, CalendarDays, Check, CalendarOff, UserRound, UsersRound } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { bonusText } from "@/i18n/factoryProductionBonusCheckoutTranslations";
 import { isProductionWorkday } from "@shared/productionTargetBonusWeeklyMethod";
@@ -39,6 +40,10 @@ type Props = {
   workers: BonusSheetWorker[];
   selected: number[];
   onToggle: (workerId: number, checked: boolean) => void;
+  manualMode?: boolean;
+  manualAmounts?: Record<number, string>;
+  onAmountChange?: (workerId: number, amount: string) => void;
+  manuallyPaidIds?: number[];
   renderDayActions?: (workerId: number, date: string) => ReactNode;
   loading: boolean;
 };
@@ -76,7 +81,8 @@ const legacyWeeklyHint = (issue: string | null) =>
   issue !== null && /this week uses the weekly flat bonus|pay through weekly bonus payroll|already covered by a weekly bonus review/i.test(issue);
 
 export function ProductionBonusWeeklySheet({
-  from, to, workers, selected, onToggle, renderDayActions, loading,
+  from, to, workers, selected, onToggle, manualMode = false, manualAmounts = {},
+  onAmountChange, manuallyPaidIds = [], renderDayActions, loading,
 }: Props) {
   const { language } = useApplicationLanguage();
   const t = (key: Parameters<typeof bonusText>[0]) => bonusText(key, language);
@@ -196,7 +202,8 @@ export function ProductionBonusWeeklySheet({
                       Linked team · {members.length} workers
                     </div>}
                     {members.map((member, memberIndex) => {
-                      const eligible = member.readyDays > 0;
+                      const alreadyPaidManually = manualMode && manuallyPaidIds.includes(member.workerId);
+                      const eligible = !alreadyPaidManually && (manualMode || member.readyDays > 0);
                       const memberState = eligible ? t("ready") : member.paidDays ? t("paidStatus")
                         : member.weeklyProjected ? "Bonus projected"
                         : member.weeklyApproved ? "Bonus approved"
@@ -209,7 +216,8 @@ export function ProductionBonusWeeklySheet({
                           (members.length > 1 ? "sm:px-3" : "")}>
                         <Checkbox checked={selected.includes(member.workerId)} disabled={!eligible}
                           aria-label={t("selectBonus") + " " + member.workerName}
-                          title={!eligible && (member.weeklyProjected || member.weeklyApproved || member.weeklyDays)
+                          title={alreadyPaidManually ? "Manual bonus already paid for this week"
+                            : !eligible && (member.weeklyProjected || member.weeklyApproved || member.weeklyDays)
                             ? "Weekly flat bonuses are handled in the Weekly Bonus Review & Pay section below"
                             : !eligible ? "No approved or payable daily bonus for this worker" : undefined}
                           onCheckedChange={checked => onToggle(member.workerId, checked === true)} />
@@ -226,8 +234,18 @@ export function ProductionBonusWeeklySheet({
                             (member.weeklyDays || member.weeklyProjected || member.weeklyApproved
                               ? "border-indigo-500/20 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300"
                               : "border-border/70 bg-muted/70 text-muted-foreground")}>
-                            {memberState}
+                            {alreadyPaidManually ? "Manual paid" : manualMode ? "Enter manual payment" : memberState}
                           </span>
+                          {manualMode && selected.includes(member.workerId) && !alreadyPaidManually && (
+                            <label className="mt-2 flex items-center gap-1 text-xs font-medium text-foreground">
+                              <span className="shrink-0">Pay $</span>
+                              <Input type="number" min="0.01" max="1000000" step="0.01"
+                                inputMode="decimal" aria-label={"Manual bonus USD for " + member.workerName}
+                                placeholder="0.00" className="h-8 w-[100px] text-sm tabular-nums"
+                                value={manualAmounts[member.workerId] ?? ""}
+                                onChange={event => onAmountChange?.(member.workerId, event.target.value)} />
+                            </label>
+                          )}
                         </div>
                       </div>;
                     })}
