@@ -511,10 +511,26 @@ export function registerRentalPaymentsAccrualRoutes(
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
       const statusFilter = req.query.status as string | undefined;
-      const conditions = [eq(propertyPayments.companyId, companyId), eq(propertyPayments.module, module)];
+      // This is exclusively a read-side reporting view. Payments are still posted,
+      // owned, and deleted using their original module, company, and vouchers.
+      // Warehouse Total Paid aggregates by ACTIVE contract rather than payment
+      // module; the normal Properties log previously omitted ERP-module rent.
+      const warehouseReconciliation = module === "PROPERTIES" && req.query.view === "warehouse-reconciliation";
+      const conditions = warehouseReconciliation
+        ? [
+            eq(propertyPayments.companyId, companyId),
+            eq(propertyContracts.companyId, companyId),
+            eq(propertyContracts.module, "PROPERTIES"),
+            eq(propertyUnits.companyId, companyId),
+            eq(propertyUnits.module, "PROPERTIES"),
+            eq(propertyUnits.unitType, "WAREHOUSE"),
+            eq(propertyUnits.active, true),
+          ]
+        : [eq(propertyPayments.companyId, companyId), eq(propertyPayments.module, module)];
       if (statusFilter) {
         conditions.push(sql`${propertyPayments.postingStatus} = ${statusFilter}`);
       }
+      const asOf = getClientDate(req);
 
       const payments = await db
         .select({
@@ -533,6 +549,19 @@ export function registerRentalPaymentsAccrualRoutes(
           postingStatus: propertyPayments.postingStatus,
           paymentGroupId: propertyPayments.paymentGroupId,
           postedAt: propertyPayments.postedAt,
+          sourceModule: propertyPayments.module,
+          contractStatus: propertyContracts.status,
+          ledgerRowId: propertyPayments.ledgerRowId,
+          reconciliationCategory: sql<string>`CASE
+            WHEN ${propertyPayments.postingStatus} = 'SCHEDULED'
+              OR ${propertyPayments.paymentDate} > ${asOf} THEN 'SCHEDULED'
+            WHEN ${propertyPayments.ledgerRowId} IS NULL THEN 'GUARANTEE'
+            WHEN ${propertyContracts.status} = 'ENDED' THEN 'ENDED_RENT'
+            WHEN ${propertyContracts.status} = 'ACTIVE'
+              AND ${propertyPayments.postingStatus} = 'POSTED'
+              AND ${propertyPayments.ledgerRowId} IS NOT NULL THEN 'ACTIVE_RENT'
+            ELSE 'OTHER'
+          END`,
           tenantName: propertyContracts.tenantName,
           unitNumber: propertyUnits.unitNumber,
           locationGroup: propertyUnits.locationGroup,
