@@ -199,6 +199,13 @@ export async function postTargetBonusPaymentsInTransaction(
       `));
       if (weeklyMode?.method === "weekly_flat")
         conflict("Weekly flat bonus is selected for this production week; daily payouts are disabled");
+      const manualBonus = first(await tx.execute(sql`
+        SELECT 1 FROM factory_target_bonus_manual_payments
+        WHERE company_id=${companyId} AND worker_id=${review.workerId}
+          AND week_start=(${choice.date}::date - (EXTRACT(ISODOW FROM ${choice.date}::date)::integer - 1))
+          AND status='POSTED' LIMIT 1
+      `));
+      if (manualBonus) conflict("A manual bonus was already paid for this worker/week; reconcile before posting the calculated daily bonus");
       if (state !== "POST") conflict("Payment already exists");
       if (command.paymentDate < choice.date) conflict("Payment cannot predate the finalized production day");
       if (expenseId == null) expenseId = await expenseAccountTx(tx, companyId);
