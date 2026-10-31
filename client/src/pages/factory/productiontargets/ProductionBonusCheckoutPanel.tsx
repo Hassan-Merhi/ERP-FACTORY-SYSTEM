@@ -15,12 +15,14 @@ import { localDateStr } from "../factoryProductionTargetsModel";
 import { ProductionBonusCategoryRatesPanel } from "./ProductionBonusCategoryRatesPanel";
 import { ProductionBonusWeeklyMethodPanel } from "./ProductionBonusWeeklyMethodPanel";
 import { ProductionBonusWeeklySheet } from "./ProductionBonusWeeklySheet";
+import { ProductionBonusWeeklyPreviewPanel } from "./ProductionBonusWeeklyPreviewPanel";
+import { ProductionTargetWeeklyBonusPaymentsPanel } from "./ProductionTargetWeeklyBonusPaymentsPanel";
 import { isProductionWorkday } from "@shared/productionTargetBonusWeeklyMethod";
 
 type Method = "standard" | "category";
 type Line = { category: string; produced: number; extra: number; rate: string; bonus: string };
 type Offer = {
-  date: string; workerId: number; workerName: string; category: string; target: number; produced: number;
+  date: string; workerId: number; workerName: string; linkGroupId: number | null; category: string; target: number; produced: number;
   extra: number; method: Method; lines: Line[]; amount: string; token: string;
   status: "pending" | "approved" | "paid" | "reversed" | "no_bonus" | "needs_setup" | "blocked" | "rejected" | "weekly";
   issue: string | null;
@@ -144,6 +146,8 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
   const selectedGroups=groups.filter(group=>selected.includes(group.workerId)&&group.readyDays>0);
   const total=chosen.reduce((sum,row)=>sum+Math.round(Number(row.amount)*100),0)/100;
   const payableGroups=groups.filter(group=>group.readyDays>0);
+  const includesWeeklyBonuses=groups.some(group=>group.weeklyDays>0);
+  const projectedWeeklyWorkers=groups.filter(group=>group.weeklyProjected).length;
   const visibleGroups=groups.filter(group=>
     (showAll||group.readyDays>0)&&
     group.workerName.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
@@ -233,6 +237,9 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <span className="text-sm font-medium">{payableGroups.length} {t("ready")}</span>
         <span className="text-sm text-muted-foreground">{groups.length} {t("totalWorkers")}</span>
+        {includesWeeklyBonuses && <span className="rounded-full border border-indigo-500/25 bg-indigo-500/10 px-3 py-1 text-xs font-medium text-indigo-700 dark:text-indigo-300">
+          {projectedWeeklyWorkers} weekly bonuses projected · select after weekly approval below
+        </span>}
       </div>
 
       <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-card/60 p-3 lg:flex-row lg:items-center lg:justify-between">
@@ -255,6 +262,13 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
         </div>
       </div>
 
+      {!isLoading && groups.length > 0 && payableGroups.length === 0 && <div role="status"
+        className="rounded-lg border border-amber-500/30 bg-amber-500/[0.07] px-4 py-3 text-sm text-foreground">
+        <strong>No payable daily bonuses in this date range.</strong>{" "}
+        {includesWeeklyBonuses
+          ? "The amounts marked Bonus projected are weekly-flat estimates, not payable daily bonuses. Complete and approve the week, then use Weekly Bonus Review & Pay below to select workers."
+          : "Only bonuses with positive, approved or pending extra-bale amounts can be selected. Check rates, targets, and approval status."}
+      </div>}
       <ProductionBonusWeeklySheet from={from} to={to}
         workers={visibleGroups} loading={isLoading} selected={selected}
         onToggle={(workerId,checked)=>setSelected(previous=>checked?
@@ -281,10 +295,29 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
           </div>;
         }}/>
 
+      {includesWeeklyBonuses && <details open className="overflow-hidden rounded-xl border border-indigo-500/25 bg-card"
+        data-testid="production-bonus-weekly-pay-section">
+        <summary className="cursor-pointer bg-indigo-500/[0.07] px-4 py-3 text-sm font-semibold text-foreground">
+          Weekly Bonus Review & Pay — approve, select workers, and post approved amounts
+        </summary>
+        <div className="space-y-4 border-t border-indigo-500/20 p-3 sm:p-4">
+          <p className="text-sm text-muted-foreground">
+            Weekly bonuses shown in the sheet cannot be paid through daily checkout.
+            First approve a completed week below, then tick individual approved workers in
+            Weekly Flat Bonus Payments. The calculated amount is locked for accounting;
+            change the configured weekly bonus rate before approval if needed.
+          </p>
+          <ProductionBonusWeeklyPreviewPanel initialDate={to}/>
+          <ProductionTargetWeeklyBonusPaymentsPanel initialDate={to}/>
+        </div>
+      </details>}
       <div className="flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="text-sm font-medium">{selectedGroups.length} {t("selected")}</div>
           <div className="text-2xl font-bold tabular-nums">{usd(total)}</div>
+          <div className="text-xs text-muted-foreground">
+            Daily total is calculated, not freely editable. Use Edit Rate on an eligible day to update an unpaid per-bale bonus.
+          </div>
         </div>
         <div className="flex flex-wrap items-end gap-3">
           <label className="space-y-1 text-xs font-medium text-muted-foreground">
