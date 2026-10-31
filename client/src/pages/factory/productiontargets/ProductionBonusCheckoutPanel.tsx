@@ -148,9 +148,17 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
   const payableGroups=groups.filter(group=>group.readyDays>0);
   const includesWeeklyBonuses=groups.some(group=>group.weeklyDays>0);
   const projectedWeeklyWorkers=groups.filter(group=>group.weeklyProjected).length;
+  const searchTerm=search.trim().toLocaleLowerCase();
+  const matchingGroups=groups.filter(group=>
+    group.workerName.toLocaleLowerCase().includes(searchTerm));
+  const matchingLinkIds=new Set(matchingGroups.flatMap(group=>
+    group.days.map(day=>day.linkGroupId).filter((id):id is number=>id!=null)));
+  // A name search retains linked teammates so the relationship stays visible.
   const visibleGroups=groups.filter(group=>
     (showAll||group.readyDays>0)&&
-    group.workerName.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+    (group.workerName.toLocaleLowerCase().includes(searchTerm)||
+      (searchTerm!==""&&group.days.some(day=>
+        day.linkGroupId!=null&&matchingLinkIds.has(day.linkGroupId)))));
   const visiblePayableGroups=visibleGroups.filter(group=>group.readyDays>0);
   const allSelected=visiblePayableGroups.length>0&&
     visiblePayableGroups.every(group=>selected.includes(group.workerId));
