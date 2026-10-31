@@ -268,6 +268,24 @@ export function registerPosTransferDelegatedApprovalRoutes(
         });
       }
 
+      // Read-only destination reachability preflight. If the selected group
+      // cannot be found on the connected WhatsApp account, approve nothing.
+      try {
+        const chats = await fetchGreenApiChats(wa.instanceId, wa.apiToken);
+        if (!chats.some((chat) => chat.id === configured.rows[0].chatId)) {
+          return res.status(409).json({
+            message: "The configured WhatsApp group is not visible to the connected account. No transfers were approved. Check the group in Export Center.",
+          });
+        }
+      } catch (error) {
+        logger.warn("[PosTransferApproval] WhatsApp group preflight unavailable", {
+          companyId: actor.companyId, destinationId, error,
+        });
+        return res.status(409).json({
+          message: "Could not verify access to the WhatsApp group. No transfers were approved. Check the connection and try again.",
+        });
+      }
+
       const records = await pool.query(
         'SELECT t.id AS "transferId", MAX(r.id)::int AS "revisionId", ' +
           'v.voucher_number AS "voucherNumber", d.name AS "destinationName" ' +
