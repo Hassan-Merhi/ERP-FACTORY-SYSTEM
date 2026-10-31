@@ -275,7 +275,7 @@ export default function RentalPaymentsLog({
                 <tfoot className="sticky bottom-0 z-20 border-t-2 bg-muted/30">
                   <tr>
                     <td className="px-3 py-2 font-semibold" colSpan={3}>
-                      TOTAL
+                      {isPropertiesPayments ? "TOTAL LISTED TRANSACTIONS" : "TOTAL"}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums font-bold text-green-700 dark:text-green-400">
                       {formatMoneyNumber(total)}
