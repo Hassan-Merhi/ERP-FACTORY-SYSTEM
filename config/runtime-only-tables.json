@@ -1,5 +1,5 @@
 {
-  "description": "Tables created by runtime DDL (server/, migrations/) but not declared in shared/schema. drizzle-kit cannot manage them and drizzle.config.ts filters them out of push. This list may only shrink: declare a table in shared/schema, then remove it here. tests/runtime-only-tables-ratchet.test.ts enforces it. Owner-approved on 2026-10-31 (PR #2613 main green-up): 17 tables that main's startup DDL creates for Production Target Bonuses (#2612 and follow-ups), the container extra expected lines and the destination normalization audit are recorded here rather than declared in shared/schema, because a declaration would let drizzle-kit push reconcile, and potentially drop, constraints and triggers that only the startup DDL installs. They stay in the declaration backlog.",
+  "description": "Tables created by runtime DDL (server/, migrations/) but not declared in shared/schema. drizzle-kit cannot manage them and drizzle.config.ts filters them out of push. This list may only shrink: declare a table in shared/schema, then remove it here. tests/runtime-only-tables-ratchet.test.ts enforces it. Owner-approved on 2026-10-31 (PR #2613 main green-up): 17 tables that main's startup DDL creates for Production Target Bonuses (#2612 and follow-ups), the container extra expected lines and the destination normalization audit are recorded here rather than declared in shared/schema, because a declaration would let drizzle-kit push reconcile, and potentially drop, constraints and triggers that only the startup DDL installs. They stay in the declaration backlog. Under the same owner approval, pos_transfer_approval_settings (main #2650, POS transfer approval delegation) was recorded on the 2026-10-31 main merge for the same reason.",
   "tables": [
     "customer_order_extra_expected_lines",
     "factory_destination_normalization_audit",
@@ -21,6 +21,7 @@
     "financial_periods",
     "immutable_financial_audit_events",
     "one_time_migrations",
+    "pos_transfer_approval_settings",
     "sp_migration_container_charges",
     "sp_migration_source_links"
   ]

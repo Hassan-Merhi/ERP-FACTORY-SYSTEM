@@ -83,7 +83,7 @@ Committed on the unified branch, not on `main`:
 - Deterministic conflicts: a cloud disagreement (bale already scanned, missing machine/assignment/bale, revoked or view-only actor) rolls back, is recorded in an append-only register and blocks the stream until a named DBA `reject-event` decision produces an auditable `rejected-conflict` receipt. Nothing is overwritten or skipped silently.
 - `GET /api/edge/status?operationId=` now also projects pressing operations.
 - Evidence: `tests/offline-phase9-pressing-sync-drill.test.ts` (separate LAN and cloud PostgreSQL databases, real fence, restricted role) plus protocol and boundary tests; wired into the Phase 8/9 workflows.
-- Coverage now: 2 approved captures (USD Journal vouchers, pressing scans), 3 session-only, 1,169 blocked. Remaining workflows and the reason each is still online-only are listed in [factory-offline-operations-runbook.md](../../operations/factory-offline-operations-runbook.md) §2. `--require-complete` stays red by design.
+- Coverage now: 2 approved captures (USD Journal vouchers, pressing scans), 3 session-only, 1,173 blocked. Remaining workflows and the reason each is still online-only are listed in [factory-offline-operations-runbook.md](../../operations/factory-offline-operations-runbook.md) §2. `--require-complete` stays red by design.
 
 ## Phase 10 — Offline identity, conflicts, secure storage and server controls
 - Implement reviewed local-session/cold-start policy, encrypted legacy-cache migration, authorization/role revocation, and scoped credentials and browser/device protections.

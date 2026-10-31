@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Plus,
+  Pencil,
   Trash2,
   ArrowDownCircle,
   Loader2,
@@ -31,6 +32,7 @@ import { useDateFormat } from "@/contexts/DateFormatContext";
 import { queryClient } from "@/lib/queryClient";
 import { getApiRequest } from "@/lib/factoryApi";
 import { useAppMode } from "@/contexts/AppModeContext";
+import { useAuthenticatedUser } from "@/app/useAuthenticatedUser";
 import type { Employee } from "@shared/schema";
 import type { AccountOption } from "./payrollTypes";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -42,6 +44,7 @@ import {
   type SalaryAdvance,
 } from "./payrollSchemas";
 import { calculateAdvanceStats } from "./advanceStats";
+import { AdvanceReassignDialog } from "./AdvanceReassignDialog";
 import { AddWorkerDeductionDialog, type WorkerDeductionFormData } from "./AddWorkerDeductionDialog";
 
 interface AdvancesTabProps {
@@ -50,6 +53,8 @@ interface AdvancesTabProps {
 
 export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
   const appMode = useAppMode();
+  const { user } = useAuthenticatedUser();
+  const canReassignAdvance = ["Admin", "Owner", "Developer"].includes(user?.currentRole ?? user?.role ?? "");
   const modeApiRequest = getApiRequest(appMode);
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
@@ -59,6 +64,7 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
   const [advanceDialogOpen, setAdvanceDialogOpen] = useState(false);
   const [deductionDialogOpen, setDeductionDialogOpen] = useState(false);
   const [selectedAdvance, setSelectedAdvance] = useState<SalaryAdvance | null>(null);
+  const [reassignTarget, setReassignTarget] = useState<SalaryAdvance | null>(null);
   const [showPaid, setShowPaid] = useState(false);
   const [workerFilter, setWorkerFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -295,6 +301,20 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
         <TableCell className="text-sm text-muted-foreground max-w-[180px] truncate">{advance.notes || "—"}</TableCell>
         <TableCell className="text-right">
           <div className="flex justify-end gap-1">
+            {canReassignAdvance && (
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => {
+                  setReassignTarget(advance);
+                }}
+                title="Change worker for this advance"
+                aria-label={`Change worker for advance #${advance.id}`}
+                data-testid={`button-reassign-advance-${advance.id}`}
+              >
+                <Pencil className="h-4 w-4 text-blue-500" />
+              </Button>
+            )}
             {!advance.fullyPaid && (
               <Button
                 size="icon"
@@ -615,6 +635,14 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
           )}
         </TabsContent>
       </Tabs>
+
+      <AdvanceReassignDialog
+        target={reassignTarget}
+        workers={workerStaff}
+        companyId={selectedCompany?.id}
+        apiRequest={modeApiRequest}
+        onClose={() => setReassignTarget(null)}
+      />
 
       {/* ── Add Advance Dialog ── */}
       <Dialog open={advanceDialogOpen} onOpenChange={setAdvanceDialogOpen}>

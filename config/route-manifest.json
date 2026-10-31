@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2297,
+  "routeCount": 2303,
   "middlewareMountCount": 139,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -1255,6 +1255,7 @@
     "GET /api/erp-worker-docs/:id/download [requireAuth > <anonymous>]",
     "GET /api/salary-advances [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/salary-advances/employee/:employeeId [requireAuth > requireNonPOS > <anonymous>]",
+    "PATCH /api/salary-advances/:id/worker [requireAuth > requireNonPOS > <anonymous>]",
     "POST /api/salary-advances [requireAuth > requireNonPOS > <anonymous>]",
     "POST /api/salary-advances/:id/deduction [requireAuth > requireNonPOS > <anonymous>]",
     "DELETE /api/salary-advances/:id [requireAuth > requireNonPOS > <anonymous>]",
@@ -2043,6 +2044,11 @@
     "POST /api/stock-transfer-order/whatsapp-groups [requireAuth > <anonymous> > <anonymous>]",
     "DELETE /api/stock-transfer-order/whatsapp-groups/:groupId [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/stock-transfer-order/send-whatsapp [requireAuth > <anonymous> > <anonymous>]",
+    "GET /api/settings/pos-transfer-approval [requireAuth > <anonymous>]",
+    "PUT /api/settings/pos-transfer-approval [requireAuth > <anonymous>]",
+    "GET /api/pos-transfer-approval/queue [requireAuth > <anonymous>]",
+    "POST /api/pos-transfer-approval/destination/:destinationId/approve-send [requireAuth > <anonymous>]",
+    "POST /api/pos-transfer-approval/:revisionId/approve-send [requireAuth > <anonymous>]",
     "GET /api/whatsapp/message-schedules [requireAuth > <anonymous>]",
     "GET /api/whatsapp/message-schedules/history [requireAuth > <anonymous>]",
     "POST /api/whatsapp/message-schedules [requireAuth > <anonymous>]",
