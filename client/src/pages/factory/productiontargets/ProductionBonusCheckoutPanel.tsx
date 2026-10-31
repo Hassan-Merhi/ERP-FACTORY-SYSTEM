@@ -15,6 +15,8 @@ import { localDateStr } from "../factoryProductionTargetsModel";
 import { ProductionBonusCategoryRatesPanel } from "./ProductionBonusCategoryRatesPanel";
 import { ProductionBonusWeeklyMethodPanel } from "./ProductionBonusWeeklyMethodPanel";
 import { ProductionBonusWeeklySheet } from "./ProductionBonusWeeklySheet";
+import { ProductionBonusManualPaymentPanel, type ManualBonusHistory } from "./ProductionBonusManualPaymentPanel";
+import { mondayOfProductionBonusWeek } from "@shared/productionTargetBonusWeeklyMethod";
 import { ProductionBonusWeeklyPreviewPanel } from "./ProductionBonusWeeklyPreviewPanel";
 import { ProductionTargetWeeklyBonusPaymentsPanel } from "./ProductionTargetWeeklyBonusPaymentsPanel";
 import { isProductionWorkday } from "@shared/productionTargetBonusWeeklyMethod";
@@ -101,6 +103,9 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
   const [to,setTo]=useState(initialDate);
   const [method,setMethod]=useState<Method>("standard");
   const [selected,setSelected]=useState<number[]>([]);
+  const [manualMode,setManualMode]=useState(true);
+  const [manualSelected,setManualSelected]=useState<number[]>([]);
+  const [manualAmounts,setManualAmounts]=useState<Record<number,string>>({});
   const [showAll,setShowAll]=useState(true);
   const [search,setSearch]=useState("");
   const [accountId,setAccountId]=useState("");
@@ -110,7 +115,7 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
   const [newRate,setNewRate]=useState("");
   const [reverse,setReverse]=useState<PaymentRow|null>(null);
   const [reverseReason,setReverseReason]=useState("");
-  useEffect(()=>{setFrom(startOfRange(initialDate));setTo(initialDate);setSelected([]);setSearch("");setShowAll(true);},[initialDate]);
+  useEffect(()=>{setFrom(startOfRange(initialDate));setTo(initialDate);setSelected([]);setManualSelected([]);setManualAmounts({});setSearch("");setShowAll(true);},[initialDate]);
   const validRange=isDate(from)&&isDate(to)&&from<=to&&daysApart(from,to)<=31;
   const {data:access}=useQuery<{canDecide:boolean}>({
     queryKey:["/api/factory/staff-tracking/production-bonuses",from,from],
@@ -135,6 +140,15 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
       new URLSearchParams({start:from,end:to})),
     enabled:canUse&&validRange,
   });
+  const manualWeekStart=mondayOfProductionBonusWeek(to)??"";
+  const {data:manualHistory}=useQuery<ManualBonusHistory>({
+    queryKey:["/api/factory/production-target-bonuses/checkout/manual-payments",manualWeekStart],
+    queryFn:()=>request("GET","/api/factory/production-target-bonuses/checkout/manual-payments?"+
+      new URLSearchParams({weekStart:manualWeekStart})),
+    enabled:canUse&&Boolean(manualWeekStart),
+  });
+  const manuallyPaidIds=(manualHistory?.payments??[]).filter(row=>row.status==="POSTED")
+    .map(row=>row.workerId);
   const cashAccounts=(accounts?.accounts??[]).filter(a=>
     !a.openingCurrency||a.openingCurrency.toUpperCase()==="USD");
   // Sunday is a factory holiday; stale cached API data must never enable Sunday payout.
@@ -155,13 +169,16 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
     group.days.map(day=>day.linkGroupId).filter((id):id is number=>id!=null)));
   // A name search retains linked teammates so the relationship stays visible.
   const visibleGroups=groups.filter(group=>
-    (showAll||group.readyDays>0)&&
+    (manualMode||showAll||group.readyDays>0)&&
     (group.workerName.toLocaleLowerCase().includes(searchTerm)||
       (searchTerm!==""&&group.days.some(day=>
         day.linkGroupId!=null&&matchingLinkIds.has(day.linkGroupId)))));
   const visiblePayableGroups=visibleGroups.filter(group=>group.readyDays>0);
-  const allSelected=visiblePayableGroups.length>0&&
-    visiblePayableGroups.every(group=>selected.includes(group.workerId));
+  const manualSelectableGroups=visibleGroups.filter(group=>!manuallyPaidIds.includes(group.workerId));
+  const selectableGroups=manualMode?manualSelectableGroups:visiblePayableGroups;
+  const activeSelection=manualMode?manualSelected:selected;
+  const allSelected=selectableGroups.length>0&&
+    selectableGroups.every(group=>activeSelection.includes(group.workerId));
   const tooMany=chosen.length>100;
   const pay=useMutation({
     mutationFn:()=>request<{posted:number;replayed:number}>("POST",endpoint+"/pay",{ // data-no-translate: TypeScript generic, not user-visible JSX
@@ -250,27 +267,45 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
         </span>}
       </div>
 
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
+        <span className="mr-2 text-sm font-semibold">Payment type</span>
+        <Button type="button" size="sm" variant={manualMode?"default":"outline"}
+          onClick={()=>{setManualMode(true);setShowAll(true);}}>
+          Enter amount to pay
+        </Button>
+        <Button type="button" size="sm" variant={!manualMode?"default":"outline"}
+          onClick={()=>setManualMode(false)}>
+          Calculated daily bonus
+        </Button>
+        <span className="text-xs text-muted-foreground">
+          {manualMode?"Select anyone in the sheet and enter a USD amount.":"Only approved/eligible calculated daily bonuses can be selected."}
+        </span>
+      </div>
       <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-card/60 p-3 lg:flex-row lg:items-center lg:justify-between">
         <Input value={search} onChange={event=>setSearch(event.target.value)}
           aria-label={t("searchWorkers")} placeholder={t("searchWorkers")}
           className="h-10 w-full lg:max-w-xs"/>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1 rounded-lg border bg-muted/30 p-1">
-            <Button type="button" size="sm" variant={!showAll?"secondary":"ghost"} className="h-8"
-              onClick={()=>setShowAll(false)}>{t("showPayable")}</Button>
+            {!manualMode&&<Button type="button" size="sm" variant={!showAll?"secondary":"ghost"} className="h-8"
+              onClick={()=>setShowAll(false)}>{t("showPayable")}</Button>}
             <Button type="button" size="sm" variant={showAll?"secondary":"ghost"} className="h-8"
               onClick={()=>setShowAll(true)}>{t("showEveryone")}</Button>
           </div>
-          <Button type="button" variant="outline" size="sm" disabled={!visiblePayableGroups.length}
-            onClick={()=>setSelected(previous=>allSelected?
-              previous.filter(id=>!visiblePayableGroups.some(group=>group.workerId===id)):
-              [...new Set([...previous,...visiblePayableGroups.map(group=>group.workerId)])])}>
+          <Button type="button" variant="outline" size="sm" disabled={!selectableGroups.length}
+            onClick={()=>{
+              const ids=selectableGroups.map(group=>group.workerId);
+              if(manualMode)setManualSelected(previous=>allSelected?
+                previous.filter(id=>!ids.includes(id)):[...new Set([...previous,...ids])]);
+              else setSelected(previous=>allSelected?
+                previous.filter(id=>!ids.includes(id)):[...new Set([...previous,...ids])]);
+            }}>
             {allSelected?t("clear"):t("selectAll")}
           </Button>
         </div>
       </div>
 
-      {!isLoading && groups.length > 0 && payableGroups.length === 0 && <div role="status"
+      {!manualMode && !isLoading && groups.length > 0 && payableGroups.length === 0 && <div role="status"
         className="rounded-lg border border-amber-500/30 bg-amber-500/[0.07] px-4 py-3 text-sm text-foreground">
         <strong>No payable daily bonuses in this date range.</strong>{" "}
         {includesWeeklyBonuses
@@ -278,10 +313,15 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
           : "Only bonuses with positive, approved or pending extra-bale amounts can be selected. Check rates, targets, and approval status."}
       </div>}
       <ProductionBonusWeeklySheet from={from} to={to}
-        workers={visibleGroups} loading={isLoading} selected={selected}
-        onToggle={(workerId,checked)=>setSelected(previous=>checked?
-          [...new Set([...previous,workerId])]:
-          previous.filter(id=>id!==workerId))}
+        workers={visibleGroups} loading={isLoading} selected={activeSelection}
+        manualMode={manualMode} manualAmounts={manualAmounts} manuallyPaidIds={manuallyPaidIds}
+        onAmountChange={(workerId,amount)=>setManualAmounts(previous=>({...previous,[workerId]:amount}))}
+        onToggle={(workerId,checked)=>{
+          const update=(previous:number[])=>checked?
+            [...new Set([...previous,workerId])]:previous.filter(id=>id!==workerId);
+          if(manualMode)setManualSelected(update);
+          else setSelected(update);
+        }}
         renderDayActions={(workerId,date)=>{
           const day=offers.find(row=>row.workerId===workerId&&row.date===date);
           if(!day)return null;
@@ -303,7 +343,10 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
           </div>;
         }}/>
 
-      {includesWeeklyBonuses && <details open className="overflow-hidden rounded-xl border border-indigo-500/25 bg-card"
+      {manualMode&&<ProductionBonusManualPaymentPanel rosterDate={to} workers={groups}
+        selected={manualSelected} amounts={manualAmounts}
+        onReset={()=>{setManualSelected([]);setManualAmounts({});}}/>}
+      {includesWeeklyBonuses && <details className="overflow-hidden rounded-xl border border-indigo-500/25 bg-card"
         data-testid="production-bonus-weekly-pay-section">
         <summary className="cursor-pointer bg-indigo-500/[0.07] px-4 py-3 text-sm font-semibold text-foreground">
           Weekly Bonus Review & Pay — approve, select workers, and post approved amounts
@@ -320,7 +363,7 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
           <ProductionTargetWeeklyBonusPaymentsPanel initialDate={to}/>
         </div>
       </details>}
-      <div className="flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 lg:flex-row lg:items-end lg:justify-between">
+      {!manualMode&&<div className="flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="text-sm font-medium">{selectedGroups.length} {t("selected")}</div>
           <div className="text-2xl font-bold tabular-nums">{usd(total)}</div>
@@ -354,8 +397,8 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
             <CheckCircle2 className="mr-2 h-4 w-4"/>{t("reviewPay")}
           </Button>
         </div>
-      </div>
-      {tooMany&&<p role="alert" className="text-sm text-destructive">{t("max100")}</p>}
+      </div>}
+      {!manualMode&&tooMany&&<p role="alert" className="text-sm text-destructive">{t("max100")}</p>}
 
       <details className="rounded-lg border border-border/70">
         <summary className="cursor-pointer px-4 py-3 text-sm font-medium">{t("settings")}</summary>
