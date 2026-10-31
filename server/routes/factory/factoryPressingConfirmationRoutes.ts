@@ -9,13 +9,18 @@ import { z, ZodError } from "zod";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
 import {
-  factoryBales, factoryPressingMachines, factoryPressingAssignments,
-  factoryPressingSessions, factoryPressingConfirmations,
-  factoryPressingCorrections, factoryUserProfiles,
+  factoryBales,
+  factoryPressingMachines,
+  factoryPressingAssignments,
+  factoryPressingSessions,
+  factoryPressingConfirmations,
+  factoryPressingCorrections,
+  factoryUserProfiles,
   users,
 } from "@shared/schema";
 import {
-  ActiveCompanyPermissionContextError, getActiveCompanyPermissionContext,
+  ActiveCompanyPermissionContextError,
+  getActiveCompanyPermissionContext,
 } from "../../services/security/activeCompanyPermissionContext";
 import { logAudit } from "../helpers/auditHelpers";
 import { capturePhase9PressingTx } from "../../edge/phase9PressingOutbox";
@@ -23,18 +28,29 @@ import { logger } from "../../lib/logger";
 import { factoryLocalDate } from "../../services/factory/pressingShiftTime";
 import { PRESSING_TIME_ZONE } from "@shared/pressingTimeZone";
 
-const confirmSchema = z.object({
-  barcode: z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9][A-Za-z0-9._/-]*$/),
-  assignmentId: z.number().int().positive(),
-  machineId: z.number().int().positive(),
-  requestId: z.string().uuid(),
-  deviceCapturedAt: z.string().datetime({ offset: true }).optional(),
-}).strict();
+const confirmSchema = z
+  .object({
+    barcode: z
+      .string()
+      .trim()
+      .min(1)
+      .max(100)
+      .regex(/^[A-Za-z0-9][A-Za-z0-9._/-]*$/),
+    assignmentId: z.number().int().positive(),
+    machineId: z.number().int().positive(),
+    requestId: z.string().uuid(),
+    deviceCapturedAt: z.string().datetime({ offset: true }).optional(),
+  })
+  .strict();
 
 type ConfirmInput = z.infer<typeof confirmSchema>;
 class ConfirmationError extends Error {
-  constructor(public readonly httpStatus: number, public readonly code: string, message: string,
-    public readonly details?: Record<string, unknown>) {
+  constructor(
+    public readonly httpStatus: number,
+    public readonly code: string,
+    message: string,
+    public readonly details?: Record<string, unknown>
+  ) {
     super(message);
   }
 }
@@ -57,11 +73,16 @@ function sendFailure(res: Response, error: unknown): void {
     return;
   }
   if (error instanceof ZodError) {
-    res.status(400).json({ code: "INVALID_PRESSING_SCAN", message: "Invalid pressing barcode request", issues: error.issues });
+    res
+      .status(400)
+      .json({ code: "INVALID_PRESSING_SCAN", message: "Invalid pressing barcode request", issues: error.issues });
     return;
   }
   logger.error("Factory pressing confirmation failed", { error });
-  res.status(500).json({ code: "PRESSING_CONFIRMATION_FAILED", message: "Could not confirm pressing. Please retry with the same request ID." });
+  res.status(500).json({
+    code: "PRESSING_CONFIRMATION_FAILED",
+    message: "Could not confirm pressing. Please retry with the same request ID.",
+  });
 }
 
 function receipt(row: typeof factoryPressingConfirmations.$inferSelect, replayed = false) {
@@ -101,93 +122,178 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
       const reference = normalizeReference(parsed.barcode);
       const companyId = ctx.companyId;
       const userId = ctx.userId;
-      const existingRequest = await db.select().from(factoryPressingConfirmations)
-        .where(and(eq(factoryPressingConfirmations.companyId, companyId),
-          eq(factoryPressingConfirmations.requestId, parsed.requestId))).limit(1);
+      const existingRequest = await db
+        .select()
+        .from(factoryPressingConfirmations)
+        .where(
+          and(
+            eq(factoryPressingConfirmations.companyId, companyId),
+            eq(factoryPressingConfirmations.requestId, parsed.requestId)
+          )
+        )
+        .limit(1);
       if (existingRequest.length) {
         const prior = existingRequest[0];
-        if (prior.referenceNumber !== reference || prior.userId !== userId ||
-          prior.machineId !== parsed.machineId || prior.assignmentId !== parsed.assignmentId) {
-          throw new ConfirmationError(409, "PRESSING_REQUEST_ID_REUSED", "Request ID was already used for another scan");
+        if (
+          prior.referenceNumber !== reference ||
+          prior.userId !== userId ||
+          prior.machineId !== parsed.machineId ||
+          prior.assignmentId !== parsed.assignmentId
+        ) {
+          throw new ConfirmationError(
+            409,
+            "PRESSING_REQUEST_ID_REUSED",
+            "Request ID was already used for another scan"
+          );
         }
-        if (prior.voidedAt) throw new ConfirmationError(409, "PRESSING_CONFIRMATION_VOIDED", "That prior scan was voided; a new confirmation request is required");
+        if (prior.voidedAt)
+          throw new ConfirmationError(
+            409,
+            "PRESSING_CONFIRMATION_VOIDED",
+            "That prior scan was voided; a new confirmation request is required"
+          );
         return res.json(receipt(prior, true));
       }
 
-      const result = await db.transaction(async tx => {
+      const result = await db.transaction(async (tx) => {
         // Same lock ordering as the supervisor assignment endpoint: lock user
         // first, machine next, assignment last. Reassignments cannot race a
         // pressing confirmation into the wrong machine's production.
         await tx.execute(sql`SELECT pg_advisory_xact_lock(${companyId}::integer, hashtext(${userId}))`);
-        const [machine] = await tx.select().from(factoryPressingMachines)
-          .where(and(eq(factoryPressingMachines.companyId, companyId),
-            eq(factoryPressingMachines.id, parsed.machineId))).for("update");
+        const [machine] = await tx
+          .select()
+          .from(factoryPressingMachines)
+          .where(
+            and(eq(factoryPressingMachines.companyId, companyId), eq(factoryPressingMachines.id, parsed.machineId))
+          )
+          .for("update");
         if (!machine?.active) {
           throw new ConfirmationError(422, "PRESSING_MACHINE_INACTIVE", "Machine is inactive or no longer assigned");
         }
-        const [assignment] = await tx.select().from(factoryPressingAssignments)
-          .where(and(eq(factoryPressingAssignments.companyId, companyId),
-            eq(factoryPressingAssignments.id, parsed.assignmentId),
-            eq(factoryPressingAssignments.machineId, machine.id),
-            eq(factoryPressingAssignments.userId, userId),
-            isNull(factoryPressingAssignments.unassignedAt))).for("update");
+        const [assignment] = await tx
+          .select()
+          .from(factoryPressingAssignments)
+          .where(
+            and(
+              eq(factoryPressingAssignments.companyId, companyId),
+              eq(factoryPressingAssignments.id, parsed.assignmentId),
+              eq(factoryPressingAssignments.machineId, machine.id),
+              eq(factoryPressingAssignments.userId, userId),
+              isNull(factoryPressingAssignments.unassignedAt)
+            )
+          )
+          .for("update");
         if (!assignment) {
-          throw new ConfirmationError(409, "PRESSING_ASSIGNMENT_CHANGED", "Your assigned machine has changed. Refresh before scanning.");
+          throw new ConfirmationError(
+            409,
+            "PRESSING_ASSIGNMENT_CHANGED",
+            "Your assigned machine has changed. Refresh before scanning."
+          );
         }
-        const [operator] = await tx.select({
-          active: users.active, username: users.username,
-          displayName: factoryUserProfiles.displayName,
-        }).from(users).leftJoin(factoryUserProfiles, and(
-          eq(factoryUserProfiles.userId, users.id),
-          eq(factoryUserProfiles.companyId, companyId),
-        )).where(eq(users.id, userId)).limit(1);
+        const [operator] = await tx
+          .select({
+            active: users.active,
+            username: users.username,
+            displayName: factoryUserProfiles.displayName,
+          })
+          .from(users)
+          .leftJoin(
+            factoryUserProfiles,
+            and(eq(factoryUserProfiles.userId, users.id), eq(factoryUserProfiles.companyId, companyId))
+          )
+          .where(eq(users.id, userId))
+          .limit(1);
         if (!operator?.active) {
           throw new ConfirmationError(403, "PRESSING_USER_INACTIVE", "Your user account is inactive");
         }
 
         // Return an idempotent receipt even after a race with the initial
         // pretransaction lookup. It must be the SAME actor/barcode/assignment.
-        const [prior] = await tx.select().from(factoryPressingConfirmations)
-          .where(and(eq(factoryPressingConfirmations.companyId, companyId),
-            eq(factoryPressingConfirmations.requestId, parsed.requestId))).limit(1);
+        const [prior] = await tx
+          .select()
+          .from(factoryPressingConfirmations)
+          .where(
+            and(
+              eq(factoryPressingConfirmations.companyId, companyId),
+              eq(factoryPressingConfirmations.requestId, parsed.requestId)
+            )
+          )
+          .limit(1);
         if (prior) {
-          if (prior.referenceNumber !== reference || prior.userId !== userId ||
-              prior.machineId !== machine.id || prior.assignmentId !== assignment.id) {
-            throw new ConfirmationError(409, "PRESSING_REQUEST_ID_REUSED", "Request ID was already used for another scan");
+          if (
+            prior.referenceNumber !== reference ||
+            prior.userId !== userId ||
+            prior.machineId !== machine.id ||
+            prior.assignmentId !== assignment.id
+          ) {
+            throw new ConfirmationError(
+              409,
+              "PRESSING_REQUEST_ID_REUSED",
+              "Request ID was already used for another scan"
+            );
           }
-          if (prior.voidedAt) throw new ConfirmationError(409, "PRESSING_CONFIRMATION_VOIDED", "That prior scan was voided; a new confirmation request is required");
+          if (prior.voidedAt)
+            throw new ConfirmationError(
+              409,
+              "PRESSING_CONFIRMATION_VOIDED",
+              "That prior scan was voided; a new confirmation request is required"
+            );
           return { row: prior, replayed: true };
         }
 
-        const [bale] = await tx.select().from(factoryBales)
-          .where(and(eq(factoryBales.companyId, companyId),
-            eq(factoryBales.referenceNumber, reference),
-            isNull(factoryBales.deletedAt))).for("update");
+        const [bale] = await tx
+          .select()
+          .from(factoryBales)
+          .where(
+            and(
+              eq(factoryBales.companyId, companyId),
+              eq(factoryBales.referenceNumber, reference),
+              isNull(factoryBales.deletedAt)
+            )
+          )
+          .for("update");
         if (!bale || bale.status === "DELETED") {
           throw new ConfirmationError(404, "PRESSING_BALE_NOT_FOUND", "This reference is not an active factory item");
         }
         // Non-bale Priority products are also represented by factory_bales
         // references. Permit them through the same immutable pressing evidence
         // and duplicate-protection path, without altering stock or accounting.
-        const [alreadyPressed] = await tx.select().from(factoryPressingConfirmations)
-          .where(and(eq(factoryPressingConfirmations.companyId, companyId),
-            eq(factoryPressingConfirmations.baleId, bale.id),
-            isNull(factoryPressingConfirmations.voidedAt))).limit(1);
+        const [alreadyPressed] = await tx
+          .select()
+          .from(factoryPressingConfirmations)
+          .where(
+            and(
+              eq(factoryPressingConfirmations.companyId, companyId),
+              eq(factoryPressingConfirmations.baleId, bale.id),
+              isNull(factoryPressingConfirmations.voidedAt)
+            )
+          )
+          .limit(1);
         if (alreadyPressed) {
-          const [priorProfile] = await tx.select({ displayName: factoryUserProfiles.displayName })
-            .from(factoryUserProfiles).where(and(
-              eq(factoryUserProfiles.companyId, companyId),
-              eq(factoryUserProfiles.userId, alreadyPressed.userId),
-            )).limit(1);
-          throw new ConfirmationError(409, "PRESSING_ALREADY_CONFIRMED",
-            "Already confirmed on " + alreadyPressed.machineNameSnapshot + " at " + alreadyPressed.confirmedAt.toISOString(),
-            { previous: {
-              confirmedAt: alreadyPressed.confirmedAt.toISOString(),
-              machineName: alreadyPressed.machineNameSnapshot,
-              operatorUserId: alreadyPressed.userId,
-              operatorName: priorProfile?.displayName?.trim() || "Display name not set",
-              referenceNumber: alreadyPressed.referenceNumber,
-            } });
+          const [priorProfile] = await tx
+            .select({ displayName: factoryUserProfiles.displayName })
+            .from(factoryUserProfiles)
+            .where(
+              and(eq(factoryUserProfiles.companyId, companyId), eq(factoryUserProfiles.userId, alreadyPressed.userId))
+            )
+            .limit(1);
+          throw new ConfirmationError(
+            409,
+            "PRESSING_ALREADY_CONFIRMED",
+            "Already confirmed on " +
+              alreadyPressed.machineNameSnapshot +
+              " at " +
+              alreadyPressed.confirmedAt.toISOString(),
+            {
+              previous: {
+                confirmedAt: alreadyPressed.confirmedAt.toISOString(),
+                machineName: alreadyPressed.machineNameSnapshot,
+                operatorUserId: alreadyPressed.userId,
+                operatorName: priorProfile?.displayName?.trim() || "Display name not set",
+                referenceNumber: alreadyPressed.referenceNumber,
+              },
+            }
+          );
         }
 
         // Physical pressing is independent of inventory lifecycle. Every
@@ -204,25 +310,33 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
         const productionDate = factoryLocalDate(now, timezoneName);
         const deviceCapturedAt = safeDeviceTimestamp(parsed.deviceCapturedAt);
         let session: typeof factoryPressingSessions.$inferSelect | undefined;
-        [session] = await tx.select().from(factoryPressingSessions)
-          .where(and(eq(factoryPressingSessions.companyId, companyId),
-            eq(factoryPressingSessions.userId, userId),
-            isNull(factoryPressingSessions.endedAt))).for("update");
+        [session] = await tx
+          .select()
+          .from(factoryPressingSessions)
+          .where(
+            and(
+              eq(factoryPressingSessions.companyId, companyId),
+              eq(factoryPressingSessions.userId, userId),
+              isNull(factoryPressingSessions.endedAt)
+            )
+          )
+          .for("update");
         if (session && (session.machineId !== machine.id || session.assignmentId !== assignment.id)) {
           throw new ConfirmationError(409, "PRESSING_SESSION_STALE", "Operator session is for another machine");
         }
         // Convert any legacy shift-based session to the simplified user-only
         // recording mode without altering its historical confirmations.
         if (session && session.shiftId !== shiftId) {
-          await tx.update(factoryPressingSessions).set({ endedAt: now })
-            .where(and(eq(factoryPressingSessions.id, session.id),
-              eq(factoryPressingSessions.companyId, companyId)));
+          await tx
+            .update(factoryPressingSessions)
+            .set({ endedAt: now })
+            .where(and(eq(factoryPressingSessions.id, session.id), eq(factoryPressingSessions.companyId, companyId)));
           session = undefined;
         }
         if (!session) {
-          [session] = await tx.insert(factoryPressingSessions)
-            .values({ companyId, userId, machineId: machine.id, assignmentId: assignment.id,
-              shiftId, startedAt: now })
+          [session] = await tx
+            .insert(factoryPressingSessions)
+            .values({ companyId, userId, machineId: machine.id, assignmentId: assignment.id, shiftId, startedAt: now })
             .returning();
         }
 
@@ -230,43 +344,87 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
         // concurrency boundary across every machine, operator and calendar day.
         // ON CONFLICT DO NOTHING avoids aborting the transaction so we can
         // classify the existing confirmation into a precise 409 response.
-        const [created] = await tx.insert(factoryPressingConfirmations)
+        const [created] = await tx
+          .insert(factoryPressingConfirmations)
           .values({
-            companyId, baleId: bale.id, machineId: machine.id,
-            assignmentId: assignment.id, sessionId: session.id, shiftId,
-            userId, userNameSnapshot: operator.displayName?.trim() || "Display name not set", machineNameSnapshot: machine.name,
-            referenceNumber: bale.referenceNumber, articleCode: bale.articleCode,
-            productName: bale.productName, weightKg: bale.weightKg,
-            requestId: parsed.requestId, deviceCapturedAt, confirmedAt: now,
-            productionDate, timezoneName,
-          }).onConflictDoNothing().returning();
+            companyId,
+            baleId: bale.id,
+            machineId: machine.id,
+            assignmentId: assignment.id,
+            sessionId: session.id,
+            shiftId,
+            userId,
+            userNameSnapshot: operator.displayName?.trim() || "Display name not set",
+            machineNameSnapshot: machine.name,
+            referenceNumber: bale.referenceNumber,
+            articleCode: bale.articleCode,
+            productName: bale.productName,
+            weightKg: bale.weightKg,
+            requestId: parsed.requestId,
+            deviceCapturedAt,
+            confirmedAt: now,
+            productionDate,
+            timezoneName,
+          })
+          .onConflictDoNothing()
+          .returning();
         if (!created) {
-          const [byRequest] = await tx.select().from(factoryPressingConfirmations)
-            .where(and(eq(factoryPressingConfirmations.companyId, companyId),
-              eq(factoryPressingConfirmations.requestId, parsed.requestId))).limit(1);
-          if (byRequest && byRequest.userId === userId && byRequest.referenceNumber === reference &&
-              byRequest.machineId === machine.id && byRequest.assignmentId === assignment.id) {
-            if (byRequest.voidedAt) throw new ConfirmationError(409, "PRESSING_CONFIRMATION_VOIDED", "That prior scan was voided; use a new request ID");
+          const [byRequest] = await tx
+            .select()
+            .from(factoryPressingConfirmations)
+            .where(
+              and(
+                eq(factoryPressingConfirmations.companyId, companyId),
+                eq(factoryPressingConfirmations.requestId, parsed.requestId)
+              )
+            )
+            .limit(1);
+          if (
+            byRequest &&
+            byRequest.userId === userId &&
+            byRequest.referenceNumber === reference &&
+            byRequest.machineId === machine.id &&
+            byRequest.assignmentId === assignment.id
+          ) {
+            if (byRequest.voidedAt)
+              throw new ConfirmationError(
+                409,
+                "PRESSING_CONFIRMATION_VOIDED",
+                "That prior scan was voided; use a new request ID"
+              );
             return { row: byRequest, replayed: true };
           }
-          const [other] = await tx.select().from(factoryPressingConfirmations)
-            .where(and(eq(factoryPressingConfirmations.companyId, companyId),
-              eq(factoryPressingConfirmations.baleId, bale.id),
-              isNull(factoryPressingConfirmations.voidedAt))).limit(1);
+          const [other] = await tx
+            .select()
+            .from(factoryPressingConfirmations)
+            .where(
+              and(
+                eq(factoryPressingConfirmations.companyId, companyId),
+                eq(factoryPressingConfirmations.baleId, bale.id),
+                isNull(factoryPressingConfirmations.voidedAt)
+              )
+            )
+            .limit(1);
           if (other) {
-            const [otherProfile] = await tx.select({ displayName: factoryUserProfiles.displayName })
-              .from(factoryUserProfiles).where(and(
-                eq(factoryUserProfiles.companyId, companyId),
-                eq(factoryUserProfiles.userId, other.userId),
-              )).limit(1);
-            throw new ConfirmationError(409, "PRESSING_ALREADY_CONFIRMED",
-              "Already confirmed on " + other.machineNameSnapshot + " at " + other.confirmedAt.toISOString(), { previous: {
-                confirmedAt: other.confirmedAt.toISOString(),
-                machineName: other.machineNameSnapshot,
-                operatorUserId: other.userId,
-                operatorName: otherProfile?.displayName?.trim() || "Display name not set",
-                referenceNumber: other.referenceNumber,
-              } });
+            const [otherProfile] = await tx
+              .select({ displayName: factoryUserProfiles.displayName })
+              .from(factoryUserProfiles)
+              .where(and(eq(factoryUserProfiles.companyId, companyId), eq(factoryUserProfiles.userId, other.userId)))
+              .limit(1);
+            throw new ConfirmationError(
+              409,
+              "PRESSING_ALREADY_CONFIRMED",
+              "Already confirmed on " + other.machineNameSnapshot + " at " + other.confirmedAt.toISOString(),
+              {
+                previous: {
+                  confirmedAt: other.confirmedAt.toISOString(),
+                  machineName: other.machineNameSnapshot,
+                  operatorUserId: other.userId,
+                  operatorName: otherProfile?.displayName?.trim() || "Display name not set",
+                  referenceNumber: other.referenceNumber,
+                },
+              }
+            );
           }
           throw new ConfirmationError(409, "PRESSING_REQUEST_ID_REUSED", "Request ID was already used");
         }
@@ -274,47 +432,73 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
         // previous immutable event. This link is append-only, committed in
         // the SAME transaction as this new confirmation. A normal first scan
         // creates no correction record.
-        const [voidedPrior] = await tx.select().from(factoryPressingConfirmations)
-          .where(and(eq(factoryPressingConfirmations.companyId, companyId),
-            eq(factoryPressingConfirmations.baleId, bale.id),
-            isNotNull(factoryPressingConfirmations.voidedAt)))
-          .orderBy(desc(factoryPressingConfirmations.voidedAt),
-            desc(factoryPressingConfirmations.id)).limit(1);
+        const [voidedPrior] = await tx
+          .select()
+          .from(factoryPressingConfirmations)
+          .where(
+            and(
+              eq(factoryPressingConfirmations.companyId, companyId),
+              eq(factoryPressingConfirmations.baleId, bale.id),
+              isNotNull(factoryPressingConfirmations.voidedAt)
+            )
+          )
+          .orderBy(desc(factoryPressingConfirmations.voidedAt), desc(factoryPressingConfirmations.id))
+          .limit(1);
         if (voidedPrior?.voidedBy) {
-          const [originalCorrection] = await tx.select({ id: factoryPressingCorrections.id })
-            .from(factoryPressingCorrections).where(and(
-              eq(factoryPressingCorrections.companyId, companyId),
-              eq(factoryPressingCorrections.confirmationId, voidedPrior.id),
-              eq(factoryPressingCorrections.action, "VOID"),
-            )).orderBy(desc(factoryPressingCorrections.id)).limit(1);
+          const [originalCorrection] = await tx
+            .select({ id: factoryPressingCorrections.id })
+            .from(factoryPressingCorrections)
+            .where(
+              and(
+                eq(factoryPressingCorrections.companyId, companyId),
+                eq(factoryPressingCorrections.confirmationId, voidedPrior.id),
+                eq(factoryPressingCorrections.action, "VOID")
+              )
+            )
+            .orderBy(desc(factoryPressingCorrections.id))
+            .limit(1);
           await tx.insert(factoryPressingCorrections).values({
-            companyId, confirmationId: voidedPrior.id,
-            replacementConfirmationId: created.id, action: "RECONFIRM",
+            companyId,
+            confirmationId: voidedPrior.id,
+            replacementConfirmationId: created.id,
+            action: "RECONFIRM",
             reason: "Replacement pressing scan after supervisor void #" + (originalCorrection?.id ?? voidedPrior.id),
             supervisorUserId: voidedPrior.voidedBy,
           });
         }
-        await logAudit({
-          userId, username: operator.username, companyId,
-          action: "create", tableName: "factory_pressing_confirmations",
-          recordId: created.id, recordIdentifier: created.referenceNumber,
-          changes: {
-            machineId: { old: null, new: created.machineId },
-            assignmentId: { old: null, new: created.assignmentId },
-            pressedAt: { old: null, new: created.confirmedAt.toISOString() },
+        await logAudit(
+          {
+            userId,
+            username: operator.username,
+            companyId,
+            action: "create",
+            tableName: "factory_pressing_confirmations",
+            recordId: created.id,
+            recordIdentifier: created.referenceNumber,
+            changes: {
+              machineId: { old: null, new: created.machineId },
+              assignmentId: { old: null, new: created.assignmentId },
+              pressedAt: { old: null, new: created.confirmedAt.toISOString() },
+            },
           },
-        }, tx);
+          tx
+        );
         // Phase 9: record a distinct, immutable physical-scan event inside
         // the SAME transaction as the confirmation and its audit. Failure
         // rolls the scan back; outside LAN-primary this is a no-op.
         await capturePhase9PressingTx(tx, {
-          companyId, actorUserId: userId, localConfirmationId: created.id,
-          requestId: created.requestId, baleId: created.baleId,
-          machineId: created.machineId, assignmentId: created.assignmentId,
+          companyId,
+          actorUserId: userId,
+          localConfirmationId: created.id,
+          requestId: created.requestId,
+          baleId: created.baleId,
+          machineId: created.machineId,
+          assignmentId: created.assignmentId,
           referenceNumber: created.referenceNumber,
           confirmedAt: created.confirmedAt.toISOString(),
           deviceCapturedAt: created.deviceCapturedAt?.toISOString() ?? null,
-          productionDate: created.productionDate, timezoneName: created.timezoneName,
+          productionDate: created.productionDate,
+          timezoneName: created.timezoneName,
         });
         return { row: created, replayed: false };
       });

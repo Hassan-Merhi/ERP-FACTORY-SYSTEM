@@ -99,7 +99,9 @@ describe("factory camera decoder", () => {
   it("falls back to ZXing when the native detector only supports QR and cannot read Code 128 labels", async () => {
     class QRDetector {
       static getSupportedFormats = async () => ["qr_code"];
-      async detect() { return [{ rawValue: "NEVER_USE_QR_ONLY_DETECTOR" }]; }
+      async detect() {
+        return [{ rawValue: "NEVER_USE_QR_ONLY_DETECTOR" }];
+      }
     }
     vi.stubGlobal("BarcodeDetector", QRDetector);
     expect(await createNativeCameraDecoder()).toBeNull();

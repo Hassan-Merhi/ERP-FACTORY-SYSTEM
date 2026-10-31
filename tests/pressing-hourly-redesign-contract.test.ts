@@ -10,7 +10,7 @@ const shell = read("client/src/pages/factory/BaleStockEntry.tsx");
 
 describe("Pressing dashboard redesign", () => {
   it("keeps hourly KG targets date and company scoped with admin-only writes", () => {
-    expect(api).toContain("if (!ctx.canCorrect) throw new ReportPermissionError(403");
+    expect(api).toMatch(/if \(!ctx\.canCorrect\)\s*throw new ReportPermissionError\(\s*403/);
     expect(api).toContain("pressingHourlyTargetsByDateKg");
     expect(api).toContain("ON CONFLICT (company_id) DO UPDATE SET");
     expect(api).toContain("hour: z.number().int().min(7).max(16)");

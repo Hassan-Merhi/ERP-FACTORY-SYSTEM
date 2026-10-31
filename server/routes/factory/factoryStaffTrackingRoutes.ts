@@ -12,7 +12,11 @@ import { registerProductionTargetBonusWeeklyReconciliationRoutes } from "./produ
 import { registerProductionBonusCategoryEvidenceRoutes } from "./productionBonusCategoryEvidenceRoutes";
 import { registerProductionBonusCategoryReviewRoutes } from "./productionBonusCategoryReviewRoutes";
 import { registerProductionBonusCheckoutRoutes } from "./productionBonusCheckoutRoutes";
-import { freezeProductionBonusCategoryEvidence, BONUS_CATEGORY_COUNTED_BALE_STATUSES, type CategoryCaptureCarry } from "../../services/factory/productionBonusCategoryCapture";
+import {
+  freezeProductionBonusCategoryEvidence,
+  BONUS_CATEGORY_COUNTED_BALE_STATUSES,
+  type CategoryCaptureCarry,
+} from "../../services/factory/productionBonusCategoryCapture";
 import { factoryStaffTrackingMessages } from "../../i18n/factoryStaffTrackingMessages";
 import { isProductionTargetsRosterWorker } from "../../services/factory/productionTargetsRoster";
 import { loadProductionPeriodSummary } from "../../services/factory/productionPeriodSummary";
@@ -28,38 +32,19 @@ import {
   loadProductionTargetDefaults,
   type ProductionTargetDefault,
 } from "../../services/factory/productionTargetDefaults";
-import { addIsoDays, isNew, joinedByPeriodEnd, numberOrNull, parseWorkerIds } from "./factoryStaffTrackingValueHelpers";
-
-type TrackingPage = "production" | "attendance";
-type PeriodType = "daily" | "weekly" | "monthly";
-type PersonType = "worker" | "employee";
-type TrackingStatus = "Present" | "Absent" | "New";
-
-type SavedTrackingRow = {
-  personType: PersonType;
-  personId: number;
-  groupName: string | null;
-  category: string | null;
-  categoryOverridden: boolean;
-  targetBales: string | null;
-  targetBalesOverridden: boolean;
-  producedBales: string | null;
-  status: TrackingStatus;
-  notes: string | null;
-};
-
-type NormalizedTrackingRow = {
-  personType: PersonType;
-  personId: number;
-  groupName: string | null;
-  category: string | null;
-  categoryOverridden: boolean;
-  notes: string | null;
-  targetBales: number | null;
-  targetBalesOverridden: boolean;
-  producedBales: number | null;
-  status: TrackingStatus;
-};
+import {
+  addIsoDays,
+  isNew,
+  joinedByPeriodEnd,
+  numberOrNull,
+  parseWorkerIds,
+  type NormalizedTrackingRow,
+  type PeriodType,
+  type PersonType,
+  type SavedTrackingRow,
+  type TrackingPage,
+  type TrackingStatus,
+} from "./factoryStaffTrackingValueHelpers";
 
 const PAGE_TYPES = new Set<TrackingPage>(["production", "attendance"]);
 const PERIOD_TYPES = new Set<PeriodType>(["daily", "weekly", "monthly"]);
@@ -108,9 +93,14 @@ function parseTrackingQuery(req: Request): {
     const from = new Date(periodStart + "T00:00:00Z");
     const to = new Date(periodEnd + "T00:00:00Z");
     const dayCount = (to.getTime() - from.getTime()) / 86400000 + 1;
-    if (!Number.isInteger(dayCount) || dayCount < 1 || dayCount > 31 ||
-        from.toISOString().slice(0, 10) !== periodStart ||
-        to.toISOString().slice(0, 10) !== periodEnd) return null;
+    if (
+      !Number.isInteger(dayCount) ||
+      dayCount < 1 ||
+      dayCount > 31 ||
+      from.toISOString().slice(0, 10) !== periodStart ||
+      to.toISOString().slice(0, 10) !== periodEnd
+    )
+      return null;
   }
   return { page, periodType, periodStart, periodEnd };
 }
@@ -285,7 +275,8 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           // Keep today's Production Targets table and bonus checkout on the
           // exact same per-day membership contract.
           return isProductionTargetsRosterWorker({
-            finalized, savedForPeriod,
+            finalized,
+            savedForPeriod,
             plannerAssigned: workerGroupNames.has(person.id),
             linkedForPeriod: productionLinkByWorker.has(person.id),
             active: person.active,
@@ -306,14 +297,19 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         // Restricting to the roster at periodEnd loses workers removed or
         // reassigned before the last day, along with their daily target totals.
         const rollup = await loadProductionPeriodSummary(
-          companyId, query.periodStart, query.periodEnd, workers.map(worker => worker.id),
+          companyId,
+          query.periodStart,
+          query.periodEnd,
+          workers.map((worker) => worker.id)
         );
-        const periodWorkers = workers.filter(worker => rollup.has(worker.id));
-        const periodRows = periodWorkers.map(worker => {
+        const periodWorkers = workers.filter((worker) => rollup.has(worker.id));
+        const periodRows = periodWorkers.map((worker) => {
           const total = rollup.get(worker.id);
           return {
-            personType: "worker" as const, personId: worker.id,
-            name: worker.fullName, code: worker.employeeCode,
+            personType: "worker" as const,
+            personId: worker.id,
+            name: worker.fullName,
+            code: worker.employeeCode,
             groupName: workerGroupNames.get(worker.id)?.[0] ?? "",
             category: total?.category || worker.position || worker.department || "",
             targetBales: total?.targetBales ?? null,
@@ -323,7 +319,8 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
             absentDays: total?.absentDays ?? 0,
             periodDays: total?.days ?? 0,
             missingTargetDays: total?.missingTargetDays ?? 0,
-            notes: "", active: worker.active,
+            notes: "",
+            active: worker.active,
             // A link can change in the middle of the week/month. Credited
             // worker totals are already distributed by day, so do not
             // collapse the entire period under a single link group.
@@ -334,9 +331,13 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         });
         res.setHeader("Cache-Control", "private, no-store");
         return res.json({
-          page: query.page, periodType: query.periodType,
-          periodStart: query.periodStart, periodEnd: query.periodEnd,
-          finalized: false, finalizedAt: null, rows: periodRows,
+          page: query.page,
+          periodType: query.periodType,
+          periodStart: query.periodStart,
+          periodEnd: query.periodEnd,
+          finalized: false,
+          finalizedAt: null,
+          rows: periodRows,
         });
       }
 
@@ -391,9 +392,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           query.page === "attendance" ? "All Workers" : (workerGroupNames.get(worker.id)?.[0] ?? "");
         const groupName = finalized ? (savedRow?.groupName ?? currentGroupName) : currentGroupName;
         const savedTargetBales =
-          savedRow?.targetBales === null || savedRow?.targetBales === undefined
-            ? null
-            : Number(savedRow.targetBales);
+          savedRow?.targetBales === null || savedRow?.targetBales === undefined ? null : Number(savedRow.targetBales);
         const productionDefault =
           query.page === "production" && query.periodType === "daily" && !finalized
             ? productionTargetDefaults.get(worker.id)
@@ -430,10 +429,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
             : savedTargetBales;
         const linkedProducedBales =
           productionLink && query.page === "production" && !finalized
-            ? productionLink.members.reduce(
-                (sum, member) => sum + (producedByWorker.get(member.workerId) ?? 0),
-                0
-              )
+            ? productionLink.members.reduce((sum, member) => sum + (producedByWorker.get(member.workerId) ?? 0), 0)
             : null;
 
         return {
@@ -452,7 +448,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
             query.page === "production"
               ? finalized
                 ? Number(savedRow?.producedBales ?? 0)
-                : linkedProducedBales ?? (producedByWorker.get(worker.id) ?? 0)
+                : (linkedProducedBales ?? producedByWorker.get(worker.id) ?? 0)
               : savedRow?.producedBales === null || savedRow?.producedBales === undefined
                 ? null
                 : Number(savedRow.producedBales),
@@ -479,94 +475,103 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
     }
   });
 
-  app.get("/api/factory/staff-tracking/production-target-defaults", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getFactoryCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: factoryStaffTrackingMessages.noFactoryCompany });
-      if (!(await canAccessTrackingPage(req, companyId, "production"))) {
-        return res.status(403).json({ message: factoryStaffTrackingMessages.forbiddenTab });
-      }
+  app.get(
+    "/api/factory/staff-tracking/production-target-defaults",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getFactoryCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: factoryStaffTrackingMessages.noFactoryCompany });
+        if (!(await canAccessTrackingPage(req, companyId, "production"))) {
+          return res.status(403).json({ message: factoryStaffTrackingMessages.forbiddenTab });
+        }
 
-      const asOf = String(req.query.asOf || "");
-      if (!ISO_DATE.test(asOf)) {
-        return res.status(400).json({ message: factoryStaffTrackingMessages.invalidPeriod });
-      }
+        const asOf = String(req.query.asOf || "");
+        if (!ISO_DATE.test(asOf)) {
+          return res.status(400).json({ message: factoryStaffTrackingMessages.invalidPeriod });
+        }
 
-      const defaults = await loadProductionTargetDefaults(companyId, asOf);
-      res.json({
-        asOf,
-        targets: [...defaults.entries()].map(([workerId, defaultsForWorker]) => ({
-          workerId,
-          category: defaultsForWorker.category,
-          targetBales: defaultsForWorker.targetBales,
-        })),
-      });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+        const defaults = await loadProductionTargetDefaults(companyId, asOf);
+        res.json({
+          asOf,
+          targets: [...defaults.entries()].map(([workerId, defaultsForWorker]) => ({
+            workerId,
+            category: defaultsForWorker.category,
+            targetBales: defaultsForWorker.targetBales,
+          })),
+        });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
-  app.post("/api/factory/staff-tracking/production-target-defaults", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getFactoryCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: factoryStaffTrackingMessages.noFactoryCompany });
-      if (!(await canAccessTrackingPage(req, companyId, "production"))) {
-        return res.status(403).json({ message: factoryStaffTrackingMessages.forbiddenTab });
-      }
-
-      const effectiveFrom = String(req.body?.effectiveFrom || "");
-      const records = Array.isArray(req.body?.records) ? req.body.records : [];
-      if (!ISO_DATE.test(effectiveFrom)) {
-        return res.status(400).json({ message: factoryStaffTrackingMessages.invalidPeriod });
-      }
-      if (records.length === 0 || records.length > 500) {
-        return res.status(400).json({ message: factoryStaffTrackingMessages.invalidRecordCount });
-      }
-
-      const allWorkers = await db
-        .select({ id: factoryWorkers.id })
-        .from(factoryWorkers)
-        .where(eq(factoryWorkers.companyId, companyId));
-      const workerIds = new Set(allWorkers.map((row) => row.id));
-      const workerGroupNames = await loadWorkerGroupNames(companyId);
-      const normalized: Array<{ workerId: number; category: string; targetBales: number | null }> = [];
-      const seen = new Set<number>();
-
-      for (const raw of records) {
-        const workerId = Number(raw?.workerId);
-        const category = String(raw?.category ?? "").trim().slice(0, 150);
-        const targetBales = numberOrNull(raw?.targetBales);
-
-        if (!Number.isInteger(workerId) || workerId <= 0 || !workerIds.has(workerId)) {
-          return res.status(400).json({ message: factoryStaffTrackingMessages.personOutsideFactory });
-        }
-        if (!workerGroupNames.has(workerId)) {
-          return res.status(400).json({ message: "Worker is not assigned to a saved Production Planner group" });
-        }
-        if (seen.has(workerId)) {
-          return res.status(400).json({ message: factoryStaffTrackingMessages.duplicatePersonInBatch });
-        }
-        if (
-          raw?.targetBales !== null &&
-          raw?.targetBales !== undefined &&
-          raw?.targetBales !== "" &&
-          targetBales === null
-        ) {
-          return res.status(400).json({ message: factoryStaffTrackingMessages.invalidBaleNumbers });
+  app.post(
+    "/api/factory/staff-tracking/production-target-defaults",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getFactoryCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: factoryStaffTrackingMessages.noFactoryCompany });
+        if (!(await canAccessTrackingPage(req, companyId, "production"))) {
+          return res.status(403).json({ message: factoryStaffTrackingMessages.forbiddenTab });
         }
 
-        seen.add(workerId);
-        normalized.push({ workerId, category, targetBales });
-      }
+        const effectiveFrom = String(req.body?.effectiveFrom || "");
+        const records = Array.isArray(req.body?.records) ? req.body.records : [];
+        if (!ISO_DATE.test(effectiveFrom)) {
+          return res.status(400).json({ message: factoryStaffTrackingMessages.invalidPeriod });
+        }
+        if (records.length === 0 || records.length > 500) {
+          return res.status(400).json({ message: factoryStaffTrackingMessages.invalidRecordCount });
+        }
 
-      const values = normalized.map(
-        ({ workerId, category, targetBales }) => sql`(
+        const allWorkers = await db
+          .select({ id: factoryWorkers.id })
+          .from(factoryWorkers)
+          .where(eq(factoryWorkers.companyId, companyId));
+        const workerIds = new Set(allWorkers.map((row) => row.id));
+        const workerGroupNames = await loadWorkerGroupNames(companyId);
+        const normalized: Array<{ workerId: number; category: string; targetBales: number | null }> = [];
+        const seen = new Set<number>();
+
+        for (const raw of records) {
+          const workerId = Number(raw?.workerId);
+          const category = String(raw?.category ?? "")
+            .trim()
+            .slice(0, 150);
+          const targetBales = numberOrNull(raw?.targetBales);
+
+          if (!Number.isInteger(workerId) || workerId <= 0 || !workerIds.has(workerId)) {
+            return res.status(400).json({ message: factoryStaffTrackingMessages.personOutsideFactory });
+          }
+          if (!workerGroupNames.has(workerId)) {
+            return res.status(400).json({ message: "Worker is not assigned to a saved Production Planner group" });
+          }
+          if (seen.has(workerId)) {
+            return res.status(400).json({ message: factoryStaffTrackingMessages.duplicatePersonInBatch });
+          }
+          if (
+            raw?.targetBales !== null &&
+            raw?.targetBales !== undefined &&
+            raw?.targetBales !== "" &&
+            targetBales === null
+          ) {
+            return res.status(400).json({ message: factoryStaffTrackingMessages.invalidBaleNumbers });
+          }
+
+          seen.add(workerId);
+          normalized.push({ workerId, category, targetBales });
+        }
+
+        const values = normalized.map(
+          ({ workerId, category, targetBales }) => sql`(
           ${companyId}, ${workerId}, ${effectiveFrom}, ${category}, ${targetBales},
           ${req.session.userId || null}, now(), now()
         )`
-      );
+        );
 
-      await db.execute(sql`
+        await db.execute(sql`
         INSERT INTO factory_worker_production_target_defaults (
           company_id, worker_id, effective_from, category, target_bales, created_by, created_at, updated_at
         ) VALUES ${sql.join(values, sql`, `)}
@@ -578,11 +583,12 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           updated_at = now()
       `);
 
-      res.json({ success: true, saved: normalized.length, effectiveFrom });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+        res.json({ success: true, saved: normalized.length, effectiveFrom });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   app.post("/api/factory/staff-tracking/bulk", requireAuth, async (req: Request, res: Response) => {
     try {
@@ -706,8 +712,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           String(raw?.notes || "")
             .trim()
             .slice(0, 4000) || null;
-        const categoryOverridden =
-          page === "production" && periodType === "daily" && raw?.categoryOverridden === true;
+        const categoryOverridden = page === "production" && periodType === "daily" && raw?.categoryOverridden === true;
         const targetBales = numberOrNull(raw?.targetBales);
         const targetBalesOverridden =
           page === "production" && periodType === "daily" && raw?.targetBalesOverridden === true;
@@ -820,12 +825,14 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           // Recheck inside the serialized close transaction, not just before
           // calculating the daily matrix; conflicting closes must roll back.
           await tx.execute(sql`SELECT pg_advisory_xact_lock(7643, ${companyId})`);
-          const locked = resultRows(await tx.execute(sql`
+          const locked = resultRows(
+            await tx.execute(sql`
             SELECT 1 FROM factory_staff_tracking_period_closures
             WHERE company_id = ${companyId} AND page_type = 'production'
               AND period_type = 'daily' AND period_start = ${periodStart}::date
               AND period_end = ${periodEnd}::date LIMIT 1
-          `));
+          `)
+          );
           if (locked.length) throw new Error("Production already finalized; category evidence is immutable");
         }
         if (page === "production") {
@@ -863,9 +870,12 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
 
         if (finalize) {
           const frozenBales = await freezeProductionBonusCategoryEvidence(
-            tx, companyId, periodStart,
-            normalizedRecords.filter(row => row.personType === "worker").map(row => row.personId),
-            String(req.session.userId || ""), finalizeCarryFrom,
+            tx,
+            companyId,
+            periodStart,
+            normalizedRecords.filter((row) => row.personType === "worker").map((row) => row.personId),
+            String(req.session.userId || ""),
+            finalizeCarryFrom
           );
           if (frozenBales !== finalizedSourceCount)
             throw new Error("Production changed while finalizing; bale category evidence and totals disagree");

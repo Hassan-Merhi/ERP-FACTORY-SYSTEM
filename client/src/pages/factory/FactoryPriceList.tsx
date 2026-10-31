@@ -74,7 +74,9 @@ export default function FactoryPriceList() {
 
   const updatePriceMutation = useMutation({
     mutationFn: async ({
-      id, field, value,
+      id,
+      field,
+      value,
     }: {
       id: number;
       field: "sellingPrice" | "productionPrice";
@@ -264,8 +266,7 @@ export default function FactoryPriceList() {
     const matchCategory = categoryFilter === "all" || String(p.categoryId) === categoryFilter;
     // Keep a row visible while Enter moves from its selling price to production cost.
     // Otherwise a "Show unpriced" refresh would unmount the second editable cell.
-    const matchZeroOnly =
-      !showZeroOnly || parseFloat(p.sellingPrice || "0") === 0 || editingCell?.productId === p.id;
+    const matchZeroOnly = !showZeroOnly || parseFloat(p.sellingPrice || "0") === 0 || editingCell?.productId === p.id;
     return matchSearch && matchCategory && matchZeroOnly;
   });
 

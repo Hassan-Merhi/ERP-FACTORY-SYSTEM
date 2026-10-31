@@ -12,8 +12,6 @@ import { errorStatus, getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { resultRows } from "../../../lib/queryResult";
-import { reverseTargetBonusPayment } from "../../../services/factory/targetBonusPaymentService";
-import { reverseWeeklyBonusPayment } from "../../../services/factory/weeklyBonusPaymentService";
 import { requireAuth } from "../../../auth";
 import { writeDaybookEntry, recalculateContainerCosts } from "../_helpers";
 import { resolveStoredFxRate, UnresolvedExchangeRateError } from "../../../services/factory/currencyConversion";
@@ -44,7 +42,12 @@ import {
   editPostedFactoryVoucherTx,
   sendVoucherCorrectionRefusal,
 } from "../../../services/factory/factoryVoucherCorrection";
-import { EMPLOYEE_CASH_POSTING_SOURCE_TYPES, voucherFxRate } from "./daybookEditPolicy";
+import {
+  bonusSource,
+  EMPLOYEE_CASH_POSTING_SOURCE_TYPES,
+  reverseBonusFromDaybook,
+  voucherFxRate,
+} from "./daybookEditPolicy";
 
 export function registerFactoryDaybookEditRoutes(app: Express) {
   // ─────── DAYBOOK ENTRY EDIT ───────
@@ -165,9 +168,13 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
 
       // Posted bonus Daybook rows are immutable accounting evidence.
       // Reversal is the only supported correction path for these entries.
-      if (existing.txType.startsWith("PRODUCTION_TARGET_BONUS_") ||
-          existing.txType.startsWith("PRODUCTION_TARGET_WEEKLY_BONUS_")) {
-        return res.status(409).json({message:"Posted bonus Daybook entries cannot be edited. Reverse the payment instead."});
+      if (
+        existing.txType.startsWith("PRODUCTION_TARGET_BONUS_") ||
+        existing.txType.startsWith("PRODUCTION_TARGET_WEEKLY_BONUS_")
+      ) {
+        return res
+          .status(409)
+          .json({ message: "Posted bonus Daybook entries cannot be edited. Reverse the payment instead." });
       }
 
       const beforeJson = JSON.stringify(existing);
@@ -547,24 +554,6 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
   // Bonus payments are source-backed financial claims, not disposable daybook text.
   // Delete from Daybook means post an exact offsetting Receipt, mark claim REVERSED,
   // and retain both voucher and daybook audit rows. Never hard-delete either claim.
-  const bonusSource = (table: string | null, id: number | null) => {
-    if (!id || !Number.isSafeInteger(id) || id <= 0) return null;
-    if (table === "factory_target_bonus_payments") return { kind: "daily" as const, id };
-    if (table === "factory_target_bonus_weekly_payments") return { kind: "weekly" as const, id };
-    return null;
-  };
-  const reverseBonusFromDaybook = async (
-    req: Request, companyId: number, source: {kind:"daily"|"weekly";id:number},
-  ) => {
-    const userId = String(req.session.userId || "");
-    const actor = {userId,username:String(req.session.username || userId)};
-    const reason = "Deleted from Factory Daybook (accounting reversal)";
-    const date = getClientDate(req);
-    return source.kind === "daily"
-      ? reverseTargetBonusPayment(companyId, source.id, date, reason, actor)
-      : reverseWeeklyBonusPayment(companyId, source.id, date, reason, actor);
-  };
-
   // DELETE /api/factory/daybook/entry/:id — non-financial entry deletion, or
   // audited payment reversal for Production Targets bonuses.
   app.delete("/api/factory/daybook/entry/:id", requireAuth, async (req: Request, res: Response) => {
@@ -588,26 +577,29 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
         .where(and(eq(factoryDaybookEntries.id, id), eq(factoryDaybookEntries.companyId, companyId)));
       if (!entry) return res.status(404).json({ message: "Entry not found" });
 
-      if (entry.txType === "PRODUCTION_TARGET_BONUS_REVERSAL" ||
-          entry.txType === "PRODUCTION_TARGET_WEEKLY_BONUS_REVERSAL") {
-        return res.status(409).json({message:"Reversal audit entries cannot be deleted"});
+      if (
+        entry.txType === "PRODUCTION_TARGET_BONUS_REVERSAL" ||
+        entry.txType === "PRODUCTION_TARGET_WEEKLY_BONUS_REVERSAL"
+      ) {
+        return res.status(409).json({ message: "Reversal audit entries cannot be deleted" });
       }
       const bonus = bonusSource(entry.referenceTable, entry.referenceId);
       if (bonus) {
         if (role !== "admin" && role !== "owner")
-          return res.status(403).json({message:"Only Admin or Owner can reverse bonuses"});
+          return res.status(403).json({ message: "Only Admin or Owner can reverse bonuses" });
         const result = await reverseBonusFromDaybook(req, Number(companyId), bonus);
-        return res.json({success:true,retainedAudit:true,...result});
+        return res.json({ success: true, retainedAudit: true, ...result });
       }
       if (entry.txType.startsWith("PRODUCTION_TARGET_")) {
-        return res.status(409).json({message:"Production bonus audit entries cannot be hard-deleted"});
+        return res.status(409).json({ message: "Production bonus audit entries cannot be hard-deleted" });
       }
       if (entry.referenceTable === "vouchers" && entry.referenceId) {
         return res.status(400).json({ message: "Voucher-backed entries must be voided, not deleted" });
       }
-      if (role === "owner") return res.status(403).json({
-        message: "Only Admin or Developer can permanently delete non-financial entries",
-      });
+      if (role === "owner")
+        return res.status(403).json({
+          message: "Only Admin or Developer can permanently delete non-financial entries",
+        });
 
       await db.delete(factoryDaybookEntries).where(eq(factoryDaybookEntries.id, id));
       res.json({ success: true });
@@ -660,7 +652,8 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
 
       // A synthetic voucher row can also represent a bonus payment. Its
       // generic retirement would strand a POSTED bonus claim. Intercept it here.
-      const bonusVoucher = resultRows(await db.execute(sql`
+      const bonusVoucher = resultRows(
+        await db.execute(sql`
         SELECT id, 'daily' AS kind, payment_voucher_id AS "paymentVoucherId",
                reversal_voucher_id AS "reversalVoucherId"
         FROM factory_target_bonus_payments
@@ -673,15 +666,26 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
         WHERE company_id = ${companyId}
           AND (payment_voucher_id = ${voucherId} OR reversal_voucher_id = ${voucherId})
         LIMIT 1
-      `)) as unknown as Array<{id:number;kind:"daily"|"weekly";paymentVoucherId:number;reversalVoucherId:number|null}>;
+      `)
+      ) as unknown as Array<{
+        id: number;
+        kind: "daily" | "weekly";
+        paymentVoucherId: number;
+        reversalVoucherId: number | null;
+      }>;
       if (bonusVoucher.length) {
         if (role !== "admin" && role !== "owner")
-          return res.status(403).json({message:"Only Admin or Owner can reverse bonuses"});
+          return res.status(403).json({ message: "Only Admin or Owner can reverse bonuses" });
         const claimed = bonusVoucher[0];
         if (Number(claimed.reversalVoucherId) === voucherId)
-          return res.status(409).json({message:"This is an accounting reversal voucher and must remain in audit history"});
-        const result = await reverseBonusFromDaybook(req,Number(companyId),{kind:claimed.kind,id:Number(claimed.id)});
-        return res.json({success:true,retainedAudit:true,...result});
+          return res
+            .status(409)
+            .json({ message: "This is an accounting reversal voucher and must remain in audit history" });
+        const result = await reverseBonusFromDaybook(req, Number(companyId), {
+          kind: claimed.kind,
+          id: Number(claimed.id),
+        });
+        return res.json({ success: true, retainedAudit: true, ...result });
       }
       const vNum = voucher.voucherNumber || "";
       const voucherTxTypeMap: Record<string, string> = { Payment: "PAYMENT", Receipt: "RECEIPT", Journal: "JOURNAL" };
@@ -693,7 +697,11 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
         // Cancel the linked native EUR payout and USD voucher together. A generic
         // voucher retirement alone would strand the wallet movement.
         fxPaymentCancelled = await cancelFxAgentSettlementVoucherTx({
-          tx, companyId, voucherId, actor: sessionRetirementActor(req), asOfDate: today,
+          tx,
+          companyId,
+          voucherId,
+          actor: sessionRetirementActor(req),
+          asOfDate: today,
         });
         if (fxPaymentCancelled) return;
 
@@ -878,7 +886,11 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
         });
       });
 
-      res.json({ message: fxPaymentCancelled ? "FX payment deleted and EUR restored" : "Voucher voided successfully", voucherId, fxPaymentCancelled });
+      res.json({
+        message: fxPaymentCancelled ? "FX payment deleted and EUR restored" : "Voucher voided successfully",
+        voucherId,
+        fxPaymentCancelled,
+      });
     } catch (error: unknown) {
       logger.error("Error voiding voucher:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
