@@ -351,7 +351,7 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
       {manualMode&&<ProductionBonusManualPaymentPanel rosterDate={to} workers={groups}
         selected={manualSelected} amounts={manualAmounts}
         onReset={()=>{setManualSelected([]);setManualAmounts({});}}/>}
-      {includesWeeklyBonuses && <details className="overflow-hidden rounded-xl border border-indigo-500/25 bg-card"
+      {includesWeeklyBonuses && <details className="hidden overflow-hidden rounded-xl border border-indigo-500/25 bg-card"
         data-testid="production-bonus-weekly-pay-section">
         <summary className="cursor-pointer bg-indigo-500/[0.07] px-4 py-3 text-sm font-semibold text-foreground">
           Weekly Bonus Review & Pay — approve, select workers, and post approved amounts
@@ -405,7 +405,7 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
       </div>}
       {!manualMode&&tooMany&&<p role="alert" className="text-sm text-destructive">{t("max100")}</p>}
 
-      <details className="rounded-lg border border-border/70">
+      <details className="hidden rounded-lg border border-border/70">
         <summary className="cursor-pointer px-4 py-3 text-sm font-medium">{t("settings")}</summary>
         <div className="space-y-3 border-t p-3">
           <p className="text-xs text-muted-foreground">{t("settingsHint")}</p>

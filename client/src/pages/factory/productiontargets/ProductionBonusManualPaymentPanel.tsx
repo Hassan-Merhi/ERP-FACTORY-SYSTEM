@@ -146,7 +146,7 @@ export function ProductionBonusManualPaymentPanel({rosterDate,workers,selected,a
       </p>}
       {accountError&&<p role="alert" className="text-xs text-destructive">{(accountError as Error).message}</p>}
       {historyError&&<p role="alert" className="text-xs text-destructive">{(historyError as Error).message}</p>}
-      <details className="rounded-lg border" data-testid="manual-production-bonus-history">
+      <details className="hidden rounded-lg border" data-testid="manual-production-bonus-history">
         <summary className="cursor-pointer px-3 py-2 text-sm font-medium">Manual payment history ({history?.payments.length??0})</summary>
         <div className="max-h-64 space-y-2 overflow-y-auto border-t p-3">
           {!history?.payments.length&&<p className="text-xs text-muted-foreground">No manual bonus payments for this week.</p>}
