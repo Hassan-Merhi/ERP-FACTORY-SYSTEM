@@ -56,8 +56,9 @@ describe("Phase 3 translation completion", () => {
     // 8208 -> 8221 with the phrases added by the 2026-10-16 feature merges (#2298-#2326);
     // 8238 with the Factory Net Position historical-date phrases (#2424);
     // 8267 with the ERP test company dialog phrases (#2428); 8275 with the
-    // ERP Tester role phrases (#2430-#2433).
-    expect(entries).toHaveLength(8275);
+    // ERP Tester role phrases (#2430-#2433); 8297 with the phrases merged on
+    // main by 2026-10-30, including the Production Bonuses workspace (#2621).
+    expect(entries).toHaveLength(8297);
     expect(new Set(entries.map((entry) => entry.en)).size).toBe(entries.length);
   });
 

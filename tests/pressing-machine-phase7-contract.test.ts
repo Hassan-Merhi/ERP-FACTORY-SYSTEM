@@ -28,7 +28,8 @@ describe("Simplified pressing workflow replaces Phase 7 operational configuratio
   });
   it("pressing confirmation is attributed to authenticated user with no shift dependency",()=>{
     expect(confirm).toContain("const shiftId = null");
-    expect(confirm).toContain("userId, userNameSnapshot: operator.username");
+    // #2559: the snapshot is the company display name, never the login username.
+    expect(confirm).toContain("userId, userNameSnapshot: operator.displayName?.trim()");
     expect(confirm).not.toContain("matchingShift(");
     expect(confirm).not.toContain("factoryPressingDowntime");
     expect(confirm).not.toContain("PRESSING_MACHINE_DOWN");
@@ -39,7 +40,7 @@ describe("Simplified pressing workflow replaces Phase 7 operational configuratio
     expect(access).toContain('eq(factoryPressingAssignments.userId, userId)');
     expect(access).toContain("pg_advisory_xact_lock");
     expect(page).toContain("activate()");
-    expect(page).toContain('Scan bale reference / barcode...');
+    expect(page).toContain('Scan bale or priority product barcode...');
   });
   it("historical pressing rows remain queryable and no Factory financial writes are introduced",()=>{
     expect(report).toContain("FROM factory_pressing_confirmations c");

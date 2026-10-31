@@ -1,5 +1,5 @@
-import { Suspense, useEffect } from "react";
-import { OFFLINE_MODE_ENABLED } from "@/lib/featureFlags";
+import { Suspense } from "react";
+import { useOfflineReadScopeLifecycle } from "./useOfflineReadScopeLifecycle";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { useMobilePerformanceLifecycle } from "@/hooks/use-mobile-performance-lifecycle";
 import { useLocation, Redirect } from "wouter";
@@ -26,45 +26,7 @@ interface AuthenticatedAppProps {
 
 export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) {
   const { selectedCompany, isLoading: companyLoading } = useCompany();
-  const selectedCompanyId = selectedCompany?.id ?? null;
-  const authenticatedUserId = String(user.id);
-  useEffect(() => {
-    if (!OFFLINE_MODE_ENABLED) return;
-    let stopped = false;
-    void import("@/lib/offline/offlineReadCache")
-      .then(async ({ revokeOfflineReadScope, verifyOfflineReadScope }) => {
-        if (stopped) return;
-        revokeOfflineReadScope();
-        if (selectedCompanyId && navigator.onLine) {
-          await verifyOfflineReadScope(selectedCompanyId);
-        }
-      })
-      .catch(() => {});
-
-    const restoreVerification = () => {
-      if (stopped || !selectedCompanyId) return;
-      void import("@/lib/offline/offlineReadCache")
-        .then(({ verifyOfflineReadScope }) => verifyOfflineReadScope(selectedCompanyId))
-        .catch(() => {});
-    };
-    const onOtherTabIdentityChanged = (event: StorageEvent) => {
-      if (event.key === "erp_offline_logout_broadcast" || event.key === "selectedCompanyId" || event.key === null) {
-        void import("@/lib/offline/offlineReadCache")
-          .then(({ revokeOfflineReadScope }) => revokeOfflineReadScope())
-          .catch(() => {});
-      }
-    };
-    window.addEventListener("online", restoreVerification);
-    window.addEventListener("storage", onOtherTabIdentityChanged);
-    return () => {
-      stopped = true;
-      window.removeEventListener("online", restoreVerification);
-      window.removeEventListener("storage", onOtherTabIdentityChanged);
-      void import("@/lib/offline/offlineReadCache")
-        .then(({ revokeOfflineReadScope }) => revokeOfflineReadScope())
-        .catch(() => {});
-    };
-  }, [selectedCompanyId, authenticatedUserId]);
+  useOfflineReadScopeLifecycle(selectedCompany?.id ?? null, String(user.id));
   useMobilePerformanceLifecycle();
   useWsInvalidation();
 

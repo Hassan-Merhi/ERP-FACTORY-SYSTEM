@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Camera, CheckCircle2, Flashlight, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translateCameraScanTitle } from "@/i18n/mobileCameraScanTranslations";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -37,7 +37,8 @@ export function MobileBarcodeScanner({
   className,
   feedback = null,
 }: MobileBarcodeScannerProps) {
-  const { language } = useApplicationLanguage();
+  // Shared scanner: tolerate rendering outside the language provider.
+  const language = useOptionalApplicationLanguage()?.language ?? "en";
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastDetected, setLastDetected] = useState("");

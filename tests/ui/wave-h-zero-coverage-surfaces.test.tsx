@@ -143,7 +143,8 @@ describe("Wave H zero-coverage production surfaces", () => {
       <CreateProformaV5Drawer open onClose={vi.fn()} onSuccess={vi.fn()} articleRows={articleRows} />
     );
 
-    expect(await screen.findByTestId("dialog-create-proforma-v5")).toBeInTheDocument();
+    // Creation is a full page since 0d18717 (no longer a dialog).
+    expect(await screen.findByTestId("page-create-proforma-v5")).toBeInTheDocument();
     expect(screen.getByTestId("select-v5-proforma-customer")).toBeInTheDocument();
     expect(screen.getByText("BAL-101")).toBeInTheDocument();
 

@@ -98,7 +98,9 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     label: "Stock Entry",
     group: "Production",
     route: "/factory/stock-entry",
-    aliases: ["/factory/pressing", "/factory/finalize"],
+    // Production Bonuses is the Production Targets tab's payment workspace;
+    // FactoryRoutes additionally limits it to Admin/Owner.
+    aliases: ["/factory/pressing", "/factory/finalize", "/factory/production-bonuses"],
     sidebar: true,
     landing: true,
   },

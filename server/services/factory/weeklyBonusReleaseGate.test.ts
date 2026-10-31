@@ -63,7 +63,7 @@ describe("Phase 16 weekly bonus end-to-end source wiring",()=>{
     const review=source("client/src/pages/factory/productiontargets/ProductionBonusWeeklyPreviewPanel.tsx");
     const payment=source("client/src/pages/factory/productiontargets/ProductionTargetWeeklyBonusPaymentsPanel.tsx");
     expect(review).toContain("Confirm decision");
-    expect(payment).toContain("Confirm and Post");
+    expect(payment).toContain("Approve Payment & Pay");
     expect(payment).toContain("Verify accounting");
     expect(payment).toContain("Confirm Reversal");
     expect(payment).toContain("Export Excel");

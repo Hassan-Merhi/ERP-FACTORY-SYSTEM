@@ -57,11 +57,12 @@ export default function FactoryPriceList() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Focus only when changing cells, not on every digit typed.
+  const editingCellKey = editingCell ? `${editingCell.productId}:${editingCell.field}` : null;
   useEffect(() => {
-    if (!editingCell) return;
+    if (!editingCellKey) return;
     inputRef.current?.focus();
     inputRef.current?.select();
-  }, [editingCell?.productId, editingCell?.field]);
+  }, [editingCellKey]);
 
   const { data: products = [], isLoading } = useQuery<FactoryBaleProduct[]>({
     queryKey: ["/api/factory/bale-products"],

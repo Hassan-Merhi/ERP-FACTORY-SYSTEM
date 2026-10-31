@@ -36,7 +36,7 @@ import {
 } from "@shared/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import type Decimal from "decimal.js";
-import { MoneyDecimal, parseMoneyInput, toMoney, type MoneyInput } from "../../../lib/money";
+import { MoneyDecimal, parseMoneyInput, toMoney } from "../../../lib/money";
 import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
 import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 import { cancelFxAgentSettlementVoucherTx } from "../../../services/factory/fxAgentSettlementCancellation";
@@ -44,24 +44,7 @@ import {
   editPostedFactoryVoucherTx,
   sendVoucherCorrectionRefusal,
 } from "../../../services/factory/factoryVoucherCorrection";
-
-/**
- * Posting source types of the factory employee cash vouchers whose void moves
- * the employee balances back (the engine-numbered successors of EMP-DEP- /
- * EMP-WD- / EMP-PAY-; see employee-crud/cash.ts, bulk-withdraw.ts, bulk-payroll.ts).
- */
-const EMPLOYEE_CASH_POSTING_SOURCE_TYPES = [
-  "factory-employee-deposit",
-  "factory-employee-withdrawal",
-  "factory-bulk-withdrawal",
-  "factory-bulk-payroll",
-];
-
-/** A voucher's exchange rate; a missing, zero or unreadable one counts as 1. */
-const voucherFxRate = (rate: MoneyInput) => {
-  const parsed = toMoney(rate || "1");
-  return parsed.isZero() ? new MoneyDecimal(1) : parsed;
-};
+import { EMPLOYEE_CASH_POSTING_SOURCE_TYPES, voucherFxRate } from "./daybookEditPolicy";
 
 export function registerFactoryDaybookEditRoutes(app: Express) {
   // ─────── DAYBOOK ENTRY EDIT ───────
