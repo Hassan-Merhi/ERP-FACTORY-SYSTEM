@@ -354,10 +354,10 @@ export function ProductionBonusCheckoutPanel({initialDate}: {initialDate:string}
         <div className="space-y-3 border-t p-3">
           <p className="text-xs text-muted-foreground">{t("settingsHint")}</p>
           <ProductionBonusCategoryRatesPanel initialDate={from}/>
-          <details className="rounded-lg border">
+          {!includesWeeklyBonuses && <details className="rounded-lg border">
             <summary className="cursor-pointer px-3 py-2 text-xs">{t("legacy")}</summary>
             <ProductionBonusWeeklyMethodPanel initialDate={to}/>
-          </details>
+          </details>}
         </div>
       </details>
     </CardContent>
