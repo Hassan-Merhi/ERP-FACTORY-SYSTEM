@@ -218,13 +218,6 @@ export default function RentalPaymentsLog({
             >
               {formatMoneyNumber(total)}
             </div>
-            {isPropertiesPayments && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                {currentViewLabel}: sum of the {search.trim() ? "matching" : "displayed"} records.
-                {isActiveUnfiltered && !discrepancy && !warehouseTotalsLoading && !warehouseTotalsError &&
-                  " Reconciles with Warehouse Total Paid."}
-              </p>
-            )}
           </CardContent>
         </Card>
         <Card>
