@@ -58,7 +58,7 @@ afterAll(async () => {
   closeTestServer();
 }, 60000);
 
-describe("ERP salary advance worker correction", () => {
+describe("ERP salary advance worker correction (PATCH /api/salary-advances/:id/worker)", () => {
   it("reassigns an untouched opening advance without changing its amounts", async () => {
     const id = await addOpeningAdvance("140.00");
     const response = await agent.patch(`/api/salary-advances/${id}/worker`).send({ employeeId: toWorkerId });
