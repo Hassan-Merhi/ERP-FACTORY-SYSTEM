@@ -137,7 +137,9 @@ export function registerPosTransferDelegatedApprovalRoutes(
     }
   });
 
-  // POS queue: no before/after figures, prices or rates. Non-designated users get no queue.
+  // One row per transfer, never one row per revision. The lifecycle approval method
+  // co-approves all pending revisions in a single transaction (latest wins per item).
+  // No before/after figures, prices or rates leave this endpoint.
   app.get("/api/pos-transfer-approval/queue", requireAuth, async (req, res) => {
     try {
       const actor = await context(req);
@@ -147,20 +149,23 @@ export function registerPosTransferDelegatedApprovalRoutes(
         "SELECT user_id,group_id FROM pos_transfer_approval_settings WHERE company_id=$1",
         [actor.companyId]
       );
-      if (settings.rows[0]?.user_id !== actor.userId) return res.json({ enabled: false, revisions: [] });
-      if (!settings.rows[0]?.group_id) return res.json({ enabled: false, needsGroup: true, revisions: [] });
+      if (settings.rows[0]?.user_id !== actor.userId) return res.json({ enabled: false, transfers: [] });
+      if (!settings.rows[0]?.group_id) return res.json({ enabled: false, needsGroup: true, transfers: [] });
       const data = await pool.query(
-        'SELECT r.id, r.revision_number AS "revisionNumber", v.voucher_number AS "voucherNumber", ' +
-          'd.name AS "destinationName", r.revision_date AS "createdAt" ' +
+        'SELECT t.id AS "transferId", MAX(r.id)::int AS "revisionId", ' +
+          'COUNT(*)::int AS "pendingRevisionCount", ' +
+          'v.voucher_number AS "voucherNumber", d.name AS "destinationName", ' +
+          'MIN(r.revision_date) AS "createdAt" ' +
           'FROM stock_transfer_revisions r ' +
           'JOIN stock_transfer_vouchers t ON t.id=r.transfer_id ' +
           'JOIN vouchers v ON v.id=t.voucher_id ' +
           'JOIN locations d ON d.id=t.destination_location_id ' +
           "WHERE v.company_id=$1 AND v.deleted_at IS NULL AND r.status='pending' " +
-          "ORDER BY r.revision_date ASC, r.id ASC LIMIT 100",
+          'GROUP BY t.id, v.voucher_number, d.name ' +
+          'ORDER BY MIN(r.revision_date) ASC, t.id ASC LIMIT 100',
         [actor.companyId]
       );
-      return res.json({ enabled: true, revisions: data.rows });
+      return res.json({ enabled: true, transfers: data.rows });
     } catch (error) {
       return errorResponse(res, error);
     }
