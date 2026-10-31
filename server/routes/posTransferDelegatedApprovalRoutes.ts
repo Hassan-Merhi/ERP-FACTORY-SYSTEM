@@ -180,6 +180,188 @@ export function registerPosTransferDelegatedApprovalRoutes(
     }
   });
 
+  // A destination represents the receiving stock-transfer order shown to POS.
+  // Underlying vouchers remain independent for accounting and inventory; only
+  // the outgoing no-cost WhatsApp workbook is consolidated.
+  app.post("/api/pos-transfer-approval/destination/:destinationId/approve-send", requireAuth, async (req, res) => {
+    try {
+      const actor = await context(req);
+      if (actor.role !== "POS") return res.sendStatus(403);
+      const destinationId = Number(req.params.destinationId);
+      if (!Number.isSafeInteger(destinationId) || destinationId <= 0) {
+        return res.status(400).json({ message: "Invalid transfer destination." });
+      }
+      await setup();
+      const configured = await pool.query(
+        'SELECT grp.chat_id AS "chatId" FROM pos_transfer_approval_settings s ' +
+          'JOIN stock_transfer_export_wa_groups grp ON grp.id=s.group_id AND grp.company_id=s.company_id ' +
+          'WHERE s.company_id=$1 AND s.user_id=$2',
+        [actor.companyId, actor.userId]
+      );
+      if (!configured.rowCount) {
+        return res.status(403).json({ message: "You are not assigned to approve and send stock transfer orders." });
+      }
+      const wa = await getWaSettings();
+      if (!wa?.instanceId || !wa.apiToken || !wa.enabled) {
+        return res.status(409).json({ message: "WhatsApp is disconnected. Ask the administrator to reconnect it before approving." });
+      }
+
+      const records = await pool.query(
+        'SELECT t.id AS "transferId", MAX(r.id)::int AS "revisionId", ' +
+          'v.voucher_number AS "voucherNumber", d.name AS "destinationName" ' +
+        'FROM stock_transfer_revisions r ' +
+        'JOIN stock_transfer_vouchers t ON t.id=r.transfer_id ' +
+        'JOIN vouchers v ON v.id=t.voucher_id ' +
+        'JOIN locations d ON d.id=t.destination_location_id ' +
+        "WHERE v.company_id=$1 AND v.deleted_at IS NULL AND r.status='pending' AND t.destination_location_id=$2 " +
+        'GROUP BY t.id,v.voucher_number,d.name ORDER BY t.id ASC LIMIT 101',
+        [actor.companyId, destinationId]
+      );
+      if (records.rows.length === 0) {
+        return res.status(409).json({ message: "There are no pending revisions for this destination. Refresh Orders." });
+      }
+      if (records.rows.length > 100) {
+        return res.status(409).json({ message: "More than 100 pending transfer vouchers. Ask an administrator to review the backlog." });
+      }
+
+      const approvedIds: number[] = [];
+      const failures: Array<{ voucherNumber: string; message: string }> = [];
+      for (const record of records.rows) {
+        try {
+          // Each call applies ALL pending revisions of one canonical transfer
+          // under its own inventory-locked transaction and audit hook.
+          const revisionId = Number(record.revisionId);
+          const approved = await approveImmutableStockTransferRevision(
+            actor.companyId,
+            revisionId,
+            actor.userId,
+            (tx, written) => logAudit({
+              userId: actor.userId,
+              username: req.session.username || req.user?.username || "POS",
+              companyId: actor.companyId,
+              action: "approve",
+              tableName: "stock_transfer_revisions",
+              recordId: revisionId,
+              recordIdentifier: "transfer-" + written.transferId + "-revision-" + written.revisionNumber,
+              changes: {
+                status: { old: written.transition === "no-op" ? "approved" : "pending", new: "approved" },
+                delegatedPosApproval: { new: true },
+                destinationBatchApproval: { new: true },
+                appliedRevisionCount: { new: written.appliedRevisionCount ?? 0 },
+              },
+            }, tx)
+          );
+          if (approved.transition !== "approved") {
+            throw new Error("Revision was already approved or changed. Refresh Orders.");
+          }
+          approvedIds.push(Number(record.transferId));
+        } catch (error: unknown) {
+          failures.push({
+            voucherNumber: String(record.voucherNumber),
+            message: error instanceof Error ? error.message : "Approval failed.",
+          });
+        }
+      }
+      // Never send a partial consolidated workbook as if it represented the
+      // complete destination batch. The user sees partial approvals separately.
+      if (failures.length > 0) {
+        logger.warn("[PosTransferApproval] Partial destination approval; export suppressed", {
+          companyId: actor.companyId,
+          destinationId,
+          approved: approvedIds.length,
+          failed: failures.length,
+        });
+        return res.json({
+          approved: approvedIds.length,
+          total: records.rows.length,
+          sent: false,
+          failures,
+          message: "Some transfers could not be approved. No combined WhatsApp export was sent. Ask an administrator to review the partial approval.",
+        });
+      }
+
+      try {
+        // Read ONLY the successfully approved transfers from persisted stock.
+        // Sum duplicates sharing a source and item into one cost-free Excel row.
+        const order = await pool.query(
+          'SELECT c.name AS "companyName", d.name AS "destinationName", ' +
+            'i.name AS "stockItemName", COALESCE(src.name, \'Unknown\') AS "sourceLocationName", ' +
+            'SUM(ti.quantity)::float8 AS quantity ' +
+          'FROM stock_transfer_vouchers t ' +
+          'JOIN vouchers v ON v.id=t.voucher_id ' +
+          'JOIN companies c ON c.id=v.company_id ' +
+          'JOIN locations d ON d.id=t.destination_location_id ' +
+          'JOIN stock_transfer_items ti ON ti.transfer_id=t.id ' +
+          'JOIN stock_items i ON i.id=ti.stock_item_id AND i.company_id=v.company_id ' +
+          'LEFT JOIN locations src ON src.id=ti.source_location_id ' +
+          'WHERE v.company_id=$1 AND t.destination_location_id=$2 ' +
+            'AND t.id=ANY($3::int[]) AND v.deleted_at IS NULL AND ti.quantity>0 ' +
+          'GROUP BY c.name,d.name,i.id,i.name,src.name ORDER BY src.name,i.name',
+          [actor.companyId, destinationId, approvedIds]
+        );
+        if (!order.rowCount) {
+          return res.json({
+            approved: approvedIds.length,
+            total: records.rows.length,
+            sent: false,
+            failures: [],
+            message: "Transfers approved, but no item quantities remained for a WhatsApp export.",
+          });
+        }
+        const first = order.rows[0];
+        const transferDate = new Intl.DateTimeFormat("sv-SE", {
+          timeZone: "Asia/Beirut", year: "numeric", month: "2-digit", day: "2-digit"
+        }).format(new Date());
+        const workbook = await dependencies.createNoCostExcel({
+          companyName: String(first.companyName),
+          destinationName: String(first.destinationName),
+          transferDate,
+          items: order.rows.map((item) => ({
+            stockItemName: String(item.stockItemName),
+            sourceLocationName: String(item.sourceLocationName),
+            quantity: Number(item.quantity),
+          })),
+        });
+        const safeDestination = String(first.destinationName).replace(/[^a-zA-Z0-9_-]/g, "_");
+        const filename = "Truck_Trip_" + safeDestination + "_" + transferDate + "_approved.xlsx";
+        // One send for the destination, not one send per underlying voucher.
+        const outcome = await sendWhatsAppFileToChatId(
+          configured.rows[0].chatId,
+          workbook,
+          filename,
+          "Approved stock transfer to " + first.destinationName + " (" + transferDate + ") — without cost",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        );
+        logger.info("[PosTransferApproval] Consolidated destination approval", {
+          companyId: actor.companyId, userId: actor.userId, destinationId,
+          transferCount: approvedIds.length, sent: outcome.success,
+        });
+        return res.json({
+          approved: approvedIds.length,
+          total: records.rows.length,
+          sent: outcome.success,
+          failures: [],
+          message: outcome.success
+            ? approvedIds.length + " transfer voucher(s) approved and one consolidated WhatsApp Excel sent."
+            : "Transfers approved, but WhatsApp delivery failed. Ask an administrator to resend manually.",
+        });
+      } catch (deliveryError) {
+        logger.error("[PosTransferApproval] Destination approved, delivery failed", {
+          companyId: actor.companyId, destinationId, error: deliveryError,
+        });
+        return res.json({
+          approved: approvedIds.length,
+          total: records.rows.length,
+          sent: false,
+          failures: [],
+          message: "Transfers approved, but the combined WhatsApp export failed. Ask an administrator to resend manually.",
+        });
+      }
+    } catch (error) {
+      return errorResponse(res, error);
+    }
+  });
+
   app.post("/api/pos-transfer-approval/:revisionId/approve-send", requireAuth, async (req, res) => {
     try {
       const actor = await context(req);
