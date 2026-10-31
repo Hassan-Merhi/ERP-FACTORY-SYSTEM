@@ -1,4 +1,4 @@
-import { CalendarDays, CircleAlert, ClipboardList, DollarSign, FileCheck2, PackageCheck, Ship, Truck } from "lucide-react";
+import { CalendarDays, CircleAlert, ClipboardList, DollarSign, FileCheck2, PackageCheck, Truck } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
