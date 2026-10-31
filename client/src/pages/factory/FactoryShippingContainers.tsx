@@ -23,8 +23,6 @@ import {
   Filter,
   ChevronDown,
   ChevronRight,
-  CheckCircle2,
-  XCircle,
   MessageCircle,
   Eye,
   Trash2,
@@ -34,7 +32,6 @@ import {
   SlidersHorizontal,
   ArrowLeft,
   ArrowRight,
-  CalendarDays,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -425,9 +422,9 @@ export default function FactoryShippingContainers() {
         {showFilters && (
           <FilterPanel
             filterDocs={filterDocs}
-            setFilterDocs={setFilterDocs}
+            setFilterDocs={(value) => { setFilterDocs(value); setQuickMode("all"); }}
             filterStatus={filterStatus}
-            setFilterStatus={setFilterStatus}
+            setFilterStatus={(value) => { setFilterStatus(value); setQuickMode("all"); }}
           />
         )}
 
