@@ -226,7 +226,12 @@ export function ProductionBonusWeeklySheet({
                           <UserRound className="h-4 w-4" aria-hidden="true" />
                         </span>
                         <div className="min-w-0">
-                          <span className="block whitespace-nowrap text-sm font-semibold" dir="auto">{member.workerName}</span>
+                          <button type="button" dir="auto" disabled={!eligible}
+                            aria-label={"Select " + member.workerName}
+                            onClick={()=>onToggle(member.workerId,!selected.includes(member.workerId))}
+                            className="block whitespace-nowrap text-left text-sm font-semibold hover:underline disabled:cursor-not-allowed disabled:no-underline">
+                            {member.workerName}
+                          </button>
                           {memberIndex > 0 && <span className="block text-[10px] font-semibold text-violet-700 dark:text-violet-300" dir="auto">
                             Linked to {members[0].workerName}
                           </span>}
