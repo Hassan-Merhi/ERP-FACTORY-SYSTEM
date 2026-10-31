@@ -16,6 +16,7 @@ import { formatDate } from "./postransferorders/utils";
 import { TransferOrderDetail } from "./postransferorders/components/TransferOrderDetail";
 import { CreateTransferDialog } from "./postransferorders/components/CreateTransferDialog";
 import { ViewTransferDialog } from "./postransferorders/components/ViewTransferDialog";
+import { PosTransferApprovalQueue } from "./postransferorders/components/PosTransferApprovalQueue";
 
 export default function PosTransferOrders({ posUser }: PosTransferOrdersProps) {
   const [editVoucherId, setEditVoucherId] = useState<number | null>(null);
@@ -93,6 +94,8 @@ export default function PosTransferOrders({ posUser }: PosTransferOrdersProps) {
           </Button>
         )}
       </PageHeader>
+
+      <PosTransferApprovalQueue />
 
       <div
         role="search"
