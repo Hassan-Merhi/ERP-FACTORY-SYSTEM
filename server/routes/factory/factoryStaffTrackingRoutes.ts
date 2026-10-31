@@ -19,7 +19,7 @@ import { loadProductionPeriodSummary } from "../../services/factory/productionPe
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { resultRows } from "../../lib/queryResult";
 import { sqlArray } from "../../lib/sqlArray";
-import { requireAttendanceEditApproval } from "./attendanceEditPolicy";
+import { attendanceApprovalRateLimiter, requireAttendanceEditApproval } from "./attendanceEditPolicy";
 import { logAudit } from "../helpers/auditWriteAdapter";
 import { employees, factoryAttendance, factoryUserProfiles, factoryWorkers } from "@shared/schema";
 import {
@@ -621,7 +621,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/factory/staff-tracking/bulk", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/factory/staff-tracking/bulk", requireAuth, attendanceApprovalRateLimiter, async (req: Request, res: Response) => {
     try {
       const companyId = getFactoryCompanyId(req);
       if (!companyId) return res.status(400).json({ message: factoryStaffTrackingMessages.noFactoryCompany });
