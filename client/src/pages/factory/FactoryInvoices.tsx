@@ -416,9 +416,10 @@ export default function FactoryInvoices() {
         </div>
       )}
 
-      <div className="rounded-xl border overflow-hidden flex flex-col">
+      {!isLoading && <InvoiceDashboardMetrics orders={scopedOrders} hideTotalsUsd={hideTotalsUsd} />}
+      <div className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm dark:bg-[#0e1a2b]">
         {/* Toolbar strip */}
-        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b bg-muted/20">
+        <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-border/60 bg-blue-500/[0.025] px-3 py-3">
           <div className="flex flex-wrap items-center gap-1.5" data-testid="filter-tabs">
             {statusFilters.map((f) => (
               <Button
@@ -427,7 +428,11 @@ export default function FactoryInvoices() {
                 size="sm"
                 onClick={() => setStatusFilter(f.key)}
                 data-testid={`button-filter-${f.key.toLowerCase()}`}
-                className="text-xs px-3"
+                className={cn("h-9 rounded-lg border px-3 text-xs font-semibold", statusFilter === f.key && (
+                  f.key === "LOADING" ? "border-blue-500 bg-blue-600 text-white hover:bg-blue-500"
+                    : f.key === "VERIFIED" ? "border-emerald-500 bg-emerald-600 text-white hover:bg-emerald-500"
+                      : "border-violet-500 bg-violet-600 text-white hover:bg-violet-500"
+                ))}
               >
                 {f.label} <span className="ml-1 opacity-70">({f.count})</span>
               </Button>
@@ -437,9 +442,9 @@ export default function FactoryInvoices() {
               size="sm"
               onClick={() => setStatusFilter("ALL")}
               data-testid="button-filter-all"
-              className="text-xs px-3 text-muted-foreground"
+              className="h-9 rounded-lg border px-3 text-xs font-semibold"
             >
-              All ({allOrders.length})
+              All ({scopedOrders.length})
             </Button>
           </div>
 
@@ -449,15 +454,15 @@ export default function FactoryInvoices() {
               size="sm"
               onClick={() => setShowHidden((v) => !v)}
               data-testid="button-toggle-show-hidden"
-              className="text-xs px-3 gap-1.5"
+              className="h-9 rounded-lg px-3 text-xs gap-1.5"
               title={showHidden ? "Hide hidden loadings" : "Show hidden loadings"}
             >
               {showHidden ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
               {showHidden ? "Showing hidden" : "Show hidden"}
             </Button>
-            <div className="w-52">
+            <div className="w-44 sm:w-48">
               <Select value={customerFilter} onValueChange={setCustomerFilter}>
-                <SelectTrigger data-testid="select-customer-filter">
+                <SelectTrigger className="h-9 rounded-lg text-xs" data-testid="select-customer-filter">
                   <SelectValue placeholder="All customers" />
                 </SelectTrigger>
                 <SelectContent>
@@ -472,6 +477,60 @@ export default function FactoryInvoices() {
             </div>
           </div>
         </div>
+
+        {/* Search and column controls retain all existing invoice actions. */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-border/60 px-3 py-2.5">
+          <div className="relative min-w-[210px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search customer, loading, container, destination..."
+              className="h-9 rounded-lg border-border/70 bg-background/80 pl-9 text-xs"
+              data-testid="input-invoice-search"
+            />
+          </div>
+          <Button
+            size="sm"
+            variant={showMoreFilters || fromDate || toDate ? "secondary" : "outline"}
+            className="h-9 rounded-lg text-xs"
+            onClick={() => setShowMoreFilters((value) => !value)}
+            aria-expanded={showMoreFilters}
+            data-testid="button-invoice-more-filters"
+          >
+            <Filter className="mr-1.5 h-3.5 w-3.5" /> More Filters
+            <ChevronDown className={cn("ml-1.5 h-3.5 w-3.5 transition-transform", showMoreFilters && "rotate-180")} />
+          </Button>
+          <Button
+            size="sm"
+            variant={compactView ? "outline" : "secondary"}
+            className="h-9 rounded-lg text-xs"
+            onClick={() => setCompactView((value) => !value)}
+            aria-pressed={!compactView}
+            title={compactView ? "Show all invoice columns" : "Use compact invoice columns"}
+            data-testid="button-invoice-columns"
+          >
+            <SlidersHorizontal className="mr-1.5 h-3.5 w-3.5" /> {compactView ? "All Columns" : "Compact"}
+          </Button>
+        </div>
+        {showMoreFilters && (
+          <div className="flex flex-wrap items-end gap-3 border-b border-border/60 bg-muted/20 px-3 py-3">
+            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" /> From date</span>
+              <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
+                className="h-9 w-40 rounded-lg bg-background text-xs" data-testid="input-invoice-from-date" />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+              <span>To date</span>
+              <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
+                className="h-9 w-40 rounded-lg bg-background text-xs" data-testid="input-invoice-to-date" />
+            </label>
+            <Button variant="ghost" size="sm" className="h-9 rounded-lg text-xs"
+              onClick={() => { setFromDate(""); setToDate(""); setSearchTerm(""); }} data-testid="button-reset-invoice-filters">
+              Clear dates / search
+            </Button>
+          </div>
+        )}
 
         {/* Summary bar */}
         {!isLoading && filteredOrders.length > 0 && (
