@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import rateLimit from "express-rate-limit";
 import { and, eq } from "drizzle-orm";
 import { db } from "../../db";
 import { users, userCompanyRoles } from "@shared/schema";
@@ -21,6 +22,29 @@ export function isValidAttendanceDate(value: unknown): value is string {
   const parsed = new Date(`${value}T00:00:00.000Z`);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
+
+/**
+ * Step-up password verification is deliberately online-only and rate limited.
+ * Normal same-day attendance and Production Targets are not counted.
+ */
+export const attendanceApprovalRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => {
+    const body = req.body ?? {};
+    if (req.path === "/api/factory/staff-tracking/bulk" && body.page !== "attendance") return true;
+    const dates: unknown[] = req.path === "/api/factory/staff-tracking/bulk"
+      ? [body.periodStart, body.periodEnd]
+      : Array.isArray(body.records) ? body.records.map((record: { attendanceDate?: unknown }) => record?.attendanceDate) : [];
+    const today = factoryAttendanceToday();
+    return !dates.some((date) => typeof date === "string" && date < today);
+  },
+  handler: (_req, res) => res.status(429).json({
+    message: "Too many attendance Admin approval attempts. Try again later.",
+  }),
+});
 
 export type AttendanceAdminCredentials = {
   adminUsername?: unknown;
