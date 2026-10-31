@@ -122,12 +122,15 @@ export function PerWorkerView() {
         existingStatusMap[r.attendanceDate] = r.status;
       }
     }
-    const records = dates.map((d) => {
+    const records: AttendanceBulkRecord[] = dates.map((d): AttendanceBulkRecord => {
       if (checkedDates[d]) {
         // Preserve existing granular status (Late, Half Day, Leave) if the date
         // is checked; fall back to "Present" for new/previously-absent dates.
         const existing = existingStatusMap[d];
-        const status = existing && existing !== "Absent" ? existing : "Present";
+        const status: AttendanceBulkRecord["status"] =
+          existing === "Late" || existing === "Half Day" || existing === "Leave"
+            ? existing
+            : "Present";
         return { workerId: workerIdNum, attendanceDate: d, status };
       }
       return { workerId: workerIdNum, attendanceDate: d, status: "Absent" };
@@ -151,9 +154,9 @@ export function PerWorkerView() {
   return (
     <div className="space-y-4">
       {/* Controls */}
-      attendancePastDates(generateDateRange(startDate, endDate)).length > 0 ? (
+      {attendancePastDates(generateDateRange(startDate, endDate)).length > 0 && (
         <Badge variant="secondary">Earlier dates require Admin approval to save</Badge>
-      ) : null
+      )}
       <Card className="overflow-hidden border-border/70 bg-card/75 shadow-none">
         <CardContent className="p-4">
           <div className="flex flex-wrap items-end gap-3">
