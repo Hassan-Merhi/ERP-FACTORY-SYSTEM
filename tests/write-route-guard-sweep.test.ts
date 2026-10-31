@@ -164,6 +164,7 @@ const SENSITIVE_WRITE_ROUTES = [
   "PATCH /api/lookup/reference/:referenceNumber/change-product",
   "PATCH /api/payroll/runs/:id",
   "PATCH /api/purchase-orders/:id",
+  "PATCH /api/salary-advances/:id/worker",
   "PATCH /api/sp/containers/:id",
   "PATCH /api/stock-transfers/:id",
   "PATCH /api/voucher-entries/:id",
