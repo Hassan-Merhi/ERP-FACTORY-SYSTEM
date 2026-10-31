@@ -185,12 +185,6 @@ export function ProductionBonusWeeklySheet({
               const made = worker.days.reduce((sum, day) => sum + day.produced, 0);
               const target = worker.days.reduce((sum, day) => sum + day.target, 0);
               const achievedWeek = target > 0 && made >= target;
-              const state = ready ? t("ready") : worker.paidDays ? t("paidStatus")
-                : worker.weeklyProjected ? "Bonus projected"
-                : worker.weeklyApproved ? "Bonus approved"
-                : worker.weeklyDays ? "Weekly bonus"
-                : worker.needsSetup ? t("needsSetup")
-                : worker.blockedDays ? t("needsReview") : t("sheetNoExtra");
               return <tr key={worker.workerId} className="group hover:bg-muted/20">
                 {first && <th scope="row" rowSpan={members.length}
                   className="sticky left-0 z-10 border-b border-r border-border/50 bg-card px-2 py-2 text-left align-top group-hover:bg-muted sm:px-3">
