@@ -24,6 +24,9 @@ import { Input } from "@/components/ui/input";
 import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatNumber } from "../customerLoadingFormat";
+import { companyQueryKey } from "@/lib/companyQueryScope";
+import type { FactoryMyAccess } from "@shared/apiTypes";
+import { canEmptyFactoryLoadingContainer } from "@shared/factoryPermissionCatalog";
 import type { FactoryContainerLoadingScanModel } from "./useFactoryContainerLoadingScanModel";
 
 interface BaleScanAudit {
@@ -338,10 +341,22 @@ function RemovalLog({ model }: { model: FactoryContainerLoadingScanModel }) {
 
 export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingScanModel }) {
   const { scanFlash, bales, totalWeight, viewMode, lastScannedRef } = model;
-  const { data: currentUser } = useQuery<{ role?: string; currentRole?: string | null }>({
-    queryKey: ["/api/auth/me"],
+  const { data: currentUser } = useQuery<{
+    id?: string | number;
+    role?: string | null;
+    currentRole?: string | null;
+    currentCompanyId?: number | null;
+  }>({ queryKey: ["/api/auth/me"] });
+  const { data: factoryAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", currentUser?.currentCompanyId),
+    enabled: Boolean(currentUser?.id && currentUser?.currentCompanyId),
   });
-  const canEmptyContainer = ["Admin", "Owner", "Developer"].includes(currentUser?.currentRole ?? currentUser?.role ?? "");
+  const canEmptyContainer = canEmptyFactoryLoadingContainer({
+    role: currentUser?.currentRole ?? currentUser?.role,
+    hasFactoryAccess: factoryAccess?.hasFactoryAccess,
+    pageKeys: factoryAccess?.pageKeys,
+    hiddenCostFields: factoryAccess?.hiddenCostFields,
+  });
   // Scan audit fields now ride on the order's bale rows. This avoids a second
   // growing request after every scan while preserving the exact same UI.
   const scanAuditByBaleId = useMemo(
