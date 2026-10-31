@@ -247,7 +247,7 @@ export function registerPosTransferDelegatedApprovalRoutes(
             quantity: Number(item.quantity),
           })),
         });
-        const filename = "Truck_Trip_" + first.destinationName.replace(/[/\\?%*:|\"<>]/g, "_") +
+        const filename = "Truck_Trip_" + String(first.destinationName).replace(/[^a-zA-Z0-9_-]/g, "_") +
           "_" + first.transferDate + "_revision_" + revisionId + ".xlsx";
         const sent = await sendWhatsAppFileToChatId(
           configured.rows[0].chatId, workbook, filename,
