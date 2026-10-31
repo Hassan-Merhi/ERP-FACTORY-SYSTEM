@@ -17,6 +17,8 @@ interface ShippingDashboardOverviewProps {
   onDateFrom: (value: string) => void;
   onDateTo: (value: string) => void;
   onOpenInvoicing: () => void;
+  allowNewOrder: boolean;
+  showOrderValue: boolean;
 }
 
 function Metric({
@@ -57,7 +59,7 @@ function Metric({
 
 /** Compact overview with only persisted/derived current shipping values. */
 export function ShippingDashboardOverview({
-  rows, today, dateFrom, dateTo, onDateFrom, onDateTo, onOpenInvoicing,
+  rows, today, dateFrom, dateTo, onDateFrom, onDateTo, onOpenInvoicing, allowNewOrder, showOrderValue,
 }: ShippingDashboardOverviewProps) {
   const loading = rows.filter((row) => row.status === "LOADING").length;
   const notFinalized = rows.filter((row) => row.status !== "FINALIZED" && row.status !== "CANCELLED").length;
@@ -98,10 +100,12 @@ export function ShippingDashboardOverview({
                 </Button>
               )}
             </div>
-            <Button className="h-10 rounded-xl bg-blue-600 px-4 text-white shadow-sm shadow-blue-500/20 hover:bg-blue-500"
-              onClick={onOpenInvoicing} data-testid="button-shipping-open-invoicing">
-              <ClipboardList className="mr-1.5 h-4 w-4" /> New Order
-            </Button>
+            {allowNewOrder && (
+              <Button className="h-10 rounded-xl bg-blue-600 px-4 text-white shadow-sm shadow-blue-500/20 hover:bg-blue-500"
+                onClick={onOpenInvoicing} data-testid="button-shipping-open-invoicing">
+                <ClipboardList className="mr-1.5 h-4 w-4" /> New Order
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -111,7 +115,9 @@ export function ShippingDashboardOverview({
         <Metric label="Not finalized" value={notFinalized} caption="Order status pending" icon={<PackageCheck className="h-5 w-5" />} tone="amber" />
         <Metric label="Overdue ETA" value={delayed} caption="ETA passed, not arrived" icon={<CircleAlert className="h-5 w-5" />} tone="rose" />
         <Metric label="With documents" value={withDocs} caption="At least one uploaded" icon={<FileCheck2 className="h-5 w-5" />} tone="violet" />
-        <Metric label="Total order value" value={"$" + total.toLocaleString(undefined, { maximumFractionDigits: 0 })} caption="Sum of listed order totals (USD)" icon={<DollarSign className="h-5 w-5" />} tone="cyan" />
+        {showOrderValue && (
+          <Metric label="Total order value" value={"$" + total.toLocaleString(undefined, { maximumFractionDigits: 0 })} caption="Sum of listed order totals (USD)" icon={<DollarSign className="h-5 w-5" />} tone="cyan" />
+        )}
       </div>
     </div>
   );
