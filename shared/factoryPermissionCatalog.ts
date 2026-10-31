@@ -133,6 +133,22 @@ export const FACTORY_TAB_REGISTRY: readonly FactoryTabDefinition[] = [
   { key: "hide_tab_workerdetail_documents", label: "Documents", group: "Worker Profile" },
 ] as const;
 
+/** Opt-in action grant stored in the company-specific Factory profile. */
+export const FACTORY_EMPTY_CONTAINER_GRANT_KEY = "grant_loading_empty_container";
+
+/** Shared server/client decision; grant never implies wider administrator access. */
+export function canEmptyFactoryLoadingContainer(access: {
+  role?: string | null;
+  hasFactoryAccess?: boolean;
+  pageKeys?: readonly string[];
+  hiddenCostFields?: readonly string[];
+}): boolean {
+  if (["Admin", "Owner", "Developer"].includes(access.role ?? "")) return true;
+  if (!access.hasFactoryAccess || access.role === "View Only") return false;
+  if (access.pageKeys?.length && !access.pageKeys.includes("factory/invoicing")) return false;
+  return access.hiddenCostFields?.includes(FACTORY_EMPTY_CONTAINER_GRANT_KEY) === true;
+}
+
 export const FACTORY_TAB_KEYS = new Set(FACTORY_TAB_REGISTRY.map((tab) => tab.key));
 
 export const FACTORY_TAB_GRANT_KEYS = new Set(
