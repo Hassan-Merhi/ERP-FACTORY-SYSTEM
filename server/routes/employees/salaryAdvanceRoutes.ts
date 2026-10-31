@@ -282,44 +282,46 @@ export function registerSalaryAdvanceRoutes(app: Express): void {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const advanceId = parseInt(req.params.id);
-      if (isNaN(advanceId)) return res.status(400).json({ message: "Invalid salary advance ID" });
+      const advanceId = Number(req.params.id);
+      if (!Number.isSafeInteger(advanceId) || advanceId <= 0) {
+        return res.status(400).json({ message: "Invalid salary advance ID" });
+      }
       const parsed = insertSalaryAdvanceDeductionSchema.omit({ salaryAdvanceId: true }).parse(req.body);
-      const advance = await storage.getSalaryAdvanceById(advanceId);
-      if (!advance) return res.status(404).json({ message: "Salary advance not found" });
-      if (advance.companyId !== companyId) {
-        return res.status(403).json({ message: "Salary advance belongs to a different company" });
-      }
-      if (advance.fullyPaid) return res.status(400).json({ message: "Salary advance is already fully paid" });
+      const result = await db.transaction(async (tx) => {
+        // Keep deduction and worker corrections serializable on the advance row.
+        await tx.execute(sql`SELECT id FROM salary_advances
+          WHERE id = ${advanceId} AND company_id = ${companyId} FOR UPDATE`);
+        const [advance] = await tx.select().from(salaryAdvances).where(
+          and(eq(salaryAdvances.id, advanceId), eq(salaryAdvances.companyId, companyId))
+        );
+        if (!advance) throw new HttpError(404, "Salary advance not found");
+        if (advance.fullyPaid) throw new HttpError(400, "Salary advance is already fully paid");
 
-      const deductionAmount = toMoney(parsed.deductionAmount);
-      const remainingBalance = toMoney(advance.remainingBalance);
-      if (deductionAmount.greaterThan(remainingBalance)) {
-        return res.status(400).json({
-          message: `Deduction amount cannot exceed remaining balance of ${remainingBalance}`,
+        const deductionAmount = toMoney(parsed.deductionAmount);
+        const remainingBalance = toMoney(advance.remainingBalance);
+        if (deductionAmount.greaterThan(remainingBalance)) {
+          throw new HttpError(400, `Deduction amount cannot exceed remaining balance of ${remainingBalance}`);
+        }
+        await tx.insert(salaryAdvanceDeductions).values({
+          salaryAdvanceId: advanceId,
+          payrollMonth: parsed.payrollMonth,
+          deductionAmount: parsed.deductionAmount,
         });
-      }
+        const newRemainingBalance = remainingBalance.minus(deductionAmount);
+        const fullyPaid = isPaidOff(newRemainingBalance);
+        await tx.update(salaryAdvances).set({
+          remainingBalance: newRemainingBalance.toFixed(2), fullyPaid,
+        }).where(and(eq(salaryAdvances.id, advanceId), eq(salaryAdvances.companyId, companyId)));
 
-      await db.insert(salaryAdvanceDeductions).values({
-        salaryAdvanceId: advanceId,
-        payrollMonth: parsed.payrollMonth,
-        deductionAmount: parsed.deductionAmount,
+        return {
+          message: "Deduction recorded successfully",
+          newRemainingBalance: newRemainingBalance.toFixed(2),
+          fullyPaid,
+        };
       });
-      const newRemainingBalance = remainingBalance.minus(deductionAmount);
-      // Paid only when nothing is left at cents: "<= 0.01" marked an advance
-      // with one cent still owed as fully paid and blocked further deductions.
-      const fullyPaid = isPaidOff(newRemainingBalance);
-      await db
-        .update(salaryAdvances)
-        .set({ remainingBalance: newRemainingBalance.toFixed(2), fullyPaid })
-        .where(eq(salaryAdvances.id, advanceId));
-      res.json({
-        message: "Deduction recorded successfully",
-        newRemainingBalance: newRemainingBalance.toFixed(2),
-        fullyPaid,
-      });
+      res.json(result);
     } catch (error: unknown) {
-      res.status(400).json({ message: getErrorMessage(error) });
+      res.status(error instanceof HttpError ? error.statusCode : 400).json({ message: getErrorMessage(error) });
     }
   });
 
