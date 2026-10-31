@@ -34,7 +34,7 @@ an open cloud epoch.
 | Pressing scan confirmation (physical bale press) | yes, existing machine assignments only | `pressing` (Phase 9) | `server/edge/phase9OperatorApply.ts apply pressing` |
 | Login, logout, company switch | yes (session only) | none | n/a |
 | All reads covered by prepared offline reads | yes | n/a | n/a |
-| Everything else (1,166 write routes) | **refused** with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION` | none | n/a |
+| Everything else (1,169 write routes) | **refused** with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION` | none | n/a |
 
 `node scripts/edge/audit-phase9-write-coverage.mjs` prints the exact current
 inventory and fails if any route becomes writable on the LAN without a reviewed
