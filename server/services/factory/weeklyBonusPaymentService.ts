@@ -141,6 +141,12 @@ export async function postWeeklyBonusPayments(
           voucherId: Number(prior.voucherId), replayed: true });
         continue;
       }
+      const manualBonus = first(await tx.execute(sql`
+        SELECT 1 FROM factory_target_bonus_manual_payments
+        WHERE company_id=${companyId} AND worker_id=${review.workerId}
+          AND week_start=${review.weekStart}::date AND status='POSTED' LIMIT 1
+      `));
+      if (manualBonus) conflict("A manual bonus was already paid for this worker/week; reconcile before paying the calculated weekly bonus");
       if (review.status !== "approved") conflict("Only approved weekly bonuses can be paid");
       if (command.paymentDate < review.weekEnd)
         conflict("Weekly bonus payment cannot predate the end of production week");
