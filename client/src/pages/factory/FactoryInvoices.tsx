@@ -13,7 +13,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useLocation } from "wouter";
 import { useDateFormat } from "@/contexts/DateFormatContext";
-import { Eye, EyeOff, Package } from "lucide-react";
+import { Eye, EyeOff, Package, Search, SlidersHorizontal, ChevronDown, CalendarDays, Filter } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { InvoiceDashboardMetrics } from "./factoryinvoices/InvoiceDashboardMetrics";
 import { queryClient, keyStartsWith, invalidateCustomerBalances } from "@/lib/queryClient";
 import { InvoiceSummaryBar } from "@/components/InvoiceSummaryBar";
 
@@ -25,6 +28,7 @@ import {
   getEstimatedKg,
   getEstimatedPrice,
   getRemainingBales,
+  getFactoryInvoiceDate,
   groupOrdersByCustomer,
   statusFilterCounts,
 } from "./factoryinvoices/invoiceCalculations";
@@ -41,6 +45,11 @@ export default function FactoryInvoices() {
   const modeApiRequest = getApiRequest(appMode);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("LOADING");
   const [customerFilter, setCustomerFilter] = useState<string>("all");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [compactView, setCompactView] = useState(true);
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [changingCustomerOrderId, setChangingCustomerOrderId] = useState<number | null>(null);
   const [newCustomerId, setNewCustomerId] = useState<string>("");
   const [expandedCustomers, setExpandedCustomers] = useState<Set<number>>(new Set());
@@ -253,9 +262,20 @@ export default function FactoryInvoices() {
     },
   });
 
-  const { loading: loadingCount, verified: verifiedCount, finalized: finalizedCount } = statusFilterCounts(allOrders);
-
-  const filteredOrders = filterOrdersByStatus(allOrders, statusFilter);
+  // KPIs, tabs and table use the same search and business-date scope.
+  const scopedOrders = allOrders.filter((order) => {
+    const needle = searchTerm.trim().toLowerCase();
+    if (needle && ![
+      order.customerName, order.invoiceNumber, String(order.id),
+      order.proformaName, order.containerNumber, order.destination,
+    ].some((value) => (value || "").toLowerCase().includes(needle))) return false;
+    const day = (getFactoryInvoiceDate(order) || "").slice(0, 10);
+    if (fromDate && (!day || day < fromDate)) return false;
+    if (toDate && (!day || day > toDate)) return false;
+    return true;
+  });
+  const { loading: loadingCount, verified: verifiedCount, finalized: finalizedCount } = statusFilterCounts(scopedOrders);
+  const filteredOrders = filterOrdersByStatus(scopedOrders, statusFilter);
 
   const statusFilters: { key: StatusFilter; label: string; count: number }[] = [
     { key: "LOADING", label: "Loading", count: loadingCount },
@@ -302,7 +322,8 @@ export default function FactoryInvoices() {
 
   // Column count for colspan calculations
   // +1 for the drag-handle column
-  const colCount = 16 - (hideProformaCol ? 1 : 0) - (hideTotalsUsd ? 1 : 0) - (showBookingInfo ? 0 : 1);
+  const colCount = 16 - (hideProformaCol ? 1 : 0) - (hideTotalsUsd ? 1 : 0) - (showBookingInfo ? 0 : 1)
+    - (compactView ? 2 + (showBookingInfo ? 1 : 0) + (hideTotalsUsd ? 0 : 1) : 0);
 
   // Group orders by customer, preserving first-appearance order
   const customerGroups = groupOrdersByCustomer(filteredOrders);
@@ -339,6 +360,7 @@ export default function FactoryInvoices() {
   };
 
   const orderRowContext = {
+    compactView,
     hideProformaCol,
     showBookingInfo,
     hideTotalsUsd,
@@ -358,7 +380,7 @@ export default function FactoryInvoices() {
   };
 
   return (
-    <div className="flex flex-col h-full p-5 gap-4">
+    <div className="flex min-w-0 flex-col gap-3 p-3 sm:p-4" data-testid="invoicing-modern-dashboard">
       <Dialog open={changingCustomerOrderId !== null} onOpenChange={(open) => { if (!open) setChangingCustomerOrderId(null); }}>
         <DialogContent>
           <DialogHeader>
