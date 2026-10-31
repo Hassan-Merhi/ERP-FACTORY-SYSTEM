@@ -6,7 +6,7 @@ import { eq, and, inArray, gte, lte } from "drizzle-orm";
 import PDFDocument from "pdfkit";
 import { factoryAttendance, factoryWorkers } from "@shared/schema";
 import { logAudit } from "./helpers/auditWriteAdapter";
-import { requireAttendanceEditApproval } from "./factory/attendanceEditPolicy";
+import { attendanceApprovalRateLimiter, requireAttendanceEditApproval } from "./factory/attendanceEditPolicy";
 
 function getFactoryCompanyId(req: import("express").Request): number | undefined {
   return req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -63,7 +63,7 @@ export function registerFactoryAttendanceRoutes(app: Express, requireAuth: Reque
 
   // POST /api/factory/attendance/bulk
   // Upsert attendance records
-  app.post("/api/factory/attendance/bulk", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/factory/attendance/bulk", requireAuth, attendanceApprovalRateLimiter, async (req: Request, res: Response) => {
     try {
       const companyId = getFactoryCompanyId(req);
       if (!companyId) return res.status(400).json({ message: "No company" });
