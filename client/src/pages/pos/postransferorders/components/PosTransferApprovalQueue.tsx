@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CheckCheck, Clock, MessageCircle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -31,6 +33,7 @@ type ApprovalResult = {
 export function PosTransferApprovalQueue() {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
+  const [excludedIds, setExcludedIds] = useState<Set<number>>(() => new Set());
   const url = "/api/pos-transfer-approval/queue";
   const key = [url, selectedCompany?.id];
   const queue = useQuery<Queue>({
@@ -44,11 +47,11 @@ export function PosTransferApprovalQueue() {
     refetchInterval: 30000,
   });
   const approve = useMutation({
-    mutationFn: async (destinationId: number) => {
+    mutationFn: async (group: { destinationId: number; transferIds: number[] }) => {
       const response = await apiRequest(
         "POST",
-        "/api/pos-transfer-approval/destination/" + destinationId + "/approve-send",
-        {}
+        "/api/pos-transfer-approval/destination/" + group.destinationId + "/approve-send",
+        { transferIds: group.transferIds }
       );
       const result: ApprovalResult = await response.json();
       if (!response.ok) throw new Error(result.message || "Approval failed.");
@@ -93,7 +96,9 @@ export function PosTransferApprovalQueue() {
         <p className="p-4 text-sm text-muted-foreground">No pending transfer orders to approve.</p>
       ) : (
         <div className="divide-y">
-          {destinations.map((destination) => (
+          {destinations.map((destination) => {
+            const included = destination.transfers.filter((transfer) => !excludedIds.has(transfer.transferId));
+            return (
             <div key={destination.destinationId} className="flex flex-wrap items-center gap-3 p-3 sm:p-4">
               <Clock className="h-4 w-4 shrink-0 text-amber-500" />
               <div className="min-w-0 flex-1">
@@ -103,25 +108,46 @@ export function PosTransferApprovalQueue() {
                   {" · "}{destination.pendingRevisionCount} pending{" "}
                   {destination.pendingRevisionCount === 1 ? "revision" : "revisions"}
                 </p>
-                <p className="mt-1 break-words text-xs text-muted-foreground">
-                  {destination.transfers.map((transfer) => transfer.voucherNumber).join(" · ")}
-                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+                  {destination.transfers.map((transfer) => (
+                    <label key={transfer.transferId} className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+                      <Checkbox
+                        checked={!excludedIds.has(transfer.transferId)}
+                        disabled={approve.isPending}
+                        onCheckedChange={(checked) => {
+                          setExcludedIds((previous) => {
+                            const next = new Set(previous);
+                            if (checked === true) next.delete(transfer.transferId);
+                            else next.add(transfer.transferId);
+                            return next;
+                          });
+                        }}
+                        aria-label={"Include " + transfer.voucherNumber}
+                      />
+                      {transfer.voucherNumber}
+                    </label>
+                  ))}
+                </div>
               </div>
               <Button
                 size="sm"
                 className="min-h-10 gap-1.5"
-                onClick={() => approve.mutate(destination.destinationId)}
-                disabled={approve.isPending}
+                onClick={() => approve.mutate({
+                  destinationId: destination.destinationId,
+                  transferIds: included.map((transfer) => transfer.transferId),
+                })}
+                disabled={approve.isPending || included.length === 0}
                 data-testid={"approve-send-destination-" + destination.destinationId}
               >
                 <CheckCheck className="h-4 w-4" />
-                {approve.isPending && approve.variables === destination.destinationId
+                {approve.isPending && approve.variables?.destinationId === destination.destinationId
                   ? "Approving & Sending…"
                   : "Approve All & Send"}
                 <MessageCircle className="h-4 w-4" />
               </Button>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </Card>
