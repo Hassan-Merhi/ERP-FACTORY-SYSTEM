@@ -1,131 +1,123 @@
 /**
- * One-time, source-verified correction of the nine 2026-10-31 company-12
- * manual Production Targets payouts charged to Payroll Deposit Expense.
- * Original payment vouchers, worker claims and cash transactions are preserved.
- * Matching, idempotent Journal vouchers reclassify expense only.
+ * Approved, one-time correction for company 12's nine manual Production
+ * Targets bonuses from October 31, 2026.
+ *
+ * Change the ORIGINAL Payment voucher's debit ledger account and the linked
+ * claim's expense account. The amount, payment date, cash credit, voucher
+ * number, worker, and payment ID remain untouched. Each source voucher edit
+ * has full before/after application and database-trigger audit records.
+ * This is allowed only for open accounting periods.
  */
 import { sql } from "drizzle-orm";
-import { db, type DbTransaction } from "../../db";
+import { db } from "../../db";
 import { resultRows } from "../../lib/queryResult";
-import { postErpVoucherTx } from "../accounting/erpVoucherPosting";
+import { assertVoucherEditableTx, recordVoucherEditAuditTx } from "../accounting/voucherCorrection";
 import { runInCompanyPostingScope } from "../accounting/scheduledPostingScope";
-import { expenseAccountTx, type TargetBonusPaymentActor } from "./targetBonusPaymentService";
+import { expenseAccountTx } from "./targetBonusPaymentService";
+import { logAudit } from "../../routes/helpers/auditHelpers";
 
 type Row = Record<string, unknown>;
-const one = (r: unknown): Row | undefined => resultRows<Row>(r)[0];
-const many = (r: unknown): Row[] => resultRows<Row>(r);
-type BonusKind = "manual" | "daily" | "weekly";
-const sourceId = (companyId: number, kind: BonusKind, id: number) =>
-  `${companyId}:${kind}:${id}`;
-const correctionType = "factory-production-bonus-expense-reclassification";
+const rows = (r: unknown): Row[] => resultRows<Row>(r);
+const EXPECTED = ["27.00","25.00","25.00","25.00","25.00","25.00","25.00","25.00","27.00"];
+const OLD_ACCOUNT_ID = 819;
+const OLD_CODE = "PAYROLL_DEPOSIT_EXPENSE";
+const NEW_CODE = "FACTORY_PRODUCTION_BONUS_EXPENSE";
+const ACTOR = {userId:"system:bonus-account-correction",username:"system",companyId:12};
 
-/**
- * Payment reversals retain their original expense account. If this source had
- * a reclassification, reverse that journal too in the SAME DB transaction.
- * Not needed for payments originally posted to Production Bonus Expense.
- */
-export async function reverseProductionBonusExpenseReclassificationTx(
-  tx: DbTransaction, companyId: number, kind: BonusKind, paymentId: number,
-  amount: string, originalExpenseId: number, reversalDate: string,
-  actor: TargetBonusPaymentActor,
-): Promise<void> {
-  const key = sourceId(companyId, kind, paymentId);
-  const original = one(await tx.execute(sql`
-    SELECT v.id, v.deleted_at AS "deletedAt"
-    FROM accounting_posting_requests apr
-    JOIN vouchers v ON v.id = apr.voucher_id AND v.company_id = apr.company_id
-    WHERE apr.company_id = ${companyId}
-      AND apr.source_type = ${correctionType}
-      AND apr.source_id = ${key + ":expense"}
-    LIMIT 1
-  `));
-  if (!original) return;
-  if (original.deletedAt) throw new Error("Historical bonus expense correction was retired; reconcile before reversing");
-  const productionBonusExpenseId = await expenseAccountTx(tx, companyId);
-  const narration = `Reverse reclassification for ${kind} Production Bonus #${paymentId}`;
-  const { replayed } = await postErpVoucherTx(tx, {
-    companyId, voucherType: "Journal", voucherDate: reversalDate,
-    sourceModule: "FACTORY", currency: "USD", description: narration,
-    source: {type: correctionType, id: key, revision: "reversal"},
-    actor: {userId: actor.userId, username: actor.username,
-      reason: "Undo production bonus expense reclassification alongside bonus payment reversal"},
-    lines: [
-      {ledgerAccountId: originalExpenseId, debit: amount, narration},
-      {ledgerAccountId: productionBonusExpenseId, credit: amount, narration},
-    ],
-  });
-  if (replayed) throw new Error("Expense reclassification reversal already exists; reconcile payment state");
-}
-
-/**
- * Safety envelope approved for company 12 only. No mass ledger editing:
- * every original voucher is verified amount/lines/date/company before posting.
- * A source replay creates no second journal. Closed periods remain protected.
- */
-export async function reclassifyApprovedManualProductionBonuses20261031(): Promise<{
-  inspected: number; posted: number; alreadyPosted: number; totalUsd: string;
+export async function correctNineProductionBonusExpenseAccounts(): Promise<{
+  inspected: number; corrected: number; previouslyCorrected: number; totalUsd: string;
 }> {
   const companyId = 12;
-  const expectedAmounts = ["27.00","25.00","25.00","25.00","25.00","25.00","25.00","25.00","27.00"] as const;
-  return runInCompanyPostingScope(companyId, () => db.transaction(async tx => {
+  return runInCompanyPostingScope(companyId,()=>db.transaction(async tx=>{
+    // Serialized with manual payouts, calculated payouts and reversals.
     await tx.execute(sql`SELECT pg_advisory_xact_lock(84023, ${companyId})`);
-    const payments = many(await tx.execute(sql`
-      SELECT p.id, p.status, p.amount_usd::text AS amount,
+    const targetId = await expenseAccountTx(tx,companyId);
+    if(targetId===OLD_ACCOUNT_ID)throw new Error("BONUS_ACCOUNT_CORRECTION_TARGET_EQUALS_SOURCE");
+    const payments = rows(await tx.execute(sql`
+      SELECT p.id,p.status,p.amount_usd::text AS amount,
         p.payment_date::text AS "paymentDate",
         p.cash_ledger_account_id AS "cashId",
         p.expense_ledger_account_id AS "expenseId",
         p.payment_voucher_id AS "voucherId",
-        ea.code AS "expenseCode", v.voucher_type AS "voucherType",
-        v.voucher_date::text AS "voucherDate", v.currency,
-        v.deleted_at AS "deletedAt"
+        ea.code AS "expenseCode",
+        v.voucher_type AS "voucherType",v.voucher_date::text AS "voucherDate",
+        v.currency,v.deleted_at AS "deletedAt"
       FROM factory_target_bonus_manual_payments p
-      JOIN ledger_accounts ea ON ea.id = p.expense_ledger_account_id AND ea.company_id=p.company_id
+      JOIN ledger_accounts ea ON ea.id=p.expense_ledger_account_id AND ea.company_id=p.company_id
       JOIN vouchers v ON v.id=p.payment_voucher_id AND v.company_id=p.company_id
       WHERE p.company_id=${companyId} AND p.id BETWEEN 1 AND 9
       ORDER BY p.id FOR UPDATE OF p
     `));
-    if (payments.length !== expectedAmounts.length)
-      throw new Error("PRODUCTION_BONUS_RECLASS_UNEXPECTED_PAYMENT_COUNT");
-    for (let i=0; i<payments.length; i++) {
-      const p = payments[i];
-      if (Number(p.id)!==i+1 || String(p.amount)!==expectedAmounts[i] ||
-          p.status!=="POSTED" || p.paymentDate!=="2026-10-31" ||
-          p.voucherDate!=="2026-10-31" || p.currency!=="USD" ||
-          p.voucherType!=="Payment" || p.deletedAt ||
-          p.expenseCode!=="PAYROLL_DEPOSIT_EXPENSE" ||
-          Number(p.voucherId)!==16893+i || Number(p.expenseId)!==819)
-        throw new Error(`PRODUCTION_BONUS_RECLASS_SOURCE_MISMATCH_${i+1}`);
-      const lines = many(await tx.execute(sql`
-        SELECT ledger_account_id AS "accountId",
-          COALESCE(debit_amount,0)::text AS debit, COALESCE(credit_amount,0)::text AS credit
-        FROM voucher_entries WHERE voucher_id=${Number(p.voucherId)}
+    if(payments.length!==9)throw new Error("BONUS_ACCOUNT_CORRECTION_SOURCE_COUNT_CHANGED");
+
+    const originalDebitEntries: Array<{id:number; amount:string; state:"old"|"new"}>=[];
+    for(let i=0;i<payments.length;i++){
+      const p=payments[i],voucherId=Number(p.voucherId);
+      const amount=Number(p.amount);
+      if(Number(p.id)!==i+1||String(p.amount)!==EXPECTED[i]||
+          p.paymentDate!=="2026-10-31"||p.voucherDate!=="2026-10-31"||
+          voucherId!==16893+i||p.voucherType!=="Payment"||
+          p.currency!=="USD"||p.deletedAt||
+          !["POSTED","REVERSED"].includes(String(p.status)))
+        throw new Error(`BONUS_ACCOUNT_CORRECTION_SOURCE_CHANGED_${i+1}`);
+      const state: string = p.expenseCode===OLD_CODE&&Number(p.expenseId)===OLD_ACCOUNT_ID
+        ?"old":p.expenseCode===NEW_CODE&&Number(p.expenseId)===targetId?"new":"invalid";
+      if(state==="invalid")throw new Error(`BONUS_ACCOUNT_CORRECTION_UNEXPECTED_ACCOUNT_${i+1}`);
+      const entries=rows(await tx.execute(sql`
+        SELECT id,ledger_account_id AS "accountId",
+          COALESCE(debit_amount,0)::text AS debit,
+          COALESCE(credit_amount,0)::text AS credit
+        FROM voucher_entries WHERE voucher_id=${voucherId}
+        ORDER BY id
       `));
-      if (lines.length!==2 ||
-          !lines.some(l=>Number(l.accountId)===Number(p.expenseId) &&
-            Number(l.debit)===Number(p.amount) && Number(l.credit)===0) ||
-          !lines.some(l=>Number(l.accountId)===Number(p.cashId) &&
-            Number(l.credit)===Number(p.amount) && Number(l.debit)===0))
-        throw new Error(`PRODUCTION_BONUS_RECLASS_LINES_MISMATCH_${i+1}`);
+      if(entries.length!==2)throw new Error(`BONUS_ACCOUNT_CORRECTION_LINES_CHANGED_${i+1}`);
+      const expense=entries.find(e=>
+        Number(e.accountId)===(state==="old"?OLD_ACCOUNT_ID:targetId)
+        &&Number(e.debit)===amount&&Number(e.credit)===0);
+      const cash=entries.find(e=>Number(e.accountId)===Number(p.cashId)
+        &&Number(e.debit)===0&&Number(e.credit)===amount);
+      if(!expense||!cash||Number(expense.id)===Number(cash.id))
+        throw new Error(`BONUS_ACCOUNT_CORRECTION_BALANCE_MISMATCH_${i+1}`);
+      originalDebitEntries.push({id:Number(expense.id),amount:String(p.amount),state:state as "old"|"new"});
     }
-    const targetId = await expenseAccountTx(tx, companyId);
-    const originalId = 819;
-    let posted=0, alreadyPosted=0;
-    for (const p of payments) {
-      const paymentId=Number(p.id);
-      const narration=`Reclassify historical manual Production Bonus #${paymentId} (original voucher #${p.voucherId})`;
-      const {replayed}=await postErpVoucherTx(tx,{
-        companyId, voucherType:"Journal", voucherDate:"2026-10-31",
-        currency:"USD",sourceModule:"FACTORY",description:narration,
-        source:{type:correctionType,id:sourceId(companyId,"manual",paymentId),revision:"expense"},
-        actor:{userId:"system:production-bonus-expense-reclass",username:"system",
-          reason:"Owner-approved correction: Payroll Deposit Expense to Production Bonus Expense"},
-        lines:[
-          {ledgerAccountId:targetId,debit:String(p.amount),narration},
-          {ledgerAccountId:originalId,credit:String(p.amount),narration},
-        ],
+
+    const already=originalDebitEntries.filter(e=>e.state==="new").length;
+    if(already===9)return {inspected:9,corrected:0,previouslyCorrected:9,totalUsd:"229.00"};
+    if(already!==0)throw new Error("BONUS_ACCOUNT_CORRECTION_PARTIAL_STATE_REQUIRES_REVIEW");
+    if(payments.some(p=>p.status!=="POSTED"))
+      throw new Error("BONUS_ACCOUNT_CORRECTION_REVERSED_SOURCE_REQUIRES_REVIEW");
+
+    for(let i=0;i<payments.length;i++){
+      const p=payments[i],voucherId=Number(p.voucherId);
+      const ctx=await assertVoucherEditableTx(tx,voucherId,{companyId});
+      const updated=rows(await tx.execute(sql`
+        UPDATE voucher_entries SET ledger_account_id=${targetId}
+        WHERE id=${originalDebitEntries[i].id} AND voucher_id=${voucherId}
+          AND ledger_account_id=${OLD_ACCOUNT_ID}
+        RETURNING id
+      `));
+      if(updated.length!==1)throw new Error(`BONUS_ACCOUNT_CORRECTION_ENTRY_UPDATE_FAILED_${i+1}`);
+      const claim=rows(await tx.execute(sql`
+        UPDATE factory_target_bonus_manual_payments
+        SET expense_ledger_account_id=${targetId}
+        WHERE company_id=${companyId} AND id=${Number(p.id)}
+          AND expense_ledger_account_id=${OLD_ACCOUNT_ID}
+        RETURNING id
+      `));
+      if(claim.length!==1)throw new Error(`BONUS_ACCOUNT_CORRECTION_CLAIM_UPDATE_FAILED_${i+1}`);
+      await recordVoucherEditAuditTx(tx,{
+        voucherId,before:ctx.before,actor:ACTOR,
+        reason:"Correct manual Production Targets bonus debit from Payroll Deposit Expense to Production Bonus Expense; cash payment unchanged",
+        extra:{bonusPaymentId:{new:Number(p.id)},fromAccountId:{old:OLD_ACCOUNT_ID},toAccountId:{new:targetId}},
       });
-      if(replayed)alreadyPosted++;else posted++;
+      await logAudit({
+        userId:ACTOR.userId,username:ACTOR.username,companyId,action:"update",
+        tableName:"factory_target_bonus_manual_payments",recordId:Number(p.id),
+        recordIdentifier:`Production bonus #${p.id} corrected expense account`,
+        changes:{expenseLedgerAccountId:{old:OLD_ACCOUNT_ID,new:targetId},
+          paymentVoucherId:{old:voucherId,new:voucherId}},
+      },tx);
     }
-    return {inspected:payments.length,posted,alreadyPosted,totalUsd:"229.00"};
-  }),"approved-production-bonus-expense-reclassification");
+    return {inspected:9,corrected:9,previouslyCorrected:0,totalUsd:"229.00"};
+  }),"approved-production-bonus-expense-account-correction");
 }
