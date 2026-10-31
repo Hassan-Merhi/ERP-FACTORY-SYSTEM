@@ -19,6 +19,15 @@ import { AlertTriangle, ClipboardList, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 
 const MONTH_NAMES = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const RECONCILIATION_VIEWS = [
+  { key: "ACTIVE_RENT", label: "Active rent" },
+  { key: "GUARANTEE", label: "Guarantee movements" },
+  { key: "ENDED_RENT", label: "Ended leases" },
+  { key: "SCHEDULED", label: "Scheduled" },
+  { key: "OTHER", label: "Other" },
+  { key: "ALL", label: "All records" },
+] as const;
+type ReconciliationView = (typeof RECONCILIATION_VIEWS)[number]["key"];
 type PaymentRow = {
   id: number;
   paymentDate: string;
@@ -34,6 +43,8 @@ type PaymentRow = {
   tenantName: string | null;
   unitNumber: string | null;
   locationGroup: string | null;
+  sourceModule?: string;
+  reconciliationCategory?: "ACTIVE_RENT" | "GUARANTEE" | "ENDED_RENT" | "SCHEDULED" | "OTHER";
 };
 
 interface Props {
@@ -58,12 +69,13 @@ export default function RentalPaymentsLog({
   const { tableProps: cardTableProps } = useMobileCardTable();
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<PaymentRow | null>(null);
+  const [reconciliationView, setReconciliationView] = useState<ReconciliationView>("ACTIVE_RENT");
 
-  const queryKey = [apiBase + "/payments", selectedCompany?.id];
   // The Properties warehouse KPI is the source of truth for active rent paid.
   // Reuse the exact same units query/key here so the two summary numbers agree.
   // This does not alter the transaction log or any accounting data.
   const isPropertiesPayments = apiBase === "/api/properties/rental";
+  const queryKey = [apiBase + "/payments", { companyId: selectedCompany?.id, view: isPropertiesPayments ? "warehouse-reconciliation" : "default" }];
   const { data: warehouseUnits = [], isLoading: warehouseTotalsLoading, isError: warehouseTotalsError } =
     useQuery<Array<{ totalPaid?: number | null }>>({
       queryKey: [apiBase + "/units", { unitType: "WAREHOUSE", companyId: selectedCompany?.id }],
@@ -78,7 +90,10 @@ export default function RentalPaymentsLog({
   const { data: payments = [], isLoading } = useQuery<PaymentRow[]>({
     queryKey,
     queryFn: async () => {
-      const res = await fetch(`${apiBase}/payments`, { credentials: "include" });
+      const res = await fetch(
+        `${apiBase}/payments${isPropertiesPayments ? "?view=warehouse-reconciliation" : ""}`,
+        { credentials: "include" }
+      );
       if (!res.ok) throw new Error("Failed to load payments");
       return res.json();
     },
@@ -89,6 +104,7 @@ export default function RentalPaymentsLog({
     mutationFn: (id: number) => apiRequest("DELETE", `${apiBase}/payments/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey });
+      queryClient.invalidateQueries({ queryKey: [apiBase + "/units"] });
       toast({ title: "Payment deleted", description: "The payment and its accounting entry have been removed." });
       setDeleteTarget(null);
     },
@@ -98,16 +114,24 @@ export default function RentalPaymentsLog({
     },
   });
 
-  const filtered = useMemo(() => {
-    if (!search.trim()) return payments;
-    return payments.filter((p) => searchAny(search, p.tenantName, p.unitNumber, p.locationGroup, p.notes));
-  }, [payments, search]);
+  const viewPayments = useMemo(() => {
+    if (!isPropertiesPayments || reconciliationView === "ALL") return payments;
+    return payments.filter((p) => p.reconciliationCategory === reconciliationView);
+  }, [payments, isPropertiesPayments, reconciliationView]);
 
+  const filtered = useMemo(() => {
+    if (!search.trim()) return viewPayments;
+    return viewPayments.filter((p) => searchAny(search, p.tenantName, p.unitNumber, p.locationGroup, p.notes, p.sourceModule));
+  }, [viewPayments, search]);
+
+  // All monetary totals are sums of the visible payment records, never an
+  // unrelated KPI substituted into the table footer.
   const total = filtered.reduce((s, p) => s + Number(p.amount), 0);
-  // The log includes guarantees and ended leases, and can omit ERP-module
-  // rent on active Properties contracts. Its row sum is not the warehouse KPI.
   const activeWarehouseRentPaid = warehouseUnits.reduce((s, u) => s + Number(u.totalPaid ?? 0), 0);
-  const totalReceived = isPropertiesPayments ? activeWarehouseRentPaid : total;
+  const isActiveUnfiltered = isPropertiesPayments && reconciliationView === "ACTIVE_RENT" && !search.trim();
+  const discrepancy = isActiveUnfiltered && !warehouseTotalsLoading && !warehouseTotalsError
+    && !isLoading && Math.abs(total - activeWarehouseRentPaid) > 0.009;
+  const currentViewLabel = RECONCILIATION_VIEWS.find((v) => v.key === reconciliationView)?.label ?? "Payments";
 
   return (
     <div
@@ -150,6 +174,27 @@ export default function RentalPaymentsLog({
         </div>
       )}
 
+      {isPropertiesPayments && (
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Payment type">
+          {RECONCILIATION_VIEWS.map((view) => {
+            const count = view.key === "ALL"
+              ? payments.length
+              : payments.filter((payment) => payment.reconciliationCategory === view.key).length;
+            return (
+              <Button
+                key={view.key}
+                size="sm"
+                variant={reconciliationView === view.key ? "default" : "outline"}
+                onClick={() => setReconciliationView(view.key)}
+                aria-pressed={reconciliationView === view.key}
+              >
+                {view.label} ({count})
+              </Button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Card>
@@ -171,16 +216,13 @@ export default function RentalPaymentsLog({
               className="text-2xl font-bold text-green-600 dark:text-green-400"
               data-testid={`stat-${testIdPrefix}-total-amount`}
             >
-              {isPropertiesPayments && warehouseTotalsLoading
-                ? "…"
-                : isPropertiesPayments && warehouseTotalsError
-                  ? "Unavailable"
-                  : formatMoneyNumber(totalReceived)}
+              {formatMoneyNumber(total)}
             </div>
             {isPropertiesPayments && (
               <p className="mt-1 text-xs text-muted-foreground">
-                Same active warehouse rent total as Total Paid (including ERP payments).
-                <span className="block">Payments listed below: {formatMoneyNumber(total)}</span>
+                {currentViewLabel}: sum of the {search.trim() ? "matching" : "displayed"} records.
+                {isActiveUnfiltered && !discrepancy && !warehouseTotalsLoading && !warehouseTotalsError &&
+                  " Reconciles with Warehouse Total Paid."}
               </p>
             )}
           </CardContent>
@@ -195,6 +237,14 @@ export default function RentalPaymentsLog({
         </Card>
       </div>
 
+      {discrepancy && (
+        <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300" role="status">
+          Active rent entries total ${formatMoneyNumber(total)}, while Warehouse Total Paid is
+          ${formatMoneyNumber(activeWarehouseRentPaid)}. Check cross-company payment ownership or timing.
+          No amounts have been adjusted.
+        </div>
+      )}
+
       {/* Payments table */}
       <Card>
         <CardContent className="p-0">
@@ -203,7 +253,7 @@ export default function RentalPaymentsLog({
               <div className="p-8 text-center text-muted-foreground">Loading payments…</div>
             ) : filtered.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">
-                {payments.length === 0 ? "No payments recorded yet." : "No payments match your search."}
+                {payments.length === 0 ? "No payments recorded yet." : "No payments match the selected type or search."}
               </div>
             ) : (
               <table className="w-full text-sm" {...cardTableProps} data-testid={`table-${testIdPrefix}-payments`}>
@@ -244,7 +294,12 @@ export default function RentalPaymentsLog({
                       <td className="px-3 py-2 text-xs text-muted-foreground">
                         {MONTH_NAMES[p.forMonth]} {p.forYear}
                       </td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">{p.notes ?? ""}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">
+                        {isPropertiesPayments && p.sourceModule === "ERP" && (
+                          <Badge variant="outline" className="mr-2 text-[10px]">ERP source</Badge>
+                        )}
+                        {p.notes ?? ""}
+                      </td>
                       <td className="px-3 py-2">
                         {p.voucherId ? (
                           <span className="text-xs text-muted-foreground font-mono">#{p.voucherId}</span>
@@ -259,15 +314,21 @@ export default function RentalPaymentsLog({
                         )}
                       </td>
                       <td className="px-2 py-1 text-right">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => setDeleteTarget(p)}
-                          aria-label="Delete payment"
-                          data-testid={`button-delete-payment-${p.id}`}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        {isPropertiesPayments && p.sourceModule !== "PROPERTIES" ? (
+                          <span className="text-xs text-muted-foreground" title="Manage this payment from its original ERP rental module">
+                            ERP source
+                          </span>
+                        ) : (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => setDeleteTarget(p)}
+                            aria-label="Delete payment"
+                            data-testid={`button-delete-payment-${p.id}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -275,7 +336,7 @@ export default function RentalPaymentsLog({
                 <tfoot className="sticky bottom-0 z-20 border-t-2 bg-muted/30">
                   <tr>
                     <td className="px-3 py-2 font-semibold" colSpan={3}>
-                      {isPropertiesPayments ? "TOTAL LISTED TRANSACTIONS" : "TOTAL"}
+                      {isPropertiesPayments ? `TOTAL — ${currentViewLabel.toUpperCase()}` : "TOTAL"}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums font-bold text-green-700 dark:text-green-400">
                       {formatMoneyNumber(total)}
