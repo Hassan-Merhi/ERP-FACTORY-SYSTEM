@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from "react";
-import { BarChart3, CalendarDays, Check, CalendarOff, UserRound } from "lucide-react";
+import { BarChart3, CalendarDays, Check, CalendarOff, UserRound, UsersRound } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { bonusText } from "@/i18n/factoryProductionBonusCheckoutTranslations";
@@ -14,6 +14,7 @@ export type BonusSheetDay = {
   category: string;
   issue: string | null;
   status: string;
+  linkGroupId: number | null;
 };
 export type BonusSheetWorker = {
   workerId: number;
@@ -88,6 +89,31 @@ export function ProductionBonusWeeklySheet({
     const days = worker.days.filter(day => isProductionWorkday(day.date));
     return { ...worker, days };
   }), [workers]);
+  // Group only workers sharing a currently visible production link. This changes
+  // presentation order only; every member keeps their own credited bales,
+  // target, checkbox and independently validated payment.
+  const arrangedWorkers = useMemo(() => {
+    const groups = new Map<number, BonusSheetWorker[]>();
+    const latestLink = (worker: BonusSheetWorker) =>
+      [...worker.days].reverse().find(day => day.linkGroupId != null)?.linkGroupId ?? null;
+    for (const worker of visibleWorkers) {
+      const id = latestLink(worker);
+      if (id != null) groups.set(id, [...(groups.get(id) ?? []), worker]);
+    }
+    const arranged: Array<{ worker: BonusSheetWorker; members: BonusSheetWorker[]; first: boolean }> = [];
+    const seen = new Set<number>();
+    for (const worker of visibleWorkers) {
+      if (seen.has(worker.workerId)) continue;
+      const id = latestLink(worker);
+      const team = id != null ? groups.get(id) : undefined;
+      const members = team && team.length > 1 ? team.filter(member => !seen.has(member.workerId)) : [worker];
+      for (const [index, member] of members.entries()) {
+        arranged.push({ worker: member, members, first: index === 0 });
+        seen.add(member.workerId);
+      }
+    }
+    return arranged;
+  }, [visibleWorkers]);
   const dayTotals = useMemo(() => dates.map(date =>
     visibleWorkers.reduce((total, worker) =>
       total + (worker.days.find(day => day.date === date)?.produced ?? 0), 0),
@@ -113,7 +139,7 @@ export function ProductionBonusWeeklySheet({
           <div>
             <h3 className="text-lg font-semibold tracking-tight">{t("sheetView")}</h3>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Daily output, individual targets and weekly bonuses at a glance.
+              Daily output and individual targets. Weekly flat bonuses are reviewed and paid separately below.
             </p>
           </div>
         </div>
@@ -153,38 +179,60 @@ export function ProductionBonusWeeklySheet({
           <tbody>
             {loading && <tr><td colSpan={dates.length + 3} className="px-4 py-12 text-center text-muted-foreground">{t("loading")}</td></tr>}
             {!loading && !visibleWorkers.length && <tr><td colSpan={dates.length + 3} className="px-4 py-12 text-center text-muted-foreground">{t("noRows")}</td></tr>}
-            {!loading && visibleWorkers.map((worker, index) => {
+            {!loading && arrangedWorkers.map(({ worker, members, first }, index) => {
               const ready = worker.readyDays > 0;
               const byDate = new Map(worker.days.map(day => [day.date, day]));
               const made = worker.days.reduce((sum, day) => sum + day.produced, 0);
               const target = worker.days.reduce((sum, day) => sum + day.target, 0);
               const achievedWeek = target > 0 && made >= target;
-              const state = ready ? t("ready") : worker.paidDays ? t("paidStatus")
-                : worker.weeklyProjected ? "Bonus projected"
-                : worker.weeklyApproved ? "Bonus approved"
-                : worker.weeklyDays ? "Weekly bonus"
-                : worker.needsSetup ? t("needsSetup")
-                : worker.blockedDays ? t("needsReview") : t("sheetNoExtra");
               return <tr key={worker.workerId} className="group hover:bg-muted/20">
-                <th scope="row" className="sticky left-0 z-10 border-b border-r border-border/50 bg-card px-3 py-3 text-left group-hover:bg-muted sm:px-4">
-                  <div className="flex items-center gap-3">
-                    <Checkbox checked={selected.includes(worker.workerId)} disabled={!ready}
-                      aria-label={t("selectBonus") + " " + worker.workerName}
-                      onCheckedChange={checked => onToggle(worker.workerId, checked === true)} />
-                    <span className={"flex h-9 w-9 shrink-0 items-center justify-center rounded-full " + avatarStyles[index % avatarStyles.length]}>
-                      <UserRound className="h-4 w-4" aria-hidden="true" />
-                    </span>
-                    <div className="min-w-0">
-                      <span className="block whitespace-nowrap text-sm font-semibold" dir="auto">{worker.workerName}</span>
-                      <span className={"mt-1 inline-flex max-w-[140px] rounded-md border px-2 py-0.5 text-[10px] font-medium " +
-                        (worker.weeklyDays || worker.weeklyProjected || worker.weeklyApproved
-                          ? "border-indigo-500/20 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300"
-                          : "border-border/70 bg-muted/70 text-muted-foreground")}>
-                        {state}
-                      </span>
-                    </div>
+                {first && <th scope="row" rowSpan={members.length}
+                  className="sticky left-0 z-10 border-b border-r border-border/50 bg-card px-2 py-2 text-left align-top group-hover:bg-muted sm:px-3">
+                  <div className={members.length > 1
+                    ? "overflow-hidden rounded-xl border-2 border-violet-500/40 bg-violet-500/[0.06]"
+                    : ""} data-linked-workers={members.length > 1 ? "true" : undefined}>
+                    {members.length > 1 && <div className="flex items-center gap-1.5 border-b border-violet-500/25 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-700 dark:text-violet-300">
+                      <UsersRound className="h-3.5 w-3.5" aria-hidden="true"/>
+                      Linked team · {members.length} workers
+                    </div>}
+                    {members.map((member, memberIndex) => {
+                      const eligible = member.readyDays > 0;
+                      const memberState = eligible ? t("ready") : member.paidDays ? t("paidStatus")
+                        : member.weeklyProjected ? "Bonus projected"
+                        : member.weeklyApproved ? "Bonus approved"
+                        : member.weeklyDays ? "Weekly bonus"
+                        : member.needsSetup ? t("needsSetup")
+                        : member.blockedDays ? t("needsReview") : t("sheetNoExtra");
+                      return <div key={member.workerId}
+                        className={"flex min-h-[80px] items-center gap-2 px-2 py-2 " +
+                          (memberIndex > 0 ? "border-t border-violet-500/20 " : "") +
+                          (members.length > 1 ? "sm:px-3" : "")}>
+                        <Checkbox checked={selected.includes(member.workerId)} disabled={!eligible}
+                          aria-label={t("selectBonus") + " " + member.workerName}
+                          title={!eligible && (member.weeklyProjected || member.weeklyApproved || member.weeklyDays)
+                            ? "Weekly flat bonuses are handled in the Weekly Bonus Review & Pay section below"
+                            : !eligible ? "No approved or payable daily bonus for this worker" : undefined}
+                          onCheckedChange={checked => onToggle(member.workerId, checked === true)} />
+                        <span className={"flex h-9 w-9 shrink-0 items-center justify-center rounded-full " +
+                          avatarStyles[(index + memberIndex) % avatarStyles.length]}>
+                          <UserRound className="h-4 w-4" aria-hidden="true" />
+                        </span>
+                        <div className="min-w-0">
+                          <span className="block whitespace-nowrap text-sm font-semibold" dir="auto">{member.workerName}</span>
+                          {memberIndex > 0 && <span className="block text-[10px] font-semibold text-violet-700 dark:text-violet-300" dir="auto">
+                            Linked to {members[0].workerName}
+                          </span>}
+                          <span className={"mt-1 inline-flex max-w-[145px] rounded-md border px-2 py-0.5 text-[10px] font-medium " +
+                            (member.weeklyDays || member.weeklyProjected || member.weeklyApproved
+                              ? "border-indigo-500/20 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300"
+                              : "border-border/70 bg-muted/70 text-muted-foreground")}>
+                            {memberState}
+                          </span>
+                        </div>
+                      </div>;
+                    })}
                   </div>
-                </th>
+                </th>}
                 {dates.map(date => {
                   const day = byDate.get(date);
                   const achieved = Boolean(day && day.target > 0 && day.produced >= day.target);
@@ -242,7 +290,7 @@ export function ProductionBonusWeeklySheet({
                     {dollars(worker.amount + worker.weeklyAmount)}
                   </strong>
                   {worker.weeklyAmount > 0 && <span className="mt-1 block text-[10px] font-medium text-amber-600 dark:text-amber-400">
-                    {worker.weeklyProjected ? "Projected · not payable yet" : "Weekly approval · paid separately"}
+                    {worker.weeklyProjected ? "Projected · finish week and approve before payment" : "Weekly approved · pay in the section below"}
                   </span>}
                 </td>
               </tr>;
@@ -260,7 +308,7 @@ export function ProductionBonusWeeklySheet({
               </td>
               <td className="px-3 py-3 text-right">
                 {dollars(displayedTotal)}
-                {includesWeekly && <span className="block text-[10px] font-normal text-muted-foreground">Includes weekly estimates · not payable here</span>}
+                {includesWeekly && <span className="block text-[10px] font-normal text-muted-foreground">Includes weekly estimates · use Weekly Bonus Review & Pay below</span>}
               </td>
             </tr>
           </tfoot>}
