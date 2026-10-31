@@ -17,14 +17,20 @@ import { useAppMode } from "@/contexts/AppModeContext";
 import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 import { AlertTriangle, ClipboardList, Trash2 } from "lucide-react";
 import { format } from "date-fns";
+import {
+  HISTORICAL_RENT_COMPANY,
+  HISTORICAL_RENT_CUTOFF_LABEL,
+  belongsToHistoricalRentSnapshot,
+} from "./property-rental/historicalRentSnapshot";
 
 const MONTH_NAMES = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const RECONCILIATION_VIEWS = [
+  { key: "HISTORICAL_RENT", label: "Rent through 26 Oct" },
   { key: "ACTIVE_RENT", label: "Active rent" },
   { key: "GUARANTEE", label: "Guarantee movements" },
   { key: "ENDED_RENT", label: "Ended leases" },
   { key: "SCHEDULED", label: "Scheduled" },
-  { key: "OTHER", label: "Other" },
+  { key: "OTHER", label: "Other / billing adjustments" },
   { key: "ALL", label: "All records" },
 ] as const;
 type ReconciliationView = (typeof RECONCILIATION_VIEWS)[number]["key"];
@@ -45,6 +51,7 @@ type PaymentRow = {
   locationGroup: string | null;
   sourceModule?: string;
   reconciliationCategory?: "ACTIVE_RENT" | "GUARANTEE" | "ENDED_RENT" | "SCHEDULED" | "OTHER";
+  postingStatus?: string;
 };
 
 interface Props {
@@ -69,12 +76,14 @@ export default function RentalPaymentsLog({
   const { tableProps: cardTableProps } = useMobileCardTable();
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<PaymentRow | null>(null);
-  const [reconciliationView, setReconciliationView] = useState<ReconciliationView>("ACTIVE_RENT");
+  const [reconciliationView, setReconciliationView] = useState<ReconciliationView>("HISTORICAL_RENT");
 
-  // The Properties warehouse KPI is the source of truth for active rent paid.
-  // Reuse the exact same units query/key here so the two summary numbers agree.
-  // This does not alter the transaction log or any accounting data.
+  // Both pages use the same voucher-backed dated rent snapshot. No payment is created.
   const isPropertiesPayments = apiBase === "/api/properties/rental";
+  const isHassanProperties = isPropertiesPayments && selectedCompany?.name === HISTORICAL_RENT_COMPANY;
+  const effectiveView = !isHassanProperties && reconciliationView === "HISTORICAL_RENT"
+    ? "ACTIVE_RENT"
+    : reconciliationView;
   const queryKey = [apiBase + "/payments", { companyId: selectedCompany?.id, view: isPropertiesPayments ? "warehouse-reconciliation" : "default" }];
   const { data: warehouseUnits = [], isLoading: warehouseTotalsLoading, isError: warehouseTotalsError } =
     useQuery<Array<{ totalPaid?: number | null }>>({
@@ -115,9 +124,15 @@ export default function RentalPaymentsLog({
   });
 
   const viewPayments = useMemo(() => {
-    if (!isPropertiesPayments || reconciliationView === "ALL") return payments;
-    return payments.filter((p) => p.reconciliationCategory === reconciliationView);
-  }, [payments, isPropertiesPayments, reconciliationView]);
+    if (!isPropertiesPayments || effectiveView === "ALL") return payments;
+    if (effectiveView === "HISTORICAL_RENT") return payments.filter(belongsToHistoricalRentSnapshot);
+    if (effectiveView === "OTHER") {
+      // Includes recorded unvouchered corrections, which are not cash receipts.
+      return payments.filter((p) => p.reconciliationCategory === "OTHER" || 
+        (p.voucherId == null && p.reconciliationCategory === "ACTIVE_RENT"));
+    }
+    return payments.filter((p) => p.reconciliationCategory === effectiveView);
+  }, [payments, isPropertiesPayments, effectiveView]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return viewPayments;
@@ -128,10 +143,10 @@ export default function RentalPaymentsLog({
   // unrelated KPI substituted into the table footer.
   const total = filtered.reduce((s, p) => s + Number(p.amount), 0);
   const activeWarehouseRentPaid = warehouseUnits.reduce((s, u) => s + Number(u.totalPaid ?? 0), 0);
-  const isActiveUnfiltered = isPropertiesPayments && reconciliationView === "ACTIVE_RENT" && !search.trim();
+  const isActiveUnfiltered = isPropertiesPayments && effectiveView === "ACTIVE_RENT" && !search.trim();
   const discrepancy = isActiveUnfiltered && !warehouseTotalsLoading && !warehouseTotalsError
     && !isLoading && Math.abs(total - activeWarehouseRentPaid) > 0.009;
-  const currentViewLabel = RECONCILIATION_VIEWS.find((v) => v.key === reconciliationView)?.label ?? "Payments";
+  const currentViewLabel = RECONCILIATION_VIEWS.find((v) => v.key === effectiveView)?.label ?? "Payments";
 
   return (
     <div
@@ -176,23 +191,42 @@ export default function RentalPaymentsLog({
 
       {isPropertiesPayments && (
         <div className="flex flex-wrap gap-2" role="group" aria-label="Payment type">
-          {RECONCILIATION_VIEWS.map((view) => {
+          {RECONCILIATION_VIEWS.filter((view) => isHassanProperties || view.key !== "HISTORICAL_RENT").map((view) => {
             const count = view.key === "ALL"
               ? payments.length
-              : payments.filter((payment) => payment.reconciliationCategory === view.key).length;
+              : view.key === "HISTORICAL_RENT"
+                ? payments.filter(belongsToHistoricalRentSnapshot).length
+                : view.key === "OTHER"
+                  ? payments.filter((payment) => payment.reconciliationCategory === "OTHER" ||
+                      (payment.voucherId == null && payment.reconciliationCategory === "ACTIVE_RENT")).length
+                  : payments.filter((payment) => payment.reconciliationCategory === view.key).length;
             return (
               <Button
                 key={view.key}
                 size="sm"
-                variant={reconciliationView === view.key ? "default" : "outline"}
+                variant={effectiveView === view.key ? "default" : "outline"}
                 onClick={() => setReconciliationView(view.key)}
-                aria-pressed={reconciliationView === view.key}
+                aria-pressed={effectiveView === view.key}
               >
                 {view.label} ({count})
               </Button>
             );
           })}
         </div>
+      )}
+
+      {isHassanProperties && effectiveView === "HISTORICAL_RENT" && (
+        <p className="text-xs text-muted-foreground">
+          Historical rent through {HISTORICAL_RENT_CUTOFF_LABEL}, including MORINA K's ended lease.
+          Later receipts, guarantee releases and unvouchered adjustments are shown in their own views.
+        </p>
+      )}
+
+      {isHassanProperties && effectiveView === "OTHER" && (
+        <p className="text-xs text-muted-foreground">
+          STE SIARSEGO's $800 billing transition adjustment has no payment voucher.
+          It remains in the original records but is not counted as voucher-backed rent paid.
+        </p>
       )}
 
       {/* Summary */}
@@ -209,7 +243,11 @@ export default function RentalPaymentsLog({
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs text-muted-foreground font-normal">TOTAL AMOUNT RECEIVED</CardTitle>
+            <CardTitle className="text-xs text-muted-foreground font-normal">
+              {isHassanProperties && effectiveView === "HISTORICAL_RENT"
+                ? "RENT PAID THROUGH 26 OCT"
+                : isHassanProperties ? "TOTAL AMOUNT RECORDED" : "TOTAL AMOUNT RECEIVED"}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div
