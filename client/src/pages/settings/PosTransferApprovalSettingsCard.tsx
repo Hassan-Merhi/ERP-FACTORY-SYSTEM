@@ -19,6 +19,7 @@ type DeliveryHealth = {
   delegateConfigured: boolean;
   groupConfigured: boolean;
   groupName: string | null;
+  groupVisible: boolean | null;
   whatsappState: string;
   ready: boolean;
   note: string;
@@ -138,7 +139,7 @@ export function PosTransferApprovalSettingsCard() {
           <p className={health.ready ? "font-medium text-green-600" : "font-medium text-amber-600"}>
             {health.ready ? "Ready for approval-to-WhatsApp" : "Not ready for approval-to-WhatsApp"}
           </p>
-          <p>WhatsApp: {health.whatsappState} · Group: {health.groupName || "Not configured"} · POS delegate: {health.delegateConfigured ? "Assigned" : "Not assigned"}</p>
+          <p>WhatsApp: {health.whatsappState} · Group: {health.groupName || "Not configured"} · Group visible: {health.groupVisible === null ? "Unverified" : health.groupVisible ? "Yes" : "No"} · POS delegate: {health.delegateConfigured ? "Assigned" : "Not assigned"}</p>
           <p className="text-xs text-muted-foreground">{health.note}</p>
         </div>
       )}
