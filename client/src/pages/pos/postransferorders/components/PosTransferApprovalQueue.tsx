@@ -7,14 +7,15 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
 
-type PendingRevision = {
-  id: number;
-  revisionNumber: number;
+type PendingTransfer = {
+  transferId: number;
+  revisionId: number;
+  pendingRevisionCount: number;
   voucherNumber: string;
   destinationName: string;
   createdAt: string;
 };
-type Queue = { enabled: boolean; needsGroup?: boolean; revisions: PendingRevision[] };
+type Queue = { enabled: boolean; needsGroup?: boolean; transfers: PendingTransfer[] };
 type Result = { approved: boolean; sent: boolean; message: string };
 
 export function PosTransferApprovalQueue() {
@@ -64,31 +65,34 @@ export function PosTransferApprovalQueue() {
           <ShieldCheck className="h-5 w-5 text-blue-500" />
           <div>
             <h3 className="font-semibold">Approve Stock Transfer Revisions</h3>
-            <p className="text-xs text-muted-foreground">One-click approval and automatic cost-free WhatsApp Excel delivery</p>
+            <p className="text-xs text-muted-foreground">Approve every pending revision for each transfer, then send one cost-free WhatsApp Excel</p>
           </div>
         </div>
-        <Badge variant="secondary">{queue.data.revisions.length} pending</Badge>
+        <Badge variant="secondary">{queue.data.transfers.length} transfers pending</Badge>
       </div>
-      {queue.data.revisions.length === 0 ? (
-        <p className="p-4 text-sm text-muted-foreground">No pending revisions to approve.</p>
+      {queue.data.transfers.length === 0 ? (
+        <p className="p-4 text-sm text-muted-foreground">No pending transfers to approve.</p>
       ) : (
         <div className="divide-y">
-          {queue.data.revisions.map((revision) => (
-            <div key={revision.id} className="flex flex-wrap items-center gap-3 p-3 sm:p-4">
+          {queue.data.transfers.map((transfer) => (
+            <div key={transfer.transferId} className="flex flex-wrap items-center gap-3 p-3 sm:p-4">
               <Clock className="h-4 w-4 shrink-0 text-amber-500" />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold">{revision.voucherNumber} · Rev {revision.revisionNumber}</p>
-                <p className="text-xs text-muted-foreground">To {revision.destinationName} · Pending approval</p>
+                <p className="text-sm font-semibold">{transfer.voucherNumber}</p>
+                <p className="text-xs text-muted-foreground">
+                  To {transfer.destinationName} · {transfer.pendingRevisionCount} pending{" "}
+                  {transfer.pendingRevisionCount === 1 ? "revision" : "revisions"}
+                </p>
               </div>
               <Button
                 size="sm"
                 className="min-h-10 gap-1.5"
-                onClick={() => approve.mutate(revision.id)}
+                onClick={() => approve.mutate(transfer.revisionId)}
                 disabled={approve.isPending}
-                data-testid={"approve-send-transfer-revision-" + revision.id}
+                data-testid={"approve-send-transfer-" + transfer.transferId}
               >
                 <CheckCheck className="h-4 w-4" />
-                Approve &amp; Send
+                Approve All &amp; Send
                 <MessageCircle className="h-4 w-4" />
               </Button>
             </div>
