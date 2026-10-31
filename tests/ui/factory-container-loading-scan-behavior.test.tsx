@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const harness = vi.hoisted(() => ({
   // Admin, Owner and Developer can empty a loading; most cases run as Admin.
   currentRole: "Admin",
+  allowEmptyContainer: false,
+  allowedPageKeys: [] as string[],
   orderDetailReady: true,
   toast: vi.fn(),
   navigate: vi.fn(),
@@ -57,7 +59,12 @@ const capacitySnapshot = {
 vi.mock("@tanstack/react-query", () => ({
   useQuery: ({ queryKey, enabled }: any) => {
     const root = queryKey?.[0];
-    if (root === "/api/auth/me") return { data: { role: harness.currentRole, currentRole: harness.currentRole } };
+    if (root === "/api/auth/me") return { data: { id: "user-1", currentCompanyId: 1, role: harness.currentRole, currentRole: harness.currentRole } };
+    if (root === "/api/factory/my-access") return { data: {
+      hasFactoryAccess: true,
+      pageKeys: harness.allowedPageKeys,
+      hiddenCostFields: harness.allowEmptyContainer ? ["grant_loading_empty_container"] : [],
+    } };
     if (root === "/api/factory/customers") return { data: [{ id: 1, legalName: "Buyer One" }] };
     if (root === "/api/locations") return { data: [{ id: 11, name: "Dock" }] };
     if (root === "/api/factory/customer-proformas/capacity") {
@@ -220,6 +227,8 @@ describe("factory container loading scan behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     harness.currentRole = "Admin";
+    harness.allowEmptyContainer = false;
+    harness.allowedPageKeys = [];
     harness.orderDetailReady = true;
     localStorage.clear();
     Object.defineProperty(window, "AudioContext", { configurable: true, value: FakeAudioContext });
@@ -477,6 +486,30 @@ describe("factory container loading scan behavior", () => {
     harness.currentRole = "Owner";
     render(<FactoryContainerLoadingScan />);
     expect(await screen.findByTestId("button-empty-container")).toBeEnabled();
+  });
+
+  it("shows Empty Container for a Manager with the saved per-user grant", async () => {
+    harness.currentRole = "Manager";
+    harness.allowEmptyContainer = true;
+    render(<FactoryContainerLoadingScan />);
+    expect(await screen.findByTestId("button-empty-container")).toBeEnabled();
+  });
+
+  it("keeps page restrictions even when the action grant is present", async () => {
+    harness.currentRole = "Manager";
+    harness.allowEmptyContainer = true;
+    harness.allowedPageKeys = ["factory/stock-entry"];
+    render(<FactoryContainerLoadingScan />);
+    await waitFor(() => expect(screen.getByTestId("button-toggle-removal-log")).toBeInTheDocument());
+    expect(screen.queryByTestId("button-empty-container")).not.toBeInTheDocument();
+  });
+
+  it("never grants Empty Container to View Only", async () => {
+    harness.currentRole = "View Only";
+    harness.allowEmptyContainer = true;
+    render(<FactoryContainerLoadingScan />);
+    await waitFor(() => expect(screen.getByTestId("button-toggle-removal-log")).toBeInTheDocument());
+    expect(screen.queryByTestId("button-empty-container")).not.toBeInTheDocument();
   });
 
   it("hides Empty Container from users who are not authorized", async () => {

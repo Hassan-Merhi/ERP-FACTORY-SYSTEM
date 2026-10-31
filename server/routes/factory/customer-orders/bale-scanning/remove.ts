@@ -26,6 +26,8 @@ import { eq, and, inArray, isNull, ne, sql } from "drizzle-orm";
 import { FactoryInvoiceRateRefusalError } from "../../../../services/accounting/perpetualInventory/factoryInvoice";
 import { lockCustomerOrderTx, syncOrderTotalsTx } from "../orderChargeLedger";
 import { closedPeriodErrorResponse } from "../../../../lib/closedPeriodError";
+import { getFactoryAccessState } from "../../../../lib/factoryAccessControl";
+import { canEmptyFactoryLoadingContainer } from "@shared/factoryPermissionCatalog";
 
 export function registerOrderBaleRemovalRoutes(app: Express) {
   // POST /api/factory/customer-orders/:id/bales/empty — return every scanned bale to stock
@@ -33,11 +35,20 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
   app.post(
     "/api/factory/customer-orders/:id/bales/empty",
     requireAuth,
-    requireRole("Admin", "Owner"),
     async (req: Request, res: Response) => {
       try {
-        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        // Resolve the live company membership; a stale pinned factory id
+        // cannot widen this per-company destructive-action grant.
+        const access = await getFactoryAccessState(req);
+        if (!access || !canEmptyFactoryLoadingContainer({
+          role: access.role,
+          hasFactoryAccess: access.hasFactoryAccess,
+          pageKeys: access.pageKeys,
+          hiddenCostFields: access.hiddenTabs,
+        })) {
+          return res.status(403).json({ message: "You do not have permission to empty this container" });
+        }
+        const companyId = access.companyId;
 
         const orderId = parseId(req.params.id);
         if (orderId === null) return res.status(400).json({ message: "Invalid id" });
