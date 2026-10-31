@@ -19,17 +19,22 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { useToast } from "@/hooks/use-toast";
 import { CalendarDays, CheckCircle, XCircle, Save, UserCheck, UserX, User, ChevronsUpDown, Check } from "lucide-react";
 
-import type { AttendanceRecord, WorkerRow } from "../types";
-import { generateDateRange, todayStr } from "../utils";
+import type { AttendanceBulkRecord, AttendanceRecord, WorkerRow } from "../types";
+import { AttendanceAdminApprovalDialog } from "./AttendanceAdminApprovalDialog";
+import { attendancePastDates, attendanceToday, type AttendanceAdminCredentials } from "../attendanceEditPolicy";
+import { generateDateRange } from "../utils";
 import { SummaryCard } from "./SummaryCard";
 
 export function PerWorkerView() {
   const { toast } = useToast();
   const [selectedWorkerId, setSelectedWorkerId] = useState<string>("");
   const [workerComboOpen, setWorkerComboOpen] = useState(false);
-  const [startDate, setStartDate] = useState<string>(todayStr());
-  const [endDate, setEndDate] = useState<string>(todayStr());
+  const [startDate, setStartDate] = useState<string>(attendanceToday);
+  const [endDate, setEndDate] = useState<string>(attendanceToday);
   const [checkedDates, setCheckedDates] = useState<Record<string, boolean>>({});
+  const [approvalOpen, setApprovalOpen] = useState(false);
+  const [pendingApprovalRecords, setPendingApprovalRecords] = useState<AttendanceBulkRecord[] | null>(null);
+  const [approvalDates, setApprovalDates] = useState<string[]>([]);
 
   const { data: workersList, isLoading: loadingWorkers } = useQuery<WorkerRow[]>({
     queryKey: ["/api/factory/workers?active=true"],
@@ -91,8 +96,11 @@ export function PerWorkerView() {
   };
 
   const saveMutation = useMutation({
-    mutationFn: (records: unknown[]) => apiRequest("POST", "/api/factory/attendance/bulk", { records }),
+    mutationFn: (payload: { records: AttendanceBulkRecord[]; credentials?: AttendanceAdminCredentials }) =>
+      apiRequest("POST", "/api/factory/attendance/bulk", { records: payload.records, ...payload.credentials }),
     onSuccess: () => {
+      setApprovalOpen(false);
+      setPendingApprovalRecords(null);
       queryClient.invalidateQueries({
         queryKey: ["/api/factory/attendance/worker", workerIdNum, startDate, endDate],
       });
@@ -114,17 +122,31 @@ export function PerWorkerView() {
         existingStatusMap[r.attendanceDate] = r.status;
       }
     }
-    const records = dates.map((d) => {
+    const records: AttendanceBulkRecord[] = dates.map((d): AttendanceBulkRecord => {
       if (checkedDates[d]) {
         // Preserve existing granular status (Late, Half Day, Leave) if the date
         // is checked; fall back to "Present" for new/previously-absent dates.
         const existing = existingStatusMap[d];
-        const status = existing && existing !== "Absent" ? existing : "Present";
+        const status: AttendanceBulkRecord["status"] =
+          existing === "Late" || existing === "Half Day" || existing === "Leave"
+            ? existing
+            : "Present";
         return { workerId: workerIdNum, attendanceDate: d, status };
       }
       return { workerId: workerIdNum, attendanceDate: d, status: "Absent" };
     });
-    saveMutation.mutate(records);
+    const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
+    if (priorDates.length) {
+      setApprovalDates(priorDates);
+      setPendingApprovalRecords(records);
+      setApprovalOpen(true);
+    } else {
+      saveMutation.mutate({ records });
+    }
+  };
+
+  const approveAttendanceSave = (credentials: AttendanceAdminCredentials) => {
+    if (pendingApprovalRecords) saveMutation.mutate({ records: pendingApprovalRecords, credentials });
   };
 
   const selectedWorker = (workersList ?? []).find((w) => w.id === workerIdNum);
@@ -132,6 +154,9 @@ export function PerWorkerView() {
   return (
     <div className="space-y-4">
       {/* Controls */}
+      {attendancePastDates(generateDateRange(startDate, endDate)).length > 0 && (
+        <Badge variant="secondary">Earlier dates require Admin approval to save</Badge>
+      )}
       <Card className="overflow-hidden border-border/70 bg-card/75 shadow-none">
         <CardContent className="p-4">
           <div className="flex flex-wrap items-end gap-3">
@@ -191,6 +216,7 @@ export function PerWorkerView() {
               <Label className="text-xs text-muted-foreground">From</Label>
               <Input
                 type="date"
+                max={attendanceToday()}
                 data-testid="input-start-date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
@@ -202,6 +228,7 @@ export function PerWorkerView() {
               <Label className="text-xs text-muted-foreground">To</Label>
               <Input
                 type="date"
+                max={attendanceToday()}
                 data-testid="input-end-date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
@@ -234,7 +261,7 @@ export function PerWorkerView() {
                 size="default"
                 data-testid="button-save-per-worker"
                 onClick={handleSave}
-                disabled={!workerIdNum || dates.length === 0 || saveMutation.isPending}
+                disabled={!workerIdNum || dates.length === 0 || saveMutation.isPending || dates.some((d) => d > attendanceToday())}
               >
                 <Save className="h-4 w-4 mr-1" />
                 {saveMutation.isPending ? "Saving…" : "Save Attendance"}
@@ -363,6 +390,13 @@ export function PerWorkerView() {
           )}
         </CardContent>
       </Card>
+      <AttendanceAdminApprovalDialog
+        open={approvalOpen}
+        onOpenChange={setApprovalOpen}
+        onApprove={approveAttendanceSave}
+        isPending={saveMutation.isPending}
+        dates={approvalDates}
+      />
     </div>
   );
 }

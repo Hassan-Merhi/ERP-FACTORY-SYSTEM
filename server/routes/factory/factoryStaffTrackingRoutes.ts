@@ -19,6 +19,8 @@ import { loadProductionPeriodSummary } from "../../services/factory/productionPe
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { resultRows } from "../../lib/queryResult";
 import { sqlArray } from "../../lib/sqlArray";
+import { attendanceApprovalRateLimiter, requireAttendanceEditApproval } from "./attendanceEditPolicy";
+import { logAudit } from "../helpers/auditWriteAdapter";
 import { employees, factoryAttendance, factoryUserProfiles, factoryWorkers } from "@shared/schema";
 import {
   indexProductionWorkerLinks,
@@ -619,7 +621,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/factory/staff-tracking/bulk", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/factory/staff-tracking/bulk", requireAuth, attendanceApprovalRateLimiter, async (req: Request, res: Response) => {
     try {
       const companyId = getFactoryCompanyId(req);
       if (!companyId) return res.status(400).json({ message: factoryStaffTrackingMessages.noFactoryCompany });
@@ -651,6 +653,15 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
       if (records.length === 0 || records.length > 500) {
         return res.status(400).json({ message: factoryStaffTrackingMessages.invalidRecordCount });
       }
+
+      const attendanceApprover = page === "attendance"
+        ? await requireAttendanceEditApproval(req, res, companyId,
+            [periodStart, periodEnd], {
+              adminUsername: req.body?.adminUsername,
+              adminPassword: req.body?.adminPassword,
+            })
+        : null;
+      if (attendanceApprover === undefined) return;
 
       if (page === "production") {
         const existingClosure = await loadClosure(companyId, page, periodType, periodStart, periodEnd);
@@ -847,6 +858,23 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
       );
 
       await db.transaction(async (tx) => {
+        if (attendanceApprover) {
+          await logAudit({
+            userId: String(req.session.userId || req.user?.id || ""),
+            username: String((req.user as { username?: string } | undefined)?.username || req.session.userId || ""),
+            companyId,
+            action: "update",
+            tableName: "factory_staff_tracking_entries",
+            recordIdentifier: `attendance:${periodType}:${periodStart}:${periodEnd}`,
+            changes: {
+              approvedBy: { new: attendanceApprover.username },
+              approvedByUserId: { new: attendanceApprover.id },
+              periodStart: { new: periodStart },
+              periodEnd: { new: periodEnd },
+              personIds: { new: normalizedRecords.map(({ personType, personId }) => `${personType}:${personId}`) },
+            },
+          }, tx);
+        }
         if (finalize) {
           // Serialize closing the production day with bonus approval/payment
           // (84023). An in-flight live bonus decision cannot race the immutable
