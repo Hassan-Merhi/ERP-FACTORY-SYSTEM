@@ -310,7 +310,54 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
           ${statusFilter}
         ORDER BY wb.bonus_date DESC, wb.id DESC
       `);
-      res.json(result.rows);
+      // Production Targets payments are a separate authoritative payment source.
+      // Display them on the Workers > Bonuses history without duplicating a worker_bonuses
+      // record, creating another payable, or exposing the legacy pay/delete actions.
+      const productionHistory = status === "pending" ? [] : (await db.execute(sql`
+        SELECT p.id, p.worker_id AS "workerId", p.payment_date::text AS "bonusDate",
+          p.amount_usd::text AS amount,
+          'Manual Production Bonus - week ' || p.week_start::text AS notes,
+          CASE WHEN p.status='POSTED' THEN 'paid' ELSE 'reversed' END AS status,
+          p.cash_ledger_account_id AS "cashAccountId", p.payment_date::text AS "paidDate",
+          fw.full_name AS "workerName", fw.employee_code AS "employeeCode",
+          la.name AS "cashAccountName", 'production_manual' AS source,
+          p.payment_voucher_id AS "voucherId"
+        FROM factory_target_bonus_manual_payments p
+        JOIN factory_workers fw ON fw.id=p.worker_id AND fw.company_id=p.company_id
+        JOIN ledger_accounts la ON la.id=p.cash_ledger_account_id AND la.company_id=p.company_id
+        WHERE p.company_id=${companyId}
+          ${workerId ? sql`AND p.worker_id=${parseInt(workerId)}` : sql``}
+          ${status === "paid" ? sql`AND p.status='POSTED'` : sql``}
+        UNION ALL
+        SELECT p.id, p.worker_id, p.payment_date::text, p.bonus_amount::text,
+          'Production Targets weekly bonus - week ' || p.week_start::text,
+          CASE WHEN p.status='POSTED' THEN 'paid' ELSE 'reversed' END,
+          p.cash_ledger_account_id, p.payment_date::text,
+          fw.full_name, fw.employee_code, la.name, 'production_weekly',
+          p.payment_voucher_id
+        FROM factory_target_bonus_weekly_payments p
+        JOIN factory_workers fw ON fw.id=p.worker_id AND fw.company_id=p.company_id
+        JOIN ledger_accounts la ON la.id=p.cash_ledger_account_id AND la.company_id=p.company_id
+        WHERE p.company_id=${companyId}
+          ${workerId ? sql`AND p.worker_id=${parseInt(workerId)}` : sql``}
+          ${status === "paid" ? sql`AND p.status='POSTED'` : sql``}
+        UNION ALL
+        SELECT p.id, p.worker_id, p.payment_date::text, p.bonus_amount::text,
+          'Production Targets daily bonus - ' || p.production_date::text,
+          CASE WHEN p.status='POSTED' THEN 'paid' ELSE 'reversed' END,
+          p.cash_ledger_account_id, p.payment_date::text,
+          fw.full_name, fw.employee_code, la.name, 'production_daily',
+          p.payment_voucher_id
+        FROM factory_target_bonus_payments p
+        JOIN factory_workers fw ON fw.id=p.worker_id AND fw.company_id=p.company_id
+        JOIN ledger_accounts la ON la.id=p.cash_ledger_account_id AND la.company_id=p.company_id
+        WHERE p.company_id=${companyId}
+          ${workerId ? sql`AND p.worker_id=${parseInt(workerId)}` : sql``}
+          ${status === "paid" ? sql`AND p.status='POSTED'` : sql``}
+      `)).rows;
+      const legacy = result.rows.map(row => ({...row, source: "worker"}));
+      res.json([...legacy, ...productionHistory].sort((a,b) =>
+        String(b.bonusDate).localeCompare(String(a.bonusDate)) || Number(b.id)-Number(a.id)));
     } catch (err: unknown) {
       res.status(500).json({ message: getErrorMessage(err) });
     }
