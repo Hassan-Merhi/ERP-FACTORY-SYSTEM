@@ -354,7 +354,8 @@ export default function ProductionComparison() {
     });
     const escapeCell = (value: string) => {
       // Avoid CSV formula injection when opening supplier names in Excel.
-      const safe = /^[\s]*[=+\-@\t\r]/.test(value) ? "'" + value : value;
+      const unsafe = /^[\s]*[=+@\t\r]/.test(value) || /^[\s]*-(?!\d+(?:\.\d+)?$)/.test(value);
+      const safe = unsafe ? "'" + value : value;
       return '"' + safe.replace(/"/g, '""') + '"';
     };
     const csv = [header, ...rows].map((row) => row.map(escapeCell).join(",")).join("\r\n");
@@ -457,7 +458,7 @@ export default function ProductionComparison() {
               range={fmtDateRange(rangeA[0], rangeA[1])}
               bales={totalABales}
               kilograms={totalAKg}
-              products={qA.data?.production.byProduct ?? []}
+              products={filtered.map((r) => ({ articleCode: r.articleCode, productName: r.productName, categoryName: r.categoryName, qty: r.aQty, totalWeightKg: r.aKg }))}
               tone="blue"
             />
             <PeriodOverviewCard
@@ -465,7 +466,7 @@ export default function ProductionComparison() {
               range={fmtDateRange(rangeB[0], rangeB[1])}
               bales={totalBBales}
               kilograms={totalBKg}
-              products={qB.data?.production.byProduct ?? []}
+              products={filtered.map((r) => ({ articleCode: r.articleCode, productName: r.productName, categoryName: r.categoryName, qty: r.bQty, totalWeightKg: r.bKg }))}
               tone="violet"
             />
           </div>
