@@ -32,9 +32,10 @@ an open cloud epoch.
 |---|---|---|---|
 | Journal voucher (USD, ledger-only, balanced, no attachment) | yes | `vouchers` (Phase 4/8) | `server/edge/phase8OperatorApply.ts` |
 | Pressing scan confirmation (physical bale press) | yes, existing machine assignments only | `pressing` (Phase 9) | `server/edge/phase9OperatorApply.ts apply pressing` |
+| Stock movement: inventory quick adjust (add / subtract at a location) | yes, existing items and locations | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — replayed as a delta; below zero is held for Admin/Developer approve/reject |
 | Login, logout, company switch | yes (session only) | none | n/a |
 | All reads covered by prepared offline reads | yes | n/a | n/a |
-| Everything else (1,173 write routes) | **refused** with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION` | none | n/a |
+| Everything else (1,172 write routes) | **refused** with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION` | none | n/a |
 
 `node scripts/edge/audit-phase9-write-coverage.mjs` prints the exact current
 inventory and fails if any route becomes writable on the LAN without a reviewed
@@ -49,11 +50,12 @@ conflict detection, and a PostgreSQL reconciliation test. Enabling a route
 without all of that would let the factory record transactions that cannot be
 reconciled safely, which is worse than refusing them.
 
-- **Stock movements, adjustments, transfers, bale lifecycle, production
+- **Stock transfers, imports, bulk stock edits, bale lifecycle, production
   finalisation:** they mutate quantities and perpetual-inventory journals that
-  the cloud may also have changed before the outage was detected. They need a
-  per-item conflict model (expected prior quantity/version) before they can be
-  replayed; until then a LAN movement could double-count or go negative.
+  the cloud may also have changed before the outage was detected. Quick
+  adjustments now replay as deltas with a below-zero hold; the other stock
+  writes still need the same treatment (their own capture, delta replay and
+  drill) before they are enabled.
 - **POS sales, payments, receipts, purchasing/receiving, supplier and customer
   balances:** each posts money and stock together through the central posting
   engine with multi-currency, tax and numbering rules. Only the narrow USD
@@ -175,12 +177,22 @@ transaction rolls back, the conflict is written to
 
 - Inspect: `node --import tsx server/edge/phase9OperatorApply.ts status` and the
   conflict row's `code`/`detail`.
-- Decide (DBA login): `node --import tsx server/edge/phase9OperatorApply.ts reject
-  pressing <sequence> "<your name>" "<reason, at least 10 characters>"`.
-- Re-run `apply pressing`: the sequence receives an immutable
+- Decide: `node --import tsx server/edge/phase9OperatorApply.ts reject
+  <stream> <sequence> <reviewer-username> "<reason, at least 10 characters>"`.
+  The reviewer must be an active **Admin or Developer** user of the company;
+  any other username is refused (`PHASE9_REVIEWER_NOT_AUTHORIZED`).
+- Re-run `apply <stream>`: the sequence receives an immutable
   `rejected-conflict` receipt and the stream continues. The cloud record is
   never overwritten; if the LAN fact must still be recorded, enter it again in
   the cloud as a new, normal transaction.
+- **Approve instead (stock only):** a stock movement held as
+  `PHASE9_STOCK_WOULD_GO_NEGATIVE` (for example a physical count proves the
+  LAN issue happened and a cloud receipt is late) can be applied anyway with
+  `... phase9OperatorApply.ts approve stock <sequence> <reviewer-username>
+  "<reason>"`, then `apply stock`. Only conflict codes a stream declares
+  overridable can be approved (`PHASE9_CONFLICT_NOT_OVERRIDABLE` otherwise);
+  a missing item or location, revoked access or a diverged replay can only be
+  rejected. Every other check still runs on the approved apply.
 
 ### 4.5 Pause and resume delivery
 

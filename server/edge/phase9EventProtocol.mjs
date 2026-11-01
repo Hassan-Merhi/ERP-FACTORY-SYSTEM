@@ -12,6 +12,11 @@
  */
 import { canonicalEvidence, hashEvidence } from "./edgeSyncStageProtocol.mjs";
 import { phase9PressingEnvelope } from "./phase9PressingEnvelope.mjs";
+import {
+  PHASE9_STOCK_ADJUST_KIND,
+  PHASE9_STOCK_NEGATIVE_CONFLICT,
+  phase9StockAdjustEnvelope,
+} from "./phase9StockEnvelope.mjs";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HASH = /^[0-9a-f]{64}$/;
@@ -52,16 +57,51 @@ function pressingPayload(payload) {
   return stableEqual(rebuilt, payload) ? rebuilt : null;
 }
 
+function stockAdjustPayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (payload.kind !== PHASE9_STOCK_ADJUST_KIND) return null;
+  const { kind: _kind, ...evidence } = payload;
+  let rebuilt;
+  try {
+    rebuilt = phase9StockAdjustEnvelope(evidence);
+  } catch {
+    return null;
+  }
+  return stableEqual(rebuilt, payload) ? rebuilt : null;
+}
+
+/**
+ * `overridable` lists the conflict codes an Admin/Developer may resolve with
+ * an "approve-override" decision (apply anyway). Every other conflict can
+ * only be rejected: the cloud keeps its state and the event is not applied.
+ */
 const STREAMS = Object.freeze({
   pressing: Object.freeze({
     kinds: Object.freeze({
       "pressing.confirmation.v1": Object.freeze({
         parse: pressingPayload,
         localRef: (payload) => payload.localConfirmationId,
+        overridable: Object.freeze([]),
+      }),
+    }),
+  }),
+  stock: Object.freeze({
+    kinds: Object.freeze({
+      [PHASE9_STOCK_ADJUST_KIND]: Object.freeze({
+        parse: stockAdjustPayload,
+        localRef: (payload) => payload.localMovementId,
+        overridable: Object.freeze([PHASE9_STOCK_NEGATIVE_CONFLICT]),
       }),
     }),
   }),
 });
+
+/** Conflict codes that may be approved (applied anyway) for an event kind. */
+export function phase9OverridableConflicts(stream, kind) {
+  if (!isPhase9EventStream(stream)) return [];
+  const kinds = STREAMS[stream].kinds;
+  return Object.prototype.hasOwnProperty.call(kinds, kind) ? [...kinds[kind].overridable] : [];
+}
 
 export function phase9EventStreams() {
   return Object.keys(STREAMS);

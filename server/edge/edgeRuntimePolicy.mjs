@@ -112,6 +112,7 @@ export function readFactoryEdgeConfiguration(env = process.env) {
 }
 
 export const PHASE9_PRESSING_CONFIRM_ROUTE = "POST /api/factory/pressing-machines/confirm";
+export const PHASE9_STOCK_ADJUST_ROUTE = "POST /api/inventory/quick-adjust";
 
 // No module without atomic capture and validated replay is implicitly enabled
 // by a one-time operator primary acknowledgement. Add routes only after
@@ -121,6 +122,10 @@ const LAN_PRIMARY_CAPTURE_ALLOWLIST = new Set([
   // Phase 9: atomic pressing.confirmation.v1 capture -> signed stage ->
   // exactly-once cloud apply with conflict register -> verified LAN receipt.
   PHASE9_PRESSING_CONFIRM_ROUTE,
+  // Phase 9 (owner policy 2026-11-01): atomic stock.quick-adjust.v1 capture,
+  // replayed in the cloud as a quantity delta; below-zero results are held
+  // for an Admin/Developer decision, never applied or dropped silently.
+  PHASE9_STOCK_ADJUST_ROUTE,
 ]);
 
 export function edgeBlocksWrite(config, method, path) {

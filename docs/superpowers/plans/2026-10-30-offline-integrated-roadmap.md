@@ -89,6 +89,14 @@ Committed on the unified branch, not on `main`:
 
 The owner chose to make all remaining workflows available offline (stock movements, POS sales, payments, supplier receiving, attachments) under the conflict policies recorded in [the runbook](../../operations/factory-offline-operations-runbook.md) ("Owner-approved offline policies"). Admin and Developer users review held conflicts. The owner will run the staging outage drills after implementation; each workflow is enabled only after its drill passes and the owner signs off.
 
+### Phase 9 stock movements — quick adjust (2026-11-01, development)
+
+- `POST /api/inventory/quick-adjust` is an approved LAN-primary write on the shared event framework, stream `stock`, kind `stock.quick-adjust.v1`: atomic capture in the adjustment transaction (`server/edge/phase9StockOutbox.ts`), cloud replay through the same implementation as the live route (`inventoryQuickAdjustCore.ts`, `server/edge/phase9StockApply.ts`) as a quantity delta, with idempotency on the LAN operation id.
+- Owner policy: a replay that would take cloud stock below zero is held (`PHASE9_STOCK_WOULD_GO_NEGATIVE`) until an Admin/Developer approves (`approve-override`) or rejects it. Approval is limited to conflict codes a stream declares overridable; reviewers are checked against current Admin/Developer roles.
+- The LAN guard admits the route only when the DBA-installed stock outbox and its immutability trigger exist (otherwise 503 `EDGE_PHASE9_STOCK_CAPTURE_NOT_INSTALLED`).
+- Evidence: `tests/offline-phase9-stock-apply.test.ts` (real handler on the full schema: deltas, lost-ACK replay, held/approved below-zero, divergence, missing item, revoked access/permission) and `tests/offline-phase9-stock-sync-drill.test.ts` (separate LAN/cloud databases, fence, restricted role, relay, approve and reject decisions, verified receipts).
+- Coverage: 3 approved captures, 3 session-only, 1,172 blocked.
+
 ## Phase 10 — Offline identity, conflicts, secure storage and server controls
 - Implement reviewed local-session/cold-start policy, encrypted legacy-cache migration, authorization/role revocation, and scoped credentials and browser/device protections.
 - Add deterministic multi-device conflict review with no silent financial/stock overwrites.

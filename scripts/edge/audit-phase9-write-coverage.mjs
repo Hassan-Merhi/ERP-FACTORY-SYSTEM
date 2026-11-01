@@ -35,6 +35,12 @@ const SUPPORTED = new Map([
       "Physical scan only (no stock/voucher/bale state); existing assignments only; " +
       "voids/corrections and assignment changes stay cloud-only; conflicts block for a DBA decision",
   }],
+  ["POST /api/inventory/quick-adjust", {
+    policy: "stock.quick-adjust.v1",
+    limitations:
+      "Replayed as a quantity delta on the cloud balance; a below-zero result is held for an " +
+      "Admin/Developer approve/reject decision; transfers, imports and bulk stock edits stay cloud-only",
+  }],
 ]);
 
 function moduleForPath(path) {

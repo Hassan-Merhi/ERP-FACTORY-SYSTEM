@@ -79,7 +79,9 @@ test("relabelled, extended, unknown-kind or out-of-order evidence is refused", (
     [{ ...event, extra: true }, /EDGE_EVENT_INVALID/],
   ];
   for (const [candidate, error] of cases) assert.throws(() => validatePhase9Event("pressing", candidate), error);
-  assert.throws(() => validatePhase9Event("stock", event), /EDGE_EVENT_STREAM_INVALID/);
+  // A pressing event can never be smuggled into another registered stream.
+  assert.throws(() => validatePhase9Event("stock", event), /EDGE_EVENT_KIND_NOT_ALLOWED/);
+  assert.throws(() => validatePhase9Event("unregistered", event), /EDGE_EVENT_STREAM_INVALID/);
   const envelope = eventEnvelope([row], SITE, "pressing");
   assert.throws(
     () => validatePhase9EventStageEnvelope({ ...envelope, events: [event, event] }, SITE),

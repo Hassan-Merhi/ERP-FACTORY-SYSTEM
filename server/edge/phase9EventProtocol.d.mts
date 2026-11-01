@@ -18,6 +18,7 @@ export const EDGE_EVENT_RECEIPT_PROTOCOL: "factory-lan-event-applied-receipts/v1
 export const EDGE_EVENT_STAGE_LIMIT: number;
 export const EVENT_APPLY_OUTCOMES: readonly Phase9ApplyOutcome[];
 export function phase9EventStreams(): string[];
+export function phase9OverridableConflicts(stream: string, kind: string): string[];
 export function isPhase9EventStream(stream: unknown): stream is string;
 export function validatePhase9Event(stream: string, event: unknown): Phase9StagedEvent;
 export function validatePhase9EventStageEnvelope(body: unknown, expectedSiteId: string): Phase9StagedEvent[];

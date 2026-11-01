@@ -26,6 +26,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { vouchers } from "../erp/vouchers";
 import { factoryPressingConfirmations } from "../factory/pressing-machine-tracking";
+import { canonicalStockMovements } from "./inventory";
 
 // ── Phase 8 cloud voucher apply (server/edge/phase8ApplyStore.mjs) ─────────
 export const factoryEdgeApplyCursor = pgTable("factory_edge_apply_cursor", {
@@ -124,6 +125,40 @@ export const factoryEdgePressingOutbox = pgTable(
       name: "factory_edge_pressing_source_fk",
       columns: [t.companyId, t.localConfirmationId],
       foreignColumns: [factoryPressingConfirmations.companyId, factoryPressingConfirmations.id],
+    }).onDelete("restrict"),
+  ]
+);
+
+// ── Phase 9 LAN stock capture (server/edge/phase9StockOutbox.ts) ────────
+export const factoryEdgeStockCounter = pgTable("factory_edge_stock_counter", {
+  siteId: uuid("site_id").primaryKey().notNull(),
+  lastSequence: bigint("last_sequence", { mode: "bigint" }).notNull(),
+});
+
+export const factoryEdgeStockOutbox = pgTable(
+  "factory_edge_stock_outbox",
+  {
+    siteId: uuid("site_id").notNull(),
+    sequence: bigint("sequence", { mode: "bigint" }).notNull(),
+    operationId: uuid("operation_id").notNull(),
+    companyId: integer("company_id").notNull(),
+    actorUserId: text("actor_user_id").notNull(),
+    localMovementId: bigint("local_movement_id", { mode: "number" }).notNull(),
+    operationKind: text("operation_kind").notNull(),
+    payload: jsonb("payload").notNull(),
+    payloadSha256: char("payload_sha256", { length: 64 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (t) => [
+    primaryKey({ columns: [t.siteId, t.sequence] }),
+    unique().on(t.siteId, t.operationId),
+    unique().on(t.siteId, t.localMovementId),
+    foreignKey({
+      name: "factory_edge_stock_source_fk",
+      columns: [t.localMovementId],
+      foreignColumns: [canonicalStockMovements.id],
     }).onDelete("restrict"),
   ]
 );

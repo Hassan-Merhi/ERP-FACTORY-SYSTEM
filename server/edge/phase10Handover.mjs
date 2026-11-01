@@ -7,6 +7,25 @@ import { readPhase10SyncControl } from "./phase10SyncControl.mjs";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/** Same projection for every generic Phase 9 event stream outbox. */
+function eventStream(stream, table) {
+  return {
+    stream,
+    sql: `SELECT count(*)::int AS captured,
+                 count(s.sequence)::int AS staged,
+                 count(a.sequence) FILTER (WHERE a.outcome IN ('cloud-applied', 'already-present'))::int AS applied,
+                 count(a.sequence) FILTER (WHERE a.outcome = 'rejected-conflict')::int AS rejected,
+                 COALESCE(max(o.sequence), 0)::text AS last_sequence
+            FROM ${table} o
+            LEFT JOIN factory_edge_event_stage_receipts s
+              ON s.site_id = o.site_id AND s.stream = '${stream}' AND s.sequence = o.sequence
+            LEFT JOIN factory_edge_event_applied_receipts a
+              ON a.site_id = o.site_id AND a.stream = '${stream}' AND a.sequence = o.sequence
+                 AND a.operation_id = o.operation_id AND btrim(a.payload_sha256) = btrim(o.payload_sha256)
+           WHERE o.site_id = $1::uuid`,
+  };
+}
+
 const STREAMS = Object.freeze([
   {
     stream: "vouchers",
@@ -22,21 +41,8 @@ const STREAMS = Object.freeze([
                  AND btrim(a.payload_sha256) = btrim(o.payload_sha256)
            WHERE o.site_id = $1::uuid`,
   },
-  {
-    stream: "pressing",
-    sql: `SELECT count(*)::int AS captured,
-                 count(s.sequence)::int AS staged,
-                 count(a.sequence) FILTER (WHERE a.outcome IN ('cloud-applied', 'already-present'))::int AS applied,
-                 count(a.sequence) FILTER (WHERE a.outcome = 'rejected-conflict')::int AS rejected,
-                 COALESCE(max(o.sequence), 0)::text AS last_sequence
-            FROM factory_edge_pressing_outbox o
-            LEFT JOIN factory_edge_event_stage_receipts s
-              ON s.site_id = o.site_id AND s.stream = 'pressing' AND s.sequence = o.sequence
-            LEFT JOIN factory_edge_event_applied_receipts a
-              ON a.site_id = o.site_id AND a.stream = 'pressing' AND a.sequence = o.sequence
-                 AND a.operation_id = o.operation_id AND btrim(a.payload_sha256) = btrim(o.payload_sha256)
-           WHERE o.site_id = $1::uuid`,
-  },
+  eventStream("pressing", "factory_edge_pressing_outbox"),
+  eventStream("stock", "factory_edge_stock_outbox"),
 ]);
 
 export async function summarizeLanEvidence(client, siteId) {

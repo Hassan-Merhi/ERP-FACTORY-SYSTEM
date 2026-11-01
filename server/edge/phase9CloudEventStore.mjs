@@ -22,6 +22,7 @@ import {
   EDGE_EVENT_STAGE_RECEIPT_PROTOCOL,
   EVENT_APPLY_OUTCOMES,
   isPhase9EventStream,
+  phase9OverridableConflicts,
   validatePhase9Event,
   validatePhase9EventStageEnvelope,
   validatePhase9ReceiptQuery,
@@ -105,16 +106,19 @@ export async function ensurePhase9CloudEventSchema(queryable) {
       UNIQUE (site_id, stream, sequence, code)
     )
   `);
-  // One decision per blocked sequence. Only "reject-event" exists: the cloud
-  // keeps its current state and the LAN event is recorded as not applied.
-  // Re-applying a corrected event is a NEW operation, never an overwrite.
+  // One decision per blocked sequence. "reject-event": the cloud keeps its
+  // current state and the LAN event is recorded as not applied. Re-applying a
+  // corrected event is a NEW operation, never an overwrite. "approve-override"
+  // applies the event despite ONE recorded conflict code that its stream
+  // declares overridable (for example stock going below zero); every other
+  // check still runs.
   await queryable.query(`
     CREATE TABLE IF NOT EXISTS factory_edge_event_conflict_decisions (
       site_id UUID NOT NULL,
       stream TEXT NOT NULL,
       sequence BIGINT NOT NULL CHECK (sequence > 0),
       conflict_id BIGINT NOT NULL REFERENCES factory_edge_event_conflicts(id) ON DELETE RESTRICT,
-      decision TEXT NOT NULL CHECK (decision = 'reject-event'),
+      decision TEXT NOT NULL CHECK (decision IN ('reject-event', 'approve-override')),
       decided_by TEXT NOT NULL CHECK (length(btrim(decided_by)) >= 3),
       reason TEXT NOT NULL CHECK (length(btrim(reason)) >= 10),
       decided_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
@@ -389,23 +393,36 @@ export async function applyStagedEventOnce(queryable, input, handlers) {
     }
 
     const decision = await queryable.query(
-      `SELECT d.decision, c.operation_id::text AS operation_id
+      `SELECT d.decision, c.operation_id::text AS operation_id, c.code, c.operation_kind
          FROM factory_edge_event_conflict_decisions d
          JOIN factory_edge_event_conflicts c ON c.id = d.conflict_id
         WHERE d.site_id = $1::uuid AND d.stream = $2 AND d.sequence = $3::bigint`,
       [approved.siteId, stream, sequence]
     );
     let result;
-    if (decision.rows.length === 1) {
-      if (decision.rows[0].decision !== "reject-event" || decision.rows[0].operation_id !== event.operationId) {
-        throw new Phase9ApplyRefusal("PHASE9_CONFLICT_DECISION_INVALID");
-      }
+    const decided = decision.rows.length === 1 ? decision.rows[0] : null;
+    if (decided && decided.operation_id !== event.operationId) {
+      throw new Phase9ApplyRefusal("PHASE9_CONFLICT_DECISION_INVALID");
+    }
+    if (decided && decided.decision === "reject-event") {
       result = { outcome: "rejected-conflict", cloudRef: null, businessDate: null };
     } else {
+      let overrideConflicts = [];
+      if (decided) {
+        // Re-check against the registry at apply time, not only when recorded.
+        if (
+          decided.decision !== "approve-override" ||
+          decided.operation_kind !== event.kind ||
+          !phase9OverridableConflicts(stream, event.kind).includes(decided.code)
+        ) {
+          throw new Phase9ApplyRefusal("PHASE9_CONFLICT_DECISION_INVALID");
+        }
+        overrideConflicts = [decided.code];
+      }
       const handler = Object.prototype.hasOwnProperty.call(handlers, event.kind) ? handlers[event.kind] : null;
       if (!handler) throw new Phase9ApplyRefusal("PHASE9_HANDLER_MISSING");
       await handler.authorize(queryable, event);
-      result = await handler.apply(queryable, event);
+      result = await handler.apply(queryable, event, Object.freeze({ overrideConflicts }));
       if (
         !result ||
         !["cloud-applied", "already-present"].includes(result.outcome) ||
@@ -492,31 +509,40 @@ export async function recordPhase9ConflictDecision(queryable, input) {
     typeof input.decidedBy !== "string" ||
     input.decidedBy.trim().length < 3 ||
     typeof input.reason !== "string" ||
-    input.reason.trim().length < 10
+    input.reason.trim().length < 10 ||
+    (input.decision !== undefined && input.decision !== "reject-event" && input.decision !== "approve-override")
   ) {
     throw new Phase9ApplyRefusal("PHASE9_CONFLICT_DECISION_INVALID");
   }
+  const decisionKind = input.decision ?? "reject-event";
   const conflict = await queryable.query(
-    `SELECT id::text FROM factory_edge_event_conflicts
+    `SELECT id::text, code, operation_kind FROM factory_edge_event_conflicts
       WHERE site_id = $1::uuid AND stream = $2 AND sequence = $3::bigint
       ORDER BY id DESC LIMIT 1`,
     [input.siteId, input.stream, String(input.sequence)]
   );
   if (conflict.rows.length !== 1) throw new Phase9ApplyRefusal("PHASE9_CONFLICT_NOT_FOUND");
+  if (
+    decisionKind === "approve-override" &&
+    !phase9OverridableConflicts(input.stream, conflict.rows[0].operation_kind).includes(conflict.rows[0].code)
+  ) {
+    throw new Phase9ApplyRefusal("PHASE9_CONFLICT_NOT_OVERRIDABLE");
+  }
   await queryable.query(
     `INSERT INTO factory_edge_event_conflict_decisions
        (site_id, stream, sequence, conflict_id, decision, decided_by, reason)
-     VALUES ($1::uuid, $2, $3::bigint, $4::bigint, 'reject-event', $5, $6)`,
+     VALUES ($1::uuid, $2, $3::bigint, $4::bigint, $5, $6, $7)`,
     [
       input.siteId,
       input.stream,
       String(input.sequence),
       conflict.rows[0].id,
+      decisionKind,
       input.decidedBy.trim(),
       input.reason.trim(),
     ]
   );
-  return { stream: input.stream, sequence: String(input.sequence), decision: "reject-event" };
+  return { stream: input.stream, sequence: String(input.sequence), decision: decisionKind };
 }
 
 /** Signed read-only receipt lookup for the LAN. Staging is never returned. */

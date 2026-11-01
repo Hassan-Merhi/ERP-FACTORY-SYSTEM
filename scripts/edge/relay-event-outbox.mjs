@@ -39,6 +39,12 @@ export const STREAM_SOURCES = Object.freeze({
     // The cloud must post the scan on the LAN's shift production day.
     businessDate: (payload) => payload?.productionDate,
   }),
+  stock: Object.freeze({
+    table: "factory_edge_stock_outbox",
+    localRef: "local_movement_id",
+    // The cloud journal is dated on the LAN movement's business day.
+    businessDate: (payload) => payload?.businessDate,
+  }),
 });
 
 function source(stream) {

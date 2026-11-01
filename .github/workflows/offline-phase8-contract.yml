@@ -15,6 +15,8 @@ on:
       - 'server/edge/edgeVoucherOutbox.ts'
       - 'server/edge/phase9PressingOutbox.ts'
       - 'server/edge/phase9PressingApply.ts'
+      - 'server/edge/phase9Stock*'
+      - 'server/routes/inventory/inventoryQuickAdjust*.ts'
       - 'server/edge/phase9OperatorApply.ts'
       - 'server/edge/phase10*.mjs'
       - 'server/edge/phase8ApplyStore.mjs'
@@ -44,6 +46,8 @@ on:
       - 'server/edge/edgeVoucherOutbox.ts'
       - 'server/edge/phase9PressingOutbox.ts'
       - 'server/edge/phase9PressingApply.ts'
+      - 'server/edge/phase9Stock*'
+      - 'server/routes/inventory/inventoryQuickAdjust*.ts'
       - 'server/edge/phase9OperatorApply.ts'
       - 'server/edge/phase10*.mjs'
       - 'server/edge/phase8ApplyStore.mjs'
@@ -83,6 +87,8 @@ on:
       - 'server/edge/edgeVoucherOutbox.ts'
       - 'server/edge/phase9PressingOutbox.ts'
       - 'server/edge/phase9PressingApply.ts'
+      - 'server/edge/phase9Stock*'
+      - 'server/routes/inventory/inventoryQuickAdjust*.ts'
       - 'server/edge/phase9OperatorApply.ts'
       - 'server/edge/phase10*.mjs'
       - 'server/edge/phase8ApplyStore.mjs'
@@ -112,6 +118,8 @@ on:
       - 'server/edge/edgeVoucherOutbox.ts'
       - 'server/edge/phase9PressingOutbox.ts'
       - 'server/edge/phase9PressingApply.ts'
+      - 'server/edge/phase9Stock*'
+      - 'server/routes/inventory/inventoryQuickAdjust*.ts'
       - 'server/edge/phase9OperatorApply.ts'
       - 'server/edge/phase10*.mjs'
       - 'server/edge/phase8ApplyStore.mjs'
@@ -200,6 +208,10 @@ jobs:
         env:
           PHASE8_TEST_DATABASE_URL: postgresql://postgres:phase8-test-admin-pass@127.0.0.1:55433/postgres
         run: node node_modules/vitest/vitest.mjs run tests/offline-phase9-pressing-sync-drill.test.ts
+      - name: Drill stock movement capture -> stage -> held/approved/rejected apply -> receipts on PostgreSQL 17
+        env:
+          PHASE8_TEST_DATABASE_URL: postgresql://postgres:phase8-test-admin-pass@127.0.0.1:55433/postgres
+        run: node node_modules/vitest/vitest.mjs run tests/offline-phase9-stock-sync-drill.test.ts
       - name: Test Phase 9 event-stream protocol, signatures and receipt verification
         run: node --test tests/offline-phase9-event-protocol.node.test.mjs
       - name: Verify narrow device capture and legacy queue quarantine

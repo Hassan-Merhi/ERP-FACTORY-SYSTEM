@@ -118,15 +118,18 @@ describe("factory LAN edge deployment policy", () => {
           expect(edgeBlocksWrite(config, verb, path)).toBe(true);
         }
       }
-      // Phase 9: only POST pressing capture is approved, and only for LAN-primary.
-      expect(edgeBlocksWrite(config, "POST", "/api/factory/pressing-machines/confirm")).toBe(mode === "read-only");
-      for (const verb of ["PUT", "PATCH", "DELETE"]) {
-        expect(edgeBlocksWrite(config, verb, "/api/factory/pressing-machines/confirm")).toBe(true);
+      // Phase 9: only POST pressing capture and POST stock quick-adjust capture are
+      // approved, and only for LAN-primary.
+      for (const approved of ["/api/factory/pressing-machines/confirm", "/api/inventory/quick-adjust"]) {
+        expect(edgeBlocksWrite(config, "POST", approved)).toBe(mode === "read-only");
+        for (const verb of ["PUT", "PATCH", "DELETE"]) {
+          expect(edgeBlocksWrite(config, verb, approved)).toBe(true);
+        }
       }
       for (const path of [
         "/api/factory/pressing-machines/void",
         "/api/pos/sales",
-        "/api/inventory/quick-adjust",
+        "/api/inventory/silent-transfer/apply",
         "/api/attachments",
         "/api/payments",
       ]) {

@@ -7,10 +7,17 @@
  *   status                         per-stream staged / applied / open conflicts
  *   apply <stream>                 apply contiguous staged events; stops at the
  *                                  first conflict, which is recorded and blocks
- *   reject <stream> <sequence> <decided-by> <reason...>
- *                                  DBA decision for a recorded conflict; the next
+ *   reject <stream> <sequence> <reviewer-username> <reason...>
+ *                                  decision for a recorded conflict; the next
  *                                  apply writes an auditable rejected-conflict
  *                                  receipt and the stream continues
+ *   approve <stream> <sequence> <reviewer-username> <reason...>
+ *                                  apply the event anyway, only for a conflict
+ *                                  its stream declares overridable (for example
+ *                                  stock going below zero)
+ *
+ * Reviewers must be active Admin or Developer users of the approved company
+ * (owner policy 2026-11-01); the username is stored with the decision.
  */
 import { pool } from "../db";
 import { readFactoryEdgeConfiguration } from "./edgeRuntimePolicy.mjs";
@@ -22,6 +29,8 @@ import {
 } from "./phase9CloudEventStore.mjs";
 import { isPhase9EventStream } from "./phase9EventProtocol.mjs";
 import { phase9PressingApplyHandler } from "./phase9PressingApply";
+import { phase9StockApplyHandler } from "./phase9StockApply";
+import { PHASE9_STOCK_ADJUST_KIND } from "./phase9StockEnvelope.mjs";
 import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,
@@ -34,7 +43,27 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 
 export const PHASE9_HANDLERS = Object.freeze({
   "pressing.confirmation.v1": phase9PressingApplyHandler,
+  [PHASE9_STOCK_ADJUST_KIND]: phase9StockApplyHandler,
 });
+
+const REVIEWER_ROLES = ["Admin", "Developer"];
+
+/** Only an active Admin/Developer of the approved company may decide a conflict. */
+export async function assertPhase9Reviewer(
+  queryable: { query: typeof pool.query },
+  companyId: number,
+  username: string
+): Promise<string> {
+  const result = await queryable.query(
+    `SELECT u.username FROM users u
+       JOIN user_company_roles r ON r.user_id = u.id AND r.company_id = $1
+      WHERE u.username = $2 AND u.active = true AND r.role = ANY($3::text[])
+      LIMIT 1`,
+    [companyId, username, REVIEWER_ROLES]
+  );
+  if (result.rows.length !== 1) throw new EdgeRefusal("PHASE9_REVIEWER_NOT_AUTHORIZED");
+  return String(result.rows[0].username);
+}
 
 export function readPhase9OperatorConfig(env: NodeJS.ProcessEnv = process.env) {
   const edge = readFactoryEdgeConfiguration(env);
@@ -82,11 +111,21 @@ async function main(argv: string[]): Promise<unknown> {
     return summarizePhase9CloudStreams(pool, siteId);
   }
   if (command === "apply" && rest.length === 1) return runPhase9OperatorApply(rest[0]);
-  if (command === "reject" && rest.length >= 4) {
-    const [stream, sequence, decidedBy, ...reason] = rest;
+  if ((command === "reject" || command === "approve") && rest.length >= 4) {
+    const [stream, sequence, reviewer, ...reason] = rest;
     const siteId = process.env.FACTORY_SYNC_SITE_ID || "";
     if (!UUID.test(siteId)) throw new EdgeRefusal("PHASE9_SITE_INVALID");
-    return recordPhase9ConflictDecision(pool, { siteId, stream, sequence, decidedBy, reason: reason.join(" ") });
+    const companyId = process.env.FACTORY_PHASE8_COMPANY_ID || "";
+    if (!POSITIVE.test(companyId)) throw new EdgeRefusal("PHASE9_COMPANY_INVALID");
+    const decidedBy = await assertPhase9Reviewer(pool, Number(companyId), reviewer);
+    return recordPhase9ConflictDecision(pool, {
+      siteId,
+      stream,
+      sequence,
+      decidedBy,
+      reason: reason.join(" "),
+      decision: command === "approve" ? "approve-override" : "reject-event",
+    });
   }
   throw new Error("PHASE9_USAGE");
 }
@@ -98,7 +137,7 @@ if (process.argv[1] && /phase9OperatorApply\.(?:ts|js)$/.test(process.argv[1])) 
       if (error instanceof Error && error.message === "PHASE9_USAGE") {
         console.error(
           "Usage: node --import tsx server/edge/phase9OperatorApply.ts status | apply <stream> | " +
-            "reject <stream> <sequence> <decided-by> <reason...>"
+            "reject|approve <stream> <sequence> <reviewer-username> <reason...>"
         );
         process.exitCode = 2;
         return;

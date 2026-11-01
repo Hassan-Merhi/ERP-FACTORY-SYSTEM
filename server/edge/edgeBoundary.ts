@@ -11,6 +11,7 @@ import {
   edgeBlocksWrite,
   edgeStatusPayload,
   PHASE9_PRESSING_CONFIRM_ROUTE,
+  PHASE9_STOCK_ADJUST_ROUTE,
   readFactoryEdgeConfiguration,
 } from "./edgeRuntimePolicy.mjs";
 import { hasFactoryEdgeData } from "./edgeDatabaseProof.mjs";
@@ -31,7 +32,8 @@ export function makeFactoryEdgeWriteGuard(
   config: EdgeConfiguration,
   hasApprovedData: () => Promise<boolean>,
   hasWriterAuthority: () => Promise<boolean> = async () => false,
-  hasPressingCapture: () => Promise<boolean> = async () => false
+  hasPressingCapture: () => Promise<boolean> = async () => false,
+  hasStockCapture: () => Promise<boolean> = async () => false
 ): RequestHandler[] {
   // Each LAN write runs database authority proofs; bound how often one client
   // can trigger them. Reads and cloud-mode traffic are not counted.
@@ -82,6 +84,21 @@ export function makeFactoryEdgeWriteGuard(
         }
       } catch {
         return res.status(503).json({ code: "EDGE_PHASE9_PRESSING_CAPTURE_NOT_INSTALLED" });
+      }
+    }
+
+    // Same rule for Phase 9 stock movements and their DBA-installed outbox.
+    if (
+      config.mode === "lan" &&
+      config.primary &&
+      `${req.method.toUpperCase()} ${path}` === PHASE9_STOCK_ADJUST_ROUTE
+    ) {
+      try {
+        if (!(await hasStockCapture())) {
+          return res.status(503).json({ code: "EDGE_PHASE9_STOCK_CAPTURE_NOT_INSTALLED" });
+        }
+      } catch {
+        return res.status(503).json({ code: "EDGE_PHASE9_STOCK_CAPTURE_NOT_INSTALLED" });
       }
     }
 
@@ -216,13 +233,32 @@ export function registerFactoryEdgeBoundary(app: Express): void {
     pressingCheck = { value, at: now };
     return value;
   }
+  let stockCheck: { value: boolean; at: number } | null = null;
+  async function stockCaptureInstalled(): Promise<boolean> {
+    const now = Date.now();
+    if (stockCheck && now - stockCheck.at < 3_000) return stockCheck.value;
+    const { rows } = await pool.query(
+      `SELECT count(*) = 3 AS installed
+         FROM pg_trigger t
+        WHERE t.tgenabled = 'O' AND NOT t.tgisinternal
+          AND (t.tgrelid, t.tgname) IN (
+            ('public.factory_edge_stock_outbox'::regclass, 'factory_edge_stock_outbox_no_mutation'),
+            ('public.factory_edge_event_stage_receipts'::regclass, 'factory_edge_event_stage_receipts_no_mutation'),
+            ('public.factory_edge_event_applied_receipts'::regclass, 'factory_edge_event_applied_receipts_no_mutation')
+          )`
+    );
+    const value = rows[0]?.installed === true;
+    stockCheck = { value, at: now };
+    return value;
+  }
   app.use(
     "/api",
     makeFactoryEdgeWriteGuard(
       config,
       provisioned,
       () => hasVerifiedPhase7WriterAuthority(pool, config),
-      pressingCaptureInstalled
+      pressingCaptureInstalled,
+      stockCaptureInstalled
     )
   );
 }

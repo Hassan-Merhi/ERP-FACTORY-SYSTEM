@@ -15,6 +15,7 @@ import { readFactoryEdgeConfiguration } from "./edgeRuntimePolicy.mjs";
 import { ensurePhase8ApplySchema } from "./phase8ApplyStore.mjs";
 import { ensurePhase9CloudEventSchema } from "./phase9CloudEventStore.mjs";
 import { ensurePhase9PressingOutboxSchema } from "./phase9PressingOutbox";
+import { ensurePhase9StockOutboxSchema } from "./phase9StockOutbox";
 import { ensurePhase10SyncControlSchema } from "./phase10SyncControl.mjs";
 import { EdgeRefusal } from "./edgeRefusal";
 
@@ -38,6 +39,7 @@ export async function installOfflineSchema(target: string, env: NodeJS.ProcessEn
     } else {
       await ensureEdgeVoucherOutboxSchema(client);
       await ensurePhase9PressingOutboxSchema(client);
+      await ensurePhase9StockOutboxSchema(client);
       await ensurePhase10SyncControlSchema(client);
     }
     await client.query("COMMIT");

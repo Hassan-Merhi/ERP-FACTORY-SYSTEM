@@ -21,7 +21,8 @@ export interface Phase9EventHandler<E = Phase9StagedEvent> {
   authorize(client: PoolClient, event: E): Promise<void>;
   apply(
     client: PoolClient,
-    event: E
+    event: E,
+    context: { readonly overrideConflicts: readonly string[] }
   ): Promise<{ outcome: "cloud-applied" | "already-present"; cloudRef: number; businessDate: string }>;
   verify(client: PoolClient, event: E, result: { cloudRef: number; businessDate: string }): Promise<boolean>;
 }
@@ -67,8 +68,15 @@ export function applyPendingStagedEvents(
 ): Promise<Phase9AppliedReceipt[]>;
 export function recordPhase9ConflictDecision(
   queryable: Queryable,
-  input: { siteId: string; stream: string; sequence: string; decidedBy: string; reason: string }
-): Promise<{ stream: string; sequence: string; decision: "reject-event" }>;
+  input: {
+    siteId: string;
+    stream: string;
+    sequence: string;
+    decidedBy: string;
+    reason: string;
+    decision?: "reject-event" | "approve-override";
+  }
+): Promise<{ stream: string; sequence: string; decision: "reject-event" | "approve-override" }>;
 export function getPhase9AppliedReceipts(
   queryable: Queryable,
   body: unknown,
