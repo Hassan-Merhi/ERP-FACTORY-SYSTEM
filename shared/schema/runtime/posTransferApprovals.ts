@@ -5,7 +5,7 @@
  * Declared here so drizzle-kit and the type system see the real schema; the definition
  * matches the runtime DDL (tests/runtime-declared-tables-ddl.test.ts).
  */
-import { foreignKey, integer, pgTable, primaryKey, timestamp, varchar } from "drizzle-orm/pg-core";
+import { foreignKey, integer, pgTable, timestamp, varchar } from "drizzle-orm/pg-core";
 import { companies } from "../common";
 import { stockTransferExportWaGroups } from "./whatsappSchedules";
 import { users } from "../users";
