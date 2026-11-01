@@ -69,6 +69,24 @@ Adding a workflow means registering a new event kind in
 `server/edge/phase9EventProtocol.mjs`, a capture call inside the route's
 transaction, an apply handler, and drill coverage — the framework is shared.
 
+### Owner-approved offline policies (2026-11-01)
+
+The owner approved these rules for the remaining workflows. Each workflow is
+switched on only after it is implemented, passes its outage drill on the
+owner's staging cloud and spare factory server, and gets owner sign-off.
+
+| Workflow | Offline rule | When the cloud disagrees after the outage |
+|---|---|---|
+| Stock movements | Recorded as quantity changes (deltas), never overwrites. | A movement that would take cloud stock below zero is **held** for an Admin/Developer to approve or reject. Nothing is dropped silently. |
+| POS sales | Separate invoice series per factory server (for example `LAN1-000123`). Prices, tax and exchange rates are the last values synced before the outage; the receipt says "offline price". Cash sales only; no credit sales above the owner's limit. | Price or rate drift is recorded, not re-priced; the sale keeps its offline price. |
+| Payments | Factory cash box only, USD or the last synced rate. No bank transfers and no supplier payments offline. | Held for review if the cash account changed or was closed in the cloud. |
+| Supplier receiving | Only against purchase orders that already exist; quantities only, no price changes. | The price is applied by the cloud when the receipt syncs; a receipt against a changed or closed order is held. |
+| Attachments | Up to 10 MB per file, kept on the factory server; the record syncs first, then the file, and each upload is checked for completeness (hash). | A file whose hash does not match is rejected and re-sent. |
+
+Conflict reviewers: users with the **Admin** or **Developer** role. Held
+items are listed in the operator status panel and decided with the audited
+operator tools.
+
 ## 3. One-time installation (DBA, maintenance window)
 
 1. Follow [factory-lan-edge.md](factory-lan-edge.md) §1–4 for the LAN server.

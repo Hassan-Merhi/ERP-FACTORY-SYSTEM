@@ -85,6 +85,10 @@ Committed on the unified branch, not on `main`:
 - Evidence: `tests/offline-phase9-pressing-sync-drill.test.ts` (separate LAN and cloud PostgreSQL databases, real fence, restricted role) plus protocol and boundary tests; wired into the Phase 8/9 workflows.
 - Coverage now: 2 approved captures (USD Journal vouchers, pressing scans), 3 session-only, 1,173 blocked. Remaining workflows and the reason each is still online-only are listed in [factory-offline-operations-runbook.md](../../operations/factory-offline-operations-runbook.md) §2. `--require-complete` stays red by design.
 
+### Phase 9 owner decisions (2026-11-01)
+
+The owner chose to make all remaining workflows available offline (stock movements, POS sales, payments, supplier receiving, attachments) under the conflict policies recorded in [the runbook](../../operations/factory-offline-operations-runbook.md) ("Owner-approved offline policies"). Admin and Developer users review held conflicts. The owner will run the staging outage drills after implementation; each workflow is enabled only after its drill passes and the owner signs off.
+
 ## Phase 10 — Offline identity, conflicts, secure storage and server controls
 - Implement reviewed local-session/cold-start policy, encrypted legacy-cache migration, authorization/role revocation, and scoped credentials and browser/device protections.
 - Add deterministic multi-device conflict review with no silent financial/stock overwrites.
