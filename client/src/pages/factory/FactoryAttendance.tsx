@@ -63,6 +63,8 @@ import { PerWorkerView } from "./factoryattendance/components/PerWorkerView";
 import { SummaryCard } from "./factoryattendance/components/SummaryCard";
 import { AttendanceReportImage } from "./factoryattendance/components/AttendanceReportImage";
 import { LanguageChoiceDialog } from "./factoryattendance/components/LanguageChoiceDialog";
+import { AttendanceAdminApprovalDialog } from "./factoryattendance/components/AttendanceAdminApprovalDialog";
+import { attendancePastDates, attendanceToday, type AttendanceAdminCredentials } from "./factoryattendance/attendanceEditPolicy";
 import "./factoryTrackingModern.css";
 
 interface AttendanceWhatsappSettings {
@@ -79,7 +81,10 @@ export default function FactoryAttendance() {
   };
 
   // ── Daily attendance state ────────────────────────────────────
-  const [selectedDate, setSelectedDate] = useState<string>(todayStr());
+  const [selectedDate, setSelectedDate] = useState<string>(attendanceToday);
+  const [approvalOpen, setApprovalOpen] = useState(false);
+  const [approvalDates, setApprovalDates] = useState<string[]>([]);
+  const [pendingApprovalRecords, setPendingApprovalRecords] = useState<AttendanceBulkRecord[] | null>(null);
   // Shift is no longer user-selectable on this screen. Keep an empty value for existing save/export payloads.
   const shift = "";
 
@@ -165,8 +170,14 @@ export default function FactoryAttendance() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: (records: AttendanceBulkRecord[]) => apiRequest("POST", "/api/factory/attendance/bulk", { records }),
+    mutationFn: (payload: { records: AttendanceBulkRecord[]; credentials?: AttendanceAdminCredentials }) =>
+      apiRequest("POST", "/api/factory/attendance/bulk", {
+        records: payload.records,
+        ...payload.credentials,
+      }),
     onSuccess: () => {
+      setApprovalOpen(false);
+      setPendingApprovalRecords(null);
       queryClient.invalidateQueries({ queryKey: ["/api/factory/attendance", selectedDate] });
       toast({ title: "Attendance saved", description: `Saved for ${selectedDate}` });
     },
@@ -185,8 +196,19 @@ export default function FactoryAttendance() {
       status: attendanceMap[w.id] ?? "Present",
       notes: notesMap[w.id] || undefined,
     }));
-    saveMutation.mutate(records);
+    const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
+    if (priorDates.length) {
+      setApprovalDates(priorDates);
+      setPendingApprovalRecords(records);
+      setApprovalOpen(true);
+    } else {
+      saveMutation.mutate({ records });
+    }
   }, [data, selectedDate, shift, attendanceMap, notesMap, saveMutation]);
+
+  const approveAttendanceSave = (credentials: AttendanceAdminCredentials) => {
+    if (pendingApprovalRecords) saveMutation.mutate({ records: pendingApprovalRecords, credentials });
+  };
 
   const markAll = (status: AttendanceStatus) => {
     if (!data?.workers) return;
@@ -352,6 +374,9 @@ export default function FactoryAttendance() {
               <Badge variant="outline" className="rounded-full bg-background/50 px-2.5 py-1 text-[11px] font-medium">
                 {formatDate(selectedDate)}
               </Badge>
+              {selectedDate < attendanceToday() && (
+                <Badge variant="secondary" className="rounded-full">Earlier date — Admin approval required to save</Badge>
+              )}
             </div>
           </div>
         </div>
@@ -390,6 +415,7 @@ export default function FactoryAttendance() {
                           id="attendance-date"
                           data-testid="input-attendance-date"
                           type="date"
+                          max={attendanceToday()}
                           value={selectedDate}
                           onChange={(e) => setSelectedDate(e.target.value)}
                           className="w-44 rounded-xl bg-background/70"
@@ -471,7 +497,7 @@ export default function FactoryAttendance() {
                         className="rounded-xl shadow-xs"
                         data-testid="button-save-attendance"
                         onClick={handleSave}
-                        disabled={!workers.length || saveMutation.isPending}
+                        disabled={!workers.length || saveMutation.isPending || selectedDate > attendanceToday()}
                       >
                         {saveMutation.isPending ? (
                           <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
@@ -840,7 +866,7 @@ export default function FactoryAttendance() {
                       className="rounded-xl shadow-xs sm:min-w-36"
                       data-testid="button-save-attendance-sticky"
                       onClick={handleSave}
-                      disabled={saveMutation.isPending}
+                      disabled={saveMutation.isPending || selectedDate > attendanceToday()}
                     >
                       {saveMutation.isPending ? (
                         <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
@@ -856,6 +882,13 @@ export default function FactoryAttendance() {
           </>
         )}
 
+        <AttendanceAdminApprovalDialog
+          open={approvalOpen}
+          onOpenChange={setApprovalOpen}
+          onApprove={approveAttendanceSave}
+          isPending={saveMutation.isPending}
+          dates={approvalDates}
+        />
         <AttendanceReportImage
           ref={attendanceReportRef}
           selectedDate={selectedDate}

@@ -127,6 +127,7 @@ const NEVER_QUEUE_PATTERNS: RegExp[] = [
   // Credential-bearing endpoints. A manager approval or a password change must be typed
   // again while online; replaying a stored secret hours later is both stale and unsafe.
   /^\/api\/pos\/retail\/discount-approvals$/,
+  /^\/api\/factory\/(?:attendance|employee-attendance|staff-tracking)\/bulk$/,
   /^\/api\/auth\/(?:login|logout|change-password)$/,
   /^\/api\/user\/change-password$/,
 ];
@@ -137,7 +138,7 @@ const NEVER_QUEUE_PATTERNS: RegExp[] = [
  * dropping a password, API token or card secret into clear-text browser storage.
  */
 const SENSITIVE_PAYLOAD_KEY =
-  /^(?:password|passwd|pwd|oldPassword|currentPassword|newPassword|confirmPassword|managerPassword|supervisorPassword|passwordHash|authorization|apiKey|apiToken|accessToken|refreshToken|clientSecret|secret|cvv|cardNumber|pin)$/i;
+  /^(?:password|passwd|pwd|oldPassword|currentPassword|newPassword|confirmPassword|managerPassword|supervisorPassword|adminPassword|passwordHash|authorization|apiKey|apiToken|accessToken|refreshToken|clientSecret|secret|cvv|cardNumber|pin)$/i;
 
 /**
  * True when a request payload carries credentials anywhere in its JSON shape.

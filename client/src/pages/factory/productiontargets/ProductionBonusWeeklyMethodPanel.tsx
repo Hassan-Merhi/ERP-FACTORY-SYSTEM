@@ -93,7 +93,7 @@ export function ProductionBonusWeeklyMethodPanel({ initialDate }: { initialDate:
           Choose how future Production Targets bonuses should work. The weekly flat method pays
           once per eligible worker per week when credited bales exceed that worker's weekly target,
           regardless of whether the worker made 1 or 30 extra bales.
-          Weekly eligibility and immutable approvals are available below. Payment posting is not activated.
+          Weekly eligibility, immutable approvals, and payment posting are handled in the dedicated review and payment sections.
         </p>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <label className="space-y-1 text-xs text-muted-foreground">
@@ -122,7 +122,7 @@ export function ProductionBonusWeeklyMethodPanel({ initialDate }: { initialDate:
               </p>
             </div>
             <span className="rounded-full border px-2 py-1 text-xs text-muted-foreground">
-              Settings · no payment posting
+              Settings only · no voucher on save
             </span>
           </div>
         )}

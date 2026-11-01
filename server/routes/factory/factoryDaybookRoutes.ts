@@ -136,6 +136,10 @@ export function registerFactoryDaybookRoutes(app: Express) {
             AND EXISTS (SELECT 1 FROM factory_target_bonus_weekly_payments p
               WHERE p.company_id = ${companyId} AND p.id = ${factoryDaybookEntries.referenceId}
                 AND p.status = 'REVERSED'))
+          OR (${factoryDaybookEntries.txType} IN ('PRODUCTION_TARGET_MANUAL_BONUS_PAYMENT','PRODUCTION_TARGET_MANUAL_BONUS_REVERSAL')
+            AND EXISTS (SELECT 1 FROM factory_target_bonus_manual_payments p
+              WHERE p.company_id = ${companyId} AND p.id = ${factoryDaybookEntries.referenceId}
+                AND p.status = 'REVERSED'))
         )`,
         // Hide zero-amount payroll payment entries — no money moved, nothing to show
         sql`NOT (

@@ -194,6 +194,9 @@ export function registerFactoryDaybookPaginationRoutes(app: Express): void {
         `NOT (f.tx_type IN ('PRODUCTION_TARGET_WEEKLY_BONUS_PAYMENT','PRODUCTION_TARGET_WEEKLY_BONUS_REVERSAL') AND EXISTS (
           SELECT 1 FROM factory_target_bonus_weekly_payments p
           WHERE p.company_id = f.company_id AND p.id = f.reference_id AND p.status = 'REVERSED'))`,
+        `NOT (f.tx_type IN ('PRODUCTION_TARGET_MANUAL_BONUS_PAYMENT','PRODUCTION_TARGET_MANUAL_BONUS_REVERSAL') AND EXISTS (
+          SELECT 1 FROM factory_target_bonus_manual_payments p
+          WHERE p.company_id = f.company_id AND p.id = f.reference_id AND p.status = 'REVERSED'))`,
         // Shared source-integrity conditions — generated from the central registry.
         // Covers all source-backed txTypes (payrolls, advances, repayments, containers,
         // mix batches, customer orders, commissions, raw stock, etc.).
