@@ -25,11 +25,11 @@ async function ensureApprovalTable(ensureGroupsTable: () => Promise<void>) {
   await ensureGroupsTable();
   if (!tablePromise) {
     tablePromise = pool.query(
-      'CREATE TABLE IF NOT EXISTS pos_transfer_approval_settings (' +
-        'company_id integer PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,' +
-        'user_id varchar REFERENCES users(id) ON DELETE SET NULL,' +
-        'group_id integer REFERENCES stock_transfer_export_wa_groups(id) ON DELETE SET NULL,' +
-        'updated_at timestamptz NOT NULL DEFAULT now())'
+      `CREATE TABLE IF NOT EXISTS pos_transfer_approval_settings (
+        company_id integer PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,
+        user_id varchar REFERENCES users(id) ON DELETE SET NULL,
+        group_id integer REFERENCES stock_transfer_export_wa_groups(id) ON DELETE SET NULL,
+        updated_at timestamptz NOT NULL DEFAULT now())`
     ).then(() => undefined).catch((error: unknown) => {
       tablePromise = null;
       throw error;
