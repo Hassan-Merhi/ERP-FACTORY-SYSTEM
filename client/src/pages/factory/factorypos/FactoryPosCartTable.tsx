@@ -6,7 +6,7 @@
  * behaviour on the trailing empty row, same deduction arithmetic and the same
  * previous-balance/after-sale calculation for credit customers.
  */
-import { Plus, Trash2, CreditCard } from "lucide-react";
+import { Plus, Trash2, CreditCard, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -101,10 +101,10 @@ function ExpenseDeductions({ model }: { model: FactoryPosModel }) {
       ))}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
           onClick={model.addExpenseRow}
-          className="text-muted-foreground"
+          className="rounded-xl border-orange-500/40 text-orange-600 hover:border-orange-500 hover:bg-orange-500/10 dark:text-orange-400"
           data-testid="button-add-deduction"
         >
           <Plus className="h-3.5 w-3.5 mr-1" />
@@ -137,7 +137,7 @@ function ExpenseDeductions({ model }: { model: FactoryPosModel }) {
 function CartRows({ model }: { model: FactoryPosModel }) {
   const { ccPrefix } = model;
   return (
-    <div className="max-h-[calc(100vh-24rem)] overflow-y-auto">
+    <div className="max-h-[calc(100vh-24rem)] min-h-[215px] overflow-y-auto">
       {model.rows.map((row, idx) => (
         <div key={row.id} className="flex border-b border-muted/50 hover-elevate">
           <div className="w-10 flex items-center justify-center border-r border-muted/50 h-10 text-xs text-muted-foreground">
@@ -195,6 +195,17 @@ function CartRows({ model }: { model: FactoryPosModel }) {
           ))}
         </div>
       ))}
+      {model.validRows.length === 0 && (
+        <div className="flex min-h-44 flex-col items-center justify-center gap-2 px-4 py-7 text-center" data-testid="pos-empty-state">
+          <span className="rounded-2xl bg-orange-500/10 p-4 text-orange-500">
+            <ShoppingCart className="h-9 w-9" aria-hidden="true" />
+          </span>
+          <p className="text-base font-semibold">Add products to the POS</p>
+          <p className="max-w-sm text-xs text-muted-foreground">
+            Select a location, then scan a barcode or search for a product to get started.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -206,7 +217,7 @@ export function FactoryPosCartTable({ model }: { model: FactoryPosModel }) {
       <div className="table-responsive">
         <div className="min-w-[400px]">
           {/* Header */}
-          <div className="flex bg-muted/30 border-b border-muted sticky top-0 z-30">
+          <div className="sticky top-0 z-30 flex border-b border-orange-500/25 bg-orange-500/10 dark:bg-orange-500/15">
             <div className="w-10 flex items-center justify-center border-r border-muted h-10 text-xs text-muted-foreground">
               #
             </div>
@@ -226,7 +237,7 @@ export function FactoryPosCartTable({ model }: { model: FactoryPosModel }) {
       </div>
 
       {/* Total Section */}
-      <div className="border-t border-muted bg-muted/20 p-4 space-y-3">
+      <div className="space-y-3 border-t border-orange-500/15 bg-gradient-to-r from-orange-500/5 via-card to-orange-500/10 p-4">
         {/* Summary row */}
         <div className="flex flex-col sm:flex-row sm:justify-end items-stretch sm:items-center gap-2 sm:gap-6 sm:max-w-lg ml-auto">
           <div className="flex items-center justify-between sm:justify-start gap-2 text-sm flex-wrap">
@@ -247,7 +258,7 @@ export function FactoryPosCartTable({ model }: { model: FactoryPosModel }) {
           </div>
           <div className="flex items-center justify-between sm:justify-start gap-2">
             <span className="text-lg font-medium">Total:</span>
-            <span className="text-2xl font-semibold font-mono" data-testid="text-grand-total">
+            <span className="rounded-xl bg-orange-600 px-4 py-2 font-mono text-xl font-bold tabular-nums text-white shadow-sm dark:bg-orange-500 sm:text-2xl" data-testid="text-grand-total">
               {ccPrefix}
               {formatNum(total)}
             </span>
