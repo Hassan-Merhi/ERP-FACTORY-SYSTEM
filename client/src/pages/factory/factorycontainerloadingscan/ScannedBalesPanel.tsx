@@ -55,11 +55,11 @@ function ScanControls({ model }: { model: FactoryContainerLoadingScanModel }) {
   if (!model.orderId) return null;
 
   return (
-    <div className="mb-4 rounded-2xl border bg-muted/20 p-3 sm:p-4" data-testid="container-loading-scan-controls">
+    <div className="mb-4 rounded-2xl border border-blue-100/80 bg-blue-50/40 p-3 dark:border-blue-500/20 dark:bg-[#0b1a31]/70 sm:p-4" data-testid="container-loading-scan-controls">
       <div className="mb-3 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2 text-sm font-semibold">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200/70 bg-blue-100 text-blue-600 dark:border-blue-400/20 dark:bg-blue-500/15 dark:text-sky-400">
               <ScanLine className="h-4 w-4 text-primary" />
             </span>
             {model.tr("scanBale")}
@@ -134,7 +134,7 @@ function ScanControls({ model }: { model: FactoryContainerLoadingScanModel }) {
           disabled={
             !model.orderId || !model.orderDetail || !model.selectedLocationId || model.addBaleMutation.isPending
           }
-          className={`h-14 min-w-0 rounded-xl border-border/80 bg-background pl-12 font-mono text-base shadow-xs transition-all focus-visible:ring-2 sm:text-lg ${model.scanInputClass}`}
+          className={`h-14 min-w-0 rounded-xl border-blue-200/80 bg-white pl-12 font-mono text-base shadow-sm transition-all focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[#0c172b] sm:text-lg ${model.scanInputClass}`}
           autoFocus
           data-testid="input-scan-code"
         />
@@ -160,14 +160,19 @@ function BaleGroups({
   if (model.orderedGroups.length === 0) {
     return (
       <div
-        className="flex min-h-[280px] flex-col items-center justify-center rounded-2xl border border-dashed bg-muted/10 px-4 py-12 text-center text-muted-foreground"
+        className="relative flex min-h-[280px] flex-col items-center justify-center overflow-hidden rounded-[22px] border border-dashed border-blue-200 bg-gradient-to-b from-blue-50/80 to-white px-4 py-12 text-center text-muted-foreground dark:border-blue-500/35 dark:from-[#0d2447] dark:via-[#0b1c37] dark:to-[#0a1528]"
         data-testid="text-no-bales"
       >
-        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-muted">
-          <Package className="h-6 w-6 opacity-60" />
+        <div aria-hidden="true" className="pointer-events-none absolute left-1/2 top-1/2 h-44 w-44 -translate-x-1/2 -translate-y-[70%] rounded-full bg-blue-400/10 blur-3xl dark:bg-blue-500/20" />
+        <div className="relative mb-4 flex h-20 w-20 items-center justify-center rounded-[22px] border border-blue-300/60 bg-white/90 shadow-[0_16px_38px_-20px_rgba(37,99,235,0.6)] dark:border-blue-400/40 dark:bg-blue-500/15">
+          <span aria-hidden="true" className="absolute -left-2 -top-2 h-4 w-4 rounded-tl-lg border-l-[3px] border-t-[3px] border-sky-500" />
+          <span aria-hidden="true" className="absolute -right-2 -top-2 h-4 w-4 rounded-tr-lg border-r-[3px] border-t-[3px] border-sky-500" />
+          <span aria-hidden="true" className="absolute -bottom-2 -left-2 h-4 w-4 rounded-bl-lg border-b-[3px] border-l-[3px] border-sky-500" />
+          <span aria-hidden="true" className="absolute -bottom-2 -right-2 h-4 w-4 rounded-br-lg border-b-[3px] border-r-[3px] border-sky-500" />
+          <Package className="h-10 w-10 text-blue-500 dark:text-sky-300" />
         </div>
-        <p className="font-medium text-foreground">{model.tr("noBalesScanned")}</p>
-        <p className="mt-1 max-w-sm text-sm">
+        <p className="relative text-base font-semibold text-foreground">{model.tr("noBalesScanned")}</p>
+        <p className="relative mt-1 max-w-sm text-sm">
           {!model.orderId ? model.tr("setupFirstHint") : model.tr("scannedAppearHint")}
         </p>
       </div>
@@ -179,7 +184,7 @@ function BaleGroups({
       {model.orderedGroups.map((group) => (
         <div
           key={group.articleCode}
-          className="overflow-hidden rounded-xl border bg-background/70"
+          className="overflow-hidden rounded-xl border border-blue-100/80 bg-white/75 shadow-sm dark:border-blue-500/15 dark:bg-[#0e1b32]/80"
           data-testid={`group-article-${group.articleCode}`}
         >
           <button
@@ -191,7 +196,7 @@ function BaleGroups({
             <div className="flex min-w-0 items-center gap-2.5">
               <Badge
                 variant="outline"
-                className="shrink-0 rounded-md bg-muted/30 font-mono"
+                className="shrink-0 rounded-md border-blue-200 bg-blue-50 font-mono text-blue-700 dark:border-blue-500/25 dark:bg-blue-500/10 dark:text-sky-300"
                 data-testid={`badge-article-${group.articleCode}`}
               >
                 {group.articleCode}
@@ -278,7 +283,7 @@ function RemovalLog({ model }: { model: FactoryContainerLoadingScanModel }) {
   if (!orderId || baleRemovals.length === 0) return null;
 
   return (
-    <div className="mt-3 overflow-hidden rounded-2xl border bg-background/80">
+    <div className="mt-3 overflow-hidden rounded-2xl border border-blue-100/80 bg-white/90 dark:border-blue-500/20 dark:bg-[#101d34]/90">
       <button
         className="flex w-full items-center justify-between gap-2 px-4 py-3 text-sm font-medium transition-colors hover:bg-muted/30"
         onClick={() => model.setShowRemovalLog((v) => !v)}
@@ -377,7 +382,7 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
   return (
     <div className="flex min-h-0 min-w-0 flex-col xl:w-[60%]">
       <div
-        className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border bg-background/90 shadow-xs transition-all duration-300 ${
+        className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-[22px] border border-blue-100/90 bg-white shadow-[0_18px_48px_-40px_rgba(30,64,175,0.75)] transition-all duration-300 dark:border-blue-500/25 dark:bg-[#101b30] ${
           scanFlash === "success" ? "ring-2 ring-green-500/80" : scanFlash === "error" ? "ring-2 ring-red-500/80" : ""
         }`}
       >
@@ -387,18 +392,23 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
               ? "bg-green-50 dark:bg-green-950/40"
               : scanFlash === "error"
                 ? "bg-red-50 dark:bg-red-950/30"
-                : "bg-background"
+                : "bg-gradient-to-r from-blue-50/90 via-white to-white dark:from-[#132848] dark:via-[#10213b] dark:to-[#101b30]"
           }`}
         >
-          <div>
-            <h2 className="text-sm font-semibold sm:text-base" data-testid="text-bales-header">
-              {model.tr("scannedBales")}
-            </h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">{model.tr("liveContents")}</p>
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-100/90 text-blue-600 dark:border-blue-400/25 dark:bg-blue-500/15 dark:text-sky-400">
+              <ScanLine className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-sm font-bold tracking-tight sm:text-base" data-testid="text-bales-header">
+                {model.tr("scannedBales")}
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">{model.tr("liveContents")}</p>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-1.5">
-            <Badge variant="secondary" className="rounded-lg px-2.5 py-1" data-testid="badge-bale-count">
+            <Badge variant="secondary" className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 font-semibold text-blue-700 dark:border-blue-400/30 dark:bg-blue-500/15 dark:text-sky-300" data-testid="badge-bale-count">
               {bales.length} {model.tr("balesLower")}
             </Badge>
             {bales.length > 0 && (
@@ -438,7 +448,7 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
           </div>
         </div>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col p-3 sm:p-4">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-gradient-to-b from-white to-slate-50/40 p-3 dark:from-[#0e1a30] dark:to-[#0b1528] sm:p-4">
           <ScanControls model={model} />
 
           {viewMode === "detailed" && lastScannedRef && (
