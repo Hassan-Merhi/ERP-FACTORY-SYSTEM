@@ -248,29 +248,29 @@ export function AgentStatementPanel({
 
       {/* Stats grid */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
-        <div className="rounded-xl border bg-muted/30 p-4 space-y-1.5">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Opening</p>
+        <div className="relative space-y-2 overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-sky-50 p-4 shadow-sm dark:border-sky-500/35 dark:from-[#163e68] dark:to-[#0d2545]">
+          <div className="flex items-center justify-between gap-2"><p className="text-xs font-bold uppercase tracking-wider text-sky-700 dark:text-sky-200">Opening</p><span className="rounded-xl bg-sky-100 p-2 text-sky-600 dark:bg-sky-500/20 dark:text-sky-300"><Layers3 className="h-4 w-4" aria-hidden="true" /></span></div>
           <p className="text-base font-bold font-mono tabular-nums leading-tight">
             {formatAmount(Math.abs(openingBalance))}
           </p>
           <p className="text-xs text-muted-foreground">{openingSide}</p>
         </div>
-        <div className="rounded-xl border bg-red-50/50 dark:bg-red-950/20 border-red-200/60 dark:border-red-800/40 p-4 space-y-1.5">
-          <p className="text-xs font-medium text-red-600 dark:text-red-400 uppercase tracking-wide">Debit</p>
+        <div className="relative space-y-2 overflow-hidden rounded-2xl border border-rose-200 bg-gradient-to-br from-rose-50 to-red-50 p-4 shadow-sm dark:border-rose-500/45 dark:from-[#542238] dark:to-[#361725]">
+          <div className="flex items-center justify-between gap-2"><p className="text-xs font-bold uppercase tracking-wider text-red-700 dark:text-red-200">Debit</p><span className="rounded-xl bg-red-100 p-2 text-red-600 dark:bg-red-400/20 dark:text-red-200"><ArrowDownRight className="h-4 w-4" aria-hidden="true" /></span></div>
           <p className="text-base font-bold font-mono tabular-nums text-red-700 dark:text-red-300 leading-tight">
             {formatAmount(periodDebit)}
           </p>
           <p className="text-xs text-muted-foreground">this period</p>
         </div>
-        <div className="rounded-xl border bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200/60 dark:border-emerald-800/40 p-4 space-y-1.5">
-          <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">Credit</p>
+        <div className="relative space-y-2 overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-green-50 p-4 shadow-sm dark:border-emerald-500/45 dark:from-[#0b5038] dark:to-[#073324]">
+          <div className="flex items-center justify-between gap-2"><p className="text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-200">Credit</p><span className="rounded-xl bg-emerald-100 p-2 text-emerald-600 dark:bg-emerald-400/20 dark:text-emerald-200"><ArrowUpRight className="h-4 w-4" aria-hidden="true" /></span></div>
           <p className="text-base font-bold font-mono tabular-nums text-emerald-700 dark:text-emerald-300 leading-tight">
             {formatAmount(periodCredit)}
           </p>
           <p className="text-xs text-muted-foreground">this period</p>
         </div>
         <div
-          className={`rounded-xl border p-4 space-y-1.5 ${closingBalance >= 0 ? "bg-blue-50/50 dark:bg-blue-950/20 border-blue-200/60 dark:border-blue-800/40" : "bg-orange-50/50 dark:bg-orange-950/20 border-orange-200/60 dark:border-orange-800/40"}`}
+          className={`relative space-y-2 overflow-hidden rounded-2xl border p-4 shadow-sm ${closingBalance >= 0 ? "border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 dark:border-blue-500/45 dark:from-[#153f7d] dark:to-[#0c2452]" : "border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50 dark:border-orange-500/45 dark:from-[#51331c] dark:to-[#322417]"}`}
         >
           <p
             className={`text-xs font-medium uppercase tracking-wide ${closingBalance >= 0 ? "text-blue-600 dark:text-blue-400" : "text-orange-600 dark:text-orange-400"}`}
