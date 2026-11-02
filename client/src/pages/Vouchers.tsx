@@ -606,7 +606,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
       {isPOS ? (
         <PageHeader title="Stock Transfer" subtitle="Transfer stock between locations" />
       ) : !isFactoryMode ? (
-        <PageHeader title="Vouchers" />
+        <PageHeader title="Vouchers" subtitle="Create and manage payment, receipt, and journal entries" />
       ) : (
         <div className="flex items-start justify-between gap-3 pb-4 border-b">
           <div>
