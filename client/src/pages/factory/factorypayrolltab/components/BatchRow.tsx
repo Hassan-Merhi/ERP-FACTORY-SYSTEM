@@ -2,7 +2,7 @@
  * BatchRow — payroll batch and worker rows.
  */
 import { useState } from "react";
-import { ChevronDown, ChevronRight, RotateCcw, Target, Trash2, Wrench } from "lucide-react";
+import { CalendarDays, ChevronDown, ChevronRight, RotateCcw, Target, Trash2, Users, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -50,30 +50,36 @@ export function BatchRow({
   return (
     <div>
       <div
-        className="flex cursor-pointer items-center gap-3 px-4 py-3 hover-elevate"
+        className={`group flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-muted/40 ${isExpanded ? "bg-muted/20" : ""}`}
         onClick={() => toggleGroup(group.key)}
         data-testid={`group-${group.key}`}
       >
-        {isExpanded ? (
-          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-        ) : (
-          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-        )}
-        <div className="min-w-0 flex-1">
-          <p className={`font-medium ${condensed ? "text-xs" : "text-sm"}`}>
-            {fmtDate(group.periodStart, formatDisplayDate)} – {fmtDate(group.periodEnd, formatDisplayDate)}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {group.records.length} worker{group.records.length !== 1 ? "s" : ""}
-          </p>
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/70 text-muted-foreground transition-colors group-hover:bg-blue-500/10 group-hover:text-blue-600 dark:group-hover:text-blue-400">
+            {isExpanded ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </span>
+          <div className="min-w-0">
+            <p className={`flex flex-wrap items-center gap-2 font-semibold tracking-tight ${condensed ? "text-xs" : "text-sm"}`}>
+              <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
+              {fmtDate(group.periodStart, formatDisplayDate)} – {fmtDate(group.periodEnd, formatDisplayDate)}
+            </p>
+            <p className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+              <Users className="h-3.5 w-3.5" />
+              {group.records.length} worker{group.records.length !== 1 ? "s" : ""}
+            </p>
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <div className="text-right">
-            <p className={`font-mono font-semibold ${condensed ? "text-xs" : "text-sm"}`}>${total.toFixed(2)}</p>
-            <p className="text-xs text-muted-foreground">
-              {paidCount > 0 && <span className="text-green-600 dark:text-green-400">{paidCount} paid</span>}
+            <p className={`font-mono font-bold tabular-nums ${condensed ? "text-xs" : "text-sm"}`}>${total.toFixed(2)}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {paidCount > 0 && <span className="font-medium text-emerald-600 dark:text-emerald-400">{paidCount} paid</span>}
               {paidCount > 0 && unpaidCount > 0 && " · "}
-              {unpaidCount > 0 && <span className="text-amber-600 dark:text-amber-400">{unpaidCount} pending</span>}
+              {unpaidCount > 0 && <span className="font-medium text-amber-600 dark:text-amber-400">{unpaidCount} pending</span>}
             </p>
           </div>
           {groupPayable.length > 0 && (
@@ -88,11 +94,13 @@ export function BatchRow({
               }}
               onClick={(event) => event.stopPropagation()}
               data-testid={`checkbox-group-${group.key}`}
+              aria-label="Select all payable workers in batch"
             />
           )}
           <Button
             size="icon"
             variant="ghost"
+            className="h-9 w-9 rounded-lg text-muted-foreground hover:text-destructive"
             onClick={(event) => {
               event.stopPropagation();
               setDeleteBatchGroup(group);
@@ -100,16 +108,16 @@ export function BatchRow({
             data-testid={`button-delete-batch-${group.key}`}
             title="Delete batch — reverses all payments and accounting entries"
           >
-            <Trash2 className="h-4 w-4 text-muted-foreground" />
+            <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
       {isExpanded && (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto border-t border-border/60 bg-background/50">
           <Table mobileLayout="cards" minimumWidth="76rem" scrollLabel="Payroll batch workers">
             <TableHeader>
-              <TableRow className="bg-muted/40 hover:bg-muted/40">
+              <TableRow className="bg-muted/30 hover:bg-muted/30 dark:bg-white/[0.04] dark:hover:bg-white/[0.04]">
                 <TableHead className="h-9 w-10 pl-8 text-xs font-semibold" />
                 <TableHead className="h-9 text-xs font-semibold">Worker</TableHead>
                 <TableHead className="h-9 text-center text-xs font-semibold">Present</TableHead>
@@ -135,7 +143,7 @@ export function BatchRow({
                   pendingBonus > 0 ||
                   Number(payroll.rejectedProductionBonus || 0) > 0;
                 return (
-                  <TableRow key={payroll.id} data-testid={`row-payroll-${payroll.id}`}>
+                  <TableRow key={payroll.id} className="transition-colors hover:bg-muted/30" data-testid={`row-payroll-${payroll.id}`}>
                     <TableCell className="pl-8">
                       {canPay && (
                         <Checkbox

@@ -1,0 +1,238 @@
+/*
+ * Approved Stock Entry redesign, 2026-11-02.
+ * Page-scoped visual styling only. No changes to permissions, stock accounting,
+ * quantity calculations, column behavior, scan workflow or label printing.
+ * All interactive UI remains in the original components for mobile and desktop.
+ */
+@layer utilities {
+  .bale-entry-refresh .stock-entry-workspace {
+    --entry-panel: hsl(var(--card) / .94);
+    --entry-subtle: hsl(var(--muted) / .32);
+    --entry-edge: hsl(var(--border) / .78);
+    --entry-glow: 0 14px 35px -29px rgb(4 120 87 / .45);
+    position: relative;
+    min-width: 0;
+  }
+  .dark .bale-entry-refresh .stock-entry-workspace {
+    --entry-panel: rgb(13 28 40 / .94);
+    --entry-subtle: rgb(24 42 54 / .85);
+    --entry-edge: rgb(96 137 156 / .28);
+    --entry-glow: 0 19px 36px -28px rgb(0 0 0 / .95);
+  }
+
+  /* A clean, compact toolbar that still leaves History and Quick Create as-is. */
+  .bale-entry-refresh .stock-entry-page-heading {
+    padding-bottom: 20px;
+  }
+  .bale-entry-refresh .stock-entry-page-heading > div {
+    align-items: center;
+    row-gap: 13px;
+  }
+  .bale-entry-refresh .stock-entry-heading-icon {
+    border: 1px solid rgb(14 165 233 / .2);
+    background: linear-gradient(150deg, rgb(14 165 233 / .19), rgb(16 185 129 / .06));
+    box-shadow: inset 0 1px rgb(255 255 255 / .09), 0 12px 24px -20px rgb(14 165 233 / .8);
+  }
+  .bale-entry-refresh .stock-entry-toolbar-button {
+    border-color: var(--entry-edge);
+    background: linear-gradient(160deg, var(--entry-panel), var(--entry-subtle));
+    color: hsl(var(--foreground));
+    box-shadow: var(--entry-glow);
+  }
+  .bale-entry-refresh .stock-entry-toolbar-button:hover {
+    border-color: rgb(16 185 129 / .38);
+    background: hsl(var(--muted) / .55);
+    color: hsl(var(--foreground));
+  }
+
+  /* Scan field is the visual focal point; keyboard, camera and dropdown are unchanged. */
+  .bale-entry-refresh .stock-entry-scan-shell {
+    position: relative;
+    isolation: isolate;
+    min-width: 0;
+    padding: 19px 19px 20px;
+    overflow: visible;
+    border: 1px solid rgb(16 185 129 / .29);
+    border-radius: 19px;
+    background:
+      radial-gradient(ellipse 58% 87% at 90% -15%, rgb(16 185 129 / .17), transparent 85%),
+      linear-gradient(135deg, rgb(16 185 129 / .07), var(--entry-panel) 67%);
+    box-shadow: var(--entry-glow), inset 0 1px rgb(255 255 255 / .065);
+  }
+  .bale-entry-refresh .stock-entry-scan-shell::before {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    right: 23px;
+    top: 23px;
+    width: 94px;
+    height: 28px;
+    opacity: .18;
+    transform: rotate(-16deg);
+    background: repeating-linear-gradient(90deg, rgb(16 185 129) 0 3px, transparent 3px 7px, rgb(16 185 129) 7px 9px, transparent 9px 13px);
+    -webkit-mask-image: linear-gradient(to left, black, transparent);
+    mask-image: linear-gradient(to left, black, transparent);
+  }
+  .bale-entry-refresh .stock-entry-scan-shell .stock-entry-scanner {
+    position: relative;
+    z-index: 1;
+    min-width: 0;
+  }
+  .bale-entry-refresh .stock-entry-scanner-label {
+    min-height: 32px;
+    padding-right: 24px;
+    letter-spacing: -.015em;
+    color: hsl(var(--foreground));
+  }
+  .bale-entry-refresh .stock-entry-label-icon {
+    flex: none;
+    border: 1px solid rgb(16 185 129 / .22);
+    background: rgb(16 185 129 / .13);
+    color: rgb(5 150 105);
+  }
+  .dark .bale-entry-refresh .stock-entry-label-icon { color: rgb(52 211 153); }
+  .bale-entry-refresh .stock-entry-scan-input {
+    border-color: rgb(14 165 233 / .62);
+    background: hsl(var(--background) / .92);
+    color: hsl(var(--foreground));
+    box-shadow: 0 0 0 3px rgb(14 165 233 / .055), inset 0 1px rgb(255 255 255 / .045);
+  }
+  .bale-entry-refresh .stock-entry-scan-input:focus-visible {
+    outline: none;
+    border-color: rgb(14 165 233);
+    box-shadow: 0 0 0 3px rgb(14 165 233 / .16), 0 9px 21px -18px rgb(14 165 233 / .9);
+  }
+  .bale-entry-refresh .stock-entry-camera button {
+    border-radius: 11px;
+  }
+  .bale-entry-refresh .stock-entry-results {
+    border-color: var(--entry-edge);
+    box-shadow: 0 17px 34px -20px rgb(0 0 0 / .45);
+  }
+
+  /* Preserve the actual table, including its scrolling and input/select fields. */
+  .bale-entry-refresh .stock-entry-cart-shell {
+    min-width: 0;
+  }
+  .bale-entry-refresh .stock-entry-desktop-table {
+    border-color: var(--entry-edge);
+    background: var(--entry-panel);
+    box-shadow: var(--entry-glow), inset 0 1px rgb(255 255 255 / .045);
+  }
+  .bale-entry-refresh .stock-entry-table-header {
+    background: hsl(var(--muted) / .5);
+  }
+  .dark .bale-entry-refresh .stock-entry-table-header {
+    background: rgb(29 48 61 / .96);
+  }
+  .bale-entry-refresh .stock-entry-desktop-table th {
+    min-height: 43px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    border-bottom-color: var(--entry-edge);
+    color: hsl(var(--muted-foreground));
+    font-size: 11px;
+    letter-spacing: .055em;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+  .bale-entry-refresh .stock-entry-desktop-table td {
+    border-bottom-color: var(--entry-edge);
+  }
+  .bale-entry-refresh .stock-entry-desktop-table tbody tr:hover {
+    background: rgb(16 185 129 / .055);
+  }
+  .bale-entry-refresh .stock-entry-desktop-table tbody tr:last-child td { border-bottom: 0; }
+  .bale-entry-refresh .stock-entry-desktop-table input,
+  .bale-entry-refresh .stock-entry-desktop-table [role="combobox"] {
+    border-radius: 9px;
+    border-color: var(--entry-edge);
+    background: hsl(var(--background) / .75);
+  }
+  .bale-entry-refresh .stock-entry-desktop-table input:focus-visible,
+  .bale-entry-refresh .stock-entry-desktop-table [role="combobox"]:focus-visible {
+    border-color: rgb(14 165 233 / .72);
+  }
+  .bale-entry-refresh .stock-entry-empty-state {
+    height: 235px;
+    background:
+      radial-gradient(ellipse 36% 35% at 50% 73%, rgb(14 165 233 / .065), transparent 92%),
+      linear-gradient(to bottom, transparent 70%, rgb(16 185 129 / .035));
+  }
+  .bale-entry-refresh .stock-entry-empty-icon {
+    color: rgb(13 148 136);
+    border: 1px solid rgb(20 184 166 / .2);
+    background: linear-gradient(145deg, rgb(14 165 233 / .14), rgb(16 185 129 / .1));
+    box-shadow: 0 13px 29px -21px rgb(14 165 233 / .65);
+  }
+  .dark .bale-entry-refresh .stock-entry-empty-icon { color: rgb(94 234 212); }
+
+  /* Right-side options and running totals (same controlled inputs and handlers). */
+  .bale-entry-refresh .stock-entry-sidebar-panel {
+    border-color: var(--entry-edge);
+    border-radius: 19px;
+    background:
+      radial-gradient(ellipse 84% 21% at 0 0, rgb(16 185 129 / .08), transparent),
+      var(--entry-panel);
+    box-shadow: var(--entry-glow), inset 0 1px rgb(255 255 255 / .055);
+  }
+  .bale-entry-refresh .stock-entry-panel-title {
+    padding-bottom: 4px;
+    color: hsl(var(--foreground));
+    letter-spacing: -.015em;
+  }
+  .bale-entry-refresh .stock-entry-sidebar [role="combobox"],
+  .bale-entry-refresh .stock-entry-sidebar input[type="date"] {
+    border: 1px solid var(--entry-edge);
+    background: hsl(var(--background) / .74);
+    color: hsl(var(--foreground));
+    box-shadow: inset 0 1px rgb(255 255 255 / .025);
+  }
+  .bale-entry-refresh .stock-entry-sidebar [role="combobox"]:focus-visible,
+  .bale-entry-refresh .stock-entry-sidebar input[type="date"]:focus-visible {
+    border-color: rgb(16 185 129 / .68);
+  }
+  .bale-entry-refresh .stock-entry-total-grid {
+    border-top-color: var(--entry-edge);
+  }
+  .bale-entry-refresh .stock-entry-total-tile {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--entry-edge);
+    background: linear-gradient(140deg, rgb(14 165 233 / .045), var(--entry-subtle));
+    box-shadow: inset 0 1px rgb(255 255 255 / .045);
+  }
+  .bale-entry-refresh .stock-entry-total-tile [data-testid^="text-total-"] {
+    color: rgb(2 132 199);
+    font-size: clamp(1.4rem, 1.75vw, 1.85rem);
+    letter-spacing: -.035em;
+  }
+  .dark .bale-entry-refresh .stock-entry-total-tile [data-testid^="text-total-"] {
+    color: rgb(56 189 248);
+  }
+  .bale-entry-refresh .stock-entry-confirm {
+    border: 1px solid rgb(52 211 153 / .48);
+    background: linear-gradient(115deg, #059669, #047857);
+    box-shadow: 0 10px 23px -17px rgb(5 150 105 / .8), inset 0 1px rgb(255 255 255 / .18);
+    transition: background .15s ease, box-shadow .15s ease;
+  }
+  .bale-entry-refresh .stock-entry-confirm:hover:not(:disabled) {
+    background: linear-gradient(115deg, #047857, #065f46);
+    box-shadow: 0 13px 26px -16px rgb(5 150 105 / .9);
+  }
+  .bale-entry-refresh .stock-entry-confirm:disabled {
+    opacity: .56;
+    box-shadow: none;
+  }
+
+  @media (max-width: 639px) {
+    .bale-entry-refresh .stock-entry-page-heading { padding-bottom: 14px; }
+    .bale-entry-refresh .stock-entry-scan-shell { padding: 14px; border-radius: 16px; }
+    .bale-entry-refresh .stock-entry-scan-shell::before { width: 58px; right: 13px; opacity: .12; }
+    .bale-entry-refresh .stock-entry-sidebar-panel { border-radius: 16px; }
+    .bale-entry-refresh .stock-entry-empty-state { height: 180px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bale-entry-refresh .stock-entry-confirm { transition: none; }
+  }
+}

@@ -415,7 +415,10 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                       />
                       {/* Big rate display */}
                       {(() => {
-                        const kg = data?.production.totalWeightKg ?? 0;
+                        // Match the "Productions" KG shown in the weight breakdown (bales + wipers/garbage).
+                        // Only the displayed per-KG rate changes; the value and weight totals stay untouched.
+                        const kg =
+                          (data?.production.totalWeightKg ?? 0) + (data?.wipersGarbage.totalWeightKg ?? 0);
                         const val = data?.production.totalValue ?? 0;
                         const rate = kg > 0 ? val / kg : 0;
                         return (

@@ -204,15 +204,15 @@ export default function BaleProductsBilingual() {
   });
 
   return (
-    <div data-factory-catalog-language={language} dir={language === "ar" ? "rtl" : "ltr"}>
-      <div className="container mx-auto px-6 pt-6">
-        <div className="rounded-xl border bg-card px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+    <div data-factory-catalog-language={language} data-bale-products-modern="true" dir={language === "ar" ? "rtl" : "ltr"}>
+      <div className="container mx-auto max-w-none px-3 pt-4 sm:px-6 sm:pt-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-gradient-to-r from-slate-50 via-white to-blue-50/60 px-4 py-3 shadow-sm dark:border-blue-400/20 dark:from-[#141e30] dark:via-[#151f32] dark:to-[#172847]">
           <div className="flex items-center gap-2 flex-wrap">
             <Select
               value={translationFilter}
               onValueChange={(value) => setTranslationFilter(value as TranslationFilter)}
             >
-              <SelectTrigger className="h-8 w-56" data-testid="select-translation-status">
+              <SelectTrigger className="h-10 w-56 rounded-xl border-slate-300 bg-white/90 dark:border-blue-300/20 dark:bg-[#0d192c]" data-testid="select-translation-status">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -224,7 +224,7 @@ export default function BaleProductsBilingual() {
             </Select>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative">
+            <div className="relative min-w-[220px] flex-1 sm:flex-none">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
               <Input
                 value={catalogSearch}
@@ -236,7 +236,7 @@ export default function BaleProductsBilingual() {
                       ? "Rechercher en français, anglais, arabe ou par code..."
                       : "Search English, Arabic, or article code..."
                 }
-                className="h-8 w-72 pl-8 pr-8 text-sm"
+                className="h-10 w-full min-w-0 rounded-xl border-slate-300 bg-white/90 pl-9 pr-8 text-sm shadow-sm sm:w-80 dark:border-blue-300/20 dark:bg-[#0d192c]"
                 dir="auto"
               />
               {catalogSearch && (
@@ -254,7 +254,7 @@ export default function BaleProductsBilingual() {
                 type="button"
                 size="sm"
                 variant="outline"
-                className="h-8"
+                className="h-10 rounded-xl border-slate-300 bg-white/90 shadow-sm dark:border-blue-300/20 dark:bg-[#0d192c]"
                 onClick={() => setCategoryDialogOpen(true)}
               >
                 <Plus className="h-3.5 w-3.5 mr-1.5" />

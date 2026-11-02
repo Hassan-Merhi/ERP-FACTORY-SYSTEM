@@ -19,7 +19,7 @@ export function FactoryPosMobileCart({ model }: { model: FactoryPosModel }) {
         return (
           <div
             key={row.id}
-            className="rounded-md border bg-card px-3 py-2.5 flex items-center gap-2 hover-elevate active-elevate-2 cursor-pointer"
+            className="rounded-xl border border-border/70 bg-card px-3 py-2.5 shadow-sm flex items-center gap-2 hover-elevate active-elevate-2 cursor-pointer"
             onClick={() => model.openMobileRowEdit(idx)}
             data-testid={`mobile-row-card-${idx}`}
           >
@@ -56,7 +56,7 @@ export function FactoryPosMobileCart({ model }: { model: FactoryPosModel }) {
 
       {/* Tap to add item */}
       <div
-        className="rounded-md border border-dashed border-muted-foreground/30 px-3 py-3 flex items-center gap-2 text-muted-foreground cursor-pointer hover-elevate active-elevate-2"
+        className="rounded-xl border border-dashed border-orange-500/35 px-3 py-3 flex items-center gap-2 text-muted-foreground cursor-pointer hover-elevate active-elevate-2"
         onClick={model.openMobileBrowse}
         data-testid="mobile-add-item-card"
       >
@@ -65,7 +65,7 @@ export function FactoryPosMobileCart({ model }: { model: FactoryPosModel }) {
       </div>
 
       {/* Mobile summary */}
-      <div className="rounded-md border bg-muted/30 px-3 py-2 flex items-center justify-between gap-2 mt-2">
+      <div className="rounded-xl border border-orange-500/25 bg-orange-500/5 px-3 py-2 flex items-center justify-between gap-2 mt-2">
         <span className="text-xs text-muted-foreground">
           {validRows.length} items · Qty {totalQty}
           {totalWeight > 0 && ` · ${formatNum(totalWeight)} kg`}

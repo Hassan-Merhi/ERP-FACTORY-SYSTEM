@@ -36,7 +36,7 @@ export function createFactoryLocationProductRenderers(inventory: FactoryLocation
     return (
       <tr
         key={prod.productId}
-        className={`border-t h-12 ${proformaMode && isSelected ? "bg-primary/5" : ""}`}
+        className={`inventory-product-row border-t h-12 ${proformaMode && isSelected ? "bg-primary/5" : ""}`}
         data-testid={`row-product${testIdSuffix}-${prod.productId}`}
       >
         {proformaMode && (
@@ -71,7 +71,7 @@ export function createFactoryLocationProductRenderers(inventory: FactoryLocation
           <td className="px-3">
             <Badge
               variant="outline"
-              className={`text-xs font-medium no-default-active-elevate whitespace-nowrap ${catColor(prod.category)}`}
+              className={`inventory-category-badge text-xs font-medium no-default-active-elevate whitespace-nowrap ${catColor(prod.category)}`}
             >
               {prod.category || "Uncategorized"}
             </Badge>
@@ -183,7 +183,7 @@ export function createFactoryLocationProductRenderers(inventory: FactoryLocation
     return (
       <div
         key={prod.productId}
-        className={`rounded-xl border p-3 ${proformaMode && isSelected ? "ring-2 ring-primary border-primary" : ""}`}
+        className={`inventory-mobile-card rounded-xl border p-3 ${proformaMode && isSelected ? "ring-2 ring-primary border-primary" : ""}`}
         data-testid={`card-product${testIdSuffix}-${prod.productId}`}
       >
         <div className="flex items-center gap-2 mb-2">

@@ -268,56 +268,62 @@ export default function FactoryEmployees() {
   }
 
   return (
-    <div className="space-y-5">
-      {/* Stats pills */}
-      <div className="flex flex-wrap gap-3">
+    <div className="space-y-5 pb-6">
+
+      {/* Visual summary only: all payroll amounts still come from the existing calculations. */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="employees-summary">
         {isLoading ? (
           <>
-            <Skeleton className="h-10 w-36 rounded-lg" />
-            <Skeleton className="h-10 w-32 rounded-lg" />
-            <Skeleton className="h-10 w-32 rounded-lg" />
-            <Skeleton className="h-10 w-44 rounded-lg" />
+            {[0, 1, 2, 3].map((index) => <Skeleton key={index} className="h-[88px] rounded-2xl" />)}
           </>
         ) : (
           <>
-            <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-4 py-2 text-sm">
-              <Users className="h-4 w-4 text-muted-foreground" />
-              <span className="text-muted-foreground">Total</span>
-              <span className="font-semibold">{employees.length}</span>
+            <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-border/70 bg-gradient-to-br from-card to-muted/30 p-3.5 shadow-sm sm:p-4 dark:from-slate-900 dark:to-slate-800/70">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-muted/70 text-foreground shadow-inner"><Users className="h-5 w-5" /></span>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-muted-foreground sm:text-sm">Total</p>
+                <p className="mt-0.5 text-xl font-bold tracking-tight tabular-nums sm:text-2xl">{employees.length}</p>
+              </div>
             </div>
-            <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-4 py-2 text-sm">
-              <UserCheck2 className="h-4 w-4 text-emerald-500" />
-              <span className="text-muted-foreground">Active</span>
-              <span className="font-semibold">{totalActive}</span>
+            <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-emerald-500/25 bg-gradient-to-br from-emerald-50 to-card p-3.5 shadow-sm sm:p-4 dark:from-emerald-950/65 dark:to-slate-900">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"><UserCheck2 className="h-5 w-5" /></span>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-muted-foreground sm:text-sm">Active</p>
+                <p className="mt-0.5 text-xl font-bold tracking-tight tabular-nums sm:text-2xl">{totalActive}</p>
+              </div>
             </div>
-            <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-4 py-2 text-sm">
-              <UserMinus className="h-4 w-4 text-muted-foreground" />
-              <span className="text-muted-foreground">Inactive</span>
-              <span className="font-semibold">{totalInactive}</span>
+            <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-border/70 bg-gradient-to-br from-card to-muted/30 p-3.5 shadow-sm sm:p-4 dark:from-slate-900 dark:to-slate-800/70">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-muted/70 text-muted-foreground"><UserMinus className="h-5 w-5" /></span>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-muted-foreground sm:text-sm">Inactive</p>
+                <p className="mt-0.5 text-xl font-bold tracking-tight tabular-nums sm:text-2xl">{totalInactive}</p>
+              </div>
             </div>
-            <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-4 py-2 text-sm">
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-              <span className="text-muted-foreground">Monthly Payroll</span>
-              <span className="font-semibold font-mono">{fmt(totalMonthlySalary)}</span>
+            <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-50 to-card p-3.5 shadow-sm sm:p-4 dark:from-violet-950/65 dark:to-slate-900">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-500/15 text-violet-600 dark:text-violet-300"><DollarSign className="h-5 w-5" /></span>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-muted-foreground sm:text-sm">Monthly Payroll</p>
+                <p className="mt-0.5 truncate text-lg font-bold tracking-tight tabular-nums sm:text-2xl" title={fmt(totalMonthlySalary)}>{fmt(totalMonthlySalary)}</p>
+              </div>
             </div>
           </>
         )}
       </div>
 
       {/* Filter row */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px]">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="relative min-w-[200px] flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search employees..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="h-11 rounded-xl border-border/70 bg-card/80 pl-10 shadow-sm focus-visible:ring-emerald-500/30"
             data-testid="input-employee-search"
           />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-32" data-testid="select-employee-status">
+          <SelectTrigger className="h-11 w-full rounded-xl border-border/70 bg-card/80 shadow-sm sm:w-36" data-testid="select-employee-status">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -326,30 +332,30 @@ export default function FactoryEmployees() {
             <SelectItem value="All">All</SelectItem>
           </SelectContent>
         </Select>
-        <Button onClick={openCreate} data-testid="button-create-employee">
+        <Button onClick={openCreate} className="h-11 rounded-xl bg-emerald-600 px-5 font-semibold text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500" data-testid="button-create-employee">
           <Plus className="mr-2 h-4 w-4" />
           New Employee
         </Button>
       </div>
 
       {/* Table */}
-      <div className="border rounded-xl overflow-x-auto">
-        <Table mobileLayout="cards">
+      <div className="overflow-x-auto rounded-2xl border border-border/70 bg-card shadow-sm dark:border-slate-700/70 dark:bg-slate-950/40">
+        <Table mobileLayout="cards" className="w-full md:min-w-[720px]">
           <TableHeader className="sticky top-0 z-30">
-            <TableRow className="bg-muted border-b-2 border-border/60 hover:bg-muted">
-              <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
+            <TableRow className="border-b border-border/70 bg-muted/65 hover:bg-muted/65 dark:bg-slate-800/70 dark:hover:bg-slate-800/70">
+              <TableHead className="py-3.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Employee
               </TableHead>
-              <TableHead className="text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
+              <TableHead className="text-right py-3.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Monthly Salary
               </TableHead>
-              <TableHead className="text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
+              <TableHead className="text-right py-3.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Balance
               </TableHead>
-              <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
+              <TableHead className="py-3.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Status
               </TableHead>
-              <TableHead className="w-[80px] py-2"></TableHead>
+              <TableHead className="w-[104px] py-3.5"><span className="sr-only">Employee actions</span></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -396,26 +402,26 @@ export default function FactoryEmployees() {
                 return (
                   <TableRow
                     key={emp.id}
-                    className="group cursor-pointer hover:bg-muted/40"
+                    className="group cursor-pointer border-b border-border/50 transition-colors hover:bg-emerald-500/[0.055] focus-within:bg-emerald-500/[0.055] dark:hover:bg-emerald-400/[0.08] dark:focus-within:bg-emerald-400/[0.08]"
                     onClick={() => navigate(`/factory/employees/${emp.id}`)}
                     data-testid={`row-employee-${emp.id}`}
                   >
                     <TableCell className="py-3">
                       <div className="flex items-center gap-3">
-                        <Avatar className={`h-8 w-8 shrink-0 ${avatarColor}`}>
+                        <Avatar className={`h-9 w-9 shrink-0 border border-border/40 shadow-sm ${avatarColor}`}>
                           <AvatarFallback className={`text-xs font-semibold ${avatarColor}`}>
                             {getInitials(fullName)}
                           </AvatarFallback>
                         </Avatar>
-                        <span className="font-medium text-sm">{fullName}</span>
+                        <span className="text-sm font-semibold tracking-tight text-foreground">{fullName}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="py-3 text-right font-mono text-sm text-muted-foreground">
+                    <TableCell className="py-3 text-right font-mono text-sm font-medium tabular-nums text-muted-foreground">
                       {fmt(emp.monthlySalary)}
                     </TableCell>
                     <TableCell className="py-3 text-right">
                       <span
-                        className={`font-mono font-semibold text-sm ${
+                        className={`font-mono font-bold text-sm tabular-nums ${
                           balance < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
                         }`}
                       >
@@ -425,7 +431,7 @@ export default function FactoryEmployees() {
                     <TableCell className="py-3">
                       <Badge
                         variant="secondary"
-                        className={`text-xs no-default-active-elevate ${
+                        className={`rounded-full border border-transparent px-2.5 py-0.5 text-xs font-semibold no-default-active-elevate ${
                           emp.active
                             ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
                             : "bg-muted text-muted-foreground"
@@ -436,7 +442,7 @@ export default function FactoryEmployees() {
                     </TableCell>
                     <TableCell className="py-3">
                       <div
-                        className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity"
+                        className="flex items-center justify-end gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <Button

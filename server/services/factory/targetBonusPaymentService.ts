@@ -55,20 +55,22 @@ export async function payingAccountTx(tx: DbTransaction, companyId: number, acco
   return Number(account.id);
 }
 export async function expenseAccountTx(tx: DbTransaction, companyId: number): Promise<number> {
-  // This is the user's existing Factory Deposit Expense classification.
+  // Production Targets bonus disbursements are not salary deposits.
+  // Keep a dedicated company-scoped expense account for daily, weekly and manual payouts.
   await tx.execute(sql`
     INSERT INTO ledger_accounts (company_id, code, name, account_type, opening_balance, active)
-    VALUES (${companyId}, 'PAYROLL_DEPOSIT_EXPENSE', 'Payroll Deposit Expense', 'Indirect Expense', '0', TRUE)
+    VALUES (${companyId}, 'FACTORY_PRODUCTION_BONUS_EXPENSE', 'Production Bonus Expense', 'Indirect Expense', '0', TRUE)
     ON CONFLICT (company_id, code) DO NOTHING
   `);
   const account = first(await tx.execute(sql`
-    SELECT id, active, sub_type AS "subType" FROM ledger_accounts
-    WHERE company_id = ${companyId} AND code = 'PAYROLL_DEPOSIT_EXPENSE'
+    SELECT id, active, sub_type AS "subType", account_type AS "accountType" FROM ledger_accounts
+    WHERE company_id = ${companyId} AND code = 'FACTORY_PRODUCTION_BONUS_EXPENSE'
       AND deleted_at IS NULL
     FOR UPDATE
   `));
-  if (!account || account.active !== true || account.subType === "Group")
-    conflict("Payroll Deposit Expense is unavailable in this company");
+  if (!account || account.active !== true || account.subType === "Group" ||
+      !["Expense", "Indirect Expense", "Direct Expense"].includes(String(account.accountType)))
+    conflict("Production Bonus Expense is unavailable or is not an expense account in this company");
   return Number(account.id);
 }
 

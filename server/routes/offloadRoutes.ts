@@ -593,6 +593,17 @@ export function registerOffloadRoutes(app: Express) {
     requireAuth,
     requireRole("Admin", "Developer"),
     async (req, res) => {
+      const selectedCompanyId = req.session.currentCompanyId;
+      if (!selectedCompanyId) return res.status(400).json({ message: "No company selected" });
+      // Company 12's June POC backfill ran already and produced a duplicate
+      // charge #64. The October correction was later retired. Never replay
+      // that one-time route: use a separately approved source-specific repair.
+      if (Number(selectedCompanyId) === 12) {
+        return res.status(409).json({
+          code: "HISTORICAL_POC_BACKFILL_REPLAY_DISABLED",
+          message: "Historical company-12 post-offload vouchers have already been backfilled. Replaying would risk duplicate payable and expense entries; use the private reconciliation audit.",
+        });
+      }
       try {
         let scanned = 0,
           created = 0,
@@ -616,7 +627,8 @@ export function registerOffloadRoutes(app: Express) {
           fc.container_number
         FROM factory_offload_additional_charges c
         JOIN factory_containers fc ON fc.id = c.container_id
-        WHERE c.ledger_account_id IS NOT NULL
+        WHERE c.ledger_account_id IS NOT NULL AND c.deleted_at IS NULL
+          AND c.company_id = ${selectedCompanyId} AND fc.company_id = ${selectedCompanyId}
         ORDER BY c.id
       `);
         type OffloadChargeRow = {
@@ -657,24 +669,26 @@ export function registerOffloadRoutes(app: Express) {
               .select({ companyId: ledgerAccounts.companyId })
               .from(ledgerAccounts)
               .where(eq(ledgerAccounts.id, ledgerAccountId));
-            if (!acctRow) {
+            if (!acctRow || Number(acctRow.companyId) !== Number(selectedCompanyId)) {
               errors++;
-              errorDetails.push(`chargeId=${chargeId}: ledgerAccount ${ledgerAccountId} not found`);
+              errorDetails.push(`chargeId=${chargeId}: ledger account missing or belongs to another company`);
               continue;
             }
             const voucherCompanyId = acctRow.companyId;
 
-            // Idempotency: check if a voucher already exists that credits this ledger account
-            // for a post-offload entry on this container
+            // Exact source-identity preflight. The legacy description-only
+            // check missed charge 64 because voucher 9309 had NULL description.
+            // Do NOT filter retired vouchers here: a user may have deliberately
+            // retired a posting, which requires review before any recreation.
             const existingCheck = await db.execute(sql`
             SELECT v.id
             FROM vouchers v
-            JOIN voucher_entries ve ON ve.voucher_id = v.id
-            WHERE v.source_module = 'FACTORY'
-              AND v.company_id = ${voucherCompanyId}
-              AND v.description ILIKE ${"%(post-offload)%container " + containerNumber + "%"}
-              AND ve.ledger_account_id = ${ledgerAccountId}
-              AND ve.credit_amount::numeric > 0
+            WHERE v.company_id = ${voucherCompanyId}
+              AND (
+                v.voucher_number LIKE ${`FACTORY-POC-${containerId}-${chargeId}-%`}
+                OR v.voucher_number = ${`FACTORY-POC-BACKFILL-${containerId}-${chargeId}`}
+                OR v.voucher_number LIKE ${`FACTORY-OC-${containerId}-${chargeId}-%`}
+              )
             LIMIT 1
           `);
             const existingRows = resultRows(existingCheck);
