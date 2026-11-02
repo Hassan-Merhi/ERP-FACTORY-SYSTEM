@@ -31,6 +31,16 @@ The audit fails closed if the matching historical set is not exactly 38 goods vo
 
 These figures represent posted expense debits, **not** proven duplicate or overstated amounts. Their exact financial correction remains unknown.
 
+### Follow-up production SELECT-only verification (November 2, 2026)
+
+- All 86 backfill vouchers are balanced individually (zero unbalanced journals).
+- The supplier-credit lines of those vouchers sum to USD 389,442.28. **This does not mean a supplier liability increase of this amount in the combined operational+GL balance**: the original backfill code checks combined balances, but a historical before-and-after snapshot was not recovered.
+- **Four** vouchers were entered with voucher dates later than their October 14 creation timestamp: FACTORY-IMPORT-102-1 (Dec 11), FACTORY-IMPORT-115-1 (Nov 11), FACTORY-IMPORT-113-1 (Oct 16), and FACTORY-COMM-68 (Oct 20). The first two remain future dated as of Nov 2.
+- All 48 commission source containers explicitly identify commission supplier **27 (NASRA)** and currency **USD**, distinct from some containers' purchase-goods suppliers. The audit now correctly resolves both supplier identities and checks source-versus-voucher mappings.
+- For MSBU7553572 and MSNU8402330, recorded offloads occurred in June and July respectively, well before their saved November/December arrival dates. Their historical import expense postings cannot be assigned an accurate earlier business date from the ETA alone.
+- Factory freight vouchers for those two containers exist in June/July. The underlying freight debit accounts and subsequent reclassifications differ from the October import journal. These are review candidates, **not proof of a duplicated import purchase**.
+
+
 Two vouchers remain future-dated as of Nov 2, 2026: MSNU8402330 (Nov 11), MSBU7553572 (Dec 11). Earlier read-only checks found no applied company-12 inventory cutover or GL-FACTORY-STOCK journal to establish that costs were capitalized.
 
 ## Later correction gate (NOT implemented)
