@@ -48,12 +48,23 @@ export default function FactoryEmployeesHub() {
     <Tabs value={effectiveTab} onValueChange={(value) => setTab(value as TabValue)}>
       <div className="erp-mobile-scroll-tabs mb-4 pb-1">
         <TabsList
-          className="w-max min-w-full rounded-2xl border border-border/70 bg-card/80 p-1.5 shadow-sm sm:min-w-0 sm:w-fit dark:border-slate-700/60 dark:bg-slate-900/70"
+          className="w-max min-w-full gap-1.5 rounded-2xl border-blue-500/15 bg-card/80 p-1.5 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-900/70 sm:min-w-0 sm:w-fit"
           aria-label="Employee sections"
           data-testid="tabs-employees-section"
         >
           {visibleOptions.map(({ value, label, icon: ItemIcon }) => (
-            <TabsTrigger key={value} value={value} className="rounded-xl px-4 py-2 text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground data-[state=active]:bg-emerald-600 data-[state=active]:font-semibold data-[state=active]:text-white data-[state=active]:shadow-sm dark:data-[state=active]:bg-emerald-700" data-testid={`tab-employees-${value}`}>
+            <TabsTrigger
+              key={value}
+              value={value}
+              data-testid={`tab-employees-${value}`}
+              className={
+                effectiveTab === value
+                  ? value === "employees"
+                    ? "border border-emerald-400/50 bg-gradient-to-r from-emerald-700 to-emerald-600 text-white shadow-md shadow-emerald-600/20 hover:text-white"
+                    : "border border-blue-400/50 bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md shadow-blue-600/20 hover:text-white"
+                  : "hover:bg-blue-500/10"
+              }
+            >
               <ItemIcon className="h-4 w-4 shrink-0" />
               {label}
             </TabsTrigger>
