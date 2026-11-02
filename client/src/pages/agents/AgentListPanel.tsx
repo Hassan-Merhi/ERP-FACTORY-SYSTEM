@@ -42,24 +42,26 @@ export function AgentListPanel({
     <div
       className={
         phone
-          ? "flex w-full min-w-0 flex-col rounded-xl border bg-muted/20"
-          : "w-72 shrink-0 border-r flex flex-col h-full overflow-hidden bg-muted/20 max-md:w-full max-md:max-h-[min(42dvh,22rem)] max-md:flex-none max-md:border-r-0 max-md:border-b"
+          ? "flex w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-blue-400/20 dark:bg-[#0b1b35]"
+          : "flex h-full w-80 shrink-0 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-blue-400/20 dark:bg-[#0b1b35] max-md:max-h-[min(42dvh,22rem)] max-md:w-full max-md:flex-none"
       }
       data-testid="agent-list-panel"
     >
       {/* Panel header */}
-      <div className={`px-4 pt-4 pb-3 border-b space-y-3 bg-background ${phone ? "rounded-t-xl" : ""}`}>
+      <div className={`space-y-3 border-b border-slate-200/70 bg-gradient-to-b from-blue-50/80 to-white px-4 pb-4 pt-4 dark:border-blue-400/10 dark:from-[#10274a] dark:to-[#0b1b35] ${phone ? "rounded-t-2xl" : ""}`}>
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Users className="h-4 w-4 text-primary" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-blue-600 shadow-sm ring-1 ring-blue-200/60 dark:bg-blue-500/15 dark:text-blue-400 dark:ring-blue-400/20">
+              <Users className="h-4 w-4" />
             </div>
-            <span className="text-sm font-bold tracking-tight">Agent Ledger</span>
+            <span className="text-base font-bold tracking-tight text-slate-900 dark:text-white">Agent Ledger</span>
           </div>
           <Button
             size="sm"
             variant="outline"
-            className={phone ? "gap-1" : "h-7 px-2 text-xs gap-1"}
+            className={phone
+              ? "gap-1.5 border-blue-500 bg-blue-600 text-white shadow-sm hover:bg-blue-700 hover:text-white"
+              : "h-9 gap-1.5 rounded-xl border-blue-500 bg-blue-600 px-3 text-xs font-semibold text-white shadow-sm shadow-blue-600/20 hover:bg-blue-700 hover:text-white"}
             onClick={() => {
               onOpenAddDialog();
             }}
@@ -73,13 +75,13 @@ export function AgentListPanel({
           value={search}
           onValueChange={onSearchChange}
           placeholder="Search agents..."
-          className={`${phone ? "" : "h-8"} text-sm bg-muted/50 border-transparent focus:border-border focus:bg-background`}
+          className={`${phone ? "" : "h-10"} rounded-xl border-slate-200 bg-slate-100/80 text-sm shadow-inner shadow-slate-100/50 placeholder:text-slate-400 focus:border-blue-400 focus:bg-white dark:border-blue-400/15 dark:bg-[#142b4c] dark:shadow-none dark:placeholder:text-slate-400 dark:focus:bg-[#172f50]`}
           data-testid="input-agent-search"
         />
       </div>
 
       {/* Agent list */}
-      <div className={phone ? "py-2 px-2 space-y-1" : "flex-1 overflow-y-auto py-2 px-2 space-y-0.5"}>
+      <div className={phone ? "space-y-1 px-2 py-3" : "flex-1 space-y-1 overflow-y-auto px-2 py-3"}>
         {loading ? (
           <div className="p-2 space-y-2">
             {[1, 2, 3, 4, 5].map((i) => (
@@ -111,24 +113,28 @@ export function AgentListPanel({
             return (
               <div
                 key={account.id}
-                className={`flex items-center gap-2.5 rounded-xl p-2 group transition-colors cursor-pointer
-                  ${isSelected ? "bg-primary/10 ring-1 ring-primary/20" : "hover:bg-muted/60"}`}
+                className={`group flex cursor-pointer items-center gap-2.5 rounded-xl border p-2.5 transition-all duration-150
+                  ${isSelected
+                    ? "border-blue-400/70 bg-gradient-to-r from-blue-100 to-blue-50 shadow-sm ring-1 ring-blue-500/30 dark:border-blue-500/80 dark:from-[#17458a] dark:to-[#102b55] dark:shadow-[0_0_16px_rgba(37,99,235,0.16)] dark:ring-blue-400/30"
+                    : "border-transparent hover:border-blue-200 hover:bg-blue-50/60 dark:hover:border-blue-400/20 dark:hover:bg-blue-400/10"}`}
                 data-testid={`agent-row-${account.id}`}
               >
                 {/* Avatar */}
                 <button
-                  className="flex-1 flex items-center gap-2.5 text-left min-w-0"
+                  className="flex min-w-0 flex-1 items-center gap-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded-lg"
                   onClick={() => onSelect(account)}
                   data-testid={`button-select-agent-${account.id}`}
                 >
                   <div
-                    className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-xs font-bold
-                    ${isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xs font-bold shadow-sm
+                    ${isSelected
+                      ? "bg-blue-600 text-white dark:bg-blue-500 dark:text-white"
+                      : "bg-slate-100 text-slate-600 dark:bg-slate-600/40 dark:text-slate-200"}`}
                   >
                     {initials || "—"}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold truncate leading-tight">{account.name}</p>
+                    <p className="truncate text-sm font-semibold leading-tight text-slate-900 dark:text-slate-50">{account.name}</p>
                     {account.balance !== 0 ? (
                       <p
                         className={`text-xs tabular-nums font-mono mt-0.5 ${isCr ? "text-red-500 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}
@@ -142,7 +148,7 @@ export function AgentListPanel({
                   </div>
                 </button>
                 <button
-                  className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+                  className="shrink-0 rounded-lg p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive focus:opacity-100 focus-visible:ring-2 focus-visible:ring-destructive group-hover:opacity-100 group-focus-within:opacity-100 touch:opacity-100"
                   onClick={() => onRemove(account.id)}
                   data-testid={`button-remove-agent-${account.id}`}
                   title="Remove from Agent Ledger"
