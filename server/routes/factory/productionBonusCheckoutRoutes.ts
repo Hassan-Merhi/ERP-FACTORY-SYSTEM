@@ -584,14 +584,12 @@ export function registerProductionBonusCheckoutRoutes(app: Express): void {
             typeof (error as { status?: unknown })?.status === "number" ? (error as { status: number }).status : 500
           );
         if (status >= 500) logger.error("Manual production bonus payout failed", { error });
-        return res
-          .status(status)
-          .json({
-            message:
-              status >= 500
-                ? "Manual payment could not be posted"
-                : (translated?.message ?? (error instanceof Error ? error.message : "Invalid manual bonus payment")),
-          });
+        return res.status(status).json({
+          message:
+            status >= 500
+              ? "Manual payment could not be posted"
+              : (translated?.message ?? (error instanceof Error ? error.message : "Invalid manual bonus payment")),
+        });
       }
     }
   );
@@ -624,14 +622,12 @@ export function registerProductionBonusCheckoutRoutes(app: Express): void {
             typeof (error as { status?: unknown })?.status === "number" ? (error as { status: number }).status : 500
           );
         if (status >= 500) logger.error("Manual bonus reversal failed", { error });
-        return res
-          .status(status)
-          .json({
-            message:
-              status >= 500
-                ? "Manual reversal failed"
-                : (translated?.message ?? (error instanceof Error ? error.message : "Invalid manual bonus reversal")),
-          });
+        return res.status(status).json({
+          message:
+            status >= 500
+              ? "Manual reversal failed"
+              : (translated?.message ?? (error instanceof Error ? error.message : "Invalid manual bonus reversal")),
+        });
       }
     }
   );
@@ -807,17 +803,15 @@ export function registerProductionBonusCheckoutRoutes(app: Express): void {
               typeof (error as { status?: unknown })?.status === "number" ? (error as { status: number }).status : 500
             );
         if (status === 500) logger.error("Production bonus checkout payment failed", { error });
-        return res
-          .status(status)
-          .json({
-            message:
-              status === 500
-                ? bonusServerText(req.headers["accept-language"], "paymentFailed")
-                : (translated?.message ??
-                  (error instanceof Error
-                    ? error.message
-                    : bonusServerText(req.headers["accept-language"], "invalidBonusPayment"))),
-          });
+        return res.status(status).json({
+          message:
+            status === 500
+              ? bonusServerText(req.headers["accept-language"], "paymentFailed")
+              : (translated?.message ??
+                (error instanceof Error
+                  ? error.message
+                  : bonusServerText(req.headers["accept-language"], "invalidBonusPayment"))),
+        });
       }
     }
   );

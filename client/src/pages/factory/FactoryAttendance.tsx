@@ -19,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { useAuthenticatedUser } from "@/app/useAuthenticatedUser";
 import {
   CalendarDays,
   CheckCircle,
@@ -74,6 +75,8 @@ interface AttendanceWhatsappSettings {
 
 export default function FactoryAttendance() {
   const { toast } = useToast();
+  const { user } = useAuthenticatedUser();
+  const isOwner = (user?.currentRole ?? user?.role) === "Owner";
   const [mode, setMode] = useState<ViewMode>(getInitialMode);
 
   const showDailyAttendance = () => {
@@ -198,14 +201,14 @@ export default function FactoryAttendance() {
       notes: notesMap[w.id] || undefined,
     }));
     const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
-    if (priorDates.length) {
+    if (priorDates.length && !isOwner) {
       setApprovalDates(priorDates);
       setPendingApprovalRecords(records);
       setApprovalOpen(true);
     } else {
       saveMutation.mutate({ records });
     }
-  }, [data, selectedDate, shift, attendanceMap, notesMap, saveMutation]);
+  }, [data, selectedDate, shift, attendanceMap, notesMap, saveMutation, isOwner]);
 
   const approveAttendanceSave = (credentials: AttendanceAdminCredentials) => {
     if (pendingApprovalRecords) saveMutation.mutate({ records: pendingApprovalRecords, credentials });
@@ -375,7 +378,7 @@ export default function FactoryAttendance() {
               <Badge variant="outline" className="rounded-full bg-background/50 px-2.5 py-1 text-[11px] font-medium">
                 {formatDate(selectedDate)}
               </Badge>
-              {selectedDate < attendanceToday() && (
+              {selectedDate < attendanceToday() && !isOwner && (
                 <Badge variant="secondary" className="rounded-full">Earlier date — Admin approval required to save</Badge>
               )}
             </div>
