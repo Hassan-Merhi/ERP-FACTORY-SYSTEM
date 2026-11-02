@@ -31,3 +31,26 @@ export interface Phase9PosSaleEnvelope extends Phase9PosSaleEvidence {
 }
 export function phase9PosSaleEnvelope(evidence: Phase9PosSaleEvidence): Phase9PosSaleEnvelope;
 export function phase9PosInvoiceNumber(siteId: string, sequence: string | number | bigint): string;
+export const PHASE9_POS_SALE_EDIT_KIND: "pos.sale-edit.v1";
+export interface Phase9PosSaleEditEvidence {
+  companyId: number;
+  localVoucherId: number;
+  actorUserId: string;
+  actorUsername: string;
+  requestId: string;
+  businessDate: string;
+  voucherRef: { clientSaleId: string | null; voucherId: number };
+  edit: {
+    description: string | null;
+    isCreditSale: boolean;
+    locationId: number | null;
+    paymentAccountId: number | null;
+    paymentAccountType: "cash" | "bank" | "credit" | null;
+    voucherDate: string | null;
+    items: Array<{ existing: boolean; stockItemId: number; quantity: string; sellingPrice: string }>;
+  };
+}
+export interface Phase9PosSaleEditEnvelope extends Phase9PosSaleEditEvidence {
+  kind: "pos.sale-edit.v1";
+}
+export function phase9PosSaleEditEnvelope(evidence: Phase9PosSaleEditEvidence): Phase9PosSaleEditEnvelope;

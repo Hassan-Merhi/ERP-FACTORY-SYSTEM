@@ -31,7 +31,8 @@ import { isPhase9EventStream } from "./phase9EventProtocol.mjs";
 import { phase9PressingApplyHandler } from "./phase9PressingApply";
 import { phase9StockApplyHandler } from "./phase9StockApply";
 import { phase9PosSaleApplyHandler } from "./phase9PosSaleApply";
-import { PHASE9_POS_SALE_KIND } from "./phase9PosSaleEnvelope.mjs";
+import { PHASE9_POS_SALE_EDIT_KIND, PHASE9_POS_SALE_KIND } from "./phase9PosSaleEnvelope.mjs";
+import { phase9PosSaleEditApplyHandler } from "./phase9PosSaleEditApply";
 import { phase9ReceivingApplyHandler } from "./phase9ReceivingApply";
 import { PHASE9_RECEIVING_KIND } from "./phase9ReceivingEnvelope.mjs";
 import { phase9AttachmentApplyHandler } from "./phase9AttachmentApply";
@@ -53,6 +54,7 @@ export const PHASE9_HANDLERS = Object.freeze({
   "pressing.confirmation.v1": phase9PressingApplyHandler,
   [PHASE9_STOCK_ADJUST_KIND]: phase9StockApplyHandler,
   [PHASE9_POS_SALE_KIND]: phase9PosSaleApplyHandler,
+  [PHASE9_POS_SALE_EDIT_KIND]: phase9PosSaleEditApplyHandler,
   [PHASE9_RECEIVING_KIND]: phase9ReceivingApplyHandler,
   [PHASE9_ATTACHMENT_KIND]: phase9AttachmentApplyHandler,
   [PHASE9_PAYMENT_KIND]: phase9PaymentApplyHandler,

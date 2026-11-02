@@ -22,6 +22,8 @@ import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
 import { validatePhase9Event } from "../server/edge/phase9EventProtocol.mjs";
 import { Phase9EventConflict } from "../server/edge/phase9CloudEventStore.mjs";
 import { phase9PosSaleApplyHandler, type Phase9PosSaleEvent } from "../server/edge/phase9PosSaleApply";
+import { phase9PosSaleEditApplyHandler, type Phase9PosSaleEditEvent } from "../server/edge/phase9PosSaleEditApply";
+import { updatePosSale } from "../server/services/pos/edit/updateSaleService";
 import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,
@@ -282,5 +284,106 @@ describe("Phase 9 offline POS sale cloud replay", () => {
       [true, "USD", null],
       [false, "XOF", 600],
     ]);
+  });
+
+  it("records a return (sale edit) on the LAN and replays it on the cloud's copy of the offline sale", async () => {
+    // LAN: a sale, then a return of part of it.
+    edge.config = LAN;
+    try {
+      const clientSaleId = randomUUID();
+      const sold = await sale({
+        clientSaleId,
+        items: [{ stockItemId: ctx.stockItemIds[0], quantity: 3, rate: 5 }],
+      });
+      const voucherId = (sold.body as { voucher: { id: number } }).voucher.id;
+      const line = await pool.query("SELECT id FROM sales_items WHERE voucher_id = $1", [voucherId]);
+      const edited = await runWithDatabaseScopeRuntimeContext(createTenantDatabaseScope(ctx.companyId), () =>
+        updatePosSale({
+          voucherId,
+          currentCompanyId: ctx.companyId,
+          userId: ctx.userId,
+          username: `${PREFIX}_testuser`,
+          userRole: "Admin",
+          canSellNegativeStock: false,
+          body: {
+            description: null,
+            items: [{ id: line.rows[0].id, stockItemId: ctx.stockItemIds[0], quantity: 1, sellingPrice: 5 }],
+            paymentAccountType: "cash",
+            paymentAccountId: ctx.cashAccountId,
+            isCreditSale: false,
+            voucherDate: "2026-10-31",
+            locationId: ctx.locationId,
+          },
+        })
+      );
+      expect(edited.status, JSON.stringify(edited.body)).toBe(200);
+      const evidence = await pool.query(
+        "SELECT payload FROM factory_edge_pos_outbox WHERE operation_kind = 'pos.sale-edit.v1' AND local_voucher_id = $1",
+        [voucherId]
+      );
+      expect(evidence.rows[0].payload).toMatchObject({
+        voucherRef: { clientSaleId, voucherId },
+        edit: {
+          items: [{ existing: true, stockItemId: ctx.stockItemIds[0], quantity: "1.000", sellingPrice: "5.00" }],
+        },
+      });
+    } finally {
+      edge.config = CLOUD;
+    }
+
+    // Cloud: the offline sale replayed first, then its return, on the same stream.
+    const saleEvent = posEvent(8, {
+      items: [{ stockItemId: ctx.stockItemIds[1], quantity: "3.000", rate: "5.00", originalCurrencyRate: null }],
+    });
+    await replay(saleEvent);
+    const before = await stock(ctx.stockItemIds[1]);
+    const payload = {
+      kind: "pos.sale-edit.v1",
+      requestId: randomUUID(),
+      companyId: ctx.companyId,
+      actorUserId: ctx.userId,
+      actorUsername: `${PREFIX}_testuser`,
+      localVoucherId: 900099,
+      businessDate: "2026-10-31",
+      voucherRef: { clientSaleId: saleEvent.operationId, voucherId: 900099 },
+      edit: {
+        description: null,
+        isCreditSale: false,
+        locationId: ctx.locationId,
+        paymentAccountId: ctx.cashAccountId,
+        paymentAccountType: "cash",
+        voucherDate: "2026-10-31",
+        items: [{ existing: true, stockItemId: ctx.stockItemIds[1], quantity: "1.000", sellingPrice: "5.00" }],
+      },
+    };
+    const editEvent = {
+      sequence: "9",
+      operationId: payload.requestId,
+      companyId: ctx.companyId,
+      actorUserId: ctx.userId,
+      kind: payload.kind,
+      localRef: payload.localVoucherId,
+      payload,
+      payloadSha256: hashEvidence(payload),
+    };
+    validatePhase9Event("pos", editEvent);
+    await runWithDatabaseScopeRuntimeContext(createTenantDatabaseScope(ctx.companyId), async () => {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const event = editEvent as unknown as Phase9PosSaleEditEvent;
+        await phase9PosSaleEditApplyHandler.authorize(client, event);
+        const result = await phase9PosSaleEditApplyHandler.apply(client, event, { overrideConflicts: [] });
+        expect(await phase9PosSaleEditApplyHandler.verify(client, event, result)).toBe(true);
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    });
+    // Two of the three units came back to stock.
+    expect(await stock(ctx.stockItemIds[1])).toBe(before + 2);
   });
 });

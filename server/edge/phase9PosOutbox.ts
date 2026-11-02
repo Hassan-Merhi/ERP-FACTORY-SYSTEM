@@ -14,7 +14,13 @@ import type { DbTransaction } from "../db";
 import { resultRows } from "../lib/queryResult";
 import { readFactoryEdgeConfiguration } from "./edgeRuntimePolicy.mjs";
 import { hashEvidence } from "./edgeSyncStageProtocol.mjs";
-import { phase9PosInvoiceNumber, phase9PosSaleEnvelope, type Phase9PosSaleEvidence } from "./phase9PosSaleEnvelope.mjs";
+import {
+  phase9PosInvoiceNumber,
+  phase9PosSaleEditEnvelope,
+  phase9PosSaleEnvelope,
+  type Phase9PosSaleEditEvidence,
+  type Phase9PosSaleEvidence,
+} from "./phase9PosSaleEnvelope.mjs";
 
 export interface Phase9PosInvoice {
   siteId: string;
@@ -44,15 +50,16 @@ export async function ensurePhase9PosOutboxSchema(queryable: Pick<Pool, "query">
       company_id INTEGER NOT NULL CHECK(company_id > 0),
       actor_user_id TEXT NOT NULL CHECK(length(actor_user_id) > 0),
       local_voucher_id INTEGER NOT NULL CHECK(local_voucher_id > 0),
-      lan_invoice_number TEXT NOT NULL,
-      operation_kind TEXT NOT NULL CHECK(operation_kind = 'pos.sale.v1'),
+      lan_invoice_number TEXT,
+      operation_kind TEXT NOT NULL CHECK(operation_kind IN ('pos.sale.v1', 'pos.sale-edit.v1')),
       payload JSONB NOT NULL,
       payload_sha256 CHAR(64) NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
       PRIMARY KEY (site_id, sequence),
       UNIQUE (site_id, operation_id),
-      UNIQUE (site_id, local_voucher_id),
       UNIQUE (site_id, lan_invoice_number),
+      -- A sale has a LAN invoice number; an edit of it does not.
+      CHECK ((operation_kind = 'pos.sale.v1') = (lan_invoice_number IS NOT NULL)),
       CONSTRAINT factory_edge_pos_source_fk
         FOREIGN KEY (local_voucher_id) REFERENCES vouchers(id) ON DELETE RESTRICT
     )
@@ -106,5 +113,32 @@ export async function capturePhase9PosSaleTx(
     VALUES (${invoice.siteId}::uuid, ${invoice.sequence}::bigint, ${event.requestId}::uuid,
             ${event.companyId}, ${event.actorUserId}, ${event.localVoucherId},
             ${event.lanInvoiceNumber}, ${event.kind}, ${JSON.stringify(event)}::jsonb, ${hash})
+  `);
+}
+
+/** Record a committed sale edit (return/correction) on the same "pos" stream. */
+export async function capturePhase9PosSaleEditTx(
+  tx: DbTransaction,
+  evidence: Phase9PosSaleEditEvidence
+): Promise<void> {
+  const config = readFactoryEdgeConfiguration();
+  if (config.mode !== "lan" || !config.primary || !config.siteId) return;
+  const event = phase9PosSaleEditEnvelope(evidence);
+  const hash = hashEvidence(event);
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('factory-edge-pos-outbox-order'))`);
+  await tx.execute(sql`
+    WITH next_sequence AS (
+      INSERT INTO factory_edge_pos_counter (site_id, last_sequence)
+      VALUES (${config.siteId}::uuid, 1)
+      ON CONFLICT (site_id) DO UPDATE SET last_sequence = factory_edge_pos_counter.last_sequence + 1
+      RETURNING last_sequence
+    )
+    INSERT INTO factory_edge_pos_outbox
+      (site_id, sequence, operation_id, company_id, actor_user_id, local_voucher_id,
+       lan_invoice_number, operation_kind, payload, payload_sha256)
+    SELECT ${config.siteId}::uuid, next_sequence.last_sequence, ${event.requestId}::uuid,
+           ${event.companyId}, ${event.actorUserId}, ${event.localVoucherId},
+           NULL, ${event.kind}, ${JSON.stringify(event)}::jsonb, ${hash}
+    FROM next_sequence
   `);
 }

@@ -20,7 +20,9 @@ import {
 import {
   PHASE9_POS_CASH_ACCOUNT_CONFLICT,
   PHASE9_POS_NEGATIVE_CONFLICT,
+  PHASE9_POS_SALE_EDIT_KIND,
   PHASE9_POS_SALE_KIND,
+  phase9PosSaleEditEnvelope,
   phase9PosSaleEnvelope,
 } from "./phase9PosSaleEnvelope.mjs";
 import {
@@ -102,6 +104,19 @@ function posSalePayload(payload) {
   return stableEqual(rebuilt, payload) ? rebuilt : null;
 }
 
+function posSaleEditPayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (payload.kind !== PHASE9_POS_SALE_EDIT_KIND) return null;
+  const { kind: _kind, ...evidence } = payload;
+  let rebuilt;
+  try {
+    rebuilt = phase9PosSaleEditEnvelope(evidence);
+  } catch {
+    return null;
+  }
+  return stableEqual(rebuilt, payload) ? rebuilt : null;
+}
+
 function receivingPayload(payload) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
   if (payload.kind !== PHASE9_RECEIVING_KIND) return null;
@@ -171,6 +186,12 @@ const STREAMS = Object.freeze({
         parse: posSalePayload,
         localRef: (payload) => payload.localVoucherId,
         overridable: Object.freeze([PHASE9_POS_NEGATIVE_CONFLICT, PHASE9_POS_CASH_ACCOUNT_CONFLICT]),
+      }),
+      // Same stream as the sale, so an edit can never be applied before it.
+      [PHASE9_POS_SALE_EDIT_KIND]: Object.freeze({
+        parse: posSaleEditPayload,
+        localRef: (payload) => payload.localVoucherId,
+        overridable: Object.freeze([PHASE9_POS_NEGATIVE_CONFLICT]),
       }),
     }),
   }),

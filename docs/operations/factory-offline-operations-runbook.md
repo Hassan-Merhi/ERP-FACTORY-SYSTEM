@@ -38,9 +38,10 @@ an open cloud epoch.
 | Supplier receiving: container offload against its existing purchase orders, and offload edits, with duties, charges, cost corrections and agent lines | yes | `receiving` (Phase 9) | `server/edge/phase9OperatorApply.ts apply receiving` — same offload lifecycle on the receipt's transaction; cloud prices apply; changed order quantities are held for Admin/Developer approve/reject |
 | File upload (Files page), up to 10 MB | yes | `attachments` (Phase 9) + signed file upload | `server/edge/phase9OperatorApply.ts apply attachments` — the record syncs first; the relay then uploads the bytes to `/api/edge/sync/files/stage`, accepted only if their SHA-256 matches a staged record; the file is created in the cloud once its bytes arrive; a missing folder is held for approve/reject |
 | Supplier, customer, employee and bank Payment / Receipt vouchers (Payments page) | yes, at the rate the user posted | `payments` (Phase 9) | `server/edge/phase9OperatorApply.ts apply payments` — same posting code on the receipt's transaction; a posting refusal (closed period, missing party/account) is a reject-only conflict |
+| POS return / sale correction (sale edit, `PUT`/`PATCH /api/vouchers/:id/sales`) | yes | `pos` (same stream as the sale) | replayed through the sale-edit core; the sale is found by its client sale id or (pre-outage) voucher id; below-zero stock held for approve/reject |
 | Login, logout, company switch | yes (session only) | none | n/a |
 | All reads covered by prepared offline reads | yes | n/a | n/a |
-| Everything else (1,167 write routes) | **refused** with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION` | none | n/a |
+| Everything else (1,165 write routes) | **refused** with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION` | none | n/a |
 
 `node scripts/edge/audit-phase9-write-coverage.mjs` prints the exact current
 inventory and fails if any route becomes writable on the LAN without a reviewed
@@ -61,7 +62,7 @@ reconciled safely, which is worse than refusing them.
   adjustments now replay as deltas with a below-zero hold; the other stock
   writes still need the same treatment (their own capture, delta replay and
   drill) before they are enabled.
-- **POS returns and cancellations (sale edits); payment edits:** each posts
+- **Whole-voucher deletes (cancellations) and payment edits:** each posts
   money and stock together through the central posting engine with
   multi-currency, tax and numbering rules. Payment/receipt edits and deletes
   stay online-only.

@@ -135,6 +135,13 @@ describe("factory LAN edge deployment policy", () => {
           expect(edgeBlocksWrite(config, verb, approved)).toBe(extraVerbs.includes(verb) ? mode === "read-only" : true);
         }
       }
+      // POS sale edits (returns): PUT and the PATCH alias only.
+      for (const verb of ["PUT", "PATCH"]) {
+        expect(edgeBlocksWrite(config, verb, "/api/vouchers/42/sales")).toBe(mode === "read-only");
+      }
+      for (const verb of ["POST", "DELETE"]) {
+        expect(edgeBlocksWrite(config, verb, "/api/vouchers/42/sales")).toBe(true);
+      }
       for (const path of [
         "/api/factory/pressing-machines/void",
         "/api/pos/retail/sales",

@@ -63,6 +63,16 @@ const SUPPORTED = new Map([
       "Files up to 10 MB; the record syncs first, then the SHA-256-verified bytes; renames, moves and " +
       "deletes stay cloud-only; a missing cloud folder is held for review",
   }],
+  ["PUT /api/vouchers/:id/sales", {
+    policy: "pos.sale-edit.v1",
+    limitations:
+      "POS returns/corrections replayed on the sale's stream through the sale-edit core; the sale is found by " +
+      "client sale id or (pre-outage) voucher id; below-zero stock is held for review",
+  }],
+  ["PATCH /api/vouchers/:id/sales", {
+    policy: "pos.sale-edit.v1",
+    limitations: "Compatibility alias of the sale edit (same handler and replay)",
+  }],
   ["POST /api/vouchers/payment-receipt", {
     policy: "voucher.payment-receipt.v1",
     limitations:

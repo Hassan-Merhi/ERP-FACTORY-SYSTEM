@@ -59,7 +59,8 @@ export const STREAM_SOURCES = Object.freeze({
   pos: Object.freeze({
     table: "factory_edge_pos_outbox",
     localRef: "local_voucher_id",
-    businessDate: (payload) => payload?.voucherDate,
+    // A sale carries its voucherDate; an edit of it carries businessDate.
+    businessDate: (payload) => payload?.businessDate ?? payload?.voucherDate,
   }),
   receiving: Object.freeze({
     table: "factory_edge_receiving_outbox",

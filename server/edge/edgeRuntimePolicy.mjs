@@ -117,6 +117,8 @@ export const PHASE9_POS_SALE_ROUTE = "POST /api/pos/sales";
 export const PHASE9_ATTACHMENT_UPLOAD_ROUTE = "POST /api/files/upload";
 export const PHASE9_PAYMENT_RECEIPT_ROUTE = "POST /api/vouchers/payment-receipt";
 // A numeric container id, or the manifest template ":id" (which the route itself rejects as invalid).
+// POS sale edits (returns/corrections): PUT is canonical, PATCH the alias.
+export const PHASE9_POS_SALE_EDIT_PATH = /^\/api\/vouchers\/(?:[1-9][0-9]{0,9}|:id)\/sales$/;
 export const PHASE9_RECEIVING_OFFLOAD_PATH = /^\/api\/containers\/(?:[1-9][0-9]{0,9}|:id)\/offload$/;
 
 // No module without atomic capture and validated replay is implicitly enabled
@@ -150,6 +152,9 @@ export function phase9ApprovedCaptureRoute(method, path) {
   // Owner policy 2026-11-02: offline offload edits (PATCH) are recorded too.
   if ((verb === "POST" || verb === "PATCH") && PHASE9_RECEIVING_OFFLOAD_PATH.test(path)) {
     return `${verb} /api/containers/:id/offload`;
+  }
+  if ((verb === "PUT" || verb === "PATCH") && PHASE9_POS_SALE_EDIT_PATH.test(path)) {
+    return `${verb} /api/vouchers/:id/sales`;
   }
   return null;
 }

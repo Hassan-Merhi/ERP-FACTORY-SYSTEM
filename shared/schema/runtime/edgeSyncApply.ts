@@ -181,7 +181,7 @@ export const factoryEdgePosOutbox = pgTable(
     companyId: integer("company_id").notNull(),
     actorUserId: text("actor_user_id").notNull(),
     localVoucherId: integer("local_voucher_id").notNull(),
-    lanInvoiceNumber: text("lan_invoice_number").notNull(),
+    lanInvoiceNumber: text("lan_invoice_number"),
     operationKind: text("operation_kind").notNull(),
     payload: jsonb("payload").notNull(),
     payloadSha256: char("payload_sha256", { length: 64 }).notNull(),
@@ -192,7 +192,6 @@ export const factoryEdgePosOutbox = pgTable(
   (t) => [
     primaryKey({ columns: [t.siteId, t.sequence] }),
     unique().on(t.siteId, t.operationId),
-    unique().on(t.siteId, t.localVoucherId),
     unique().on(t.siteId, t.lanInvoiceNumber),
     foreignKey({
       name: "factory_edge_pos_source_fk",
