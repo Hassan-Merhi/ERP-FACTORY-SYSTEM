@@ -33,18 +33,14 @@ export function runPostStartupJobs(): void {
     unrefTimer(accountingReconciliationTimer);
   }
 
+  // Do not automatically post the October 2026 historical supplier backfill.
+  // The previously approved 87-record run produced Direct Expense journals,
+  // including two vouchers dated after the actual posting date. Re-running
+  // it on startup can alter historical P&L without an expense/inventory
+  // reconciliation. Keep this legacy environment flag diagnostic-only.
+  // Any historical repair now requires a separate audited, manual procedure.
   if (process.env.ERP_RECONCILE_SUPPLIERS_20261014 === "company-12-approved-87") {
-    const supplierTimer = setTimeout(async () => {
-      try {
-        const { reconcileFactorySuppliers20261014 } =
-          await import("../../scripts/reconcile-factory-suppliers-20261014");
-        await reconcileFactorySuppliers20261014(true);
-        logger.info("[SupplierRepair] Historical factory supplier journals completed");
-      } catch (error: unknown) {
-        logger.error("[SupplierRepair] Historical supplier reconciliation halted", { error: getErrorMessage(error) });
-      }
-    }, 12000);
-    unrefTimer(supplierTimer);
+    logger.warn("[SupplierRepair] Automatic historical supplier postings are disabled pending accounting review");
   }
 
   // Single-use accounting repair approved for company 12: EUR=1.18,
