@@ -57,12 +57,36 @@ interface AttRecord {
 
 const STATUS_OPTIONS: AttendanceStatus[] = ["Present", "Absent", "Late", "Half Day", "Leave"];
 
+// Visual-only palette: status identifiers and attendance rules remain unchanged.
 const STATUS_COLORS: Record<string, string> = {
-  Present: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
-  Absent: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
-  Late: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-  "Half Day": "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-  Leave: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
+  Present: "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-500/50 dark:bg-emerald-500/15 dark:text-emerald-200",
+  Absent: "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-500/50 dark:bg-rose-500/15 dark:text-rose-200",
+  Late: "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-500/50 dark:bg-amber-500/15 dark:text-amber-200",
+  "Half Day": "border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-500/50 dark:bg-sky-500/15 dark:text-sky-200",
+  Leave: "border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-500/50 dark:bg-violet-500/15 dark:text-violet-200",
+};
+
+const SUMMARY_TONES: Record<string, { card: string; icon: string; glow: string }> = {
+  Total: {
+    card: "border-blue-200 bg-gradient-to-br from-blue-50 via-white to-sky-100 dark:border-blue-500/35 dark:from-[#192f5a] dark:via-[#142747] dark:to-[#183f7c]",
+    icon: "bg-blue-100 text-blue-700 dark:bg-blue-400/20 dark:text-blue-200",
+    glow: "bg-blue-400/15 dark:bg-blue-400/25",
+  },
+  Present: {
+    card: "border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-emerald-100 dark:border-emerald-500/35 dark:from-[#123e3a] dark:via-[#10332f] dark:to-[#12694b]",
+    icon: "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/20 dark:text-emerald-200",
+    glow: "bg-emerald-400/15 dark:bg-emerald-400/25",
+  },
+  Absent: {
+    card: "border-rose-200 bg-gradient-to-br from-rose-50 via-white to-rose-100 dark:border-rose-500/35 dark:from-[#4b2135] dark:via-[#392033] dark:to-[#732f47]",
+    icon: "bg-rose-100 text-rose-700 dark:bg-rose-400/20 dark:text-rose-200",
+    glow: "bg-rose-400/15 dark:bg-rose-400/25",
+  },
+  Other: {
+    card: "border-amber-200 bg-gradient-to-br from-amber-50 via-white to-amber-100 dark:border-amber-500/35 dark:from-[#44351a] dark:via-[#3b301d] dark:to-[#77520e]",
+    icon: "bg-amber-100 text-amber-700 dark:bg-amber-400/20 dark:text-amber-200",
+    glow: "bg-amber-400/15 dark:bg-amber-400/25",
+  },
 };
 
 function localDateStr(d: Date) {
@@ -100,18 +124,18 @@ function SummaryCard({
   color: string;
   testId: string;
 }) {
+  const tone = SUMMARY_TONES[label] ?? SUMMARY_TONES.Total;
   return (
-    <Card>
-      <CardContent className="pt-4 pb-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs text-muted-foreground">{label}</p>
-            <p className={`text-2xl font-bold ${color}`} data-testid={testId}>
-              {value}
-            </p>
-          </div>
-          <div className={`opacity-60 ${color}`}>{icon}</div>
+    <Card className={`relative isolate overflow-hidden rounded-2xl shadow-sm ${tone.card}`}>
+      <div aria-hidden="true" className={`pointer-events-none absolute -bottom-12 -right-8 h-32 w-44 rotate-[-20deg] rounded-full blur-2xl ${tone.glow}`} />
+      <CardContent className="relative flex items-center justify-between gap-3 px-4 py-4 sm:px-5 sm:py-5">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-slate-600 dark:text-slate-200">{label}</p>
+          <p className={`mt-1 text-3xl font-bold tracking-tight tabular-nums ${color}`} data-testid={testId}>
+            {value}
+          </p>
         </div>
+        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl shadow-sm ${tone.icon}`}>{icon}</div>
       </CardContent>
     </Card>
   );
@@ -217,10 +241,11 @@ export default function FactoryEmployeeAttendanceTab() {
   };
 
   return (
-    <div className="space-y-4 p-1">
-      <div className="flex gap-2">
+    <div className="space-y-5 rounded-2xl border border-slate-200/70 bg-gradient-to-b from-slate-50/80 to-white p-3 shadow-sm sm:p-5 dark:border-blue-400/10 dark:from-[#0c1933] dark:via-[#0c1730] dark:to-[#0a1327]">
+      <div className="inline-flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white/80 p-1.5 shadow-sm dark:border-blue-400/20 dark:bg-slate-900/70">
         <Button
           variant={mode === "daily" ? "default" : "outline"}
+          className={mode === "daily" ? "rounded-lg border-blue-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md shadow-blue-500/20 hover:from-sky-600 hover:to-blue-700" : "rounded-lg border-transparent text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"}
           onClick={() => setMode("daily")}
           data-testid="button-mode-daily"
         >
@@ -229,6 +254,7 @@ export default function FactoryEmployeeAttendanceTab() {
         </Button>
         <Button
           variant={mode === "perEmployee" ? "default" : "outline"}
+          className={mode === "perEmployee" ? "rounded-lg border-blue-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md shadow-blue-500/20 hover:from-sky-600 hover:to-blue-700" : "rounded-lg border-transparent text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"}
           onClick={() => setMode("perEmployee")}
           data-testid="button-mode-per-employee"
         >
@@ -241,9 +267,9 @@ export default function FactoryEmployeeAttendanceTab() {
         <PerEmployeeView />
       ) : (
         <>
-          <Card>
-            <CardContent className="pt-4">
-              <div className="flex flex-wrap gap-3 items-end">
+          <Card className="rounded-2xl border-slate-200/90 bg-white/90 shadow-sm dark:border-blue-400/25 dark:bg-[#13223d]/80">
+            <CardContent className="px-4 py-4 sm:px-5 sm:py-5">
+              <div className="flex flex-wrap items-end gap-3 sm:gap-4">
                 <div className="flex flex-col gap-1">
                   <Label className="text-xs text-muted-foreground">Attendance Date</Label>
                   <Input
@@ -251,7 +277,7 @@ export default function FactoryEmployeeAttendanceTab() {
                     max={attendanceToday()}
                     value={selectedDate}
                     onChange={(e) => setSelectedDate(e.target.value)}
-                    className="w-44"
+                    className="h-10 w-44 rounded-xl border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-950/40"
                     data-testid="input-attendance-date"
                   />
                 </div>
@@ -261,13 +287,14 @@ export default function FactoryEmployeeAttendanceTab() {
                     placeholder="e.g. Morning"
                     value={shift}
                     onChange={(e) => setShift(e.target.value)}
-                    className="w-36"
+                    className="h-10 w-40 rounded-xl border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-950/40"
                     data-testid="input-shift"
                   />
                 </div>
-                <div className="flex flex-wrap gap-2 ml-auto items-center">
+                <div className="ml-auto flex flex-wrap items-center gap-2">
                   <Button
                     variant="outline"
+                    className="rounded-xl border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:border-emerald-500/60 dark:bg-emerald-500/15 dark:text-emerald-200 dark:hover:bg-emerald-500/25"
                     onClick={() => markAll("Present")}
                     disabled={!emps.length}
                     data-testid="button-mark-all-present"
@@ -276,16 +303,18 @@ export default function FactoryEmployeeAttendanceTab() {
                   </Button>
                   <Button
                     variant="outline"
+                    className="rounded-xl border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100 dark:border-rose-500/60 dark:bg-rose-500/15 dark:text-rose-200 dark:hover:bg-rose-500/25"
                     onClick={() => markAll("Absent")}
                     disabled={!emps.length}
                     data-testid="button-mark-all-absent"
                   >
                     <UserX className="h-4 w-4 mr-1" /> Mark All Absent
                   </Button>
-                  <Button variant="ghost" onClick={reset} disabled={!emps.length} data-testid="button-reset">
+                  <Button variant="ghost" className="rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800/60 dark:hover:bg-slate-700" onClick={reset} disabled={!emps.length} data-testid="button-reset">
                     <RotateCcw className="h-4 w-4 mr-1" /> Reset
                   </Button>
                   <Button
+                    className="rounded-xl border border-blue-500 bg-gradient-to-r from-sky-500 to-blue-600 px-5 text-white shadow-md shadow-blue-500/20 hover:from-sky-600 hover:to-blue-700"
                     onClick={handleSave}
                     disabled={!emps.length || saveMutation.isPending || selectedDate > attendanceToday()}
                     data-testid="button-save-attendance"
@@ -299,30 +328,30 @@ export default function FactoryEmployeeAttendanceTab() {
           </Card>
 
           {emps.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
               <SummaryCard
-                icon={<Users className="h-4 w-4" />}
+                icon={<Users className="h-5 w-5" />}
                 label="Total"
                 value={counts.total}
-                color="text-foreground"
+                color="text-blue-800 dark:text-blue-100"
                 testId="stat-total"
               />
               <SummaryCard
-                icon={<CheckCircle className="h-4 w-4" />}
+                icon={<CheckCircle className="h-5 w-5" />}
                 label="Present"
                 value={counts.present}
                 color="text-green-600 dark:text-green-400"
                 testId="stat-present"
               />
               <SummaryCard
-                icon={<XCircle className="h-4 w-4" />}
+                icon={<XCircle className="h-5 w-5" />}
                 label="Absent"
                 value={counts.absent}
                 color="text-red-600 dark:text-red-400"
                 testId="stat-absent"
               />
               <SummaryCard
-                icon={<Clock className="h-4 w-4" />}
+                icon={<Clock className="h-5 w-5" />}
                 label="Other"
                 value={counts.other}
                 color="text-amber-600 dark:text-amber-400"
@@ -331,10 +360,10 @@ export default function FactoryEmployeeAttendanceTab() {
             </div>
           )}
 
-          <Card>
-            <CardHeader className="pb-3 flex flex-row items-center justify-between gap-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <CalendarDays className="h-4 w-4" />
+          <Card className="overflow-hidden rounded-2xl border-slate-200/90 bg-white/95 shadow-sm dark:border-blue-400/25 dark:bg-[#13223d]/80">
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 px-4 pb-3 pt-5 sm:px-5">
+              <CardTitle className="flex flex-wrap items-center gap-2 text-base font-semibold sm:text-lg">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-200"><CalendarDays className="h-5 w-5" /></span>
                 Employees — {formatDate(selectedDate)}
                 {shift && <Badge variant="secondary">{shift}</Badge>}
               </CardTitle>
@@ -344,7 +373,7 @@ export default function FactoryEmployeeAttendanceTab() {
                 </span>
               )}
             </CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="px-3 pb-4 pt-0 sm:px-5 sm:pb-5">
               {isLoading ? (
                 <div className="p-4 space-y-2">
                   {Array.from({ length: 5 }).map((_, i) => (
@@ -358,15 +387,15 @@ export default function FactoryEmployeeAttendanceTab() {
                 </div>
               ) : (
                 <>
-                  <div className="hidden sm:block overflow-x-auto">
-                    <table className="w-full text-sm">
+                  <div className="hidden overflow-x-auto rounded-xl border border-slate-200 sm:block dark:border-slate-600/70">
+                    <table className="w-full min-w-[760px] text-sm">
                       <thead className="sticky top-0 z-30">
-                        <tr className="border-b bg-muted/40">
-                          <th className="text-left px-4 py-2 font-medium text-muted-foreground w-8">#</th>
-                          <th className="text-left px-4 py-2 font-medium text-muted-foreground">Employee</th>
-                          <th className="text-left px-4 py-2 font-medium text-muted-foreground">Department</th>
-                          <th className="text-left px-4 py-2 font-medium text-muted-foreground w-44">Status</th>
-                          <th className="text-left px-4 py-2 font-medium text-muted-foreground">Notes</th>
+                        <tr className="border-b border-slate-200 bg-slate-100/90 dark:border-slate-600 dark:bg-[#213353]">
+                          <th className="text-left px-4 py-3 font-semibold text-slate-600 dark:text-slate-200 w-8">#</th>
+                          <th className="text-left px-4 py-3 font-semibold text-slate-600 dark:text-slate-200">Employee</th>
+                          <th className="text-left px-4 py-3 font-semibold text-slate-600 dark:text-slate-200">Department</th>
+                          <th className="text-left px-4 py-3 font-semibold text-slate-600 dark:text-slate-200 w-44">Status</th>
+                          <th className="text-left px-4 py-3 font-semibold text-slate-600 dark:text-slate-200">Notes</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -375,7 +404,7 @@ export default function FactoryEmployeeAttendanceTab() {
                           return (
                             <tr
                               key={emp.id}
-                              className="border-b last:border-0 hover-elevate"
+                              className="border-b border-slate-100 transition-colors last:border-0 hover:bg-blue-50/60 dark:border-slate-700/70 dark:hover:bg-blue-400/10"
                               data-testid={`row-employee-${emp.id}`}
                             >
                               <td className="px-4 py-2 text-muted-foreground">{idx + 1}</td>
@@ -393,7 +422,7 @@ export default function FactoryEmployeeAttendanceTab() {
                                 >
                                   <SelectTrigger
                                     data-testid={`select-status-${emp.id}`}
-                                    className={`h-8 text-xs font-medium ${STATUS_COLORS[status] ?? ""}`}
+                                    className={`h-9 rounded-lg text-xs font-semibold shadow-sm ${STATUS_COLORS[status] ?? ""}`}
                                   >
                                     <SelectValue />
                                   </SelectTrigger>
@@ -411,7 +440,7 @@ export default function FactoryEmployeeAttendanceTab() {
                                   placeholder="Optional notes"
                                   value={notesMap[emp.id] ?? ""}
                                   onChange={(e) => setNotesMap((p) => ({ ...p, [emp.id]: e.target.value }))}
-                                  className="h-8 text-xs"
+                                  className="h-9 rounded-lg border-slate-200 bg-slate-50/70 text-xs dark:border-slate-600 dark:bg-slate-950/30"
                                   data-testid={`input-notes-${emp.id}`}
                                 />
                               </td>
@@ -421,13 +450,13 @@ export default function FactoryEmployeeAttendanceTab() {
                       </tbody>
                     </table>
                   </div>
-                  <div className="sm:hidden space-y-2 p-3">
+                  <div className="space-y-3 sm:hidden">
                     {emps.map((emp, idx) => {
                       const status = attendanceMap[emp.id] ?? "Present";
                       return (
                         <div
                           key={emp.id}
-                          className="border rounded-md p-3 space-y-2"
+                          className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/50 p-4 shadow-sm dark:border-slate-600/70 dark:bg-slate-900/50"
                           data-testid={`card-employee-${emp.id}`}
                         >
                           <div className="flex items-start justify-between gap-2">
@@ -440,7 +469,7 @@ export default function FactoryEmployeeAttendanceTab() {
                             value={status}
                             onValueChange={(v) => setAttendanceMap((p) => ({ ...p, [emp.id]: v as AttendanceStatus }))}
                           >
-                            <SelectTrigger className={`h-9 text-sm font-medium ${STATUS_COLORS[status] ?? ""}`}>
+                            <SelectTrigger className={`h-10 rounded-lg text-sm font-semibold ${STATUS_COLORS[status] ?? ""}`}>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
