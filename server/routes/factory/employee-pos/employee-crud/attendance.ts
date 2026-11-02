@@ -130,6 +130,7 @@ export function registerFactoryEmployeeAttendanceRoutes(app: Express) {
                 notes: { old: before?.notes ?? null, new: record.notes || null },
                 approvedBy: { new: approvedBy.username },
                 approvedByUserId: { new: approvedBy.id },
+                authorizationMethod: { new: approvedBy.authorizationMethod },
                 attendanceDate: { new: record.attendanceDate },
               },
             }, tx);

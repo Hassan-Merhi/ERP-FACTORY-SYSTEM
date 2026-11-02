@@ -97,8 +97,8 @@ export function registerFactoryAttendanceRoutes(app: Express, requireAuth: Reque
         seen.add(key);
       }
 
-      // Validate all dates and require a freshly entered, company-scoped Admin password
-      // for *every* save that includes past days, even from an Owner/Admin account.
+      // Validate all dates. Active company Owners can edit past days directly;
+      // other roles still need fresh, company-scoped Admin approval.
       const approvedBy = await requireAttendanceEditApproval(
         req, res, companyId, records.map((record) => record.attendanceDate), { adminUsername, adminPassword }
       );
@@ -157,6 +157,7 @@ export function registerFactoryAttendanceRoutes(app: Express, requireAuth: Reque
                 shift: { old: before?.shift ?? null, new: record.shift || null },
                 approvedBy: { new: approvedBy.username },
                 approvedByUserId: { new: approvedBy.id },
+                authorizationMethod: { new: approvedBy.authorizationMethod },
                 attendanceDate: { new: record.attendanceDate },
               },
             }, tx);
