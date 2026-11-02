@@ -92,6 +92,7 @@ const FACTORY_NAV_ICONS: Record<string, typeof Package> = {
   "factory/pos": ShoppingCart,
   "factory/invoicing": FileText,
   "factory/location-inventory": MapPin,
+  "factory/stock-query": Package,
   "factory/containers-hub": Container,
   "factory/stock-allocation-v5": LayoutGrid,
   "factory/sheets-sacks": Layers,
