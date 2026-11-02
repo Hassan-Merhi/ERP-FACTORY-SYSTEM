@@ -38,21 +38,25 @@ export function OtwNotes() {
   );
 
   return (
-    <div className="rounded-xl border overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/20">
-        <StickyNote className="h-3.5 w-3.5 text-muted-foreground" />
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Notes</span>
+    <section className="overflow-hidden rounded-2xl border border-border/70 bg-card/90 shadow-sm dark:border-blue-200/10 dark:bg-slate-900/55" aria-label="Container notes">
+      <div className="flex items-center gap-3 border-b border-border/60 bg-gradient-to-r from-blue-500/5 to-transparent px-4 py-3 sm:px-5">
+        <span className="flex size-8 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600 dark:bg-blue-400/15 dark:text-blue-300">
+          <StickyNote className="h-4 w-4" />
+        </span>
+        <span className="text-sm font-semibold tracking-tight">Notes</span>
+        <span className="ml-auto text-xs text-muted-foreground">Auto-saved</span>
       </div>
-      <div className="px-4 py-3">
+      <div className="p-3 sm:p-4">
         <Textarea
           value={value}
           onChange={handleChange}
           placeholder="Write anything here…"
-          className="min-h-[72px] resize-y text-sm border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+          aria-label="Container notes"
+          className="min-h-[96px] resize-y rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm shadow-inner focus-visible:border-blue-500/40 focus-visible:ring-2 focus-visible:ring-blue-500/20 dark:bg-slate-950/40"
           data-testid="textarea-otw-notes"
         />
       </div>
-    </div>
+    </section>
   );
 }
 
