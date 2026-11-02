@@ -185,6 +185,8 @@ const PROPERTIES_MAINTENANCE_CONTEXT: PageEntry[] = getDeveloperMaintenanceLinks
 
 /** Factory routes that aren't in FACTORY_NAV_SECTIONS but were historically in the palette. */
 const FACTORY_EXTRAS_ALWAYS: PageEntry[] = [
+  // Daybook is pinned, so it is excluded from FACTORY_NAV_SECTIONS; retain search access.
+  { label: "Factory Daybook", description: DESCRIPTIONS["/factory/daybook"], path: "/factory/daybook", icon: Calendar },
   { label: "Factory Chat", description: "Internal messaging", path: "/factory/chat", icon: MessageSquare },
   {
     label: "Bale Relabeling",
