@@ -671,8 +671,8 @@ export default function FactoryCustomers() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Dr">Debit (Dr)</SelectItem>
-                    <SelectItem value="Cr">Credit (Cr)</SelectItem>
+                    <SelectItem value="Dr">Debit</SelectItem>
+                    <SelectItem value="Cr">Credit</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
