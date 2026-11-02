@@ -18,11 +18,11 @@ export function registerEmployeeRoutes(app: Express) {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });
       }
-      const employees = await storage.getAllEmployees(req.session.currentCompanyId);
+      const employees = await storage.getEmployeesWithBalances(req.session.currentCompanyId);
       // Ensure proper camelCase field names for frontend
       const transformedEmployees = employees.map((emp) => {
-        // Use stored currentBalance which is kept in sync by payroll operations and journal vouchers
-        // The syncEmployeePayrollBalance function updates currentBalance when vouchers are created/edited/deleted
+        // This is the ledger-authoritative amount: Cr positive for Payroll.
+        // Do not fall back to the write-side employee.current_balance cache.
         const currentBalance = toMoney(emp.currentBalance).toNumber();
 
         return {
