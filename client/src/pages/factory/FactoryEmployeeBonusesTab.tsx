@@ -74,7 +74,7 @@ function dateLabel(date: string) {
   return parsed.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "2-digit", timeZone: "UTC" });
 }
 function csvCell(value: string | number) {
-  const escaped = String(value).replace(/^[=+\-@\t\r]/, "'const today = () => new Date().toLocaleDateString("en-CA");");
+  const escaped = String(value).replace(/^[=+\-@\t\r]/, (match) => "'" + match);
   return '"' + escaped.replace(/"/g, '""') + '"';
 }
 
