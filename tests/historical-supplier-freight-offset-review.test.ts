@@ -38,6 +38,19 @@ describe("Historical factory freight reconciliation is strictly a no-write previ
     expect(result.reviewFlags).toContain("SECOND_IMPORT_VOUCHER_SAME_CONTAINER_REQUIRES_REVIEW");
     expect(result.isProvenOverstatement).toBe(false);
   });
+  it("identifies freight entries posted to a different ledger code", () => {
+    const result = classifyFreightOffsetEvidence({
+      ...evidence, containerId: 145,
+      freightVoucherCount: 1,
+      freightDebitUsd: "0.00",
+      freightCreditUsd: "0.00",
+      chargeClearingDebitUsd: "0.00",
+      freightSourceAccountCodes: "FACTORY_FREIGHT_EXPENSE, (nonledger)",
+    });
+    expect(result.reviewFlags).toContain("FREIGHT_SOURCE_POSTED_TO_OTHER_LEDGER_ACCOUNTS");
+    expect(result.freightSourceAccountCodes).toContain("FACTORY_FREIGHT_EXPENSE");
+    expect(result.proposedGLPosting).toBeNull();
+  });
   it("distinguishes one-sided freight evidence", () => {
     const result = classifyFreightOffsetEvidence({
       ...evidence, freightVoucherCount: 1, freightDebitUsd: "1200.00",
