@@ -113,9 +113,11 @@ async function recordOne(page, id, tour) {
     await delay(1600);
     const actualPath = new URL(page.url()).pathname;
     if (actualPath !== tour.route) throw new Error("Unexpected redirect to " + actualPath + " for " + tour.route);
-    const actualTitle = await page.evaluate(() => {
+    const pageDetails = await page.evaluate(() => {
       const heading = document.querySelector("h1, h2");
-      return heading?.textContent?.trim().slice(0, 120) || document.title;
+      const tabs = Array.from(document.querySelectorAll("[role=tab]"))
+        .map((item) => item.textContent?.trim()).filter(Boolean).slice(0, 12);
+      return { title: heading?.textContent?.trim().slice(0, 120) || document.title, tabs };
     });
     await page.screenshot({ path: path.join(dir, "screenshot.png"), fullPage: false });
     const videoPath = path.join(dir, "screen.webm");
@@ -153,11 +155,12 @@ async function recordOne(page, id, tour) {
       await recorder.stop();
       await page.evaluate(() => document.getElementById("training-recording-caption")?.remove()).catch(() => {});
     }
-    if (blocked.length) throw new Error("Blocked non-read requests during recording: " + blocked.slice(0, 4).join(", "));
+    // Keep usable evidence even if an app background request was blocked.
+    // The review report makes incomplete interactions visible; no write was sent.
     await fs.writeFile(path.join(dir, "captions.vtt"), captions.join("\n"));
     const steps = tour.steps.map((item, index) => String(index + 1) + ". " + item).join("\n");
-    await fs.writeFile(path.join(dir, "guide.md"), "# " + tour.title + "\n\nRecorded against the disposable Phase 7 test company.\n\nPage: " + tour.route + "\n\nScreen heading: " + actualTitle + "\n\n## Guided steps\n\n" + steps + "\n\n![Actual test system screenshot](screenshot.png)\n");
-    return { topic: id, route: tour.route, durationMs: Date.now() - started, status: "captured", source: "disposable Phase 7 fixture" };
+    await fs.writeFile(path.join(dir, "guide.md"), "# " + tour.title + "\n\nRecorded against the disposable Phase 7 test company.\n\nPage: " + tour.route + "\n\nScreen heading: " + pageDetails.title + "\n\nVisible tabs: " + (pageDetails.tabs.join(", ") || "(none)") + "\n\n## Guided steps\n\n" + steps + "\n\n![Actual test system screenshot](screenshot.png)\n");
+    return { topic: id, route: tour.route, durationMs: Date.now() - started, status: "captured", blockedRequests: blocked.slice(0, 20), requiresReview: true, source: "disposable Phase 7 fixture" };
   } finally {
     page.off("request", onRequest);
     await page.setRequestInterception(false);
