@@ -65,6 +65,7 @@ export default function FactoryProformas() {
         proformas={proformas}
         proformasLoading={proformasLoading}
         hideProformaPrice={model.hideProformaPrice}
+        formatAmount={model.formatAmount}
         setExcelImportName={model.setExcelImportName}
         setExcelImportLines={model.setExcelImportLines}
         setExcelImportErrors={model.setExcelImportErrors}
