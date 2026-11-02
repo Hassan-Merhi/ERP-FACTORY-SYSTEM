@@ -172,6 +172,23 @@ export async function auditHistoricalFactorySuppliers() {
     )).rows;
     const mixSourceMap = new Map(mixSources.map((r) => [num(r.container_id), r]));
 
+    // A distinct mix may combine materials from multiple containers. Count
+    // and value it ONCE, but never allocate its total to one supplier.
+    const relatedMixSnapshot = (await client.query<SqlRow>(
+      [
+        "WITH linked AS (",
+        " SELECT DISTINCT s.mix_batch_id FROM factory_mix_batch_sources s",
+        " JOIN factory_mix_batches m ON m.id=s.mix_batch_id AND m.company_id=$1",
+        " WHERE s.container_id=ANY($2::int[]) AND m.deleted_at IS NULL",
+        ") SELECT COUNT(*)::int AS linked_mix_count,",
+        "COALESCE(SUM(GREATEST(m.total_weight_kg-m.used_kg,0)),0)::text AS unconsumed_mix_weight_kg,",
+        "COALESCE(SUM(GREATEST(m.total_weight_kg-m.used_kg,0)*m.cost_per_kg),0)::text AS mix_wip_value_usd,",
+        "COUNT(*) FILTER (WHERE m.cost_per_kg<=0)::int AS zero_cost_mix_count",
+        "FROM linked JOIN factory_mix_batches m ON m.id=linked.mix_batch_id AND m.company_id=$1",
+        "AND m.deleted_at IS NULL AND m.status <> 'CLOSED'",
+      ].join("\n"), [COMPANY, containerIds.filter((id) => refs.some((ref) => ref.kind === "goods" && ref.containerId === id))]
+    )).rows[0];
+
     const baleLineage = (await client.query<SqlRow>(
       [
         "SELECT COUNT(*)::int AS factory_bale_count,",
@@ -243,7 +260,7 @@ export async function auditHistoricalFactorySuppliers() {
       supplierDebit = supplierDebit.plus(supplierDr);
       const raw = stockMap.get(containerId);
       const receipt = receiptMap.get(containerId);
-      const sourceMix = mixSourceMap.get(containerId);
+      const sourceMix = kind === "goods" ? mixSourceMap.get(containerId) : undefined;
       const other = relatedExpense.get(containerId) ?? [];
       const expectedNative = kind === "goods"
         ? money(container.total_kg).times(money(container.rate_per_kg))
@@ -356,6 +373,14 @@ export async function auditHistoricalFactorySuppliers() {
         cutovers,
         stockJournalCount: num(stockJournals[0]?.n),
         lineageCoverage,
+        linkedMixSnapshot: {
+          linkedMixCount: num(relatedMixSnapshot?.linked_mix_count),
+          currentUnconsumedMixWeightKg: String(relatedMixSnapshot?.unconsumed_mix_weight_kg ?? "0"),
+          currentMixWipValueUsd: String(relatedMixSnapshot?.mix_wip_value_usd ?? "0"),
+          zeroCostMixCount: num(relatedMixSnapshot?.zero_cost_mix_count),
+          attributableToIndividualContainers: false,
+          warning: "Shared mixes may contain other supplier material. Current values are not historical sale-COGS proof.",
+        },
       },
       previewGate: {
         financialJournalPostingAllowed: false,
