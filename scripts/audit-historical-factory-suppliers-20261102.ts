@@ -260,6 +260,30 @@ export async function auditHistoricalFactorySuppliers() {
     )).rows;
     const accountClassificationAudit = accountRows.map(inspectFactoryAccountType);
 
+    // Pair the factory-charge account's entries with their original ledger
+    // counterparties, to prevent treating a debit balance as a proved expense
+    // error. An unrecognized/nonledger counterparty remains explicit.
+    const payableCounterparts = (await client.query<SqlRow>(
+      [
+        "SELECT COALESCE(other_account.code,'(nonledger/party)') AS account_code,",
+        "COALESCE(other_account.account_type,'(nonledger/party)') AS account_type,",
+        "COUNT(DISTINCT v.id)::int AS vouchers,",
+        "COALESCE(SUM(other_line.debit_amount),0)::text AS debit_usd,",
+        "COALESCE(SUM(other_line.credit_amount),0)::text AS credit_usd",
+        "FROM ledger_accounts payable",
+        "JOIN voucher_entries payable_line ON payable_line.ledger_account_id=payable.id",
+        "JOIN vouchers v ON v.id=payable_line.voucher_id",
+        "AND v.company_id=$1 AND v.deleted_at IS NULL",
+        "AND COALESCE(v.optional,false)=false",
+        "JOIN voucher_entries other_line ON other_line.voucher_id=v.id",
+        "AND other_line.id<>payable_line.id",
+        "LEFT JOIN ledger_accounts other_account ON other_account.id=other_line.ledger_account_id",
+        "WHERE payable.company_id=$1 AND payable.deleted_at IS NULL",
+        "AND payable.code='FACTORY_CHARGES_PAYABLE'",
+        "GROUP BY account_code,account_type ORDER BY account_code",
+      ].join("\n"), [COMPANY]
+    )).rows;
+
     // Alternate production evidence supports bale existence/processing but
     // does not supply a mix-to-bale relation or attributable historical COGS.
     const supplementalLineage = (await client.query<SqlRow>(
@@ -429,6 +453,13 @@ export async function auditHistoricalFactorySuppliers() {
         accounts: accountClassificationAudit,
         typeMismatches: accountClassificationAudit.filter((account) => account.mismatch).length,
         financialImpactToReclassifyUsd: null,
+        payableCounterpartBreakdown: payableCounterparts.map((row) => ({
+          accountCode: row.account_code,
+          accountType: row.account_type,
+          vouchers: num(row.vouchers),
+          debitUsd: String(row.debit_usd),
+          creditUsd: String(row.credit_usd),
+        })),
         warning: "Type mismatches are real reporting risks, not permission to rewrite source accounts or post supplier-neutral financial journals.",
       },
       alternativeProductionEvidence: {
