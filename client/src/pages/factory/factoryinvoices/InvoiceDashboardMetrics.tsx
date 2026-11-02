@@ -10,11 +10,12 @@ const num = (value: string | number | null | undefined) => {
 };
 
 function Card({
-  label, value, caption, icon, tone,
+  label, value, caption, totalValue, icon, tone,
 }: {
   label: string;
   value: string;
   caption: string;
+  totalValue?: string;
   icon: ReactNode;
   tone: "blue" | "green" | "amber" | "violet" | "cyan";
 }) {
@@ -36,9 +37,15 @@ function Card({
         </div>
       </div>
       <p className="mt-2 truncate text-[11px] text-muted-foreground" title={caption}>{caption}</p>
+      {totalValue && <p className="mt-1 truncate text-[11px] font-semibold tabular-nums text-foreground" title={`Total value: ${totalValue}`}>Total value: {totalValue}</p>}
     </div>
   );
 }
+
+const formatUsd = (orders: CustomerOrder[]) => {
+  const amount = orders.reduce((sum, order) => sum + num(order.grandTotal), 0);
+  return "$" + amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
 
 function caption(orders: CustomerOrder[]) {
   const bales = orders.reduce((total, order) => total + num(order.totalQtyBales), 0);
@@ -57,18 +64,19 @@ export function InvoiceDashboardMetrics({
   const loading = orders.filter((order) => order.status === "LOADING");
   const verified = orders.filter((order) => order.status === "VERIFIED" || order.status === "PENDING_VERIFICATION");
   const finalized = orders.filter((order) => order.status === "FINALIZED");
-  const amount = orders.reduce((sum, order) => sum + num(order.grandTotal), 0);
+  // Financial amounts follow the same visible order set and respect the USD visibility toggle.
+  const displayValue = (statusOrders: CustomerOrder[]) => hideTotalsUsd ? undefined : formatUsd(statusOrders);
 
   return (
     <section className="grid grid-cols-2 gap-2.5 lg:grid-cols-3 2xl:grid-cols-5" aria-label="Invoice summary metrics">
-      <Card label="Total orders" value={fmtNum(orders.length)} caption={caption(orders)} icon={<FileText className="h-5 w-5" />} tone="blue" />
-      <Card label="Verified" value={fmtNum(verified.length)} caption={caption(verified)} icon={<BadgeCheck className="h-5 w-5" />} tone="green" />
-      <Card label="Loading" value={fmtNum(loading.length)} caption={caption(loading)} icon={<Boxes className="h-5 w-5" />} tone="amber" />
-      <Card label="Finalized" value={fmtNum(finalized.length)} caption={caption(finalized)} icon={<FileCheck2 className="h-5 w-5" />} tone="violet" />
+      <Card label="Total orders" value={fmtNum(orders.length)} caption={caption(orders)} totalValue={displayValue(orders)} icon={<FileText className="h-5 w-5" />} tone="blue" />
+      <Card label="Verified" value={fmtNum(verified.length)} caption={caption(verified)} totalValue={displayValue(verified)} icon={<BadgeCheck className="h-5 w-5" />} tone="green" />
+      <Card label="Loading" value={fmtNum(loading.length)} caption={caption(loading)} totalValue={displayValue(loading)} icon={<Boxes className="h-5 w-5" />} tone="amber" />
+      <Card label="Finalized" value={fmtNum(finalized.length)} caption={caption(finalized)} totalValue={displayValue(finalized)} icon={<FileCheck2 className="h-5 w-5" />} tone="violet" />
       {!hideTotalsUsd && (
         <Card
           label="Total value"
-          value={"$" + amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          value={formatUsd(orders)}
           caption="Visible orders · USD"
           icon={<Wallet className="h-5 w-5" />}
           tone="cyan"
