@@ -94,7 +94,7 @@ export function AgentStatementPanel({
   const closingSide = balanceSideLabel(closingBalance, selectedAccount.type);
 
   return (
-    <div className={phone ? "min-w-0 space-y-4" : "relative isolate min-h-full min-w-0 space-y-6 overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-blue-400/20 dark:bg-[#07152b] lg:p-6 max-md:rounded-none max-md:border-0 max-md:p-3"} data-testid="agent-statement-panel">
+    <div className={phone ? "min-w-0 space-y-4" : "relative isolate min-h-full min-w-0 space-y-6 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-blue-400/20 dark:bg-[#07152b] lg:p-6 max-md:rounded-none max-md:border-0 max-md:p-3"} data-testid="agent-statement-panel">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         {phone && (
