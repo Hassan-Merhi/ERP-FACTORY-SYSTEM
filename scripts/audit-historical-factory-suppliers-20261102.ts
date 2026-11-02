@@ -18,6 +18,7 @@ import { inspectFactoryAccountType, type FactoryAccountAuditRow } from "./histor
 import { classifyFreightOffsetEvidence } from "./historical-supplier-freight-offset-review";
 import { previewHistoricalChargesPeriodNeutrality, type HistoricalClearingPeriodRow } from "./historical-charges-period-neutral-preflight";
 import { inspectHistoricalPostOffloadLink, type HistoricalPostOffloadLink } from "./historical-post-offload-voucher-source-audit";
+import { assessPostOffloadDuplicateSource, type PostOffloadDuplicateSourceReview } from "./historical-freight-batch-replay-guard";
 
 const COMPANY = 12;
 const EXPECTED_GOODS = 38;
@@ -323,6 +324,55 @@ export async function auditHistoricalFactorySuppliers() {
     )).rows;
     const postOffloadSourceLinks = pocRows.map(inspectHistoricalPostOffloadLink);
 
+    // A single source charge can have two fully active vouchers. Its current
+    // charge.voucher_id points to just one, so source-link-only audits miss the
+    // second. Group by both IDs parsed from the voucher NUMBER, not description.
+    const duplicateSources = (await client.query<SqlRow>(
+      [
+        "WITH parsed AS (",
+        "SELECT v.id,v.voucher_number,v.voucher_date::text AS voucher_date,v.total_amount,",
+        "SUBSTRING(v.voucher_number FROM '^FACTORY-POC-(?:BACKFILL-)?([0-9]+)-')::int AS container_id,",
+        "SUBSTRING(v.voucher_number FROM '^FACTORY-POC-(?:BACKFILL-)?[0-9]+-([0-9]+)')::int AS charge_id",
+        "FROM vouchers v WHERE v.company_id=$1 AND v.deleted_at IS NULL",
+        "AND COALESCE(v.optional,false)=false AND v.voucher_number LIKE 'FACTORY-POC-%'",
+        ") SELECT container_id,charge_id,COUNT(*)::int AS active_count,",
+        "JSONB_AGG(JSONB_BUILD_OBJECT(",
+        "'voucherId',id,'voucherNumber',voucher_number,",
+        "'voucherDate',voucher_date,'amountNative',total_amount::text",
+        ") ORDER BY id) AS active_vouchers",
+        "FROM parsed GROUP BY container_id,charge_id HAVING COUNT(*)>1",
+        "ORDER BY container_id,charge_id",
+      ].join("\n"), [COMPANY]
+    )).rows;
+
+    // The original company-12 source-specific correction for charge #64 was
+    // posted and later SOFT DELETED. Including retired corrections is essential;
+    // an active-voucher-only audit would mistake the historical review as absent.
+    const originalCorrection = (await client.query<SqlRow>(
+      "SELECT id,voucher_number,deleted_at::text AS deleted_at,total_amount::text AS amount_native " +
+      "FROM vouchers WHERE company_id=$1 AND voucher_number='FACTORY-CORRECTION-20261014-83'",
+      [COMPANY]
+    )).rows[0];
+    const duplicatePostOffloadSources = duplicateSources.map((row) => {
+      const activeVouchers = row.active_vouchers as PostOffloadDuplicateSourceReview["activeVouchers"];
+      if (!Array.isArray(activeVouchers)) throw new Error("Invalid POC voucher evidence JSON");
+      const priorCorrection = num(row.container_id) === 83 && num(row.charge_id) === 64 &&
+        originalCorrection != null ? {
+          voucherId: num(originalCorrection.id),
+          voucherNumber: String(originalCorrection.voucher_number),
+          deletedAt: originalCorrection.deleted_at == null ? null : String(originalCorrection.deleted_at),
+          amountNative: String(originalCorrection.amount_native),
+        } : null;
+      return assessPostOffloadDuplicateSource({
+        companyId: COMPANY,
+        containerId: num(row.container_id),
+        chargeId: num(row.charge_id),
+        activeVoucherCount: num(row.active_count),
+        activeVouchers,
+        priorCorrection,
+      });
+    });
+
     // Container-specific active freight journals, not amount-only duplicate
     // detection. Exact FREIGHT offsets indicate paired GL legs, NOT a second
     // expense or permission to debit inventory.
@@ -575,6 +625,10 @@ export async function auditHistoricalFactorySuppliers() {
           sourceInventoryDeltaIsRecognizedGLAsset: false,
           warning: "Native source amount and voucher amount must match before accounting interpretation. Old voucher link differences are not proven duplicated costs.",
           exceptions: postOffloadSourceLinks.filter((row) => row.status !== "SOURCE_IDENTITY_MATCHED"),
+          duplicateSourceFamilies: duplicatePostOffloadSources,
+          duplicateSourceFamiliesCount: duplicatePostOffloadSources.length,
+          safeCorrectionAmountUsd: null,
+          reviewWarning: "A source may have two active vouchers, even when charge.voucher_id points to only one. A retired correction is not an active offset. Creditor ledgers may change if adjusted; no automatic reversal permitted.",
         },
         typeMismatches: accountClassificationAudit.filter((account) => account.mismatch).length,
         financialImpactToReclassifyUsd: null,
