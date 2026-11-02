@@ -31,6 +31,7 @@ import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from
 const PREFIX = "p9pos";
 const SITE = "7c1d2e3f-4a5b-4c6d-9e8f-0a1b2c3d4e5f";
 let ctx: TestContext;
+let customerAccountId: number;
 
 const LAN = { mode: "lan", primary: true, siteId: SITE, writeMode: "lan-primary" };
 const CLOUD = { mode: "cloud", primary: false, siteId: null, writeMode: "cloud" };
@@ -70,11 +71,13 @@ function posEvent(sequence: number, overrides: Partial<Phase9PosSaleEvent["paylo
     localVoucherId: 900000 + sequence,
     lanInvoiceNumber: `LAN-7C1D-${String(sequence).padStart(6, "0")}`,
     locationId: ctx.locationId,
-    cashAccountId: ctx.cashAccountId,
-    currency: "USD" as const,
+    paymentAccountType: "cash" as const,
+    paymentAccountId: ctx.cashAccountId,
+    currency: "USD",
+    exchangeRate: null as string | null,
     voucherDate: "2026-10-31",
     notes: null,
-    items: [{ stockItemId: ctx.stockItemIds[1], quantity: "3.000", rate: "10.00" }],
+    items: [{ stockItemId: ctx.stockItemIds[1], quantity: "3.000", rate: "10.00", originalCurrencyRate: null }],
     ...overrides,
   };
   const event = {
@@ -125,6 +128,12 @@ async function stock(stockItemId: number): Promise<number> {
 
 beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
+  const customer = await pool.query(
+    `INSERT INTO ledger_accounts (company_id, code, name, account_type, opening_balance, opening_balance_side)
+     VALUES ($1, $2, 'Offline Customer', 'Asset', '0', 'Dr') RETURNING id`,
+    [ctx.companyId, `${PREFIX}_CUST`]
+  );
+  customerAccountId = Number(customer.rows[0].id);
   edge.config = LAN;
   await ensurePhase9PosOutboxSchema(pool);
   edge.config = CLOUD;
@@ -160,8 +169,9 @@ describe("Phase 9 offline POS sale capture on the factory LAN server (POST /api/
       });
       expect(outbox.rows[0].payload).toMatchObject({
         kind: "pos.sale.v1",
-        cashAccountId: ctx.cashAccountId,
-        items: [{ stockItemId: ctx.stockItemIds[0], quantity: "2.000", rate: "12.50" }],
+        paymentAccountType: "cash",
+        paymentAccountId: ctx.cashAccountId,
+        items: [{ stockItemId: ctx.stockItemIds[0], quantity: "2.000", rate: "12.50", originalCurrencyRate: null }],
       });
       // The same till retry is the same sale: no second LAN invoice.
       const retry = await sale({ clientSaleId });
@@ -175,21 +185,44 @@ describe("Phase 9 offline POS sale capture on the factory LAN server (POST /api/
     }
   });
 
-  it("refuses offline credit, non-USD and id-less sales before writing anything", async () => {
+  it("refuses id-less sales and non-USD sales without an entered rate before writing anything", async () => {
     edge.config = LAN;
     try {
       const before = await stock(ctx.stockItemIds[0]);
       expect((await sale({})).body).toMatchObject({ code: "EDGE_POS_CLIENT_SALE_ID_REQUIRED" });
-      expect((await sale({ clientSaleId: randomUUID(), currency: "EUR" })).body).toMatchObject({
-        code: "EDGE_POS_OFFLINE_USD_ONLY",
+      expect((await sale({ clientSaleId: randomUUID(), currency: "XOF" })).body).toMatchObject({
+        code: "EDGE_POS_OFFLINE_RATE_REQUIRED",
       });
+      expect(await stock(ctx.stockItemIds[0])).toBe(before);
+    } finally {
+      edge.config = CLOUD;
+    }
+  });
+
+  it("records credit sales and foreign-currency sales at the cashier's entered rate", async () => {
+    edge.config = LAN;
+    try {
       const credit = await sale({
         clientSaleId: randomUUID(),
         isCreditSale: true,
-        paymentAccountId: ctx.cashAccountId,
+        paymentAccountId: customerAccountId,
       });
-      expect(credit.status).not.toBe(200);
-      expect(await stock(ctx.stockItemIds[0])).toBe(before);
+      expect(credit.status, JSON.stringify(credit.body)).toBe(200);
+      const foreign = await sale({ clientSaleId: randomUUID(), currency: "XOF", exchangeRate: "600" });
+      expect(foreign.status, JSON.stringify(foreign.body)).toBe(200);
+      const rows = await pool.query(
+        "SELECT payload FROM factory_edge_pos_outbox WHERE local_voucher_id = ANY($1::int[]) ORDER BY sequence",
+        [
+          [
+            (credit.body as { voucher: { id: number } }).voucher.id,
+            (foreign.body as { voucher: { id: number } }).voucher.id,
+          ],
+        ]
+      );
+      expect(rows.rows.map((r) => [r.payload.paymentAccountType, r.payload.currency, r.payload.exchangeRate])).toEqual([
+        ["credit", "USD", null],
+        ["cash", "XOF", "600"],
+      ]);
     } finally {
       edge.config = CLOUD;
     }
@@ -216,7 +249,9 @@ describe("Phase 9 offline POS sale cloud replay", () => {
   });
 
   it("holds a sale that would take cloud stock below zero until it is approved", async () => {
-    const event = posEvent(2, { items: [{ stockItemId: ctx.stockItemIds[2], quantity: "150.000", rate: "1.00" }] });
+    const event = posEvent(2, {
+      items: [{ stockItemId: ctx.stockItemIds[2], quantity: "150.000", rate: "1.00", originalCurrencyRate: null }],
+    });
     expect(await conflictCode(replay(event))).toBe("PHASE9_POS_STOCK_WOULD_GO_NEGATIVE");
     expect(await stock(ctx.stockItemIds[2])).toBe(100);
     await replay(event, ["PHASE9_POS_STOCK_WOULD_GO_NEGATIVE"]);
@@ -224,15 +259,28 @@ describe("Phase 9 offline POS sale cloud replay", () => {
   });
 
   it("refuses a till account that is missing or not a cash account, and a diverged replay", async () => {
-    expect(await conflictCode(replay(posEvent(3, { cashAccountId: ctx.salesAccountId })))).toBe(
-      "PHASE9_POS_CASH_ACCOUNT_MISSING"
+    expect(await conflictCode(replay(posEvent(3, { paymentAccountId: ctx.salesAccountId })))).toBe(
+      "PHASE9_POS_PAYMENT_ACCOUNT_MISSING"
     );
     const requestId = randomUUID();
     await replay(posEvent(4, { requestId }));
     const diverged = posEvent(5, {
       requestId,
-      items: [{ stockItemId: ctx.stockItemIds[1], quantity: "4.000", rate: "10.00" }],
+      items: [{ stockItemId: ctx.stockItemIds[1], quantity: "4.000", rate: "10.00", originalCurrencyRate: null }],
     });
     expect(await conflictCode(replay(diverged))).toBe("PHASE9_POS_REQUEST_ID_DIVERGED");
+  });
+
+  it("replays a credit sale to the customer and a foreign sale at the LAN rate, never a re-derived one", async () => {
+    const credit = await replay(posEvent(6, { paymentAccountType: "credit", paymentAccountId: customerAccountId }));
+    const foreign = await replay(posEvent(7, { currency: "XOF", exchangeRate: "600" }));
+    const vouchers = await pool.query(
+      "SELECT id, is_credit_sale, currency, exchange_rate::numeric AS rate FROM vouchers WHERE id = ANY($1::int[]) ORDER BY id",
+      [[credit.cloudRef, foreign.cloudRef]]
+    );
+    expect(vouchers.rows.map((r) => [r.is_credit_sale, r.currency, r.rate === null ? null : Number(r.rate)])).toEqual([
+      [true, "USD", null],
+      [false, "XOF", 600],
+    ]);
   });
 });

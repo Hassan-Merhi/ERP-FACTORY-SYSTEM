@@ -131,6 +131,7 @@ The owner chose to make all remaining workflows available offline (stock movemen
 The owner extended offline coverage: offload edits, duties and charges; supplier, customer and bank payments; POS credit, bank and Kwacha sales at the rate the cashier enters, plus returns and cancellations; and stock transfers, imports and bulk edits.
 
 - Receiving: the `receiving` event now carries the full offload as entered and edits (`PATCH /api/containers/:id/offload`).
+- POS: offline sales may now be cash, bank or credit, in USD or another currency at the rate the cashier enters (`EDGE_POS_OFFLINE_RATE_REQUIRED` if missing). The `pos.sale.v1` evidence carries the payment type and account, currency, rate and original prices; the cloud replay passes the LAN rate as `lockedCurrency`, so it is never re-derived. Tests: `tests/offline-phase9-pos-sale.test.ts`.
 - Payments: `POST /api/vouchers/payment-receipt` is an approved capture (stream `payments`); its create path moved to `server/services/accounting/paymentReceiptVoucherPosting.ts`, shared by the route and the cloud replay (`server/edge/phase9PaymentApply.ts`), which posts at the LAN rate on the receipt's transaction. Evidence: `tests/offline-phase9-payments.test.ts`.
 
 ## Phase 10 — Offline identity, conflicts, secure storage and server controls

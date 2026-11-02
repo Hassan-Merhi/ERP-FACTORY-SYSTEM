@@ -8,10 +8,11 @@
  * service locks and de-duplicates: an apply interrupted after the sale
  * committed returns the stored sale as "already-present" on retry.
  *
- * Owner policy: the sale keeps the price it was sold at; a sale that would
- * take cloud stock below zero, or whose cash account mapping changed, is held
- * for an Admin/Developer approve/reject decision. A missing or non-cash
- * account, a company that no longer allows offline sales, revoked access or
+ * Owner policy: the sale keeps the price and the exchange rate it was sold
+ * at (cash, bank or credit); a sale that would take cloud stock below zero,
+ * or whose POS till cash account mapping changed, is held for an
+ * Admin/Developer approve/reject decision. A missing payment account or
+ * customer, a company that no longer allows offline sales, revoked access or
  * any other refusal by the sale service can only be rejected.
  */
 import type { PoolClient } from "pg";
@@ -37,11 +38,13 @@ export interface Phase9PosSaleEvent {
     localVoucherId: number;
     lanInvoiceNumber: string;
     locationId: number;
-    cashAccountId: number;
-    currency: "USD";
+    paymentAccountType: "cash" | "bank" | "credit";
+    paymentAccountId: number;
+    currency: string;
+    exchangeRate: string | null;
     voucherDate: string;
     notes: string | null;
-    items: Array<{ stockItemId: number; quantity: string; rate: string }>;
+    items: Array<{ stockItemId: number; quantity: string; rate: string; originalCurrencyRate: string | null }>;
   };
   payloadSha256: string;
 }
@@ -109,12 +112,24 @@ async function apply(
     throw new Phase9EventConflict("PHASE9_POS_COMPANY_UNSUPPORTED", { companyType });
   }
 
-  const account = await client.query(
-    "SELECT account_type, active FROM ledger_accounts WHERE id = $1 AND company_id = $2",
-    [p.cashAccountId, event.companyId]
-  );
-  if (!account.rows.length || account.rows[0].account_type !== "Cash" || account.rows[0].active === false) {
-    throw new Phase9EventConflict("PHASE9_POS_CASH_ACCOUNT_MISSING", { cashAccountId: p.cashAccountId });
+  // The payment account must still exist in the cloud: a Cash ledger (cash),
+  // a bank account (bank) or a customer receivable ledger (credit).
+  const accountId = p.paymentAccountId;
+  const account =
+    p.paymentAccountType === "bank"
+      ? await client.query("SELECT active FROM bank_accounts WHERE id = $1 AND company_id = $2", [
+          accountId,
+          event.companyId,
+        ])
+      : await client.query(
+          "SELECT active FROM ledger_accounts WHERE id = $1 AND company_id = $2 AND account_type = $3",
+          [accountId, event.companyId, p.paymentAccountType === "credit" ? "Asset" : "Cash"]
+        );
+  if (!account.rows.length || account.rows[0].active === false) {
+    throw new Phase9EventConflict("PHASE9_POS_PAYMENT_ACCOUNT_MISSING", {
+      paymentAccountType: p.paymentAccountType,
+      paymentAccountId: accountId,
+    });
   }
   // A POS user's till account is assigned per location; if it was changed or
   // closed in the cloud during the outage, an Admin/Developer decides.
@@ -122,21 +137,24 @@ async function apply(
     event.actorUserId,
     event.companyId,
   ]);
-  if (String(role.rows[0]?.role) === "POS" && !context.overrideConflicts.includes(PHASE9_POS_CASH_ACCOUNT_CONFLICT)) {
+  if (
+    p.paymentAccountType === "cash" &&
+    String(role.rows[0]?.role) === "POS" &&
+    !context.overrideConflicts.includes(PHASE9_POS_CASH_ACCOUNT_CONFLICT)
+  ) {
     const mapping = await client.query(
       `SELECT cash_account_id FROM user_location_cash_accounts
         WHERE user_id = $1 AND company_id = $2 AND location_id = $3`,
       [event.actorUserId, event.companyId, p.locationId]
     );
-    if (mapping.rows.length && Number(mapping.rows[0].cash_account_id) !== p.cashAccountId) {
+    if (mapping.rows.length && Number(mapping.rows[0].cash_account_id) !== accountId) {
       throw new Phase9EventConflict(PHASE9_POS_CASH_ACCOUNT_CONFLICT, {
-        lanCashAccountId: p.cashAccountId,
+        lanCashAccountId: accountId,
         cloudCashAccountId: Number(mapping.rows[0].cash_account_id),
       });
     }
   }
 
-  // Same source as the live route: the actor's role in this company.
   const flags = await client.query(
     "SELECT can_sell_negative_stock FROM user_company_roles WHERE user_id = $1 AND company_id = $2",
     [event.actorUserId, event.companyId]
@@ -177,14 +195,22 @@ async function apply(
       voucherDateFallback: p.voucherDate,
       body: {
         locationId: p.locationId,
-        cashAccountId: p.cashAccountId,
-        items: p.items,
+        ...(p.paymentAccountType === "cash" ? { cashAccountId: accountId } : { paymentAccountId: accountId }),
+        items: p.items.map((line) => ({
+          stockItemId: line.stockItemId,
+          quantity: line.quantity,
+          rate: line.rate,
+          ...(line.originalCurrencyRate === null ? {} : { originalCurrencyRate: line.originalCurrencyRate }),
+        })),
         notes: p.notes ? `${p.notes} · ${marker}` : marker,
-        isCreditSale: false,
+        isCreditSale: p.paymentAccountType === "credit",
         voucherDate: p.voucherDate,
         clientSaleId: event.operationId,
-        currency: "USD",
+        currency: p.currency,
+        exchangeRate: p.exchangeRate,
       },
+      // The rate the cashier entered on the factory server, never re-derived.
+      lockedCurrency: { currency: p.currency, exchangeRate: p.exchangeRate },
     },
     { isSpCompany: false }
   );

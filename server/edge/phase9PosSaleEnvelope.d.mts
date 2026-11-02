@@ -8,17 +8,20 @@ export interface Phase9PosSaleItem {
   stockItemId: number;
   quantity: string;
   rate: string;
+  originalCurrencyRate: string | null;
 }
 export interface Phase9PosSaleEvidence {
   companyId: number;
   localVoucherId: number;
   lanInvoiceNumber: string;
   locationId: number;
-  cashAccountId: number;
+  paymentAccountType: "cash" | "bank" | "credit";
+  paymentAccountId: number;
   actorUserId: string;
   actorUsername: string;
   requestId: string;
-  currency: "USD";
+  currency: string;
+  exchangeRate: string | null;
   voucherDate: string;
   notes: string | null;
   items: Phase9PosSaleItem[];

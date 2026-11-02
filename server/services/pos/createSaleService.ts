@@ -50,6 +50,16 @@ import { PosZmwRateError, resolveLockedZmwPosCurrency, assertZmwImportPrices } f
 import { allocatePhase9PosInvoiceTx, capturePhase9PosSaleTx, isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
 import { phase9PosSaleRefusal } from "./posSaleOfflinePolicy";
 
+/** The rate a cashier entered for a non-USD sale on the factory LAN server. */
+function offlineEnteredRate(
+  currency: unknown,
+  exchangeRate: unknown
+): { currency: string; exchangeRate: string } | null {
+  const code = String(currency || "USD").toUpperCase();
+  if (code === "USD" || exchangeRate == null || exchangeRate === "") return null;
+  return { currency: code, exchangeRate: String(exchangeRate) };
+}
+
 function err(result: HandlerErrorResult): CreatePosSaleResult {
   return { status: result.status, body: result.body };
 }
@@ -132,7 +142,7 @@ export async function createPosSale(
   // shape is accepted, before anything is written (see posSaleOfflinePolicy).
   const lanCapture = isPhase9LanPrimary();
   if (lanCapture) {
-    const refusal = phase9PosSaleRefusal({ clientSaleId, isCreditSale, accountType, currency, isSpCompany });
+    const refusal = phase9PosSaleRefusal({ clientSaleId, currency, exchangeRate, isSpCompany });
     if (refusal) return err(refusal);
   }
 
@@ -191,7 +201,14 @@ export async function createPosSale(
   // backdated ZMW sale's approved rate differs from the current rate.
   let lockedPosCurrency: { currency: string; exchangeRate: string | null };
   try {
-    lockedPosCurrency = await resolveLockedZmwPosCurrency(currentCompanyId, voucherDate, currency, exchangeRate);
+    // Offline (owner decision 2026-11-02): the cashier's entered rate is the
+    // sale's rate on the factory LAN server, and the cloud replay posts at
+    // that same rate. Online, the company's effective-dated rate is locked.
+    const enteredRate = lanCapture ? offlineEnteredRate(currency, exchangeRate) : null;
+    lockedPosCurrency =
+      params.lockedCurrency ??
+      enteredRate ??
+      (await resolveLockedZmwPosCurrency(currentCompanyId, voucherDate, currency, exchangeRate));
   } catch (error) {
     if (error instanceof PosZmwRateError) {
       return err({ status: error.statusCode, body: { code: error.code, message: error.message } });
@@ -423,17 +440,23 @@ export async function createPosSale(
           localVoucherId: txVoucher.id,
           lanInvoiceNumber: lanInvoice.number,
           locationId: parsedLocationId,
-          cashAccountId: accountId,
+          paymentAccountType: accountType === "credit" ? "credit" : accountType === "bank" ? "bank" : "cash",
+          paymentAccountId: Number(accountId),
           actorUserId: String(userId),
           actorUsername: username,
           requestId: String(clientSaleId),
-          currency: "USD",
+          currency: lockedPosCurrency.currency,
+          exchangeRate: lockedPosCurrency.exchangeRate == null ? null : String(lockedPosCurrency.exchangeRate),
           voucherDate,
           notes: typeof notes === "string" && notes ? notes : null,
           items: inventoryValidation.map(({ item }) => ({
             stockItemId: Number(item.stockItemId),
             quantity: inventoryQuantity(item.quantity),
             rate: inventoryMoney(item.rate),
+            originalCurrencyRate:
+              item.originalCurrencyRate == null || item.originalCurrencyRate === ""
+                ? null
+                : String(item.originalCurrencyRate),
           })),
         });
       }

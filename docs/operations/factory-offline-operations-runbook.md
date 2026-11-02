@@ -34,7 +34,7 @@ an open cloud epoch.
 | Factory cash-box Payment / Receipt (USD; one Cash account against expense or income accounts) | yes | `vouchers` (Phase 4/8) | `server/edge/phase8OperatorApply.ts` — account types re-checked in the cloud; banks, payables, receivables, stock and employees refused |
 | Pressing scan confirmation (physical bale press) | yes, existing machine assignments only | `pressing` (Phase 9) | `server/edge/phase9OperatorApply.ts apply pressing` |
 | Stock movement: inventory quick adjust (add / subtract at a location) | yes, existing items and locations | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — replayed as a delta; below zero is held for Admin/Developer approve/reject |
-| POS cash sale (USD, cash account, non-supplier-partner company) | yes, numbered `LAN-<site>-000123` | `pos` (Phase 9) | `server/edge/phase9OperatorApply.ts apply pos` — replayed through the sale service on its `clientSaleId`; keeps the offline price; below-zero stock or a changed till account is held for Admin/Developer approve/reject |
+| POS sale — cash, bank or credit; USD or another currency at the cashier's entered rate (non-supplier-partner company) | yes, numbered `LAN-<site>-000123` | `pos` (Phase 9) | `server/edge/phase9OperatorApply.ts apply pos` — replayed through the sale service on its `clientSaleId`; keeps the offline price; below-zero stock or a changed till account is held for Admin/Developer approve/reject |
 | Supplier receiving: container offload against its existing purchase orders, and offload edits, with duties, charges, cost corrections and agent lines | yes | `receiving` (Phase 9) | `server/edge/phase9OperatorApply.ts apply receiving` — same offload lifecycle on the receipt's transaction; cloud prices apply; changed order quantities are held for Admin/Developer approve/reject |
 | File upload (Files page), up to 10 MB | yes | `attachments` (Phase 9) + signed file upload | `server/edge/phase9OperatorApply.ts apply attachments` — the record syncs first; the relay then uploads the bytes to `/api/edge/sync/files/stage`, accepted only if their SHA-256 matches a staged record; the file is created in the cloud once its bytes arrive; a missing folder is held for approve/reject |
 | Supplier, customer, employee and bank Payment / Receipt vouchers (Payments page) | yes, at the rate the user posted | `payments` (Phase 9) | `server/edge/phase9OperatorApply.ts apply payments` — same posting code on the receipt's transaction; a posting refusal (closed period, missing party/account) is a reject-only conflict |
@@ -61,8 +61,7 @@ reconciled safely, which is worse than refusing them.
   adjustments now replay as deltas with a below-zero hold; the other stock
   writes still need the same treatment (their own capture, delta replay and
   drill) before they are enabled.
-- **POS credit, bank and non-USD sales, returns, cancellations; payments,
-  receipts, purchasing/receiving, supplier and customer balances:** each posts
+- **POS returns and cancellations (sale edits); payment edits:** each posts
   money and stock together through the central posting engine with
   multi-currency, tax and numbering rules. Payment/receipt edits and deletes
   stay online-only.

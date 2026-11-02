@@ -2,17 +2,19 @@
  * Phase 9: typed, immutable LAN evidence for a POS cash sale
  * (POST /api/pos/sales) captured while the factory LAN server is the writer.
  *
- * Owner policy (2026-11-01): offline sales are cash only, carry their own
- * LAN invoice series (LAN-<site>-000123), keep the price they were sold at
- * (the last prices synced before the outage) and are replayed in the cloud
- * through the normal sale service, idempotent on the sale's clientSaleId.
- * This version accepts USD sales only; Kwacha sales stay online-only until
- * the LAN rate can be carried as evidence.
+ * Owner policy (2026-11-01, extended 2026-11-02): offline sales may be cash,
+ * bank or credit, in USD or another accepted currency at the exchange rate the
+ * cashier entered. They carry their own LAN invoice series (LAN-<site>-000123),
+ * keep the price they were sold at, and are replayed in the cloud through the
+ * normal sale service at the same rate, idempotent on the sale's clientSaleId.
  */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const DECIMAL = /^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,6})?$/;
 const INVOICE = /^LAN-[0-9A-F]{4}-[0-9]{6,}$/;
+const RATE = /^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,12})?$/;
+const CURRENCY = /^[A-Z]{3}$/;
+const PAYMENT_TYPES = new Set(["cash", "bank", "credit"]);
 const MAX_REF = 2147483647;
 const MAX_ITEMS = 200;
 
@@ -23,14 +25,16 @@ export const PHASE9_POS_CASH_ACCOUNT_CONFLICT = "PHASE9_POS_CASH_ACCOUNT_CHANGED
 const INPUT_FIELDS = Object.freeze([
   "actorUserId",
   "actorUsername",
-  "cashAccountId",
   "companyId",
   "currency",
+  "exchangeRate",
   "items",
   "lanInvoiceNumber",
   "localVoucherId",
   "locationId",
   "notes",
+  "paymentAccountId",
+  "paymentAccountType",
   "requestId",
   "voucherDate",
 ]);
@@ -55,7 +59,9 @@ function item(line) {
     !line ||
     typeof line !== "object" ||
     Array.isArray(line) ||
-    Object.keys(line).sort().join(",") !== "quantity,rate,stockItemId" ||
+    Object.keys(line).sort().join(",") !== "originalCurrencyRate,quantity,rate,stockItemId" ||
+    (line.originalCurrencyRate !== null &&
+      (typeof line.originalCurrencyRate !== "string" || !DECIMAL.test(line.originalCurrencyRate))) ||
     !ref(line.stockItemId) ||
     typeof line.quantity !== "string" ||
     !DECIMAL.test(line.quantity) ||
@@ -65,7 +71,12 @@ function item(line) {
   ) {
     throw new Phase9PosSaleRefusal("PHASE9_POS_EVIDENCE_INVALID");
   }
-  return { stockItemId: line.stockItemId, quantity: line.quantity, rate: line.rate };
+  return {
+    stockItemId: line.stockItemId,
+    quantity: line.quantity,
+    rate: line.rate,
+    originalCurrencyRate: line.originalCurrencyRate,
+  };
 }
 
 /** Accept only the values the LAN sale transaction committed. */
@@ -78,7 +89,8 @@ export function phase9PosSaleEnvelope(evidence) {
     !ref(evidence.companyId) ||
     !ref(evidence.localVoucherId) ||
     !ref(evidence.locationId) ||
-    !ref(evidence.cashAccountId) ||
+    !PAYMENT_TYPES.has(evidence.paymentAccountType) ||
+    !ref(evidence.paymentAccountId) ||
     typeof evidence.actorUserId !== "string" ||
     evidence.actorUserId.length < 1 ||
     evidence.actorUserId.length > 255 ||
@@ -89,7 +101,11 @@ export function phase9PosSaleEnvelope(evidence) {
     !UUID.test(evidence.requestId) ||
     typeof evidence.lanInvoiceNumber !== "string" ||
     !INVOICE.test(evidence.lanInvoiceNumber) ||
-    evidence.currency !== "USD" ||
+    typeof evidence.currency !== "string" ||
+    !CURRENCY.test(evidence.currency) ||
+    (evidence.currency === "USD"
+      ? evidence.exchangeRate !== null
+      : typeof evidence.exchangeRate !== "string" || !RATE.test(evidence.exchangeRate)) ||
     !validDay(evidence.voucherDate) ||
     (evidence.notes !== null && (typeof evidence.notes !== "string" || evidence.notes.length > 500)) ||
     !Array.isArray(evidence.items) ||
@@ -107,8 +123,10 @@ export function phase9PosSaleEnvelope(evidence) {
     localVoucherId: evidence.localVoucherId,
     lanInvoiceNumber: evidence.lanInvoiceNumber,
     locationId: evidence.locationId,
-    cashAccountId: evidence.cashAccountId,
+    paymentAccountType: evidence.paymentAccountType,
+    paymentAccountId: evidence.paymentAccountId,
     currency: evidence.currency,
+    exchangeRate: evidence.exchangeRate,
     voucherDate: evidence.voucherDate,
     notes: evidence.notes,
     items: evidence.items.map(item),
