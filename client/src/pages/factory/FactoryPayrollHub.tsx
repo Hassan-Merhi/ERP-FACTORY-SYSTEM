@@ -47,9 +47,9 @@ export default function FactoryPayrollHub() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="border-b bg-background shrink-0">
+      <div className="relative shrink-0 overflow-hidden border-b border-border/70 bg-gradient-to-r from-blue-500/10 via-indigo-500/5 to-background dark:from-blue-900/30 dark:via-indigo-900/20 dark:to-background">
         {/* Shared page-header grammar (accent bar, icon, subtitle) like the ERP and Properties pages. */}
-        <div className="px-4 pt-3 [&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-2">
+        <div className="relative z-10 px-4 pt-4 sm:px-5 [&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-3">
           <PageHeader
             title="Payroll & Benefits"
             subtitle={tr("hubDescription")}
@@ -58,14 +58,15 @@ export default function FactoryPayrollHub() {
           />
         </div>
 
-        <div className="erp-mobile-scroll-tabs px-4 pb-1">
-          <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Factory sections">
+        <div className="erp-mobile-scroll-tabs relative z-10 px-4 pb-3 sm:px-5">
+          <TabsList className="w-max min-w-full border-border/60 bg-background/65 shadow-sm backdrop-blur-sm sm:min-w-0 sm:w-fit" aria-label="Factory sections">
             {tabs.map(({ key, label, Icon }) => {
               const active = activeSection === key;
               return (
                 <PillTabButton
                   key={key}
                   selected={active}
+                  className={active ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md hover:text-white" : ""}
                   data-testid={`tab-people-${key}`}
                   onClick={() => setActiveSection(key)}
                 >
@@ -78,14 +79,14 @@ export default function FactoryPayrollHub() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto min-h-0">
+      <div className="min-h-0 flex-1 overflow-auto bg-background">
         {sections.length === 0 && (
           <div className="p-6 text-sm text-muted-foreground">
             No Payroll & Benefits tabs are available for this user.
           </div>
         )}
         {activeSection === "workers" && sections.includes("workers") && (
-          <div className="p-4">
+          <div className="p-4 sm:p-5">
             <FactoryWorkersHub />
           </div>
         )}
