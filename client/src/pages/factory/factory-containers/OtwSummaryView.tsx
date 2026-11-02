@@ -75,9 +75,9 @@ export function OtwSummaryView({
                       <span className="hidden w-28 shrink-0 text-right font-mono text-sm tabular-nums text-muted-foreground sm:block">
                         {fmtOtwKg(group.totalKg)} kg
                       </span>
-                      <div className="min-w-[110px] shrink-0 text-right text-foreground">
+                      <span className="min-w-[110px] shrink-0 text-right text-foreground">
                         <OtwCurrencyInline amounts={group.totalsByCurrency} />
-                      </div>
+                      </span>
                       <ChevronDown
                         className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
                       />
