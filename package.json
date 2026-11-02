@@ -196,7 +196,7 @@
     "@types/node-cron": "^3.0.11",
     "@types/nodemailer": "^8.0.0",
     "@types/papaparse": "^5.5.2",
-    "@types/pdfkit": "^0.17.5",
+    "@types/pdfkit": "^0.17.7",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
     "@types/supertest": "^7.2.1",
@@ -204,7 +204,7 @@
     "@typescript/native": "npm:typescript@7.0.2",
     "@vitest/coverage-v8": "5.0.5",
     "drizzle-kit": "^0.31.10",
-    "eslint": "^10.9.1",
+    "eslint": "^10.13.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "7.1.1",
     "eslint-plugin-unused-imports": "^4.4.1",
@@ -215,7 +215,7 @@
     "supertest": "7.2.2",
     "tsx": "^4.23.13",
     "typescript": "npm:@typescript/typescript6@6.0.2",
-    "typescript-eslint": "^8.69.0",
+    "typescript-eslint": "^8.72.0",
     "vitest": "^5.0.0"
   },
   "optionalDependencies": {
