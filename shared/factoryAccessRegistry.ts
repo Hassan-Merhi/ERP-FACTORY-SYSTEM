@@ -71,6 +71,8 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     group: "Finance",
     route: "/factory/cost-centers",
     sidebar: true,
+    settingsVisible: false,
+    accessLevel: "developer",
     landing: false,
   },
   {
@@ -79,7 +81,10 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     group: "Finance",
     route: "/factory/daybook",
     pinned: true,
-    landing: true,
+    sidebar: true,
+    settingsVisible: false,
+    accessLevel: "developer",
+    landing: false,
   },
   {
     key: "factory/vouchers",
