@@ -66,7 +66,7 @@ export default function FactoryPayrollHub() {
                 <PillTabButton
                   key={key}
                   selected={active}
-                  className={active ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md hover:text-white" : ""}
+                  className={active ? (key === "employees" ? "bg-gradient-to-r from-emerald-700 to-emerald-600 text-white shadow-md hover:text-white" : "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md hover:text-white") : ""}
                   data-testid={`tab-people-${key}`}
                   onClick={() => setActiveSection(key)}
                 >
