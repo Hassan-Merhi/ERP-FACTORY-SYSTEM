@@ -619,7 +619,7 @@ export default function GroundScan() {
   }
 
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className="ground-scan-refresh flex flex-col gap-4 p-4">
       {/* ── Migration banner ── */}
       {hasMigrationData && (
         <div className="flex items-start gap-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3">
@@ -656,7 +656,7 @@ export default function GroundScan() {
       )}
 
       {/* ── Location selector ── */}
-      <div className="flex items-center gap-2 text-sm flex-wrap">
+      <div className="ground-scan-location flex items-center gap-2 text-sm flex-wrap">
         <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
         <span className="text-muted-foreground shrink-0">Scanning location:</span>
         <Select
@@ -664,7 +664,7 @@ export default function GroundScan() {
           onValueChange={setSelectedLocationId}
           data-testid="select-ground-scan-location"
         >
-          <SelectTrigger className="w-60" data-testid="trigger-ground-scan-location">
+          <SelectTrigger className="w-60 max-w-full" data-testid="trigger-ground-scan-location">
             <SelectValue placeholder="All locations" />
           </SelectTrigger>
           <SelectContent>
@@ -689,7 +689,7 @@ export default function GroundScan() {
       </div>
 
       {/* ── Scan bar ── */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+      <div className="ground-scan-toolbar flex flex-col gap-3 sm:flex-row sm:items-start">
         <div className="flex-1 flex flex-col gap-2">
           <div className="relative">
             <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -702,7 +702,7 @@ export default function GroundScan() {
               }}
               onKeyDown={(e) => e.key === "Enter" && handleScan()}
               placeholder="Scan ref code / barcode..."
-              className="pl-9"
+              className="ground-scan-input pl-9"
               disabled={scanning}
               data-testid="input-ground-scan"
               autoComplete="off"
@@ -716,19 +716,22 @@ export default function GroundScan() {
           )}
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="ground-scan-actions flex items-center gap-2 shrink-0">
           <MobileBarcodeScanner onScan={(code) => void handleScan(code)} disabled={scanning} />
           <Button
             onClick={() => void handleScan()}
             disabled={scanning || !scanInput.trim()}
+            className="ground-scan-submit"
             data-testid="button-ground-scan-confirm"
           >
+            {scanning ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <ScanLine className="mr-1.5 h-4 w-4" />}
             {scanning ? "Looking up..." : "Scan"}
           </Button>
           <Button
             variant="outline"
             onClick={exportExcel}
             disabled={scannedBales.length === 0 || exporting}
+            className="ground-scan-export"
             data-testid="button-ground-scan-export"
           >
             {exporting ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Download className="h-4 w-4 mr-1.5" />}
@@ -761,8 +764,8 @@ export default function GroundScan() {
       </div>
 
       {/* ── Stats ── */}
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+      <div className="ground-scan-summary flex flex-col gap-1.5">
+        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
           <span data-testid="text-ground-scan-count">
             <span className="font-semibold text-foreground">{scannedBales.length}</span> bale
             {scannedBales.length !== 1 ? "s" : ""} scanned
@@ -781,8 +784,8 @@ export default function GroundScan() {
           <p className="text-sm">Scan a bale to add it to the list</p>
         </div>
       ) : (
-        <div className="rounded-md border overflow-x-auto">
-          <Table>
+        <div className="ground-scan-table-shell rounded-md border overflow-x-auto">
+          <Table className="ground-scan-table">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-8">#</TableHead>
@@ -840,6 +843,8 @@ export default function GroundScan() {
                     <Button
                       size="icon"
                       variant="ghost"
+                      className="ground-scan-remove"
+                      aria-label={`Remove scan ${bale.refCode}`}
                       onClick={() => {
                         const item = serverItems.find((i) => i.reference_number === bale.refCode);
                         if (item) removeMutation.mutate(item.id);
