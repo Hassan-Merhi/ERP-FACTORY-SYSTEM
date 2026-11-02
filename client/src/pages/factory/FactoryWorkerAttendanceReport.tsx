@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
-import { Loader2, CalendarDays, Printer, ChevronLeft, ChevronRight, Pencil, EyeOff, Eye } from "lucide-react";
+import { Loader2, CalendarDays, Printer, ChevronLeft, ChevronRight, Pencil, EyeOff, Eye, UsersRound, CalendarCheck2, Coins, HandCoins, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -226,12 +226,12 @@ export default function FactoryWorkerAttendanceReport() {
   }, [data, mode, customStart, customEnd]);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5 rounded-2xl bg-gradient-to-b from-blue-50/50 via-background to-background px-2 pb-4 text-foreground dark:from-[#0b172b] dark:via-[#0b1220] dark:to-[#0b1220] sm:px-4 sm:py-4 print:gap-3 print:rounded-none print:bg-white print:p-0 print:text-black">
       {/* ── Header bar ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-2">
-          <CalendarDays className="h-5 w-5 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">Attendance Report</h2>
+      <div className="flex items-center justify-between flex-wrap gap-3 print:hidden">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-400/30 bg-blue-500/10 text-blue-600 dark:text-blue-300"><CalendarDays className="h-5 w-5" /></span>
+          <div><h2 className="text-xl font-bold tracking-tight sm:text-2xl">Attendance Report</h2><p className="text-xs text-muted-foreground">Workforce attendance and salary overview</p></div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -240,7 +240,7 @@ export default function FactoryWorkerAttendanceReport() {
             size="default"
             onClick={() => window.print()}
             data-testid="button-print-report"
-            className="print:hidden"
+            className="gap-2 rounded-lg border border-blue-500 bg-blue-600 px-5 font-semibold text-white shadow-[0_5px_15px_rgba(37,99,235,0.25)] hover:bg-blue-700 hover:text-white dark:border-blue-400 dark:bg-blue-600 dark:hover:bg-blue-500 print:hidden"
           >
             <Printer className="h-4 w-4 mr-2" />
             Print
@@ -249,9 +249,9 @@ export default function FactoryWorkerAttendanceReport() {
       </div>
 
       {/* ── Date mode selector ──────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 flex-wrap print:hidden">
-        <span className="text-xs text-muted-foreground font-medium">Period:</span>
-        <div className="flex items-center gap-1 rounded-md border bg-background p-0.5">
+      <div className="flex flex-wrap items-center gap-3 print:hidden">
+        <span className="text-sm font-semibold text-muted-foreground">Period:</span>
+        <div className="flex flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white/80 p-1 shadow-sm dark:border-blue-900/60 dark:bg-[#122037]">
           {(["today", "yesterday", "thisMonth", "custom"] as DateMode[]).map((m) => (
             <Button
               key={m}
@@ -265,7 +265,7 @@ export default function FactoryWorkerAttendanceReport() {
                 setMode(m);
               }}
               data-testid={`mode-${m}`}
-              className={cn("h-7 px-3 text-xs rounded-xs", mode === m ? "bg-muted font-semibold" : "")}
+              className={cn("h-8 rounded-lg px-4 text-xs font-semibold transition-colors", mode === m ? "bg-blue-600 text-white shadow-[0_2px_10px_rgba(37,99,235,0.35)] hover:bg-blue-700 hover:text-white dark:bg-blue-600 dark:hover:bg-blue-500" : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-blue-950/70")}
             >
               {m === "today" ? "Today" : m === "yesterday" ? "Yesterday" : m === "thisMonth" ? "This Month" : "Custom"}
             </Button>
@@ -274,7 +274,7 @@ export default function FactoryWorkerAttendanceReport() {
 
         {/* Month navigator for thisMonth */}
         {mode === "thisMonth" && (
-          <div className="flex items-center gap-1 rounded-md border bg-background p-0.5">
+          <div className="flex flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white/80 p-1 shadow-sm dark:border-blue-900/60 dark:bg-[#122037]">
             <Button
               variant="ghost"
               size="icon"
@@ -322,15 +322,15 @@ export default function FactoryWorkerAttendanceReport() {
       </div>
 
       {/* ── Filter + toggle bar ─────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 flex-wrap print:hidden">
-        <span className="text-xs text-muted-foreground font-medium">Show:</span>
-        <div className="flex items-center gap-1 rounded-md border bg-background p-0.5">
+      <div className="flex flex-wrap items-center gap-3 print:hidden">
+        <span className="text-sm font-semibold text-muted-foreground">Show:</span>
+        <div className="flex flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white/80 p-1 shadow-sm dark:border-blue-900/60 dark:bg-[#122037]">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setFilter("all")}
             data-testid="filter-all"
-            className={cn("h-7 px-3 text-xs rounded-xs", filter === "all" ? "bg-muted font-semibold" : "")}
+            className={cn("h-8 rounded-lg px-3 text-xs font-semibold transition-colors", filter === "all" ? "bg-blue-600 text-white shadow-sm hover:bg-blue-700 hover:text-white dark:bg-blue-600" : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-blue-950/70")}
           >
             All
             {data && (
@@ -344,7 +344,7 @@ export default function FactoryWorkerAttendanceReport() {
             size="sm"
             onClick={() => setFilter("present")}
             data-testid="filter-present"
-            className={cn("h-7 px-3 text-xs rounded-xs", filter === "present" ? "status-success font-semibold" : "")}
+            className={cn("h-8 rounded-lg px-3 text-xs font-semibold transition-colors", filter === "present" ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300" : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-blue-950/70")}
           >
             No Absences
             {data && (
@@ -358,7 +358,7 @@ export default function FactoryWorkerAttendanceReport() {
             size="sm"
             onClick={() => setFilter("absent")}
             data-testid="filter-absent"
-            className={cn("h-7 px-3 text-xs rounded-xs", filter === "absent" ? "status-danger font-semibold" : "")}
+            className={cn("h-8 rounded-lg px-3 text-xs font-semibold transition-colors", filter === "absent" ? "bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-300" : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-blue-950/70")}
           >
             Has Absences
             {data && (
@@ -376,7 +376,7 @@ export default function FactoryWorkerAttendanceReport() {
             size="sm"
             onClick={() => setHideFullAbsent((v) => !v)}
             data-testid="toggle-hide-full-absent"
-            className={cn("h-7 px-3 text-xs gap-1.5", hideFullAbsent ? "bg-muted font-semibold" : "")}
+            className={cn("h-9 gap-1.5 rounded-lg border-slate-200 px-3 text-xs font-semibold dark:border-blue-900/60 dark:bg-[#122037]", hideFullAbsent && "border-blue-400 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-500/15 dark:text-blue-300")}
           >
             {hideFullAbsent ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
             {hideFullAbsent ? "Show" : "Hide"} fully absent
@@ -395,7 +395,7 @@ export default function FactoryWorkerAttendanceReport() {
           size="sm"
           onClick={() => setEditMode((v) => !v)}
           data-testid="toggle-edit-mode"
-          className={cn("h-7 px-3 text-xs gap-1.5", editMode ? "bg-muted font-semibold" : "")}
+          className={cn("h-9 gap-1.5 rounded-lg border-slate-200 px-3 text-xs font-semibold dark:border-blue-900/60 dark:bg-[#122037]", editMode && "border-blue-400 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-500/15 dark:text-blue-300")}
         >
           <Pencil className="h-3.5 w-3.5" />
           {editMode ? "Editing" : "Edit"}
@@ -437,21 +437,21 @@ export default function FactoryWorkerAttendanceReport() {
           </div>
 
           {/* ── Summary cards ───────────────────────────────────────────────── */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground font-medium mb-1">Workers</p>
-                <p className="text-2xl font-bold tabular-nums" data-testid="stat-total-workers">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 print:grid-cols-5">
+            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:shadow-none border-blue-300/70 dark:border-blue-500/60 bg-gradient-to-br from-blue-50 via-blue-50/70 to-white dark:from-[#1a3866] dark:via-[#112848] dark:to-[#0d1b32]">
+              <CardContent className="flex min-h-[106px] items-center gap-3 p-4"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-blue-100 text-blue-600 dark:bg-blue-500/25 dark:text-blue-300"><UsersRound className="h-6 w-6" /></div><div className="min-w-0">
+                <p className="mb-1 text-xs font-medium text-muted-foreground">Workers</p>
+                <p className="text-2xl font-bold tabular-nums tracking-tight" data-testid="stat-total-workers">
                   {filteredWorkers.length}
                 </p>
-              </CardContent>
+              </div></CardContent>
             </Card>
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground font-medium mb-1">Attendance Rate</p>
+            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:shadow-none border-emerald-300/70 dark:border-emerald-500/60 bg-gradient-to-br from-emerald-50 via-emerald-50/70 to-white dark:from-[#104e44] dark:via-[#0b382f] dark:to-[#0a2527]">
+              <CardContent className="flex min-h-[106px] items-center gap-3 p-4"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"><CalendarCheck2 className="h-6 w-6" /></div><div className="min-w-0">
+                <p className="mb-1 text-xs font-medium text-muted-foreground">Attendance Rate</p>
                 <p
                   className={cn(
-                    "text-2xl font-bold tabular-nums",
+                    "text-2xl font-bold tabular-nums tracking-tight",
                     overallPct === null
                       ? "text-muted-foreground"
                       : overallPct >= 90
@@ -464,33 +464,33 @@ export default function FactoryWorkerAttendanceReport() {
                 >
                   {overallPct !== null ? `${overallPct}%` : "—"}
                 </p>
-              </CardContent>
+              </div></CardContent>
             </Card>
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground font-medium mb-1">Expected Salary</p>
-                <p className="text-xl font-bold tabular-nums text-foreground" data-testid="stat-expected-salary">
+            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:shadow-none border-violet-300/70 dark:border-violet-500/60 bg-gradient-to-br from-violet-50 via-violet-50/70 to-white dark:from-[#403061] dark:via-[#302448] dark:to-[#1b1a38]">
+              <CardContent className="flex min-h-[106px] items-center gap-3 p-4"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-violet-100 text-violet-700 dark:bg-violet-500/25 dark:text-violet-300"><Coins className="h-6 w-6" /></div><div className="min-w-0">
+                <p className="mb-1 text-xs font-medium text-muted-foreground">Expected Salary</p>
+                <p className="break-words text-xl font-bold tabular-nums tracking-tight text-foreground" data-testid="stat-expected-salary">
                   {salaryKpi ? fmtCurrency(salaryKpi.totalExpected) : "—"}
                 </p>
-              </CardContent>
+              </div></CardContent>
             </Card>
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground font-medium mb-1">Paid Salary</p>
+            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:shadow-none border-cyan-300/70 dark:border-cyan-500/60 bg-gradient-to-br from-cyan-50 via-cyan-50/70 to-white dark:from-[#0f4654] dark:via-[#103440] dark:to-[#0b2534]">
+              <CardContent className="flex min-h-[106px] items-center gap-3 p-4"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300"><HandCoins className="h-6 w-6" /></div><div className="min-w-0">
+                <p className="mb-1 text-xs font-medium text-muted-foreground">Paid Salary</p>
                 <p
-                  className="text-xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400"
+                  className="break-words text-xl font-bold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400"
                   data-testid="stat-paid-salary"
                 >
                   {salaryKpi ? fmtCurrency(salaryKpi.totalPaid) : "—"}
                 </p>
-              </CardContent>
+              </div></CardContent>
             </Card>
-            <Card className="border-amber-300 dark:border-amber-700">
-              <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground font-medium mb-1">Remaining Salary</p>
+            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:shadow-none border-amber-300/80 dark:border-amber-500/70 bg-gradient-to-br from-amber-50 via-amber-50/70 to-white dark:from-[#54411e] dark:via-[#3c301c] dark:to-[#29241b]">
+              <CardContent className="flex min-h-[106px] items-center gap-3 p-4"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"><Wallet className="h-6 w-6" /></div><div className="min-w-0">
+                <p className="mb-1 text-xs font-medium text-muted-foreground">Remaining Salary</p>
                 <p
                   className={cn(
-                    "text-xl font-bold tabular-nums",
+                    "break-words text-xl font-bold tabular-nums tracking-tight",
                     !salaryKpi
                       ? "text-muted-foreground"
                       : salaryKpi.totalRemaining < 0
@@ -510,13 +510,13 @@ export default function FactoryWorkerAttendanceReport() {
                 {salaryKpi && salaryKpi.totalRemaining < 0 && (
                   <p className="text-[11px] text-blue-500 dark:text-blue-400 mt-0.5">Overpaid</p>
                 )}
-              </CardContent>
+              </div></CardContent>
             </Card>
           </div>
 
           {/* ── Edit mode hint ───────────────────────────────────────────────── */}
           {editMode && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2 print:hidden">
+            <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/70 px-4 py-3 text-xs text-muted-foreground dark:border-blue-800/50 dark:bg-blue-900/20 print:hidden">
               <Pencil className="h-3.5 w-3.5 shrink-0" />
               Click a cell to cycle: P → A → L → H → Clear. Or press{" "}
               <kbd className="mx-1 px-1 rounded-sm border text-[11px]">P</kbd>{" "}
@@ -542,24 +542,24 @@ export default function FactoryWorkerAttendanceReport() {
             </Card>
           ) : (
             /* ── Attendance grid ────────────────────────────────────────────── */
-            <div className="overflow-auto rounded-md border print:overflow-visible print:border-0 print:max-h-none">
+            <div className="overflow-auto rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)] dark:border-blue-900/70 dark:bg-[#0c172a] dark:shadow-[0_16px_32px_rgba(0,0,0,0.2)] print:max-h-none print:overflow-visible print:rounded-none print:border-0 print:bg-white print:shadow-none">
               <table className="w-full text-xs border-collapse min-w-max print:text-[11px]">
                 <thead>
-                  <tr className="bg-muted print:bg-gray-100">
-                    <th className="text-left px-2 py-2 font-medium border-b border-r whitespace-nowrap sticky top-0 left-0 bg-muted z-30 min-w-[70px] print:bg-gray-100">
+                  <tr className="bg-slate-100 text-slate-700 dark:bg-[#172b49] dark:text-slate-200 print:bg-gray-100 print:text-black">
+                    <th className="sticky left-0 top-0 z-30 min-w-[70px] whitespace-nowrap border-b border-r border-slate-200 bg-slate-100 px-3 py-3 text-left font-semibold dark:border-[#2b4060] dark:bg-[#172b49] print:bg-gray-100">
                       Code
                     </th>
-                    <th className="text-left px-3 py-2 font-medium border-b border-r whitespace-nowrap sticky top-0 left-[70px] bg-muted z-30 min-w-[160px] print:bg-gray-100">
+                    <th className="sticky left-[70px] top-0 z-30 min-w-[160px] whitespace-nowrap border-b border-r border-slate-200 bg-slate-100 px-3 py-3 text-left font-semibold dark:border-[#2b4060] dark:bg-[#172b49] print:bg-gray-100">
                       Worker
                     </th>
                     {data.dates.map(({ date, label, abbr, isWeekend }) => (
                       <th
                         key={date}
                         className={cn(
-                          "text-center px-0 py-1 font-medium border-b border-r w-8 min-w-[32px] sticky top-0 z-20",
+                          "sticky top-0 z-20 w-8 min-w-[32px] border-b border-r border-slate-200 px-0 py-2 text-center font-semibold dark:border-[#2b4060]",
                           isWeekend
-                            ? "text-amber-600 dark:text-amber-400 bg-amber-50/60 dark:bg-amber-900/10"
-                            : "bg-muted"
+                            ? "bg-amber-50/80 text-amber-600 dark:bg-[#3d301f] dark:text-amber-300"
+                            : "bg-slate-100 dark:bg-[#172b49]"
                         )}
                       >
                         <div className="flex flex-col items-center gap-0 leading-tight">
@@ -568,13 +568,13 @@ export default function FactoryWorkerAttendanceReport() {
                         </div>
                       </th>
                     ))}
-                    <th className="text-center px-2 py-2 font-medium border-b border-r whitespace-nowrap min-w-[52px] text-emerald-700 dark:text-emerald-400 sticky top-0 z-20 bg-muted print:bg-gray-100">
+                    <th className="sticky top-0 z-20 min-w-[52px] whitespace-nowrap border-b border-r border-slate-200 bg-slate-100 px-2 py-3 text-center font-bold text-emerald-700 dark:border-[#2b4060] dark:bg-[#172b49] dark:text-emerald-300 print:bg-gray-100">
                       P
                     </th>
-                    <th className="text-center px-2 py-2 font-medium border-b border-r whitespace-nowrap min-w-[52px] text-red-500 dark:text-red-400 sticky top-0 z-20 bg-muted print:bg-gray-100">
+                    <th className="sticky top-0 z-20 min-w-[52px] whitespace-nowrap border-b border-r border-slate-200 bg-slate-100 px-2 py-3 text-center font-bold text-red-500 dark:border-[#2b4060] dark:bg-[#172b49] dark:text-red-400 print:bg-gray-100">
                       A
                     </th>
-                    <th className="text-center px-2 py-2 font-medium border-b whitespace-nowrap min-w-[52px] sticky top-0 z-20 bg-muted print:bg-gray-100">
+                    <th className="sticky top-0 z-20 min-w-[52px] whitespace-nowrap border-b border-slate-200 bg-slate-100 px-2 py-3 text-center font-bold dark:border-[#2b4060] dark:bg-[#172b49] print:bg-gray-100">
                       %
                     </th>
                   </tr>
@@ -584,21 +584,21 @@ export default function FactoryWorkerAttendanceReport() {
                   {filteredWorkers.map((worker, idx) => (
                     <tr
                       key={worker.id}
-                      className={cn("border-b transition-colors", idx % 2 === 0 ? "bg-background" : "bg-muted/20")}
+                      className={cn("border-b border-slate-100 transition-colors hover:bg-blue-50/70 dark:border-[#253651] dark:hover:bg-[#1a3456]", idx % 2 === 0 ? "bg-white dark:bg-[#0c172a]" : "bg-slate-50/70 dark:bg-[#101e33]")}
                       data-testid={`row-worker-${worker.id}`}
                     >
                       <td
                         className={cn(
-                          "px-2 py-1.5 border-r sticky left-0 z-10 font-mono text-muted-foreground",
-                          idx % 2 === 0 ? "bg-background" : "bg-muted/20"
+                          "sticky left-0 z-10 border-r border-slate-100 px-3 py-2 font-mono text-muted-foreground dark:border-[#253651]",
+                          idx % 2 === 0 ? "bg-white dark:bg-[#0c172a]" : "bg-slate-50/70 dark:bg-[#101e33]"
                         )}
                       >
                         {worker.employeeCode || "—"}
                       </td>
                       <td
                         className={cn(
-                          "px-3 py-1.5 border-r sticky left-[70px] z-10 font-medium whitespace-nowrap",
-                          idx % 2 === 0 ? "bg-background" : "bg-muted/20"
+                          "sticky left-[70px] z-10 whitespace-nowrap border-r border-slate-100 px-3 py-2 font-semibold dark:border-[#253651]",
+                          idx % 2 === 0 ? "bg-white dark:bg-[#0c172a]" : "bg-slate-50/70 dark:bg-[#101e33]"
                         )}
                       >
                         <span className="truncate block max-w-[180px]" title={worker.fullName}>
@@ -612,7 +612,7 @@ export default function FactoryWorkerAttendanceReport() {
                           <td
                             key={date}
                             className={cn(
-                              "text-center px-0 py-1.5 border-r w-8",
+                              "w-8 border-r border-slate-100 px-0 py-2 text-center dark:border-[#253651]",
                               isWeekend ? "bg-amber-50/40 dark:bg-amber-900/5" : ""
                             )}
                             data-testid={`cell-${worker.id}-${date}`}
@@ -652,17 +652,17 @@ export default function FactoryWorkerAttendanceReport() {
                       })}
 
                       {/* Present count */}
-                      <td className="text-center px-2 py-1.5 border-r font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                      <td className="border-r border-slate-100 px-2 py-2 text-center font-bold tabular-nums text-emerald-700 dark:border-[#253651] dark:text-emerald-400">
                         {worker.presentCount}
                       </td>
                       {/* Absent count */}
-                      <td className="text-center px-2 py-1.5 border-r font-semibold tabular-nums text-red-500 dark:text-red-400">
+                      <td className="border-r border-slate-100 px-2 py-2 text-center font-bold tabular-nums text-red-500 dark:border-[#253651] dark:text-red-400">
                         {worker.absentCount}
                       </td>
                       {/* Attendance % */}
                       <td
                         className={cn(
-                          "text-center px-2 py-1.5 font-semibold tabular-nums",
+                          "px-2 py-2 text-center font-bold tabular-nums",
                           worker.attendancePct === null
                             ? "text-muted-foreground"
                             : worker.attendancePct >= 90
@@ -678,9 +678,9 @@ export default function FactoryWorkerAttendanceReport() {
                   ))}
 
                   {/* ── Daily summary row ────────────────────────────────────── */}
-                  <tr className="border-t-2 bg-muted/60 font-semibold sticky bottom-0 print:bg-gray-100">
-                    <td className="px-2 py-2 border-r sticky left-0 bg-muted/60 z-10 text-muted-foreground text-[11px] print:bg-gray-100" />
-                    <td className="px-3 py-2 border-r sticky left-[70px] bg-muted/60 z-10 text-muted-foreground text-[11px] whitespace-nowrap print:bg-gray-100">
+                  <tr className="sticky bottom-0 border-t-2 border-blue-200 bg-blue-50 font-semibold dark:border-blue-900/70 dark:bg-[#183050] print:bg-gray-100">
+                    <td className="px-2 py-2 border-r sticky left-0 bg-blue-50 dark:bg-[#183050] z-10 text-muted-foreground text-[11px] print:bg-gray-100" />
+                    <td className="px-3 py-2 border-r sticky left-[70px] bg-blue-50 dark:bg-[#183050] z-10 text-muted-foreground text-[11px] whitespace-nowrap print:bg-gray-100">
                       Daily Total
                     </td>
                     {data.dates.map(({ date }) => {
@@ -715,7 +715,7 @@ export default function FactoryWorkerAttendanceReport() {
           )}
 
           {/* ── Legend ──────────────────────────────────────────────────────── */}
-          <div className="flex items-center gap-4 text-xs text-muted-foreground print:hidden">
+          <div className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-white/70 px-4 py-3 text-xs text-muted-foreground dark:border-blue-900/50 dark:bg-[#111f36]/80 print:hidden">
             <span className="flex items-center gap-1.5">
               <span className="inline-flex items-center justify-center w-4 h-4 rounded-xs bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold">
                 P
