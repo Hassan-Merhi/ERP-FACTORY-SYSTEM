@@ -406,9 +406,12 @@ let migrationsDone = false;
             }
           }
         } catch (inspectionError: unknown) {
-          logger.warn("[startup] Historical production bonus inspection unavailable; serving without changing posted vouchers", {
-            error: getErrorMessage(inspectionError),
-          });
+          logger.warn(
+            "[startup] Historical production bonus inspection unavailable; serving without changing posted vouchers",
+            {
+              error: getErrorMessage(inspectionError),
+            }
+          );
         }
       }
       // The Container Planner's registered migrations are never applied by
