@@ -9,9 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  ArrowRight, Boxes, CalendarDays, ChartNoAxesColumnIncreasing, ChevronRight,
-  Download, FilterX, Layers3, MapPin, Package, Search, ShoppingCart,
-  TrendingUp, Users, Warehouse,
+  ArrowRight, Boxes, CalendarDays, ChartNoAxesColumnIncreasing,
+  Download, FilterX, MapPin, Package, Search, ShoppingCart,
+  TrendingUp, Warehouse,
 } from "lucide-react";
 
 interface Option { id: number; name: string }
