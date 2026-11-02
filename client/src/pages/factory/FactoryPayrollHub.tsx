@@ -47,9 +47,9 @@ export default function FactoryPayrollHub() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="shrink-0 border-b border-border/60 bg-gradient-to-br from-background via-background to-blue-50/60 dark:to-blue-950/30">
+      <div className="relative shrink-0 overflow-hidden border-b border-border/70 bg-gradient-to-r from-blue-500/10 via-indigo-500/5 to-background dark:from-blue-900/30 dark:via-indigo-900/20 dark:to-background">
         {/* Shared page-header grammar (accent bar, icon, subtitle) like the ERP and Properties pages. */}
-        <div className="px-4 pt-4 sm:px-5 [&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-3">
+        <div className="relative z-10 px-4 pt-4 sm:px-5 [&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-3">
           <PageHeader
             title="Payroll & Benefits"
             subtitle={tr("hubDescription")}
@@ -58,15 +58,15 @@ export default function FactoryPayrollHub() {
           />
         </div>
 
-        <div className="erp-mobile-scroll-tabs px-4 pb-3 sm:px-5">
-          <TabsList className="w-max min-w-full rounded-2xl border-border/60 bg-muted/40 p-1 shadow-sm dark:bg-slate-900/60 sm:min-w-0 sm:w-fit" aria-label="Factory sections">
+        <div className="erp-mobile-scroll-tabs relative z-10 px-4 pb-3 sm:px-5">
+          <TabsList className="w-max min-w-full border-border/60 bg-background/65 shadow-sm backdrop-blur-sm sm:min-w-0 sm:w-fit" aria-label="Factory sections">
             {tabs.map(({ key, label, Icon }) => {
               const active = activeSection === key;
               return (
                 <PillTabButton
                   key={key}
                   selected={active}
-                  className={active ? "rounded-xl bg-blue-600 text-white shadow-sm shadow-blue-500/20 hover:text-white dark:bg-blue-600" : "rounded-xl hover:text-foreground"}
+                  className={active ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md hover:text-white" : ""}
                   data-testid={`tab-people-${key}`}
                   onClick={() => setActiveSection(key)}
                 >
@@ -79,7 +79,7 @@ export default function FactoryPayrollHub() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto bg-background dark:bg-gradient-to-br dark:from-background dark:to-slate-950/30">
+      <div className="min-h-0 flex-1 overflow-auto bg-background">
         {sections.length === 0 && (
           <div className="p-6 text-sm text-muted-foreground">
             No Payroll & Benefits tabs are available for this user.
