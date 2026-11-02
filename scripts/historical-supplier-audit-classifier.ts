@@ -14,6 +14,8 @@ export interface HistoricalSupplierVoucherEvidence {
   receivedKg: string;
   usedKg: string;
   remainingKg: string;
+  overusedKg?: string;
+  unvaluedRawRows?: number;
   relatedExpenseCount: number;
   storedArrivalDate?: string | null;
   firstOffloadedAt?: string | null;
@@ -42,6 +44,10 @@ export function classifyHistoricalSupplierVoucher(row: HistoricalSupplierVoucher
     flags.push("RAW_MATERIAL_ALREADY_CONSUMED");
   }
   if (row.relatedExpenseCount > 0) flags.push("OTHER_FACTORY_EXPENSE_LINES_CHECK_FOR_OVERLAP");
+  if (row.overusedKg != null && amount(row.overusedKg).gt(0)) {
+    flags.push("SOURCE_RAW_STOCK_OVERUSED_KG_REQUIRES_REVIEW");
+  }
+  if ((row.unvaluedRawRows ?? 0) > 0) flags.push("RAW_STOCK_MISSING_USD_COST");
   if (row.expectedSupplierId !== undefined && row.linkedSupplierId !== undefined &&
       row.expectedSupplierId !== row.linkedSupplierId) {
     flags.push("SOURCE_SUPPLIER_MISMATCH");

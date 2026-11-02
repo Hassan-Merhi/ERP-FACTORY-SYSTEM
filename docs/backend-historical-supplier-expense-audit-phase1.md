@@ -46,3 +46,14 @@ Two vouchers remain future-dated as of Nov 2, 2026: MSNU8402330 (Nov 11), MSBU75
 ## Later correction gate (NOT implemented)
 
 Only after independent invoice, historical inventory, COGS and accounting-offset proof should a separate reviewed, auditable GL-only journal be considered. Correction must have no supplier, customer, bank/cash or stock movement lines, and must preserve supplier balances, openings, advances and payments. Already consumed goods must not be capitalized as current inventory. Neither deleting vouchers nor hiding expense accounts is acceptable. This audit cannot and does not post any correction.
+### Raw-material valuation correction (read-only verification)
+
+The first audit draft incorrectly used the legacy `factory_raw_stock.quantity_kg` as the remaining amount. The actual factory stock valuation uses **each positive `received_kg - used_kg` row**, multiplied by the saved USD cost per kg; it excludes overused negative rows from the raw asset. The private audit now follows that exact rule and reports negative overusage separately.
+
+The 38 historical goods containers, checked on November 2, have:
+- 30 containers with no positive raw balance.
+- 8 containers with **136,971 kg** of positive raw balance across active raw rows, valued at **USD 124,451.43** using the currently saved cost/kg.
+- One separate overused source (container 23 / Germany), **3,516 kg** below zero. This must be diagnosed separately, not subtracted from remaining raw stock.
+- Netting the positive and negative quantities yields 133,455 kg, but that is **not the valuation method** and must never be used to book stock or expense.
+
+This is current operational stock valuation, not historical proof of the October 14 inventory balance or a proven USD 124,451.43 expense overstatement. Do not post a capitalization/correction based on this snapshot alone.

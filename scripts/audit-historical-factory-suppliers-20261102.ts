@@ -131,7 +131,13 @@ export async function auditHistoricalFactorySuppliers() {
       [
         "SELECT container_id,COALESCE(SUM(received_kg),0)::text AS received_kg,",
         "COALESCE(SUM(used_kg),0)::text AS used_kg,",
-        "COALESCE(SUM(quantity_kg),0)::text AS remaining_kg,",
+        // Match factoryStockValuation: each positive (received_kg - used_kg)
+        // counts as stock. The legacy quantity_kg is NOT remaining stock.
+        "COALESCE(SUM(GREATEST(received_kg-used_kg,0)),0)::text AS remaining_kg,",
+        "COALESCE(SUM(GREATEST(used_kg-received_kg,0)),0)::text AS overused_kg,",
+        "COALESCE(SUM(CASE WHEN received_kg>used_kg THEN (received_kg-used_kg)*cost_per_kg_usd ELSE 0 END),0)::text AS remaining_value_usd,",
+        "COUNT(*) FILTER(WHERE received_kg>used_kg AND cost_per_kg_usd IS NULL)::int AS unvalued_raw_rows,",
+        "COALESCE(SUM(quantity_kg),0)::text AS legacy_quantity_kg,",
         "MIN(offloaded_at)::text AS first_offloaded_at",
         "FROM factory_raw_stock WHERE company_id=$1 AND container_id=ANY($2::int[])",
         "AND deleted_at IS NULL GROUP BY container_id",
@@ -236,6 +242,8 @@ export async function auditHistoricalFactorySuppliers() {
         receivedKg: String(raw?.received_kg ?? "0"),
         usedKg: String(raw?.used_kg ?? "0"),
         remainingKg: String(raw?.remaining_kg ?? "0"),
+        overusedKg: String(raw?.overused_kg ?? "0"),
+        unvaluedRawRows: num(raw?.unvalued_raw_rows),
         relatedExpenseCount: other.length,
       });
       return {
@@ -264,6 +272,10 @@ export async function auditHistoricalFactorySuppliers() {
         receivedKg: String(raw?.received_kg ?? "0"),
         usedKg: String(raw?.used_kg ?? "0"),
         remainingKg: String(raw?.remaining_kg ?? "0"),
+        overusedKg: String(raw?.overused_kg ?? "0"),
+        remainingRawValueUsd: num(raw?.unvalued_raw_rows) > 0 ? null : String(raw?.remaining_value_usd ?? "0"),
+        unvaluedRawRows: num(raw?.unvalued_raw_rows),
+        legacyQuantityKgNotValuation: String(raw?.legacy_quantity_kg ?? "0"),
         firstOffloadedAt: raw?.first_offloaded_at ?? null,
         receiptRecordCount: num(receipt?.receipt_count),
         firstReceiptDate: receipt?.first_receipt_date ?? null,
