@@ -145,7 +145,9 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
 
   return (
     <Switch>
-      <Route path="/factory/daybook" component={FactoryDaybook} />
+      <Route path="/factory/daybook">
+        {() => (isDeveloper ? <FactoryDaybook /> : <Redirect replace to={factoryDefaultPage} />)}
+      </Route>
       <Route path="/factory/transporters" component={FactoryTransporters} />
       <Route path="/factory/finance">
         <Redirect replace to="/factory/payroll-hub?section=workers" />
@@ -210,17 +212,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       {isDeveloper && <Route path="/factory/accounting/dashboard" component={UnifiedAccountingDashboard} />}
       {isDeveloper && <Route path="/factory/accounting/rollout" component={UnifiedAccountingRollout} />}
       <Route path="/factory/cost-centers">
-        {() =>
-          (isAdminOwnerOrDev || user?.role === "Manager") &&
-          (!myAccess ||
-            myAccess.fullAccess ||
-            myAccess.pageKeys?.includes("factory/cost-centers") ||
-            myAccess.pageKeys?.includes("factory/accounts")) ? (
-            <CostCenters />
-          ) : (
-            <Redirect replace to={factoryDefaultPage} />
-          )
-        }
+        {() => (isDeveloper ? <CostCenters /> : <Redirect replace to={factoryDefaultPage} />)}
       </Route>
       {isAdminOwnerOrDev && <Route path="/factory/account-groups" component={AccountGroups} />}
       <Route path="/factory/agents" component={Agents} />
