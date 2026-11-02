@@ -9,6 +9,7 @@ import Decimal from "decimal.js";
 export interface FreightOffsetEvidence {
   containerId: number;
   freightVoucherCount: number;
+  freightSourceAccountCodes?: string;
   freightDebitUsd: string;
   freightCreditUsd: string;
   chargeClearingDebitUsd: string;
@@ -28,11 +29,15 @@ export function classifyFreightOffsetEvidence(row: FreightOffsetEvidence) {
   } else if (debit.gt(0) || credit.gt(0)) {
     flags.push("FREIGHT_ONLY_ONE_SIDE_RECORDED");
   }
+  if (row.freightVoucherCount > 0 && debit.isZero() && credit.isZero()) {
+    flags.push("FREIGHT_SOURCE_POSTED_TO_OTHER_LEDGER_ACCOUNTS");
+  }
   if (row.duplicateImportVoucherCount > 0) flags.push("SECOND_IMPORT_VOUCHER_SAME_CONTAINER_REQUIRES_REVIEW");
   if (!amount(row.chargeClearingDebitUsd).isZero()) flags.push("FACTORY_CHARGES_PAYABLE_USED_AS_CLEARING_ACCOUNT");
   return {
     containerId: row.containerId,
     sourceFreightVouchers: row.freightVoucherCount,
+    freightSourceAccountCodes: row.freightSourceAccountCodes ?? null,
     freightDebitUsd: debit.toFixed(2),
     freightCreditUsd: credit.toFixed(2),
     freightNetDebitUsd: delta.toFixed(2),
