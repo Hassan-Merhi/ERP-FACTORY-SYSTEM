@@ -45,50 +45,50 @@ function FactoryPOSScreen() {
             subtitle="Quick sales for factory operations"
             icon={<ShoppingCart className="h-5 w-5 text-orange-500" />}
           >
-        <div className="flex flex-wrap gap-1 sm:gap-2">
-          {editSaleId ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => model.navigate("/factory/pos")}
-              data-testid="button-new-sale"
-            >
-              <Plus className="h-4 w-4 sm:mr-1" />
-              <span className="hidden sm:inline">New Sale</span>
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => model.setShowHistory((h) => !h)}
-              data-testid="button-toggle-history"
-            >
-              <History className="h-4 w-4 sm:mr-1" />
-              <span className="hidden sm:inline">History</span>
-            </Button>
-          )}
-          <Button
-            size="sm"
-            onClick={model.handleSubmit}
-            disabled={model.validRows.length === 0 || isSaving}
-            className="gap-1 bg-orange-600 text-white hover:bg-orange-700 dark:bg-orange-500 dark:hover:bg-orange-600 sm:gap-2"
-            data-testid="button-complete-sale"
-          >
-            {isSaving ? (
-              "..."
-            ) : editSaleId ? (
-              <>
-                <span className="hidden sm:inline">Update</span>
-                <Pencil className="h-4 w-4" />
-              </>
-            ) : (
-              <>
-                <span className="hidden sm:inline">Save</span>
-                <Check className="h-4 w-4" />
-              </>
-            )}
-          </Button>
-        </div>
+            <div className="flex flex-wrap gap-1 sm:gap-2">
+              {editSaleId ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => model.navigate("/factory/pos")}
+                  data-testid="button-new-sale"
+                >
+                  <Plus className="h-4 w-4 sm:mr-1" />
+                  <span className="hidden sm:inline">New Sale</span>
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => model.setShowHistory((h) => !h)}
+                  data-testid="button-toggle-history"
+                >
+                  <History className="h-4 w-4 sm:mr-1" />
+                  <span className="hidden sm:inline">History</span>
+                </Button>
+              )}
+              <Button
+                size="sm"
+                onClick={model.handleSubmit}
+                disabled={model.validRows.length === 0 || isSaving}
+                className="gap-1 bg-orange-600 text-white hover:bg-orange-700 dark:bg-orange-500 dark:hover:bg-orange-600 sm:gap-2"
+                data-testid="button-complete-sale"
+              >
+                {isSaving ? (
+                  "..."
+                ) : editSaleId ? (
+                  <>
+                    <span className="hidden sm:inline">Update</span>
+                    <Pencil className="h-4 w-4" />
+                  </>
+                ) : (
+                  <>
+                    <span className="hidden sm:inline">Save</span>
+                    <Check className="h-4 w-4" />
+                  </>
+                )}
+              </Button>
+            </div>
           </PageHeader>
         </div>
       </section>
