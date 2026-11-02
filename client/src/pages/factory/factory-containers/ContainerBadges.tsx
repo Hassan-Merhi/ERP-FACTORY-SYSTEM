@@ -8,13 +8,13 @@ export function OtwCurrencyInline({ amounts }: { amounts: Record<string, number>
   const entries = Object.entries(amounts).filter(([, v]) => v > 0);
   if (entries.length === 0) return <span className="text-muted-foreground">—</span>;
   return (
-    <div className="flex flex-col items-end gap-0.5">
+    <span className="flex flex-col items-end gap-0.5">
       {entries.map(([ccy, amt]) => (
         <span key={ccy} className="font-mono text-base font-semibold whitespace-nowrap">
           {otwFmtCcy(otwCcySymbol(ccy), amt)}
         </span>
       ))}
-    </div>
+    </span>
   );
 }
 
