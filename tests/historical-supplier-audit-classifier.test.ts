@@ -61,6 +61,21 @@ describe("Historical supplier backend audit classification", () => {
     expect(flags).toContain("SOURCE_VOUCHER_CURRENCY_MISMATCH");
     expect(flags).toContain("VOUCHER_NOT_BALANCED");
   });
+  it("does not label raw stock with an actual remaining balance as fully consumed", () => {
+    const flags = classifyHistoricalSupplierVoucher({ ...base,
+      receivedKg: "20740", usedKg: "0", remainingKg: "20740",
+    });
+    expect(flags).not.toContain("RAW_MATERIAL_ALREADY_CONSUMED");
+  });
+  it("flags overused raw rows and missing stock valuation without inventing a correction", () => {
+    const flags = classifyHistoricalSupplierVoucher({ ...base,
+      receivedKg: "0", usedKg: "3516", remainingKg: "0",
+      overusedKg: "3516", unvaluedRawRows: 1,
+    });
+    expect(flags).toContain("SOURCE_RAW_STOCK_OVERUSED_KG_REQUIRES_REVIEW");
+    expect(flags).toContain("RAW_STOCK_MISSING_USD_COST");
+    expect(flags).not.toContain("RAW_MATERIAL_ALREADY_CONSUMED");
+  });
   it("flags possible expense overlap but does not propose a journal", () => {
     const flags = classifyHistoricalSupplierVoucher({ ...base, relatedExpenseCount: 2 });
     expect(flags).toContain("OTHER_FACTORY_EXPENSE_LINES_CHECK_FOR_OVERLAP");
