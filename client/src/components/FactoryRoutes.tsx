@@ -112,12 +112,12 @@ import {
   RawStockRecalculate,
   Settings,
   SpreadsheetEditor,
-  StockQuery,
   VoucherDetail,
   VoucherEdit,
   WipersReEntry,
 } from "@/lazyPages";
 
+const FactoryStockQueryWorkspace = lazy(() => import("@/pages/factory/FactoryStockQueryWorkspace"));
 const AccountGroups = lazy(() => import("@/pages/AccountGroups"));
 const FactoryInvoiceDetailBilingual = lazy(() => import("@/pages/factory/FactoryInvoiceDetailBilingual"));
 const FactoryProductionBonuses = lazy(() => import("@/pages/factory/FactoryProductionBonuses"));
@@ -194,7 +194,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       </Route>
       <Route path="/factory/stock-bale-list" component={FactoryStockBaleList} />
       <Route path="/factory/stock-query/:id" component={FactoryStockItemDetail} />
-      <Route path="/factory/stock-query" component={StockQuery} />
+      <Route path="/factory/stock-query" component={FactoryStockQueryWorkspace} />
       <Route path="/factory/contacts" component={FactoryContacts} />
       <Route path="/factory/accounts" component={FactoryAccounts} />
       {isDeveloper && <Route path="/factory/accounting/open-items" component={AccountingOpenItems} />}

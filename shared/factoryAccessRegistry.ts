@@ -235,6 +235,7 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     label: "Stock Query",
     group: "Inventory",
     route: "/factory/stock-query",
+    sidebar: true,
     landing: true,
   },
   {
