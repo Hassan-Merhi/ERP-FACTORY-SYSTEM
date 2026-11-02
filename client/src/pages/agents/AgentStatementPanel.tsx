@@ -2,8 +2,8 @@
  * Agent statement panel (right side of the Agent Ledger page): header with
  * balance, period filter, stats grid, ledger table, and print output.
  *
- * Extracted from pages/Agents.tsx; markup, calculations, styling, and test
- * ids are unchanged.
+ * Extracted from pages/Agents.tsx. The presentation is theme-aware;
+ * calculations, printed statement values, actions, and test ids are preserved.
  */
 import { useMemo, useRef } from "react";
 import { TrendingUp, TrendingDown, X, FileDown, Printer, ArrowRightLeft, ArrowLeft, Store, Layers3, ArrowDownRight, ArrowUpRight, Flag } from "lucide-react";
@@ -116,36 +116,36 @@ export function AgentStatementPanel({
             </div>
           )}
           <div className="min-w-0">
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <h2
-              className={`${phone ? "wrap-break-word text-lg" : "text-2xl"} font-extrabold tracking-tight text-slate-900 dark:text-slate-50`}
-              data-testid="text-agent-account-name"
-            >
-              {selectedAccount.name}
-            </h2>
-            <Badge
-              variant="secondary"
-              className="no-default-active-elevate rounded-lg border border-blue-200 bg-blue-100 px-2.5 py-1 text-xs font-bold capitalize text-blue-700 dark:border-blue-400/20 dark:bg-blue-600/25 dark:text-blue-200"
-            >
-              {selectedAccount.type}
-            </Badge>
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            {selectedAccount.balanceSide?.toLowerCase() === "cr" ? (
-              <TrendingDown className="h-4 w-4 text-red-500 dark:text-red-400" />
-            ) : (
-              <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-            )}
-            <span className="font-mono text-lg font-extrabold tabular-nums text-slate-900 dark:text-white" data-testid="text-agent-balance">
-              {fxWallet
-                ? `EUR ${Number(fxWallet.state.eur).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                : formatAmount(Math.abs(selectedAccount.balance))}
-            </span>
-            <span className={`text-xs font-semibold ${drCrClass(selectedAccount.balanceSide)}`}>
-              {fxWallet ? (Number(fxWallet.state.eur) >= 0 ? "Dr" : "Cr") : (selectedAccount.balanceSide ?? "")}
-            </span>
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{fxWallet ? "native EUR balance" : "current balance"}</span>
-          </div>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h2
+                className={`${phone ? "wrap-break-word text-lg" : "text-2xl"} font-extrabold tracking-tight text-slate-900 dark:text-slate-50`}
+                data-testid="text-agent-account-name"
+              >
+                {selectedAccount.name}
+              </h2>
+              <Badge
+                variant="secondary"
+                className="no-default-active-elevate rounded-lg border border-blue-200 bg-blue-100 px-2.5 py-1 text-xs font-bold capitalize text-blue-700 dark:border-blue-400/20 dark:bg-blue-600/25 dark:text-blue-200"
+              >
+                {selectedAccount.type}
+              </Badge>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {selectedAccount.balanceSide?.toLowerCase() === "cr" ? (
+                <TrendingDown className="h-4 w-4 text-red-500 dark:text-red-400" />
+              ) : (
+                <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              )}
+              <span className="font-mono text-lg font-extrabold tabular-nums text-slate-900 dark:text-white" data-testid="text-agent-balance">
+                {fxWallet
+                  ? `EUR ${Number(fxWallet.state.eur).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : formatAmount(Math.abs(selectedAccount.balance))}
+              </span>
+              <span className={`text-xs font-semibold ${drCrClass(selectedAccount.balanceSide)}`}>
+                {fxWallet ? (Number(fxWallet.state.eur) >= 0 ? "Dr" : "Cr") : (selectedAccount.balanceSide ?? "")}
+              </span>
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{fxWallet ? "native EUR balance" : "current balance"}</span>
+            </div>
           </div>
         </div>
         {phone ? (
@@ -249,21 +249,36 @@ export function AgentStatementPanel({
       {/* Stats grid */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         <div className="relative space-y-2 overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-sky-50 p-4 shadow-sm dark:border-sky-500/35 dark:from-[#163e68] dark:to-[#0d2545]">
-          <div className="flex items-center justify-between gap-2"><p className="text-xs font-bold uppercase tracking-wider text-sky-700 dark:text-sky-200">Opening</p><span className="rounded-xl bg-sky-100 p-2 text-sky-600 dark:bg-sky-500/20 dark:text-sky-300"><Layers3 className="h-4 w-4" aria-hidden="true" /></span></div>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-bold uppercase tracking-wider text-sky-700 dark:text-sky-200">Opening</p>
+            <span className="rounded-xl bg-sky-100 p-2 text-sky-600 dark:bg-sky-500/20 dark:text-sky-300">
+              <Layers3 className="h-4 w-4" aria-hidden="true" />
+            </span>
+          </div>
           <p className="break-words font-mono text-lg font-extrabold leading-tight tracking-tight tabular-nums text-slate-900 dark:text-white">
             {formatAmount(Math.abs(openingBalance))}
           </p>
           <p className="text-xs text-muted-foreground">{openingSide}</p>
         </div>
         <div className="relative space-y-2 overflow-hidden rounded-2xl border border-rose-200 bg-gradient-to-br from-rose-50 to-red-50 p-4 shadow-sm dark:border-rose-500/45 dark:from-[#542238] dark:to-[#361725]">
-          <div className="flex items-center justify-between gap-2"><p className="text-xs font-bold uppercase tracking-wider text-red-700 dark:text-red-200">Debit</p><span className="rounded-xl bg-red-100 p-2 text-red-600 dark:bg-red-400/20 dark:text-red-200"><ArrowDownRight className="h-4 w-4" aria-hidden="true" /></span></div>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-bold uppercase tracking-wider text-red-700 dark:text-red-200">Debit</p>
+            <span className="rounded-xl bg-red-100 p-2 text-red-600 dark:bg-red-400/20 dark:text-red-200">
+              <ArrowDownRight className="h-4 w-4" aria-hidden="true" />
+            </span>
+          </div>
           <p className="break-words font-mono text-lg font-extrabold leading-tight tracking-tight tabular-nums text-red-700 dark:text-red-100">
             {formatAmount(periodDebit)}
           </p>
           <p className="text-xs text-muted-foreground">this period</p>
         </div>
         <div className="relative space-y-2 overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-green-50 p-4 shadow-sm dark:border-emerald-500/45 dark:from-[#0b5038] dark:to-[#073324]">
-          <div className="flex items-center justify-between gap-2"><p className="text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-200">Credit</p><span className="rounded-xl bg-emerald-100 p-2 text-emerald-600 dark:bg-emerald-400/20 dark:text-emerald-200"><ArrowUpRight className="h-4 w-4" aria-hidden="true" /></span></div>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-200">Credit</p>
+            <span className="rounded-xl bg-emerald-100 p-2 text-emerald-600 dark:bg-emerald-400/20 dark:text-emerald-200">
+              <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+            </span>
+          </div>
           <p className="break-words font-mono text-lg font-extrabold leading-tight tracking-tight tabular-nums text-emerald-700 dark:text-emerald-100">
             {formatAmount(periodCredit)}
           </p>
