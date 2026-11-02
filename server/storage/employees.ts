@@ -3,6 +3,7 @@ import { db } from "../db";
 import * as schema from "@shared/schema";
 import type { Employee, InsertEmployee } from "@shared/schema";
 import { MoneyDecimal, toMoney } from "../lib/money";
+import { loadEmployeeLedgerAmounts } from "../services/accounting/employeeLedgerAmounts";
 
 // Employees
 
@@ -126,11 +127,19 @@ export async function getAllEmployees(companyId: number): Promise<Employee[]> {
 export async function getEmployeesWithBalances(
   companyId: number
 ): Promise<Array<Employee & { calculatedBalance: string }>> {
-  const employees = await getAllEmployees(companyId);
+  const [employees, ledgerAmounts] = await Promise.all([
+    getAllEmployees(companyId),
+    loadEmployeeLedgerAmounts(companyId),
+  ]);
   return employees.map((employee) => {
+    const amounts = ledgerAmounts.get(employee.id);
+    const currentBalance = amounts?.currentBalance ?? "0.00";
     return {
       ...employee,
-      calculatedBalance: toMoney(employee.currentBalance).toFixed(2),
+      currentBalance,
+      calculatedBalance: currentBalance,
+      totalDeposits: amounts?.totalDeposits ?? "0.00",
+      totalWithdrawals: amounts?.totalWithdrawals ?? "0.00",
     };
   });
 }
