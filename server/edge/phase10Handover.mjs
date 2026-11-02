@@ -45,6 +45,7 @@ const STREAMS = Object.freeze([
   eventStream("stock", "factory_edge_stock_outbox"),
   eventStream("pos", "factory_edge_pos_outbox"),
   eventStream("receiving", "factory_edge_receiving_outbox"),
+  eventStream("attachments", "factory_edge_attachment_outbox"),
 ]);
 
 export async function summarizeLanEvidence(client, siteId) {

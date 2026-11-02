@@ -11,6 +11,7 @@ import {
   edgeBlocksWrite,
   edgeStatusPayload,
   PHASE9_PRESSING_CONFIRM_ROUTE,
+  PHASE9_ATTACHMENT_UPLOAD_ROUTE,
   PHASE9_POS_SALE_ROUTE,
   phase9ApprovedCaptureRoute,
   PHASE9_STOCK_ADJUST_ROUTE,
@@ -268,6 +269,10 @@ export function registerFactoryEdgeBoundary(app: Express): void {
         [PHASE9_POS_SALE_ROUTE]: {
           installed: outboxInstalled("factory_edge_pos_outbox"),
           code: "EDGE_PHASE9_POS_CAPTURE_NOT_INSTALLED",
+        },
+        [PHASE9_ATTACHMENT_UPLOAD_ROUTE]: {
+          installed: outboxInstalled("factory_edge_attachment_outbox"),
+          code: "EDGE_PHASE9_ATTACHMENT_CAPTURE_NOT_INSTALLED",
         },
         "POST /api/containers/:id/offload": {
           installed: outboxInstalled("factory_edge_receiving_outbox"),

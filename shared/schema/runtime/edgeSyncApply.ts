@@ -13,6 +13,7 @@ import {
   bigint,
   bigserial,
   char,
+  customType,
   date,
   foreignKey,
   integer,
@@ -28,6 +29,7 @@ import { vouchers } from "../erp/vouchers";
 import { factoryPressingConfirmations } from "../factory/pressing-machine-tracking";
 import { canonicalStockMovements } from "./inventory";
 import { containerOffloads } from "../containers";
+import { storedFiles } from "../erp/documents";
 
 // ── Phase 8 cloud voucher apply (server/edge/phase8ApplyStore.mjs) ─────────
 export const factoryEdgeApplyCursor = pgTable("factory_edge_apply_cursor", {
@@ -232,6 +234,70 @@ export const factoryEdgeReceivingOutbox = pgTable(
       foreignColumns: [containerOffloads.id],
     }).onDelete("restrict"),
   ]
+);
+
+// ── Phase 9 LAN attachment capture (server/edge/phase9AttachmentOutbox.ts) ─
+export const factoryEdgeAttachmentCounter = pgTable("factory_edge_attachment_counter", {
+  siteId: uuid("site_id").primaryKey().notNull(),
+  lastSequence: bigint("last_sequence", { mode: "bigint" }).notNull(),
+});
+
+export const factoryEdgeAttachmentOutbox = pgTable(
+  "factory_edge_attachment_outbox",
+  {
+    siteId: uuid("site_id").notNull(),
+    sequence: bigint("sequence", { mode: "bigint" }).notNull(),
+    operationId: uuid("operation_id").notNull(),
+    companyId: integer("company_id").notNull(),
+    actorUserId: text("actor_user_id").notNull(),
+    localFileId: integer("local_file_id").notNull(),
+    operationKind: text("operation_kind").notNull(),
+    payload: jsonb("payload").notNull(),
+    payloadSha256: char("payload_sha256", { length: 64 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (t) => [
+    primaryKey({ columns: [t.siteId, t.sequence] }),
+    unique().on(t.siteId, t.operationId),
+    unique().on(t.siteId, t.localFileId),
+    foreignKey({
+      name: "factory_edge_attachment_source_fk",
+      columns: [t.localFileId],
+      foreignColumns: [storedFiles.id],
+    }).onDelete("restrict"),
+  ]
+);
+
+export const factoryEdgeAttachmentFileReceipts = pgTable(
+  "factory_edge_attachment_file_receipts",
+  {
+    siteId: uuid("site_id").notNull(),
+    fileSha256: char("file_sha256", { length: 64 }).notNull(),
+    byteSize: integer("byte_size").notNull(),
+    acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (t) => [primaryKey({ columns: [t.siteId, t.fileSha256] })]
+);
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
+
+// Cloud: verified attachment bytes (server/edge/phase9CloudEventStore.mjs).
+export const factoryEdgeStagedFiles = pgTable(
+  "factory_edge_staged_files",
+  {
+    siteId: uuid("site_id").notNull(),
+    fileSha256: char("file_sha256", { length: 64 }).notNull(),
+    byteSize: integer("byte_size").notNull(),
+    content: bytea("content").notNull(),
+    receivedAt: timestamp("received_at", { withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (t) => [primaryKey({ columns: [t.siteId, t.fileSha256] })]
 );
 
 // ── Phase 9 LAN event-stream receipt logs ─────────────────────────────────

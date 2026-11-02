@@ -46,6 +46,8 @@ export const EDGE_EVENT_RECEIPT_QUERY_PATH = "/api/edge/sync/events/applied-rece
 export const EDGE_EVENT_RECEIPT_QUERY_PROTOCOL = "factory-lan-event-applied-query/v1";
 export const EDGE_EVENT_RECEIPT_PROTOCOL = "factory-lan-event-applied-receipts/v1";
 export const EDGE_EVENT_STAGE_LIMIT = 25;
+/** Attachment bytes (application/octet-stream), authenticated over their SHA-256. */
+export const EDGE_FILE_STAGE_PATH = "/api/edge/sync/files/stage";
 
 /** Outcomes a cloud apply receipt may carry. Never "staged". */
 export const EVENT_APPLY_OUTCOMES = Object.freeze(["cloud-applied", "already-present", "rejected-conflict"]);

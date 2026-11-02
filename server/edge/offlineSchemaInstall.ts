@@ -18,6 +18,7 @@ import { ensurePhase9PressingOutboxSchema } from "./phase9PressingOutbox";
 import { ensurePhase9StockOutboxSchema } from "./phase9StockOutbox";
 import { ensurePhase9PosOutboxSchema } from "./phase9PosOutbox";
 import { ensurePhase9ReceivingOutboxSchema } from "./phase9ReceivingOutbox";
+import { ensurePhase9AttachmentOutboxSchema } from "./phase9AttachmentOutbox";
 import { ensurePhase10SyncControlSchema } from "./phase10SyncControl.mjs";
 import { EdgeRefusal } from "./edgeRefusal";
 
@@ -44,6 +45,7 @@ export async function installOfflineSchema(target: string, env: NodeJS.ProcessEn
       await ensurePhase9StockOutboxSchema(client);
       await ensurePhase9PosOutboxSchema(client);
       await ensurePhase9ReceivingOutboxSchema(client);
+      await ensurePhase9AttachmentOutboxSchema(client);
       await ensurePhase10SyncControlSchema(client);
     }
     await client.query("COMMIT");

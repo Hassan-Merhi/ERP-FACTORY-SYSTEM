@@ -18,7 +18,9 @@ export function hashEvidence(payload: unknown): string;
 export function validateStageEnvelope(body: unknown, siteId: string): StagedVoucherEvent[];
 export const VOUCHER_STAGE_SIGNATURE_DOMAIN: "ERP_FACTORY_VOUCHER_STAGE_V1";
 export const EVENT_STAGE_SIGNATURE_DOMAIN: "ERP_FACTORY_EVENT_STAGE_V1";
-export type StageSignatureDomain = typeof VOUCHER_STAGE_SIGNATURE_DOMAIN | typeof EVENT_STAGE_SIGNATURE_DOMAIN;
+export const FILE_STAGE_SIGNATURE_DOMAIN: "ERP_FACTORY_FILE_STAGE_V1";
+export type StageSignatureDomain =
+  typeof VOUCHER_STAGE_SIGNATURE_DOMAIN | typeof EVENT_STAGE_SIGNATURE_DOMAIN | typeof FILE_STAGE_SIGNATURE_DOMAIN;
 export function makeStageSignature(
   raw: Buffer,
   timestamp: string,

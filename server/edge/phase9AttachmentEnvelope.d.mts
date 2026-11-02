@@ -16,6 +16,7 @@ export interface Phase9AttachmentEvidence {
   fileSize: number;
   description: string | null;
   sha256: string;
+  uploadedOn: string;
 }
 export interface Phase9AttachmentEnvelope extends Phase9AttachmentEvidence {
   kind: "attachment.file.v1";

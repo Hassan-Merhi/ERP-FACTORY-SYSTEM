@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Phase 9 LAN relay for business EVENT streams (currently: pressing).
+ * Phase 9 LAN relay for business EVENT streams (pressing, stock, pos,
+ * receiving, attachments).
  *
  *  1. Stage: send unstaged immutable outbox rows, in sequence order, to the
  *     signed cloud inbox, and persist a "staged-not-applied" receipt ONLY when
@@ -9,6 +10,9 @@
  *     and persist one ONLY when it matches the local outbox row exactly
  *     (operation, company, actor, local reference, payload hash).
  *
+ *  3. Files (attachments only): after a record is staged, upload its bytes,
+ *     authenticated over their SHA-256, and log the cloud's acknowledgement.
+ *
  * Safe to rerun at any time (WAN loss, lost ACK, restart): every step is
  * idempotent and divergent evidence aborts instead of overwriting. It never
  * posts business effects anywhere and honours the Phase 10 pause switch.
@@ -16,12 +20,19 @@
 import { Client } from "pg";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
-import { EVENT_STAGE_SIGNATURE_DOMAIN, hashEvidence, makeStageSignature } from "../../server/edge/edgeSyncStageProtocol.mjs";
+import { createHash } from "node:crypto";
+import {
+  EVENT_STAGE_SIGNATURE_DOMAIN,
+  FILE_STAGE_SIGNATURE_DOMAIN,
+  hashEvidence,
+  makeStageSignature,
+} from "../../server/edge/edgeSyncStageProtocol.mjs";
 import {
   EDGE_EVENT_RECEIPT_PROTOCOL,
   EDGE_EVENT_RECEIPT_QUERY_PATH,
   EDGE_EVENT_RECEIPT_QUERY_PROTOCOL,
   EDGE_EVENT_STAGE_LIMIT,
+  EDGE_FILE_STAGE_PATH,
   EDGE_EVENT_STAGE_PATH,
   EDGE_EVENT_STAGE_PROTOCOL,
   EDGE_EVENT_STAGE_RECEIPT_PROTOCOL,
@@ -55,6 +66,11 @@ export const STREAM_SOURCES = Object.freeze({
     localRef: "local_offload_id",
     businessDate: (payload) => payload?.offloadDate,
   }),
+  attachments: Object.freeze({
+    table: "factory_edge_attachment_outbox",
+    localRef: "local_file_id",
+    businessDate: (payload) => payload?.uploadedOn,
+  }),
 });
 
 function source(stream) {
@@ -69,6 +85,7 @@ export function readRelayConfiguration(env = process.env) {
     siteId: base.siteId,
     key: base.key,
     stageEndpoint: origin + EDGE_EVENT_STAGE_PATH,
+    fileEndpoint: origin + EDGE_FILE_STAGE_PATH,
     receiptEndpoint: origin + EDGE_EVENT_RECEIPT_QUERY_PATH,
   });
 }
@@ -321,6 +338,71 @@ export async function relayEventStreamOnce({ client, config, stream, fetcher = f
   return { stream, paused: false, staged, receipts };
 }
 
+/**
+ * Upload the bytes of staged attachment records the cloud has not yet
+ * acknowledged. Each file is read from the LAN stored_files row, checked
+ * against the record's SHA-256 before sending, and logged only after the
+ * cloud echoes the same digest and size. Re-sending is harmless.
+ */
+export async function relayAttachmentFilesOnce({ client, config, fetcher = fetch, limit = 20 }) {
+  const control = await readPhase10SyncControl(client, config.siteId).catch((error) => {
+    if (error && error.code === "42P01") return { paused: false };
+    throw error;
+  });
+  if (control.paused) return { paused: true, uploaded: 0 };
+  const pending = await client.query(
+    `SELECT DISTINCT ON (o.payload->>'sha256') o.payload->>'sha256' AS sha256,
+            (o.payload->>'fileSize')::int AS file_size, f.file_data
+       FROM factory_edge_attachment_outbox o
+       JOIN factory_edge_event_stage_receipts s
+         ON s.site_id = o.site_id AND s.stream = 'attachments' AND s.sequence = o.sequence
+       JOIN stored_files f ON f.id = o.local_file_id AND f.company_id = o.company_id
+      WHERE o.site_id = $1::uuid
+        AND NOT EXISTS (SELECT 1 FROM factory_edge_attachment_file_receipts r
+                         WHERE r.site_id = o.site_id AND r.file_sha256 = o.payload->>'sha256')
+      ORDER BY o.payload->>'sha256'
+      LIMIT $2`,
+    [config.siteId, limit]
+  );
+  let uploaded = 0;
+  for (const row of pending.rows) {
+    const bytes = Buffer.from(String(row.file_data), "base64");
+    if (bytes.length !== Number(row.file_size) || createHash("sha256").update(bytes).digest("hex") !== row.sha256) {
+      throw new Error("EDGE_ATTACHMENT_LOCAL_FILE_MISMATCH");
+    }
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const response = await fetcher(config.fileEndpoint, {
+      method: "POST",
+      redirect: "error",
+      signal: AbortSignal.timeout(120000),
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "X-Factory-File-Sha256": row.sha256,
+        "X-Factory-Sync-Timestamp": timestamp,
+        "X-Factory-Sync-Signature": makeStageSignature(
+          Buffer.from(row.sha256, "utf8"),
+          timestamp,
+          config.key,
+          FILE_STAGE_SIGNATURE_DOMAIN
+        ),
+      },
+      body: bytes,
+    });
+    if (!response.ok) throw new Error("EDGE_ATTACHMENT_CLOUD_REJECTED_" + response.status);
+    const echo = await response.json();
+    if (echo?.sha256 !== row.sha256 || echo?.byteSize !== bytes.length || echo?.state !== "file-staged") {
+      throw new Error("EDGE_ATTACHMENT_RECEIPT_MISMATCH");
+    }
+    await client.query(
+      `INSERT INTO factory_edge_attachment_file_receipts (site_id, file_sha256, byte_size)
+       VALUES ($1::uuid, $2, $3) ON CONFLICT DO NOTHING`,
+      [config.siteId, row.sha256, bytes.length]
+    );
+    uploaded++;
+  }
+  return { paused: false, uploaded };
+}
+
 export async function relayAllEventStreams({ env = process.env, fetcher = fetch } = {}) {
   const config = readRelayConfiguration(env);
   const client = new Client({
@@ -337,6 +419,9 @@ export async function relayAllEventStreams({ env = process.env, fetcher = fetch 
     const results = [];
     for (const stream of Object.keys(STREAM_SOURCES)) {
       results.push(await relayEventStreamOnce({ client, config, stream, fetcher }));
+      if (stream === "attachments") {
+        results.push({ stream: "attachment-files", ...(await relayAttachmentFilesOnce({ client, config, fetcher })) });
+      }
     }
     return results;
   } finally {

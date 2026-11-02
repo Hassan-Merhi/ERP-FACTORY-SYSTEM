@@ -1,4 +1,4 @@
-import type { Express, Request, Response } from "express";
+import express, { type Express, type Request, type Response } from "express";
 import { pool } from "../db";
 import { edgeSyncRateLimit } from "./edgeRateLimit";
 import { EdgeStageConflict, stageVoucherEvents } from "./edgeCloudStaging";
@@ -6,11 +6,17 @@ import { getAppliedCloudReceipts, PHASE8_RECEIPT_QUERY_PATH } from "./phase8Appl
 import {
   EDGE_SYNC_STAGE_PATH,
   EVENT_STAGE_SIGNATURE_DOMAIN,
+  FILE_STAGE_SIGNATURE_DOMAIN,
   readCloudSyncStageConfiguration,
   verifyStageSignature,
 } from "./edgeSyncStageProtocol.mjs";
-import { EDGE_EVENT_RECEIPT_QUERY_PATH, EDGE_EVENT_STAGE_PATH } from "./phase9EventProtocol.mjs";
-import { getPhase9AppliedReceipts, Phase9StageConflict, stagePhase9Events } from "./phase9CloudEventStore.mjs";
+import { EDGE_EVENT_RECEIPT_QUERY_PATH, EDGE_EVENT_STAGE_PATH, EDGE_FILE_STAGE_PATH } from "./phase9EventProtocol.mjs";
+import {
+  getPhase9AppliedReceipts,
+  Phase9StageConflict,
+  stagePhase9AttachmentFile,
+  stagePhase9Events,
+} from "./phase9CloudEventStore.mjs";
 import { EdgeRefusal } from "./edgeRefusal";
 
 /** HTTPS + exact event-domain HMAC; false means a response was already sent. */
@@ -89,6 +95,40 @@ export function registerCloudEdgeSyncReceiver(app: Express): void {
       return res.status(503).json({ code: "EDGE_EVENT_STAGE_UNAVAILABLE" });
     }
   });
+  // Phase 9 attachments: the verified bytes of a staged attachment record.
+  // The HMAC covers the declared SHA-256; the body must hash to it.
+  app.post(
+    EDGE_FILE_STAGE_PATH,
+    edgeSyncRateLimit,
+    express.raw({ type: "application/octet-stream", limit: "10mb" }),
+    async (req, res) => {
+      res.setHeader("Cache-Control", "no-store");
+      if (process.env.NODE_ENV === "production" && !req.secure) {
+        return res.status(403).json({ code: "EDGE_SYNC_HTTPS_REQUIRED" });
+      }
+      const sha256 = req.get("X-Factory-File-Sha256") ?? "";
+      try {
+        if (!/^[0-9a-f]{64}$/.test(sha256)) throw new EdgeRefusal("EDGE_FILE_SHA256_INVALID");
+        verifyStageSignature(
+          Buffer.from(sha256, "utf8"),
+          req.get("X-Factory-Sync-Timestamp") ?? "",
+          req.get("X-Factory-Sync-Signature") ?? "",
+          config.secret,
+          Date.now() / 1000,
+          FILE_STAGE_SIGNATURE_DOMAIN
+        );
+      } catch {
+        return res.status(401).json({ code: "EDGE_SYNC_AUTH_FAILED" });
+      }
+      if (!Buffer.isBuffer(req.body)) return res.status(400).json({ code: "EDGE_FILE_BODY_INVALID" });
+      try {
+        return res.status(200).json(await stagePhase9AttachmentFile(pool, config.siteId, sha256, req.body));
+      } catch (error) {
+        if (error instanceof Phase9StageConflict) return res.status(409).json({ code: error.message });
+        return res.status(503).json({ code: "EDGE_FILE_STAGE_UNAVAILABLE" });
+      }
+    }
+  );
   if (process.env.FACTORY_PHASE9_RECEIPTS_ENABLED === "1") {
     app.post(EDGE_EVENT_RECEIPT_QUERY_PATH, edgeSyncRateLimit, async (req, res) => {
       if (!acceptSignedEvent(req, res, config.secret)) return;

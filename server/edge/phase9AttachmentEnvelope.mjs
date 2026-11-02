@@ -11,6 +11,7 @@
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HASH = /^[0-9a-f]{64}$/;
 const MAX_REF = 2147483647;
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 export const PHASE9_ATTACHMENT_KIND = "attachment.file.v1";
 export const PHASE9_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
@@ -28,6 +29,7 @@ const INPUT_FIELDS = Object.freeze([
   "localFileId",
   "requestId",
   "sha256",
+  "uploadedOn",
 ]);
 
 export class Phase9AttachmentRefusal extends Error {
@@ -38,6 +40,12 @@ export class Phase9AttachmentRefusal extends Error {
 }
 
 const ref = (value) => Number.isSafeInteger(value) && value > 0 && value <= MAX_REF;
+function validDay(date) {
+  if (typeof date !== "string" || !DAY.test(date)) return false;
+  const value = new Date(date + "T00:00:00.000Z");
+  return Number.isFinite(value.getTime()) && value.toISOString().slice(0, 10) === date;
+}
+
 const text = (value, max) => typeof value === "string" && value.length >= 1 && value.length <= max;
 
 export function phase9AttachmentEnvelope(evidence) {
@@ -60,7 +68,8 @@ export function phase9AttachmentEnvelope(evidence) {
     evidence.fileSize > PHASE9_ATTACHMENT_MAX_BYTES ||
     (evidence.description !== null && !text(evidence.description, 1000)) ||
     typeof evidence.sha256 !== "string" ||
-    !HASH.test(evidence.sha256)
+    !HASH.test(evidence.sha256) ||
+    !validDay(evidence.uploadedOn)
   ) {
     throw new Phase9AttachmentRefusal("PHASE9_ATTACHMENT_EVIDENCE_INVALID");
   }
@@ -77,5 +86,6 @@ export function phase9AttachmentEnvelope(evidence) {
     fileSize: evidence.fileSize,
     description: evidence.description,
     sha256: evidence.sha256,
+    uploadedOn: evidence.uploadedOn,
   };
 }

@@ -22,7 +22,7 @@ export interface Phase9EventHandler<E = Phase9StagedEvent> {
   apply(
     client: PoolClient,
     event: E,
-    context: { readonly overrideConflicts: readonly string[] }
+    context: { readonly overrideConflicts: readonly string[]; readonly siteId: string }
   ): Promise<{ outcome: "cloud-applied" | "already-present"; cloudRef: number; businessDate: string }>;
   verify(client: PoolClient, event: E, result: { cloudRef: number; businessDate: string }): Promise<boolean>;
 }
@@ -91,3 +91,10 @@ export function summarizePhase9CloudStreams(
   queryable: Queryable,
   siteId: string
 ): Promise<{ stream: string; stagedThrough: string; appliedThrough: string; openConflicts: number }[]>;
+export function stagePhase9AttachmentFile(
+  queryable: Queryable,
+  siteId: string,
+  sha256: string,
+  bytes: Buffer
+): Promise<{ siteId: string; sha256: string; byteSize: number; state: "file-staged" }>;
+export function readPhase9StagedFile(queryable: Queryable, siteId: string, sha256: string): Promise<Buffer | null>;

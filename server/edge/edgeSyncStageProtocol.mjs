@@ -100,7 +100,14 @@ function checkKey(secret) {
 // one endpoint can never authenticate against another with the same key.
 export const VOUCHER_STAGE_SIGNATURE_DOMAIN = "ERP_FACTORY_VOUCHER_STAGE_V1";
 export const EVENT_STAGE_SIGNATURE_DOMAIN = "ERP_FACTORY_EVENT_STAGE_V1";
-const SIGNATURE_DOMAINS = new Set([VOUCHER_STAGE_SIGNATURE_DOMAIN, EVENT_STAGE_SIGNATURE_DOMAIN]);
+// Attachment bytes: the signature covers the file's SHA-256 (hex); the
+// receiver recomputes that digest from the body, binding the bytes to it.
+export const FILE_STAGE_SIGNATURE_DOMAIN = "ERP_FACTORY_FILE_STAGE_V1";
+const SIGNATURE_DOMAINS = new Set([
+  VOUCHER_STAGE_SIGNATURE_DOMAIN,
+  EVENT_STAGE_SIGNATURE_DOMAIN,
+  FILE_STAGE_SIGNATURE_DOMAIN,
+]);
 
 function computeSignature(raw, timestamp, secret, domain) {
   if (!SIGNATURE_DOMAINS.has(domain)) throw new Error("EDGE_SYNC_SIGNATURE_DOMAIN_INVALID");

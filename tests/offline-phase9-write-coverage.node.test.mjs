@@ -15,6 +15,7 @@ const manifest = {
     "POST /api/factory/bales [business]",
     "POST /api/inventory/quick-adjust [business]",
     "POST /api/containers/:id/offload [business]",
+    "POST /api/files/upload [multipart]",
     "POST /api/suppliers/create [business]",
     "POST /api/documents/upload [multipart]",
     "PUT /api/payments/:id [business]",
@@ -22,8 +23,8 @@ const manifest = {
 };
 test("every unique API write has explicit capture, session-only or blocked disposition", () => {
   const report = auditPhase9WriteCoverage(manifest);
-  assert.equal(report.summary.uniqueApiWriteRoutes, 10);
-  assert.equal(report.summary.approvedCapture, 5);
+  assert.equal(report.summary.uniqueApiWriteRoutes, 11);
+  assert.equal(report.summary.approvedCapture, 6);
   assert.equal(report.summary.sessionOnly, 1);
   assert.equal(report.summary.blocked, 4);
   assert.equal(report.summary.productionComplete, false);
@@ -36,6 +37,7 @@ test("every unique API write has explicit capture, session-only or blocked dispo
   assert.equal(byPath.get("/api/inventory/quick-adjust").policy, "stock.quick-adjust.v1");
   assert.equal(byPath.get("/api/pos/sales").policy, "pos.sale.v1");
   assert.equal(byPath.get("/api/containers/:id/offload").policy, "receiving.container-offload.v1");
+  assert.equal(byPath.get("/api/files/upload").policy, "attachment.file.v1");
 });
 test("policy drift from an accidental LAN write bypass fails the audit", () => {
   const unsafeGuard = (config, method, path) =>
@@ -53,7 +55,7 @@ test("missing vetted route, bad manifest and unexpected allowed route are refuse
 test("real route manifest has explicit accounting/stock/POS/factory/attachment gaps", () => {
   const real = JSON.parse(fs.readFileSync(new URL("../config/route-manifest.json", import.meta.url), "utf8"));
   const report = auditPhase9WriteCoverage(real);
-  assert.equal(report.summary.approvedCapture, 5);
+  assert.equal(report.summary.approvedCapture, 6);
   assert.ok(report.summary.blocked > 0);
   assert.ok(report.routes.some((r) => r.module === "retail-pos" && r.disposition === "blocked"));
   assert.ok(report.routes.some((r) => r.module === "factory-production" && r.disposition === "blocked"));

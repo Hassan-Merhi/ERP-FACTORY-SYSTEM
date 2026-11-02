@@ -53,6 +53,12 @@ const SUPPORTED = new Map([
       "First offload against existing purchase orders, quantities only (no duties, charges or cost " +
       "corrections); cloud prices apply; changed order quantities are held for review; edits stay cloud-only",
   }],
+  ["POST /api/files/upload", {
+    policy: "attachment.file.v1",
+    limitations:
+      "Files up to 10 MB; the record syncs first, then the SHA-256-verified bytes; renames, moves and " +
+      "deletes stay cloud-only; a missing cloud folder is held for review",
+  }],
 ]);
 
 function moduleForPath(path) {

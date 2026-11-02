@@ -16,6 +16,7 @@ export const EDGE_EVENT_RECEIPT_QUERY_PATH: "/api/edge/sync/events/applied-recei
 export const EDGE_EVENT_RECEIPT_QUERY_PROTOCOL: "factory-lan-event-applied-query/v1";
 export const EDGE_EVENT_RECEIPT_PROTOCOL: "factory-lan-event-applied-receipts/v1";
 export const EDGE_EVENT_STAGE_LIMIT: number;
+export const EDGE_FILE_STAGE_PATH: "/api/edge/sync/files/stage";
 export const EVENT_APPLY_OUTCOMES: readonly Phase9ApplyOutcome[];
 export function phase9EventStreams(): string[];
 export function phase9OverridableConflicts(stream: string, kind: string): string[];

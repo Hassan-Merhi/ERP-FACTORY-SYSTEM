@@ -16,6 +16,7 @@
  *
  * Handlers MUST use the same client/transaction they are given.
  */
+import { createHash } from "node:crypto";
 import { validatePhase8OperatorApproval, hasVerifiedCloudWriterAuthority } from "./phase8ApplyStore.mjs";
 import {
   EDGE_EVENT_RECEIPT_PROTOCOL,
@@ -147,6 +148,21 @@ export async function ensurePhase9CloudEventSchema(queryable) {
       CHECK ((outcome = 'rejected-conflict') = (business_date IS NULL))
     )
   `);
+  // Phase 9 attachments: verified file bytes, content-addressed per site. A
+  // file is accepted only for a staged attachment record with the same
+  // SHA-256 (stagePhase9AttachmentFile), and is immutable once stored.
+  await queryable.query(`
+    CREATE TABLE IF NOT EXISTS factory_edge_staged_files (
+      site_id UUID NOT NULL,
+      file_sha256 CHAR(64) NOT NULL CHECK (file_sha256 ~ '^[0-9a-f]{64}$'),
+      byte_size INTEGER NOT NULL CHECK (byte_size > 0 AND byte_size <= 10485760),
+      content BYTEA NOT NULL,
+      received_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+      PRIMARY KEY (site_id, file_sha256),
+      CHECK (octet_length(content) = byte_size),
+      CHECK (encode(sha256(content), 'hex') = file_sha256)
+    )
+  `);
   await queryable.query(`
     CREATE OR REPLACE FUNCTION factory_edge_event_evidence_immutable()
     RETURNS trigger LANGUAGE plpgsql AS $$
@@ -159,6 +175,7 @@ export async function ensurePhase9CloudEventSchema(queryable) {
     "factory_edge_event_conflicts",
     "factory_edge_event_conflict_decisions",
     "factory_edge_applied_events",
+    "factory_edge_staged_files",
   ]) {
     await queryable.query(`DROP TRIGGER IF EXISTS ${table}_no_modify ON ${table}`);
     await queryable.query(`
@@ -422,7 +439,7 @@ export async function applyStagedEventOnce(queryable, input, handlers) {
       const handler = Object.prototype.hasOwnProperty.call(handlers, event.kind) ? handlers[event.kind] : null;
       if (!handler) throw new Phase9ApplyRefusal("PHASE9_HANDLER_MISSING");
       await handler.authorize(queryable, event);
-      result = await handler.apply(queryable, event, Object.freeze({ overrideConflicts }));
+      result = await handler.apply(queryable, event, Object.freeze({ overrideConflicts, siteId: approved.siteId }));
       if (
         !result ||
         !["cloud-applied", "already-present"].includes(result.outcome) ||
@@ -586,4 +603,51 @@ export async function summarizePhase9CloudStreams(queryable, siteId) {
     appliedThrough: String(row.applied_through),
     openConflicts: Number(row.open_conflicts),
   }));
+}
+
+const FILE_HASH = /^[0-9a-f]{64}$/;
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Store the verified bytes of a staged attachment record. The caller has
+ * authenticated the request; here the body must hash to the declared SHA-256
+ * and a staged "attachments" record of this site must reference that digest.
+ * Idempotent: the same file sent again is acknowledged without a new row.
+ */
+export async function stagePhase9AttachmentFile(queryable, siteId, sha256, bytes) {
+  if (
+    typeof sha256 !== "string" ||
+    !FILE_HASH.test(sha256) ||
+    !Buffer.isBuffer(bytes) ||
+    bytes.length < 1 ||
+    bytes.length > MAX_FILE_BYTES
+  ) {
+    throw new Phase9StageConflict("PHASE9_FILE_INVALID");
+  }
+  if (createHash("sha256").update(bytes).digest("hex") !== sha256) {
+    throw new Phase9StageConflict("PHASE9_FILE_HASH_MISMATCH");
+  }
+  const referenced = await queryable.query(
+    `SELECT (payload->>'fileSize')::int AS file_size FROM factory_edge_staged_events
+      WHERE site_id = $1::uuid AND stream = 'attachments' AND payload->>'sha256' = $2
+      LIMIT 1`,
+    [siteId, sha256]
+  );
+  if (!referenced.rows.length) throw new Phase9StageConflict("PHASE9_FILE_NOT_REFERENCED");
+  if (Number(referenced.rows[0].file_size) !== bytes.length) throw new Phase9StageConflict("PHASE9_FILE_SIZE_MISMATCH");
+  await queryable.query(
+    `INSERT INTO factory_edge_staged_files (site_id, file_sha256, byte_size, content)
+     VALUES ($1::uuid, $2, $3, $4) ON CONFLICT (site_id, file_sha256) DO NOTHING`,
+    [siteId, sha256, bytes.length, bytes]
+  );
+  return { siteId, sha256, byteSize: bytes.length, state: "file-staged" };
+}
+
+/** The verified bytes for a staged attachment, or null if not yet received. */
+export async function readPhase9StagedFile(queryable, siteId, sha256) {
+  const result = await queryable.query(
+    "SELECT content FROM factory_edge_staged_files WHERE site_id = $1::uuid AND file_sha256 = $2",
+    [siteId, sha256]
+  );
+  return result.rows[0]?.content ?? null;
 }

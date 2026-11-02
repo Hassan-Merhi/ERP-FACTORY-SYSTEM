@@ -118,6 +118,14 @@ The owner chose to make all remaining workflows available offline (stock movemen
 - Evidence: `tests/offline-phase9-receiving.test.ts` (quantity-only policy, LAN capture with digest, cloud replay, no double receipt, held/approved changed order).
 - Coverage: 5 approved captures, 3 session-only, 1,170 blocked.
 
+### Phase 9 attachments — file upload (2026-11-02, development)
+
+- `POST /api/files/upload` is an approved LAN-primary write, stream `attachments`, kind `attachment.file.v1`, with a 10 MB offline cap. The upload's row and the record (metadata + SHA-256) commit together (`server/edge/phase9AttachmentOutbox.ts`).
+- Owner policy "record first, then the file": the relay stages the record, then uploads the bytes to the signed `/api/edge/sync/files/stage` endpoint (own HMAC domain over the SHA-256; body must hash to it; must match a staged record and its size). The cloud keeps verified bytes in an immutable, content-addressed `factory_edge_staged_files` table; the LAN logs acknowledgements so files are sent once.
+- Cloud replay (`server/edge/phase9AttachmentApply.ts`) waits without a conflict until the bytes are staged, then creates the file on the receipt's transaction and verifies its hash; a missing folder is held for approve (top level) or reject.
+- Evidence: `tests/offline-phase9-attachments.test.ts` (LAN capture, relay staging, tampered/unreferenced bytes refused, upload once, replay, held/approved missing folder).
+- Coverage: 6 approved captures, 3 session-only, 1,169 blocked.
+
 ## Phase 10 — Offline identity, conflicts, secure storage and server controls
 - Implement reviewed local-session/cold-start policy, encrypted legacy-cache migration, authorization/role revocation, and scoped credentials and browser/device protections.
 - Add deterministic multi-device conflict review with no silent financial/stock overwrites.

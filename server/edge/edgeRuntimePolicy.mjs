@@ -114,6 +114,7 @@ export function readFactoryEdgeConfiguration(env = process.env) {
 export const PHASE9_PRESSING_CONFIRM_ROUTE = "POST /api/factory/pressing-machines/confirm";
 export const PHASE9_STOCK_ADJUST_ROUTE = "POST /api/inventory/quick-adjust";
 export const PHASE9_POS_SALE_ROUTE = "POST /api/pos/sales";
+export const PHASE9_ATTACHMENT_UPLOAD_ROUTE = "POST /api/files/upload";
 // A numeric container id, or the manifest template ":id" (which the route itself rejects as invalid).
 export const PHASE9_RECEIVING_OFFLOAD_PATH = /^\/api\/containers\/(?:[1-9][0-9]{0,9}|:id)\/offload$/;
 
@@ -132,6 +133,9 @@ const LAN_PRIMARY_CAPTURE_ALLOWLIST = new Set([
   // Phase 9 (owner policy 2026-11-01): offline POS cash sales in USD with a
   // LAN invoice series, replayed through the sale service on clientSaleId.
   PHASE9_POS_SALE_ROUTE,
+  // Phase 9 (owner policy 2026-11-01): files up to 10 MB; the record syncs
+  // first, then the SHA-256-verified bytes.
+  PHASE9_ATTACHMENT_UPLOAD_ROUTE,
 ]);
 
 /** Approved parameterised captures: POST /api/containers/<id>/offload (quantity receipts). */

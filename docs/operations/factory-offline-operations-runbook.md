@@ -36,9 +36,10 @@ an open cloud epoch.
 | Stock movement: inventory quick adjust (add / subtract at a location) | yes, existing items and locations | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — replayed as a delta; below zero is held for Admin/Developer approve/reject |
 | POS cash sale (USD, cash account, non-supplier-partner company) | yes, numbered `LAN-<site>-000123` | `pos` (Phase 9) | `server/edge/phase9OperatorApply.ts apply pos` — replayed through the sale service on its `clientSaleId`; keeps the offline price; below-zero stock or a changed till account is held for Admin/Developer approve/reject |
 | Supplier receiving: first container offload against its existing purchase orders, quantities only | yes, no duties/charges/cost corrections | `receiving` (Phase 9) | `server/edge/phase9OperatorApply.ts apply receiving` — same offload lifecycle on the receipt's transaction; cloud prices apply; changed order quantities are held for Admin/Developer approve/reject |
+| File upload (Files page), up to 10 MB | yes | `attachments` (Phase 9) + signed file upload | `server/edge/phase9OperatorApply.ts apply attachments` — the record syncs first; the relay then uploads the bytes to `/api/edge/sync/files/stage`, accepted only if their SHA-256 matches a staged record; the file is created in the cloud once its bytes arrive; a missing folder is held for approve/reject |
 | Login, logout, company switch | yes (session only) | none | n/a |
 | All reads covered by prepared offline reads | yes | n/a | n/a |
-| Everything else (1,170 write routes) | **refused** with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION` | none | n/a |
+| Everything else (1,169 write routes) | **refused** with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION` | none | n/a |
 
 `node scripts/edge/audit-phase9-write-coverage.mjs` prints the exact current
 inventory and fails if any route becomes writable on the LAN without a reviewed
@@ -67,9 +68,9 @@ reconciled safely, which is worse than refusing them.
   supplier/customer payments and bank movements still need their own capture,
   replay and drill. Offline receiving covers a container's first,
   quantity-only offload; offload edits and charges stay online-only.
-- **Attachments and documents:** files are not in the database transaction, so
-  they need a content-addressed upload transfer and verification step that does
-  not exist yet.
+- **Other documents and imports:** offline file upload covers the Files page
+  (`POST /api/files/upload`); renames, moves, deletes, imports and document
+  exports stay online-only.
 - **Pressing voids/corrections and machine assignment changes:** supervisor
   actions on the cloud's view of the same records; they stay cloud-only so a
   void can never race a LAN scan of the same bale.
@@ -192,7 +193,7 @@ transaction rolls back, the conflict is written to
   `rejected-conflict` receipt and the stream continues. The cloud record is
   never overwritten; if the LAN fact must still be recorded, enter it again in
   the cloud as a new, normal transaction.
-- **Approve instead (stock, POS and receiving):** a stock movement held as
+- **Approve instead (stock, POS, receiving and attachments):** a stock movement held as
   `PHASE9_STOCK_WOULD_GO_NEGATIVE` (for example a physical count proves the
   LAN issue happened and a cloud receipt is late) can be applied anyway with
   `... phase9OperatorApply.ts approve stock <sequence> <reviewer-username>
@@ -204,7 +205,12 @@ transaction rolls back, the conflict is written to
   `PHASE9_POS_CASH_ACCOUNT_CHANGED` can be approved with `approve pos ...`.
   A receipt held as `PHASE9_RECEIVING_ORDER_CHANGED` can be approved with
   `approve receiving ...`; the cloud then receives its current order
-  quantities.
+  quantities. A file held as `PHASE9_ATTACHMENT_FOLDER_MISSING` can be
+  approved with `approve attachments ...`; it is stored at the top level.
+- An attachment record waits (no conflict, `PHASE9_ATTACHMENT_FILE_NOT_STAGED`)
+  until the relay has uploaded its bytes; re-run the relay, then `apply
+  attachments`. The relay checks each file against its recorded SHA-256 before
+  sending and logs the cloud's acknowledgement, so a file is sent once.
 - POS replays run through the normal sale service in its own transaction;
   exactly-once comes from the sale's `clientSaleId` (the LAN operation id), so
   an apply interrupted after the sale committed is reported as
