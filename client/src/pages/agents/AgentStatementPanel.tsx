@@ -6,7 +6,7 @@
  * ids are unchanged.
  */
 import { useMemo, useRef } from "react";
-import { TrendingUp, TrendingDown, X, FileDown, Printer, ArrowRightLeft, ArrowLeft } from "lucide-react";
+import { TrendingUp, TrendingDown, X, FileDown, Printer, ArrowRightLeft, ArrowLeft, Store, Layers3, ArrowDownRight, ArrowUpRight, Flag } from "lucide-react";
 import { ErpMobileActionsMenu } from "@/components/ui/erp-mobile-records";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -94,9 +94,9 @@ export function AgentStatementPanel({
   const closingSide = balanceSideLabel(closingBalance, selectedAccount.type);
 
   return (
-    <div className={phone ? "space-y-4" : "p-6 space-y-5 max-w-5xl max-md:p-3"} data-testid="agent-statement-panel">
+    <div className={phone ? "min-w-0 space-y-4" : "relative isolate min-h-full min-w-0 space-y-6 overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-blue-400/20 dark:bg-[#07152b] lg:p-6 max-md:rounded-none max-md:border-0 max-md:p-3"} data-testid="agent-statement-panel">
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         {phone && (
           <Button
             variant="outline"
@@ -109,28 +109,34 @@ export function AgentStatementPanel({
             Back to agents
           </Button>
         )}
-        <div className={phone ? "min-w-0 flex-1" : undefined}>
+        <div className={phone ? "min-w-0 flex-1" : "flex min-w-0 flex-1 items-center gap-4"}>
+          {!phone && (
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 to-blue-100 text-sky-600 shadow-sm dark:border-sky-400/25 dark:from-[#153f67] dark:to-[#09213c] dark:text-sky-300">
+              <Store className="h-8 w-8" aria-hidden="true" />
+            </div>
+          )}
+          <div className="min-w-0">
           <div className="flex items-center gap-2.5 flex-wrap">
             <h2
-              className={`${phone ? "wrap-break-word text-lg" : "text-xl"} font-bold tracking-tight`}
+              className={`${phone ? "wrap-break-word text-lg" : "text-2xl"} font-extrabold tracking-tight text-slate-900 dark:text-slate-50`}
               data-testid="text-agent-account-name"
             >
               {selectedAccount.name}
             </h2>
             <Badge
               variant="secondary"
-              className="text-xs no-default-active-elevate bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 capitalize font-semibold"
+              className="no-default-active-elevate rounded-lg border border-blue-200 bg-blue-100 px-2.5 py-1 text-xs font-bold capitalize text-blue-700 dark:border-blue-400/20 dark:bg-blue-600/25 dark:text-blue-200"
             >
               {selectedAccount.type}
             </Badge>
           </div>
-          <div className="flex items-center gap-1.5 mt-1.5">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             {selectedAccount.balanceSide?.toLowerCase() === "cr" ? (
-              <TrendingDown className="w-3.5 h-3.5 text-emerald-600" />
+              <TrendingDown className="h-4 w-4 text-red-500 dark:text-red-400" />
             ) : (
-              <TrendingUp className="w-3.5 h-3.5 text-red-500" />
+              <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
             )}
-            <span className="text-base font-bold font-mono tabular-nums" data-testid="text-agent-balance">
+            <span className="font-mono text-lg font-extrabold tabular-nums text-slate-900 dark:text-white" data-testid="text-agent-balance">
               {fxWallet
                 ? `EUR ${Number(fxWallet.state.eur).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                 : formatAmount(Math.abs(selectedAccount.balance))}
@@ -138,7 +144,8 @@ export function AgentStatementPanel({
             <span className={`text-xs font-semibold ${drCrClass(selectedAccount.balanceSide)}`}>
               {fxWallet ? (Number(fxWallet.state.eur) >= 0 ? "Dr" : "Cr") : (selectedAccount.balanceSide ?? "")}
             </span>
-            <span className="text-xs text-muted-foreground">{fxWallet ? "native EUR balance" : "current balance"}</span>
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{fxWallet ? "native EUR balance" : "current balance"}</span>
+          </div>
           </div>
         </div>
         {phone ? (
@@ -163,7 +170,7 @@ export function AgentStatementPanel({
             ]}
           />
         ) : (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -171,7 +178,7 @@ export function AgentStatementPanel({
               disabled={transactionsLoading || vouchersWithBalance.length === 0}
               data-testid="button-export-excel"
             >
-              <FileDown className="h-3.5 w-3.5 mr-1.5" />
+              <FileDown className="mr-1.5 h-4 w-4 text-emerald-500" />
               Excel
             </Button>
             <Button
@@ -181,7 +188,7 @@ export function AgentStatementPanel({
               disabled={transactionsLoading}
               data-testid="button-print"
             >
-              <Printer className="h-3.5 w-3.5 mr-1.5" />
+              <Printer className="mr-1.5 h-4 w-4" />
               Print
             </Button>
             <Button
@@ -198,7 +205,7 @@ export function AgentStatementPanel({
       </div>
 
       {fxWallet && (
-        <div className="rounded-lg border p-3 space-y-1" data-testid="agent-native-fx-wallet">
+        <div className="space-y-1 rounded-xl border border-sky-200 bg-sky-50/70 p-4 dark:border-sky-500/30 dark:bg-sky-950/30" data-testid="agent-native-fx-wallet">
           <p className="text-sm font-semibold">FX Agent Native Balance</p>
           <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm font-mono tabular-nums">
             <span>
@@ -240,7 +247,7 @@ export function AgentStatementPanel({
       <PeriodFilter value={periodFilter} onChange={onPeriodChange} />
 
       {/* Stats grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         <div className="rounded-xl border bg-muted/30 p-4 space-y-1.5">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Opening</p>
           <p className="text-base font-bold font-mono tabular-nums leading-tight">
