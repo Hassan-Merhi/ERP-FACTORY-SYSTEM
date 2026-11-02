@@ -286,6 +286,17 @@
     background: linear-gradient(130deg, #8668f3, #6348d8);
   }
 
+  .bale-stock-entry-modern .daily-scan-success {
+    border-radius: 11px;
+    border: 1px solid rgba(15, 170, 111, .38);
+    background: linear-gradient(90deg, rgba(15, 190, 120, .15), rgba(15, 190, 120, .045));
+    color: #067d55;
+    padding: 11px 13px;
+  }
+  .dark .bale-stock-entry-modern .daily-scan-success {
+    color: #99f1c8;
+  }
+
   .bale-stock-entry-modern .daily-scan-alert {
     border-radius: 11px;
     border: 1px solid rgba(235, 164, 27, .4);
