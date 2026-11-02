@@ -280,7 +280,7 @@ export async function auditHistoricalFactorySuppliers() {
         "LEFT JOIN ledger_accounts other_account ON other_account.id=other_line.ledger_account_id",
         "WHERE payable.company_id=$1 AND payable.deleted_at IS NULL",
         "AND payable.code='FACTORY_CHARGES_PAYABLE'",
-        "GROUP BY account_code,account_type ORDER BY account_code",
+        "GROUP BY 1,2 ORDER BY 1",
       ].join("\n"), [COMPANY]
     )).rows;
 
