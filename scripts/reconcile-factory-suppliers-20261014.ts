@@ -163,6 +163,26 @@ async function run(apply: boolean): Promise<void> {
     new MoneyDecimal(0)
   );
   if (!expectedCommission.eq("32500")) throw new Error("NASRA commission preflight differs from $32,500");
+  // A container's estimated arrival date is not evidence of when goods
+  // became an accounting expense. In particular, never backfill a voucher
+  // into a future period merely because the ETA was stored on the container.
+  // Use the factory's local business day, not the server's UTC day.
+  const dateParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Beirut", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date());
+  const datePart = (part: "year" | "month" | "day") =>
+    dateParts.find((entry) => entry.type === part)?.value ?? "";
+  const businessToday = `${datePart("year")}-${datePart("month")}-${datePart("day")}`;
+  const futureDated = importIds
+    .map((id) => byId.get(id)!)
+    .filter((row) => (row.arrival_date || row.created_on) > businessToday);
+  if (futureDated.length) {
+    console.warn(`[SupplierRepair] ${futureDated.length} goods imports have a future voucher date:`,
+      futureDated.map((row) => `${row.container_number}=${row.arrival_date || row.created_on}`).join(", "));
+    if (apply) {
+      throw new Error("Refusing historical supplier postings with future voucher dates. Reconcile source dates and existing GL first; no vouchers have been posted by this run.");
+    }
+  }
   console.log(`[SupplierRepair] ${apply ? "APPLY" : "DRY RUN"}: 38 goods, 48 NASRA commissions, 1 BANIN opening liability already held.`);
   for (const [currency, amount] of native) console.log(`[SupplierRepair] Goods ${currency}: ${amount.toFixed(2)}`);
   console.log(`[SupplierRepair] NASRA commission USD: ${expectedCommission.toFixed(2)}`);
