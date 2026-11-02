@@ -162,7 +162,7 @@
     "react": "^19.2.8",
     "react-day-picker": "^10.0.0",
     "react-dom": "^19.2.8",
-    "react-hook-form": "7.90.0",
+    "react-hook-form": "7.91.0",
     "react-is": "19.3.0",
     "react-markdown": "^10.1.0",
     "react-to-print": "^3.2.0",
