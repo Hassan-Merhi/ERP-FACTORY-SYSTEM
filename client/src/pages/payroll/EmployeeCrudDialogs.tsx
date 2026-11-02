@@ -185,6 +185,7 @@ export function EmployeeCrudDialogs({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Opening Balance (Optional)</FormLabel>
+                    <FormDescription>Positive = Credit (owed to employee). Negative = Debit (employee advance).</FormDescription>
                     <FormControl>
                       <Input
                         type="number"
