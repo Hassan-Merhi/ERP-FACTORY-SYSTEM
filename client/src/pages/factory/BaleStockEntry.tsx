@@ -14,6 +14,7 @@ import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translateFactoryStaffTrackingText } from "@/i18n/factoryStaffTrackingTranslations";
 import "./factoryTrackingModern.css";
 import "./baleStockEntryRefresh.css";
+import "./stockEntryApprovedDesign.css";
 
 import { StockEntryTab } from "./bale-stock-entry/StockEntryTab";
 import { DailyStockSummary } from "./bale-stock-entry/DailyStockSummary";
