@@ -1,4 +1,4 @@
-import { Ship, Building2, Package, Boxes, ChevronDown } from "lucide-react";
+import { Ship, Building2, Package, Boxes, ChevronDown, Coins } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -40,11 +40,11 @@ export function OtwSummaryView({
   onViewContainer,
 }: OtwSummaryViewProps) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-5" data-testid="factory-containers-summary">
       <OtwNotes />
 
       {otwContainers.length === 0 ? (
-        <div className="rounded-xl border overflow-hidden">
+        <div className="rounded-2xl border border-border/70 bg-card/80 shadow-sm">
           <div className="py-16 text-center">
             <Ship className="h-12 w-12 mx-auto mb-3 text-muted-foreground opacity-40" />
             <p className="text-muted-foreground">No containers currently on the way.</p>
@@ -52,39 +52,42 @@ export function OtwSummaryView({
         </div>
       ) : (
         <>
-          <div className="rounded-xl border overflow-hidden">
+          <div className="space-y-3" aria-label="Container suppliers">
             {otwSupplierGroups.map((group, idx) => {
               const key = String(group.supplierId ?? "none");
               const isOpen = openOtwGroups.has(key);
-              const isLast = idx === otwSupplierGroups.length - 1;
               return (
                 <Collapsible key={key} open={isOpen} onOpenChange={() => toggleOtwGroup(key)}>
                   <CollapsibleTrigger asChild>
-                    <div
-                      className={`flex items-center gap-3 px-4 py-3.5 cursor-pointer hover-elevate transition-colors ${!isLast || isOpen ? "border-b" : ""} ${isOpen ? "bg-muted/30" : ""}`}
+                    <button
+                      type="button"
+                      className={`group flex w-full flex-wrap items-center gap-x-4 gap-y-3 border border-border/70 bg-card/90 px-4 py-4 text-left shadow-sm transition-all hover:border-blue-500/35 hover:bg-blue-500/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 dark:border-blue-200/10 dark:bg-slate-900/60 dark:hover:bg-slate-800/80 sm:flex-nowrap sm:px-5 ${isOpen ? "rounded-t-2xl border-b-0 bg-blue-500/5 dark:bg-slate-800/80" : "rounded-2xl"}`}
                       data-testid={`row-otw-supplier-${key}`}
+                      aria-label={`${group.supplierName}, ${group.containers.length} containers`}
                     >
-                      <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="font-semibold text-sm flex-1 min-w-0 truncate">{group.supplierName}</span>
-                      <Badge variant="secondary" className="shrink-0 text-xs">
+                      <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${idx % 2 === 0 ? "bg-blue-500/10 text-blue-600 dark:text-blue-300" : "bg-violet-500/10 text-violet-600 dark:text-violet-300"}`}>
+                        <Building2 className="h-5 w-5" />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight sm:text-base">{group.supplierName}</span>
+                      <Badge variant="secondary" className="shrink-0 rounded-full border border-border/60 px-2.5 py-1 text-xs font-semibold">
                         {group.containers.length} ctr{group.containers.length !== 1 ? "s" : ""}
                       </Badge>
-                      <span className="font-mono text-xs text-muted-foreground shrink-0 hidden sm:block w-28 text-right">
+                      <span className="hidden w-28 shrink-0 text-right font-mono text-sm tabular-nums text-muted-foreground sm:block">
                         {fmtOtwKg(group.totalKg)} kg
                       </span>
-                      <div className="shrink-0 min-w-[110px] text-right">
+                      <div className="min-w-[110px] shrink-0 text-right text-foreground">
                         <OtwCurrencyInline amounts={group.totalsByCurrency} />
                       </div>
                       <ChevronDown
-                        className={`h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+                        className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
                       />
-                    </div>
+                    </button>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
-                    <div className={`bg-muted/5 ${!isLast ? "border-b" : ""}`}>
+                    <div className="overflow-x-auto rounded-b-2xl border border-t-0 border-border/70 bg-card/90 dark:border-blue-200/10 dark:bg-slate-900/60">
                       <Table>
                         <TableHeader>
-                          <TableRow className="bg-muted/40 border-b border-border/60 hover:bg-muted/40">
+                          <TableRow className="border-b border-border/60 bg-blue-500/5 hover:bg-blue-500/5 dark:bg-slate-800/60">
                             <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2 pl-4">
                               Container
                             </TableHead>
@@ -108,7 +111,7 @@ export function OtwSummaryView({
                             return (
                               <TableRow
                                 key={c.id}
-                                className="cursor-pointer hover-elevate"
+                                className="cursor-pointer border-border/40 transition-colors hover:bg-blue-500/5 dark:hover:bg-blue-400/10"
                                 onClick={() => onViewContainer(c)}
                                 data-testid={`row-otw-container-${c.id}`}
                               >
@@ -126,7 +129,7 @@ export function OtwSummaryView({
                           })}
                         </TableBody>
                         <tfoot>
-                          <TableRow className="bg-muted/30 font-medium">
+                          <TableRow className="border-t border-border/70 bg-blue-500/5 font-medium dark:bg-slate-800/50">
                             <TableCell colSpan={2} className="text-muted-foreground">
                               Supplier total
                             </TableCell>
@@ -147,37 +150,45 @@ export function OtwSummaryView({
             })}
           </div>
 
-          <div className="sticky bottom-0 z-50 rounded-xl border bg-card shadow-md" data-testid="div-otw-grand-total">
-            <div className="flex flex-wrap items-center gap-6 p-4">
-              <div className="flex items-center gap-2">
-                <Package className="h-4 w-4 text-muted-foreground shrink-0" />
+          <div className="sticky bottom-0 z-20 overflow-hidden rounded-2xl border border-blue-500/20 bg-card/95 shadow-lg shadow-blue-950/5 backdrop-blur-xl dark:border-blue-300/15 dark:bg-slate-900/95" data-testid="div-otw-grand-total">
+            <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-blue-500 to-violet-500" />
+            <div className="grid gap-4 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)] sm:gap-0 sm:p-5">
+              <div className="flex items-center gap-3 sm:border-r sm:border-border/70 sm:pr-4">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-300">
+                  <Package className="h-5 w-5" />
+                </span>
                 <div>
-                  <p className="text-xs text-muted-foreground">Containers</p>
-                  <p className="text-lg font-bold font-mono" data-testid="text-otw-grand-containers">
+                  <p className="text-xs font-medium text-muted-foreground">Containers</p>
+                  <p className="font-mono text-2xl font-bold tabular-nums tracking-tight" data-testid="text-otw-grand-containers">
                     {otwGrandTotals.containers}
                   </p>
                 </div>
               </div>
-              <div className="flex items-start gap-2">
-                <Boxes className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
+              <div className="flex items-center gap-3 sm:border-r sm:border-border/70 sm:px-5">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-300">
+                  <Boxes className="h-5 w-5" />
+                </span>
                 <div>
-                  <p className="text-xs text-muted-foreground">Total KG</p>
-                  <p className="text-lg font-bold font-mono" data-testid="text-otw-grand-kg">
+                  <p className="text-xs font-medium text-muted-foreground">Total KG</p>
+                  <p className="font-mono text-2xl font-bold tabular-nums tracking-tight" data-testid="text-otw-grand-kg">
                     {fmtOtwKg(otwGrandTotals.kg)}
                   </p>
                 </div>
               </div>
-              <div className="flex items-start gap-2 flex-1">
-                <div className="w-full">
-                  <p className="text-xs text-muted-foreground mb-1">Total Value by Currency</p>
-                  <div className="flex flex-wrap gap-x-6 gap-y-1" data-testid="text-otw-grand-totals">
+              <div className="flex items-center gap-3 sm:pl-5">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
+                  <Coins className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">Total Value by Currency</p>
+                  <div className="flex flex-wrap gap-x-6 gap-y-2" data-testid="text-otw-grand-totals">
                     {Object.entries(otwGrandTotals.totalsByCurrency)
                       .filter(([, v]) => v > 0)
                       .sort(([a], [b]) => a.localeCompare(b))
                       .map(([ccy, amt]) => (
                         <div key={ccy} className="flex flex-col">
                           <span className="text-xs text-muted-foreground">{ccy}</span>
-                          <span className="text-lg font-bold font-mono whitespace-nowrap">
+                          <span className="whitespace-nowrap font-mono text-xl font-bold tabular-nums tracking-tight">
                             {otwFmtCcy(otwCcySymbol(ccy), amt)}
                           </span>
                         </div>
