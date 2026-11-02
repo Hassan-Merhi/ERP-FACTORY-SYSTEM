@@ -320,7 +320,7 @@ export default function FactoryPendingLoadings() {
           </div>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-slate-500 dark:text-slate-400 sm:text-sm">
             <span className="inline-flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> Started: {formatDate(load.loadingStartedAt)}</span>
-            <span className="inline-flex items-center gap-1.5"><Package className="h-3.5 w-3.5" /> {load.totalQtyBales.toLocaleString()} bales scanned</span>
+            <span className="inline-flex items-center gap-1.5"><Package className="h-3.5 w-3.5" /> {(load.totalQtyBales || 0).toLocaleString()} bales scanned</span>
             <span className="inline-flex items-center gap-1.5"><Weight className="h-3.5 w-3.5" /> {fmtKg(load.totalWeightKg)}</span>
           </div>
           {editingNoteId === load.id ? (
@@ -497,7 +497,7 @@ export default function FactoryPendingLoadings() {
         </div>
       )}
 
-            {/* Delete Confirmation Dialog */}
+      {/* Delete Confirmation Dialog */}
       <AlertDialog
         open={!!deleteTarget}
         onOpenChange={(open) => {
