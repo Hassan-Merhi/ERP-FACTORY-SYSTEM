@@ -86,9 +86,13 @@ export function registerFactoryStockQueryReportRoutes(app: Express) {
                  COALESCE(SUM(cob.price_used::numeric), 0) AS "total"
           FROM customer_order_bales cob
           JOIN customer_orders co ON co.id = cob.order_id
+          LEFT JOIN factory_bales fb
+            ON fb.id = cob.bale_id AND fb.company_id = co.company_id
           JOIN factory_bale_products p
-            ON p.article_code = cob.article_code AND p.company_id = co.company_id
-               AND p.deleted_at IS NULL ${productCategory}
+            ON p.company_id = co.company_id AND p.deleted_at IS NULL
+               AND (p.id = fb.product_id OR
+                    (fb.product_id IS NULL AND p.article_code = cob.article_code))
+               ${productCategory}
           LEFT JOIN customers c ON c.id = co.customer_id AND c.company_id = co.company_id
           WHERE co.company_id = ${companyId} AND co.status = 'FINALIZED'
             AND co.deleted_at IS NULL ${saleLocation} ${saleCustomer}
