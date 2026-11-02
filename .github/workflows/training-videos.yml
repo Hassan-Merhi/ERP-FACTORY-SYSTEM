@@ -1,6 +1,12 @@
 name: Record Real ERP Training Videos (Disposable Data)
 
 on:
+  workflow_call:
+    inputs:
+      topic:
+        description: "Comma-separated tour IDs selected by the nightly audit"
+        type: string
+        required: true
   workflow_dispatch:
     inputs:
       topic:
@@ -109,7 +115,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: real-erp-training-${{ inputs.topic }}
+          name: real-erp-training-${{ github.run_id }}
           path: artifacts/training-videos
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 30

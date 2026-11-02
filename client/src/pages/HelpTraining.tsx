@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { BookOpen, ChevronRight, CirclePlay, Clapperboard, FileText, Search, ShieldCheck, Video } from "lucide-react";
 import { visibleTrainingTopics, type TrainingMode } from "@/training/trainingCatalog";
-import { publishedTrainingVideos } from "@/training/publishedVideos";
+import { publishedTrainingVideos, publishedTrainingCaptions } from "@/training/publishedVideos";
 
 interface Props {
   mode: TrainingMode;
@@ -97,7 +97,11 @@ export default function HelpTraining({ mode, role, accessKeys, fullAccess = fals
             <div className="overflow-hidden rounded-xl border bg-muted/30">
               {supportedVideo ? (
                 <video className="aspect-video w-full bg-black" controls preload="metadata"
-                  src={videoUrl} aria-label={"Training video: " + active.title} />
+                  src={videoUrl} aria-label={"Training video: " + active.title}>
+                  {publishedTrainingCaptions[active.id] && (
+                    <track kind="captions" src={publishedTrainingCaptions[active.id]} srcLang="en" label="English" default />
+                  )}
+                </video>
               ) : (
                 <div className="flex aspect-video flex-col items-center justify-center gap-3 p-6 text-center">
                   <Clapperboard className="h-10 w-10 text-muted-foreground" />

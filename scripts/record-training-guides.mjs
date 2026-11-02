@@ -36,7 +36,8 @@ const TOURS = Object.freeze({
   "erp-daybook": { company: "PHASE7-ERP", route: "/daybook", title: "ERP Daybook", steps: ["Open the Daybook.", "Review the date and transaction filters.", "No journal transactions are changed."] },
   "erp-reports": { company: "PHASE7-ERP", route: "/sales-report", title: "ERP Sales Report", steps: ["Open Sales Report.", "Review the available period and scope filters.", "This tour is read-only."] },
 });
-const tours = selectedTopic === "all" ? Object.entries(TOURS) : [[selectedTopic, TOURS[selectedTopic]]];
+const chosenIds = selectedTopic === "all" ? Object.keys(TOURS) : selectedTopic.split(",").map((id) => id.trim()).filter(Boolean);
+const tours = [...new Set(chosenIds)].map((id) => [id, TOURS[id]]);
 
 function assertSafeEnvironment() {
   const url = new URL(base);
@@ -160,7 +161,7 @@ async function recordOne(page, id, tour) {
     await fs.writeFile(path.join(dir, "captions.vtt"), captions.join("\n"));
     const steps = tour.steps.map((item, index) => String(index + 1) + ". " + item).join("\n");
     await fs.writeFile(path.join(dir, "guide.md"), "# " + tour.title + "\n\nRecorded against the disposable Phase 7 test company.\n\nPage: " + tour.route + "\n\nScreen heading: " + pageDetails.title + "\n\nVisible tabs: " + (pageDetails.tabs.join(", ") || "(none)") + "\n\n## Guided steps\n\n" + steps + "\n\n![Actual test system screenshot](screenshot.png)\n");
-    return { topic: id, route: tour.route, durationMs: Date.now() - started, status: "captured", blockedRequests: blocked.slice(0, 20), requiresReview: true, source: "disposable Phase 7 fixture" };
+    return { topic: id, route: tour.route, sourceSha: process.env.GITHUB_SHA || null, durationMs: Date.now() - started, status: "captured", blockedRequests: blocked.slice(0, 20), requiresReview: true, source: "disposable Phase 7 fixture" };
   } finally {
     page.off("request", onRequest);
     await page.setRequestInterception(false);
