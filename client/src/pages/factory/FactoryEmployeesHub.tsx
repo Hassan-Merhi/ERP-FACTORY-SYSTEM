@@ -59,7 +59,9 @@ export default function FactoryEmployeesHub() {
               data-testid={`tab-employees-${value}`}
               className={
                 effectiveTab === value
-                  ? "border border-blue-400/50 bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md shadow-blue-600/20 hover:text-white"
+                  ? value === "employees"
+                    ? "border border-emerald-400/50 bg-gradient-to-r from-emerald-700 to-emerald-600 text-white shadow-md shadow-emerald-600/20 hover:text-white"
+                    : "border border-blue-400/50 bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md shadow-blue-600/20 hover:text-white"
                   : "hover:bg-blue-500/10"
               }
             >
