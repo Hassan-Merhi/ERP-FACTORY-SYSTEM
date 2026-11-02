@@ -44,6 +44,12 @@ describe("Company-12 charge-64 creditor exposure: always a nonposting preview", 
     expect(r.factoryClearingNetDebitAfterIllustrationUsd).toBe("379888.49");
     expect(r.reportedExpenseDecreaseIfSameAccountTypeUsd).toBe("1692.96");
     expect(r.namedCreditorLedgerWouldChange).toBe(true);
+    expect(r.supplierBalanceProtectionRequired).toBe(true);
+    expect(r.supplierBalanceFreeze.canPost).toBe(false);
+    expect(r.supplierBalanceFreeze.issues).toContain("PROTECTED_NAMED_CREDITOR_LEDGER");
+    expect(r.supplierBalanceFreeze.issues).toContain("PROTECTED_BALANCE_SHEET_OR_OTHER_LEDGER");
+    expect(r.allowedSupplierOrCreditorBalanceDeltaUsd).toBe("0.00");
+    expect(r.neutralCorrectionProven).toBe(false);
     expect(r.registeredSupplierPartyLinesChanged).toBe(false);
     expect(r.readyToPost).toBe(false);
     expect(r.proposedJournal).toBeNull();
