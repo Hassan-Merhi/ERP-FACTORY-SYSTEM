@@ -12,6 +12,7 @@ import { registerAuthoritativeInventoryStockMiddleware } from "./authoritativeIn
 import { registerFactoryLocationInventoryRoutes } from "./locationInventoryRoutes";
 import { registerFactoryLocationInventoryExportRoutes } from "./locationInventoryExportRoutes";
 import { registerFactoryStockQueryRoutes } from "./stockQueryRoutes";
+import { registerFactoryStockQueryReportRoutes } from "./stockQueryReportRoutes";
 
 export function registerFactoryStockRoutes(app: Express) {
   registerFactoryStockEntryRoutes(app);
@@ -20,4 +21,5 @@ export function registerFactoryStockRoutes(app: Express) {
   registerFactoryLocationInventoryRoutes(app);
   registerFactoryLocationInventoryExportRoutes(app);
   registerFactoryStockQueryRoutes(app);
+  registerFactoryStockQueryReportRoutes(app);
 }
