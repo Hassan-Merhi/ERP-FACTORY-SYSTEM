@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
+import { useAuthenticatedUser } from "@/app/useAuthenticatedUser";
 import { CalendarDays, CheckCircle, XCircle, Save, UserCheck, UserX, User, ChevronsUpDown, Check } from "lucide-react";
 
 import type { AttendanceBulkRecord, AttendanceRecord, WorkerRow } from "../types";
@@ -27,6 +28,8 @@ import { SummaryCard } from "./SummaryCard";
 
 export function PerWorkerView() {
   const { toast } = useToast();
+  const { user } = useAuthenticatedUser();
+  const isOwner = (user?.currentRole ?? user?.role) === "Owner";
   const [selectedWorkerId, setSelectedWorkerId] = useState<string>("");
   const [workerComboOpen, setWorkerComboOpen] = useState(false);
   const [startDate, setStartDate] = useState<string>(attendanceToday);
@@ -136,7 +139,7 @@ export function PerWorkerView() {
       return { workerId: workerIdNum, attendanceDate: d, status: "Absent" };
     });
     const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
-    if (priorDates.length) {
+    if (priorDates.length && !isOwner) {
       setApprovalDates(priorDates);
       setPendingApprovalRecords(records);
       setApprovalOpen(true);
@@ -154,7 +157,7 @@ export function PerWorkerView() {
   return (
     <div className="space-y-4">
       {/* Controls */}
-      {attendancePastDates(generateDateRange(startDate, endDate)).length > 0 && (
+      {!isOwner && attendancePastDates(generateDateRange(startDate, endDate)).length > 0 && (
         <Badge variant="secondary">Earlier dates require Admin approval to save</Badge>
       )}
       <Card className="overflow-hidden border-border/70 bg-card/75 shadow-none">
