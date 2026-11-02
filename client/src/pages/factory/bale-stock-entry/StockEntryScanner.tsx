@@ -81,11 +81,15 @@ export function StockEntryScanner({
   const isOpen = showDropdown && filteredProducts.length > 0;
 
   return (
-    <FactoryMobileScannerPanel>
-      <label htmlFor="factory-stock-entry-scan" className="mb-2 block text-sm font-medium">
+    <div className="stock-entry-scanner">
+      <FactoryMobileScannerPanel>
+      <label htmlFor="factory-stock-entry-scan" className="stock-entry-scanner-label mb-3 flex items-center gap-2 text-sm font-bold">
+        <span className="stock-entry-label-icon inline-flex h-8 w-8 items-center justify-center rounded-lg" aria-hidden="true">
+          <ScanLine className="h-4 w-4" />
+        </span>
         Scan article code or search product
       </label>
-      <MobileBarcodeScanner onScan={onCameraScan} className="mb-2" />
+      <MobileBarcodeScanner onScan={onCameraScan} className="stock-entry-camera mb-3" />
       <div className="relative group">
         <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
           <ScanLine className="h-5 w-5 text-muted-foreground transition-colors group-focus-within:text-primary" />
@@ -109,7 +113,7 @@ export function StockEntryScanner({
           value={scanInput}
           onChange={(e) => onScanInputChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="h-12 rounded-xl border-2 pl-11 text-base shadow-xs transition-all focus-visible:ring-primary/20 sm:h-11"
+          className="stock-entry-scan-input h-12 rounded-xl border-2 pl-11 text-base shadow-xs transition-all focus-visible:ring-primary/20 sm:h-12"
           data-testid="input-scan-product"
         />
 
@@ -129,7 +133,7 @@ export function StockEntryScanner({
             ref={listRef}
             role="listbox"
             aria-label="Matching bale products"
-            className="absolute z-50 mt-1 max-h-72 w-full overflow-y-auto overscroll-contain rounded-xl border bg-background shadow-xl max-sm:relative max-sm:mt-2 max-sm:max-h-[min(20rem,45dvh)]"
+            className="stock-entry-results absolute z-50 mt-2 max-h-72 w-full overflow-y-auto overscroll-contain rounded-xl border bg-background shadow-xl max-sm:relative max-sm:mt-2 max-sm:max-h-[min(20rem,45dvh)]"
           >
             {filteredProducts.map((p, idx) => (
               <button
@@ -174,6 +178,7 @@ export function StockEntryScanner({
           </div>
         )}
       </div>
-    </FactoryMobileScannerPanel>
+      </FactoryMobileScannerPanel>
+    </div>
   );
 }

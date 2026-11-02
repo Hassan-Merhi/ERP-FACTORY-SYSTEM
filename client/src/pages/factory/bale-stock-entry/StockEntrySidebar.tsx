@@ -1,4 +1,4 @@
-import { CalendarDays, Loader2, CheckCircle } from "lucide-react";
+import { CalendarDays, Loader2, CheckCircle, MapPin, SlidersHorizontal, Boxes, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,11 +43,14 @@ export function StockEntrySidebar({
   onConfirm,
 }: StockEntrySidebarProps) {
   return (
-    <aside className="min-w-0 xl:sticky xl:top-6" aria-label="Stock entry options and totals">
-      <div className="min-w-0 space-y-5 rounded-2xl border bg-card p-3 shadow-xs sm:p-5">
+    <aside className="stock-entry-sidebar min-w-0 xl:sticky xl:top-6" aria-label="Stock entry options and totals">
+      <div className="stock-entry-sidebar-panel min-w-0 space-y-5 rounded-2xl border bg-card p-3 shadow-xs sm:p-5">
         <div className="space-y-4">
           <div className="space-y-2">
-            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Location & Date</p>
+            <h2 className="stock-entry-panel-title flex items-center gap-2 text-sm font-bold">
+              <MapPin className="h-4 w-4 text-emerald-500" aria-hidden="true" />
+              Location & Date
+            </h2>
             <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
               <Select value={selectedLocationId} onValueChange={onLocationChange}>
                 <SelectTrigger className="min-h-11 w-full rounded-xl" data-testid="select-location">
@@ -76,7 +79,10 @@ export function StockEntrySidebar({
           </div>
 
           <div className="space-y-2">
-            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Filters & Options</p>
+            <h2 className="stock-entry-panel-title flex items-center gap-2 text-sm font-bold">
+              <SlidersHorizontal className="h-4 w-4 text-emerald-500" aria-hidden="true" />
+              Filters & Options
+            </h2>
             <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
               <div className="min-w-0 space-y-1">
                 <Label className="px-1 text-xs font-semibold text-muted-foreground">Worker Group</Label>
@@ -116,9 +122,12 @@ export function StockEntrySidebar({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 border-t pt-4">
-          <div className="min-w-0 rounded-lg bg-muted/40 p-3">
-            <span className="block text-xs font-medium text-muted-foreground">Total Bales</span>
+        <div className="stock-entry-total-grid grid grid-cols-2 gap-3 border-t pt-4">
+          <div className="stock-entry-total-tile min-w-0 rounded-xl bg-muted/40 p-3">
+            <span className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+              <Boxes className="h-4 w-4 text-emerald-500" aria-hidden="true" />
+              Total Bales
+            </span>
             <span
               className="mt-1 block wrap-break-word text-xl font-black tabular-nums text-primary"
               data-testid="text-total-qty"
@@ -126,8 +135,11 @@ export function StockEntrySidebar({
               {totalQty}
             </span>
           </div>
-          <div className="min-w-0 rounded-lg bg-muted/40 p-3">
-            <span className="block text-xs font-medium text-muted-foreground">Total Weight</span>
+          <div className="stock-entry-total-tile min-w-0 rounded-xl bg-muted/40 p-3">
+            <span className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+              <Scale className="h-4 w-4 text-emerald-500" aria-hidden="true" />
+              Total Weight
+            </span>
             <span
               className="mt-1 block wrap-break-word text-xl font-black tabular-nums text-primary"
               data-testid="text-total-kg"
@@ -140,7 +152,7 @@ export function StockEntrySidebar({
 
         <FactoryMobileActionBar className="min-[360px]:grid-cols-1">
           <Button
-            className="min-h-12 w-full gap-2 rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-600 sm:min-h-11"
+            className="stock-entry-confirm min-h-12 w-full gap-2 rounded-xl bg-emerald-600 text-sm font-bold text-white hover:bg-emerald-600 sm:min-h-12"
             disabled={totalQty === 0 || !selectedLocationId || isPending}
             onClick={onConfirm}
             data-testid="button-confirm-stock-entry"
