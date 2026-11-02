@@ -278,6 +278,10 @@ export function registerFactoryEdgeBoundary(app: Express): void {
           installed: outboxInstalled("factory_edge_receiving_outbox"),
           code: "EDGE_PHASE9_RECEIVING_CAPTURE_NOT_INSTALLED",
         },
+        "PATCH /api/containers/:id/offload": {
+          installed: outboxInstalled("factory_edge_receiving_outbox"),
+          code: "EDGE_PHASE9_RECEIVING_CAPTURE_NOT_INSTALLED",
+        },
       }
     )
   );

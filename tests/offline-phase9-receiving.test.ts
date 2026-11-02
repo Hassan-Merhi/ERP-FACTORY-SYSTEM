@@ -20,7 +20,7 @@ import { pool } from "../server/db";
 import { executeContainerOffloadLifecycle } from "../server/services/containers/offload-lifecycle/execute";
 import {
   offlineReceivingCapture,
-  offlineReceivingRefusal,
+  offlineReceivingInputs,
 } from "../server/routes/containers/containerOffloadOfflinePolicy";
 import { ensurePhase9ReceivingOutboxSchema } from "../server/edge/phase9ReceivingOutbox";
 import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
@@ -60,7 +60,26 @@ async function container(quantity = "10.000"): Promise<number> {
   return Number(c.rows[0].id);
 }
 
-function receivingEvent(containerId: number, lineDigest: string): Phase9ReceivingEvent {
+const NO_CHARGES = {
+  duties: "0",
+  dutiesAccountId: null,
+  officeCharges: "0",
+  officeChargesAccountId: null,
+  officeChargesCashAccountId: null,
+  transferCharges: "0",
+  transportFees: "0",
+  transportAccountId: null,
+  additionalCharges: [],
+  inventoryCostCorrections: [],
+  agentChargeLines: [],
+};
+
+function receivingEvent(
+  containerId: number,
+  lineDigest: string,
+  mode: "create" | "edit" = "create",
+  offload: Record<string, unknown> = NO_CHARGES
+): Phase9ReceivingEvent {
   const requestId = randomUUID();
   const payload = {
     kind: "receiving.container-offload.v1",
@@ -73,6 +92,8 @@ function receivingEvent(containerId: number, lineDigest: string): Phase9Receivin
     locationId: ctx.locationId,
     offloadDate: "2026-11-02",
     lineDigest,
+    mode,
+    offload,
   };
   const event = {
     sequence: "1",
@@ -174,13 +195,30 @@ afterAll(async () => {
 }, 60_000);
 
 describe("Phase 9 offline receiving on the factory LAN server (POST /api/containers/:id/offload)", () => {
-  it("allows only quantity receipts offline", () => {
-    expect(offlineReceivingRefusal({ duties: "0", officeCharges: "0", transferCharges: "0", transportFees: "0" })).toBe(
-      null
-    );
-    expect(offlineReceivingRefusal({ duties: "12.50" })).toBe("EDGE_RECEIVING_QUANTITY_ONLY");
-    expect(offlineReceivingRefusal({ additionalCharges: [{}] })).toBe("EDGE_RECEIVING_QUANTITY_ONLY");
-    expect(offlineReceivingRefusal({ inventoryCostCorrections: [{}] })).toBe("EDGE_RECEIVING_QUANTITY_ONLY");
+  it("captures charges and accounts in canonical form", () => {
+    expect(
+      offlineReceivingInputs({
+        companyId: 1,
+        containerId: 1,
+        mode: "create-or-replace",
+        locationId: 1,
+        offloadDate: "2026-11-02",
+        duties: "12.50",
+        dutiesAccountId: 7,
+        officeCharges: "0.00",
+        transferCharges: "3",
+        transportFees: "0",
+        additionalCharges: [{ description: "Forklift", amount: 20, ledgerAccountId: 9 }],
+        inventoryCostCorrections: [{ stockItemId: 4, correctRate: 6.75 }],
+      })
+    ).toEqual({
+      ...NO_CHARGES,
+      duties: "12.5",
+      dutiesAccountId: 7,
+      transferCharges: "3",
+      additionalCharges: [{ description: "Forklift", amount: "20", ledgerAccountId: 9 }],
+      inventoryCostCorrections: [{ stockItemId: 4, correctRate: "6.75" }],
+    });
   });
 
   it("records the committed first offload in the same transaction, with the order's quantity digest", async () => {
@@ -200,7 +238,20 @@ describe("Phase 9 offline receiving on the factory LAN server (POST /api/contain
             transferCharges: "0",
             transportFees: "0",
           },
-          offlineReceivingCapture({ userId: ctx.userId, username: `${PREFIX}_testuser`, offloadDate: "2026-11-02" })
+          offlineReceivingCapture(
+            { userId: ctx.userId, username: `${PREFIX}_testuser` },
+            {
+              companyId: ctx.companyId,
+              containerId,
+              mode: "create-or-replace",
+              locationId: ctx.locationId,
+              offloadDate: "2026-11-02",
+              duties: "0",
+              officeCharges: "0",
+              transferCharges: "0",
+              transportFees: "0",
+            }
+          )
         )
       );
       const outbox = await pool.query(
@@ -212,6 +263,8 @@ describe("Phase 9 offline receiving on the factory LAN server (POST /api/contain
       expect(outbox.rows[0].payload).toMatchObject({
         containerId,
         offloadDate: "2026-11-02",
+        mode: "create",
+        offload: NO_CHARGES,
         lineDigest: phase9ReceivingLineDigest([{ stockItemId: ctx.stockItemIds[0], quantity: "10" }]),
       });
     } finally {
@@ -248,6 +301,21 @@ describe("Phase 9 offline receiving cloud replay", () => {
       await replay(client, event, ["PHASE9_RECEIVING_ORDER_CHANGED"]);
       // Approved: the cloud's current order quantity is received.
       expect(await qty(client)).toBe(before + 12);
+    });
+  });
+
+  it("replays an offloaded container's edit with its duties as entered", async () => {
+    const containerId = await container();
+    const digest = phase9ReceivingLineDigest([{ stockItemId: ctx.stockItemIds[0], quantity: "10" }]);
+    await inRolledBackTx(async (client) => {
+      const editBeforeOffload = receivingEvent(containerId, digest, "edit");
+      expect(await conflictCode(replay(client, editBeforeOffload))).toBe("PHASE9_RECEIVING_NOT_OFFLOADED");
+      await replay(client, receivingEvent(containerId, digest));
+      const edited = await replay(client, receivingEvent(containerId, digest, "edit", { ...NO_CHARGES, duties: "25" }));
+      const offload = await client.query("SELECT duties::numeric AS duties FROM container_offloads WHERE id = $1", [
+        edited.cloudRef,
+      ]);
+      expect(Number(offload.rows[0].duties)).toBe(25);
     });
   });
 });

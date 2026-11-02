@@ -50,8 +50,12 @@ const SUPPORTED = new Map([
   ["POST /api/containers/:id/offload", {
     policy: "receiving.container-offload.v1",
     limitations:
-      "First offload against existing purchase orders, quantities only (no duties, charges or cost " +
-      "corrections); cloud prices apply; changed order quantities are held for review; edits stay cloud-only",
+      "Offload against existing purchase orders with its duties, charges, cost corrections and agent lines " +
+      "as entered; cloud prices apply; changed order quantities are held for review",
+  }],
+  ["PATCH /api/containers/:id/offload", {
+    policy: "receiving.container-offload.v1",
+    limitations: "Offload edit replayed as entered (replace-only); the cloud must already hold the offload",
   }],
   ["POST /api/files/upload", {
     policy: "attachment.file.v1",

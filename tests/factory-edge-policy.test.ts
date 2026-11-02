@@ -128,8 +128,10 @@ describe("factory LAN edge deployment policy", () => {
         "/api/files/upload",
       ]) {
         expect(edgeBlocksWrite(config, "POST", approved)).toBe(mode === "read-only");
+        // Offload edits (PATCH) are approved too; every other verb stays blocked.
+        const extraVerbs = approved === "/api/containers/42/offload" ? ["PATCH"] : [];
         for (const verb of ["PUT", "PATCH", "DELETE"]) {
-          expect(edgeBlocksWrite(config, verb, approved)).toBe(true);
+          expect(edgeBlocksWrite(config, verb, approved)).toBe(extraVerbs.includes(verb) ? mode === "read-only" : true);
         }
       }
       for (const path of [

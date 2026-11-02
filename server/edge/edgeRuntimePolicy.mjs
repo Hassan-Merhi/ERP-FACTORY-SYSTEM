@@ -142,8 +142,10 @@ const LAN_PRIMARY_CAPTURE_ALLOWLIST = new Set([
 export function phase9ApprovedCaptureRoute(method, path) {
   const key = `${String(method).toUpperCase()} ${path}`;
   if (LAN_PRIMARY_CAPTURE_ALLOWLIST.has(key)) return key;
-  if (String(method).toUpperCase() === "POST" && PHASE9_RECEIVING_OFFLOAD_PATH.test(path)) {
-    return "POST /api/containers/:id/offload";
+  const verb = String(method).toUpperCase();
+  // Owner policy 2026-11-02: offline offload edits (PATCH) are recorded too.
+  if ((verb === "POST" || verb === "PATCH") && PHASE9_RECEIVING_OFFLOAD_PATH.test(path)) {
+    return `${verb} /api/containers/:id/offload`;
   }
   return null;
 }

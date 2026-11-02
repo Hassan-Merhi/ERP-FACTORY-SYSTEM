@@ -10,8 +10,7 @@ import {
   executeContainerOffloadLifecycle,
   type ContainerOffloadLifecycleMode,
 } from "../../services/containers/offload-lifecycle";
-import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
-import { offlineReceivingCapture, offlineReceivingRefusal } from "./containerOffloadOfflinePolicy";
+import { offlineReceivingCapture } from "./containerOffloadOfflinePolicy";
 
 async function runCentralOffload(req: Request, res: Response, mode: ContainerOffloadLifecycleMode): Promise<void> {
   const startedAt = Date.now();
@@ -38,42 +37,34 @@ async function runCentralOffload(req: Request, res: Response, mode: ContainerOff
 
   const data = validation.data;
   const offloadDate = data.offloadDate || getClientDate(req);
-  // Factory LAN server during an outage: quantity-only first offloads only.
-  if (isPhase9LanPrimary()) {
-    const refusal = mode === "replace-only" ? "EDGE_RECEIVING_ALREADY_OFFLOADED" : offlineReceivingRefusal(data);
-    if (refusal) {
-      res.status(409).json({ code: refusal, message: "Only quantity receipts can be recorded while offline." });
-      return;
-    }
-  }
 
   try {
+    const input = {
+      companyId,
+      containerId,
+      mode,
+      locationId: data.locationId,
+      offloadDate,
+      duties: data.duties,
+      dutiesAccountId: data.dutiesAccountId ?? null,
+      officeCharges: data.officeCharges,
+      officeChargesAccountId: data.officeChargesAccountId ?? null,
+      officeChargesCashAccountId: data.officeChargesCashAccountId ?? null,
+      transferCharges: data.transferCharges,
+      transportFees: data.transportFees,
+      transportAccountId: data.transportAccountId ?? null,
+      additionalCharges: data.additionalCharges ?? [],
+      inventoryCostCorrections: data.inventoryCostCorrections ?? [],
+      agentChargeLines: data.agentChargeLines ?? [],
+      // Wave 15 (M10): cost corrections need Admin/Owner.
+      actorRole: req.session.currentRole ?? null,
+    };
     const result = await executeContainerOffloadLifecycle(
-      {
-        companyId,
-        containerId,
-        mode,
-        locationId: data.locationId,
-        offloadDate,
-        duties: data.duties,
-        dutiesAccountId: data.dutiesAccountId ?? null,
-        officeCharges: data.officeCharges,
-        officeChargesAccountId: data.officeChargesAccountId ?? null,
-        officeChargesCashAccountId: data.officeChargesCashAccountId ?? null,
-        transferCharges: data.transferCharges,
-        transportFees: data.transportFees,
-        transportAccountId: data.transportAccountId ?? null,
-        additionalCharges: data.additionalCharges ?? [],
-        inventoryCostCorrections: data.inventoryCostCorrections ?? [],
-        agentChargeLines: data.agentChargeLines ?? [],
-        // Wave 15 (M10): cost corrections need Admin/Owner.
-        actorRole: req.session.currentRole ?? null,
-      },
-      offlineReceivingCapture({
-        userId: String(req.session.userId),
-        username: req.session.username || "unknown",
-        offloadDate,
-      })
+      input,
+      offlineReceivingCapture(
+        { userId: String(req.session.userId), username: req.session.username || "unknown" },
+        input
+      )
     );
 
     logger.info("Atomic container offload lifecycle completed", {

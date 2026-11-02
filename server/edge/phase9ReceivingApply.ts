@@ -1,14 +1,15 @@
 /**
  * Phase 9 cloud apply handler for `receiving.container-offload.v1`.
  *
- * Replays a factory LAN receipt of a container against its existing purchase
- * orders through the same offload lifecycle the live route uses, on the SAME
- * PostgreSQL transaction as the Phase 9 receipt and cursor. Quantities only:
- * no duties or charges, and the cloud's current purchase order prices value
- * the stock. If the order's quantities changed in the cloud during the outage
- * the receipt is held (PHASE9_RECEIVING_ORDER_CHANGED) for an Admin/Developer
- * to approve (receive the cloud's current quantities) or reject. A container
- * already offloaded or no longer offloadable can only be rejected.
+ * Replays a factory LAN offload (first offload or edit, with its duties,
+ * charges, cost corrections and agent lines exactly as entered) through the
+ * same offload lifecycle the live route uses, on the SAME PostgreSQL
+ * transaction as the Phase 9 receipt and cursor. The cloud's current purchase
+ * order prices value the stock. If the order's quantities changed in the
+ * cloud during the outage the offload is held (PHASE9_RECEIVING_ORDER_CHANGED)
+ * for an Admin/Developer to approve (use the cloud's current quantities) or
+ * reject. A first offload of a container the cloud already offloaded, an
+ * edit of one it has not, or any lifecycle refusal can only be rejected.
  */
 import { drizzle } from "drizzle-orm/node-postgres";
 import type { PoolClient } from "pg";
@@ -18,7 +19,7 @@ import {
   executeContainerOffloadLifecycleTx,
 } from "../services/containers/offload-lifecycle";
 import { Phase9EventConflict } from "./phase9CloudEventStore.mjs";
-import { PHASE9_RECEIVING_ORDER_CHANGED } from "./phase9ReceivingEnvelope.mjs";
+import { PHASE9_RECEIVING_ORDER_CHANGED, type Phase9ReceivingOffloadInputs } from "./phase9ReceivingEnvelope.mjs";
 import { phase9ReceivingLineDigestTx } from "./phase9ReceivingOutbox";
 
 type Queryable = Pick<PoolClient, "query">;
@@ -40,6 +41,8 @@ export interface Phase9ReceivingEvent {
     locationId: number;
     offloadDate: string;
     lineDigest: string;
+    mode: "create" | "edit";
+    offload: Phase9ReceivingOffloadInputs;
   };
   payloadSha256: string;
 }
@@ -88,10 +91,13 @@ async function apply(
     throw new Phase9EventConflict("PHASE9_RECEIVING_CONTAINER_MISSING", { containerId: p.containerId });
   }
   const status = String(container.rows[0].status);
-  if (status === "OFFLOADED") {
+  if (p.mode === "create" && status === "OFFLOADED") {
     throw new Phase9EventConflict("PHASE9_RECEIVING_ALREADY_OFFLOADED", { containerId: p.containerId });
   }
-  if (status !== "OTW") {
+  if (p.mode === "edit" && status !== "OFFLOADED") {
+    throw new Phase9EventConflict("PHASE9_RECEIVING_NOT_OFFLOADED", { containerId: p.containerId, status });
+  }
+  if (status !== "OTW" && status !== "OFFLOADED") {
     throw new Phase9EventConflict("PHASE9_RECEIVING_CONTAINER_NOT_OFFLOADABLE", { containerId: p.containerId, status });
   }
   const cloudDigest = await phase9ReceivingLineDigestTx(tx, event.companyId, p.containerId);
@@ -102,21 +108,38 @@ async function apply(
       cloudDigest,
     });
   }
+  // Cost corrections need Admin/Owner: the actor's CURRENT cloud role decides.
+  const role = await client.query("SELECT role FROM user_company_roles WHERE user_id = $1 AND company_id = $2", [
+    event.actorUserId,
+    event.companyId,
+  ]);
+  const o = p.offload;
   try {
     const result = await executeContainerOffloadLifecycleTx(tx, {
       companyId: event.companyId,
       containerId: p.containerId,
-      mode: "create-or-replace",
+      mode: p.mode === "edit" ? "replace-only" : "create-or-replace",
       locationId: p.locationId,
       offloadDate: p.offloadDate,
-      duties: "0",
-      officeCharges: "0",
-      transferCharges: "0",
-      transportFees: "0",
-      additionalCharges: [],
-      inventoryCostCorrections: [],
-      agentChargeLines: [],
-      actorRole: null,
+      duties: o.duties,
+      dutiesAccountId: o.dutiesAccountId,
+      officeCharges: o.officeCharges,
+      officeChargesAccountId: o.officeChargesAccountId,
+      officeChargesCashAccountId: o.officeChargesCashAccountId,
+      transferCharges: o.transferCharges,
+      transportFees: o.transportFees,
+      transportAccountId: o.transportAccountId,
+      additionalCharges: o.additionalCharges.map((line) => ({ ...line, amount: Number(line.amount) })),
+      inventoryCostCorrections: o.inventoryCostCorrections.map((line) => ({
+        stockItemId: line.stockItemId,
+        correctRate: Number(line.correctRate),
+      })),
+      agentChargeLines: o.agentChargeLines.map((line) => ({
+        ...(line.description === null ? {} : { description: line.description }),
+        amountUsd: Number(line.amountUsd),
+        parentAgentAccountId: line.parentAgentAccountId,
+      })),
+      actorRole: role.rows[0]?.role ? String(role.rows[0].role) : null,
     });
     return { outcome: "cloud-applied", cloudRef: Number(result.offload.id), businessDate: p.offloadDate };
   } catch (error) {
