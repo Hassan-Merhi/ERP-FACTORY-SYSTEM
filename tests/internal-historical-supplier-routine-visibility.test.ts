@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isInternalHistoricalSupplierCatchup,
   operationalHistoricalSupplierExclusionSql,
+  operationalHistoricalSupplierGlobalExclusionSql,
   type RoutineHistoricalSupplierVoucher,
 } from "../server/services/accounting/internalHistoricalSupplierRoutineVisibility";
 
@@ -43,6 +44,15 @@ describe("Company-12 historical supplier catchup is an internal posting in routi
     expect(isInternalHistoricalSupplierCatchup({
       ...original, voucherNumber: "FACTORY-POC-83-64-1",
     })).toBe(false);
+  });
+  it("scopes global All Daybook catchup exclusions per voucher company", () => {
+    const sql = operationalHistoricalSupplierGlobalExclusionSql("v");
+    expect(sql).toContain("v.company_id <> 12");
+    expect(sql).toContain("FACTORY-IMPORT-[0-9]+");
+    expect(sql).toContain("FACTORY-COMM-[0-9]+");
+    // A legacy-numbered journal in a different company must remain visible.
+    expect(sql).toContain(" OR");
+    expect(operationalHistoricalSupplierGlobalExclusionSql("vouchers")).toContain("vouchers.company_id <> 12");
   });
   it("constrains SQL only to the known company and legacy identity", () => {
     expect(operationalHistoricalSupplierExclusionSql(11,"v")).toBe("TRUE");

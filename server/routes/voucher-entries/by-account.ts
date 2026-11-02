@@ -15,6 +15,7 @@ import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import { logAudit } from "../_helpers";
 import { z } from "zod";
 import { parseBoundedPagination, wantsBoundedPagination } from "../../lib/boundedPagination";
+import { operationalHistoricalSupplierExclusionSql } from "../../services/accounting/internalHistoricalSupplierRoutineVisibility";
 
 export function registerVoucherEntryByAccountRoutes(app: Express) {
   // ── ACCOUNT TRANSFER: fetch all entries for a ledger account ──
@@ -49,6 +50,10 @@ export function registerVoucherEntryByAccountRoutes(app: Express) {
         eq(vouchers.companyId, companyId),
         isNull(vouchers.deletedAt),
         eq(vouchers.optional, false),
+        // This endpoint is only the Account Transfer entry *picker*.
+        // Protect old backfill legs from routine selection, without touching
+        // the legal ledger, official statements or direct voucher audit.
+        sql.raw(operationalHistoricalSupplierExclusionSql(companyId, "vouchers")),
       ];
       const search = typeof req.query.search === "string" ? req.query.search.trim().slice(0, 200) : "";
       if (search) {
