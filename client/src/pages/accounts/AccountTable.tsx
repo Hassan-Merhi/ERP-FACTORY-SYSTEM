@@ -1,7 +1,7 @@
 import { Fragment, useState, useMemo } from "react";
-import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, GripVertical, Pencil } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, FolderClosed, GripVertical, Pencil, Wallet } from "lucide-react";
 import type { Account } from "./accountTypes";
 import { FxAgentNativeBalance } from "./FxAgentNativeBalance";
 import type { AccountDisplayLayout } from "./DisplayAccountGroups";
@@ -195,14 +195,24 @@ export function AccountTable({
           className="h-8 text-xs"
           onClick={() => setShowZeroBalances((visible) => !visible)}
           data-testid="button-show-zero-balances"
+          aria-pressed={showZeroBalances}
         >
+          <span aria-hidden="true" className={cn("mr-2 flex h-3.5 w-7 items-center rounded-full p-0.5 transition-colors", showZeroBalances ? "bg-blue-500" : "bg-muted-foreground/30")}>
+            <span className={cn("h-2.5 w-2.5 rounded-full bg-white shadow-sm transition-transform", showZeroBalances && "translate-x-3")} />
+          </span>
           {showZeroBalances ? "Hide 0 Balance" : "Show 0 Balance"}
         </Button>
       </div>
 
-      <div className="rounded-xl border overflow-hidden">
+      <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-card shadow-sm dark:border-[#2c4267] dark:bg-[#0b1425]">
         {/* Fixed layout on phones so long account names truncate instead of pushing balances off-screen. */}
         <Table className="max-sm:table-fixed">
+          <TableHeader>
+            <TableRow className="border-b border-slate-200/80 bg-slate-100/80 hover:bg-slate-100/80 dark:border-blue-800/60 dark:bg-[#1d3354] dark:hover:bg-[#1d3354]">
+              <TableHead className="h-10 pl-5 text-xs font-semibold text-slate-700 dark:text-slate-100">Account Name / Code</TableHead>
+              {!hideBalances && <TableHead className="h-10 text-right pr-5 text-xs font-semibold text-slate-700 dark:text-slate-100">Balance</TableHead>}
+            </TableRow>
+          </TableHeader>
           <TableBody>
             {parents.map((account) => {
               const kids = childMap.get(account.accountId) || [];
@@ -234,14 +244,14 @@ export function AccountTable({
                       if (key && target) onMove?.(key, target);
                       setDragging(null);
                     }}
-                    className="cursor-pointer transition-colors hover:bg-muted/30 group/row"
+                    className="group/row cursor-pointer border-b border-border/60 bg-white transition-colors hover:bg-blue-50/70 dark:border-slate-700/50 dark:bg-[#101b30] dark:hover:bg-[#1a3354]"
                     onClick={() => {
                       if (hasKids) toggleParent(account.id);
                       else handleAccountChange(account.id);
                     }}
                     data-testid={`row-account-${account.id}`}
                   >
-                    <TableCell className={cn("py-3", isGroup && "font-medium")}>
+                    <TableCell className={cn("py-2.5 pl-4", isGroup && "font-medium")}>
                       <div className="flex items-center gap-2.5 min-w-0">
                         {hasKids ? (
                           <span className="text-muted-foreground shrink-0">
@@ -254,11 +264,14 @@ export function AccountTable({
                         ) : (
                           <span className="w-3.5 shrink-0" />
                         )}
+                        <span aria-hidden="true" className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-lg", isGroup ? "bg-blue-500/10 text-blue-600 dark:text-blue-300" : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400")}>
+                          {isGroup ? <FolderClosed className="h-4 w-4" /> : <Wallet className="h-4 w-4" />}
+                        </span>
                         <span className="truncate text-sm max-sm:min-w-0 max-sm:flex-1 max-sm:whitespace-normal max-sm:line-clamp-2 max-sm:wrap-break-word">
                           {account.name}
                         </span>
                         {account.accountId && !isGroup && (
-                          <span className="text-[11px] text-muted-foreground font-mono shrink-0 max-sm:hidden">
+                          <span className="shrink-0 rounded-md bg-muted/70 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground max-sm:hidden dark:bg-blue-950/60">
                             #{account.accountId}
                           </span>
                         )}
@@ -279,7 +292,7 @@ export function AccountTable({
                       </div>
                     </TableCell>
                     {!hideBalances && (
-                      <TableCell className="text-right py-3 max-sm:w-28">
+                      <TableCell className="py-2.5 pr-5 text-right max-sm:w-28">
                         {account.fxWallet ? (
                           <FxAgentNativeBalance wallet={account.fxWallet} compact />
                         ) : hasKids && account.type !== "displayGroup" ? (
@@ -332,15 +345,16 @@ export function AccountTable({
                             if (key && target) onMove?.(key, target);
                             setDragging(null);
                           }}
-                          className="cursor-pointer hover:bg-muted/20 group/child"
+                          className="group/child cursor-pointer border-b border-border/50 bg-slate-50/40 transition-colors hover:bg-blue-50/70 dark:border-slate-700/50 dark:bg-[#0b1629] dark:hover:bg-[#1a3354]"
                           onClick={() => handleAccountChange(child.id)}
                           data-testid={`row-account-${child.id}`}
                         >
                           <TableCell className="py-2.5 pl-14">
                             <div className="flex items-center gap-2 min-w-0">
+                              <span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-300"><Wallet className="h-3.5 w-3.5" /></span>
                               <span className="truncate text-sm text-muted-foreground">{child.name}</span>
                               {child.accountId && (
-                                <span className="text-[11px] text-muted-foreground/60 font-mono shrink-0">
+                                <span className="shrink-0 rounded-md bg-muted/70 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground/80 dark:bg-blue-950/60">
                                   #{child.accountId}
                                 </span>
                               )}
@@ -361,7 +375,7 @@ export function AccountTable({
                             </div>
                           </TableCell>
                           {!hideBalances && (
-                            <TableCell className="text-right py-2.5">
+                            <TableCell className="py-2.5 pr-5 text-right">
                               {child.fxWallet ? (
                                 <FxAgentNativeBalance wallet={child.fxWallet} compact />
                               ) : (
