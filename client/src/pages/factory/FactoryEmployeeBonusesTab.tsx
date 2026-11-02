@@ -322,7 +322,9 @@ export default function FactoryEmployeeBonusesTab() {
                     <div>
                       <p className="font-semibold text-sm break-words">{bonusName(b)}</p>
                       <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><CalendarDays className="h-3.5 w-3.5" />{dateLabel(bonusDate(b))}</p>
-                      {visibleColumns.notes && b.notes && <p className="text-xs text-muted-foreground mt-1 break-words">{b.notes}</p>}
+                      {visibleColumns.notes && b.notes ? (
+                        <p className="text-xs text-muted-foreground mt-1 break-words">{b.notes}</p>
+                      ) : null}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {visibleColumns.amount && <span className="font-mono text-emerald-600 dark:text-emerald-400 text-sm font-semibold tabular-nums">{fmt(b.amount)}</span>}
