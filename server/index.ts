@@ -54,6 +54,7 @@ import { runStartupMigrations, warmupDb } from "./startup/runServerStartupMigrat
 import { ensureFactoryStaffTrackingSchema } from "./startup/factoryStaffTrackingSchema";
 import { ensureFactoryTargetBonusPaymentSchema } from "./startup/ensureFactoryTargetBonusPaymentSchema";
 import { inspectHistoricalProductionBonusExpenseAccounts } from "./services/factory/productionBonusExpenseReclassification";
+import { applyApprovedZakariaOpeningCredit } from "./startup/applyApprovedZakariaOpeningCredit";
 import { ensureSupplierTrackingShopDutyDefaults } from "./startup/ensureSupplierTrackingShopDutyDefaults";
 import { ensureZambiaHistoricalPurchaseCost } from "./startup/ensureZambiaHistoricalPurchaseCost";
 import { ensureFactoryContainerPlannerSchemaOnBoot } from "./startup/factoryContainerPlannerSchema";
@@ -356,6 +357,10 @@ let migrationsDone = false;
       // Financial payout table must exist before any posting route becomes reachable.
       // Fatal on error: never serve a deployment with accounting schema missing.
       await ensureFactoryTargetBonusPaymentSchema(pool);
+      // Owner-confirmed: HADI L'SHI Zakaria El Ali #103's $9,930.12
+      // opening is Cr, not Dr. Scoped, audited and idempotent; never alters
+      // salary/bonus postings or other employees.
+      await applyApprovedZakariaOpeningCredit();
       // The one-time historical bonus reclassification has already been applied.
       // Never rerun a historical voucher mutation on every server startup.
       // A later legitimate voucher edit can change a paid amount while its old
