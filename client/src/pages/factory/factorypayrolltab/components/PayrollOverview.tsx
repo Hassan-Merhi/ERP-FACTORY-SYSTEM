@@ -41,7 +41,7 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
     isDeveloper,
     payrolls,
     isLoading,
-    projectionFetching,
+    projectionRows,
     projectionTotal,
     payrollGroups,
     toggleGroup,
@@ -51,81 +51,95 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
   } = payroll;
   return (
     <>
-      {/* Stats pills */}
-      <div className="flex flex-wrap gap-3">
+      {/* Presentation-only metrics: all values still come from the existing payroll model. */}
+      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5" data-testid="payroll-summary">
         {isLoading ? (
-          <>
-            <Skeleton className="h-10 w-40 rounded-lg" />
-            <Skeleton className="h-10 w-36 rounded-lg" />
-            <Skeleton className="h-10 w-44 rounded-lg" />
-            <Skeleton className="h-10 w-40 rounded-lg" />
-            <Skeleton className="h-10 w-52 rounded-lg" />
-          </>
+          Array.from({ length: 5 }).map((_, index) => (
+            <Skeleton key={index} className="h-28 rounded-2xl" />
+          ))
         ) : (
           <>
-            <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-4 py-2 text-sm">
-              <Users className="h-4 w-4 text-muted-foreground" />
-              <span className="text-muted-foreground">Workers on Payroll</span>
-              <span className="font-semibold" data-testid="stat-workers">
-                {stats.uniqueWorkers}
+            <div className="flex min-h-28 min-w-0 items-center gap-3 rounded-2xl border border-indigo-200/60 bg-indigo-50/70 p-4 shadow-sm dark:border-indigo-400/20 dark:bg-gradient-to-br dark:from-indigo-500/20 dark:to-slate-950/60">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600 dark:bg-indigo-400/15 dark:text-indigo-300">
+                <Users className="h-5 w-5" />
               </span>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-muted-foreground">Workers on Payroll</p>
+                <p className="mt-1 text-2xl font-bold tracking-tight tabular-nums" data-testid="stat-workers">{stats.uniqueWorkers}</p>
+              </div>
             </div>
-            <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-4 py-2 text-sm">
-              <Layers className="h-4 w-4 text-muted-foreground" />
-              <span className="text-muted-foreground">Batches</span>
-              <span className="font-semibold">{payrollGroups.length}</span>
-            </div>
-            <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-4 py-2 text-sm">
-              <Clock className="h-4 w-4 text-amber-500" />
-              <span className="text-muted-foreground">Pending</span>
-              <span className="font-semibold font-mono text-amber-600 dark:text-amber-400" data-testid="stat-pending">
-                ${stats.pending.toFixed(2)}
+
+            <div className="flex min-h-28 min-w-0 items-center gap-3 rounded-2xl border border-border/70 bg-card/80 p-4 shadow-sm dark:bg-slate-900/70">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground dark:bg-white/[0.07]">
+                <Layers className="h-5 w-5" />
               </span>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-muted-foreground">Batches</p>
+                <p className="mt-1 text-2xl font-bold tracking-tight tabular-nums">{payrollGroups.length}</p>
+              </div>
             </div>
-            <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-4 py-2 text-sm">
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-              <span className="text-muted-foreground">Total Paid</span>
-              <span className="font-semibold font-mono text-emerald-600 dark:text-emerald-400" data-testid="stat-paid">
-                ${stats.paid.toFixed(2)}
+
+            <div className="flex min-h-28 min-w-0 items-center gap-3 rounded-2xl border border-amber-200/70 bg-amber-50/70 p-4 shadow-sm dark:border-amber-400/20 dark:bg-gradient-to-br dark:from-amber-500/15 dark:to-slate-950/60">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-400/15 dark:text-amber-400">
+                <Clock className="h-5 w-5" />
               </span>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-muted-foreground">Pending</p>
+                <p className="mt-1 font-mono text-xl font-bold tracking-tight tabular-nums text-amber-700 dark:text-amber-400" data-testid="stat-pending">
+                  ${stats.pending.toFixed(2)}
+                </p>
+              </div>
             </div>
-            <div
-              className="flex items-center gap-2 rounded-lg border bg-muted/40 px-4 py-2 text-sm"
-              data-testid="stat-projection"
-            >
-              <CalendarDays className="h-4 w-4 text-muted-foreground shrink-0" />
-              <Select value={projectionPeriod} onValueChange={(v) => setProjectionPeriod(v as typeof projectionPeriod)}>
-                <SelectTrigger
-                  className="h-auto border-0 p-0 shadow-none focus:ring-0 text-muted-foreground text-sm gap-1 min-w-0 w-auto"
-                  data-testid="select-projection-period"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="daily">Daily</SelectItem>
-                  <SelectItem value="weekly">Weekly</SelectItem>
-                  <SelectItem value="biweekly">Bi-weekly</SelectItem>
-                  <SelectItem value="monthly">Monthly</SelectItem>
-                </SelectContent>
-              </Select>
-              <span className="text-muted-foreground">Total</span>
-              {projectionFetching ? (
-                <span className="font-mono text-muted-foreground/50 text-sm">···</span>
-              ) : (
-                <span
-                  className="font-semibold font-mono text-blue-600 dark:text-blue-400"
-                  data-testid="stat-projection-total"
-                >
-                  ${projectionTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              )}
+
+            <div className="flex min-h-28 min-w-0 items-center gap-3 rounded-2xl border border-emerald-200/70 bg-emerald-50/70 p-4 shadow-sm dark:border-emerald-400/20 dark:bg-gradient-to-br dark:from-emerald-500/15 dark:to-slate-950/60">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-400">
+                <CheckCircle2 className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-muted-foreground">Total Paid</p>
+                <p className="mt-1 font-mono text-xl font-bold tracking-tight tabular-nums text-emerald-700 dark:text-emerald-400" data-testid="stat-paid">
+                  ${stats.paid.toFixed(2)}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex min-h-28 min-w-0 flex-col justify-center gap-2 rounded-2xl border border-border/70 bg-card/90 p-4 shadow-sm dark:border-blue-400/20 dark:bg-gradient-to-br dark:from-blue-500/10 dark:to-slate-900/80" data-testid="stat-projection">
+              <div className="flex min-w-0 items-center gap-2">
+                <CalendarDays className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+                <Select value={projectionPeriod} onValueChange={(v) => setProjectionPeriod(v as typeof projectionPeriod)}>
+                  <SelectTrigger
+                    className="h-8 min-w-0 w-auto max-w-full gap-2 rounded-lg border-border/60 bg-background/70 px-2 text-xs font-semibold shadow-none focus:ring-1"
+                    data-testid="select-projection-period"
+                    aria-label="Payroll projection period"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="daily">Daily</SelectItem>
+                    <SelectItem value="weekly">Weekly</SelectItem>
+                    <SelectItem value="biweekly">Bi-weekly</SelectItem>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="ml-auto text-xs text-muted-foreground">Total</span>
+              </div>
+              {/* Keep the previous valid amount visible during refetches, never replace it with flashing dots. */}
+              <p
+                className="min-h-7 truncate font-mono text-xl font-bold tracking-tight tabular-nums text-blue-700 dark:text-blue-300"
+                data-testid="stat-projection-total"
+                aria-live="polite"
+              >
+                {projectionRows === undefined
+                  ? "—"
+                  : `$${projectionTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              </p>
             </div>
           </>
         )}
       </div>
 
       {/* Filter / actions row */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex items-center justify-between flex-wrap gap-3 rounded-xl px-0.5">
         <p className="text-xs text-muted-foreground">
           {payrolls?.length || 0} record{payrolls?.length !== 1 ? "s" : ""} · {payrollGroups.length} batch
           {payrollGroups.length !== 1 ? "es" : ""}
@@ -151,7 +165,7 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
               <ShieldCheck className="h-4 w-4 text-muted-foreground" />
             </Button>
           )}
-          <Button onClick={() => setRunOpen(true)} data-testid="button-run-payroll">
+          <Button className="rounded-xl bg-blue-600 px-5 font-semibold shadow-sm shadow-blue-500/20 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500" onClick={() => setRunOpen(true)} data-testid="button-run-payroll">
             <Play className="h-4 w-4 mr-2" />
             Run Payroll
           </Button>
@@ -159,7 +173,7 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
       </div>
 
       {/* Records list */}
-      <div className="border rounded-xl overflow-hidden">
+      <div className="overflow-hidden rounded-2xl border border-border/70 bg-card/75 shadow-sm dark:border-white/10 dark:bg-slate-950/30">
         {isLoading ? (
           <div className="p-4 space-y-2">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -182,7 +196,7 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
                 All batches are fully paid — see completed batches below.
               </div>
             )}
-            <div className="divide-y">
+            <div className="divide-y divide-border/60">
               {activeGroups.map((group) => (
                 <BatchRow
                   key={group.key}
@@ -207,9 +221,9 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
 
             {/* ── Completed batches (all paid) ── */}
             {completedGroups.length > 0 && (
-              <div className={activeGroups.length > 0 ? "border-t" : ""}>
+              <div className={activeGroups.length > 0 ? "border-t border-border/60" : ""}>
                 <button
-                  className="w-full flex items-center gap-2 px-4 py-2.5 text-xs font-medium text-muted-foreground hover-elevate"
+                  className="flex w-full items-center gap-2 px-4 py-3 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
                   onClick={() => setShowCompletedBatches((v) => !v)}
                   data-testid="toggle-completed-batches"
                 >
@@ -222,7 +236,7 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
                   {completedGroups.length} completed batch{completedGroups.length !== 1 ? "es" : ""}
                 </button>
                 {showCompletedBatches && (
-                  <div className="divide-y bg-muted/20">
+                  <div className="divide-y divide-border/60 bg-muted/15">
                     {completedGroups.map((group) => (
                       <BatchRow
                         key={group.key}

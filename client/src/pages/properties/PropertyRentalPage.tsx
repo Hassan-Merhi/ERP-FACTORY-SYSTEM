@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, ChevronRight, RefreshCw, Trash2, ClipboardList, CreditCard, BookCheck } from "lucide-react";
+import { Plus, ChevronRight, RefreshCw, Trash2, ClipboardList, CreditCard, BookCheck, MapPin, Building2, UserRound, CalendarDays } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
@@ -26,6 +26,11 @@ import { UnitActionDialog } from "./property-rental/components/UnitActionDialog"
 import { BulkPaymentDialog } from "./property-rental/components/BulkPaymentDialog";
 import { RentalUnitCards } from "./property-rental/components/RentalUnitCards";
 import { ErpMobileActionsMenu, ErpMobileSummaryGrid } from "@/components/ui/erp-mobile-records";
+import {
+  HISTORICAL_RENT_COMPANY,
+  historicalRentSnapshotTotal,
+  type HistoricalRentPayment,
+} from "./property-rental/historicalRentSnapshot";
 export default function PropertyRentalPage({
   unitType,
   pageTitle,
@@ -51,6 +56,20 @@ export default function PropertyRentalPage({
     },
     enabled: !!selectedCompany,
   });
+
+  // Dated, voucher-backed actual rent; no synthetic payment or ledger adjustment.
+  const showHistoricalPaid = apiBase === "/api/properties/rental" &&
+    unitType === "WAREHOUSE" && selectedCompany?.name === HISTORICAL_RENT_COMPANY;
+  const { data: historicalPayments = [], isLoading: historicalLoading, isError: historicalError } =
+    useQuery<HistoricalRentPayment[]>({
+      queryKey: [apiBase + "/payments", { companyId: selectedCompany?.id, view: "warehouse-reconciliation" }],
+      queryFn: async () => {
+        const res = await fetch(`${apiBase}/payments?view=warehouse-reconciliation`, { credentials: "include" });
+        if (!res.ok) throw new Error("Failed to load historical warehouse rent");
+        return res.json();
+      },
+      enabled: !!selectedCompany && showHistoricalPaid,
+    });
 
   const { data: cashAccounts = [] } = useQuery<CashAccount[]>({
     queryKey: [apiBase + "/cash-accounts", selectedCompany?.id],
@@ -94,6 +113,16 @@ export default function PropertyRentalPage({
     });
     return { totalGuarantee, totalOwed, totalCredit, totalPaid, totalMonthlyRent };
   }, [units]);
+
+  const datedHistoricalPaid = useMemo(
+    () => historicalRentSnapshotTotal(historicalPayments),
+    [historicalPayments],
+  );
+  const summaryPaid = showHistoricalPaid ? datedHistoricalPaid : totals.totalPaid;
+  const paidLabel = showHistoricalPaid ? "TOTAL PAID THROUGH 26 OCT" : "TOTAL PAID";
+  const paidValue = showHistoricalPaid && (historicalLoading || historicalError)
+    ? "Unavailable"
+    : "$" + fmtMoney(summaryPaid);
 
   const runMonthly = useMutation({
     mutationFn: () => apiRequest("POST", apiBase + "/run-monthly"),
@@ -173,6 +202,7 @@ export default function PropertyRentalPage({
 
   // ERP and Properties render the shared page-header contract; Factory keeps its hub strip.
   const isErp = appMode === "erp" || appMode === "properties";
+  const isFactoryShopTable = testIdPrefix === "factory-rental-shops";
   const isPhoneLayout = useErpPhoneLayout();
   // Phones in every mode: cards instead of the twelve-column table, and one primary action plus
   // a menu.
@@ -317,7 +347,7 @@ export default function PropertyRentalPage({
                 valueClassName: "text-green-600 dark:text-green-400",
               },
               { label: "TOTAL GUARANTEE", value: `$${fmtMoney(totals.totalGuarantee)}` },
-              { label: "TOTAL PAID", value: `$${fmtMoney(totals.totalPaid)}` },
+              { label: paidLabel, value: paidValue },
             ]}
           />
         ) : (
@@ -367,7 +397,7 @@ export default function PropertyRentalPage({
             <Card>
               <CardHeader className="px-3 pt-3 pb-1">
                 <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">
-                  TOTAL PAID
+                  {paidLabel}
                 </CardTitle>
               </CardHeader>
               <CardContent className="px-3 pb-3">
@@ -375,7 +405,7 @@ export default function PropertyRentalPage({
                   className={`text-lg font-bold ${totals.totalPaid > 0 ? "text-green-600 dark:text-green-400" : ""}`}
                   data-testid={`stat-${testIdPrefix}-total-paid`}
                 >
-                  ${fmtMoney(totals.totalPaid)}
+                  {paidValue}
                 </div>
               </CardContent>
             </Card>
@@ -434,8 +464,8 @@ export default function PropertyRentalPage({
           )
         ) : (
           /* Main table */
-          <Card>
-            <CardContent className="p-0">
+          <Card className={isFactoryShopTable ? "factory-rentals-table-shell" : undefined}>
+            <CardContent className={isFactoryShopTable ? "p-2 sm:p-3" : "p-0"}>
               <div data-horizontal-scroll="true" className="overflow-x-auto">
                 {isLoading ? (
                   <div className="p-8 text-center text-muted-foreground">Loading units…</div>
@@ -446,7 +476,7 @@ export default function PropertyRentalPage({
                       : "No shops yet. Add your first unit above."}
                   </div>
                 ) : (
-                  <table className="w-full text-sm">
+                  <table className={isFactoryShopTable ? "factory-rentals-table w-full text-sm" : "w-full text-sm"}>
                     <thead className="bg-muted border-b sticky top-0 z-30">
                       <tr>
                         <th className="px-3 py-2 w-8" onClick={(e) => e.stopPropagation()}>
@@ -489,22 +519,29 @@ export default function PropertyRentalPage({
                         const unitNumColor = p.headerBg;
                         return (
                           <Fragment key={group}>
-                            <tr key={`grp-${group}`} className="border-t">
-                              <td
-                                colSpan={12}
-                                className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-center"
-                                style={{ backgroundColor: p.headerBg, color: p.headerText }}
+                            <tr key={`grp-${group}`} className={isFactoryShopTable ? "factory-rentals-location-row" : "border-t"}>
+                              <td colSpan={12}
+                                className={isFactoryShopTable ? "factory-rentals-location-cell" : "px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-center"}
+                                style={isFactoryShopTable ? undefined : { backgroundColor: p.headerBg, color: p.headerText }}
                               >
-                                {group}
+                                {isFactoryShopTable ? (
+                                  <div className="factory-rentals-location-bar" style={{ background: `linear-gradient(110deg, ${p.headerBg}, ${p.headerBg}df)` }}>
+                                    <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
+                                    <span>{group}</span>
+                                    <span className="factory-rentals-location-count">{groupUnits.length} {groupUnits.length === 1 ? "unit" : "units"}</span>
+                                  </div>
+                                ) : group}
                               </td>
                             </tr>
                             {groupUnits.map((u, uIdx) => (
                               <tr
                                 key={u.id}
-                                className="border-t cursor-pointer transition-colors"
-                                style={{ backgroundColor: uIdx % 2 === 0 ? rowBgEven : rowBgOdd }}
-                                onMouseEnter={(e) => (e.currentTarget.style.filter = "brightness(0.93)")}
-                                onMouseLeave={(e) => (e.currentTarget.style.filter = "")}
+                                className={isFactoryShopTable ? `factory-rentals-unit-row cursor-pointer${u.contract && selectedContractIds.has(u.contract.id) ? " factory-rentals-unit-row-selected" : ""}` : "border-t cursor-pointer transition-colors"}
+                                style={isFactoryShopTable
+                                  ? { "--factory-rentals-rgb": `${p.r}, ${p.g}, ${p.b}` } as React.CSSProperties
+                                  : { backgroundColor: uIdx % 2 === 0 ? rowBgEven : rowBgOdd }}
+                                onMouseEnter={(e) => { if (!isFactoryShopTable) e.currentTarget.style.filter = "brightness(0.93)"; }}
+                                onMouseLeave={(e) => { if (!isFactoryShopTable) e.currentTarget.style.filter = ""; }}
                                 onClick={() => setOpenUnitId(u.id)}
                                 data-testid={`row-unit-${u.id}`}
                               >
@@ -524,12 +561,15 @@ export default function PropertyRentalPage({
                                     />
                                   )}
                                 </td>
-                                <td
-                                  className="px-3 py-2 font-mono text-xs font-bold"
-                                  style={{ backgroundColor: unitNumBg, color: unitNumColor }}
-                                >
-                                  {u.unitNumber}
-                                </td>
+                                <td className={isFactoryShopTable ? "px-3 py-2" : "px-3 py-2 font-mono text-xs font-bold"}
+                                   style={isFactoryShopTable ? undefined : { backgroundColor: unitNumBg, color: unitNumColor }}>
+                                   {isFactoryShopTable ? (
+                                     <span className="factory-rentals-unit-pill" style={{ color: p.headerBg, backgroundColor: `rgba(${p.r},${p.g},${p.b},0.15)` }}>
+                                       <Building2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                                       {u.unitNumber}
+                                     </span>
+                                   ) : u.unitNumber}
+                                 </td>
                                 <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
                                   {u.dimensions ? (
                                     <span className="font-medium text-foreground">{u.dimensions}</span>
@@ -542,7 +582,8 @@ export default function PropertyRentalPage({
                                 <td className="px-3 py-2">
                                   {u.contract ? (
                                     <span className="font-medium flex items-center gap-1.5 flex-wrap">
-                                      {u.contract.tenantName}
+                                       {isFactoryShopTable && <UserRound className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />}
+                                       {u.contract.tenantName}
                                       {u.contract.isInternal && (
                                         <Badge className="text-xs bg-violet-600 text-white">Internal</Badge>
                                       )}
@@ -584,7 +625,8 @@ export default function PropertyRentalPage({
                                       : "text-muted-foreground"
                                   }`}
                                 >
-                                  {u.contract
+                                  <span className={isFactoryShopTable ? "factory-rentals-money-pill" : undefined}>
+                                     {u.contract
                                     ? fmtMoneyCurrency(
                                         (
                                           u as unknown as Unit & {
@@ -594,11 +636,13 @@ export default function PropertyRentalPage({
                                         u.contract.currency
                                       )
                                     : "—"}
+                                   </span>
                                 </td>
                                 <td
                                   className={`px-3 py-2 text-right tabular-nums font-semibold ${(u.outstanding ?? 0) > 0 ? "text-red-600 dark:text-red-400" : (u as { prepaidCredit: 0 }).prepaidCredit > 0 ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}
                                 >
-                                  {u.outstanding !== null
+                                  <span className={isFactoryShopTable ? "factory-rentals-money-pill" : undefined}>
+                                     {u.outstanding !== null
                                     ? fmtMoneyCurrency(
                                         (u.outstanding ?? 0) > 0
                                           ? u.outstanding!
@@ -608,6 +652,7 @@ export default function PropertyRentalPage({
                                         u.contract?.currency
                                       )
                                     : "—"}
+                                   </span>
                                 </td>
                                 <td className="px-3 py-2 text-right tabular-nums text-muted-foreground text-xs">
                                   {(u as { scheduledAmount: 0 }).scheduledAmount > 0
@@ -615,13 +660,17 @@ export default function PropertyRentalPage({
                                     : "—"}
                                 </td>
                                 <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
-                                  {u.nextBillingDate
-                                    ? format(new Date(u.nextBillingDate + "T00:00:00Z"), "dd MMM")
-                                    : "—"}
-                                </td>
+                                   <span className="factory-rentals-date">
+                                     {isFactoryShopTable && <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+                                     {u.nextBillingDate ? format(new Date(u.nextBillingDate + "T00:00:00Z"), "dd MMM") : "—"}
+                                   </span>
+                                 </td>
                                 <td className="px-3 py-2 text-xs text-muted-foreground">
-                                  {u.contract ? format(new Date(u.contract.startDate), "dd MMM yyyy") : "—"}
-                                </td>
+                                   <span className="factory-rentals-date">
+                                     {isFactoryShopTable && <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+                                     {u.contract ? format(new Date(u.contract.startDate), "dd MMM yyyy") : "—"}
+                                   </span>
+                                 </td>
                                 <td className="px-2 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                                   <div className="flex items-center justify-end gap-1">
                                     {!u.isShared && (

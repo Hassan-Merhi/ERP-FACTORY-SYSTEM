@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { Trash2, Plus, Minus } from "lucide-react";
+import { Trash2, Plus, Minus, PackageOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
@@ -115,7 +115,7 @@ export function StockEntryCart({
   );
 
   return (
-    <div className="min-w-0 max-w-full" data-factory-stock-entry-cart="true">
+    <div className="stock-entry-cart min-w-0 max-w-full" data-factory-stock-entry-cart="true">
       {isMobile ? (
         <div className="md:hidden phone-land:block">
           {cart.length === 0 ? (
@@ -254,10 +254,10 @@ export function StockEntryCart({
           )}
         </div>
       ) : (
-        <div className="hidden overflow-hidden rounded-xl border bg-card/50 md:block phone-land:hidden">
+        <div className="stock-entry-desktop-table hidden overflow-hidden rounded-2xl border bg-card/50 md:block phone-land:hidden">
           <Table scrollLabel="Bales ready for stock entry" minimumWidth="56rem" stickyFirstColumn>
             <TableHeader>
-              <TableRow className="bg-muted/30">
+              <TableRow className="stock-entry-table-header bg-muted/30">
                 <TableHead className="w-[40%]">Product</TableHead>
                 <TableHead className="w-[15%] text-center">Bale Qty</TableHead>
                 <TableHead className="w-[15%] text-right">Kg / Bale</TableHead>
@@ -381,8 +381,14 @@ export function StockEntryCart({
               ))}
               {cart.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
-                    No items added yet. Scan a code or type to search.
+                  <TableCell colSpan={5} className="stock-entry-empty-state h-56 text-center text-muted-foreground">
+                    <div className="flex flex-col items-center justify-center gap-2 py-5">
+                      <span className="stock-entry-empty-icon flex h-16 w-16 items-center justify-center rounded-2xl">
+                        <PackageOpen className="h-9 w-9" aria-hidden="true" />
+                      </span>
+                      <strong className="mt-1 text-base font-bold text-foreground">No items added yet</strong>
+                      <span className="text-xs sm:text-sm">Scan a code or type a product name to add production items.</span>
+                    </div>
                   </TableCell>
                 </TableRow>
               )}

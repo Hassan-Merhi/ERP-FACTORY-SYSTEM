@@ -15,6 +15,7 @@ import {
   Info,
   SlidersHorizontal,
   WalletCards,
+  Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,9 +39,10 @@ import type { useFactoryWorkersModel } from "./useFactoryWorkersModel";
 
 interface FactoryWorkersModelProps {
   model: ReturnType<typeof useFactoryWorkersModel>;
+  onOpenCategories?: () => void;
 }
 
-export function FactoryWorkersRosterPanel({ model }: FactoryWorkersModelProps) {
+export function FactoryWorkersRosterPanel({ model, onOpenCategories }: FactoryWorkersModelProps) {
   const {
     setLocation,
     searchQuery,
@@ -89,65 +91,53 @@ export function FactoryWorkersRosterPanel({ model }: FactoryWorkersModelProps) {
     totalTransport,
     totalAdvances,
     totalRemainingToBePaid,
+    showCategories,
   } = model;
+
+  const kpiCards = [
+    { label: "Total", value: String(workers?.length ?? 0), icon: Users, tone: "from-blue-500/15 to-blue-500/5", iconTone: "bg-blue-500/15 text-blue-500", valueTone: "text-foreground" },
+    { label: "Active", value: String(activeCount), icon: UserCheck, tone: "from-emerald-500/15 to-emerald-500/5", iconTone: "bg-emerald-500/15 text-emerald-500", valueTone: "text-foreground" },
+    { label: "Inactive", value: String(inactiveCount), icon: UserX, tone: "from-slate-500/15 to-slate-500/5", iconTone: "bg-slate-500/15 text-slate-400", valueTone: "text-foreground" },
+    { label: "Total Salary", value: `${totalSalary.toLocaleString()}`, icon: Download, tone: "from-sky-500/15 to-sky-500/5", iconTone: "bg-sky-500/15 text-sky-500", valueTone: "text-foreground" },
+    { label: "Transport", value: `${totalTransport.toLocaleString()}`, icon: Bus, tone: "from-indigo-500/15 to-indigo-500/5", iconTone: "bg-indigo-500/15 text-indigo-500", valueTone: "text-foreground" },
+    { label: "Advances", value: `${totalAdvances.toLocaleString()}`, icon: Banknote, tone: "from-amber-500/15 to-amber-500/5", iconTone: "bg-amber-500/15 text-amber-500", valueTone: "text-foreground" },
+    {
+      label: "Total Remaining",
+      value: `${totalRemainingToBePaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      icon: WalletCards,
+      tone: "from-violet-500/20 to-violet-500/5",
+      iconTone: "bg-violet-500/15 text-violet-500",
+      valueTone: "text-violet-600 dark:text-violet-300",
+    },
+  ];
 
   return (
     <>
       <TabsContent value="workers" className="mt-4 space-y-5">
-        {/* Stats pills */}
-        <div className="flex flex-wrap gap-3">
-          {isLoading ? (
-            <>
-              <Skeleton className="h-10 w-36 rounded-lg" />
-              <Skeleton className="h-10 w-32 rounded-lg" />
-              <Skeleton className="h-10 w-32 rounded-lg" />
-              <Skeleton className="h-10 w-44 rounded-lg" />
-            </>
-          ) : (
-            <>
-              <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-4 py-2 text-sm">
-                <Users className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Total</span>
-                <span className="font-semibold">{workers?.length ?? 0}</span>
-              </div>
-              <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-4 py-2 text-sm">
-                <UserCheck className="h-4 w-4 text-emerald-500" />
-                <span className="text-muted-foreground">Active</span>
-                <span className="font-semibold">{activeCount}</span>
-              </div>
-              <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-4 py-2 text-sm">
-                <UserX className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Inactive</span>
-                <span className="font-semibold">{inactiveCount}</span>
-              </div>
-              <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-4 py-2 text-sm">
-                <Download className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Total Salary</span>
-                <span className="font-semibold font-mono">${totalSalary.toLocaleString()}</span>
-              </div>
-              <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-4 py-2 text-sm">
-                <Bus className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Transport</span>
-                <span className="font-semibold font-mono">${totalTransport.toLocaleString()}</span>
-              </div>
-              <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-4 py-2 text-sm">
-                <Banknote className="h-4 w-4 text-amber-500" />
-                <span className="text-muted-foreground">Advances</span>
-                <span className="font-semibold font-mono">${totalAdvances.toLocaleString()}</span>
-              </div>
-              <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-4 py-2 text-sm">
-                <WalletCards className="h-4 w-4 text-violet-500" />
-                <span className="text-muted-foreground">Total Remaining</span>
-                <span className="font-semibold font-mono text-violet-600 dark:text-violet-400">
-                  $
-                  {totalRemainingToBePaid.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </span>
-              </div>
-            </>
-          )}
+        {/* Presentation only: amounts and eligibility remain calculated by the existing model. */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-7" data-testid="worker-kpi-cards">
+          {isLoading
+            ? Array.from({ length: 7 }).map((_, index) => (
+                <Skeleton key={index} className="h-[92px] rounded-xl" />
+              ))
+            : kpiCards.map(({ label, value, icon: Icon, tone, iconTone, valueTone }) => (
+                <div
+                  key={label}
+                  className={`min-w-0 rounded-xl border border-border/70 bg-gradient-to-br ${tone} p-3 shadow-sm transition-shadow hover:shadow-md sm:p-3.5`}
+                >
+                  <div className="flex min-w-0 items-start gap-2.5">
+                    <div className={`shrink-0 rounded-lg p-2 ${iconTone}`}>
+                      <Icon className="h-4 w-4" aria-hidden="true" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="block text-xs text-muted-foreground">{label}</span>
+                      <span className={`block truncate pt-1 text-lg font-bold tracking-tight tabular-nums ${valueTone}`} title={value}>
+                        {value}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
         </div>
 
         {/* Filter + actions row */}
@@ -158,12 +148,12 @@ export function FactoryWorkersRosterPanel({ model }: FactoryWorkersModelProps) {
               placeholder="Search by name, code, position, nationality..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
+              className="h-10 rounded-lg border-border/70 bg-card/80 pl-9 shadow-sm focus-visible:ring-primary/40"
               data-testid="input-search"
             />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-32" data-testid="select-status-filter">
+            <SelectTrigger className="h-10 w-32 rounded-lg bg-card/80" data-testid="select-status-filter">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -178,7 +168,7 @@ export function FactoryWorkersRosterPanel({ model }: FactoryWorkersModelProps) {
             variant={filtersOpen || activeFilterCount > 0 ? "default" : "outline"}
             size="sm"
             onClick={() => setFiltersOpen((o) => !o)}
-            className="relative"
+            className="relative h-10 rounded-lg"
             data-testid="button-toggle-filters"
           >
             <SlidersHorizontal className="h-4 w-4 mr-1.5" />
@@ -200,11 +190,21 @@ export function FactoryWorkersRosterPanel({ model }: FactoryWorkersModelProps) {
           <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImportFile} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" data-testid="button-actions-menu">
+              <Button variant="outline" className="h-10 rounded-lg bg-card/80" data-testid="button-actions-menu">
                 Actions <ChevronDown className="h-4 w-4 ml-2" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuContent align="end" className="w-52 rounded-xl border-border/80 p-1 shadow-xl">
+              {showCategories && onOpenCategories && (
+                <DropdownMenuItem
+                  onClick={onOpenCategories}
+                  className="rounded-lg bg-primary/10 font-medium text-primary focus:bg-primary/15 focus:text-primary"
+                  data-testid="button-open-worker-categories"
+                >
+                  <Layers className="h-4 w-4" />
+                  Categories
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 onClick={() => window.open("/api/factory/workers/template.xlsx", "_blank")}
                 data-testid="button-download-template"
@@ -235,6 +235,7 @@ export function FactoryWorkersRosterPanel({ model }: FactoryWorkersModelProps) {
               resetForm();
               setCreateOpen(true);
             }}
+            className="h-10 rounded-lg px-4 shadow-sm"
             data-testid="button-add-worker"
           >
             <Plus className="h-4 w-4 mr-2" />
@@ -453,12 +454,12 @@ export function FactoryWorkersRosterPanel({ model }: FactoryWorkersModelProps) {
         )}
 
         {/* Table */}
-        <div data-horizontal-scroll="true" className="border rounded-xl overflow-x-auto">
+        <div data-horizontal-scroll="true" className="overflow-x-auto rounded-xl border border-border/70 bg-card/70 shadow-sm">
           {/* min-w keeps the eight columns readable on tablets: the outer div scrolls sideways
               instead of table-fixed squeezing every header into one another. Phone cards reset it. */}
           <Table mobileLayout="cards" wrapperClassName="overflow-visible" className="w-full min-w-[64rem] table-fixed">
             <TableHeader className="sticky top-0 z-30">
-              <TableRow className="bg-muted border-b-2 border-border/60 hover:bg-muted">
+              <TableRow className="border-b border-border/70 bg-muted/65 dark:bg-slate-900/80 hover:bg-muted/65 dark:hover:bg-slate-900/80">
                 <TableHead className="w-10 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2 pl-3 pr-1">
                   #
                 </TableHead>
@@ -548,7 +549,7 @@ export function FactoryWorkersRosterPanel({ model }: FactoryWorkersModelProps) {
                 filteredWorkers.map((worker, idx) => (
                   <TableRow
                     key={worker.id}
-                    className="group cursor-pointer hover:bg-muted/40"
+                    className="group cursor-pointer transition-colors hover:bg-primary/5 dark:hover:bg-blue-400/[0.08]"
                     onClick={() => setLocation(`/factory/workers/${worker.id}`)}
                     data-testid={`row-worker-${worker.id}`}
                   >

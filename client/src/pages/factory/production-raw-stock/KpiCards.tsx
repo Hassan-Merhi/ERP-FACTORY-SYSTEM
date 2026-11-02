@@ -10,6 +10,10 @@ interface KpiCardsProps {
   totalValue: number;
 }
 
+/**
+ * Presentation-only KPI cards. Values and their authoritative calculation
+ * continue to come from ProductionRawStock; no costing logic lives here.
+ */
 export function KpiCards({
   totalReceived,
   totalReceivedValue,
@@ -21,54 +25,56 @@ export function KpiCards({
   const fmtKg = (n: number) => formatNumber(n, 3);
 
   return (
-    <div className="rounded-xl border bg-card">
-      <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x">
-        {/* Total Received */}
-        <div className="flex items-start gap-3 px-5 py-4">
-          <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-slate-500/10 border border-slate-500/20 shrink-0 mt-0.5">
-            <ArrowDownCircle className="h-4.5 w-4.5 text-slate-500" />
+    <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3 lg:gap-4" data-testid="raw-production-kpis">
+      <div className="relative isolate min-w-0 overflow-hidden rounded-2xl border border-blue-200/80 bg-linear-to-br from-blue-50 via-card to-slate-50 p-4 shadow-sm transition-shadow hover:shadow-md dark:border-blue-400/20 dark:from-[#162433] dark:via-[#161e27] dark:to-[#182f47] sm:p-5">
+        <div aria-hidden="true" className="pointer-events-none absolute -bottom-16 -right-14 -z-10 h-40 w-56 rounded-full bg-blue-400/10 blur-3xl dark:bg-blue-400/15" />
+        <div className="flex min-w-0 items-start gap-3.5">
+          <div className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-300/60 bg-blue-500/10 shadow-sm dark:border-blue-400/20 dark:bg-blue-400/15">
+            <ArrowDownCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" aria-hidden="true" />
           </div>
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">Total Received</p>
-            <p className="text-2xl font-bold font-mono tabular-nums leading-tight" data-testid="text-total-received">
-              {fmtKg(totalReceived)} <span className="text-sm font-medium text-muted-foreground">kg</span>
+          <div className="min-w-0">
+            <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.09em] text-slate-600 dark:text-slate-300">Total Received</p>
+            <p className="font-mono text-xl font-bold leading-tight tracking-tight tabular-nums text-foreground lg:text-2xl" data-testid="text-total-received">
+              {fmtKg(totalReceived)} <span className="text-xs font-semibold text-muted-foreground">kg</span>
             </p>
-            <p className="text-xs text-muted-foreground font-mono mt-0.5" data-testid="text-total-received-value">
+            <p className="mt-2 font-mono text-xs font-medium tabular-nums text-muted-foreground" data-testid="text-total-received-value">
               ${formatNumber(totalReceivedValue)}
             </p>
           </div>
         </div>
-        {/* Total Used */}
-        <div className="flex items-start gap-3 px-5 py-4">
-          <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-amber-500/10 border border-amber-500/20 shrink-0 mt-0.5">
-            <ArrowUpCircle className="h-4.5 w-4.5 text-amber-500" />
+      </div>
+
+      <div className="relative isolate min-w-0 overflow-hidden rounded-2xl border border-amber-200/80 bg-linear-to-br from-amber-50 via-card to-orange-50/60 p-4 shadow-sm transition-shadow hover:shadow-md dark:border-amber-400/20 dark:from-[#29251e] dark:via-[#211f1c] dark:to-[#382715] sm:p-5">
+        <div aria-hidden="true" className="pointer-events-none absolute -bottom-16 -right-14 -z-10 h-40 w-56 rounded-full bg-amber-400/10 blur-3xl dark:bg-amber-400/15" />
+        <div className="flex min-w-0 items-start gap-3.5">
+          <div className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-amber-300/60 bg-amber-500/10 shadow-sm dark:border-amber-400/20 dark:bg-amber-400/15">
+            <ArrowUpCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
           </div>
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">Total Used</p>
-            <p className="text-2xl font-bold font-mono tabular-nums leading-tight" data-testid="text-total-used">
-              {fmtKg(totalUsed)} <span className="text-sm font-medium text-muted-foreground">kg</span>
+          <div className="min-w-0">
+            <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.09em] text-slate-600 dark:text-slate-300">Total Used</p>
+            <p className="font-mono text-xl font-bold leading-tight tracking-tight tabular-nums text-foreground lg:text-2xl" data-testid="text-total-used">
+              {fmtKg(totalUsed)} <span className="text-xs font-semibold text-muted-foreground">kg</span>
             </p>
-            <p className="text-xs text-muted-foreground font-mono mt-0.5" data-testid="text-total-used-value">
+            <p className="mt-2 font-mono text-xs font-medium tabular-nums text-muted-foreground" data-testid="text-total-used-value">
               ${formatNumber(totalUsedValue)}
             </p>
           </div>
         </div>
-        {/* Free Available */}
-        <div className="flex items-start gap-3 px-5 py-4">
-          <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 shrink-0 mt-0.5">
-            <Package className="h-4.5 w-4.5 text-emerald-500" />
+      </div>
+
+      <div className="relative isolate min-w-0 overflow-hidden rounded-2xl border border-emerald-200/80 bg-linear-to-br from-emerald-50 via-card to-teal-50 p-4 shadow-sm transition-shadow hover:shadow-md dark:border-emerald-400/25 dark:from-[#102b25] dark:via-[#15231f] dark:to-[#074532] sm:p-5">
+        <div aria-hidden="true" className="pointer-events-none absolute -bottom-16 -right-14 -z-10 h-40 w-56 rounded-full bg-emerald-400/10 blur-3xl dark:bg-emerald-400/20" />
+        <div className="flex min-w-0 items-start gap-3.5">
+          <div className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-300/60 bg-emerald-500/10 shadow-sm dark:border-emerald-400/20 dark:bg-emerald-400/15">
+            <Package className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
           </div>
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">Free Available</p>
-            <p
-              className="text-2xl font-bold font-mono tabular-nums leading-tight text-emerald-600 dark:text-emerald-400"
-              data-testid="text-total-free"
-            >
-              {fmtKg(totalFree)}{" "}
-              <span className="text-sm font-medium text-emerald-600/70 dark:text-emerald-400/70">kg</span>
+          <div className="min-w-0">
+            <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.09em] text-slate-600 dark:text-slate-300">Free Available</p>
+            <p className="font-mono text-xl font-bold leading-tight tracking-tight tabular-nums text-emerald-700 dark:text-emerald-400 lg:text-2xl" data-testid="text-total-free">
+              {fmtKg(totalFree)} <span className="text-xs font-semibold text-emerald-600/80 dark:text-emerald-400/80">kg</span>
             </p>
-            <p className="text-xs text-muted-foreground font-mono mt-0.5" data-testid="text-total-value">
-              Stock Value: <span className="text-foreground font-semibold">${formatNumber(totalValue)}</span>
+            <p className="mt-2 text-xs font-medium text-muted-foreground" data-testid="text-total-value">
+              Stock Value: <span className="font-mono font-bold tabular-nums text-foreground">${formatNumber(totalValue)}</span>
             </p>
           </div>
         </div>

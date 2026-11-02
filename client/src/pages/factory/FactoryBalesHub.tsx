@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Package } from "lucide-react";
+import { Boxes, Package, ScanBarcode, Truck } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FactoryArabicTranslationActions } from "@/components/FactoryArabicTranslationActions";
@@ -9,6 +9,7 @@ import BaleProducts from "../BaleProductsBilingual";
 import CustomerLoading from "./CustomerLoading";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
+import "./balesExplorerModern.css";
 
 type BalesTab = "history" | "barcode" | "products" | "customer-loading";
 
@@ -48,14 +49,14 @@ export default function FactoryBalesHub() {
   const show = (tab: BalesTab) => visibleTabs.includes(tab);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="bales-explorer-page flex h-full min-w-0 flex-col">
       <Tabs
         value={activeTab}
         onValueChange={(value) => setActiveTab(value as BalesTab)}
-        className="flex h-full flex-col"
+        className="flex h-full min-w-0 flex-col"
       >
         {/* Shared page-header grammar (accent bar, icon, subtitle) like the other hubs and the ERP pages. */}
-        <div className="shrink-0 px-4 pt-3 [&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-2">
+        <div className="bales-explorer-hero shrink-0 px-4 pt-4 [&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-2">
           <PageHeader
             title="Bales"
             subtitle="Bale history, barcode lookup, products and customer loading"
@@ -63,26 +64,30 @@ export default function FactoryBalesHub() {
             showBackButton={false}
           />
         </div>
-        <div className="flex min-w-0 shrink-0 items-center gap-2 border-b px-4 pb-1">
+        <div className="bales-explorer-nav flex min-w-0 shrink-0 items-center gap-2 px-4 pb-3">
           <div className="erp-mobile-scroll-tabs min-w-0 flex-1 pb-1">
             <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Bale explorer sections">
               {show("history") && (
-                <TabsTrigger value="history" data-testid="tab-bales-history">
+                <TabsTrigger value="history" className="bales-explorer-tab" data-testid="tab-bales-history">
+                  <Package className="h-4 w-4" aria-hidden="true" />
                   Bales
                 </TabsTrigger>
               )}
               {show("barcode") && (
-                <TabsTrigger value="barcode" data-testid="tab-barcode-lookup">
+                <TabsTrigger value="barcode" className="bales-explorer-tab" data-testid="tab-barcode-lookup">
+                  <ScanBarcode className="h-4 w-4" aria-hidden="true" />
                   Barcode Lookup
                 </TabsTrigger>
               )}
               {show("products") && (
-                <TabsTrigger value="products" data-testid="tab-bale-products">
+                <TabsTrigger value="products" className="bales-explorer-tab" data-testid="tab-bale-products">
+                  <Boxes className="h-4 w-4" aria-hidden="true" />
                   Bale Products
                 </TabsTrigger>
               )}
               {show("customer-loading") && (
-                <TabsTrigger value="customer-loading" data-testid="tab-customer-loading">
+                <TabsTrigger value="customer-loading" className="bales-explorer-tab" data-testid="tab-customer-loading">
+                  <Truck className="h-4 w-4" aria-hidden="true" />
                   Customer Loading
                 </TabsTrigger>
               )}
@@ -92,8 +97,8 @@ export default function FactoryBalesHub() {
         </div>
 
         {show("history") && (
-          <TabsContent value="history" className="mt-0 flex-1 overflow-auto">
-            <div className="p-4">
+          <TabsContent value="history" className="bales-explorer-body mt-0 flex-1 overflow-auto">
+            <div className="p-3 sm:p-4">
               <BalesHistory />
             </div>
           </TabsContent>

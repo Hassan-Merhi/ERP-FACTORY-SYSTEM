@@ -58,6 +58,8 @@ export interface Transaction {
   voucherDate: string;
   effectiveDate?: string | null;
   voucherDescription: string;
+  /** Original posting timestamp, used only to recognize Oct-14 legacy routine rows. */
+  createdAt?: string | Date | null;
   destination?: string | null;
   currency?: string;
 }

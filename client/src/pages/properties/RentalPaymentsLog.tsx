@@ -17,8 +17,23 @@ import { useAppMode } from "@/contexts/AppModeContext";
 import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 import { AlertTriangle, ClipboardList, Trash2 } from "lucide-react";
 import { format } from "date-fns";
+import {
+  HISTORICAL_RENT_COMPANY,
+  HISTORICAL_RENT_CUTOFF_LABEL,
+  belongsToHistoricalRentSnapshot,
+} from "./property-rental/historicalRentSnapshot";
 
 const MONTH_NAMES = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const RECONCILIATION_VIEWS = [
+  { key: "HISTORICAL_RENT", label: "Rent through 26 Oct" },
+  { key: "ACTIVE_RENT", label: "Active rent" },
+  { key: "GUARANTEE", label: "Guarantee movements" },
+  { key: "ENDED_RENT", label: "Ended leases" },
+  { key: "SCHEDULED", label: "Scheduled" },
+  { key: "OTHER", label: "Other / billing adjustments" },
+  { key: "ALL", label: "All records" },
+] as const;
+type ReconciliationView = (typeof RECONCILIATION_VIEWS)[number]["key"];
 type PaymentRow = {
   id: number;
   paymentDate: string;
@@ -34,6 +49,9 @@ type PaymentRow = {
   tenantName: string | null;
   unitNumber: string | null;
   locationGroup: string | null;
+  sourceModule?: string;
+  reconciliationCategory?: "ACTIVE_RENT" | "GUARANTEE" | "ENDED_RENT" | "SCHEDULED" | "OTHER";
+  postingStatus?: string;
 };
 
 interface Props {
@@ -58,13 +76,33 @@ export default function RentalPaymentsLog({
   const { tableProps: cardTableProps } = useMobileCardTable();
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<PaymentRow | null>(null);
+  const [reconciliationView, setReconciliationView] = useState<ReconciliationView>("HISTORICAL_RENT");
 
-  const queryKey = [apiBase + "/payments", selectedCompany?.id];
+  // Both pages use the same voucher-backed dated rent snapshot. No payment is created.
+  const isPropertiesPayments = apiBase === "/api/properties/rental";
+  const isHassanProperties = isPropertiesPayments && selectedCompany?.name === HISTORICAL_RENT_COMPANY;
+  const effectiveView = !isHassanProperties && reconciliationView === "HISTORICAL_RENT"
+    ? "ACTIVE_RENT"
+    : reconciliationView;
+  const queryKey = [apiBase + "/payments", { companyId: selectedCompany?.id, view: isPropertiesPayments ? "warehouse-reconciliation" : "default" }];
+  const { data: warehouseUnits = [], isLoading: warehouseTotalsLoading, isError: warehouseTotalsError } =
+    useQuery<Array<{ totalPaid?: number | null }>>({
+      queryKey: [apiBase + "/units", { unitType: "WAREHOUSE", companyId: selectedCompany?.id }],
+      queryFn: async () => {
+        const res = await fetch(`${apiBase}/units?unitType=WAREHOUSE`, { credentials: "include" });
+        if (!res.ok) throw new Error("Failed to load warehouse rent totals");
+        return res.json();
+      },
+      enabled: !!selectedCompany && isPropertiesPayments,
+    });
 
   const { data: payments = [], isLoading } = useQuery<PaymentRow[]>({
     queryKey,
     queryFn: async () => {
-      const res = await fetch(`${apiBase}/payments`, { credentials: "include" });
+      const res = await fetch(
+        `${apiBase}/payments${isPropertiesPayments ? "?view=warehouse-reconciliation" : ""}`,
+        { credentials: "include" }
+      );
       if (!res.ok) throw new Error("Failed to load payments");
       return res.json();
     },
@@ -75,6 +113,7 @@ export default function RentalPaymentsLog({
     mutationFn: (id: number) => apiRequest("DELETE", `${apiBase}/payments/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey });
+      queryClient.invalidateQueries({ queryKey: [apiBase + "/units"] });
       toast({ title: "Payment deleted", description: "The payment and its accounting entry have been removed." });
       setDeleteTarget(null);
     },
@@ -84,12 +123,30 @@ export default function RentalPaymentsLog({
     },
   });
 
-  const filtered = useMemo(() => {
-    if (!search.trim()) return payments;
-    return payments.filter((p) => searchAny(search, p.tenantName, p.unitNumber, p.locationGroup, p.notes));
-  }, [payments, search]);
+  const viewPayments = useMemo(() => {
+    if (!isPropertiesPayments || effectiveView === "ALL") return payments;
+    if (effectiveView === "HISTORICAL_RENT") return payments.filter(belongsToHistoricalRentSnapshot);
+    if (effectiveView === "OTHER") {
+      // Includes recorded unvouchered corrections, which are not cash receipts.
+      return payments.filter((p) => p.reconciliationCategory === "OTHER" || 
+        (p.voucherId == null && p.reconciliationCategory === "ACTIVE_RENT"));
+    }
+    return payments.filter((p) => p.reconciliationCategory === effectiveView);
+  }, [payments, isPropertiesPayments, effectiveView]);
 
+  const filtered = useMemo(() => {
+    if (!search.trim()) return viewPayments;
+    return viewPayments.filter((p) => searchAny(search, p.tenantName, p.unitNumber, p.locationGroup, p.notes, p.sourceModule));
+  }, [viewPayments, search]);
+
+  // All monetary totals are sums of the visible payment records, never an
+  // unrelated KPI substituted into the table footer.
   const total = filtered.reduce((s, p) => s + Number(p.amount), 0);
+  const activeWarehouseRentPaid = warehouseUnits.reduce((s, u) => s + Number(u.totalPaid ?? 0), 0);
+  const isActiveUnfiltered = isPropertiesPayments && effectiveView === "ACTIVE_RENT" && !search.trim();
+  const discrepancy = isActiveUnfiltered && !warehouseTotalsLoading && !warehouseTotalsError
+    && !isLoading && Math.abs(total - activeWarehouseRentPaid) > 0.009;
+  const currentViewLabel = RECONCILIATION_VIEWS.find((v) => v.key === effectiveView)?.label ?? "Payments";
 
   return (
     <div
@@ -132,6 +189,46 @@ export default function RentalPaymentsLog({
         </div>
       )}
 
+      {isPropertiesPayments && (
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Payment type">
+          {RECONCILIATION_VIEWS.filter((view) => isHassanProperties || view.key !== "HISTORICAL_RENT").map((view) => {
+            const count = view.key === "ALL"
+              ? payments.length
+              : view.key === "HISTORICAL_RENT"
+                ? payments.filter(belongsToHistoricalRentSnapshot).length
+                : view.key === "OTHER"
+                  ? payments.filter((payment) => payment.reconciliationCategory === "OTHER" ||
+                      (payment.voucherId == null && payment.reconciliationCategory === "ACTIVE_RENT")).length
+                  : payments.filter((payment) => payment.reconciliationCategory === view.key).length;
+            return (
+              <Button
+                key={view.key}
+                size="sm"
+                variant={effectiveView === view.key ? "default" : "outline"}
+                onClick={() => setReconciliationView(view.key)}
+                aria-pressed={effectiveView === view.key}
+              >
+                {view.label} ({count})
+              </Button>
+            );
+          })}
+        </div>
+      )}
+
+      {isHassanProperties && effectiveView === "HISTORICAL_RENT" && (
+        <p className="text-xs text-muted-foreground">
+          Historical rent through {HISTORICAL_RENT_CUTOFF_LABEL}, including MORINA K's ended lease.
+          Later receipts, guarantee releases and unvouchered adjustments are shown in their own views.
+        </p>
+      )}
+
+      {isHassanProperties && effectiveView === "OTHER" && (
+        <p className="text-xs text-muted-foreground">
+          STE SIARSEGO's $800 billing transition adjustment has no payment voucher.
+          It remains in the original records but is not counted as voucher-backed rent paid.
+        </p>
+      )}
+
       {/* Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Card>
@@ -146,7 +243,11 @@ export default function RentalPaymentsLog({
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs text-muted-foreground font-normal">TOTAL AMOUNT RECEIVED</CardTitle>
+            <CardTitle className="text-xs text-muted-foreground font-normal">
+              {isHassanProperties && effectiveView === "HISTORICAL_RENT"
+                ? "RENT PAID THROUGH 26 OCT"
+                : isHassanProperties ? "TOTAL AMOUNT RECORDED" : "TOTAL AMOUNT RECEIVED"}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div
@@ -167,6 +268,14 @@ export default function RentalPaymentsLog({
         </Card>
       </div>
 
+      {discrepancy && (
+        <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300" role="status">
+          Active rent entries total ${formatMoneyNumber(total)}, while Warehouse Total Paid is
+          ${formatMoneyNumber(activeWarehouseRentPaid)}. Check cross-company payment ownership or timing.
+          No amounts have been adjusted.
+        </div>
+      )}
+
       {/* Payments table */}
       <Card>
         <CardContent className="p-0">
@@ -175,7 +284,7 @@ export default function RentalPaymentsLog({
               <div className="p-8 text-center text-muted-foreground">Loading payments…</div>
             ) : filtered.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">
-                {payments.length === 0 ? "No payments recorded yet." : "No payments match your search."}
+                {payments.length === 0 ? "No payments recorded yet." : "No payments match the selected type or search."}
               </div>
             ) : (
               <table className="w-full text-sm" {...cardTableProps} data-testid={`table-${testIdPrefix}-payments`}>
@@ -216,7 +325,12 @@ export default function RentalPaymentsLog({
                       <td className="px-3 py-2 text-xs text-muted-foreground">
                         {MONTH_NAMES[p.forMonth]} {p.forYear}
                       </td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">{p.notes ?? ""}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">
+                        {isPropertiesPayments && p.sourceModule === "ERP" && (
+                          <Badge variant="outline" className="mr-2 text-[10px]">ERP source</Badge>
+                        )}
+                        {p.notes ?? ""}
+                      </td>
                       <td className="px-3 py-2">
                         {p.voucherId ? (
                           <span className="text-xs text-muted-foreground font-mono">#{p.voucherId}</span>
@@ -231,15 +345,21 @@ export default function RentalPaymentsLog({
                         )}
                       </td>
                       <td className="px-2 py-1 text-right">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => setDeleteTarget(p)}
-                          aria-label="Delete payment"
-                          data-testid={`button-delete-payment-${p.id}`}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        {isPropertiesPayments && p.sourceModule !== "PROPERTIES" ? (
+                          <span className="text-xs text-muted-foreground" title="Manage this payment from its original ERP rental module">
+                            ERP source
+                          </span>
+                        ) : (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => setDeleteTarget(p)}
+                            aria-label="Delete payment"
+                            data-testid={`button-delete-payment-${p.id}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -247,7 +367,7 @@ export default function RentalPaymentsLog({
                 <tfoot className="sticky bottom-0 z-20 border-t-2 bg-muted/30">
                   <tr>
                     <td className="px-3 py-2 font-semibold" colSpan={3}>
-                      TOTAL
+                      {isPropertiesPayments ? `TOTAL — ${currentViewLabel.toUpperCase()}` : "TOTAL"}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums font-bold text-green-700 dark:text-green-400">
                       {formatMoneyNumber(total)}

@@ -135,6 +135,12 @@ export function registerOrderLoadingRoutes(app: Express) {
 
       // The date selected in Validate & Finalize is the business-effective date.
       // Keep a separate actual timestamp for audit/update bookkeeping.
+      const overrideLoadingDate = req.body?.overrideLoadingDate === true;
+      // Older clients may send today's date on resubmission. Never silently
+      // change the original completion date without a deliberate user edit.
+      if (overrideLoadingDate && (typeof req.body?.txDate !== "string" || !req.body.txDate)) {
+        return res.status(400).json({ message: "Select a loading date to change the original date" });
+      }
       const txDate = req.body?.txDate || getClientDate(req);
       if (
         typeof txDate !== "string" ||
@@ -416,9 +422,11 @@ export function registerOrderLoadingRoutes(app: Express) {
             // The later invoice-finalization step must preserve this value so a
             // revert returns here instead of incorrectly returning to VERIFIED.
             previousStatus: "LOADING",
-            // A reopened loading keeps its first confirmed loading date. Re-verification
-            // may happen days later and must not silently replace that date.
-            loadingFinalizedAt: order.loadingFinalizedAt ?? effectiveFinalizedAt,
+            // Preserve the original date unless the operator explicitly changes
+            // it in Validate Loading; the selected date then drives analytics too.
+            loadingFinalizedAt: overrideLoadingDate
+              ? effectiveFinalizedAt
+              : (order.loadingFinalizedAt ?? effectiveFinalizedAt),
             verifiedAt: effectiveFinalizedAt,
             updatedAt: now,
           })

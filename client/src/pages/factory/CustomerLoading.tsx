@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Loader2, Search, ShoppingCart, UsersRound } from "lucide-react";
+import { ChevronLeft, ChevronRight, Columns3, History, Loader2, Package, Search, ShoppingCart, SlidersHorizontal, Truck, UserRound, UsersRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -33,6 +33,22 @@ import {
 } from "./customerLoadingTypes";
 
 const PAGE_SIZE = 75;
+const COLUMN_PREFERENCE_KEY = "factory.customer-loading.visible-columns.v1";
+
+/** Only column presentation is persisted; selection, quantities, and proforma data are not stored. */
+function initialVisibleColumns(): Set<ColumnKey> {
+  const defaults = new Set(COLUMN_OPTIONS.map((column) => column.key));
+  if (typeof window === "undefined") return defaults;
+  try {
+    const stored = window.localStorage.getItem(COLUMN_PREFERENCE_KEY);
+    if (stored === null) return defaults;
+    const parsed: unknown = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return defaults;
+    return new Set(COLUMN_OPTIONS.filter((column) => parsed.includes(column.key)).map((column) => column.key));
+  } catch {
+    return defaults;
+  }
+}
 
 async function readJson<T>(url: string): Promise<T> {
   const response = await fetch(url, { credentials: "include" });
@@ -57,11 +73,17 @@ export default function CustomerLoading() {
   const [proformaName, setProformaName] = useState("");
   const [historyProduct, setHistoryProduct] = useState<CustomerLoadingProduct | null>(null);
   const [columnsOpen, setColumnsOpen] = useState(false);
-  const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(
-    () => new Set(COLUMN_OPTIONS.map((column) => column.key))
-  );
+  const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(initialVisibleColumns);
   const [page, setPage] = useState(1);
   const qtyRefs = useRef<Record<number, HTMLInputElement | null>>({});
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(COLUMN_PREFERENCE_KEY, JSON.stringify([...visibleColumns]));
+    } catch {
+      // Preferences are optional when storage is blocked.
+    }
+  }, [visibleColumns]);
 
   const customersQuery = useQuery<CustomerOption[]>({
     queryKey: ["/api/factory/customers", "customer-loading-picker"],
@@ -297,50 +319,95 @@ export default function CustomerLoading() {
       className="mx-auto flex w-full max-w-[1800px] flex-col gap-5 p-4 pb-24 md:p-6 md:pb-24"
       data-testid="customer-loading-page"
     >
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Customer Loading</h1>
-        <p className="text-sm text-muted-foreground">
-          See what each customer has loaded, inspect history, select items, and create a proforma directly.
-        </p>
-      </div>
-      <Card>
-        <CardContent className="grid gap-4 p-4 lg:grid-cols-[minmax(280px,420px)_1fr] lg:items-end">
-          <div className="space-y-2">
-            <div className="text-sm font-medium">Customer</div>
-            <Select
-              value={customerId}
-              onValueChange={(value) => {
-                setCustomerId(value);
-                resetFilters();
-                resetSelection();
-                setProformaName("");
-                setHistoryProduct(null);
-              }}
-            >
-              <SelectTrigger data-testid="customer-loading-customer-select">
-                <SelectValue placeholder={customersQuery.isLoading ? "Loading customers…" : "Choose a customer"} />
-              </SelectTrigger>
-              <SelectContent>
-                {(customersQuery.data ?? []).map((customer) => (
-                  <SelectItem key={customer.id} value={String(customer.id)}>
-                    {customer.legalName}
-                    {customer.code ? ` · ${customer.code}` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      <section className="relative isolate overflow-hidden rounded-2xl border border-indigo-200/80 bg-gradient-to-r from-slate-50 via-blue-50/70 to-indigo-100/70 p-5 shadow-sm dark:border-indigo-400/25 dark:from-[#101b30] dark:via-[#142644] dark:to-[#172b4b] sm:p-6">
+        <div className="pointer-events-none absolute -right-8 -top-20 h-64 w-64 rounded-full bg-indigo-400/10 blur-3xl dark:bg-indigo-400/15" aria-hidden="true" />
+        <div className="pointer-events-none absolute bottom-0 right-12 hidden text-indigo-400/15 dark:text-blue-200/10 lg:block" aria-hidden="true">
+          <Package className="h-40 w-40 -rotate-12" strokeWidth={1} />
+        </div>
+        <div className="relative flex items-center gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-700 text-white shadow-lg shadow-violet-600/20">
+            <Truck className="h-7 w-7" />
           </div>
-          <div className="text-sm text-muted-foreground lg:text-right">
-            {loadingQuery.data?.customer
-              ? `Viewing product history for ${loadingQuery.data.customer.legalName}`
-              : "Select a customer to begin"}
+          <div className="min-w-0">
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-700/75 dark:text-indigo-200/75">
+              Bale Explorer / Customer History
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-950 dark:text-white sm:text-3xl">
+              Customer Loading
+            </h1>
+            <p className="mt-1 max-w-3xl text-sm text-slate-600 dark:text-blue-100/75">
+              See what each customer has loaded, inspect history, select items, and create a proforma directly.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <Card className="overflow-hidden rounded-2xl border-indigo-200 bg-gradient-to-r from-indigo-50 via-white to-violet-50 shadow-sm dark:border-indigo-400/35 dark:from-[#192f57] dark:via-[#1b2b4e] dark:to-[#29254d]">
+        <CardContent className="flex flex-col gap-4 p-4 sm:p-5 xl:flex-row xl:items-end xl:justify-between">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-400/15 dark:text-blue-200 sm:flex">
+              <UserRound className="h-6 w-6" />
+            </div>
+            <div className="min-w-0 w-full max-w-xl space-y-2">
+              <div className="text-sm font-semibold text-slate-800 dark:text-blue-100">Customer</div>
+              <Select
+                value={customerId}
+                onValueChange={(value) => {
+                  setCustomerId(value);
+                  resetFilters();
+                  resetSelection();
+                  setProformaName("");
+                  setHistoryProduct(null);
+                }}
+              >
+                <SelectTrigger
+                  className="h-11 w-full border-indigo-200 bg-white/90 font-medium shadow-sm focus:ring-indigo-500 dark:border-indigo-400/50 dark:bg-[#101d36]/90 dark:text-white"
+                  data-testid="customer-loading-customer-select"
+                >
+                  <SelectValue placeholder={customersQuery.isLoading ? "Loading customers…" : "Choose a customer"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(customersQuery.data ?? []).map((customer) => (
+                    <SelectItem key={customer.id} value={String(customer.id)}>
+                      {customer.legalName}
+                      {customer.code ? ` · ${customer.code}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center xl:justify-end">
+            <div className="flex min-w-0 items-center gap-2 text-sm">
+              <History className="h-4 w-4 shrink-0 text-indigo-600 dark:text-violet-200" />
+              <div className="min-w-0">
+                <div className="text-xs text-muted-foreground dark:text-blue-100/65">Viewing product history for</div>
+                <div className="truncate font-semibold text-slate-800 dark:text-white">
+                  {loadingQuery.data?.customer?.legalName || "Select a customer to begin"}
+                </div>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!customerId}
+              onClick={() => {
+                setLoadingFilter("LOADED");
+                setPage(1);
+              }}
+              className="shrink-0 border-violet-300 bg-violet-100/80 text-violet-900 hover:bg-violet-200 dark:border-violet-400/65 dark:bg-violet-500/25 dark:text-violet-100 dark:hover:bg-violet-500/40"
+              title="Filter to loaded products; click a Loaded status to inspect its history"
+            >
+              <History className="mr-2 h-4 w-4" />
+              Browse Loading History
+            </Button>
           </div>
         </CardContent>
       </Card>
 
       {!customerId ? (
         <Card>
-          <CardContent className="flex min-h-[300px] flex-col items-center justify-center gap-3 p-8 text-center">
+          <CardContent className="flex min-h-[300px] flex-col items-center justify-center gap-3 rounded-2xl bg-gradient-to-br from-blue-50 to-violet-50 p-8 text-center dark:from-[#12243f] dark:to-[#1f2144]">
             <div className="rounded-full bg-muted p-4">
               <UsersRound className="h-7 w-7 text-muted-foreground" />
             </div>
@@ -364,16 +431,40 @@ export default function CustomerLoading() {
         <>
           <CustomerLoadingSummaryCards summary={summary} formatNumber={formatNumber} />
 
-          <Card className="overflow-hidden">
-            <div className="flex flex-col gap-3 border-b p-4 xl:flex-row xl:items-center xl:justify-between">
-              <div>
-                <div className="font-semibold">Product List</div>
-                <div className="text-xs text-muted-foreground">
-                  {filteredProducts.length} of {products.length} products · {selectedProductIds.size} selected
+          <Card className="overflow-hidden rounded-2xl border-slate-200/90 bg-white shadow-sm dark:border-slate-700/70 dark:bg-[#121d30]">
+            <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-indigo-50/60 p-4 dark:border-slate-700/70 dark:from-[#182640] dark:to-[#192343] sm:p-5">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-400/20 dark:text-indigo-200">
+                    <Package className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">Product List</h2>
+                      <span className="rounded-full border border-violet-200 bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-800 dark:border-violet-400/30 dark:bg-violet-500/20 dark:text-violet-200">
+                        {formatNumber(filteredProducts.length)} products
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {filteredProducts.length} of {products.length} products · {selectedProductIds.size} selected
+                    </div>
+                  </div>
                 </div>
+                <Button
+                  variant="outline"
+                  onClick={() => setColumnsOpen(true)}
+                  className="border-slate-300 bg-white shadow-sm dark:border-slate-500 dark:bg-slate-800/60"
+                  data-testid="customer-loading-columns-button"
+                >
+                  <Columns3 className="mr-2 h-4 w-4" />
+                  Columns
+                </Button>
               </div>
-              <div className="grid gap-2 sm:grid-cols-2 xl:flex xl:items-center">
-                <div className="relative sm:col-span-2 xl:w-72">
+              <div className="mb-2 flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                <SlidersHorizontal className="h-3.5 w-3.5" /> Search & filters
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-[minmax(16rem,1.6fr)_repeat(5,minmax(8rem,1fr))]">
+                <div className="relative sm:col-span-2 lg:col-span-3 2xl:col-span-1">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     value={search}
@@ -381,8 +472,8 @@ export default function CustomerLoading() {
                       setSearch(e.target.value);
                       setPage(1);
                     }}
-                    placeholder="Search name, Arabic, or code"
-                    className="pl-9"
+                    placeholder="Search name, Arabic, or code..."
+                    className="h-10 border-slate-300 bg-white pl-9 shadow-sm dark:border-slate-600 dark:bg-slate-900/60"
                     data-testid="customer-loading-search"
                   />
                 </div>
@@ -393,7 +484,7 @@ export default function CustomerLoading() {
                     setPage(1);
                   }}
                 >
-                  <SelectTrigger className="xl:w-44" data-testid="customer-loading-status-filter">
+                  <SelectTrigger className="h-10 min-w-0 border-slate-300 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-900/60" data-testid="customer-loading-status-filter">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -409,7 +500,7 @@ export default function CustomerLoading() {
                     setPage(1);
                   }}
                 >
-                  <SelectTrigger className="xl:w-44">
+                  <SelectTrigger className="h-10 min-w-0 border-slate-300 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-900/60">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -428,7 +519,7 @@ export default function CustomerLoading() {
                     setPage(1);
                   }}
                 >
-                  <SelectTrigger className="xl:w-36">
+                  <SelectTrigger className="h-10 min-w-0 border-slate-300 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-900/60">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -447,7 +538,7 @@ export default function CustomerLoading() {
                     setPage(1);
                   }}
                 >
-                  <SelectTrigger className="xl:w-36" data-testid="customer-loading-zero-stock-filter">
+                  <SelectTrigger className="h-10 min-w-0 border-slate-300 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-900/60" data-testid="customer-loading-zero-stock-filter">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -462,7 +553,7 @@ export default function CustomerLoading() {
                     setPage(1);
                   }}
                 >
-                  <SelectTrigger className="xl:w-44" data-testid="customer-loading-negative-stock-filter">
+                  <SelectTrigger className="h-10 min-w-0 border-slate-300 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-900/60" data-testid="customer-loading-negative-stock-filter">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -470,21 +561,14 @@ export default function CustomerLoading() {
                     <SelectItem value="HIDE_NEGATIVE">Hide Negative</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button
-                  variant="outline"
-                  onClick={() => setColumnsOpen(true)}
-                  data-testid="customer-loading-columns-button"
-                >
-                  Columns
-                </Button>
               </div>
             </div>
 
-            <div className="max-h-[62vh] overflow-auto">
-              <table className="w-full min-w-[1100px] border-collapse text-sm">
-                <thead className="sticky top-0 z-30 bg-card shadow-[0_1px_0_hsl(var(--border))]">
-                  <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-                    <th className="sticky left-0 z-40 w-12 bg-card px-3 py-3">
+            <div className="max-h-[62vh] overflow-auto bg-white dark:bg-[#121d30]">
+              <table className="w-full min-w-[1280px] border-collapse text-sm">
+                <thead className="sticky top-0 z-30 bg-slate-100 shadow-[0_1px_0_hsl(var(--border))] dark:bg-[#263956]">
+                  <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-slate-600 dark:text-blue-100/85">
+                    <th className="sticky left-0 z-40 w-12 bg-slate-100 px-3 py-3 dark:bg-[#263956]">
                       <Checkbox
                         checked={allVisibleSelected}
                         onCheckedChange={(checked) => {
@@ -535,7 +619,7 @@ export default function CustomerLoading() {
                     return (
                       <tr
                         key={product.id}
-                        className={`border-b last:border-b-0 hover:bg-muted/30 ${selected ? "bg-primary/5" : ""}`}
+                        className={`border-b border-slate-100 transition-colors last:border-b-0 hover:bg-blue-50/80 dark:border-slate-700/50 dark:hover:bg-blue-400/10 ${selected ? "bg-indigo-50 dark:bg-indigo-500/10" : "even:bg-slate-50/70 dark:even:bg-white/[0.025]"}`}
                         data-testid={`customer-loading-product-${product.id}`}
                       >
                         <td className="sticky left-0 z-20 bg-inherit px-3 py-3">
@@ -550,14 +634,14 @@ export default function CustomerLoading() {
                             {product.articleCode || product.code}
                           </td>
                         )}
-                        {isColumnVisible("product") && <td className="px-4 py-3 font-medium">{product.name}</td>}
+                        {isColumnVisible("product") && <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100">{product.name}</td>}
                         {isColumnVisible("arabicName") && (
                           <td className="px-4 py-3 text-right" dir="rtl">
                             {product.nameAr || "—"}
                           </td>
                         )}
                         {isColumnVisible("category") && (
-                          <td className="px-4 py-3 text-muted-foreground">{product.categoryName || "—"}</td>
+                          <td className="px-4 py-3"><span className="inline-flex rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-800 dark:border-blue-400/25 dark:bg-blue-400/10 dark:text-blue-200">{product.categoryName || "—"}</span></td>
                         )}
                         {isColumnVisible("weight") && (
                           <td className="px-4 py-3 text-right tabular-nums">
@@ -601,11 +685,11 @@ export default function CustomerLoading() {
                               disabled={product.loadingStatus !== "LOADED"}
                             >
                               {product.loadingStatus === "LOADED" ? (
-                                <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/80">
+                                <Badge variant="secondary" className="cursor-pointer border border-emerald-200 bg-emerald-100 font-semibold text-emerald-800 hover:bg-emerald-200 dark:border-emerald-400/30 dark:bg-emerald-400/15 dark:text-emerald-200 dark:hover:bg-emerald-400/25">
                                   Loaded · {product.loadingCount}
                                 </Badge>
                               ) : (
-                                <Badge variant="outline">Never loaded</Badge>
+                                <Badge variant="outline" className="border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700/40 dark:text-slate-300">Never loaded</Badge>
                               )}
                             </button>
                           </td>
@@ -665,7 +749,7 @@ export default function CustomerLoading() {
                 </div>
               )}
             </div>
-            <div className="flex flex-col gap-2 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-[#17243b] sm:flex-row sm:items-center sm:justify-between">
               <div className="text-xs text-muted-foreground">
                 Showing {filteredProducts.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1}–
                 {Math.min(safePage * PAGE_SIZE, filteredProducts.length)} of {filteredProducts.length}
@@ -697,7 +781,7 @@ export default function CustomerLoading() {
       )}
 
       {selectedProductIds.size > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-50 border-t bg-background/95 px-4 py-3 shadow-2xl backdrop-blur-sm md:left-(--sidebar-width,0px)">
+        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-indigo-300 bg-white/95 px-4 py-3 shadow-2xl backdrop-blur-md dark:border-indigo-500/40 dark:bg-[#14213a]/95 md:left-(--sidebar-width,0px)">
           <div className="mx-auto flex max-w-[1800px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
               <span>

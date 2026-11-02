@@ -18,6 +18,7 @@ import {
 import type { SettingsUserRow } from "../settingsTypes";
 import {
   FACTORY_TAB_GRANT_KEYS,
+  FACTORY_EMPTY_CONTAINER_GRANT_KEY,
   isFactoryTabVisibleInProfile,
   setFactoryTabVisibleInProfile,
   type FactoryTabDefinition,
@@ -93,9 +94,13 @@ export function AdvancedRestrictions({
   const hiddenTabCount = isPrivileged
     ? 0
     : FACTORY_TABS.filter((tab) => !isFactoryTabVisibleInProfile(tab, hiddenCostFields)).length;
+  const emptyContainerGranted =
+    hasFactoryAccess && !isViewOnly && hiddenCostFields.includes(FACTORY_EMPTY_CONTAINER_GRANT_KEY);
   const hiddenFieldCount = isPrivileged
     ? 0
-    : hiddenCostFields.filter((key) => !factoryTabKeys.has(key) && !FACTORY_TAB_GRANT_KEYS.has(key)).length;
+    : hiddenCostFields.filter(
+        (key) => !factoryTabKeys.has(key) && !FACTORY_TAB_GRANT_KEYS.has(key) && key !== FACTORY_EMPTY_CONTAINER_GRANT_KEY
+      ).length;
   // View Only ERP access is automatic, so legacy ERP selections do not count
   // as active page restrictions in the user-management summary.
   const erpPageKeys = new Set(ALL_ERP_PAGES.map((page) => page.key));
@@ -108,7 +113,8 @@ export function AdvancedRestrictions({
     relevantPageCount +
     hiddenTabCount +
     hiddenFieldCount +
-    (isPrivileged ? 0 : hiddenErpCostFields.length);
+    (isPrivileged ? 0 : hiddenErpCostFields.length) +
+    (isPrivileged ? 0 : Number(emptyContainerGranted));
 
   return (
     <Card>
@@ -140,6 +146,7 @@ export function AdvancedRestrictions({
                 if (tabCount > 0) parts.push(`${tabCount} tab${tabCount !== 1 ? "s" : ""} hidden`);
                 if (fieldCount > 0) parts.push(`${fieldCount} Factory field${fieldCount !== 1 ? "s" : ""} hidden`);
                 if (erpCount > 0) parts.push(`${erpCount} ERP field${erpCount !== 1 ? "s" : ""} hidden`);
+                if (emptyContainerGranted) parts.push("Empty Container allowed");
                 return (
                   <p className="text-xs text-muted-foreground font-normal mt-1">
                     {parts.length > 0 ? parts.join(" · ") : "No additional restrictions active"}
@@ -163,6 +170,33 @@ export function AdvancedRestrictions({
                     role-level defaults for this user only.
                   </span>
                 </div>
+                {hasFactoryAccess && !isViewOnly && (
+                  <div className="space-y-2 rounded-md border p-3" data-testid="section-container-loading-actions">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Container Loading Actions
+                    </p>
+                    <label className="flex cursor-pointer items-start gap-3">
+                      <Checkbox
+                        checked={emptyContainerGranted}
+                        onCheckedChange={(checked) =>
+                          setHiddenCostFields((prev) =>
+                            checked === true
+                              ? Array.from(new Set([...prev, FACTORY_EMPTY_CONTAINER_GRANT_KEY]))
+                              : prev.filter((key) => key !== FACTORY_EMPTY_CONTAINER_GRANT_KEY)
+                          )
+                        }
+                        data-testid="checkbox-allow-empty-container"
+                      />
+                      <span className="space-y-1">
+                        <span className="block text-sm font-medium">Allow Empty Container</span>
+                        <span className="block text-xs text-muted-foreground">
+                          Allow this user to return all scanned bales from an open container to stock.
+                          Does not grant administrator rights. Off by default.
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+                )}
                 {hasFactoryAccess && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between flex-wrap gap-2">

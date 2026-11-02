@@ -2,7 +2,7 @@
  * Setup card of the container loading scan page: customer, loading location,
  * proforma, note and the Start Loading action.
  */
-import { FileText, MapPin, Play, Save, UserRound } from "lucide-react";
+import { ClipboardList, FileText, MapPin, Play, Save, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,22 +12,27 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
   const { orderId, customerId, activeProformas } = model;
 
   return (
-    <div className="overflow-hidden rounded-2xl border bg-background/90 shadow-xs">
-      <div className="border-b px-4 py-3 sm:px-5">
-        <h3 className="text-sm font-semibold sm:text-base">{model.tr("loadingDetails")}</h3>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {orderId ? model.tr("loadingDetailsLockedHint") : model.tr("loadingDetailsSetupHint")}
-        </p>
+    <div className="overflow-hidden rounded-[22px] border border-blue-100/90 bg-white shadow-[0_18px_48px_-40px_rgba(30,64,175,0.75)] dark:border-blue-500/25 dark:bg-[#101b30]">
+      <div className="flex items-center gap-3 border-b border-blue-100 bg-gradient-to-r from-blue-50/90 to-white px-4 py-3.5 dark:border-blue-500/20 dark:from-[#132848] dark:to-[#101b30] sm:px-5">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-700 text-white shadow-md shadow-blue-500/20">
+          <ClipboardList className="h-5 w-5" />
+        </div>
+        <div className="min-w-0">
+          <h3 className="text-sm font-bold tracking-tight sm:text-base">{model.tr("loadingDetails")}</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {orderId ? model.tr("loadingDetailsLockedHint") : model.tr("loadingDetailsSetupHint")}
+          </p>
+        </div>
       </div>
 
-      <div className="space-y-4 p-4 sm:p-5">
+      <div className="space-y-4 bg-gradient-to-b from-white to-slate-50/30 p-4 dark:from-[#101b30] dark:to-[#0e192d] sm:p-5">
         <div>
           <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             <UserRound className="h-3.5 w-3.5" />
             {model.tr("customer")}
           </label>
           <Select value={model.selectedCustomerId} onValueChange={model.setSelectedCustomerId} disabled={!!orderId}>
-            <SelectTrigger className="h-10 rounded-xl bg-muted/10" data-testid="select-customer">
+            <SelectTrigger className="h-11 rounded-xl border-blue-200/90 bg-slate-50/60 shadow-sm focus:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[#0b172b]" data-testid="select-customer">
               <SelectValue placeholder={model.tr("selectCustomer")} />
             </SelectTrigger>
             <SelectContent>
@@ -46,7 +51,7 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
             {model.tr("loadingLocation")}
           </label>
           <Select value={model.selectedLocationId} onValueChange={model.setSelectedLocationId} disabled={!!orderId}>
-            <SelectTrigger className="h-10 rounded-xl bg-muted/10" data-testid="select-location">
+            <SelectTrigger className="h-11 rounded-xl border-blue-200/90 bg-slate-50/60 shadow-sm focus:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[#0b172b]" data-testid="select-location">
               <SelectValue placeholder={model.tr("selectLocation")} />
             </SelectTrigger>
             <SelectContent>
@@ -66,7 +71,7 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
               {model.tr("proforma")}
             </label>
             <Select value={model.selectedProformaId} onValueChange={model.setSelectedProformaId}>
-              <SelectTrigger className="h-10 rounded-xl bg-muted/10" data-testid="select-proforma">
+              <SelectTrigger className="h-11 rounded-xl border-blue-200/90 bg-slate-50/60 shadow-sm focus:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[#0b172b]" data-testid="select-proforma">
                 <SelectValue placeholder={model.tr("selectProforma")} />
               </SelectTrigger>
               <SelectContent>
@@ -102,7 +107,7 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
                 value={model.loadingNote}
                 onChange={(e) => model.setLoadingNote(e.target.value)}
                 placeholder={model.tr("addLoadingNote")}
-                className="min-h-[78px] resize-none rounded-xl bg-muted/10 text-sm"
+                className="min-h-[88px] resize-none rounded-xl border-blue-200/90 bg-slate-50/60 text-sm shadow-sm focus-visible:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[#0b172b]"
                 rows={2}
                 data-testid="input-loading-note"
               />
@@ -123,7 +128,7 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
               value={model.loadingNote}
               onChange={(e) => model.setLoadingNote(e.target.value)}
               placeholder={model.tr("optionalNote")}
-              className="min-h-[78px] resize-none rounded-xl bg-muted/10 text-sm"
+              className="min-h-[88px] resize-none rounded-xl border-blue-200/90 bg-slate-50/60 text-sm shadow-sm focus-visible:ring-blue-500/30 dark:border-blue-500/25 dark:bg-[#0b172b]"
               rows={2}
               data-testid="input-loading-note"
             />
@@ -132,7 +137,7 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
 
         {!orderId && (
           <Button
-            className="h-11 w-full rounded-xl"
+            className="h-12 w-full rounded-xl bg-gradient-to-r from-sky-500 to-blue-700 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:from-sky-600 hover:to-blue-800 disabled:opacity-50"
             onClick={model.handleStartLoading}
             disabled={
               !customerId ||
