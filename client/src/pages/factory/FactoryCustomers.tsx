@@ -13,7 +13,14 @@ import { useLocation } from "wouter";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Pencil, User, Trash2, FileText, RotateCcw, History, Clock, Eye, EyeOff } from "lucide-react";
+import {
+  Plus, Pencil, User, Trash2, FileText, RotateCcw, History, Clock, Eye, EyeOff,
+  Users, Wallet, Scale, SlidersHorizontal, Columns3, Download, RefreshCw, ChevronDown,
+} from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { useSingleFlightAction } from "@/hooks/use-single-flight-action";
@@ -59,6 +66,12 @@ export default function FactoryCustomers() {
   const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
   const [showDeleted] = useState(false);
   const [showZeroBalance, setShowZeroBalance] = useState(false);
+  const [balanceFilter, setBalanceFilter] = useState<"all" | "Dr" | "Cr">("all");
+  const showBalanceColumn = prefs.columns?.balance !== false;
+  const showActionsColumn = prefs.columns?.actions !== false;
+  const setColumnVisible = (column: "balance" | "actions", visible: boolean) => {
+    setPrefs({ columns: { ...prefs.columns, [column]: visible } });
+  };
   const [formData, setFormData] = useState({
     legalName: "",
     phone: "",
@@ -218,11 +231,56 @@ export default function FactoryCustomers() {
     return searchAny(search, c.legalName, c.code, c.phone);
   });
   const zeroBalanceCount = filtered.filter((customer) => Math.abs(customer.balance ?? 0) <= 0.001).length;
-  const visibleCustomers = showZeroBalance
+  const visibleCustomers = (showZeroBalance
     ? filtered
-    : filtered.filter((customer) => Math.abs(customer.balance ?? 0) > 0.001);
+    : filtered.filter((customer) => Math.abs(customer.balance ?? 0) > 0.001)
+  ).filter((customer) => balanceFilter === "all" || customer.balanceSide?.toUpperCase() === balanceFilter.toUpperCase());
   const { page: safePage, setPage, totalPages, paginate } = useClientTablePagination(visibleCustomers.length, pageSize);
   const pagedCustomers = paginate(visibleCustomers);
+
+  // Display-only summaries of the existing API amounts. The API supplies an
+  // unsigned magnitude and a separate debit/credit side; never infer the
+  // accounting side from the amount's sign or use these sums for posting.
+  const { totalDebit, totalCredit } = customers.reduce(
+    (totals, customer) => {
+      const amount = Number(customer.balance);
+      if (!Number.isFinite(amount) || Math.abs(amount) <= 0.001) return totals;
+      if (customer.balanceSide?.toUpperCase() === "DR") totals.totalDebit += Math.abs(amount);
+      if (customer.balanceSide?.toUpperCase() === "CR") totals.totalCredit += Math.abs(amount);
+      return totals;
+    },
+    { totalDebit: 0, totalCredit: 0 }
+  );
+  const netBalance = totalDebit - totalCredit;
+
+  const exportVisibleCustomers = () => {
+    // Export the current client-side view without touching accounting data.
+    // Escape spreadsheet formulas in user-provided text to avoid CSV injection.
+    const csvCell = (value: string | number) => {
+      const raw = String(value ?? "");
+      const safe = /^[\s]*[=+@-]/.test(raw) ? `'${raw}` : raw;
+      return `"${safe.replace(/"/g, '""')}"`;
+    };
+    const rows = [
+      ["Customer Name", "Code", "Phone", "Balance", "Balance Type"],
+      ...visibleCustomers.map((customer) => [
+        customer.legalName,
+        customer.code,
+        customer.phone ?? "",
+        customer.balance == null ? "" : String(customer.balance),
+        customer.balanceSide?.toUpperCase() === "CR" ? "Credit" : customer.balanceSide?.toUpperCase() === "DR" ? "Debit" : "",
+      ]),
+    ];
+    const csv = rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
+    const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "factory-customers.csv";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
 
   if (isLoading) {
     return (
@@ -251,13 +309,55 @@ export default function FactoryCustomers() {
   }
 
   return (
-    <div className="flex flex-col h-full p-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold" data-testid="text-page-title">
-            Customers
-          </h1>
-          <p className="text-sm text-muted-foreground">{customers.length} total customers</p>
+    <div className="flex min-h-full flex-col gap-5 px-4 py-5 sm:px-6 sm:py-6" data-testid="factory-customers-directory">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4" data-testid="customer-balance-summary">
+        <div className="rounded-2xl border border-blue-500/25 bg-blue-500/5 p-3 shadow-sm sm:p-4 dark:border-blue-400/30 dark:bg-blue-500/10">
+          <div className="flex items-center gap-3">
+            <span className="rounded-xl bg-blue-500/15 p-2.5 text-blue-600 dark:text-blue-400"><Users className="h-5 w-5" /></span>
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">Total Customers</p>
+              <p className="mt-1 text-xl font-bold tabular-nums sm:text-2xl" data-testid="metric-customers-total">{customers.length}</p>
+            </div>
+          </div>
+        </div>
+        <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-3 shadow-sm sm:p-4 dark:border-emerald-400/30 dark:bg-emerald-500/10">
+          <div className="flex items-center gap-3">
+            <span className="rounded-xl bg-emerald-500/15 p-2.5 text-emerald-600 dark:text-emerald-400"><Wallet className="h-5 w-5" /></span>
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">Total Debit</p>
+              <p className="mt-1 break-all text-base font-bold tabular-nums text-emerald-600 sm:text-xl dark:text-emerald-400" data-testid="metric-customers-debit">{formatCashAmount(totalDebit)}</p>
+            </div>
+          </div>
+        </div>
+        <div className="rounded-2xl border border-rose-500/25 bg-rose-500/5 p-3 shadow-sm sm:p-4 dark:border-rose-400/30 dark:bg-rose-500/10">
+          <div className="flex items-center gap-3">
+            <span className="rounded-xl bg-rose-500/15 p-2.5 text-rose-600 dark:text-rose-400"><Wallet className="h-5 w-5" /></span>
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">Total Credit</p>
+              <p className="mt-1 break-all text-base font-bold tabular-nums text-rose-600 sm:text-xl dark:text-rose-400" data-testid="metric-customers-credit">{formatCashAmount(totalCredit)}</p>
+            </div>
+          </div>
+        </div>
+        <div className="rounded-2xl border border-violet-500/25 bg-violet-500/5 p-3 shadow-sm sm:p-4 dark:border-violet-400/30 dark:bg-violet-500/10">
+          <div className="flex items-center gap-3">
+            <span className="rounded-xl bg-violet-500/15 p-2.5 text-violet-600 dark:text-violet-400"><Scale className="h-5 w-5" /></span>
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">Net Balance</p>
+              <p className={`mt-1 break-all text-base font-bold tabular-nums sm:text-xl ${netBalance < -0.001 ? "text-rose-600 dark:text-rose-400" : netBalance > 0.001 ? "text-emerald-600 dark:text-emerald-400" : "text-foreground"}`} data-testid="metric-customers-net">
+                {netBalance < -0.001 ? "−" : ""}{formatCashAmount(Math.abs(netBalance))}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 border-b border-border/60 pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <span className="rounded-xl bg-blue-500/10 p-2.5 text-blue-600 dark:text-sky-400"><Users className="h-6 w-6" /></span>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-page-title">Customers</h1>
+            <p className="text-sm text-muted-foreground">{customers.length} total customers</p>
+          </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {zeroBalanceCount > 0 && (
@@ -280,7 +380,7 @@ export default function FactoryCustomers() {
             onClick={openCreate}
             data-testid="button-add-customer"
             size="sm"
-            className="h-9 gap-2 rounded-lg px-4 shadow-xs"
+            className="h-10 gap-2 rounded-xl bg-blue-600 px-4 text-white shadow-sm hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
           >
             <Plus className="h-4 w-4" />
             Add Customer
@@ -296,26 +396,60 @@ export default function FactoryCustomers() {
         }}
         searchPlaceholder="Search by name, code, or phone..."
         searchTestId="input-search-customers"
+        className="mb-0"
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9 gap-2 rounded-xl" data-testid="button-customer-balance-filter">
+                  <SlidersHorizontal className="h-4 w-4" /> Filters <ChevronDown className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Balance side</DropdownMenuLabel>
+                <DropdownMenuItem onSelect={() => { setBalanceFilter("all"); setPage(1); }}>All balances {balanceFilter === "all" ? "✓" : ""}</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => { setBalanceFilter("Dr"); setPage(1); }}>Debit balances {balanceFilter === "Dr" ? "✓" : ""}</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => { setBalanceFilter("Cr"); setPage(1); }}>Credit balances {balanceFilter === "Cr" ? "✓" : ""}</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9 gap-2 rounded-xl" data-testid="button-customer-columns">
+                  <Columns3 className="h-4 w-4" /> Columns <ChevronDown className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Visible columns (saved)</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuCheckboxItem checked disabled>Name</DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={showBalanceColumn} onCheckedChange={(checked) => setColumnVisible("balance", checked)}>Balance</DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={showActionsColumn} onCheckedChange={(checked) => setColumnVisible("actions", checked)}>Actions</DropdownMenuCheckboxItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button variant="outline" size="sm" className="h-9 gap-2 rounded-xl" onClick={exportVisibleCustomers} data-testid="button-export-customers">
+              <Download className="h-4 w-4" /> Export
+            </Button>
+            <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl" onClick={() => void refetchCustomers()} title="Refresh customers" aria-label="Refresh customers" data-testid="button-refresh-customers">
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          </div>
+        }
       />
 
-      <div className="rounded-xl border overflow-hidden">
+      <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm dark:border-blue-400/20 dark:bg-slate-950/40">
         <div className="table-responsive">
-          <Table mobileLayout="cards" density={prefs.density}>
+          <Table mobileLayout="cards" density={prefs.density} wrapperClassName="border-0 rounded-none dark:border-0">
             <TableHeader className="sticky top-0 z-30">
-              <TableRow className="bg-muted border-b-2 border-border/60 hover:bg-muted">
-                <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
-                  Name
-                </TableHead>
-                <TableHead className="text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
-                  Balance
-                </TableHead>
-                <TableHead className="w-[90px] py-2"></TableHead>
+              <TableRow className="bg-muted/65 hover:bg-muted/65 dark:bg-blue-900/25 dark:hover:bg-blue-900/25">
+                <TableHead className="py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Name</TableHead>
+                {showBalanceColumn && <TableHead className="py-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Balance</TableHead>}
+                {showActionsColumn && <TableHead className="w-[144px] py-3 text-right"><span className="sr-only">Actions</span></TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {visibleCustomers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={1 + Number(showBalanceColumn) + Number(showActionsColumn)} className="text-center py-8 text-muted-foreground">
                     {search
                       ? "No customers match your search"
                       : zeroBalanceCount > 0
@@ -325,36 +459,50 @@ export default function FactoryCustomers() {
                 </TableRow>
               ) : (
                 pagedCustomers.map((customer) => (
-                  <TableRow key={customer.id} data-testid={`row-customer-${customer.id}`}>
-                    <TableCell className="font-medium" data-testid={`text-customer-name-${customer.id}`}>
-                      <button
-                        className="text-left hover:underline text-foreground"
-                        onClick={() => navigate(`/factory/customers/${customer.id}`)}
-                        data-testid={`button-open-statement-${customer.id}`}
-                      >
-                        {customer.legalName}
-                      </button>
-                      {customer.phone && <p className="text-xs text-muted-foreground mt-0.5">{customer.phone}</p>}
+                  <TableRow key={customer.id} className="hover:bg-blue-500/5 dark:hover:bg-blue-500/10" data-testid={`row-customer-${customer.id}`}>
+                    <TableCell className="py-3 font-medium sm:py-3" data-testid={`text-customer-name-${customer.id}`}>
+                      <div className="flex items-center gap-3">
+                        <div aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600/10 text-xs font-bold text-blue-600 dark:bg-blue-400/15 dark:text-blue-300">
+                          {customer.legalName.trim().split(/\s+/).slice(0, 2).map((part) => part.charAt(0)).join("").toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <button
+                            className="text-left font-semibold text-foreground hover:underline"
+                            onClick={() => navigate(`/factory/customers/${customer.id}`)}
+                            data-testid={`button-open-statement-${customer.id}`}
+                          >
+                            {customer.legalName}
+                          </button>
+                          {customer.phone && <p className="mt-0.5 text-xs text-muted-foreground">{customer.phone}</p>}
+                        </div>
+                      </div>
                     </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {customer.balance !== undefined ? (
-                        <span data-testid={`text-customer-balance-${customer.id}`}>
-                          {formatCashAmount(customer.balance)}{" "}
-                          <span className={`text-xs font-semibold ${drCrClass(customer.balanceSide)}`}>
-                            {customer.balanceSide}
+                    {showBalanceColumn && (
+                      <TableCell className="py-3 text-right font-mono sm:py-3">
+                        {customer.balance !== undefined ? (
+                          <span
+                            className={`text-sm font-bold tabular-nums ${Math.abs(customer.balance) <= 0.001 ? "text-muted-foreground" : drCrClass(customer.balanceSide)}`}
+                            data-testid={`text-customer-balance-${customer.id}`}
+                            title={customer.balanceSide?.toUpperCase() === "CR" ? "Credit balance" : "Debit balance"}
+                            aria-label={`${formatCashAmount(customer.balance)} ${customer.balanceSide?.toUpperCase() === "CR" ? "credit" : "debit"} balance`}
+                          >
+                            {formatCashAmount(customer.balance)}
                           </span>
-                        </span>
-                      ) : (
-                        "-"
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
+                    )}
+                    {showActionsColumn && (
+                    <TableCell className="py-3 sm:py-3">
+                      <div className="flex items-center justify-end gap-1">
                         <Button
                           variant="ghost"
                           size="icon"
                           onClick={() => navigate(`/factory/invoicing?tab=proformas&customerId=${customer.id}`)}
                           title="View Proformas"
+                          aria-label={`View proformas for ${customer.legalName}`}
+                          className="h-9 w-9 rounded-xl border border-border/60 hover:border-blue-400/60 hover:text-blue-500"
                           data-testid={`button-proformas-customer-${customer.id}`}
                         >
                           <FileText className="h-4 w-4" />
@@ -364,6 +512,8 @@ export default function FactoryCustomers() {
                           size="icon"
                           onClick={() => openEdit(customer)}
                           title="Edit Customer"
+                          aria-label={`Edit ${customer.legalName}`}
+                          className="h-9 w-9 rounded-xl border border-border/60 hover:border-blue-400/60 hover:text-blue-500"
                           data-testid={`button-edit-customer-${customer.id}`}
                         >
                           <Pencil className="h-4 w-4" />
@@ -374,13 +524,15 @@ export default function FactoryCustomers() {
                           size="icon"
                           onClick={() => setDeletingCustomer(customer)}
                           title="Delete Customer"
-                          className="text-destructive"
+                          aria-label={`Delete ${customer.legalName}`}
+                          className="h-9 w-9 rounded-xl border border-destructive/20 text-destructive hover:border-destructive/50 hover:bg-destructive/10"
                           data-testid={`button-delete-customer-${customer.id}`}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
+                    )}
                   </TableRow>
                 ))
               )}
@@ -519,8 +671,8 @@ export default function FactoryCustomers() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Dr">Debit (Dr)</SelectItem>
-                    <SelectItem value="Cr">Credit (Cr)</SelectItem>
+                    <SelectItem value="Dr">Debit</SelectItem>
+                    <SelectItem value="Cr">Credit</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -9,7 +9,7 @@
  */
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, Layers, Plus, Search, X } from "lucide-react";
+import { ChevronDown, FileSearch, Layers, Plus, Search, Wallet, X } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -139,6 +139,20 @@ export default function Accounts() {
   });
   const presentedSearchModel = { ...model, filteredAccounts: visibleFilteredAccounts };
 
+  // Counts only, sourced from the existing as-of account list. Do not
+  // modify posted balances, group structures or account queries.
+  const overviewAccounts = projectGoldenCoastFreshStartAccounts(
+    model.allAccounts, freshStartPresentation
+  ).filter((account) =>
+    account.type !== "displayGroup" &&
+    account.subType !== "Group" &&
+    (model.appMode !== "factory" || !account.name.trim().toLocaleLowerCase().startsWith("insurance - "))
+  );
+  const totalAccounts = overviewAccounts.length;
+  const accountsWithBalance = overviewAccounts.filter(
+    (account) => Math.abs(Number(account.balance) || 0) > 0.001
+  ).length;
+
   const closeSelectedAccount = () => {
     model.setSelectedAccount(null);
 
@@ -183,8 +197,12 @@ export default function Accounts() {
   ];
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Accounts Overview" subtitle="View all accounts, balances, and transaction history">
+    <div className="space-y-5" data-testid="accounts-overview">
+      <PageHeader
+        title="Accounts Overview"
+        subtitle="View all accounts, balances, and transaction history"
+        icon={<span className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-400/30 bg-blue-600/15 text-blue-600 dark:bg-blue-500/20 dark:text-blue-300"><Layers className="h-5 w-5" aria-hidden="true" /></span>}
+      >
         {showViewAccounts && !phoneStatementOpen && model.currentUser?.role === "Developer" && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -212,6 +230,7 @@ export default function Accounts() {
             <Button
               variant="outline"
               data-testid="button-account-groups"
+               className="rounded-xl shadow-sm"
               onClick={() => model.navigate(`${model.modePrefix}/account-groups`)}
             >
               <Layers className="w-4 h-4 mr-2" /> Account Groups
@@ -220,6 +239,7 @@ export default function Accounts() {
         {showViewAccounts && !phoneStatementOpen && (
           <Button
             data-testid="button-create-account"
+             className="rounded-xl bg-blue-600 text-white shadow-sm shadow-blue-600/20 hover:bg-blue-700"
             disabled={!model.selectedCompany}
             onClick={() => model.navigate(`${model.modePrefix}/create`)}
           >
@@ -227,6 +247,21 @@ export default function Accounts() {
           </Button>
         )}
       </PageHeader>
+
+      {showViewAccounts && activeAccountTab === "view" && !selectedAccount && !phoneStatementOpen && (
+        <section className="grid gap-3 sm:grid-cols-2" aria-label="Accounts overview figures" data-testid="accounts-summary">
+          <div className="flex items-center gap-4 rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-4 shadow-sm dark:border-emerald-800/60 dark:from-emerald-950/80 dark:via-[#0b292d] dark:to-[#092129]">
+            <span className="rounded-xl bg-emerald-500/15 p-3 text-emerald-600 dark:text-emerald-400"><Layers className="h-6 w-6" aria-hidden="true" /></span>
+            <div><p className="text-sm text-muted-foreground">Total Accounts</p><p className="text-2xl font-bold tabular-nums" data-testid="accounts-total-count">{model.accountsLoading || model.accountsError || !model.selectedCompany ? "—" : totalAccounts.toLocaleString()}</p></div>
+          </div>
+          {!model.hideBalances && (
+            <div className="flex items-center gap-4 rounded-2xl border border-blue-200/80 bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-4 shadow-sm dark:border-blue-800/60 dark:from-[#102c51] dark:via-[#0e2444] dark:to-[#0b1c37]">
+              <span className="rounded-xl bg-blue-500/15 p-3 text-blue-600 dark:text-sky-300"><Wallet className="h-6 w-6" aria-hidden="true" /></span>
+              <div><p className="text-sm text-muted-foreground">Accounts with Balance</p><p className="text-2xl font-bold tabular-nums" data-testid="accounts-with-balance-count">{model.accountsLoading || model.accountsError || !model.selectedCompany ? "—" : accountsWithBalance.toLocaleString()}</p></div>
+            </div>
+          )}
+        </section>
+      )}
 
       {showViewAccounts && (
         <AccountDialogs
@@ -267,12 +302,12 @@ export default function Accounts() {
         <Tabs
           value={activeAccountTab}
           onValueChange={(value) => setRequestedAccountTab(value as "view" | "find")}
-          className="space-y-6"
+          className="space-y-5"
         >
           <div className={phoneStatementOpen ? "hidden" : "erp-mobile-scroll-tabs pb-1"}>
-            <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Accounts sections">
-              {showViewAccounts && <TabsTrigger value="view">View Accounts</TabsTrigger>}
-              {showFindVoucher && <TabsTrigger value="find">Find Voucher</TabsTrigger>}
+            <TabsList className="h-auto w-max min-w-full gap-1 rounded-2xl border border-border/70 bg-muted/60 p-1.5 shadow-sm sm:min-w-0 sm:w-fit dark:bg-[#111e33]" aria-label="Accounts sections">
+              {showViewAccounts && <TabsTrigger value="view" className="gap-2 rounded-xl px-4 py-2.5 data-[state=active]:bg-blue-600 data-[state=active]:text-white"><Layers className="h-4 w-4" /> View Accounts</TabsTrigger>}
+              {showFindVoucher && <TabsTrigger value="find" className="gap-2 rounded-xl px-4 py-2.5 data-[state=active]:bg-blue-600 data-[state=active]:text-white"><FileSearch className="h-4 w-4" /> Find Voucher</TabsTrigger>}
             </TabsList>
           </div>
 
@@ -283,12 +318,12 @@ export default function Accounts() {
                   <ZambiaCashCurrencyTransfer />
                   {/* Search — command-palette style */}
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                     <Input
                       placeholder="Search accounts by name or code…"
                       value={model.searchTerm}
                       onChange={(e) => model.setSearchTerm(e.target.value)}
-                      className="pl-9 pr-9"
+                      className="h-11 rounded-xl border-border/70 bg-background/90 pl-10 pr-9 shadow-sm focus-visible:ring-blue-500/50 dark:border-blue-900/60 dark:bg-[#0a172b]/90"
                       data-testid="input-accounts-search"
                     />
                     {model.searchTerm && (

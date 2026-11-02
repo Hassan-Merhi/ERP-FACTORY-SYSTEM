@@ -83,7 +83,7 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     pinned: true,
     sidebar: true,
     settingsVisible: false,
-    accessLevel: "developer",
+    accessLevel: "admin",
     landing: false,
   },
   {

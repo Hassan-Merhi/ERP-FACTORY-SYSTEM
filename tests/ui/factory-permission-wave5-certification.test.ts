@@ -203,20 +203,34 @@ describe("Wave 5 Factory user-profile certification", () => {
     expect(guardedRedirect(unrestricted, "/factory/spreadsheet", "Developer", true)).toBeNull();
   });
 
-  it("reserves Factory Daybook and Cost Centers for Developer only", () => {
-    for (const route of ["/factory/daybook", "/factory/cost-centers"]) {
-      const page = resolveFactoryPage(route)!;
-      expect(page.accessLevel).toBe("developer");
-      expect(FACTORY_SETTINGS_PAGES).not.toContain(page);
-      for (const role of ["User", "Manager", "Admin", "Owner"]) {
-        expect(factoryPageAllowsRole(page, role)).toBe(false);
-        expect(guardedRedirect(unrestricted, route, role, role === "Admin" || role === "Owner")).toBe(
-          "/factory/production-report"
-        );
-      }
-      expect(factoryPageAllowsRole(page, "Developer")).toBe(true);
-      expect(guardedRedirect(unrestricted, route, "Developer", true)).toBeNull();
+  it("restores Factory Daybook for Admin and Developer without opening it to other roles", () => {
+    const route = "/factory/daybook";
+    const page = resolveFactoryPage(route)!;
+    expect(page.accessLevel).toBe("admin");
+    expect(FACTORY_SETTINGS_PAGES).not.toContain(page);
+    for (const role of ["User", "Manager", "Owner"]) {
+      expect(factoryPageAllowsRole(page, role)).toBe(false);
+      expect(guardedRedirect(unrestricted, route, role, role === "Owner")).toBe("/factory/production-report");
     }
+    for (const role of ["Admin", "Developer"]) {
+      expect(factoryPageAllowsRole(page, role)).toBe(true);
+      expect(guardedRedirect(unrestricted, route, role, true)).toBeNull();
+    }
+  });
+
+  it("keeps Factory Cost Centers Developer-only", () => {
+    const route = "/factory/cost-centers";
+    const page = resolveFactoryPage(route)!;
+    expect(page.accessLevel).toBe("developer");
+    expect(FACTORY_SETTINGS_PAGES).not.toContain(page);
+    for (const role of ["User", "Manager", "Admin", "Owner"]) {
+      expect(factoryPageAllowsRole(page, role)).toBe(false);
+      expect(guardedRedirect(unrestricted, route, role, role === "Admin" || role === "Owner")).toBe(
+        "/factory/production-report"
+      );
+    }
+    expect(factoryPageAllowsRole(page, "Developer")).toBe(true);
+    expect(guardedRedirect(unrestricted, route, "Developer", true)).toBeNull();
   });
 
   it("keeps an unrestricted normal user unrestricted on user-level pages", () => {
