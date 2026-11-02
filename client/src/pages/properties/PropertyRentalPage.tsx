@@ -625,7 +625,8 @@ export default function PropertyRentalPage({
                                       : "text-muted-foreground"
                                   }`}
                                 >
-                                  {u.contract
+                                  <span className={isFactoryShopTable ? "factory-rentals-money-pill" : undefined}>
+                                     {u.contract
                                     ? fmtMoneyCurrency(
                                         (
                                           u as unknown as Unit & {
@@ -635,11 +636,13 @@ export default function PropertyRentalPage({
                                         u.contract.currency
                                       )
                                     : "—"}
+                                   </span>
                                 </td>
                                 <td
                                   className={`px-3 py-2 text-right tabular-nums font-semibold ${(u.outstanding ?? 0) > 0 ? "text-red-600 dark:text-red-400" : (u as { prepaidCredit: 0 }).prepaidCredit > 0 ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}
                                 >
-                                  {u.outstanding !== null
+                                  <span className={isFactoryShopTable ? "factory-rentals-money-pill" : undefined}>
+                                     {u.outstanding !== null
                                     ? fmtMoneyCurrency(
                                         (u.outstanding ?? 0) > 0
                                           ? u.outstanding!
@@ -649,6 +652,7 @@ export default function PropertyRentalPage({
                                         u.contract?.currency
                                       )
                                     : "—"}
+                                   </span>
                                 </td>
                                 <td className="px-3 py-2 text-right tabular-nums text-muted-foreground text-xs">
                                   {(u as { scheduledAmount: 0 }).scheduledAmount > 0
