@@ -414,6 +414,7 @@ export function useAnalyticsLegacy() {
   // ── Factory Analytics Queries ───────────────────────────────────────────
   const [factoryOrderPage, setFactoryOrderPage] = useState(1);
   const [factoryOrderStatus, setFactoryOrderStatus] = useState("VERIFIED_FINALIZED");
+  const [factoryOrderDestination, setFactoryOrderDestination] = useState("all");
   const [factoryOrderIncludeCharges, setFactoryOrderIncludeCharges] = useState(false);
 
   // The page-level PeriodFilter is the single date control for factory sales analytics.
@@ -422,6 +423,11 @@ export function useAnalyticsLegacy() {
   useEffect(() => {
     setFactoryOrderPage(1);
   }, [periodFilter.fromDate, periodFilter.toDate]);
+
+  // A different company, period or status can have entirely different destinations.
+  useEffect(() => {
+    setFactoryOrderDestination("all");
+  }, [selectedCompany?.id, periodFilter.fromDate, periodFilter.toDate, factoryOrderStatus]);
 
   const buildFactorySalesUrl = (base: string) => {
     const params = new URLSearchParams();
@@ -436,6 +442,7 @@ export function useAnalyticsLegacy() {
     if (periodFilter.fromDate) params.append("startDate", periodFilter.fromDate);
     if (periodFilter.toDate) params.append("endDate", periodFilter.toDate);
     params.append("status", factoryOrderStatus);
+    if (factoryOrderDestination !== "all") params.append("destinationExact", factoryOrderDestination);
     params.append("includeCharges", String(factoryOrderIncludeCharges));
     params.append("page", String(factoryOrderPage));
     params.append("pageSize", "50");
@@ -453,6 +460,7 @@ export function useAnalyticsLegacy() {
       periodFilter.fromDate,
       periodFilter.toDate,
       factoryOrderStatus,
+      factoryOrderDestination,
       factoryOrderIncludeCharges,
       factoryOrderPage,
     ],
@@ -775,6 +783,8 @@ export function useAnalyticsLegacy() {
     setFactoryOrderPage,
     factoryOrderStatus,
     setFactoryOrderStatus,
+    factoryOrderDestination,
+    setFactoryOrderDestination,
     factoryOrderIncludeCharges,
     setFactoryOrderIncludeCharges,
     factoryCustomerOrderAnalytics,
