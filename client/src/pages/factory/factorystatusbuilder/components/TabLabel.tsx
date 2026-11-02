@@ -63,7 +63,7 @@ export function TabLabel({
         setEditing(true);
         setDraft(name);
       }}
-      className={`relative flex min-h-11 sm:min-h-9 shrink-0 items-center gap-1.5 rounded-full px-3 py-2 cursor-pointer select-none whitespace-nowrap transition-colors motion-reduce:transition-none focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${active ? "bg-background text-foreground font-semibold shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"}`}
+      className={`relative flex min-h-11 shrink-0 cursor-pointer select-none items-center gap-1.5 whitespace-nowrap rounded-full border px-4 py-2 text-sm transition-all motion-reduce:transition-none focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:min-h-9 ${active ? "border-blue-500/50 bg-blue-600/10 font-semibold text-blue-700 shadow-sm dark:border-blue-500/60 dark:bg-blue-500/15 dark:text-blue-300" : "border-border/60 bg-muted/30 text-muted-foreground hover:border-border hover:bg-muted/60 hover:text-foreground"}`}
     >
       {editing ? (
         <input
