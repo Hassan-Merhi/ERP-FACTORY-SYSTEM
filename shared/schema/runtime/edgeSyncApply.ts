@@ -300,6 +300,40 @@ export const factoryEdgeStagedFiles = pgTable(
   (t) => [primaryKey({ columns: [t.siteId, t.fileSha256] })]
 );
 
+// ── Phase 9 LAN payment capture (server/edge/phase9PaymentOutbox.ts) ────
+export const factoryEdgePaymentCounter = pgTable("factory_edge_payment_counter", {
+  siteId: uuid("site_id").primaryKey().notNull(),
+  lastSequence: bigint("last_sequence", { mode: "bigint" }).notNull(),
+});
+
+export const factoryEdgePaymentOutbox = pgTable(
+  "factory_edge_payment_outbox",
+  {
+    siteId: uuid("site_id").notNull(),
+    sequence: bigint("sequence", { mode: "bigint" }).notNull(),
+    operationId: uuid("operation_id").notNull(),
+    companyId: integer("company_id").notNull(),
+    actorUserId: text("actor_user_id").notNull(),
+    localVoucherId: integer("local_voucher_id").notNull(),
+    operationKind: text("operation_kind").notNull(),
+    payload: jsonb("payload").notNull(),
+    payloadSha256: char("payload_sha256", { length: 64 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (t) => [
+    primaryKey({ columns: [t.siteId, t.sequence] }),
+    unique().on(t.siteId, t.operationId),
+    unique().on(t.siteId, t.localVoucherId),
+    foreignKey({
+      name: "factory_edge_payment_source_fk",
+      columns: [t.localVoucherId],
+      foreignColumns: [vouchers.id],
+    }).onDelete("restrict"),
+  ]
+);
+
 // ── Phase 9 LAN event-stream receipt logs ─────────────────────────────────
 export const factoryEdgeEventStageReceipts = pgTable(
   "factory_edge_event_stage_receipts",

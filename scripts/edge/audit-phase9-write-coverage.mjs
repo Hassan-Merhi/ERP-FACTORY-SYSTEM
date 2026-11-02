@@ -63,6 +63,12 @@ const SUPPORTED = new Map([
       "Files up to 10 MB; the record syncs first, then the SHA-256-verified bytes; renames, moves and " +
       "deletes stay cloud-only; a missing cloud folder is held for review",
   }],
+  ["POST /api/vouchers/payment-receipt", {
+    policy: "voucher.payment-receipt.v1",
+    limitations:
+      "Supplier, customer, employee and bank payments/receipts replayed through the same posting code at " +
+      "the LAN rate; edits and deletes stay cloud-only; posting refusals are reject-only conflicts",
+  }],
 ]);
 
 function moduleForPath(path) {

@@ -37,9 +37,10 @@ an open cloud epoch.
 | POS cash sale (USD, cash account, non-supplier-partner company) | yes, numbered `LAN-<site>-000123` | `pos` (Phase 9) | `server/edge/phase9OperatorApply.ts apply pos` — replayed through the sale service on its `clientSaleId`; keeps the offline price; below-zero stock or a changed till account is held for Admin/Developer approve/reject |
 | Supplier receiving: container offload against its existing purchase orders, and offload edits, with duties, charges, cost corrections and agent lines | yes | `receiving` (Phase 9) | `server/edge/phase9OperatorApply.ts apply receiving` — same offload lifecycle on the receipt's transaction; cloud prices apply; changed order quantities are held for Admin/Developer approve/reject |
 | File upload (Files page), up to 10 MB | yes | `attachments` (Phase 9) + signed file upload | `server/edge/phase9OperatorApply.ts apply attachments` — the record syncs first; the relay then uploads the bytes to `/api/edge/sync/files/stage`, accepted only if their SHA-256 matches a staged record; the file is created in the cloud once its bytes arrive; a missing folder is held for approve/reject |
+| Supplier, customer, employee and bank Payment / Receipt vouchers (Payments page) | yes, at the rate the user posted | `payments` (Phase 9) | `server/edge/phase9OperatorApply.ts apply payments` — same posting code on the receipt's transaction; a posting refusal (closed period, missing party/account) is a reject-only conflict |
 | Login, logout, company switch | yes (session only) | none | n/a |
 | All reads covered by prepared offline reads | yes | n/a | n/a |
-| Everything else (1,168 write routes) | **refused** with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION` | none | n/a |
+| Everything else (1,167 write routes) | **refused** with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION` | none | n/a |
 
 `node scripts/edge/audit-phase9-write-coverage.mjs` prints the exact current
 inventory and fails if any route becomes writable on the LAN without a reviewed
@@ -63,10 +64,8 @@ reconciled safely, which is worse than refusing them.
 - **POS credit, bank and non-USD sales, returns, cancellations; payments,
   receipts, purchasing/receiving, supplier and customer balances:** each posts
   money and stock together through the central posting engine with
-  multi-currency, tax and numbering rules. Offline POS covers cash USD sales
-  and offline payments cover factory cash-box Payment/Receipt vouchers only;
-  supplier/customer payments and bank movements still need their own capture,
-  replay and drill.
+  multi-currency, tax and numbering rules. Payment/receipt edits and deletes
+  stay online-only.
 - **Other documents and imports:** offline file upload covers the Files page
   (`POST /api/files/upload`); renames, moves, deletes, imports and document
   exports stay online-only.

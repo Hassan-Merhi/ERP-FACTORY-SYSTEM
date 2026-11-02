@@ -33,6 +33,7 @@ import {
   PHASE9_ATTACHMENT_KIND,
   phase9AttachmentEnvelope,
 } from "./phase9AttachmentEnvelope.mjs";
+import { PHASE9_PAYMENT_KIND, phase9PaymentEnvelope } from "./phase9PaymentEnvelope.mjs";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HASH = /^[0-9a-f]{64}$/;
@@ -127,6 +128,19 @@ function attachmentPayload(payload) {
   return stableEqual(rebuilt, payload) ? rebuilt : null;
 }
 
+function paymentPayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (payload.kind !== PHASE9_PAYMENT_KIND) return null;
+  const { kind: _kind, ...evidence } = payload;
+  let rebuilt;
+  try {
+    rebuilt = phase9PaymentEnvelope(evidence);
+  } catch {
+    return null;
+  }
+  return stableEqual(rebuilt, payload) ? rebuilt : null;
+}
+
 /**
  * `overridable` lists the conflict codes an Admin/Developer may resolve with
  * an "approve-override" decision (apply anyway). Every other conflict can
@@ -175,6 +189,15 @@ const STREAMS = Object.freeze({
         parse: attachmentPayload,
         localRef: (payload) => payload.localFileId,
         overridable: Object.freeze([PHASE9_ATTACHMENT_FOLDER_MISSING]),
+      }),
+    }),
+  }),
+  payments: Object.freeze({
+    kinds: Object.freeze({
+      [PHASE9_PAYMENT_KIND]: Object.freeze({
+        parse: paymentPayload,
+        localRef: (payload) => payload.localVoucherId,
+        overridable: Object.freeze([]),
       }),
     }),
   }),

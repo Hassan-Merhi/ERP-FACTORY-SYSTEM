@@ -126,6 +126,7 @@ describe("factory LAN edge deployment policy", () => {
         "/api/pos/sales",
         "/api/containers/42/offload",
         "/api/files/upload",
+        "/api/vouchers/payment-receipt",
       ]) {
         expect(edgeBlocksWrite(config, "POST", approved)).toBe(mode === "read-only");
         // Offload edits (PATCH) are approved too; every other verb stays blocked.

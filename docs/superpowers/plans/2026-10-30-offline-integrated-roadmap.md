@@ -126,6 +126,13 @@ The owner chose to make all remaining workflows available offline (stock movemen
 - Evidence: `tests/offline-phase9-attachments.test.ts` (LAN capture, relay staging, tampered/unreferenced bytes refused, upload once, replay, held/approved missing folder).
 - Coverage: 6 approved captures, 3 session-only, 1,169 blocked.
 
+### Owner decisions 2026-11-02 — wider offline scope
+
+The owner extended offline coverage: offload edits, duties and charges; supplier, customer and bank payments; POS credit, bank and Kwacha sales at the rate the cashier enters, plus returns and cancellations; and stock transfers, imports and bulk edits.
+
+- Receiving: the `receiving` event now carries the full offload as entered and edits (`PATCH /api/containers/:id/offload`).
+- Payments: `POST /api/vouchers/payment-receipt` is an approved capture (stream `payments`); its create path moved to `server/services/accounting/paymentReceiptVoucherPosting.ts`, shared by the route and the cloud replay (`server/edge/phase9PaymentApply.ts`), which posts at the LAN rate on the receipt's transaction. Evidence: `tests/offline-phase9-payments.test.ts`.
+
 ## Phase 10 — Offline identity, conflicts, secure storage and server controls
 - Implement reviewed local-session/cold-start policy, encrypted legacy-cache migration, authorization/role revocation, and scoped credentials and browser/device protections.
 - Add deterministic multi-device conflict review with no silent financial/stock overwrites.

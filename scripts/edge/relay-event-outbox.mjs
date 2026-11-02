@@ -71,6 +71,11 @@ export const STREAM_SOURCES = Object.freeze({
     localRef: "local_file_id",
     businessDate: (payload) => payload?.uploadedOn,
   }),
+  payments: Object.freeze({
+    table: "factory_edge_payment_outbox",
+    localRef: "local_voucher_id",
+    businessDate: (payload) => payload?.voucher?.voucherDate,
+  }),
 });
 
 function source(stream) {

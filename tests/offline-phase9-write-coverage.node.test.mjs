@@ -17,6 +17,7 @@ const manifest = {
     "POST /api/containers/:id/offload [business]",
     "PATCH /api/containers/:id/offload [business]",
     "POST /api/files/upload [multipart]",
+    "POST /api/vouchers/payment-receipt [business]",
     "POST /api/suppliers/create [business]",
     "POST /api/documents/upload [multipart]",
     "PUT /api/payments/:id [business]",
@@ -24,8 +25,8 @@ const manifest = {
 };
 test("every unique API write has explicit capture, session-only or blocked disposition", () => {
   const report = auditPhase9WriteCoverage(manifest);
-  assert.equal(report.summary.uniqueApiWriteRoutes, 12);
-  assert.equal(report.summary.approvedCapture, 7);
+  assert.equal(report.summary.uniqueApiWriteRoutes, 13);
+  assert.equal(report.summary.approvedCapture, 8);
   assert.equal(report.summary.sessionOnly, 1);
   assert.equal(report.summary.blocked, 4);
   assert.equal(report.summary.productionComplete, false);
@@ -56,7 +57,7 @@ test("missing vetted route, bad manifest and unexpected allowed route are refuse
 test("real route manifest has explicit accounting/stock/POS/factory/attachment gaps", () => {
   const real = JSON.parse(fs.readFileSync(new URL("../config/route-manifest.json", import.meta.url), "utf8"));
   const report = auditPhase9WriteCoverage(real);
-  assert.equal(report.summary.approvedCapture, 7);
+  assert.equal(report.summary.approvedCapture, 8);
   assert.ok(report.summary.blocked > 0);
   assert.ok(report.routes.some((r) => r.module === "retail-pos" && r.disposition === "blocked"));
   assert.ok(report.routes.some((r) => r.module === "factory-production" && r.disposition === "blocked"));
