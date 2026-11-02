@@ -17,12 +17,12 @@ const CURRENCIES = ["USD", "EUR", "GBP", "LBP"];
 
 export function FactoryPosToolbar({ model }: { model: FactoryPosModel }) {
   return (
-    <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-4">
+    <div className="grid grid-cols-2 gap-2 rounded-2xl border border-border/70 bg-card/90 p-3 shadow-sm sm:flex sm:flex-wrap sm:items-center sm:gap-3">
       {/* Location */}
       <div className="flex items-center gap-2 col-span-2 sm:col-span-1">
         <MapPin className="h-4 w-4 text-muted-foreground shrink-0 hidden sm:block" />
         <Select value={model.locationId} onValueChange={model.setLocationId}>
-          <SelectTrigger className="w-full sm:w-48" data-testid="select-location">
+          <SelectTrigger className="h-10 w-full rounded-xl border-border/70 bg-background/60 sm:w-48" data-testid="select-location">
             <SelectValue placeholder="Select location" />
           </SelectTrigger>
           <SelectContent>
@@ -41,7 +41,7 @@ export function FactoryPosToolbar({ model }: { model: FactoryPosModel }) {
           type="date"
           value={model.txDate}
           onChange={(e) => model.setTxDate(e.target.value)}
-          className="w-full sm:w-36"
+          className="h-10 w-full rounded-xl border-border/70 bg-background/60 sm:w-36"
           data-testid="input-sale-date"
         />
       </div>
@@ -49,7 +49,7 @@ export function FactoryPosToolbar({ model }: { model: FactoryPosModel }) {
       {/* Currency */}
       <div className="flex items-center gap-2">
         <Select value={model.currencyCode} onValueChange={model.setCurrencyCode}>
-          <SelectTrigger className="w-24 sm:w-28" data-testid="select-currency">
+          <SelectTrigger className="h-10 w-24 rounded-xl border-border/70 bg-background/60 sm:w-28" data-testid="select-currency">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -66,7 +66,7 @@ export function FactoryPosToolbar({ model }: { model: FactoryPosModel }) {
       <div className="flex items-center gap-2 col-span-2 sm:col-span-1">
         <Wallet className="h-4 w-4 text-muted-foreground shrink-0 hidden sm:block" />
         <Select value={model.cashAccountId} onValueChange={model.setCashAccountId}>
-          <SelectTrigger className="w-full sm:w-48" data-testid="select-cash-account">
+          <SelectTrigger className="h-10 w-full rounded-xl border-border/70 bg-background/60 sm:w-48" data-testid="select-cash-account">
             <SelectValue placeholder="Cash account" />
           </SelectTrigger>
           <SelectContent>
@@ -98,7 +98,7 @@ export function FactoryPosToolbar({ model }: { model: FactoryPosModel }) {
             model.setSelectedCustomerId("");
           }}
           data-testid="button-payment-type-cash"
-          className="gap-1"
+          className={`h-10 gap-1 rounded-xl ${model.paymentType === "CASH" ? "bg-orange-600 text-white hover:bg-orange-700 dark:bg-orange-500 dark:hover:bg-orange-600" : ""}`}
         >
           <Banknote className="h-3.5 w-3.5" />
           Cash
@@ -108,7 +108,7 @@ export function FactoryPosToolbar({ model }: { model: FactoryPosModel }) {
           size="sm"
           onClick={() => model.setPaymentType("CREDIT")}
           data-testid="button-payment-type-credit"
-          className="gap-1"
+          className={`h-10 gap-1 rounded-xl ${model.paymentType === "CREDIT" ? "bg-orange-600 text-white hover:bg-orange-700 dark:bg-orange-500 dark:hover:bg-orange-600" : ""}`}
         >
           <CreditCard className="h-3.5 w-3.5" />
           Credit
@@ -123,7 +123,7 @@ export function FactoryPosToolbar({ model }: { model: FactoryPosModel }) {
             placeholder="Customer name (optional)"
             value={model.customerName}
             onChange={(e) => model.setCustomerName(e.target.value)}
-            className="w-full sm:w-44"
+            className="h-10 w-full rounded-xl border-border/70 bg-background/60 sm:w-44"
             data-testid="input-customer-name"
           />
         </div>
@@ -139,7 +139,7 @@ export function FactoryPosToolbar({ model }: { model: FactoryPosModel }) {
               if (customer) model.setCustomerName(customer.legalName || customer.name || "");
             }}
           >
-            <SelectTrigger className="w-full sm:w-48" data-testid="select-credit-customer">
+            <SelectTrigger className="h-10 w-full rounded-xl border-border/70 bg-background/60 sm:w-48" data-testid="select-credit-customer">
               <SelectValue placeholder="Select customer *" />
             </SelectTrigger>
             <SelectContent>
@@ -153,14 +153,15 @@ export function FactoryPosToolbar({ model }: { model: FactoryPosModel }) {
         </div>
       )}
 
-      {/* Notes */}
-      <div className="col-span-2 sm:col-span-1 sm:flex-1 flex items-center gap-2 order-last sm:order-none">
+      {/* Keep notes reachable on mobile; desktop notes appear beside Products. */}
+      <div className="col-span-2 flex items-center gap-2 md:hidden">
         <Textarea
           placeholder="Notes (optional)"
           value={model.notes}
           onChange={(e) => model.setNotes(e.target.value)}
-          className="resize-none h-9"
-          data-testid="input-notes"
+          className="min-h-16 resize-none rounded-xl border-border/70 bg-background/60"
+          aria-label="Notes (optional)"
+          data-testid="input-notes-mobile"
         />
       </div>
     </div>
