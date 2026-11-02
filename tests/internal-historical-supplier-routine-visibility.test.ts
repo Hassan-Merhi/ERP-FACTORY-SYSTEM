@@ -48,7 +48,7 @@ describe("Company-12 historical supplier catchup is an internal posting in routi
     expect(operationalHistoricalSupplierExclusionSql(11,"v")).toBe("TRUE");
     const paginated = operationalHistoricalSupplierExclusionSql(12,"v");
     const other = operationalHistoricalSupplierExclusionSql(12,"vouchers");
-    expect(paginated).toContain("v.voucher_number ~ '^FACTORY-IMPORT-");
+    expect(paginated).toContain("COALESCE(v.voucher_number,'') ~ '^FACTORY-IMPORT-");
     expect(paginated).toContain("v.created_at >= TIMESTAMP '2026-10-14'");
     expect(other).toContain("vouchers.description");
     expect(paginated).toMatch(/^NOT \(/);
