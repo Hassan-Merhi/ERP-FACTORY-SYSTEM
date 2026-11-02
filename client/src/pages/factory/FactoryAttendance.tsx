@@ -754,7 +754,7 @@ export default function FactoryAttendance() {
                                     <SelectTrigger
                                       data-testid={`select-status-${worker.id}`}
                                       data-attendance-status={status}
-                                       className={`attendance-status-trigger h-9 rounded-lg bg-background/70 text-xs font-medium ${STATUS_COLORS[status] ?? ""}`}
+                                      className={`attendance-status-trigger h-9 rounded-lg bg-background/70 text-xs font-medium ${STATUS_COLORS[status] ?? ""}`}
                                     >
                                       <SelectValue />
                                     </SelectTrigger>
@@ -821,7 +821,7 @@ export default function FactoryAttendance() {
                               <SelectTrigger
                                 data-testid={`select-status-mobile-${worker.id}`}
                                 data-attendance-status={status}
-                                 className={`attendance-status-trigger h-10 rounded-lg bg-background/70 text-sm font-medium ${STATUS_COLORS[status] ?? ""}`}
+                                className={`attendance-status-trigger h-10 rounded-lg bg-background/70 text-sm font-medium ${STATUS_COLORS[status] ?? ""}`}
                               >
                                 <SelectValue />
                               </SelectTrigger>
