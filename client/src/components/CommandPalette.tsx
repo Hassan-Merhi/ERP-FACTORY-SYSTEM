@@ -154,7 +154,6 @@ const ERP_HUB_TABS: PageEntry[] = [
 
 /** Factory routes that aren't in FACTORY_NAV_SECTIONS but were historically in the palette. */
 const FACTORY_EXTRAS_ALWAYS: PageEntry[] = [
-  { label: "Factory Daybook", description: DESCRIPTIONS["/factory/daybook"], path: "/factory/daybook", icon: Calendar },
   { label: "Factory Chat", description: "Internal messaging", path: "/factory/chat", icon: MessageSquare },
   {
     label: "Bale Relabeling",

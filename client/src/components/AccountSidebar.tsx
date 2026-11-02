@@ -195,7 +195,7 @@ export default function AccountSidebar({
   };
 
   return (
-    <Card className="flex flex-col h-full">
+    <Card className="voucher-account-panel flex flex-col h-full">
       <div className="p-4 border-b">
         <div className="flex items-center justify-between mb-3">
           <div className="min-w-0">

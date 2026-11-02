@@ -33,7 +33,7 @@ export default function FactoryProductionBonuses() {
       </div>
     </div>
     <ProductionBonusCheckoutPanel initialDate={initialDate}/>
-    <details className="rounded-lg border bg-card">
+    <details className="hidden rounded-lg border bg-card">
       <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">
         {bonusText("paymentHistory",language)}
       </summary>

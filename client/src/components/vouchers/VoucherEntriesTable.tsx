@@ -295,7 +295,7 @@ export function VoucherEntriesTable({
   return (
     <>
       {/* Scrolls sideways below ~22rem rather than squeezing the inputs to a few characters. */}
-      <div className="hidden sm:block border rounded-md overflow-x-auto">
+      <div className="voucher-entries-table hidden sm:block border rounded-md overflow-x-auto">
         <table className="w-full">
           {/* Below the form's sticky save footer (z-20), which it otherwise paints over on short screens. */}
           <thead className="bg-muted sticky top-0 z-10">

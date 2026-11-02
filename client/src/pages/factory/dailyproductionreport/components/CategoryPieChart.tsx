@@ -4,6 +4,7 @@
  * Extracted from DailyProductionReport.tsx during the Phase 4 god-file split.
  */
 import { useMemo } from "react";
+import { Sun } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { ResponsiveChartPanel, ResponsiveChartViewport, ResponsiveLegendList } from "@/components/ui/responsive-report";
 
@@ -40,6 +41,7 @@ export function CategoryPieChart({
 
   return (
     <ResponsiveChartPanel data-testid="card-category-pie" aria-label="Production weight by category">
+      <div className="production-premium-chart-title"><Sun className="h-4 w-4" aria-hidden="true" />Production by Season</div>
       <div className="grid min-w-0 grid-cols-1 items-center gap-4 lg:grid-cols-[minmax(0,1fr)_13rem]">
         <ResponsiveLegendList aria-label="Category chart legend">
           {slices.map((slice) => {
@@ -64,7 +66,7 @@ export function CategoryPieChart({
         </ResponsiveLegendList>
 
         <ResponsiveChartViewport label="Production category pie chart" className="mx-auto w-full max-w-52">
-          <div className="h-52 w-full min-w-0">
+          <div className="production-donut-area h-52 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={1}>
               <PieChart>
                 <Pie
@@ -87,6 +89,7 @@ export function CategoryPieChart({
                 />
               </PieChart>
             </ResponsiveContainer>
+            <div className="production-donut-total" aria-hidden="true">{Math.round(total).toLocaleString()} kg<small>Total</small></div>
           </div>
         </ResponsiveChartViewport>
       </div>

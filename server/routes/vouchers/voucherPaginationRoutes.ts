@@ -14,6 +14,7 @@ import {
   filterRoutineCorrection,
   ROUTINE_CORRECTION_VOUCHER_ID,
 } from "../../services/accounting/operationalCorrectionVisibility";
+import { operationalHistoricalSupplierExclusionSql } from "../../services/accounting/internalHistoricalSupplierRoutineVisibility";
 
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 250;
@@ -96,6 +97,9 @@ export function registerVoucherPaginationRoutes(app: Express): void {
         ...(filterRoutineCorrection(companyId, req.session.currentRole)
           ? [sql`${vouchers.id} <> ${ROUTINE_CORRECTION_VOUCHER_ID}`]
           : []),
+        // Operational voucher browser only. Keep all original GL/journal rows
+        // in accounting statements, audit history and supplier statements.
+        sql.raw(operationalHistoricalSupplierExclusionSql(companyId, "vouchers")),
       ];
 
       const voucherType = typeof req.query.voucherType === "string" ? req.query.voucherType.trim() : "";

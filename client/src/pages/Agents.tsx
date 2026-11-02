@@ -199,7 +199,7 @@ export default function Agents() {
   // Phones show one screen at a time: the agent list, then the selected agent's statement.
   if (isPhone) {
     return (
-      <div className="flex min-w-0 flex-col gap-3" data-testid="agents-phone-layout">
+      <div className="flex min-w-0 flex-col gap-3 bg-slate-50/50 dark:bg-[#071225]" data-testid="agents-phone-layout">
         {statementPanel ?? listPanel}
         {addDialog}
       </div>
@@ -208,17 +208,17 @@ export default function Agents() {
 
   return (
     // Below md the panes stack: the list is a bounded pane above the statement.
-    <div className="flex h-full max-md:h-auto max-md:min-h-full max-md:flex-col max-md:overflow-visible">
+    <div className="flex h-full min-w-0 gap-3 bg-slate-50/70 p-3 dark:bg-[#071225] max-md:h-auto max-md:min-h-full max-md:flex-col max-md:overflow-visible max-md:p-0">
       {/* ── Left panel — agent list ─────────────────────────────────────── */}
       {listPanel}
 
       {/* ── Right panel — statement ─────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto bg-background max-md:w-full max-md:min-w-0 max-md:overflow-visible">
+      <div className="min-w-0 flex-1 overflow-y-auto max-md:w-full max-md:overflow-visible">
         {!selectedAccount ? (
-          <div className="h-full flex items-center justify-center">
-            <div className="flex flex-col items-center gap-4 text-center max-w-xs">
-              <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center">
-                <BookOpen className="h-8 w-8 text-muted-foreground" />
+          <div className="flex h-full min-h-72 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-blue-400/20 dark:bg-[#07152b]">
+            <div className="flex max-w-xs flex-col items-center gap-4 px-4 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300">
+                <BookOpen className="h-8 w-8" />
               </div>
               <div>
                 <p className="text-base font-semibold">No agent selected</p>

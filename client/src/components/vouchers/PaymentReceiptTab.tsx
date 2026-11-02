@@ -297,7 +297,7 @@ export function PaymentReceiptTab({
     <div className="flex flex-col xl:flex-row gap-4">
       {/* ── Left column: form ── */}
       <div className="flex-1 min-w-0">
-        <Card>
+        <Card className="voucher-form-card">
           <Form {...form}>
             <form
               onSubmit={form.handleSubmit(onSubmit)}
@@ -307,7 +307,7 @@ export function PaymentReceiptTab({
             >
               {/* ── Compact header strip ── */}
               <div
-                className="relative flex items-center gap-2 px-4 py-3 border-b border-border/50 overflow-hidden flex-wrap rounded-t-lg"
+                className="voucher-hero relative flex items-center gap-2 px-4 py-3 border-b border-border/50 overflow-hidden flex-wrap rounded-t-lg"
                 style={{
                   background: `linear-gradient(135deg, ${accentColor}22 0%, ${accentColor}08 55%, transparent 100%)`,
                 }}
@@ -320,7 +320,7 @@ export function PaymentReceiptTab({
 
                 {/* Icon tile */}
                 <div
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white ml-2"
+                  className="voucher-hero-icon flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white ml-2"
                   style={{
                     backgroundColor: accentColor,
                     boxShadow: `0 2px 8px ${accentColor}55, inset 0 1px 0 rgba(255,255,255,0.2)`,
@@ -331,18 +331,23 @@ export function PaymentReceiptTab({
 
                 {/* Title + badges */}
                 {/* min-w keeps the title readable: the row wraps the date input instead of covering it. */}
-                <div className="flex items-center gap-2 flex-1 min-w-[9rem]">
-                  <span className="text-sm font-medium">{title}</span>
-                  {isEditMode && (
-                    <Badge variant="secondary" className="text-xs" data-testid="badge-editing">
-                      Editing
-                    </Badge>
-                  )}
-                  {voucherNumber && (
-                    <span className="text-xs font-mono text-muted-foreground" data-testid="text-voucher-number">
-                      #{voucherNumber}
-                    </span>
-                  )}
+                <div className="voucher-hero-heading flex flex-col gap-0.5 flex-1 min-w-[9rem]">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="voucher-hero-title text-sm font-semibold">{title}</span>
+                    {isEditMode && (
+                      <Badge variant="secondary" className="text-xs" data-testid="badge-editing">
+                        Editing
+                      </Badge>
+                    )}
+                    {voucherNumber && (
+                      <span className="text-xs font-mono text-muted-foreground" data-testid="text-voucher-number">
+                        #{voucherNumber}
+                      </span>
+                    )}
+                  </div>
+                  <span className="voucher-hero-subtitle">
+                    {isPayment ? "Create a new payment entry" : "Record incoming funds"}
+                  </span>
                 </div>
 
                 {/* Entry Date input */}
@@ -428,7 +433,7 @@ export function PaymentReceiptTab({
               </div>
 
               {/* ── Form fields ── */}
-              <div className="p-4 sm:p-5 space-y-6">
+              <div className="voucher-fields p-4 sm:p-5 space-y-6">
                 {/* ── Source account + running total ── */}
                 <div className="grid gap-3 lg:grid-cols-[1fr_minmax(170px,210px)]">
                   {/* Selected-account summary card — the picker collapses into this */}
@@ -522,7 +527,7 @@ export function PaymentReceiptTab({
                   />
 
                   {/* Running total — stated up front, not discovered at the bottom */}
-                  <div className="rounded-lg border bg-muted/20 px-4 py-3 flex flex-col justify-center">
+                  <div className="voucher-total-card rounded-lg border bg-muted/20 px-4 py-3 flex flex-col justify-center">
                     <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                       {title.replace(" Voucher", "")} Total
                     </span>
@@ -668,7 +673,7 @@ export function PaymentReceiptTab({
 
               {/* ── Action bar — the total stays with Save, pinned to the bottom of the card ── */}
               <div
-                className="sticky bottom-0 z-20 rounded-b-lg border-t bg-card px-4 sm:px-5 py-3 shadow-[0_-4px_12px_-8px_hsl(var(--foreground)/0.25)] max-sm:py-2"
+                className="voucher-action-bar sticky bottom-0 z-20 rounded-b-lg border-t bg-card px-4 sm:px-5 py-3 shadow-[0_-4px_12px_-8px_hsl(var(--foreground)/0.25)] max-sm:py-2"
                 data-voucher-sticky-actions=""
               >
                 <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -736,7 +741,7 @@ export function PaymentReceiptTab({
                       <Button
                         type="submit"
                         size="default"
-                        className="w-full sm:w-auto"
+                        className="voucher-save-button w-full sm:w-auto"
                         disabled={
                           paymentAccountId === 0 ||
                           total === 0 ||

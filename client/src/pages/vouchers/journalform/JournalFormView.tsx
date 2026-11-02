@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { BookOpen } from "lucide-react";
 import { ExchangeRateInput } from "@/components/ExchangeRateInput";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { DraftRestorePrompt } from "@/components/DraftRestorePrompt";
@@ -55,10 +56,18 @@ export function JournalFormView({ model }: { model: Model }) {
       )}
 
       <div className="flex flex-col xl:flex-row gap-4">
-        <Card className="flex-1 min-w-0">
-          <CardContent className="pt-5">
-            <div className="flex items-center gap-2 mb-5">
-              <span className="text-sm font-semibold">Journal Voucher</span>
+        <Card className="voucher-journal-card flex-1 min-w-0">
+          <CardContent className="voucher-journal-content pt-5">
+            <div className="voucher-journal-title">
+              <span className="voucher-journal-icon" aria-hidden="true">
+                <BookOpen className="h-5 w-5" />
+              </span>
+              <div>
+                <strong className="block">Journal Voucher</strong>
+                <span className="block text-xs text-muted-foreground mt-0.5">
+                  Record balanced debit and credit entries
+                </span>
+              </div>
             </div>
 
             {hasJournalDraft && !voucherIdToEdit && journalDraftAge && (
@@ -73,8 +82,8 @@ export function JournalFormView({ model }: { model: Model }) {
             )}
 
             <Form {...journalForm}>
-              <form noValidate onSubmit={journalForm.handleSubmit(onJournalSubmit)} className="space-y-5">
-                <div className="flex items-center justify-between gap-4 flex-wrap">
+              <form noValidate onSubmit={journalForm.handleSubmit(onJournalSubmit)} className="voucher-journal-form space-y-5">
+                <div className="voucher-journal-meta flex items-center justify-between gap-4 flex-wrap">
                   <div>
                     <p className="text-sm font-semibold">
                       {voucherToEdit?.voucherNumber ? `#${voucherToEdit.voucherNumber}` : "New Journal Entry"}

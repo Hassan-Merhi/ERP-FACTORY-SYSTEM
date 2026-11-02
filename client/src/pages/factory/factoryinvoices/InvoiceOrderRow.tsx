@@ -50,6 +50,21 @@ import { EditableShippingCell } from "./EditableShippingCell";
 
 export type EditableShippingField = "containerNumber" | "bookingInfo" | "destination" | "containerNotes";
 
+export type InvoiceColumnKey =
+  | "loading"
+  | "proforma"
+  | "container"
+  | "bookingInfo"
+  | "destination"
+  | "notes"
+  | "date"
+  | "status"
+  | "bales"
+  | "weight"
+  | "remaining"
+  | "extras"
+  | "total";
+
 /** Weight cell formatting shared by the order row and the customer group row. */
 export function fmtKg(val: string | number | null | undefined) {
   const n = parseFloat(String(val ?? "0"));
@@ -59,9 +74,7 @@ export function fmtKg(val: string | number | null | undefined) {
 
 /** Page-level callbacks shared by every order row (and the group rows). */
 export interface InvoiceOrderRowContext {
-  hideProformaCol: boolean;
-  showBookingInfo: boolean;
-  hideTotalsUsd: boolean;
+  isColumnVisible: (key: InvoiceColumnKey) => boolean;
   formatDisplayDate: (date: string) => string;
   getStatusBadge: (status: string) => ReactNode;
   onRowClick: (order: CustomerOrder) => void;
@@ -95,9 +108,7 @@ export function InvoiceOrderRow({
   onDragOver,
   onDrop,
   onDragEnd,
-  hideProformaCol,
-  showBookingInfo,
-  hideTotalsUsd,
+  isColumnVisible,
   formatDisplayDate,
   getStatusBadge,
   onRowClick,
@@ -120,7 +131,7 @@ export function InvoiceOrderRow({
   return (
     <TableRow
       key={order.id}
-      className={`cursor-pointer ${order.isHidden ? "opacity-50" : ""} ${
+      className={`cursor-pointer transition-colors hover:bg-blue-500/[0.04] dark:hover:bg-blue-400/[0.06] ${order.isHidden ? "opacity-50" : ""} ${
         !indented && isDropTarget ? "border-t-2 border-primary" : ""
       } ${!indented && isDragging ? "opacity-40" : ""}`}
       draggable={!indented}
@@ -140,46 +151,46 @@ export function InvoiceOrderRow({
       <TableCell data-testid={`text-customer-name-${order.id}`}>
         {indented ? <span className="pl-5 text-muted-foreground/50 text-xs">↳</span> : order.customerName}
       </TableCell>
-      <TableCell className="font-mono text-sm text-muted-foreground" data-testid={`text-loading-number-${order.id}`}>
+      {isColumnVisible("loading") && <TableCell className="font-mono text-sm text-muted-foreground" data-testid={`text-loading-number-${order.id}`}>
         #{order.id}
-      </TableCell>
-      {!hideProformaCol && (
+      </TableCell>}
+      {isColumnVisible("proforma") && (
         <TableCell className="text-sm text-muted-foreground" data-testid={`text-proforma-${order.id}`}>
           {order.proformaName || <span className="text-muted-foreground/50">—</span>}
         </TableCell>
       )}
-      <TableCell className="font-mono text-sm" data-testid={`text-container-${order.id}`}>
+      {isColumnVisible("container") && <TableCell className="font-mono text-sm" data-testid={`text-container-${order.id}`}>
         <EditableShippingCell orderId={order.id} field="containerNumber" value={order.containerNumber}
           maxLength={100} onSave={onSaveShippingField} />
-      </TableCell>
-      {showBookingInfo && (
+      </TableCell>}
+      {isColumnVisible("bookingInfo") && (
         <TableCell className="text-sm max-w-[180px]" data-testid={`text-booking-info-${order.id}`}>
           <EditableShippingCell orderId={order.id} field="bookingInfo" value={order.bookingInfo}
             maxLength={2000} onSave={onSaveShippingField} />
         </TableCell>
       )}
-      <TableCell className="text-sm" data-testid={`text-destination-${order.id}`}>
+      {isColumnVisible("destination") && <TableCell className="text-sm" data-testid={`text-destination-${order.id}`}>
         <EditableShippingCell orderId={order.id} field="destination" value={order.destination}
           maxLength={500} onSave={onSaveShippingField} />
-      </TableCell>
-      <TableCell className="text-sm max-w-[200px]" data-testid={`text-notes-${order.id}`}>
+      </TableCell>}
+      {isColumnVisible("notes") && <TableCell className="text-sm max-w-[200px]" data-testid={`text-notes-${order.id}`}>
         <EditableShippingCell orderId={order.id} field="containerNotes" value={order.containerNotes}
           maxLength={10000} multiline onSave={onSaveShippingField} />
-      </TableCell>
-      <TableCell className="font-mono text-sm" data-testid={`text-order-date-${order.id}`}>
+      </TableCell>}
+      {isColumnVisible("date") && <TableCell className="font-mono text-sm" data-testid={`text-order-date-${order.id}`}>
         {displayDate}
-      </TableCell>
-      <TableCell>{getStatusBadge(order.status)}</TableCell>
-      <TableCell
+      </TableCell>}
+      {isColumnVisible("status") && <TableCell>{getStatusBadge(order.status)}</TableCell>}
+      {isColumnVisible("bales") && <TableCell
         className="text-right font-mono text-sm font-semibold tabular-nums"
         data-testid={`text-total-bales-${order.id}`}
       >
         <span className={getLoadedBalesColorClass(order.totalQtyBales ?? 0)}>{order.totalQtyBales ?? "-"}</span>
-      </TableCell>
-      <TableCell className="text-right font-mono text-sm" data-testid={`text-weight-${order.id}`}>
+      </TableCell>}
+      {isColumnVisible("weight") && <TableCell className="text-right font-mono text-sm" data-testid={`text-weight-${order.id}`}>
         {fmtKg(order.totalWeightKg)}
-      </TableCell>
-      <TableCell className="text-right font-mono" data-testid={`text-remaining-${order.id}`}>
+      </TableCell>}
+      {isColumnVisible("remaining") && <TableCell className="text-right font-mono" data-testid={`text-remaining-${order.id}`}>
         {expected <= 0 ? (
           <span className="text-muted-foreground/40">—</span>
         ) : remaining > 0 ? (
@@ -189,8 +200,8 @@ export function InvoiceOrderRow({
         ) : (
           <span className="text-green-600 dark:text-green-400 font-medium">Done</span>
         )}
-      </TableCell>
-      <TableCell className="text-right font-mono text-sm" data-testid={`text-extras-${order.id}`}>
+      </TableCell>}
+      {isColumnVisible("extras") && <TableCell className="text-right font-mono text-sm" data-testid={`text-extras-${order.id}`}>
         {parseFloat(order.freightAmount || "0") <= 0 && parseFloat(order.otherChargesTotal || "0") <= 0 ? (
           <span className="text-muted-foreground/40">—</span>
         ) : (
@@ -217,8 +228,8 @@ export function InvoiceOrderRow({
             )}
           </div>
         )}
-      </TableCell>
-      {!hideTotalsUsd && (
+      </TableCell>}
+      {isColumnVisible("total") && (
         <TableCell className="text-right font-mono font-semibold" data-testid={`text-grand-total-${order.id}`}>
           $
           {parseFloat(order.grandTotal || "0").toLocaleString(undefined, {

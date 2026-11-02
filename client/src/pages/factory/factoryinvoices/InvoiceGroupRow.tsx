@@ -46,7 +46,7 @@ export function InvoiceGroupRow({
       {/* Group summary row */}
       <TableRow
         key={`group-${group.customerId}`}
-        className={`cursor-pointer bg-muted/40 font-medium ${
+        className={`cursor-pointer bg-blue-500/[0.055] font-medium hover:bg-blue-500/[0.09] dark:bg-blue-500/[0.08] ${
           isDropTarget ? "border-t-2 border-primary" : ""
         } ${isDragging ? "opacity-40" : ""}`}
         draggable
@@ -74,19 +74,19 @@ export function InvoiceGroupRow({
             </Badge>
           </div>
         </TableCell>
-        <TableCell className="text-muted-foreground text-sm">—</TableCell>
-        {!orderRowContext.hideProformaCol && <TableCell />}
-        <TableCell />
-        {orderRowContext.showBookingInfo && <TableCell />}
-        <TableCell />
-        <TableCell />
-        <TableCell />
-        <TableCell />
-        <TableCell className="text-right font-mono text-sm font-semibold tabular-nums">
+        {orderRowContext.isColumnVisible("loading") && <TableCell className="text-muted-foreground text-sm">—</TableCell>}
+        {orderRowContext.isColumnVisible("proforma") && <TableCell />}
+        {orderRowContext.isColumnVisible("container") && <TableCell />}
+        {orderRowContext.isColumnVisible("bookingInfo") && <TableCell />}
+        {orderRowContext.isColumnVisible("destination") && <TableCell />}
+        {orderRowContext.isColumnVisible("notes") && <TableCell />}
+        {orderRowContext.isColumnVisible("date") && <TableCell />}
+        {orderRowContext.isColumnVisible("status") && <TableCell />}
+        {orderRowContext.isColumnVisible("bales") && <TableCell className="text-right font-mono text-sm font-semibold tabular-nums">
           <span className={getLoadedBalesColorClass(totals.totalBales)}>{totals.totalBales}</span>
-        </TableCell>
-        <TableCell className="text-right font-mono text-sm">{fmtKg(totals.totalWeightKg)}</TableCell>
-        <TableCell className="text-right font-mono">
+        </TableCell>}
+        {orderRowContext.isColumnVisible("weight") && <TableCell className="text-right font-mono text-sm">{fmtKg(totals.totalWeightKg)}</TableCell>}
+        {orderRowContext.isColumnVisible("remaining") && <TableCell className="text-right font-mono">
           {totals.totalRemaining > 0 ? (
             <span className="text-red-600 dark:text-red-400">{totals.totalRemaining}</span>
           ) : totals.totalOverloaded > 0 ? (
@@ -94,9 +94,9 @@ export function InvoiceGroupRow({
           ) : (
             <span className="text-green-600 dark:text-green-400">Done</span>
           )}
-        </TableCell>
-        <TableCell />
-        {!orderRowContext.hideTotalsUsd && (
+        </TableCell>}
+        {orderRowContext.isColumnVisible("extras") && <TableCell />}
+        {orderRowContext.isColumnVisible("total") && (
           <TableCell className="text-right font-mono">
             $
             {totals.totalAmount.toLocaleString(undefined, {

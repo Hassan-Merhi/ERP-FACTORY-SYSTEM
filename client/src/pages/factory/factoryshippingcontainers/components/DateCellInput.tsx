@@ -29,7 +29,7 @@ export function DateCellInput({
     const display = fmtDate(value);
     return (
       <span
-        className="cursor-pointer hover:underline hover:text-foreground text-sm"
+        className="shipping-editable cursor-pointer hover:text-foreground text-sm"
         onClick={() => {
           setDraft(value);
           setEditing(true);
