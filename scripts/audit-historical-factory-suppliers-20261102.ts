@@ -16,6 +16,7 @@ import { classifyHistoricalSupplierVoucher } from "./historical-supplier-audit-c
 import { previewHistoricalCostAllocation } from "./historical-supplier-cost-allocation-preview";
 import { inspectFactoryAccountType, type FactoryAccountAuditRow } from "./historical-supplier-ledger-classification";
 import { classifyFreightOffsetEvidence } from "./historical-supplier-freight-offset-review";
+import { previewHistoricalChargesPeriodNeutrality, type HistoricalClearingPeriodRow } from "./historical-charges-period-neutral-preflight";
 
 const COMPANY = 12;
 const EXPECTED_GOODS = 38;
@@ -260,6 +261,44 @@ export async function auditHistoricalFactorySuppliers() {
       ].join("\n"), [COMPANY]
     )).rows;
     const accountClassificationAudit = accountRows.map(inspectFactoryAccountType);
+    const payableAccount = accountRows.find((row) => row.code === "FACTORY_CHARGES_PAYABLE");
+    if (!payableAccount) throw new Error("Missing clearing ledger account: audit refuses guessed financial impact");
+
+    // A type-only repair would change recognized historical P&L by the
+    // clearing-account's entire debit balance. This groups ACTIVE, posted
+    // vouchers by effective accounting period and source. Never books journals.
+    const clearingPeriods = (await client.query<HistoricalClearingPeriodRow & SqlRow>(
+      [
+        "WITH sources AS (",
+        "SELECT v.id,TO_CHAR(COALESCE(v.effective_date,v.voucher_date),'YYYY-MM') AS period,",
+        "SUBSTRING(v.voucher_number FROM '^FACTORY-(FREIGHT|OC|POC)-') AS source,",
+        "p.debit_amount AS payable_dr,p.credit_amount AS payable_cr",
+        "FROM vouchers v JOIN voucher_entries p ON p.voucher_id=v.id",
+        "JOIN ledger_accounts a ON a.id=p.ledger_account_id",
+        "WHERE v.company_id=$1 AND a.company_id=$1 AND a.code='FACTORY_CHARGES_PAYABLE'",
+        "AND v.deleted_at IS NULL AND COALESCE(v.optional,false)=false",
+        "AND v.voucher_number ~ '^FACTORY-(FREIGHT|OC|POC)-'",
+        "), per_voucher AS (",
+        "SELECT s.id,s.period,s.source,s.payable_dr,s.payable_cr,",
+        "COUNT(*)::int AS n_lines,SUM(ve.debit_amount) AS debit,SUM(ve.credit_amount) AS credit,",
+        "COUNT(*) FILTER(WHERE ve.supplier_id IS NOT NULL OR ve.factory_supplier_id IS NOT NULL",
+        "OR ve.customer_id IS NOT NULL OR ve.bank_account_id IS NOT NULL)::int AS party_lines",
+        "FROM sources s JOIN voucher_entries ve ON ve.voucher_id=s.id",
+        "GROUP BY s.id,s.period,s.source,s.payable_dr,s.payable_cr",
+        ") SELECT period,source,COUNT(*)::int AS \"voucherCount\",",
+        "SUM(payable_dr)::text AS \"clearingDebitUsd\",",
+        "SUM(payable_cr)::text AS \"clearingCreditUsd\",",
+        "COUNT(*) FILTER (WHERE n_lines=2 AND ABS(debit-credit)<=0.01)::int AS \"balancedTwoLineVoucherCount\",",
+        "SUM(party_lines)::int AS \"directSupplierCustomerBankLineCount\"",
+        "FROM per_voucher GROUP BY period,source ORDER BY period,source",
+      ].join("\n"), [COMPANY]
+    )).rows;
+    const clearingPeriodNeutralityPreview = previewHistoricalChargesPeriodNeutrality(clearingPeriods, {
+      currentAccountType: payableAccount.accountType,
+      actualPostedDebitUsd: payableAccount.debitUsd,
+      actualPostedCreditUsd: payableAccount.creditUsd,
+      expectedVoucherCount: payableAccount.voucherCount,
+    });
 
     // Container-specific active freight journals, not amount-only duplicate
     // detection. Exact FREIGHT offsets indicate paired GL legs, NOT a second
@@ -504,6 +543,7 @@ export async function auditHistoricalFactorySuppliers() {
       },
       accountClassificationAudit: {
         accounts: accountClassificationAudit,
+        clearingPeriodNeutralityPreview,
         typeMismatches: accountClassificationAudit.filter((account) => account.mismatch).length,
         financialImpactToReclassifyUsd: null,
         payableCounterpartBreakdown: payableCounterparts.map((row) => ({
