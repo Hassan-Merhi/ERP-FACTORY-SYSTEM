@@ -103,6 +103,15 @@ describe("realtime invalidation contract", () => {
     });
   });
 
+  it("refreshes customer reference balances when a proforma is transferred", () => {
+    expect(classifyRealtimeWrite("/api/factory/customer-proformas/123/transfer", { targetCustomerId: 7 })).toEqual({
+      topics: ["factory", "reference"],
+    });
+    expect(classifyRealtimeWrite("/api/factory/customer-proformas/123/transfer?source=factory", {})).toEqual({
+      topics: ["factory", "reference"],
+    });
+  });
+
   it("isolates high-frequency Factory scan writes from the broad Factory topic", () => {
     expect(classifyRealtimeWrite("/api/factory/daily-bale-scans", {})).toEqual({ topics: ["scans"] });
     expect(classifyRealtimeWrite("/api/factory/ground-scan-items", { locationId: "5" })).toEqual({
