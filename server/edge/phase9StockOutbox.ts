@@ -23,6 +23,11 @@ import {
 } from "./phase9StockEnvelope.mjs";
 import { phase9StockItemEditEnvelope, type Phase9StockItemEditEvidence } from "./phase9StockItemEditEnvelope.mjs";
 
+/**
+ * local_movement_id is the LAN source row: a canonical stock movement (quick
+ * adjust), a stock transfer (transfer) or the edit's own stream sequence (item
+ * edit); unique per kind.
+ */
 export async function ensurePhase9StockOutboxSchema(queryable: Pick<Pool, "query">): Promise<void> {
   if (readFactoryEdgeConfiguration().mode !== "lan") return;
   await queryable.query(`
@@ -38,9 +43,6 @@ export async function ensurePhase9StockOutboxSchema(queryable: Pick<Pool, "query
       operation_id UUID NOT NULL,
       company_id INTEGER NOT NULL CHECK(company_id > 0),
       actor_user_id TEXT NOT NULL CHECK(length(actor_user_id) > 0),
-      -- The LAN source row: a canonical stock movement (quick adjust), a
-      -- stock transfer (transfer) or the edit's own sequence (item edit);
-      -- unique per kind.
       local_movement_id BIGINT NOT NULL CHECK(local_movement_id > 0 AND local_movement_id <= 2147483647),
       operation_kind TEXT NOT NULL CHECK(operation_kind IN ('stock.quick-adjust.v1', 'stock.transfer.v1', 'stock.item-edit.v1')),
       payload JSONB NOT NULL,

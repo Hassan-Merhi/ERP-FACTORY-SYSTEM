@@ -91,8 +91,11 @@ const SENSITIVE_TABLES = [
 const VOUCHER_RETIREMENT_CALL = /\bretireVouchers(?:Tx|ByNumberTx|WithClient|ForRequestTx)\s*\(/;
 // Phase 22 (B): a route that posts through the ERP or factory engine helpers writes
 // vouchers just as much as one that inserts them itself.
+// The offline-mode work moved the stock-transfer transaction (voucher, lines,
+// inventory) into createStockTransferTx, shared with the factory replay; a
+// route calling it writes vouchers and inventory just the same.
 const VOUCHER_POSTING_CALL =
-  /\b(?:postErpVoucherTx|postErpEntriesTx|postManualVoucherTx|postEmployeeVoucherTx|postAccrualPassTx|postFactoryVoucherTx|postFactoryPartyLineVoucherTx)\s*\(/;
+  /\b(?:postErpVoucherTx|postErpEntriesTx|postManualVoucherTx|postEmployeeVoucherTx|postAccrualPassTx|postFactoryVoucherTx|postFactoryPartyLineVoucherTx|createStockTransferTx)\s*\(/;
 
 /** Ways this codebase writes: drizzle builders and raw SQL alike. */
 function writesSensitiveTable(source) {
