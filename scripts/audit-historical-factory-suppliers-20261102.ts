@@ -14,6 +14,7 @@ import { pool } from "../server/db";
 import { factoryBusinessDateInBeirut } from "./historical-supplier-date-safety";
 import { classifyHistoricalSupplierVoucher } from "./historical-supplier-audit-classifier";
 import { previewHistoricalCostAllocation } from "./historical-supplier-cost-allocation-preview";
+import { inspectFactoryAccountType, type FactoryAccountAuditRow } from "./historical-supplier-ledger-classification";
 
 const COMPANY = 12;
 const EXPECTED_GOODS = 38;
@@ -235,6 +236,48 @@ export async function auditHistoricalFactorySuppliers() {
       [COMPANY]
     )).rows;
 
+    // The existing account_type is the input used by ledger reporting; compare
+    // it with documented factory system-account semantics, never UPDATE it.
+    const accountRows = (await client.query<FactoryAccountAuditRow & SqlRow>(
+      [
+        "SELECT a.code,a.name,a.account_type AS \"accountType\",",
+        "COALESCE(x.debit,0)::text AS \"debitUsd\",",
+        "COALESCE(x.credit,0)::text AS \"creditUsd\",",
+        "COALESCE(x.vouchers,0)::int AS \"voucherCount\",",
+        "COALESCE(x.lines,0)::int AS \"postedLineCount\"",
+        "FROM ledger_accounts a LEFT JOIN LATERAL (",
+        "SELECT COUNT(DISTINCT v.id)::int vouchers,COUNT(*)::int lines,",
+        "COALESCE(SUM(ve.debit_amount),0) debit,",
+        "COALESCE(SUM(ve.credit_amount),0) credit",
+        "FROM voucher_entries ve JOIN vouchers v ON v.id=ve.voucher_id",
+        "WHERE ve.ledger_account_id=a.id AND v.company_id=$1",
+        "AND v.deleted_at IS NULL AND COALESCE(v.optional,false)=false",
+        ") x ON TRUE",
+        "WHERE a.company_id=$1 AND a.deleted_at IS NULL",
+        "AND a.code IN ('FACTORY_CHARGES_PAYABLE','FACTORY_RAW_MATERIAL_STOCK')",
+        "ORDER BY a.code",
+      ].join("\n"), [COMPANY]
+    )).rows;
+    const accountClassificationAudit = accountRows.map(inspectFactoryAccountType);
+
+    // Alternate production evidence supports bale existence/processing but
+    // does not supply a mix-to-bale relation or attributable historical COGS.
+    const supplementalLineage = (await client.query<SqlRow>(
+      [
+        "SELECT",
+        "(SELECT COUNT(DISTINCT bale_id)::int FROM factory_pressing_confirmations",
+        " WHERE company_id=$1 AND voided_at IS NULL) AS pressing_confirmation_bales,",
+        "(SELECT COUNT(DISTINCT bale_id)::int FROM factory_bale_production_attributions",
+        " WHERE company_id=$1) AS production_attribution_bales,",
+        "(SELECT COUNT(DISTINCT bale_id)::int FROM factory_legacy_bale_cost_repairs",
+        " WHERE company_id=$1) AS historical_bale_repair_bales,",
+        "(SELECT COUNT(DISTINCT mix_batch_id)::int FROM factory_daily_usages",
+        " WHERE company_id=$1) AS daily_usage_mix_count,",
+        "(SELECT COUNT(DISTINCT bale_id)::int FROM factory_pos_sale_bales",
+        " WHERE company_id=$1) AS pos_bale_link_count",
+      ].join("\n"), [COMPANY]
+    )).rows[0];
+
     const businessDate = factoryBusinessDateInBeirut(new Date());
     const lineageCoverage = {
       factoryBaleCount: num(baleLineage?.factory_bale_count),
@@ -381,6 +424,21 @@ export async function auditHistoricalFactorySuppliers() {
           attributableToIndividualContainers: false,
           warning: "Shared mixes may contain other supplier material. Current values are not historical sale-COGS proof.",
         },
+      },
+      accountClassificationAudit: {
+        accounts: accountClassificationAudit,
+        typeMismatches: accountClassificationAudit.filter((account) => account.mismatch).length,
+        financialImpactToReclassifyUsd: null,
+        warning: "Type mismatches are real reporting risks, not permission to rewrite source accounts or post supplier-neutral financial journals.",
+      },
+      alternativeProductionEvidence: {
+        pressingConfirmationBales: num(supplementalLineage?.pressing_confirmation_bales),
+        productionAttributionBales: num(supplementalLineage?.production_attribution_bales),
+        historicalBaleRepairBales: num(supplementalLineage?.historical_bale_repair_bales),
+        dailyUsageMixCount: num(supplementalLineage?.daily_usage_mix_count),
+        posBaleLinkCount: num(supplementalLineage?.pos_bale_link_count),
+        provesMixToBaleLineage: false,
+        warning: "An alternative bale identity without a verified mix/source link cannot support sale COGS attribution.",
       },
       previewGate: {
         financialJournalPostingAllowed: false,
