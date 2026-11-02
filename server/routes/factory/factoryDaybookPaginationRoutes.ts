@@ -8,6 +8,7 @@ import { buildPaginationIntegrityConditions } from "../../services/factory/daybo
 import { factoryBaleProducts, factoryBales, factoryUserProfiles } from "@shared/schema";
 import { parseMoneyInput, toMoney } from "../../lib/money";
 import { parsePositiveInt } from "../../lib/listPagination";
+import { operationalHistoricalSupplierExclusionSql } from "../../services/accounting/internalHistoricalSupplierRoutineVisibility";
 
 const MAX_PAGE_SIZE = 250;
 const DEFAULT_PAGE_SIZE = 100;
@@ -206,6 +207,7 @@ export function registerFactoryDaybookPaginationRoutes(app: Express): void {
         `v.company_id = ${companyParam}`,
         `v.deleted_at IS NULL`,
         `v.voucher_type IN ('Payment','Receipt','Journal')`,
+        operationalHistoricalSupplierExclusionSql(companyId, "v"),
         // Dedicated bonus Daybook rows represent the voucher. Do not display
         // another synthetic voucher row that would bypass the bonus reversal action.
         `NOT EXISTS (SELECT 1 FROM factory_target_bonus_payments p WHERE p.company_id = v.company_id
