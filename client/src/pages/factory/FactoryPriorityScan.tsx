@@ -95,11 +95,13 @@ export default function FactoryPriorityScan() {
   );
   const inputRef = useRef<HTMLInputElement>(null);
   const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const localFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scanSubmissionInFlightRef = useRef(false);
   const [scanInput, setScanInput] = useState("");
   const [scanning, setScanning] = useState(false);
   const [feedback, setFeedback] = useState<ScanFeedback | null>(null);
   const [priorityFlashVisible, setPriorityFlashVisible] = useState(false);
+  const [localFlash, setLocalFlash] = useState<Pick<PriorityScanHistoryResponse["scans"][number], "referenceNumber" | "priority" | "color" | "orderId"> | null>(null);
   const [historyView, setHistoryView] = useState<"condensed" | "detailed">("condensed");
 
   const { data: configs = [], isLoading: configsLoading } = useQuery<PriorityScanConfig[]>({
@@ -192,7 +194,7 @@ export default function FactoryPriorityScan() {
     return () => window.clearTimeout(timer);
   }, [latestScannedBale?.id, latestScannedBale?.scannedAt, priorityHistory?.serverNow]);
 
-  const currentPriorityBale = priorityFlashVisible ? latestScannedBale : null;
+  const currentPriorityBale = localFlash ?? (priorityFlashVisible ? latestScannedBale : null);
 
   useEffect(() => {
     const timer = setTimeout(() => inputRef.current?.focus(), 100);
@@ -202,6 +204,7 @@ export default function FactoryPriorityScan() {
   useEffect(
     () => () => {
       if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+      if (localFlashTimerRef.current) clearTimeout(localFlashTimerRef.current);
     },
     []
   );
@@ -210,6 +213,19 @@ export default function FactoryPriorityScan() {
     if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
     setFeedback(next);
     feedbackTimerRef.current = setTimeout(() => setFeedback(null), 5000);
+  };
+
+  // The server-confirmed route immediately illuminates the exact saved priority color.
+  // The history-driven flash above remains the fallback for scans on other devices.
+  const flashConfirmedRoute = (route: PriorityScanAllocation) => {
+    if (localFlashTimerRef.current) clearTimeout(localFlashTimerRef.current);
+    setLocalFlash({
+      referenceNumber: route.referenceNumber,
+      priority: route.target.priority,
+      color: route.target.color,
+      orderId: route.target.orderId,
+    });
+    localFlashTimerRef.current = setTimeout(() => setLocalFlash(null), PRIORITY_SCAN_FLASH_MS);
   };
 
   const focusScanner = () => {
@@ -275,6 +291,7 @@ export default function FactoryPriorityScan() {
     setScanning(true);
     try {
       const routed = await allocatePriorityScan(referenceNumber);
+      flashConfirmedRoute(routed);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: [PENDING_LOADS_URL] }),
         queryClient.invalidateQueries({ queryKey: [PRIORITY_SCAN_CONFIGS_URL] }),
@@ -357,7 +374,7 @@ export default function FactoryPriorityScan() {
             <Layers className="h-5 w-5" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold tracking-wide text-slate-500 dark:text-slate-400">{tr("activePriorities", { count: "" }).replace(/^[\s\d]+/, "").trim() || tr("priorityQueue")}</p>
+            <p className="text-xs font-semibold tracking-wide text-slate-500 dark:text-slate-400">{tr("priorityQueue")}</p>
             <p className="text-2xl font-bold tabular-nums text-blue-700 dark:text-blue-300">{activeQueue.length}</p>
           </div>
         </div>
