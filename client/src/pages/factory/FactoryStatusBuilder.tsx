@@ -430,7 +430,15 @@ export default function FactoryStatusBuilder() {
       const sheet = localSheets[activeIdx];
       if (!sheet) return;
       const rowCount = sheet.rows.length;
-      const colCount = sheet.columns.length;
+      const hiddenIds = hiddenColumnsBySheet[sheet.stableId] ?? [];
+      const visibleCols = sheet.columns
+        .map((col, index) => hiddenIds.includes(col.id) ? -1 : index)
+        .filter((index) => index !== -1);
+      const visiblePosition = visibleCols.indexOf(ci);
+      const previousCol = visiblePosition > 0 ? visibleCols[visiblePosition - 1] : null;
+      const nextCol = visiblePosition >= 0 && visiblePosition < visibleCols.length - 1
+        ? visibleCols[visiblePosition + 1]
+        : null;
 
       if (e.key === "Enter") {
         e.preventDefault();
@@ -447,11 +455,11 @@ export default function FactoryStatusBuilder() {
       } else if (e.key === "Tab") {
         e.preventDefault();
         if (e.shiftKey) {
-          if (ci > 0) focusCell(ri, ci - 1);
-          else if (ri > 0) focusCell(ri - 1, colCount - 1);
+          if (previousCol !== null) focusCell(ri, previousCol);
+          else if (ri > 0 && visibleCols.length > 0) focusCell(ri - 1, visibleCols[visibleCols.length - 1]);
         } else {
-          if (ci < colCount - 1) focusCell(ri, ci + 1);
-          else if (ri < rowCount - 1) focusCell(ri + 1, 0);
+          if (nextCol !== null) focusCell(ri, nextCol);
+          else if (ri < rowCount - 1 && visibleCols.length > 0) focusCell(ri + 1, visibleCols[0]);
         }
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
@@ -461,19 +469,19 @@ export default function FactoryStatusBuilder() {
         if (ri < rowCount - 1) focusCell(ri + 1, ci);
       } else if (e.key === "ArrowLeft") {
         const input = e.currentTarget;
-        if (input.selectionStart === 0 && input.selectionEnd === 0 && ci > 0) {
+        if (input.selectionStart === 0 && input.selectionEnd === 0 && previousCol !== null) {
           e.preventDefault();
-          focusCell(ri, ci - 1);
+          focusCell(ri, previousCol);
         }
       } else if (e.key === "ArrowRight") {
         const input = e.currentTarget;
-        if (input.selectionStart === input.value.length && ci < colCount - 1) {
+        if (input.selectionStart === input.value.length && nextCol !== null) {
           e.preventDefault();
-          focusCell(ri, ci + 1);
+          focusCell(ri, nextCol);
         }
       }
     },
-    [localSheets, activeIdx, focusCell, updateSheet]
+    [localSheets, activeIdx, focusCell, updateSheet, hiddenColumnsBySheet]
   );
 
   useEffect(() => {
@@ -629,7 +637,7 @@ export default function FactoryStatusBuilder() {
                   <DropdownMenuCheckboxItem
                     key={col.id}
                     checked={!hiddenColIds.includes(col.id)}
-                    onCheckedChange={(checked) => setColumnHidden(activeSheet.stableId, col.id, !!checked === false)}
+                    onCheckedChange={(checked) => setColumnHidden(activeSheet.stableId, col.id, !checked)}
                     data-testid={`sb-toggle-column-${ci}`}
                   >
                     <span className="truncate">{col.label || `Column ${ci + 1}`}</span>
@@ -927,10 +935,10 @@ export default function FactoryStatusBuilder() {
                         Add row
                       </button>
                     </td>
-                    {activeSheet.columns.map((_, ci) => (
-                      <td key={ci} className="border border-border" />
+                    {activeSheet.columns.map((col) => (
+                      <td key={col.id} className={`border-b border-r border-border/50 ${hiddenColIds.includes(col.id) ? "hidden" : ""}`} />
                     ))}
-                    <td className="border border-border" />
+                    <td className="border-b border-border/50" />
                   </tr>
 
                   {/* Footer — DIFFERENCE row */}
