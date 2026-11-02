@@ -48,10 +48,10 @@ export function operationalHistoricalSupplierExclusionSql(
 ): string {
   if (companyId !== HISTORICAL_SUPPLIER_ROUTINE_COMPANY_ID) return "TRUE";
   return `NOT (
-    (${alias}.voucher_number ~ '^FACTORY-IMPORT-[0-9]+(-[0-9]+)?$'
+    (COALESCE(${alias}.voucher_number,'') ~ '^FACTORY-IMPORT-[0-9]+(-[0-9]+)?$'
       AND COALESCE(${alias}.description,'') LIKE 'Goods import - container % (historical supplier reconciliation)')
     OR
-    (${alias}.voucher_number ~ '^FACTORY-COMM-[0-9]+(-[0-9]+)?$'
+    (COALESCE(${alias}.voucher_number,'') ~ '^FACTORY-COMM-[0-9]+(-[0-9]+)?$'
       AND ${alias}.created_at >= TIMESTAMP '2026-10-14'
       AND ${alias}.created_at < TIMESTAMP '2026-10-15')
   )`;
