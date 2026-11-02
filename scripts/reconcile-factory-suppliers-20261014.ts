@@ -15,6 +15,7 @@ import { sql } from "drizzle-orm";
 import { db, pool, type DbTransaction } from "../server/db";
 import { MoneyDecimal, toMoney } from "../server/lib/money";
 import { getPartyBalance } from "../server/services/accounting/balances/ledgerBalanceEngine";
+import { factoryBusinessDateInBeirut, futureDatedSupplierGoods } from "./historical-supplier-date-safety";
 import { systemAccountIdsTx } from "../server/services/accounting/perpetualInventory/linkedJournal";
 import { syncContainerCommissionJournalTx } from "../server/services/factory/containerCommissionJournal";
 import { postFactoryVoucherTx } from "../server/services/factory/factoryVoucherPosting";
@@ -167,15 +168,8 @@ async function run(apply: boolean): Promise<void> {
   // became an accounting expense. In particular, never backfill a voucher
   // into a future period merely because the ETA was stored on the container.
   // Use the factory's local business day, not the server's UTC day.
-  const dateParts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Asia/Beirut", year: "numeric", month: "2-digit", day: "2-digit",
-  }).formatToParts(new Date());
-  const datePart = (part: "year" | "month" | "day") =>
-    dateParts.find((entry) => entry.type === part)?.value ?? "";
-  const businessToday = `${datePart("year")}-${datePart("month")}-${datePart("day")}`;
-  const futureDated = importIds
-    .map((id) => byId.get(id)!)
-    .filter((row) => (row.arrival_date || row.created_on) > businessToday);
+  const businessToday = factoryBusinessDateInBeirut(new Date());
+  const futureDated = futureDatedSupplierGoods(importIds.map((id) => byId.get(id)!), businessToday);
   if (futureDated.length) {
     console.warn(`[SupplierRepair] ${futureDated.length} goods imports have a future voucher date:`,
       futureDated.map((row) => `${row.container_number}=${row.arrival_date || row.created_on}`).join(", "));
