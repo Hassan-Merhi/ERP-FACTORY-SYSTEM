@@ -1,3 +1,4 @@
+import "./FactoryLocationInventoryRedesign.css";
 import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,7 +51,7 @@ type BreakdownStatCardProps = {
 function BreakdownStatCard({ icon, label, total, regular, special, unit, accent }: BreakdownStatCardProps) {
   return (
     <div
-      className="min-w-0 rounded-xl border bg-card/40 shadow-xs"
+      className="inventory-kpi-card min-w-0 rounded-xl border bg-card/40 shadow-xs"
       data-testid={`stat-${label.replace(/\s+/g, "-").toLowerCase()}`}
     >
       <div className="flex items-start gap-3 px-3.5 py-3">
@@ -150,9 +151,9 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
   );
 
   return (
-    <div className={`p-4 md:p-6 w-full space-y-5 ${proformaMode && selections.size > 0 ? "pb-24" : ""}`}>
+    <div className={`factory-location-inventory inventory-product-view p-4 md:p-6 w-full space-y-5 ${proformaMode && selections.size > 0 ? "pb-24" : ""}`}>
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+      <div className="inventory-detail-header flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"
@@ -165,7 +166,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
           </Button>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl md:text-2xl font-bold tracking-tight" data-testid="text-page-title">
+              <h1 className="inventory-detail-title text-xl md:text-2xl font-bold tracking-tight" data-testid="text-page-title">
                 {selectedLocation.name}
               </h1>
               <Button
@@ -225,7 +226,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
 
       {/* KPI cards: each stock quantity shows the combined total and both categories. */}
       {!inventoryLoading && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="inventory-kpi-grid grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <BreakdownStatCard
             icon={<Package className="h-4 w-4 text-blue-400" />}
             label="Total Bales"
@@ -245,6 +246,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
             accent="bg-emerald-500/10"
           />
           <StatCard
+            className="inventory-stat-card inventory-kpi-categories"
             icon={<Layers className="h-4 w-4 text-purple-400" />}
             label="Categories"
             value={String(categoryGroups.length)}
@@ -253,6 +255,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
           />
           {!hideAvgCost && (
             <StatCard
+              className="inventory-stat-card inventory-kpi-cost"
               icon={<DollarSign className="h-4 w-4 text-amber-400" />}
               label="Cost Value"
               value={formatAmount(statsCostValue)}
@@ -262,6 +265,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
           )}
           {!hideSellingPrice && (
             <StatCard
+              className="inventory-stat-card inventory-kpi-selling"
               icon={<TrendingUp className="h-4 w-4 text-green-400" />}
               label="Sell Value"
               value={formatAmount(statsSellValue)}
@@ -370,16 +374,16 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
       )}
 
       {/* Main card — toolbar + table */}
-      <div className="rounded-xl border overflow-hidden w-full" ref={printRef}>
+      <div className="inventory-table-shell rounded-xl border overflow-hidden w-full" ref={printRef}>
         {/* Toolbar strip */}
-        <div className="flex flex-col gap-2 px-4 py-3 border-b bg-muted/20">
+        <div className="inventory-toolbar flex flex-col gap-2 px-4 py-3 border-b bg-muted/20">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search product or article code..."
               value={productSearch}
               onChange={(e) => setProductSearch(e.target.value)}
-              className="pl-9"
+              className="inventory-search-input pl-9"
               data-testid="input-search-products"
             />
           </div>
@@ -390,7 +394,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
               }}
             >
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1.5 h-8" data-testid="button-category-filter">
+                <Button variant="outline" size="sm" className="inventory-filter-button gap-1.5 h-8" data-testid="button-category-filter">
                   <ListFilter className="h-3.5 w-3.5" />
                   {categoryFilter.length === 0
                     ? "All Categories"
@@ -473,7 +477,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
                 <Badge
                   key={field}
                   variant={prodSortField === field ? "default" : "outline"}
-                  className="cursor-pointer"
+                  className={`inventory-sort-chip cursor-pointer ${prodSortField === field ? "is-active" : ""}`}
                   onClick={() => setProdSortField(field)}
                   data-testid={`badge-sort-${field}`}
                 >
@@ -503,7 +507,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
             )}
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1.5 ml-auto" data-testid="button-columns">
+                <Button variant="outline" size="sm" className="inventory-columns-button gap-1.5 ml-auto" data-testid="button-columns">
                   <SlidersHorizontal className="h-4 w-4" />
                   Columns
                   {hiddenColumns.size > 0 && (
@@ -568,7 +572,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
               <>
                 {regularProducts.map((prod) => renderMobileCard(prod))}
                 {regularProducts.length > 0 && (
-                  <div className="rounded-xl border p-3 bg-muted/30" data-testid="text-product-totals">
+                  <div className="inventory-mobile-total rounded-xl border p-3 bg-muted/30" data-testid="text-product-totals">
                     <div className="flex items-center justify-between gap-2 font-bold text-sm">
                       <span>
                         Total ({regularProducts.length} products, {totalBales.toLocaleString()} bales)
@@ -589,7 +593,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
                       Wipers &amp; Garbage
                     </p>
                     {specialProducts.map((prod) => renderMobileCard(prod, "-sp"))}
-                    <div className="rounded-xl border p-3 bg-muted/30" data-testid="text-special-product-totals">
+                    <div className="inventory-mobile-total rounded-xl border p-3 bg-muted/30" data-testid="text-special-product-totals">
                       <div className="flex items-center justify-between gap-2 font-bold text-sm">
                         <span>
                           Total ({specialProducts.length} products, {spTotalBales.toLocaleString()} bales)
@@ -612,8 +616,8 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
         {/* Desktop table */}
         {!inventoryLoading && !(proformaMode && availableLoading) && (
           <div className="hidden md:block space-y-0 w-full">
-            <div data-horizontal-scroll="true" className="rounded-md border w-full overflow-x-auto">
-              <table className="table-fixed text-sm" style={{ minWidth: "820px", width: "100%" }}>
+            <div data-horizontal-scroll="true" className="inventory-table-frame rounded-md border w-full overflow-x-auto">
+              <table className="inventory-stock-table table-fixed text-sm" style={{ minWidth: "820px", width: "100%" }}>
                 <colgroup>
                   {proformaMode && <col style={{ width: "36px" }} />}
                   <col style={{ minWidth: "200px" }} />
@@ -629,7 +633,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
                   {col("total_kg") && <col style={{ width: "100px" }} />}
                   {!proformaMode && col("actions") && <col style={{ width: "100px" }} />}
                 </colgroup>
-                <thead className="bg-muted border-b-2 border-border/60 sticky top-0 z-30">
+                <thead className="inventory-table-head bg-muted border-b-2 border-border/60 sticky top-0 z-30">
                   <tr className="h-10">
                     {proformaMode && <th className="px-2"></th>}
                     <th className="text-left px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">
@@ -706,7 +710,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
                     <>
                       {regularProducts.map((prod) => renderProductRow(prod))}
                       {regularProducts.length > 0 && (
-                        <tr className="border-t bg-muted/50 h-12 font-bold">
+                        <tr className="inventory-section-total border-t bg-muted/50 h-12 font-bold">
                           {proformaMode && <td></td>}
                           <td className="px-3" colSpan={col("category") ? 2 : 1}>
                             Total ({regularProducts.length} products)
@@ -737,11 +741,11 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
 
             {specialProducts.length > 0 && (
               <div className="mt-6">
-                <p className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
-                  Wipers &amp; Garbage
+                <p className="inventory-special-heading text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
+                  <Layers className="inventory-special-icon h-4 w-4" /> Wipers &amp; Garbage
                 </p>
-                <div className="rounded-md border w-full overflow-auto max-h-[500px]">
-                  <table className="table-fixed text-sm" style={{ minWidth: "820px", width: "100%" }}>
+                <div className="inventory-table-frame rounded-md border w-full overflow-auto max-h-[500px]">
+                  <table className="inventory-stock-table table-fixed text-sm" style={{ minWidth: "820px", width: "100%" }}>
                     <colgroup>
                       {proformaMode && <col style={{ width: "36px" }} />}
                       <col style={{ minWidth: "200px" }} />
@@ -757,7 +761,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
                       {col("total_kg") && <col style={{ width: "100px" }} />}
                       {!proformaMode && col("actions") && <col style={{ width: "100px" }} />}
                     </colgroup>
-                    <thead className="bg-muted border-b-2 border-border/60 sticky top-0 z-30">
+                    <thead className="inventory-table-head bg-muted border-b-2 border-border/60 sticky top-0 z-30">
                       <tr className="h-10">
                         {proformaMode && <th className="px-2"></th>}
                         <th className="text-left px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">
@@ -820,7 +824,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
                     </thead>
                     <tbody>
                       {specialProducts.map((prod) => renderProductRow(prod, "-sp"))}
-                      <tr className="border-t bg-muted/50 h-12 font-bold">
+                      <tr className="inventory-section-total border-t bg-muted/50 h-12 font-bold">
                         {proformaMode && <td></td>}
                         <td className="px-3" colSpan={col("category") ? 2 : 1}>
                           Total ({specialProducts.length} products)
@@ -851,7 +855,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
         )}
 
         {!inventoryLoading && filteredProducts.length > 0 && (
-          <div className="px-4 py-3 border-t text-xs text-muted-foreground">
+          <div className="inventory-table-footer px-4 py-3 border-t text-xs text-muted-foreground">
             Showing {filteredProducts.length} of {activeInventoryData.length} products
           </div>
         )}
