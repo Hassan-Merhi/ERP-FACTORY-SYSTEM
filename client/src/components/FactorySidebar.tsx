@@ -192,21 +192,10 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
     const page = resolveFactoryPage(item.url);
     if (!page || !myAccess) return false; // Never show destinations before company grants resolve.
     if (!factoryPageAllowsRole(page, user?.role)) return false;
-    if (
-      page.key === "factory/cost-centers" &&
-      !["Admin", "Owner", "Developer", "Manager"].includes(user?.role ?? "")
-    ) return false;
     if (page.featureFlag) {
       const defaultOn = !!page.featureFlagDefaultOn;
       const enabled = defaultOn ? settings?.[page.featureFlag] !== false : settings?.[page.featureFlag] === true;
       if (!enabled) return false;
-    }
-    // Cost Centers deliberately has stricter route-level grants even for
-    // privileged roles. Match the FactoryRoutes condition before any bypass.
-    if (page.key === "factory/cost-centers") {
-      return myAccess.fullAccess ||
-        myAccess.pageKeys.includes("factory/cost-centers") ||
-        myAccess.pageKeys.includes("factory/accounts");
     }
     // The ordinary Factory route guard bypasses per-user page lists for these roles.
     const privilegedRole = ["Admin", "Owner", "Developer"].includes(user?.role ?? "");
