@@ -370,7 +370,6 @@ function readTopicsForPath(path: string): RealtimeInvalidationTopic[] | undefine
     path === "/api/factory/categories" ||
     path === "/api/factory/settings" ||
     path === "/api/factory/my-access" ||
-    path === "/api/factory/customers" ||
     path === "/api/factory/suppliers" ||
     path === "/api/factory/worker-categories"
   ) {
