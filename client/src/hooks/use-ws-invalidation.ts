@@ -40,6 +40,7 @@ const TOPIC_QUERY_PREFIXES: Record<RealtimeInvalidationTopic, readonly string[]>
     "/api/reports/net-profit",
     "/api/balance-sheet",
     "/api/dashboard-payable-accounts",
+    "/api/factory/customers", // This list includes live account balances.
   ],
   factory: ["/api/factory/"],
   scans: ["/api/factory/daily-bale-scans", "/api/factory/ground-scan-items"],
