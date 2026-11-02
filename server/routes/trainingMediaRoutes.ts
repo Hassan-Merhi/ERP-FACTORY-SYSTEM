@@ -15,9 +15,9 @@ import { companies } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { db } from "../db";
 
-type PublishedMedia = { videoKey: string; captionsKey?: string; sourceSha?: string; publishedAt?: string };
+type PublishedMedia = { videoKey: string; captionsKey?: string; screenshotKey?: string; sourceSha?: string; publishedAt?: string };
 const registry: Record<string, PublishedMedia> = published as Record<string, PublishedMedia>;
-const OBJECT_KEY = /^training\/videos\/[a-z0-9-]+\/[a-f0-9]{40}\.(?:webm|vtt)$/;
+const OBJECT_KEY = /^training\/videos\/[a-z0-9-]+\/[a-f0-9]{40}\.(?:webm|vtt|png)$/;
 const TOPIC_ID = /^[a-z0-9-]{1,80}$/;
 const EMPTY_HASH = createHash("sha256").update("").digest("hex");
 
@@ -105,7 +105,7 @@ export function signedTrainingObjectRequest(key: string, range?: string): { url:
   return { url: cfg.url.origin + canonicalPath, headers };
 }
 
-async function streamMedia(req: Request, res: Response, kind: "video" | "captions") {
+async function streamMedia(req: Request, res: Response, kind: "video" | "captions" | "screenshot") {
   const topic = String(req.params.topic || "");
   if (!TOPIC_ID.test(topic) || !Object.prototype.hasOwnProperty.call(registry, topic)) {
     res.status(404).json({ message: "Training media not published" });
@@ -121,8 +121,8 @@ async function streamMedia(req: Request, res: Response, kind: "video" | "caption
     return;
   }
   const entry = registry[topic];
-  const key = kind === "video" ? entry.videoKey : entry.captionsKey;
-  if (!key || !OBJECT_KEY.test(key) || !key.endsWith(kind === "video" ? ".webm" : ".vtt")) {
+  const key = kind === "video" ? entry.videoKey : kind === "captions" ? entry.captionsKey : entry.screenshotKey;
+  if (!key || !OBJECT_KEY.test(key) || !key.endsWith(kind === "video" ? ".webm" : kind === "captions" ? ".vtt" : ".png")) {
     res.status(404).json({ message: "Training media not published" });
     return;
   }
@@ -143,7 +143,7 @@ async function streamMedia(req: Request, res: Response, kind: "video" | "caption
       return;
     }
     res.status(upstream.status);
-    res.setHeader("Content-Type", kind === "video" ? "video/webm" : "text/vtt; charset=utf-8");
+    res.setHeader("Content-Type", kind === "video" ? "video/webm" : kind === "captions" ? "text/vtt; charset=utf-8" : "image/png");
     res.setHeader("Cache-Control", "private, max-age=300");
     res.setHeader("X-Content-Type-Options", "nosniff");
     for (const name of ["content-length", "content-range", "accept-ranges"]) {
@@ -163,4 +163,5 @@ async function streamMedia(req: Request, res: Response, kind: "video" | "caption
 export function registerTrainingMediaRoutes(app: Express): void {
   app.get("/api/training/media/:topic", requireAuth, (req, res) => { void streamMedia(req, res, "video"); });
   app.get("/api/training/media/:topic/captions", requireAuth, (req, res) => { void streamMedia(req, res, "captions"); });
+  app.get("/api/training/media/:topic/screenshot", requireAuth, (req, res) => { void streamMedia(req, res, "screenshot"); });
 }

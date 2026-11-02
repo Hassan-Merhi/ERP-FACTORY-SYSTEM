@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { BookOpen, ChevronRight, CirclePlay, Clapperboard, FileText, Search, ShieldCheck, Video } from "lucide-react";
 import { visibleTrainingTopics, type TrainingMode } from "@/training/trainingCatalog";
-import { publishedTrainingVideos, publishedTrainingCaptions } from "@/training/publishedVideos";
+import { publishedTrainingVideos, publishedTrainingCaptions, publishedTrainingGuides, publishedTrainingScreenshots } from "@/training/publishedVideos";
 
 interface Props {
   mode: TrainingMode;
@@ -113,7 +113,7 @@ export default function HelpTraining({ mode, role, accessKeys, fullAccess = fals
             <div>
               <h3 className="flex items-center gap-2 text-base font-semibold"><CirclePlay className="h-4 w-4 text-primary" />Step-by-step instructions</h3>
               <ol className="mt-3 space-y-3">
-                {active.steps.map((step, i) => (
+                {(publishedTrainingGuides[active.id] ?? active.steps).map((step, i) => (
                   <li className="flex items-start gap-3 text-sm" key={i}>
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">{i + 1}</span>
                     <span className="pt-0.5">{step}</span>
@@ -121,6 +121,12 @@ export default function HelpTraining({ mode, role, accessKeys, fullAccess = fals
                 ))}
               </ol>
             </div>
+            {publishedTrainingScreenshots[active.id] && (
+              <div className="space-y-2"><h3 className="text-base font-semibold">Actual training-system screenshot</h3>
+                <img src={publishedTrainingScreenshots[active.id]} alt={"Verified training screenshot: " + active.title}
+                  loading="lazy" className="max-h-[480px] w-full rounded-lg border object-contain" />
+              </div>
+            )}
             {active.route && <Link href={active.route} className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold hover:bg-muted">
               Open this page <ChevronRight className="h-4 w-4" />
             </Link>}

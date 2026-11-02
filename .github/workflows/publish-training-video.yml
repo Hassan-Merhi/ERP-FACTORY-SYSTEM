@@ -113,6 +113,8 @@ jobs:
             --content-type video/webm --no-progress
           aws --endpoint-url "$TRAINING_MEDIA_S3_ENDPOINT" s3 cp "$RUNNER_TEMP/review/$TOPIC/captions.vtt" "$target.vtt" \
             --content-type text/vtt --no-progress
+          aws --endpoint-url "$TRAINING_MEDIA_S3_ENDPOINT" s3 cp "$RUNNER_TEMP/review/$TOPIC/screenshot.png" "$target.png" \
+            --content-type image/png --no-progress
       - name: Propose publication for code review and deployment
         env:
           TRAINING_PUBLISH_TOPIC: ${{ inputs.topic }}
@@ -120,6 +122,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export TRAINING_APPROVED_GUIDE_PATH="$RUNNER_TEMP/review/$TOPIC/guide.md"
           node scripts/register-published-training.mjs
           branch="training/publish-$SOURCE_RUN-$TOPIC"
           git config user.name "training-publication[bot]"

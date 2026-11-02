@@ -31,7 +31,7 @@ Each completed topic output includes:
 1. Check recording success and confirm the video contains only disposable sample data, no private business details, login screens or credentials.
 2. Check the instructions against the actual current UI and confirm the recorded page is correct.
 3. Upload approved WebM files to authenticated durable training-media storage. Do not serve them from temporary GitHub Action artifacts or an ephemeral Render filesystem.
-4. Use the protected **Approve & Publish ERP Training Video** workflow to upload approved files to private S3-compatible storage and open a PR updating `shared/publishedTrainingMedia.json`. The app resolves video and caption streams through its authenticated backend, so no direct storage URL is exposed.
+4. Use the protected **Approve & Publish ERP Training Video** workflow to upload approved video, captions and screenshot to private S3-compatible storage and open a PR updating `shared/publishedTrainingMedia.json` with reviewed guide steps. The app resolves video and caption streams through its authenticated backend, so no direct storage URL is exposed.
 5. Verify streaming playback and role access before publishing the change. Add transcripts/captions alongside the media via your storage integration.
 6. Rerecord videos when relevant workflows or screenshots change.
 
