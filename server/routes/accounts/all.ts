@@ -303,7 +303,9 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
         // Employees are credit-normal (Cr positive); the engine's opening side
         // rule applies (a sideless employee opening is Cr).
         const { closing, opening } = engineFigures("employee", employee.id);
-        const netBalance = balStartDate || effectiveEndDate ? closing.negated() : toMoney(employee.currentBalance);
+        // The employee cache can retain the wrong sign for a debit opening.
+        // Always display the posted ledger closing, including in All Time.
+        const netBalance = closing.negated();
         const openingCr = opening.negated();
         const storedSide = employeeOpeningSides.get(employee.id) ?? "Cr";
         return {
