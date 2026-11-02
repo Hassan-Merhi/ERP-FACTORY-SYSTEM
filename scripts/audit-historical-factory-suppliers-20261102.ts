@@ -13,6 +13,7 @@ import Decimal from "decimal.js";
 import { pool } from "../server/db";
 import { factoryBusinessDateInBeirut } from "./historical-supplier-date-safety";
 import { classifyHistoricalSupplierVoucher } from "./historical-supplier-audit-classifier";
+import { previewHistoricalCostAllocation } from "./historical-supplier-cost-allocation-preview";
 
 const COMPANY = 12;
 const EXPECTED_GOODS = 38;
@@ -157,6 +158,33 @@ export async function auditHistoricalFactorySuppliers() {
     )).rows;
     const receiptMap = new Map(receipts.map((r) => [num(r.container_id), r]));
 
+    // PROVENANCE ONLY. Source costs can include supplier-average and landed charges,
+    // and cannot simply be equated to the historic import voucher face amount.
+    const mixSources = (await client.query<SqlRow>(
+      [
+        "SELECT s.container_id,COUNT(DISTINCT s.mix_batch_id)::int AS source_mix_count,",
+        "COALESCE(SUM(COALESCE(s.weight_kg,s.quantity_kg,0)),0)::text AS source_mix_weight_kg,",
+        "COALESCE(SUM(s.total_cost),0)::text AS source_mix_cost_usd",
+        "FROM factory_mix_batch_sources s JOIN factory_mix_batches m",
+        "ON m.id=s.mix_batch_id AND m.company_id=$1 AND m.deleted_at IS NULL",
+        "WHERE s.container_id=ANY($2::int[]) GROUP BY s.container_id",
+      ].join("\n"), [COMPANY, containerIds]
+    )).rows;
+    const mixSourceMap = new Map(mixSources.map((r) => [num(r.container_id), r]));
+
+    const baleLineage = (await client.query<SqlRow>(
+      [
+        "SELECT COUNT(*)::int AS factory_bale_count,",
+        "COUNT(*) FILTER (WHERE mix_batch_id IS NOT NULL)::int AS direct_mix_links,",
+        "COUNT(*) FILTER (WHERE pressing_batch_id IS NOT NULL)::int AS pressing_links",
+        "FROM factory_bales WHERE company_id=$1 AND deleted_at IS NULL",
+      ].join("\n"), [COMPANY]
+    )).rows[0];
+    const pressingLinkCoverage = (await client.query<SqlRow>(
+      "SELECT COUNT(*)::int AS n FROM factory_pressing_batches WHERE company_id=$1 AND mix_batch_id IS NOT NULL",
+      [COMPANY]
+    )).rows[0];
+
     const otherExpense = (await client.query<SqlRow>(
       [
         "SELECT v.id AS voucher_id,v.voucher_number,v.voucher_date::text AS voucher_date,",
@@ -191,6 +219,13 @@ export async function auditHistoricalFactorySuppliers() {
     )).rows;
 
     const businessDate = factoryBusinessDateInBeirut(new Date());
+    const lineageCoverage = {
+      factoryBaleCount: num(baleLineage?.factory_bale_count),
+      directlyMixLinkedBales: num(baleLineage?.direct_mix_links),
+      pressingBatchLinkedBales: num(baleLineage?.pressing_links),
+      linkedPressingBatches: num(pressingLinkCoverage?.n),
+      inventoryCutoverApplied: cutovers.some((cutover) => String(cutover.status).toUpperCase() === "APPLIED"),
+    };
     let totalGoods = money(0), totalCommissions = money(0), supplierCredit = money(0), supplierDebit = money(0);
     const vouchers = refs.map(({ id, kind, containerId, lines }) => {
       const container = containerMap.get(containerId);
@@ -208,6 +243,7 @@ export async function auditHistoricalFactorySuppliers() {
       supplierDebit = supplierDebit.plus(supplierDr);
       const raw = stockMap.get(containerId);
       const receipt = receiptMap.get(containerId);
+      const sourceMix = mixSourceMap.get(containerId);
       const other = relatedExpense.get(containerId) ?? [];
       const expectedNative = kind === "goods"
         ? money(container.total_kg).times(money(container.rate_per_kg))
@@ -224,6 +260,16 @@ export async function auditHistoricalFactorySuppliers() {
       const expectedSupplierId = kind === "goods" ? container.supplier_id : container.commission_supplier_id;
       const totalDebit = lines.reduce((sum, line) => sum.plus(money(line.debit_usd)), money(0));
       const totalCredit = lines.reduce((sum, line) => sum.plus(money(line.credit_usd)), money(0));
+      const costAllocationPreview = previewHistoricalCostAllocation({
+        kind,
+        sourceMixCount: num(sourceMix?.source_mix_count),
+        sourceMixWeightKg: String(sourceMix?.source_mix_weight_kg ?? "0"),
+        sourceMixCostUsd: String(sourceMix?.source_mix_cost_usd ?? "0"),
+        rawRemainingKg: String(raw?.remaining_kg ?? "0"),
+        rawRemainingValueUsd: num(raw?.unvalued_raw_rows) > 0 ? null : String(raw?.remaining_value_usd ?? "0"),
+        rawOverusedKg: String(raw?.overused_kg ?? "0"),
+        rawUnvaluedRows: num(raw?.unvalued_raw_rows),
+      }, lineageCoverage);
       const flags = classifyHistoricalSupplierVoucher({
         voucherDate: head.voucher_date,
         postingDate: head.recorded_at.slice(0, 10),
@@ -284,6 +330,7 @@ export async function auditHistoricalFactorySuppliers() {
           voucherNumber: x.voucher_number, accountCode: x.account_code,
           debitUsd: x.debit_usd, creditUsd: x.credit_usd,
         })),
+        costAllocationPreview,
         flags,
         proposedCorrection: null,
         reviewStatus: "NOT_PROVEN_DO_NOT_POST",
@@ -308,6 +355,12 @@ export async function auditHistoricalFactorySuppliers() {
       perpetualInventoryEvidence: {
         cutovers,
         stockJournalCount: num(stockJournals[0]?.n),
+        lineageCoverage,
+      },
+      previewGate: {
+        financialJournalPostingAllowed: false,
+        safeVerifiedOverstatementUsd: null,
+        reason: "No complete historical source-to-finished-bale or sale cost lineage and no proved historical GL capitalization.",
       },
       safeguards: [
         "Read-only inspection cannot alter existing supplier balances or accounting.",
