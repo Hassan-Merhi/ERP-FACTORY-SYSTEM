@@ -7,7 +7,7 @@
  * overlays, bale panel, setup card, progress panel and dialogs are separate
  * views in the same folder.
  */
-import { CheckCircle, Clock, Package, Save, Scale, ScanLine } from "lucide-react";
+import { CheckCircle, Clock, Container, Package, Save, Scale, ScanLine } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatNumber } from "./customerLoadingFormat";
@@ -27,20 +27,29 @@ export default function FactoryContainerLoadingScan() {
 
   return (
     <div
-      className="flex h-full min-w-0 flex-col bg-muted/10 p-3 sm:p-4 lg:p-6"
+      className="flex h-full min-w-0 flex-col bg-slate-50/70 p-3 dark:bg-[#080f1c] sm:p-4 lg:p-6"
       data-testid="factory-container-loading-page"
     >
       <ScanOverlays model={model} />
 
-      <div className="mb-4 rounded-2xl border bg-background/90 px-4 py-3 shadow-xs sm:px-5 sm:py-4">
-        <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-primary/10">
-              <ScanLine className="h-5 w-5 text-primary" />
+      <div className="relative isolate mb-4 overflow-hidden rounded-[22px] border border-blue-200/70 bg-gradient-to-r from-white via-blue-50/80 to-sky-100/70 px-4 py-4 shadow-[0_16px_40px_-32px_rgba(37,99,235,0.65)] dark:border-blue-500/30 dark:from-[#12213e] dark:via-[#102448] dark:to-[#0a2e62] sm:px-5 sm:py-5">
+        {/* Decorative freight-container artwork; no loading or scan behavior lives here. */}
+        <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 hidden w-1/3 overflow-hidden lg:block">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-50/0 via-sky-300/5 to-blue-500/10 dark:from-transparent dark:to-blue-500/20" />
+          <div
+            className="absolute -right-8 top-5 h-24 w-[85%] -skew-x-12 rounded-lg border border-blue-700/20 shadow-[0_18px_40px_rgba(0,37,100,0.25)] dark:border-sky-300/35"
+            style={{ backgroundImage: "repeating-linear-gradient(90deg, #0d3f85 0px, #1c66bb 9px, #154c92 14px, #09376d 17px)" }}
+          />
+          <div className="absolute -right-5 top-5 h-24 w-[85%] -skew-x-12 rounded-lg bg-gradient-to-t from-blue-950/30 to-sky-300/15" />
+        </div>
+        <div className="relative z-10 flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-blue-300/70 bg-gradient-to-br from-blue-500 to-indigo-700 text-white shadow-lg shadow-blue-500/20 dark:border-sky-400/35">
+              <Container className="h-6 w-6" />
             </div>
             <div className="min-w-0">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <h1 className="truncate text-lg font-semibold leading-tight sm:text-xl">
+                <h1 className="truncate text-lg font-bold tracking-tight sm:text-[22px]">
                   {model.tr("containerLoading")}
                 </h1>
                 {isResuming && orderId && (
@@ -59,12 +68,13 @@ export default function FactoryContainerLoadingScan() {
                   </Badge>
                 )}
               </div>
-              <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">{model.tr("containerLoadingSubtitle")}</p>
+              <p className="mt-1 max-w-[540px] text-xs text-slate-600 dark:text-blue-100/75 sm:text-sm">
+                {model.tr("containerLoadingSubtitle")}
+              </p>
             </div>
           </div>
-
           {orderId && (
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+            <div className="flex flex-wrap items-center gap-2 lg:mr-[17%]">
               {model.orderDetail?.proformaIdUsed && (
                 <ContainerExtraItemsDialog
                   orderId={orderId}
@@ -72,28 +82,18 @@ export default function FactoryContainerLoadingScan() {
                   status={model.orderDetail.status}
                 />
               )}
-              <div className="flex items-center gap-2 rounded-xl border bg-muted/20 px-3 py-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-background">
-                  <Package className="h-4 w-4 text-muted-foreground" />
-                </div>
+              <div className="flex items-center gap-2 rounded-xl border border-blue-200/80 bg-white/80 px-3 py-2 shadow-sm backdrop-blur-sm dark:border-blue-400/25 dark:bg-[#071632]/75">
+                <Package className="h-5 w-5 text-blue-600 dark:text-sky-400" />
                 <div>
-                  <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    {model.tr("bales")}
-                  </div>
-                  <div className="font-mono text-sm font-semibold">{model.bales.length}</div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{model.tr("bales")}</div>
+                  <div className="font-mono text-sm font-bold">{model.bales.length}</div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 rounded-xl border bg-muted/20 px-3 py-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-background">
-                  <Scale className="h-4 w-4 text-muted-foreground" />
-                </div>
+              <div className="flex items-center gap-2 rounded-xl border border-blue-200/80 bg-white/80 px-3 py-2 shadow-sm backdrop-blur-sm dark:border-blue-400/25 dark:bg-[#071632]/75">
+                <Scale className="h-5 w-5 text-blue-600 dark:text-sky-400" />
                 <div>
-                  <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    {model.tr("weight")}
-                  </div>
-                  <div className="font-mono text-sm font-semibold">
-                    {formatNumber(model.totalWeight, 2)} {model.tr("kgUnit")}
-                  </div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{model.tr("weight")}</div>
+                  <div className="font-mono text-sm font-bold">{formatNumber(model.totalWeight, 2)} {model.tr("kgUnit")}</div>
                 </div>
               </div>
             </div>
@@ -109,7 +109,7 @@ export default function FactoryContainerLoadingScan() {
           <ProformaProgressPanel model={model} />
 
           {orderId && (
-            <div className="mobile-action-bar grid grid-cols-1 gap-2 rounded-2xl border bg-background/95 p-2 shadow-xs backdrop-blur-sm sm:grid-cols-2 xl:static xl:m-0 xl:grid-cols-1 xl:bg-background/90">
+            <div className="mobile-action-bar grid grid-cols-1 gap-2 rounded-[22px] border border-blue-100 bg-white/95 p-2 shadow-sm backdrop-blur-sm dark:border-blue-500/20 dark:bg-[#101d34]/95 sm:grid-cols-2 xl:static xl:m-0 xl:grid-cols-1">
               <Button
                 variant="outline"
                 className="h-11 w-full"
@@ -120,7 +120,7 @@ export default function FactoryContainerLoadingScan() {
                 {model.tr("saveAndExit")}
               </Button>
               <Button
-                className="h-11 w-full"
+                className="h-11 w-full rounded-xl bg-gradient-to-r from-sky-500 to-blue-700 font-semibold text-white shadow-md shadow-blue-500/20 hover:from-sky-600 hover:to-blue-800"
                 onClick={() => model.setShowFinalizeDialog(true)}
                 disabled={model.bales.length === 0 || model.finalizeMutation.isPending}
                 data-testid="button-finalize-loading"
