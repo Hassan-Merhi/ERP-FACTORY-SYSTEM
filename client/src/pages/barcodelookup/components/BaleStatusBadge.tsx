@@ -24,7 +24,7 @@ export function BaleStatusBadge({ status }: { status: string }) {
   const info = map[status] || { label: status, variant: "outline" as const, icon: AlertCircle };
   const Icon = info.icon;
   return (
-    <Badge variant={info.variant} className="gap-1" data-testid="badge-bale-status">
+    <Badge variant={info.variant} className={status === "SOLD" ? "gap-1 border border-emerald-500/35 bg-emerald-500/15 font-semibold text-emerald-700 dark:text-emerald-300" : "gap-1"} data-testid="badge-bale-status">
       <Icon className="h-3 w-3" />
       {info.label}
     </Badge>
