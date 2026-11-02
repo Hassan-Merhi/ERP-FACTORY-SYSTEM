@@ -1,0 +1,133 @@
+/* Factory Shop Rentals only. All data, accounting and table actions stay in PropertyRentalPage. */
+.factory-rentals-table-shell {
+  overflow: hidden;
+  border: 1px solid #d6dcec;
+  border-radius: 18px;
+  background: linear-gradient(140deg, #fbfcff, #f5f7ff);
+  box-shadow: 0 12px 30px rgba(20, 37, 74, 0.06);
+}
+.dark .factory-rentals-table-shell {
+  border-color: #37446d;
+  background: linear-gradient(140deg, #182238, #101827);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.24);
+}
+.factory-rentals-table {
+  min-width: 1240px;
+  border-collapse: separate;
+  border-spacing: 0 4px;
+}
+.factory-rentals-table thead th {
+  padding: 13px 12px;
+  background: linear-gradient(180deg, #eeecff, #e5e9f8);
+  border-top: 1px solid #d9ddf2;
+  border-bottom: 1px solid #d9ddf2;
+  color: #323a59;
+  font-size: 12px;
+  letter-spacing: .01em;
+  white-space: nowrap;
+}
+.dark .factory-rentals-table thead th {
+  background: linear-gradient(180deg, #30365d, #242b4b);
+  color: #f3f5ff;
+  border-color: #404977;
+}
+.factory-rentals-table thead th:first-child {
+  border-radius: 10px 0 0 10px;
+  border-left: 1px solid #d9ddf2;
+}
+.factory-rentals-table thead th:last-child {
+  border-radius: 0 10px 10px 0;
+  border-right: 1px solid #d9ddf2;
+}
+.dark .factory-rentals-table thead th:first-child,
+.dark .factory-rentals-table thead th:last-child { border-color: #404977; }
+.factory-rentals-table .factory-rentals-location-cell {
+  border: 0;
+  padding: 7px 0 2px;
+}
+.factory-rentals-location-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 37px;
+  padding: 8px 14px;
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 10px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .065em;
+  text-transform: uppercase;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12);
+}
+.factory-rentals-location-count {
+  margin-left: auto;
+  opacity: .85;
+  font-size: 10px;
+  letter-spacing: .01em;
+  font-weight: 600;
+  text-transform: none;
+}
+.factory-rentals-table .factory-rentals-unit-row > td {
+  padding: 12px;
+  background: rgba(var(--factory-rentals-rgb), .035);
+  border-top: 1px solid rgba(70,88,125,.12);
+  border-bottom: 1px solid rgba(70,88,125,.12);
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+.dark .factory-rentals-table .factory-rentals-unit-row > td {
+  background: rgba(var(--factory-rentals-rgb), .095);
+  border-color: rgba(132,151,195,.14);
+}
+.factory-rentals-table .factory-rentals-unit-row:hover > td {
+  background: rgba(var(--factory-rentals-rgb), .12);
+  border-color: rgba(var(--factory-rentals-rgb), .28);
+}
+.dark .factory-rentals-table .factory-rentals-unit-row:hover > td {
+  background: rgba(var(--factory-rentals-rgb), .23);
+}
+.factory-rentals-table .factory-rentals-unit-row-selected > td,
+.dark .factory-rentals-table .factory-rentals-unit-row-selected > td {
+  background: rgba(var(--factory-rentals-rgb), .19);
+  border-color: rgba(var(--factory-rentals-rgb), .4);
+}
+.factory-rentals-table .factory-rentals-unit-row > td:first-child {
+  border-left: 1px solid rgba(70,88,125,.15);
+  border-radius: 9px 0 0 9px;
+}
+.factory-rentals-table .factory-rentals-unit-row > td:last-child {
+  border-right: 1px solid rgba(70,88,125,.15);
+  border-radius: 0 9px 9px 0;
+}
+.factory-rentals-unit-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 225px;
+  min-height: 32px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: .015em;
+  overflow-wrap: anywhere;
+}
+.dark .factory-rentals-unit-pill { filter: brightness(1.4); }
+.factory-rentals-table .factory-rentals-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.factory-rentals-table td.text-green-600 { font-weight: 700; }
+.factory-rentals-table td.text-red-600 { font-weight: 700; }
+.factory-rentals-table button:hover { background: rgba(239,68,68,.12); }
+.factory-rentals-table button:focus-visible,
+.factory-rentals-table [role="checkbox"]:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .factory-rentals-table .factory-rentals-unit-row > td { transition: none; }
+}
