@@ -370,16 +370,22 @@ export default function FactoryShippingContainers() {
             <TableHeader>
               <TableRow>
                 {colVis.orderDate && <TableHead className="text-xs w-20 min-w-[80px]">Order Date</TableHead>}
-                <TableHead className={stickyHeadBase} style={{ left: INV_LEFT, minWidth: "130px", width: "130px" }}>
-                  Invoice #
-                </TableHead>
-                <TableHead className={stickyHeadBase} style={{ left: CLI_LEFT, minWidth: "144px", width: "144px" }}>
-                  Client
-                </TableHead>
+                {colVis.invoiceNumber && (
+                  <TableHead className={cn(stickyHeadBase, "shipping-sticky")} style={{ left: INV_LEFT, minWidth: "130px", width: "130px" }}>
+                    Invoice #
+                  </TableHead>
+                )}
+                {colVis.clientName && (
+                  <TableHead className={cn(stickyHeadBase, "shipping-sticky")} style={{ left: clientLeft, minWidth: "144px", width: "144px" }}>
+                    Client
+                  </TableHead>
+                )}
                 {colVis.status && <TableHead className="text-xs w-24 min-w-[96px]">Status</TableHead>}
-                <TableHead className={stickyHeadBase} style={{ left: CTR_LEFT, minWidth: "120px", width: "120px" }}>
-                  Container #
-                </TableHead>
+                {colVis.containerNumber && (
+                  <TableHead className={cn(stickyHeadBase, "shipping-sticky")} style={{ left: containerLeft, minWidth: "120px", width: "120px" }}>
+                    Container #
+                  </TableHead>
+                )}
                 {colVis.destination && <TableHead className="text-xs min-w-[120px]">Destination</TableHead>}
                 {colVis.eta && <TableHead className="text-xs min-w-[100px]">ETA</TableHead>}
                 {colVis.arrived && <TableHead className="text-xs min-w-[90px]">Arrived</TableHead>}
@@ -415,17 +421,22 @@ export default function FactoryShippingContainers() {
                     )}
 
                     {/* Sticky: Invoice # */}
-                    <TableCell className={stickyCellBase} style={{ left: INV_LEFT }}>
-                      <span className="font-mono font-medium text-xs whitespace-nowrap">{r.invoiceNumber}</span>
-                    </TableCell>
+                    {colVis.invoiceNumber && (
+                      <TableCell className={cn(stickyCellBase, "shipping-sticky")} style={{ left: INV_LEFT }}>
+                        <span className="font-mono font-medium text-xs whitespace-nowrap">{r.invoiceNumber}</span>
+                      </TableCell>
+                    )}
 
                     {/* Sticky: Client */}
-                    <TableCell
-                      className={cn(stickyCellBase, "font-medium text-xs max-w-[144px] truncate")}
-                      style={{ left: CLI_LEFT }}
-                    >
-                      {r.clientName || "—"}
-                    </TableCell>
+                    {colVis.clientName && (
+                      <TableCell
+                        className={cn(stickyCellBase, "shipping-sticky font-medium text-xs max-w-[144px] truncate")}
+                        style={{ left: clientLeft }}
+                        title={r.clientName || ""}
+                      >
+                        {r.clientName || "—"}
+                      </TableCell>
+                    )}
 
                     {colVis.status && (
                       <TableCell>
@@ -442,7 +453,7 @@ export default function FactoryShippingContainers() {
                           }}
                           data-testid={`button-status-${r.id}`}
                         >
-                          <Badge className={cn("text-xs whitespace-nowrap cursor-pointer", statusColor(r.status))}>
+                          <Badge className={cn("shipping-status whitespace-nowrap cursor-pointer", statusColor(r.status))}>
                             {statusLabel(r.status)}
                           </Badge>
                         </button>
@@ -450,15 +461,17 @@ export default function FactoryShippingContainers() {
                     )}
 
                     {/* Sticky: Container # */}
-                    <TableCell className={stickyCellBase} style={{ left: CTR_LEFT }}>
-                      <EditableCellInput
-                        value={r.containerNumber || ""}
-                        placeholder="Enter #"
-                        onSave={(v) => syncOrderMutation.mutate({ id: r.id, patch: { containerNumber: v || null } })}
-                        testId={`cell-container-${r.id}`}
-                        saving={syncOrderMutation.isPending}
-                      />
-                    </TableCell>
+                    {colVis.containerNumber && (
+                      <TableCell className={cn(stickyCellBase, "shipping-sticky")} style={{ left: containerLeft }}>
+                        <EditableCellInput
+                          value={r.containerNumber || ""}
+                          placeholder="Enter #"
+                          onSave={(v) => syncOrderMutation.mutate({ id: r.id, patch: { containerNumber: v || null } })}
+                          testId={`cell-container-${r.id}`}
+                          saving={syncOrderMutation.isPending}
+                        />
+                      </TableCell>
+                    )}
 
                     {colVis.destination && (
                       <TableCell>
@@ -507,11 +520,11 @@ export default function FactoryShippingContainers() {
                     {colVis.finalized && (
                       <TableCell className="whitespace-nowrap">
                         {r.finalizedDate ? (
-                          <span className="text-green-700 dark:text-green-400 font-medium text-xs">
-                            {fmtDate(r.finalizedDate)}
+                          <span className="shipping-date shipping-date-complete">
+                            <CheckCircle2 className="mr-1 h-3 w-3" /> {fmtDate(r.finalizedDate)}
                           </span>
                         ) : (
-                          <span className="text-amber-600 dark:text-amber-400 italic text-xs">Not finalized</span>
+                          <span className="shipping-date shipping-date-pending">Not finalized</span>
                         )}
                       </TableCell>
                     )}
@@ -536,7 +549,7 @@ export default function FactoryShippingContainers() {
                     {colVis.containerCost && (
                       <TableCell className="text-xs whitespace-nowrap font-medium">
                         {r.grandTotal ? (
-                          <span className="text-foreground">${Number(r.grandTotal).toLocaleString()}</span>
+                          <span className="shipping-cost">${Number(r.grandTotal).toLocaleString()}</span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
