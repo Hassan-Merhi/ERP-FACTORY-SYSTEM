@@ -5,6 +5,7 @@
  * though it has no factory_supplier_id or supplier_id voucher-entry lines.
  */
 import Decimal from "decimal.js";
+import { inspectHistoricalCorrectionBalanceProtection } from "./historical-supplier-balance-freeze";
 
 export interface Charge64CreditorImpactInput {
   creditorAccountCode: string;
@@ -68,6 +69,26 @@ export function previewCharge64CreditorImpact(input: Charge64CreditorImpactInput
   blockers.push("PAYMENT_AND_SETTLEMENT_EVIDENCE_NOT_SIGNED_OFF");
   blockers.push("FINANCIAL_POSTING_REQUIRES_ACCOUNTING_APPROVAL");
   const clearingAfter = money(input.factoryClearingPostedDebitUsd).minus(amount);
+  // This is the *actual* balancing counterpart required to remove voucher
+  // #9309. WALMDACLE would be debited, changing a protected creditor balance.
+  // Never replace it with an invented asset, suspense, or equity account.
+  const supplierBalanceFreeze = inspectHistoricalCorrectionBalanceProtection([
+    {
+      accountKind: "ledger",
+      accountCode: input.creditorAccountCode,
+      accountType: input.creditorAccountType,
+      debitUsd: fmt(amount),
+      creditUsd: "0.00",
+    },
+    {
+      accountKind: "ledger",
+      accountCode: input.factoryClearingAccountCode,
+      accountType: input.factoryClearingAccountType,
+      debitUsd: "0.00",
+      creditUsd: fmt(amount),
+    },
+  ]);
+  blockers.push(...supplierBalanceFreeze.issues);
   return {
     status: "REVIEW_REQUIRED_NO_POSTING",
     source: { containerId: 83, chargeId: 64,
@@ -97,6 +118,10 @@ export function previewCharge64CreditorImpact(input: Charge64CreditorImpactInput
     reviewedFiscalCloseCount: input.fiscalReviewedCloseCount,
     registeredSupplierPartyLinesChanged: false,
     namedCreditorLedgerWouldChange: true,
+    supplierBalanceFreeze,
+    supplierBalanceProtectionRequired: true,
+    allowedSupplierOrCreditorBalanceDeltaUsd: "0.00",
+    neutralCorrectionProven: false,
     stockOrContainerCostChanged: false,
     proposedJournal: null,
     approvedPeriod: null,
