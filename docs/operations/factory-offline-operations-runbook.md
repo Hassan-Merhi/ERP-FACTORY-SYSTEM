@@ -34,6 +34,8 @@ an open cloud epoch.
 | Factory cash-box Payment / Receipt (USD; one Cash account against expense or income accounts) | yes | `vouchers` (Phase 4/8) | `server/edge/phase8OperatorApply.ts` — account types re-checked in the cloud; banks, payables, receivables, stock and employees refused |
 | Pressing scan confirmation (physical bale press) | yes, existing machine assignments only | `pressing` (Phase 9) | `server/edge/phase9OperatorApply.ts apply pressing` |
 | Stock movement: inventory quick adjust (add / subtract at a location) | yes, existing items and locations | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — replayed as a delta; below zero is held for Admin/Developer approve/reject |
+| New stock transfer (`POST /api/stock-transfers`, create-from-scratch form; the existing-voucher form is refused) | yes, existing items and locations | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — replayed through the same transfer code on the LAN request id, with a cloud voucher number; a source the cloud cannot cover is held for Admin/Developer approve/reject |
+| Stock-item master edits: bulk price update, bulk category, bulk rename, bulk unit fix, the update-by-code imports (names, categories, opening balances, barcodes), location prices and single-item edits | yes, existing items only; whitelisted fields (name, unit, selling price, category, group, active, opening balances, location prices, new barcodes) | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — each field applied only while the cloud value still equals what the LAN saw; a field the cloud changed meanwhile is held for Admin/Developer approve (LAN value wins) or reject; a re-coded or missing item, a missing category/group/location or a barcode another item holds is reject-only |
 | POS sale — cash, bank or credit; USD or another currency at the cashier's entered rate (non-supplier-partner company) | yes, numbered `LAN-<site>-000123` | `pos` (Phase 9) | `server/edge/phase9OperatorApply.ts apply pos` — replayed through the sale service on its `clientSaleId`; keeps the offline price; below-zero stock or a changed till account is held for Admin/Developer approve/reject |
 | Supplier receiving: container offload against its existing purchase orders, and offload edits, with duties, charges, cost corrections and agent lines | yes | `receiving` (Phase 9) | `server/edge/phase9OperatorApply.ts apply receiving` — same offload lifecycle on the receipt's transaction; cloud prices apply; changed order quantities are held for Admin/Developer approve/reject |
 | File upload (Files page), up to 10 MB | yes | `attachments` (Phase 9) + signed file upload | `server/edge/phase9OperatorApply.ts apply attachments` — the record syncs first; the relay then uploads the bytes to `/api/edge/sync/files/stage`, accepted only if their SHA-256 matches a staged record; the file is created in the cloud once its bytes arrive; a missing folder is held for approve/reject |
@@ -42,7 +44,7 @@ an open cloud epoch.
 | POS sale cancellation (`DELETE /api/vouchers/:id`, sales vouchers only, Admin) | yes | `pos` (same stream as the sale) | replayed through the same delete code; the operator tool refreshes the intercompany POS mirror for the date afterwards; a missing or already-cancelled sale is reject-only |
 | Login, logout, company switch | yes (session only) | none | n/a |
 | All reads covered by prepared offline reads | yes | n/a | n/a |
-| Everything else (1,164 write routes) | **refused** with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION` | none | n/a |
+| Everything else (1,153 write routes) | **refused** with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION` | none | n/a |
 
 `node scripts/edge/audit-phase9-write-coverage.mjs` prints the exact current
 inventory and fails if any route becomes writable on the LAN without a reviewed
@@ -57,12 +59,14 @@ conflict detection, and a PostgreSQL reconciliation test. Enabling a route
 without all of that would let the factory record transactions that cannot be
 reconciled safely, which is worse than refusing them.
 
-- **Stock transfers, imports, bulk stock edits, bale lifecycle, production
-  finalisation:** they mutate quantities and perpetual-inventory journals that
-  the cloud may also have changed before the outage was detected. Quick
-  adjustments now replay as deltas with a below-zero hold; the other stock
-  writes still need the same treatment (their own capture, delta replay and
-  drill) before they are enabled.
+- **Creating, deleting, merging or re-coding stock items; Excel transfer
+  imports, inventory imports, transfer edits/approvals/revisions; bale
+  lifecycle, production finalisation:** item ids and codes are how every
+  other offline record (sales, transfers, adjustments) finds its item in the
+  cloud, so a new LAN item id could not be matched; the transfer workflow
+  edits and the Excel imports go through separate code that has no replay
+  handler yet. Quick adjustments, new transfers and master edits of existing
+  items are offline (above).
 - **Deletes of non-sales vouchers and payment edits:** each posts
   money and stock together through the central posting engine with
   multi-currency, tax and numbering rules. Payment/receipt edits and deletes
@@ -91,6 +95,11 @@ owner's staging cloud and spare factory server, and gets owner sign-off.
 | Payments | Factory cash box only, USD or the last synced rate. No bank transfers and no supplier payments offline. | Held for review if the cash account changed or was closed in the cloud. |
 | Supplier receiving | Only against purchase orders that already exist; quantities only, no price changes. | The price is applied by the cloud when the receipt syncs; a receipt against a changed or closed order is held. |
 | Attachments | Up to 10 MB per file, kept on the factory server; the record syncs first, then the file, and each upload is checked for completeness (hash). | A file whose hash does not match is rejected and re-sent. |
+
+Owner decision 2026-11-02 extended these: offline POS takes credit, bank and
+non-USD sales at the rate the cashier enters, plus returns and cancellations;
+supplier, customer and bank payments; receiving edits with duties and charges;
+and stock transfers and stock-item bulk edits/imports (the rules in section 2).
 
 Conflict reviewers: users with the **Admin** or **Developer** role. Held
 items are listed in the operator status panel and decided with the audited

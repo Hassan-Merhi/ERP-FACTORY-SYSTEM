@@ -56,6 +56,17 @@ function canonical(type: string, value: unknown): string | null {
   return text === "" ? null : text;
 }
 
+function sameLoose(a: unknown, b: unknown): boolean {
+  const left = a === null || a === undefined ? "" : String(a);
+  const right = b === null || b === undefined ? "" : String(b);
+  if (left === right) return true;
+  try {
+    return left !== "" && right !== "" && new Decimal(left).equals(new Decimal(right));
+  } catch {
+    return false;
+  }
+}
+
 /** Update an item's fields; on the LAN only whitelisted fields, recorded before -> after. */
 export async function updateStockItemFieldsTx(
   tx: DbTransaction,
@@ -68,12 +79,24 @@ export async function updateStockItemFieldsTx(
     const [updated] = await tx.update(stockItems).set(updates).where(eq(stockItems.id, stockItemId)).returning();
     return updated;
   }
-  const refused = keys.filter((key) => !Object.prototype.hasOwnProperty.call(ITEM_FIELDS, key));
-  if (refused.length) throw new StockItemEditCloudOnlyError(refused);
   const [before] = await tx.select().from(stockItems).where(eq(stockItems.id, stockItemId)).for("update");
   if (!before) return undefined;
-  const [after] = await tx.update(stockItems).set(updates).where(eq(stockItems.id, stockItemId)).returning();
-  for (const field of keys) {
+  // A form that re-sends an unchanged cloud-only field (its code, grade...) is
+  // fine; changing one is refused.
+  const refused = keys.filter(
+    (key) =>
+      !Object.prototype.hasOwnProperty.call(ITEM_FIELDS, key) &&
+      !sameLoose(before[key as keyof typeof before], updates[key as keyof InsertStockItem])
+  );
+  if (refused.length) throw new StockItemEditCloudOnlyError(refused);
+  const allowed = Object.fromEntries(
+    keys
+      .filter((key) => Object.prototype.hasOwnProperty.call(ITEM_FIELDS, key))
+      .map((key) => [key, updates[key as keyof InsertStockItem]])
+  ) as Partial<InsertStockItem>;
+  if (!Object.keys(allowed).length) return before;
+  const [after] = await tx.update(stockItems).set(allowed).where(eq(stockItems.id, stockItemId)).returning();
+  for (const field of Object.keys(allowed)) {
     const type = ITEM_FIELDS[field];
     const from = canonical(type, before[field as keyof typeof before]);
     const to = canonical(type, after[field as keyof typeof after]);

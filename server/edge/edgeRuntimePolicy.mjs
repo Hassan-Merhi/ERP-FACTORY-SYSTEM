@@ -117,6 +117,19 @@ export const PHASE9_POS_SALE_ROUTE = "POST /api/pos/sales";
 export const PHASE9_ATTACHMENT_UPLOAD_ROUTE = "POST /api/files/upload";
 export const PHASE9_PAYMENT_RECEIPT_ROUTE = "POST /api/vouchers/payment-receipt";
 export const PHASE9_STOCK_TRANSFER_ROUTE = "POST /api/stock-transfers";
+// Stock-item master edits (owner policy 2026-11-02): bulk edits and update-by-code imports.
+export const PHASE9_STOCK_ITEM_EDIT_STATIC_ROUTES = Object.freeze([
+  "POST /api/stock-items/bulk-update-prices",
+  "POST /api/stock-items/bulk-assign-category",
+  "POST /api/stock-items/bulk-rename",
+  "POST /api/stock-items/bulk-update-uom",
+  "POST /api/stock-items/update-categories",
+  "POST /api/stock-items/update-names-by-code",
+  "POST /api/stock-items/import-barcodes",
+  "POST /api/stock-items/import-opening-balances",
+]);
+export const PHASE9_STOCK_ITEM_PATH = /^\/api\/stock-items\/(?:[1-9][0-9]{0,9}|:id)$/;
+export const PHASE9_STOCK_ITEM_LOCATION_PRICES_PATH = /^\/api\/stock-items\/(?:[1-9][0-9]{0,9}|:id)\/location-prices$/;
 // A numeric container id, or the manifest template ":id" (which the route itself rejects as invalid).
 // POS sale edits (returns/corrections): PUT is canonical, PATCH the alias.
 export const PHASE9_POS_SALE_EDIT_PATH = /^\/api\/vouchers\/(?:[1-9][0-9]{0,9}|:id)\/sales$/;
@@ -148,6 +161,9 @@ const LAN_PRIMARY_CAPTURE_ALLOWLIST = new Set([
   // Phase 9 (owner policy 2026-11-02): new stock transfers, replayed through
   // the same transfer code on the LAN request id; a cloud shortfall is held.
   PHASE9_STOCK_TRANSFER_ROUTE,
+  // Phase 9 (owner policy 2026-11-02): stock-item master edits of existing
+  // items, replayed field by field; a field the cloud changed is held.
+  ...PHASE9_STOCK_ITEM_EDIT_STATIC_ROUTES,
 ]);
 
 /** Approved parameterised captures: POST /api/containers/<id>/offload (quantity receipts). */
@@ -163,6 +179,10 @@ export function phase9ApprovedCaptureRoute(method, path) {
     return `${verb} /api/vouchers/:id/sales`;
   }
   if (verb === "DELETE" && PHASE9_VOUCHER_DELETE_PATH.test(path)) return "DELETE /api/vouchers/:id";
+  if (verb === "PATCH" && PHASE9_STOCK_ITEM_PATH.test(path)) return "PATCH /api/stock-items/:id";
+  if (verb === "POST" && PHASE9_STOCK_ITEM_LOCATION_PRICES_PATH.test(path)) {
+    return "POST /api/stock-items/:id/location-prices";
+  }
   return null;
 }
 

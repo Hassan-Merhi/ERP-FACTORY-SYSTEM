@@ -156,7 +156,7 @@ export function registerStockTransferCreateRoutes(app: Express) {
               .json({ message: `Item ${item.stockItemId}: Source and destination cannot be the same` });
           }
         }
-        // Create Stock Transfer voucher, items, and update inventory atomically
+        // Voucher, items and the journalled inventory movement are created atomically by createStockTransferTx.
         const effectiveDate = voucherDate || getClientDate(req);
 
         // A transfer moves stock the moment it commits, so a double click or a

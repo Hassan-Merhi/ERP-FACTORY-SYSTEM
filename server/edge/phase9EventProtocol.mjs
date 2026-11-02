@@ -10,6 +10,11 @@
  * must be byte-for-byte the canonical envelope that the LAN capture produced.
  * Registering a kind is the review gate for a new offline write workflow.
  */
+import {
+  PHASE9_STOCK_ITEM_CHANGED_CONFLICT,
+  PHASE9_STOCK_ITEM_EDIT_KIND,
+  phase9StockItemEditEnvelope,
+} from "./phase9StockItemEditEnvelope.mjs";
 import { canonicalEvidence, hashEvidence } from "./edgeSyncStageProtocol.mjs";
 import { phase9PressingEnvelope } from "./phase9PressingEnvelope.mjs";
 import {
@@ -102,6 +107,19 @@ function stockTransferPayload(payload) {
   let rebuilt;
   try {
     rebuilt = phase9StockTransferEnvelope(evidence);
+  } catch {
+    return null;
+  }
+  return stableEqual(rebuilt, payload) ? rebuilt : null;
+}
+
+function stockItemEditPayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (payload.kind !== PHASE9_STOCK_ITEM_EDIT_KIND) return null;
+  const { kind: _kind, ...evidence } = payload;
+  let rebuilt;
+  try {
+    rebuilt = phase9StockItemEditEnvelope(evidence);
   } catch {
     return null;
   }
@@ -212,6 +230,11 @@ const STREAMS = Object.freeze({
         parse: stockTransferPayload,
         localRef: (payload) => payload.localTransferId,
         overridable: Object.freeze([PHASE9_STOCK_NEGATIVE_CONFLICT]),
+      }),
+      [PHASE9_STOCK_ITEM_EDIT_KIND]: Object.freeze({
+        parse: stockItemEditPayload,
+        localRef: (payload) => payload.localEditId,
+        overridable: Object.freeze([PHASE9_STOCK_ITEM_CHANGED_CONFLICT]),
       }),
     }),
   }),

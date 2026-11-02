@@ -14,6 +14,11 @@ import { logAudit } from "../../_helpers";
 import { stockItems, insertStockItemSchema } from "@shared/schema";
 import { eq, and, or, asc, sql, isNull, ilike, type SQL } from "drizzle-orm";
 import { toMoney } from "../../../lib/money";
+import {
+  finishStockItemEditCaptureTx,
+  stockItemEditRecorder,
+  updateStockItemFieldsTx,
+} from "../../../services/inventory/stockItemEditCapture";
 
 export function registerStockItemRoutes(app: Express) {
   // Stock Items
@@ -140,6 +145,7 @@ export function registerStockItemRoutes(app: Express) {
       const changed: Array<{ id: number; code: string; oldName: string; newName: string }> = [];
       let unchanged = 0;
 
+      const recorder = stockItemEditRecorder("POST /api/stock-items/update-names-by-code");
       await db.transaction(async (tx) => {
         for (const row of rows) {
           const item = itemByCode.get(row.code.toLowerCase());
@@ -152,10 +158,17 @@ export function registerStockItemRoutes(app: Express) {
             continue;
           }
 
-          await tx
-            .update(stockItems)
-            .set({ name: row.newName })
-            .where(and(eq(stockItems.id, item.id), eq(stockItems.companyId, companyId), isNull(stockItems.deletedAt)));
+          if (recorder.active) {
+            // Factory LAN server: recorded for the cloud (owner decision 2026-11-02).
+            await updateStockItemFieldsTx(tx, recorder, item.id, { name: row.newName });
+          } else {
+            await tx
+              .update(stockItems)
+              .set({ name: row.newName })
+              .where(
+                and(eq(stockItems.id, item.id), eq(stockItems.companyId, companyId), isNull(stockItems.deletedAt))
+              );
+          }
           changed.push({ id: item.id, code: item.code, oldName: item.name, newName: row.newName });
           // Phase 21 (B): each rename's audit row commits with the renames.
           await logAudit(
@@ -172,6 +185,7 @@ export function registerStockItemRoutes(app: Express) {
             tx
           );
         }
+        await finishStockItemEditCaptureTx(tx, req, recorder);
       });
 
       return res.json({

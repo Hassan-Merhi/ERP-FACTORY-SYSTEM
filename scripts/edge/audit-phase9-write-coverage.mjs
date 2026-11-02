@@ -24,6 +24,13 @@ const SAFE_SESSION_WRITES = new Set([
   "POST /api/auth/login", "POST /api/auth/logout",
   "POST /api/auth/set-company", "POST /api/csp-report",
 ]);
+const STOCK_ITEM_EDIT = Object.freeze({
+  policy: "stock.item-edit.v1",
+  limitations:
+    "Existing items only, whitelisted fields (name, unit, prices, category, group, active, opening balances, " +
+    "location prices, new barcodes); a field the cloud changed meanwhile is held for an Admin/Developer " +
+    "decision; creating, deleting, merging and re-coding items stay cloud-only",
+});
 const SUPPORTED = new Map([
   ["POST /api/vouchers/with-entries", {
     policy: "voucher.with-entries.v1",
@@ -47,6 +54,16 @@ const SUPPORTED = new Map([
       "New transfers only (the existing-voucher form is refused on the LAN); replayed on the LAN request id " +
       "with a cloud voucher number; a cloud shortfall is held for an Admin/Developer decision",
   }],
+  ["POST /api/stock-items/bulk-update-prices", STOCK_ITEM_EDIT],
+  ["POST /api/stock-items/bulk-assign-category", STOCK_ITEM_EDIT],
+  ["POST /api/stock-items/bulk-rename", STOCK_ITEM_EDIT],
+  ["POST /api/stock-items/bulk-update-uom", STOCK_ITEM_EDIT],
+  ["POST /api/stock-items/update-categories", STOCK_ITEM_EDIT],
+  ["POST /api/stock-items/update-names-by-code", STOCK_ITEM_EDIT],
+  ["POST /api/stock-items/import-barcodes", STOCK_ITEM_EDIT],
+  ["POST /api/stock-items/import-opening-balances", STOCK_ITEM_EDIT],
+  ["POST /api/stock-items/:id/location-prices", STOCK_ITEM_EDIT],
+  ["PATCH /api/stock-items/:id", STOCK_ITEM_EDIT],
   ["POST /api/pos/sales", {
     policy: "pos.sale.v1",
     limitations:

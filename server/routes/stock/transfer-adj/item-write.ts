@@ -15,6 +15,12 @@ import { sql } from "drizzle-orm";
 import type { RawQueryRow } from "../../../db";
 import type { InsertStockItem } from "@shared/schema";
 import { toFiniteNumber } from "@shared/typeGuards";
+import {
+  finishStockItemEditCaptureTx,
+  sendStockItemEditRefusal,
+  stockItemEditRecorder,
+  updateStockItemFieldsTx,
+} from "../../../services/inventory/stockItemEditCapture";
 
 export function registerStockItemWriteRoutes(app: Express) {
   // Update stock item
@@ -107,8 +113,14 @@ export function registerStockItemWriteRoutes(app: Express) {
       }
 
       // Phase 21 (B): the write and its audit commit together.
+      // Factory LAN server: whitelisted fields only, recorded for the cloud.
+      const recorder = stockItemEditRecorder("PATCH /api/stock-items/:id");
       const updated = await db.transaction(async (tx) => {
-        const written = await storage.updateStockItem(stockItemId, updates, tx);
+        const written = recorder.active
+          ? await updateStockItemFieldsTx(tx, recorder, stockItemId, updates)
+          : await storage.updateStockItem(stockItemId, updates, tx);
+        if (!written) throw new Error("Stock item not found");
+        await finishStockItemEditCaptureTx(tx, req, recorder);
         const _stockChanges: Record<string, { old?: unknown; new?: unknown }> = {};
         for (const _f of ["name", "code", "uom", "barcode", "sellingPrice", "active"] as const) {
           if (
@@ -138,6 +150,7 @@ export function registerStockItemWriteRoutes(app: Express) {
       });
       res.json(updated);
     } catch (error: unknown) {
+      if (sendStockItemEditRefusal(res, error)) return;
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });

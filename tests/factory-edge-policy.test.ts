@@ -127,6 +127,10 @@ describe("factory LAN edge deployment policy", () => {
         "/api/containers/42/offload",
         "/api/files/upload",
         "/api/vouchers/payment-receipt",
+        "/api/stock-transfers",
+        "/api/stock-items/bulk-update-prices",
+        "/api/stock-items/import-barcodes",
+        "/api/stock-items/42/location-prices",
       ]) {
         expect(edgeBlocksWrite(config, "POST", approved)).toBe(mode === "read-only");
         // Offload edits (PATCH) are approved too; every other verb stays blocked.
@@ -145,6 +149,11 @@ describe("factory LAN edge deployment policy", () => {
       // POS sale cancellation: DELETE of a voucher (the route itself refuses non-sales).
       expect(edgeBlocksWrite(config, "DELETE", "/api/vouchers/42")).toBe(mode === "read-only");
       expect(edgeBlocksWrite(config, "PUT", "/api/vouchers/42")).toBe(true);
+      // Single stock item edit: PATCH only (create, delete and merge stay cloud-only).
+      expect(edgeBlocksWrite(config, "PATCH", "/api/stock-items/42")).toBe(mode === "read-only");
+      for (const verb of ["POST", "PUT", "DELETE"]) {
+        expect(edgeBlocksWrite(config, verb, "/api/stock-items/42")).toBe(true);
+      }
       for (const path of [
         "/api/factory/pressing-machines/void",
         "/api/pos/retail/sales",
@@ -154,6 +163,12 @@ describe("factory LAN edge deployment policy", () => {
         "/api/attachments",
         "/api/files/42",
         "/api/payments",
+        "/api/stock-items",
+        "/api/stock-items/import",
+        "/api/stock-items/bulk-delete",
+        "/api/stock-items/42/merge",
+        "/api/stock-transfers/42",
+        "/api/stock-transfer-import/import",
       ]) {
         for (const verb of ["POST", "PUT", "PATCH", "DELETE"]) {
           expect(edgeBlocksWrite(config, verb, path)).toBe(true);

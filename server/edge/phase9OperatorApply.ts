@@ -31,6 +31,8 @@ import { isPhase9EventStream } from "./phase9EventProtocol.mjs";
 import { phase9PressingApplyHandler } from "./phase9PressingApply";
 import { phase9StockApplyHandler } from "./phase9StockApply";
 import { phase9StockTransferApplyHandler } from "./phase9StockTransferApply";
+import { phase9StockItemEditApplyHandler } from "./phase9StockItemEditApply";
+import { PHASE9_STOCK_ITEM_EDIT_KIND } from "./phase9StockItemEditEnvelope.mjs";
 import { phase9PosSaleApplyHandler } from "./phase9PosSaleApply";
 import {
   PHASE9_POS_SALE_CANCEL_KIND,
@@ -61,6 +63,7 @@ export const PHASE9_HANDLERS = Object.freeze({
   "pressing.confirmation.v1": phase9PressingApplyHandler,
   [PHASE9_STOCK_ADJUST_KIND]: phase9StockApplyHandler,
   [PHASE9_STOCK_TRANSFER_KIND]: phase9StockTransferApplyHandler,
+  [PHASE9_STOCK_ITEM_EDIT_KIND]: phase9StockItemEditApplyHandler,
   [PHASE9_POS_SALE_KIND]: phase9PosSaleApplyHandler,
   [PHASE9_POS_SALE_EDIT_KIND]: phase9PosSaleEditApplyHandler,
   [PHASE9_POS_SALE_CANCEL_KIND]: phase9PosSaleCancelApplyHandler,
