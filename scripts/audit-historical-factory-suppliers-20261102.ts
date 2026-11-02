@@ -15,6 +15,7 @@ import { factoryBusinessDateInBeirut } from "./historical-supplier-date-safety";
 import { classifyHistoricalSupplierVoucher } from "./historical-supplier-audit-classifier";
 import { previewHistoricalCostAllocation } from "./historical-supplier-cost-allocation-preview";
 import { inspectFactoryAccountType, type FactoryAccountAuditRow } from "./historical-supplier-ledger-classification";
+import { classifyFreightOffsetEvidence } from "./historical-supplier-freight-offset-review";
 
 const COMPANY = 12;
 const EXPECTED_GOODS = 38;
@@ -260,6 +261,45 @@ export async function auditHistoricalFactorySuppliers() {
     )).rows;
     const accountClassificationAudit = accountRows.map(inspectFactoryAccountType);
 
+    // Container-specific active freight journals, not amount-only duplicate
+    // detection. Exact FREIGHT offsets indicate paired GL legs, NOT a second
+    // expense or permission to debit inventory.
+    const freightRows = (await client.query<SqlRow>(
+      [
+        "SELECT substring(v.voucher_number FROM '^FACTORY-FREIGHT-([0-9]+)')::int AS container_id,",
+        "COUNT(DISTINCT v.id)::int AS freight_voucher_count,",
+        "COALESCE(SUM(CASE WHEN la.code='FREIGHT' THEN ve.debit_amount ELSE 0 END),0)::text AS freight_dr,",
+        "COALESCE(SUM(CASE WHEN la.code='FREIGHT' THEN ve.credit_amount ELSE 0 END),0)::text AS freight_cr,",
+        "COALESCE(SUM(CASE WHEN la.code='FACTORY_CHARGES_PAYABLE' THEN ve.debit_amount ELSE 0 END),0)::text AS clearing_dr,",
+        "STRING_AGG(DISTINCT COALESCE(la.code,'(nonledger)'),', ' ORDER BY COALESCE(la.code,'(nonledger)')) AS source_account_codes",
+        "FROM vouchers v JOIN voucher_entries ve ON ve.voucher_id=v.id",
+        "LEFT JOIN ledger_accounts la ON la.id=ve.ledger_account_id",
+        "WHERE v.company_id=$1 AND v.deleted_at IS NULL AND COALESCE(v.optional,false)=false",
+        "AND v.voucher_number ~ '^FACTORY-FREIGHT-[0-9]+(-|$)'",
+        "AND substring(v.voucher_number FROM '^FACTORY-FREIGHT-([0-9]+)')::int=ANY($2::int[])",
+        "GROUP BY 1 ORDER BY 1",
+      ].join("\n"), [COMPANY, containerIds]
+    )).rows;
+    const freightByContainer = new Map(freightRows.map((row) => [num(row.container_id), row]));
+
+    // A second FACTORY-IMPORT voucher would merit inspection, but its
+    // absence does not prove other sources have not already expensed the goods.
+    const additionalImportRows = (await client.query<SqlRow>(
+      [
+        "SELECT substring(v.voucher_number FROM '^FACTORY-IMPORT-([0-9]+)')::int AS container_id,",
+        "COUNT(DISTINCT v.id)::int AS extra_vouchers,",
+        "COALESCE(SUM(CASE WHEN la.code='FACTORY_IMPORT_COST' THEN ve.debit_amount ELSE 0 END),0)::text AS extra_expense_usd",
+        "FROM vouchers v JOIN voucher_entries ve ON ve.voucher_id=v.id",
+        "LEFT JOIN ledger_accounts la ON la.id=ve.ledger_account_id",
+        "WHERE v.company_id=$1 AND v.deleted_at IS NULL AND COALESCE(v.optional,false)=false",
+        "AND v.id <> ALL($2::int[]) AND v.voucher_number ~ '^FACTORY-IMPORT-[0-9]+(-|$)'",
+        "AND substring(v.voucher_number FROM '^FACTORY-IMPORT-([0-9]+)')::int=ANY($3::int[])",
+        "GROUP BY 1",
+      ].join("\n"), [COMPANY, voucherIds, containerIds]
+    )).rows;
+    const additionalImportByContainer = new Map(additionalImportRows.map((row) => [num(row.container_id), row]));
+
+
     // Pair the factory-charge account's entries with their original ledger
     // counterparties, to prevent treating a debit balance as a proved expense
     // error. An unrecognized/nonledger counterparty remains explicit.
@@ -328,6 +368,18 @@ export async function auditHistoricalFactorySuppliers() {
       const raw = stockMap.get(containerId);
       const receipt = receiptMap.get(containerId);
       const sourceMix = kind === "goods" ? mixSourceMap.get(containerId) : undefined;
+      const freight = kind === "goods" ? freightByContainer.get(containerId) : undefined;
+      const additionalImport = kind === "goods" ? additionalImportByContainer.get(containerId) : undefined;
+      const freightOffsetReview = kind === "goods" ? classifyFreightOffsetEvidence({
+        containerId,
+        freightVoucherCount: num(freight?.freight_voucher_count),
+        freightSourceAccountCodes: freight?.source_account_codes == null ? undefined : String(freight.source_account_codes),
+        freightDebitUsd: String(freight?.freight_dr ?? "0"),
+        freightCreditUsd: String(freight?.freight_cr ?? "0"),
+        chargeClearingDebitUsd: String(freight?.clearing_dr ?? "0"),
+        duplicateImportVoucherCount: num(additionalImport?.extra_vouchers),
+        duplicateImportExpenseUsd: String(additionalImport?.extra_expense_usd ?? "0"),
+      }) : null;
       const other = relatedExpense.get(containerId) ?? [];
       const expectedNative = kind === "goods"
         ? money(container.total_kg).times(money(container.rate_per_kg))
@@ -415,6 +467,7 @@ export async function auditHistoricalFactorySuppliers() {
           debitUsd: x.debit_usd, creditUsd: x.credit_usd,
         })),
         costAllocationPreview,
+        freightOffsetReview,
         flags,
         proposedCorrection: null,
         reviewStatus: "NOT_PROVEN_DO_NOT_POST",
@@ -470,6 +523,13 @@ export async function auditHistoricalFactorySuppliers() {
         posBaleLinkCount: num(supplementalLineage?.pos_bale_link_count),
         provesMixToBaleLineage: false,
         warning: "An alternative bale identity without a verified mix/source link cannot support sale COGS attribution.",
+      },
+      freightSourceReview: {
+        checkedActiveFreightSourceVouchers: freightRows.reduce((sum,row) => sum + num(row.freight_voucher_count), 0),
+        goodsContainersWithFreightEntries: freightRows.length,
+        goodsContainersWithOtherImportVouchers: additionalImportRows.length,
+        safeExpenseReversalUsd: null,
+        warning: "Matched freight debits and credits do not certify which expenses or liabilities should be reversed.",
       },
       previewGate: {
         financialJournalPostingAllowed: false,
