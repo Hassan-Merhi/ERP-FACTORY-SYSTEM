@@ -2,11 +2,11 @@
  * Agent statement panel (right side of the Agent Ledger page): header with
  * balance, period filter, stats grid, ledger table, and print output.
  *
- * Extracted from pages/Agents.tsx; markup, calculations, styling, and test
- * ids are unchanged.
+ * Extracted from pages/Agents.tsx. The presentation is theme-aware;
+ * calculations, printed statement values, actions, and test ids are preserved.
  */
 import { useMemo, useRef } from "react";
-import { TrendingUp, TrendingDown, X, FileDown, Printer, ArrowRightLeft, ArrowLeft } from "lucide-react";
+import { TrendingUp, TrendingDown, X, FileDown, Printer, ArrowRightLeft, ArrowLeft, Store, Layers3, ArrowDownRight, ArrowUpRight, Flag } from "lucide-react";
 import { ErpMobileActionsMenu } from "@/components/ui/erp-mobile-records";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -94,9 +94,9 @@ export function AgentStatementPanel({
   const closingSide = balanceSideLabel(closingBalance, selectedAccount.type);
 
   return (
-    <div className={phone ? "space-y-4" : "p-6 space-y-5 max-w-5xl max-md:p-3"} data-testid="agent-statement-panel">
+    <div className={phone ? "min-w-0 space-y-4" : "relative isolate min-h-full min-w-0 space-y-6 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-blue-400/20 dark:bg-[#07152b] lg:p-6 max-md:rounded-none max-md:border-0 max-md:p-3"} data-testid="agent-statement-panel">
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         {phone && (
           <Button
             variant="outline"
@@ -109,36 +109,43 @@ export function AgentStatementPanel({
             Back to agents
           </Button>
         )}
-        <div className={phone ? "min-w-0 flex-1" : undefined}>
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <h2
-              className={`${phone ? "wrap-break-word text-lg" : "text-xl"} font-bold tracking-tight`}
-              data-testid="text-agent-account-name"
-            >
-              {selectedAccount.name}
-            </h2>
-            <Badge
-              variant="secondary"
-              className="text-xs no-default-active-elevate bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 capitalize font-semibold"
-            >
-              {selectedAccount.type}
-            </Badge>
-          </div>
-          <div className="flex items-center gap-1.5 mt-1.5">
-            {selectedAccount.balanceSide?.toLowerCase() === "cr" ? (
-              <TrendingDown className="w-3.5 h-3.5 text-emerald-600" />
-            ) : (
-              <TrendingUp className="w-3.5 h-3.5 text-red-500" />
-            )}
-            <span className="text-base font-bold font-mono tabular-nums" data-testid="text-agent-balance">
-              {fxWallet
-                ? `EUR ${Number(fxWallet.state.eur).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                : formatAmount(Math.abs(selectedAccount.balance))}
-            </span>
-            <span className={`text-xs font-semibold ${drCrClass(selectedAccount.balanceSide)}`}>
-              {fxWallet ? (Number(fxWallet.state.eur) >= 0 ? "Dr" : "Cr") : (selectedAccount.balanceSide ?? "")}
-            </span>
-            <span className="text-xs text-muted-foreground">{fxWallet ? "native EUR balance" : "current balance"}</span>
+        <div className={phone ? "min-w-0 flex-1" : "flex min-w-0 flex-1 items-center gap-4"}>
+          {!phone && (
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 to-blue-100 text-sky-600 shadow-sm dark:border-sky-400/25 dark:from-[#153f67] dark:to-[#09213c] dark:text-sky-300">
+              <Store className="h-8 w-8" aria-hidden="true" />
+            </div>
+          )}
+          <div className="min-w-0">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h2
+                className={`${phone ? "wrap-break-word text-lg" : "text-2xl"} font-extrabold tracking-tight text-slate-900 dark:text-slate-50`}
+                data-testid="text-agent-account-name"
+              >
+                {selectedAccount.name}
+              </h2>
+              <Badge
+                variant="secondary"
+                className="no-default-active-elevate rounded-lg border border-blue-200 bg-blue-100 px-2.5 py-1 text-xs font-bold capitalize text-blue-700 dark:border-blue-400/20 dark:bg-blue-600/25 dark:text-blue-200"
+              >
+                {selectedAccount.type}
+              </Badge>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {selectedAccount.balanceSide?.toLowerCase() === "cr" ? (
+                <TrendingDown className="h-4 w-4 text-red-500 dark:text-red-400" />
+              ) : (
+                <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              )}
+              <span className="font-mono text-lg font-extrabold tabular-nums text-slate-900 dark:text-white" data-testid="text-agent-balance">
+                {fxWallet
+                  ? `EUR ${Number(fxWallet.state.eur).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : formatAmount(Math.abs(selectedAccount.balance))}
+              </span>
+              <span className={`text-xs font-semibold ${drCrClass(selectedAccount.balanceSide)}`}>
+                {fxWallet ? (Number(fxWallet.state.eur) >= 0 ? "Dr" : "Cr") : (selectedAccount.balanceSide ?? "")}
+              </span>
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{fxWallet ? "native EUR balance" : "current balance"}</span>
+            </div>
           </div>
         </div>
         {phone ? (
@@ -163,7 +170,7 @@ export function AgentStatementPanel({
             ]}
           />
         ) : (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -171,7 +178,7 @@ export function AgentStatementPanel({
               disabled={transactionsLoading || vouchersWithBalance.length === 0}
               data-testid="button-export-excel"
             >
-              <FileDown className="h-3.5 w-3.5 mr-1.5" />
+              <FileDown className="mr-1.5 h-4 w-4 text-emerald-500" />
               Excel
             </Button>
             <Button
@@ -181,7 +188,7 @@ export function AgentStatementPanel({
               disabled={transactionsLoading}
               data-testid="button-print"
             >
-              <Printer className="h-3.5 w-3.5 mr-1.5" />
+              <Printer className="mr-1.5 h-4 w-4" />
               Print
             </Button>
             <Button
@@ -198,7 +205,7 @@ export function AgentStatementPanel({
       </div>
 
       {fxWallet && (
-        <div className="rounded-lg border p-3 space-y-1" data-testid="agent-native-fx-wallet">
+        <div className="space-y-1 rounded-xl border border-sky-200 bg-sky-50/70 p-4 dark:border-sky-500/30 dark:bg-sky-950/30" data-testid="agent-native-fx-wallet">
           <p className="text-sm font-semibold">FX Agent Native Balance</p>
           <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm font-mono tabular-nums">
             <span>
@@ -240,38 +247,54 @@ export function AgentStatementPanel({
       <PeriodFilter value={periodFilter} onChange={onPeriodChange} />
 
       {/* Stats grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="rounded-xl border bg-muted/30 p-4 space-y-1.5">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Opening</p>
-          <p className="text-base font-bold font-mono tabular-nums leading-tight">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+        <div className="relative space-y-2 overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-sky-50 p-4 shadow-sm dark:border-sky-500/35 dark:from-[#163e68] dark:to-[#0d2545]">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-bold uppercase tracking-wider text-sky-700 dark:text-sky-200">Opening</p>
+            <span className="rounded-xl bg-sky-100 p-2 text-sky-600 dark:bg-sky-500/20 dark:text-sky-300">
+              <Layers3 className="h-4 w-4" aria-hidden="true" />
+            </span>
+          </div>
+          <p className="break-words font-mono text-lg font-extrabold leading-tight tracking-tight tabular-nums text-slate-900 dark:text-white">
             {formatAmount(Math.abs(openingBalance))}
           </p>
           <p className="text-xs text-muted-foreground">{openingSide}</p>
         </div>
-        <div className="rounded-xl border bg-red-50/50 dark:bg-red-950/20 border-red-200/60 dark:border-red-800/40 p-4 space-y-1.5">
-          <p className="text-xs font-medium text-red-600 dark:text-red-400 uppercase tracking-wide">Debit</p>
-          <p className="text-base font-bold font-mono tabular-nums text-red-700 dark:text-red-300 leading-tight">
+        <div className="relative space-y-2 overflow-hidden rounded-2xl border border-rose-200 bg-gradient-to-br from-rose-50 to-red-50 p-4 shadow-sm dark:border-rose-500/45 dark:from-[#542238] dark:to-[#361725]">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-bold uppercase tracking-wider text-red-700 dark:text-red-200">Debit</p>
+            <span className="rounded-xl bg-red-100 p-2 text-red-600 dark:bg-red-400/20 dark:text-red-200">
+              <ArrowDownRight className="h-4 w-4" aria-hidden="true" />
+            </span>
+          </div>
+          <p className="break-words font-mono text-lg font-extrabold leading-tight tracking-tight tabular-nums text-red-700 dark:text-red-100">
             {formatAmount(periodDebit)}
           </p>
           <p className="text-xs text-muted-foreground">this period</p>
         </div>
-        <div className="rounded-xl border bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200/60 dark:border-emerald-800/40 p-4 space-y-1.5">
-          <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">Credit</p>
-          <p className="text-base font-bold font-mono tabular-nums text-emerald-700 dark:text-emerald-300 leading-tight">
+        <div className="relative space-y-2 overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-green-50 p-4 shadow-sm dark:border-emerald-500/45 dark:from-[#0b5038] dark:to-[#073324]">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-200">Credit</p>
+            <span className="rounded-xl bg-emerald-100 p-2 text-emerald-600 dark:bg-emerald-400/20 dark:text-emerald-200">
+              <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+            </span>
+          </div>
+          <p className="break-words font-mono text-lg font-extrabold leading-tight tracking-tight tabular-nums text-emerald-700 dark:text-emerald-100">
             {formatAmount(periodCredit)}
           </p>
           <p className="text-xs text-muted-foreground">this period</p>
         </div>
         <div
-          className={`rounded-xl border p-4 space-y-1.5 ${closingBalance >= 0 ? "bg-blue-50/50 dark:bg-blue-950/20 border-blue-200/60 dark:border-blue-800/40" : "bg-orange-50/50 dark:bg-orange-950/20 border-orange-200/60 dark:border-orange-800/40"}`}
+          className={`relative space-y-2 overflow-hidden rounded-2xl border p-4 shadow-sm ${closingBalance >= 0 ? "border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 dark:border-blue-500/45 dark:from-[#153f7d] dark:to-[#0c2452]" : "border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50 dark:border-orange-500/45 dark:from-[#51331c] dark:to-[#322417]"}`}
         >
+          <div className="flex items-center justify-between gap-2">
+            <p className={`text-xs font-bold uppercase tracking-wider ${closingBalance >= 0 ? "text-blue-700 dark:text-blue-200" : "text-orange-700 dark:text-orange-200"}`}>Closing</p>
+            <span className={`rounded-xl p-2 ${closingBalance >= 0 ? "bg-blue-100 text-blue-600 dark:bg-blue-400/20 dark:text-blue-200" : "bg-orange-100 text-orange-600 dark:bg-orange-400/20 dark:text-orange-200"}`}>
+              <Flag className="h-4 w-4" aria-hidden="true" />
+            </span>
+          </div>
           <p
-            className={`text-xs font-medium uppercase tracking-wide ${closingBalance >= 0 ? "text-blue-600 dark:text-blue-400" : "text-orange-600 dark:text-orange-400"}`}
-          >
-            Closing
-          </p>
-          <p
-            className={`text-base font-bold font-mono tabular-nums leading-tight ${closingBalance >= 0 ? "text-blue-700 dark:text-blue-300" : "text-orange-700 dark:text-orange-300"}`}
+            className={`break-words font-mono text-lg font-extrabold leading-tight tracking-tight tabular-nums ${closingBalance >= 0 ? "text-blue-800 dark:text-blue-100" : "text-orange-800 dark:text-orange-100"}`}
           >
             {formatAmount(Math.abs(closingBalance))}
           </p>
@@ -307,26 +330,26 @@ export function AgentStatementPanel({
           </div>
         </div>
 
-        <div className="rounded-xl border overflow-hidden shadow-xs">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-blue-400/25 dark:bg-[#0a1a33] print:rounded-none print:border-0 print:shadow-none">
           <Table mobileLayout="cards">
             <TableHeader>
-              <TableRow className="bg-muted/50 hover:bg-muted/50 border-b-2">
-                <TableHead className="text-xs h-10 font-bold uppercase tracking-wide text-muted-foreground w-[120px]">
+              <TableRow className="border-b border-slate-200 bg-slate-100/90 hover:bg-slate-100/90 dark:border-blue-400/20 dark:bg-[#142b4d] dark:hover:bg-[#142b4d]">
+                <TableHead className="h-11 text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 w-[120px]">
                   Date
                 </TableHead>
-                <TableHead className="text-xs h-10 font-bold uppercase tracking-wide text-muted-foreground w-[110px]">
+                <TableHead className="h-11 text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 w-[110px]">
                   Type
                 </TableHead>
-                <TableHead className="text-xs h-10 font-bold uppercase tracking-wide text-muted-foreground">
+                <TableHead className="h-11 text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
                   Particulars
                 </TableHead>
-                <TableHead className="text-xs h-10 font-bold uppercase tracking-wide text-muted-foreground text-right w-[130px]">
+                <TableHead className="h-11 text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 text-right w-[130px]">
                   Debit
                 </TableHead>
-                <TableHead className="text-xs h-10 font-bold uppercase tracking-wide text-muted-foreground text-right w-[130px]">
+                <TableHead className="h-11 text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 text-right w-[130px]">
                   Credit
                 </TableHead>
-                <TableHead className="text-xs h-10 font-bold uppercase tracking-wide text-muted-foreground text-right w-[145px]">
+                <TableHead className="h-11 text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 text-right w-[145px]">
                   Balance
                 </TableHead>
               </TableRow>
@@ -345,7 +368,7 @@ export function AgentStatementPanel({
               ) : (
                 <>
                   {/* Opening Balance row */}
-                  <TableRow className="bg-muted/30 hover:bg-muted/30" data-testid="row-opening-balance">
+                  <TableRow className="bg-slate-50/90 hover:bg-slate-50/90 dark:bg-[#10243e] dark:hover:bg-[#10243e]" data-testid="row-opening-balance">
                     <TableCell
                       className="py-3 text-xs font-bold text-muted-foreground uppercase tracking-wider"
                       colSpan={3}
@@ -399,7 +422,7 @@ export function AgentStatementPanel({
                       return (
                         <TableRow
                           key={v.voucherId}
-                          className={`hover:bg-accent/30 transition-colors ${idx % 2 === 1 ? "bg-muted/10" : ""}`}
+                          className={`border-slate-100 transition-colors hover:bg-blue-50/70 dark:border-blue-400/10 dark:hover:bg-blue-500/10 ${idx % 2 === 1 ? "bg-slate-50/60 dark:bg-[#0e203b]" : ""}`}
                           data-testid={`row-voucher-${v.voucherId}`}
                         >
                           <TableCell className="py-3 font-mono text-sm whitespace-nowrap text-muted-foreground">
@@ -449,7 +472,7 @@ export function AgentStatementPanel({
 
                   {/* Closing Balance row */}
                   {vouchersWithBalance.length > 0 && (
-                    <TableRow className="bg-muted/40 hover:bg-muted/40 border-t-2" data-testid="row-closing-balance">
+                    <TableRow className="border-t-2 border-blue-200 bg-blue-50/75 hover:bg-blue-50/75 dark:border-blue-400/40 dark:bg-[#142b4d] dark:hover:bg-[#142b4d]" data-testid="row-closing-balance">
                       <TableCell
                         colSpan={3}
                         className="py-3 text-xs font-bold text-muted-foreground uppercase tracking-wider"
