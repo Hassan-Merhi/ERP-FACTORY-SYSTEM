@@ -13,6 +13,7 @@ import FactoryProductionTargets from "./FactoryProductionTargets";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translateFactoryStaffTrackingText } from "@/i18n/factoryStaffTrackingTranslations";
 import "./factoryTrackingModern.css";
+import "./baleStockEntryModern.css";
 
 import { StockEntryTab } from "./bale-stock-entry/StockEntryTab";
 import { DailyStockSummary } from "./bale-stock-entry/DailyStockSummary";
@@ -112,9 +113,9 @@ export default function BaleStockEntry() {
   }
 
   return (
-    <FactoryMobilePage>
-      <FactoryMobileHeader>
-        <div className="flex min-w-0 items-center gap-3">
+    <FactoryMobilePage className="bale-stock-entry-modern">
+      <FactoryMobileHeader className="bale-stock-entry-hero">
+        <div className="bale-stock-entry-hero-title flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-500/25 bg-linear-to-br from-emerald-500/30 to-emerald-600/10">
             <ScanLine className="h-5 w-5 text-emerald-500" />
           </div>
@@ -135,6 +136,7 @@ export default function BaleStockEntry() {
             STOCK ENTRY
           </span>
         </FactoryMobileHeaderActions>
+        <div className="bale-stock-entry-hero-art" aria-hidden="true"><Factory /></div>
       </FactoryMobileHeader>
 
       <DailyStockSummary date={summaryDate} />
@@ -148,7 +150,7 @@ export default function BaleStockEntry() {
         className="min-w-0"
       >
         <div className="erp-mobile-scroll-tabs pb-1">
-          <TabsList aria-label="Bale stock entry sections" className="w-max min-w-full rounded-2xl border border-border/70 bg-card/70 p-1 sm:min-w-0 sm:w-fit">
+          <TabsList aria-label="Bale stock entry sections" className="bale-stock-entry-tabs w-max min-w-full rounded-2xl border border-border/70 bg-card/70 p-1 sm:min-w-0 sm:w-fit">
             {showEntry && (
               <TabsTrigger value="entry" data-testid="tab-stock-entry">
                 <ScanLine className="mr-1 h-4 w-4" />
