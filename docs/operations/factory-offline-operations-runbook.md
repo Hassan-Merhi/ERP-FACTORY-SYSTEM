@@ -33,9 +33,10 @@ an open cloud epoch.
 | Journal voucher (USD, ledger-only, balanced, no attachment) | yes | `vouchers` (Phase 4/8) | `server/edge/phase8OperatorApply.ts` |
 | Pressing scan confirmation (physical bale press) | yes, existing machine assignments only | `pressing` (Phase 9) | `server/edge/phase9OperatorApply.ts apply pressing` |
 | Stock movement: inventory quick adjust (add / subtract at a location) | yes, existing items and locations | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — replayed as a delta; below zero is held for Admin/Developer approve/reject |
+| POS cash sale (USD, cash account, non-supplier-partner company) | yes, numbered `LAN-<site>-000123` | `pos` (Phase 9) | `server/edge/phase9OperatorApply.ts apply pos` — replayed through the sale service on its `clientSaleId`; keeps the offline price; below-zero stock or a changed till account is held for Admin/Developer approve/reject |
 | Login, logout, company switch | yes (session only) | none | n/a |
 | All reads covered by prepared offline reads | yes | n/a | n/a |
-| Everything else (1,172 write routes) | **refused** with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION` | none | n/a |
+| Everything else (1,171 write routes) | **refused** with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION` | none | n/a |
 
 `node scripts/edge/audit-phase9-write-coverage.mjs` prints the exact current
 inventory and fails if any route becomes writable on the LAN without a reviewed
@@ -56,10 +57,11 @@ reconciled safely, which is worse than refusing them.
   adjustments now replay as deltas with a below-zero hold; the other stock
   writes still need the same treatment (their own capture, delta replay and
   drill) before they are enabled.
-- **POS sales, payments, receipts, purchasing/receiving, supplier and customer
-  balances:** each posts money and stock together through the central posting
-  engine with multi-currency, tax and numbering rules. Only the narrow USD
-  Journal path has a verified replay adapter today.
+- **POS credit, bank and non-USD sales, returns, cancellations; payments,
+  receipts, purchasing/receiving, supplier and customer balances:** each posts
+  money and stock together through the central posting engine with
+  multi-currency, tax and numbering rules. Offline POS covers cash USD sales
+  only; the rest still needs its own capture, replay and drill.
 - **Attachments and documents:** files are not in the database transaction, so
   they need a content-addressed upload transfer and verification step that does
   not exist yet.
@@ -185,14 +187,20 @@ transaction rolls back, the conflict is written to
   `rejected-conflict` receipt and the stream continues. The cloud record is
   never overwritten; if the LAN fact must still be recorded, enter it again in
   the cloud as a new, normal transaction.
-- **Approve instead (stock only):** a stock movement held as
+- **Approve instead (stock and POS):** a stock movement held as
   `PHASE9_STOCK_WOULD_GO_NEGATIVE` (for example a physical count proves the
   LAN issue happened and a cloud receipt is late) can be applied anyway with
   `... phase9OperatorApply.ts approve stock <sequence> <reviewer-username>
   "<reason>"`, then `apply stock`. Only conflict codes a stream declares
   overridable can be approved (`PHASE9_CONFLICT_NOT_OVERRIDABLE` otherwise);
   a missing item or location, revoked access or a diverged replay can only be
-  rejected. Every other check still runs on the approved apply.
+  rejected. Every other check still runs on the approved apply. For POS, a
+  sale held as `PHASE9_POS_STOCK_WOULD_GO_NEGATIVE` or
+  `PHASE9_POS_CASH_ACCOUNT_CHANGED` can be approved with `approve pos ...`.
+- POS replays run through the normal sale service in its own transaction;
+  exactly-once comes from the sale's `clientSaleId` (the LAN operation id), so
+  an apply interrupted after the sale committed is reported as
+  `already-present` on the next run, never posted twice.
 
 ### 4.5 Pause and resume delivery
 

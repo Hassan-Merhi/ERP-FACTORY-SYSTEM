@@ -41,6 +41,12 @@ const SUPPORTED = new Map([
       "Replayed as a quantity delta on the cloud balance; a below-zero result is held for an " +
       "Admin/Developer approve/reject decision; transfers, imports and bulk stock edits stay cloud-only",
   }],
+  ["POST /api/pos/sales", {
+    policy: "pos.sale.v1",
+    limitations:
+      "Cash, USD, non-supplier-partner sales with a client sale id; LAN invoice series; replayed through " +
+      "the sale service on clientSaleId; below-zero stock or a changed till account is held for review",
+  }],
 ]);
 
 function moduleForPath(path) {

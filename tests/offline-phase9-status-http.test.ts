@@ -55,6 +55,9 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", () => ({
   }),
   edgeStatusPayload: () => ({ mode: "lan", siteId: SITE, writeMode: "read-only" }),
   edgeBlocksWrite: () => true,
+  PHASE9_PRESSING_CONFIRM_ROUTE: "POST /api/factory/pressing-machines/confirm",
+  PHASE9_STOCK_ADJUST_ROUTE: "POST /api/inventory/quick-adjust",
+  PHASE9_POS_SALE_ROUTE: "POST /api/pos/sales",
 }));
 vi.mock("../server/edge/edgeSyncReceiver", () => ({
   registerCloudEdgeSyncReceiver: () => undefined,

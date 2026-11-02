@@ -27,3 +27,4 @@ export const CLOUD_WRITER_FENCE_ACK: string;
 export function shouldStartEdgeBackgroundJobs(config: EdgeConfiguration): boolean;
 export const PHASE9_PRESSING_CONFIRM_ROUTE: "POST /api/factory/pressing-machines/confirm";
 export const PHASE9_STOCK_ADJUST_ROUTE: "POST /api/inventory/quick-adjust";
+export const PHASE9_POS_SALE_ROUTE: "POST /api/pos/sales";

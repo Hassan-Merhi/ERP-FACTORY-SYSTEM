@@ -17,6 +17,12 @@ import {
   PHASE9_STOCK_NEGATIVE_CONFLICT,
   phase9StockAdjustEnvelope,
 } from "./phase9StockEnvelope.mjs";
+import {
+  PHASE9_POS_CASH_ACCOUNT_CONFLICT,
+  PHASE9_POS_NEGATIVE_CONFLICT,
+  PHASE9_POS_SALE_KIND,
+  phase9PosSaleEnvelope,
+} from "./phase9PosSaleEnvelope.mjs";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HASH = /^[0-9a-f]{64}$/;
@@ -70,6 +76,19 @@ function stockAdjustPayload(payload) {
   return stableEqual(rebuilt, payload) ? rebuilt : null;
 }
 
+function posSalePayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (payload.kind !== PHASE9_POS_SALE_KIND) return null;
+  const { kind: _kind, ...evidence } = payload;
+  let rebuilt;
+  try {
+    rebuilt = phase9PosSaleEnvelope(evidence);
+  } catch {
+    return null;
+  }
+  return stableEqual(rebuilt, payload) ? rebuilt : null;
+}
+
 /**
  * `overridable` lists the conflict codes an Admin/Developer may resolve with
  * an "approve-override" decision (apply anyway). Every other conflict can
@@ -91,6 +110,15 @@ const STREAMS = Object.freeze({
         parse: stockAdjustPayload,
         localRef: (payload) => payload.localMovementId,
         overridable: Object.freeze([PHASE9_STOCK_NEGATIVE_CONFLICT]),
+      }),
+    }),
+  }),
+  pos: Object.freeze({
+    kinds: Object.freeze({
+      [PHASE9_POS_SALE_KIND]: Object.freeze({
+        parse: posSalePayload,
+        localRef: (payload) => payload.localVoucherId,
+        overridable: Object.freeze([PHASE9_POS_NEGATIVE_CONFLICT, PHASE9_POS_CASH_ACCOUNT_CONFLICT]),
       }),
     }),
   }),

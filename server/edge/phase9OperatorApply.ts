@@ -30,6 +30,8 @@ import {
 import { isPhase9EventStream } from "./phase9EventProtocol.mjs";
 import { phase9PressingApplyHandler } from "./phase9PressingApply";
 import { phase9StockApplyHandler } from "./phase9StockApply";
+import { phase9PosSaleApplyHandler } from "./phase9PosSaleApply";
+import { PHASE9_POS_SALE_KIND } from "./phase9PosSaleEnvelope.mjs";
 import { PHASE9_STOCK_ADJUST_KIND } from "./phase9StockEnvelope.mjs";
 import {
   createTenantDatabaseScope,
@@ -44,6 +46,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 export const PHASE9_HANDLERS = Object.freeze({
   "pressing.confirmation.v1": phase9PressingApplyHandler,
   [PHASE9_STOCK_ADJUST_KIND]: phase9StockApplyHandler,
+  [PHASE9_POS_SALE_KIND]: phase9PosSaleApplyHandler,
 });
 
 const REVIEWER_ROLES = ["Admin", "Developer"];

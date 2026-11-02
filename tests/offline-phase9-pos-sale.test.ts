@@ -1,0 +1,238 @@
+/**
+ * Phase 9 offline POS cash sales (pos.sale.v1) on the full application schema:
+ * the factory LAN capture (LAN invoice series, immutable outbox, owner-policy
+ * refusals) and the cloud replay through the normal sale service, idempotent
+ * on the sale's clientSaleId, with below-zero stock held for review.
+ */
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { randomUUID } from "node:crypto";
+
+const edge = vi.hoisted(() => ({
+  config: { mode: "cloud", primary: false, siteId: null } as Record<string, unknown>,
+}));
+vi.mock("../server/edge/edgeRuntimePolicy.mjs", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readFactoryEdgeConfiguration: () => edge.config,
+}));
+
+import { pool } from "../server/db";
+import { createPosSale } from "../server/services/pos/createSaleService";
+import { ensurePhase9PosOutboxSchema } from "../server/edge/phase9PosOutbox";
+import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
+import { validatePhase9Event } from "../server/edge/phase9EventProtocol.mjs";
+import { Phase9EventConflict } from "../server/edge/phase9CloudEventStore.mjs";
+import { phase9PosSaleApplyHandler, type Phase9PosSaleEvent } from "../server/edge/phase9PosSaleApply";
+import {
+  createTenantDatabaseScope,
+  runWithDatabaseScopeRuntimeContext,
+} from "../server/services/security/databaseScopeRuntimeContext";
+import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
+
+const PREFIX = "p9pos";
+const SITE = "7c1d2e3f-4a5b-4c6d-9e8f-0a1b2c3d4e5f";
+let ctx: TestContext;
+
+const LAN = { mode: "lan", primary: true, siteId: SITE, writeMode: "lan-primary" };
+const CLOUD = { mode: "cloud", primary: false, siteId: null, writeMode: "cloud" };
+
+function sale(body: Record<string, unknown>) {
+  return runWithDatabaseScopeRuntimeContext(createTenantDatabaseScope(ctx.companyId), () =>
+    createPosSale(
+      {
+        currentCompanyId: ctx.companyId,
+        userId: ctx.userId,
+        username: `${PREFIX}_testuser`,
+        userRole: "Admin",
+        canSellNegativeStock: false,
+        sessionCashAccountId: null,
+        voucherDateFallback: "2026-10-31",
+        body: {
+          locationId: ctx.locationId,
+          cashAccountId: ctx.cashAccountId,
+          items: [{ stockItemId: ctx.stockItemIds[0], quantity: 2, rate: 12.5 }],
+          voucherDate: "2026-10-31",
+          ...body,
+        } as never,
+      },
+      { isSpCompany: false }
+    )
+  );
+}
+
+function posEvent(sequence: number, overrides: Partial<Phase9PosSaleEvent["payload"]> = {}): Phase9PosSaleEvent {
+  const requestId = overrides.requestId ?? randomUUID();
+  const payload = {
+    kind: "pos.sale.v1",
+    requestId,
+    companyId: ctx.companyId,
+    actorUserId: ctx.userId,
+    actorUsername: `${PREFIX}_testuser`,
+    localVoucherId: 900000 + sequence,
+    lanInvoiceNumber: `LAN-7C1D-${String(sequence).padStart(6, "0")}`,
+    locationId: ctx.locationId,
+    cashAccountId: ctx.cashAccountId,
+    currency: "USD" as const,
+    voucherDate: "2026-10-31",
+    notes: null,
+    items: [{ stockItemId: ctx.stockItemIds[1], quantity: "3.000", rate: "10.00" }],
+    ...overrides,
+  };
+  const event = {
+    sequence: String(sequence),
+    operationId: requestId,
+    companyId: ctx.companyId,
+    actorUserId: ctx.userId,
+    kind: payload.kind,
+    localRef: payload.localVoucherId,
+    payload,
+    payloadSha256: hashEvidence(payload),
+  };
+  validatePhase9Event("pos", event);
+  return event as Phase9PosSaleEvent;
+}
+
+async function replay(event: Phase9PosSaleEvent, overrideConflicts: string[] = []) {
+  return runWithDatabaseScopeRuntimeContext(createTenantDatabaseScope(ctx.companyId), async () => {
+    const client = await pool.connect();
+    try {
+      await phase9PosSaleApplyHandler.authorize(client, event);
+      const result = await phase9PosSaleApplyHandler.apply(client, event, { overrideConflicts });
+      expect(await phase9PosSaleApplyHandler.verify(client, event, result)).toBe(true);
+      return result;
+    } finally {
+      client.release();
+    }
+  });
+}
+
+async function conflictCode(promise: Promise<unknown>): Promise<string> {
+  try {
+    await promise;
+  } catch (error) {
+    if (error instanceof Phase9EventConflict) return error.message;
+    throw error;
+  }
+  throw new Error("expected a Phase 9 conflict");
+}
+
+async function stock(stockItemId: number): Promise<number> {
+  const result = await pool.query(
+    "SELECT quantity::numeric AS q FROM inventory WHERE company_id = $1 AND location_id = $2 AND stock_item_id = $3",
+    [ctx.companyId, ctx.locationId, stockItemId]
+  );
+  return Number(result.rows[0]?.q ?? 0);
+}
+
+beforeAll(async () => {
+  ctx = await seedTestData(PREFIX);
+  edge.config = LAN;
+  await ensurePhase9PosOutboxSchema(pool);
+  edge.config = CLOUD;
+}, 120_000);
+
+afterAll(async () => {
+  edge.config = CLOUD;
+  await pool.query("ALTER TABLE factory_edge_pos_outbox DISABLE TRIGGER factory_edge_pos_outbox_no_mutation");
+  await pool.query("DELETE FROM factory_edge_pos_outbox WHERE site_id = $1", [SITE]);
+  await pool.query("ALTER TABLE factory_edge_pos_outbox ENABLE TRIGGER factory_edge_pos_outbox_no_mutation");
+  await pool.query("DELETE FROM factory_edge_pos_counter WHERE site_id = $1", [SITE]);
+  await cleanupTestData(PREFIX);
+  closeTestServer();
+}, 60_000);
+
+describe("Phase 9 offline POS sale capture on the factory LAN server (POST /api/pos/sales)", () => {
+  it("numbers offline sales in the LAN series and records them in the same transaction", async () => {
+    edge.config = LAN;
+    try {
+      const clientSaleId = randomUUID();
+      const result = await sale({ clientSaleId });
+      expect(result.status).toBe(200);
+      const body = result.body as { voucher: { id: number; voucherNumber: string } };
+      expect(body.voucher.voucherNumber).toMatch(/^LAN-7C1D-\d{6}$/);
+      const outbox = await pool.query(
+        "SELECT local_voucher_id, lan_invoice_number, payload FROM factory_edge_pos_outbox WHERE operation_id = $1",
+        [clientSaleId]
+      );
+      expect(outbox.rows).toHaveLength(1);
+      expect(outbox.rows[0]).toMatchObject({
+        local_voucher_id: body.voucher.id,
+        lan_invoice_number: body.voucher.voucherNumber,
+      });
+      expect(outbox.rows[0].payload).toMatchObject({
+        kind: "pos.sale.v1",
+        cashAccountId: ctx.cashAccountId,
+        items: [{ stockItemId: ctx.stockItemIds[0], quantity: "2.000", rate: "12.50" }],
+      });
+      // The same till retry is the same sale: no second LAN invoice.
+      const retry = await sale({ clientSaleId });
+      expect((retry.body as { _idempotent?: boolean })._idempotent).toBe(true);
+      const count = await pool.query("SELECT count(*)::int AS n FROM factory_edge_pos_outbox WHERE site_id = $1", [
+        SITE,
+      ]);
+      expect(count.rows[0].n).toBe(1);
+    } finally {
+      edge.config = CLOUD;
+    }
+  });
+
+  it("refuses offline credit, non-USD and id-less sales before writing anything", async () => {
+    edge.config = LAN;
+    try {
+      const before = await stock(ctx.stockItemIds[0]);
+      expect((await sale({})).body).toMatchObject({ code: "EDGE_POS_CLIENT_SALE_ID_REQUIRED" });
+      expect((await sale({ clientSaleId: randomUUID(), currency: "EUR" })).body).toMatchObject({
+        code: "EDGE_POS_OFFLINE_USD_ONLY",
+      });
+      const credit = await sale({
+        clientSaleId: randomUUID(),
+        isCreditSale: true,
+        paymentAccountId: ctx.cashAccountId,
+      });
+      expect(credit.status).not.toBe(200);
+      expect(await stock(ctx.stockItemIds[0])).toBe(before);
+    } finally {
+      edge.config = CLOUD;
+    }
+  });
+});
+
+describe("Phase 9 offline POS sale cloud replay", () => {
+  it("replays the sale through the sale service at its offline price, exactly once", async () => {
+    const before = await stock(ctx.stockItemIds[1]);
+    const event = posEvent(1, { notes: "Gate sale" });
+    const applied = await replay(event);
+    expect(applied).toMatchObject({ outcome: "cloud-applied", businessDate: "2026-10-31" });
+    const voucher = await pool.query(
+      "SELECT voucher_number, description, total_amount::text AS total FROM vouchers WHERE id = $1",
+      [applied.cloudRef]
+    );
+    expect(voucher.rows[0].voucher_number).not.toMatch(/^LAN-/);
+    expect(voucher.rows[0].description).toBe("Gate sale · Offline sale LAN-7C1D-000001 (offline price)");
+    expect(Number(voucher.rows[0].total)).toBe(30);
+    expect(await stock(ctx.stockItemIds[1])).toBe(before - 3);
+    // Lost acknowledgement: the retry finds the committed sale.
+    expect(await replay(event)).toEqual({ ...applied, outcome: "already-present" });
+    expect(await stock(ctx.stockItemIds[1])).toBe(before - 3);
+  });
+
+  it("holds a sale that would take cloud stock below zero until it is approved", async () => {
+    const event = posEvent(2, { items: [{ stockItemId: ctx.stockItemIds[2], quantity: "150.000", rate: "1.00" }] });
+    expect(await conflictCode(replay(event))).toBe("PHASE9_POS_STOCK_WOULD_GO_NEGATIVE");
+    expect(await stock(ctx.stockItemIds[2])).toBe(100);
+    await replay(event, ["PHASE9_POS_STOCK_WOULD_GO_NEGATIVE"]);
+    expect(await stock(ctx.stockItemIds[2])).toBe(-50);
+  });
+
+  it("refuses a till account that is missing or not a cash account, and a diverged replay", async () => {
+    expect(await conflictCode(replay(posEvent(3, { cashAccountId: ctx.salesAccountId })))).toBe(
+      "PHASE9_POS_CASH_ACCOUNT_MISSING"
+    );
+    const requestId = randomUUID();
+    await replay(posEvent(4, { requestId }));
+    const diverged = posEvent(5, {
+      requestId,
+      items: [{ stockItemId: ctx.stockItemIds[1], quantity: "4.000", rate: "10.00" }],
+    });
+    expect(await conflictCode(replay(diverged))).toBe("PHASE9_POS_REQUEST_ID_DIVERGED");
+  });
+});

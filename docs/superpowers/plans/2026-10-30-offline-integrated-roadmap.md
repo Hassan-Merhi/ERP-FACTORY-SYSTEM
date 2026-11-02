@@ -97,6 +97,14 @@ The owner chose to make all remaining workflows available offline (stock movemen
 - Evidence: `tests/offline-phase9-stock-apply.test.ts` (real handler on the full schema: deltas, lost-ACK replay, held/approved below-zero, divergence, missing item, revoked access/permission) and `tests/offline-phase9-stock-sync-drill.test.ts` (separate LAN/cloud databases, fence, restricted role, relay, approve and reject decisions, verified receipts).
 - Coverage: 3 approved captures, 3 session-only, 1,172 blocked.
 
+### Phase 9 POS cash sales (2026-11-02, development)
+
+- `POST /api/pos/sales` is an approved LAN-primary write, stream `pos`, kind `pos.sale.v1`. Owner policy: cash, USD, non-supplier-partner sales with a client sale id; credit, bank, non-USD and id-less sales are refused offline before anything is written (`server/services/pos/posSaleOfflinePolicy.ts`).
+- Offline sales are numbered from the LAN invoice series (`LAN-<site>-000123`, allocated from the stream's gapless counter in the sale transaction) and captured in the same transaction (`server/edge/phase9PosOutbox.ts`).
+- Cloud replay (`server/edge/phase9PosSaleApply.ts`) re-checks access, the till cash account and stock, then runs the normal sale service with the offline price; the cloud voucher keeps a cloud number and records the LAN invoice number. Exactly-once is the sale's `clientSaleId`. Below-zero stock and a changed POS till account are held for approve/reject; a missing/non-cash account, unsupported company or any sale-service refusal can only be rejected.
+- Evidence: `tests/offline-phase9-pos-sale.test.ts` (LAN capture, series, retry, refusals; cloud replay, lost-ACK, held/approved below-zero, bad till account, divergence). The shared store, relay and decision mechanics are the ones proven by the stock drill.
+- Coverage: 4 approved captures, 3 session-only, 1,171 blocked.
+
 ## Phase 10 — Offline identity, conflicts, secure storage and server controls
 - Implement reviewed local-session/cold-start policy, encrypted legacy-cache migration, authorization/role revocation, and scoped credentials and browser/device protections.
 - Add deterministic multi-device conflict review with no silent financial/stock overwrites.

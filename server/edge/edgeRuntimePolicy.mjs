@@ -113,6 +113,7 @@ export function readFactoryEdgeConfiguration(env = process.env) {
 
 export const PHASE9_PRESSING_CONFIRM_ROUTE = "POST /api/factory/pressing-machines/confirm";
 export const PHASE9_STOCK_ADJUST_ROUTE = "POST /api/inventory/quick-adjust";
+export const PHASE9_POS_SALE_ROUTE = "POST /api/pos/sales";
 
 // No module without atomic capture and validated replay is implicitly enabled
 // by a one-time operator primary acknowledgement. Add routes only after
@@ -126,6 +127,9 @@ const LAN_PRIMARY_CAPTURE_ALLOWLIST = new Set([
   // replayed in the cloud as a quantity delta; below-zero results are held
   // for an Admin/Developer decision, never applied or dropped silently.
   PHASE9_STOCK_ADJUST_ROUTE,
+  // Phase 9 (owner policy 2026-11-01): offline POS cash sales in USD with a
+  // LAN invoice series, replayed through the sale service on clientSaleId.
+  PHASE9_POS_SALE_ROUTE,
 ]);
 
 export function edgeBlocksWrite(config, method, path) {

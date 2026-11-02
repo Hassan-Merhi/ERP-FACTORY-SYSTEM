@@ -22,27 +22,22 @@ const manifest = {
 test("every unique API write has explicit capture, session-only or blocked disposition", () => {
   const report = auditPhase9WriteCoverage(manifest);
   assert.equal(report.summary.uniqueApiWriteRoutes, 9);
-  assert.equal(report.summary.approvedCapture, 3);
+  assert.equal(report.summary.approvedCapture, 4);
   assert.equal(report.summary.sessionOnly, 1);
-  assert.equal(report.summary.blocked, 5);
+  assert.equal(report.summary.blocked, 4);
   assert.equal(report.summary.productionComplete, false);
   const byPath = new Map(report.routes.map((r) => [r.path, r]));
-  for (const path of [
-    "/api/pos/sales",
-    "/api/factory/bales",
-    "/api/suppliers/create",
-    "/api/documents/upload",
-    "/api/payments/:id",
-  ]) {
+  for (const path of ["/api/factory/bales", "/api/suppliers/create", "/api/documents/upload", "/api/payments/:id"]) {
     assert.equal(byPath.get(path).disposition, "blocked");
   }
   assert.equal(byPath.get("/api/vouchers/with-entries").policy, "voucher.with-entries.v1");
   assert.equal(byPath.get("/api/factory/pressing-machines/confirm").policy, "pressing.confirmation.v1");
   assert.equal(byPath.get("/api/inventory/quick-adjust").policy, "stock.quick-adjust.v1");
+  assert.equal(byPath.get("/api/pos/sales").policy, "pos.sale.v1");
 });
 test("policy drift from an accidental LAN write bypass fails the audit", () => {
   const unsafeGuard = (config, method, path) =>
-    path === "/api/pos/sales" ? false : edgeBlocksWrite(config, method, path);
+    path === "/api/factory/bales" ? false : edgeBlocksWrite(config, method, path);
   assert.throws(() => auditPhase9WriteCoverage(manifest, unsafeGuard), /PHASE9_WRITE_GUARD_DRIFT/);
 });
 test("missing vetted route, bad manifest and unexpected allowed route are refused", () => {
@@ -56,7 +51,7 @@ test("missing vetted route, bad manifest and unexpected allowed route are refuse
 test("real route manifest has explicit accounting/stock/POS/factory/attachment gaps", () => {
   const real = JSON.parse(fs.readFileSync(new URL("../config/route-manifest.json", import.meta.url), "utf8"));
   const report = auditPhase9WriteCoverage(real);
-  assert.equal(report.summary.approvedCapture, 3);
+  assert.equal(report.summary.approvedCapture, 4);
   assert.ok(report.summary.blocked > 0);
   assert.ok(report.routes.some((r) => r.module === "retail-pos" && r.disposition === "blocked"));
   assert.ok(report.routes.some((r) => r.module === "factory-production" && r.disposition === "blocked"));

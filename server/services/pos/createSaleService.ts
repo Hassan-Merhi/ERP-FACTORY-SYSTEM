@@ -47,6 +47,8 @@ import { baleMirrorMovementRefusal } from "../accounting/perpetualInventory/cuto
 import { MoneyDecimal } from "../../lib/money";
 import { spDeductionAmount, spPayableAfterDeduction } from "./spDeduction";
 import { PosZmwRateError, resolveLockedZmwPosCurrency, assertZmwImportPrices } from "./posZmwRatePolicy";
+import { allocatePhase9PosInvoiceTx, capturePhase9PosSaleTx, isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
+import { phase9PosSaleRefusal } from "./posSaleOfflinePolicy";
 
 function err(result: HandlerErrorResult): CreatePosSaleResult {
   return { status: result.status, body: result.body };
@@ -125,6 +127,14 @@ export async function createPosSale(
 
   const idempotentResult = await checkIdempotentSale(currentCompanyId, clientSaleId);
   if (idempotentResult) return idempotentResult;
+
+  // Factory LAN server during an outage: only the owner-approved offline sale
+  // shape is accepted, before anything is written (see posSaleOfflinePolicy).
+  const lanCapture = isPhase9LanPrimary();
+  if (lanCapture) {
+    const refusal = phase9PosSaleRefusal({ clientSaleId, isCreditSale, accountType, currency, isSpCompany });
+    if (refusal) return err(refusal);
+  }
 
   if (!locationId) {
     return { status: 400, body: { message: "Location is required" } };
@@ -264,9 +274,12 @@ export async function createPosSale(
         currency: lockedPosCurrency.currency,
         exchangeRate: lockedPosCurrency.exchangeRate,
       });
+      // Offline sales take the next LAN invoice number, never an SV- number.
+      const lanInvoice = lanCapture ? await allocatePhase9PosInvoiceTx(tx) : null;
       const posted = await postErpVoucherTx(tx, {
         companyId: currentCompanyId,
         voucherType: "Sales",
+        ...(lanInvoice ? { voucherNumber: lanInvoice.number } : {}),
         voucherDate,
         description:
           notes ||
@@ -401,6 +414,27 @@ export async function createPosSale(
           voucherDate: String(txVoucher.voucherDate),
           locationId: parsedLocationId,
           relieved: relievedTotal,
+        });
+      }
+
+      if (lanInvoice) {
+        await capturePhase9PosSaleTx(tx, lanInvoice, {
+          companyId: currentCompanyId,
+          localVoucherId: txVoucher.id,
+          lanInvoiceNumber: lanInvoice.number,
+          locationId: parsedLocationId,
+          cashAccountId: accountId,
+          actorUserId: String(userId),
+          actorUsername: username,
+          requestId: String(clientSaleId),
+          currency: "USD",
+          voucherDate,
+          notes: typeof notes === "string" && notes ? notes : null,
+          items: inventoryValidation.map(({ item }) => ({
+            stockItemId: Number(item.stockItemId),
+            quantity: inventoryQuantity(item.quantity),
+            rate: inventoryMoney(item.rate),
+          })),
         });
       }
 

@@ -11,6 +11,7 @@ import {
   edgeBlocksWrite,
   edgeStatusPayload,
   PHASE9_PRESSING_CONFIRM_ROUTE,
+  PHASE9_POS_SALE_ROUTE,
   PHASE9_STOCK_ADJUST_ROUTE,
   readFactoryEdgeConfiguration,
 } from "./edgeRuntimePolicy.mjs";
@@ -33,7 +34,8 @@ export function makeFactoryEdgeWriteGuard(
   hasApprovedData: () => Promise<boolean>,
   hasWriterAuthority: () => Promise<boolean> = async () => false,
   hasPressingCapture: () => Promise<boolean> = async () => false,
-  hasStockCapture: () => Promise<boolean> = async () => false
+  /** Other approved Phase 9 routes: "METHOD /path" -> its DBA-installed outbox check. */
+  routeCaptures: Readonly<Record<string, { installed: () => Promise<boolean>; code: string }>> = {}
 ): RequestHandler[] {
   // Each LAN write runs database authority proofs; bound how often one client
   // can trigger them. Reads and cloud-mode traffic are not counted.
@@ -87,18 +89,14 @@ export function makeFactoryEdgeWriteGuard(
       }
     }
 
-    // Same rule for Phase 9 stock movements and their DBA-installed outbox.
-    if (
-      config.mode === "lan" &&
-      config.primary &&
-      `${req.method.toUpperCase()} ${path}` === PHASE9_STOCK_ADJUST_ROUTE
-    ) {
+    // Same rule for every other approved Phase 9 route and its own outbox.
+    const capture =
+      config.mode === "lan" && config.primary ? routeCaptures[`${req.method.toUpperCase()} ${path}`] : null;
+    if (capture) {
       try {
-        if (!(await hasStockCapture())) {
-          return res.status(503).json({ code: "EDGE_PHASE9_STOCK_CAPTURE_NOT_INSTALLED" });
-        }
+        if (!(await capture.installed())) return res.status(503).json({ code: capture.code });
       } catch {
-        return res.status(503).json({ code: "EDGE_PHASE9_STOCK_CAPTURE_NOT_INSTALLED" });
+        return res.status(503).json({ code: capture.code });
       }
     }
 
@@ -233,23 +231,26 @@ export function registerFactoryEdgeBoundary(app: Express): void {
     pressingCheck = { value, at: now };
     return value;
   }
-  let stockCheck: { value: boolean; at: number } | null = null;
-  async function stockCaptureInstalled(): Promise<boolean> {
-    const now = Date.now();
-    if (stockCheck && now - stockCheck.at < 3_000) return stockCheck.value;
-    const { rows } = await pool.query(
-      `SELECT count(*) = 3 AS installed
-         FROM pg_trigger t
-        WHERE t.tgenabled = 'O' AND NOT t.tgisinternal
-          AND (t.tgrelid, t.tgname) IN (
-            ('public.factory_edge_stock_outbox'::regclass, 'factory_edge_stock_outbox_no_mutation'),
-            ('public.factory_edge_event_stage_receipts'::regclass, 'factory_edge_event_stage_receipts_no_mutation'),
-            ('public.factory_edge_event_applied_receipts'::regclass, 'factory_edge_event_applied_receipts_no_mutation')
-          )`
-    );
-    const value = rows[0]?.installed === true;
-    stockCheck = { value, at: now };
-    return value;
+  /** Outbox + shared receipt logs + their enabled immutability triggers, cached briefly. */
+  function outboxInstalled(outbox: string): () => Promise<boolean> {
+    let cached: { value: boolean; at: number } | null = null;
+    return async () => {
+      const now = Date.now();
+      if (cached && now - cached.at < 3_000) return cached.value;
+      const { rows } = await pool.query(
+        `SELECT count(*) = 3 AS installed
+           FROM pg_trigger t
+          WHERE t.tgenabled = 'O' AND NOT t.tgisinternal
+            AND (t.tgrelid, t.tgname) IN (
+              ($1::regclass, $2),
+              ('public.factory_edge_event_stage_receipts'::regclass, 'factory_edge_event_stage_receipts_no_mutation'),
+              ('public.factory_edge_event_applied_receipts'::regclass, 'factory_edge_event_applied_receipts_no_mutation')
+            )`,
+        [`public.${outbox}`, `${outbox}_no_mutation`]
+      );
+      cached = { value: rows[0]?.installed === true, at: now };
+      return cached.value;
+    };
   }
   app.use(
     "/api",
@@ -258,7 +259,16 @@ export function registerFactoryEdgeBoundary(app: Express): void {
       provisioned,
       () => hasVerifiedPhase7WriterAuthority(pool, config),
       pressingCaptureInstalled,
-      stockCaptureInstalled
+      {
+        [PHASE9_STOCK_ADJUST_ROUTE]: {
+          installed: outboxInstalled("factory_edge_stock_outbox"),
+          code: "EDGE_PHASE9_STOCK_CAPTURE_NOT_INSTALLED",
+        },
+        [PHASE9_POS_SALE_ROUTE]: {
+          installed: outboxInstalled("factory_edge_pos_outbox"),
+          code: "EDGE_PHASE9_POS_CAPTURE_NOT_INSTALLED",
+        },
+      }
     )
   );
 }

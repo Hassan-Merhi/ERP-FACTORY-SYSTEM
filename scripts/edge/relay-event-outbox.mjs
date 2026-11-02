@@ -45,6 +45,11 @@ export const STREAM_SOURCES = Object.freeze({
     // The cloud journal is dated on the LAN movement's business day.
     businessDate: (payload) => payload?.businessDate,
   }),
+  pos: Object.freeze({
+    table: "factory_edge_pos_outbox",
+    localRef: "local_voucher_id",
+    businessDate: (payload) => payload?.voucherDate,
+  }),
 });
 
 function source(stream) {
