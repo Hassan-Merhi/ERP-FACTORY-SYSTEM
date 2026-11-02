@@ -63,7 +63,10 @@ import { PerWorkerView } from "./factoryattendance/components/PerWorkerView";
 import { SummaryCard } from "./factoryattendance/components/SummaryCard";
 import { AttendanceReportImage } from "./factoryattendance/components/AttendanceReportImage";
 import { LanguageChoiceDialog } from "./factoryattendance/components/LanguageChoiceDialog";
+import { AttendanceAdminApprovalDialog } from "./factoryattendance/components/AttendanceAdminApprovalDialog";
+import { attendancePastDates, attendanceToday, type AttendanceAdminCredentials } from "./factoryattendance/attendanceEditPolicy";
 import "./factoryTrackingModern.css";
+import "./factoryAttendanceRefresh.css";
 
 interface AttendanceWhatsappSettings {
   attendanceWhatsappGroupId?: string | null;
@@ -79,7 +82,10 @@ export default function FactoryAttendance() {
   };
 
   // ── Daily attendance state ────────────────────────────────────
-  const [selectedDate, setSelectedDate] = useState<string>(todayStr());
+  const [selectedDate, setSelectedDate] = useState<string>(attendanceToday);
+  const [approvalOpen, setApprovalOpen] = useState(false);
+  const [approvalDates, setApprovalDates] = useState<string[]>([]);
+  const [pendingApprovalRecords, setPendingApprovalRecords] = useState<AttendanceBulkRecord[] | null>(null);
   // Shift is no longer user-selectable on this screen. Keep an empty value for existing save/export payloads.
   const shift = "";
 
@@ -165,8 +171,14 @@ export default function FactoryAttendance() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: (records: AttendanceBulkRecord[]) => apiRequest("POST", "/api/factory/attendance/bulk", { records }),
+    mutationFn: (payload: { records: AttendanceBulkRecord[]; credentials?: AttendanceAdminCredentials }) =>
+      apiRequest("POST", "/api/factory/attendance/bulk", {
+        records: payload.records,
+        ...payload.credentials,
+      }),
     onSuccess: () => {
+      setApprovalOpen(false);
+      setPendingApprovalRecords(null);
       queryClient.invalidateQueries({ queryKey: ["/api/factory/attendance", selectedDate] });
       toast({ title: "Attendance saved", description: `Saved for ${selectedDate}` });
     },
@@ -185,8 +197,19 @@ export default function FactoryAttendance() {
       status: attendanceMap[w.id] ?? "Present",
       notes: notesMap[w.id] || undefined,
     }));
-    saveMutation.mutate(records);
+    const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
+    if (priorDates.length) {
+      setApprovalDates(priorDates);
+      setPendingApprovalRecords(records);
+      setApprovalOpen(true);
+    } else {
+      saveMutation.mutate({ records });
+    }
   }, [data, selectedDate, shift, attendanceMap, notesMap, saveMutation]);
+
+  const approveAttendanceSave = (credentials: AttendanceAdminCredentials) => {
+    if (pendingApprovalRecords) saveMutation.mutate({ records: pendingApprovalRecords, credentials });
+  };
 
   const markAll = (status: AttendanceStatus) => {
     if (!data?.workers) return;
@@ -333,16 +356,16 @@ export default function FactoryAttendance() {
   });
 
   return (
-    <div className="factory-tracking-modern factory-tracking-attendance">
+    <div className="factory-tracking-modern factory-tracking-attendance factory-attendance-refresh">
       <div className="space-y-4">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div className="attendance-hero flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div className="min-w-0">
             <div className="flex items-center gap-3">
               <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-primary/20 bg-primary/10 text-primary shadow-xs">
                 <CalendarDays className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <h2 className="text-lg font-semibold tracking-tight">Attendance</h2>
+                <h2 className="text-lg font-semibold tracking-tight">Workers Attendance</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Record the day, review attendance at a glance, and send or export reports.
                 </p>
@@ -352,6 +375,9 @@ export default function FactoryAttendance() {
               <Badge variant="outline" className="rounded-full bg-background/50 px-2.5 py-1 text-[11px] font-medium">
                 {formatDate(selectedDate)}
               </Badge>
+              {selectedDate < attendanceToday() && (
+                <Badge variant="secondary" className="rounded-full">Earlier date — Admin approval required to save</Badge>
+              )}
             </div>
           </div>
         </div>
@@ -367,7 +393,7 @@ export default function FactoryAttendance() {
         ) : (
           <>
             {/* Attendance controls + range export */}
-            <Card className="overflow-hidden border-border/70 bg-card/75 shadow-none">
+            <Card className="attendance-command-card overflow-hidden border-border/70 bg-card/75 shadow-none">
               <CardContent className="p-4">
                 <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(500px,0.9fr)] xl:gap-0">
                   <div className="space-y-3 xl:pr-5">
@@ -390,6 +416,7 @@ export default function FactoryAttendance() {
                           id="attendance-date"
                           data-testid="input-attendance-date"
                           type="date"
+                          max={attendanceToday()}
                           value={selectedDate}
                           onChange={(e) => setSelectedDate(e.target.value)}
                           className="w-44 rounded-xl bg-background/70"
@@ -471,7 +498,7 @@ export default function FactoryAttendance() {
                         className="rounded-xl shadow-xs"
                         data-testid="button-save-attendance"
                         onClick={handleSave}
-                        disabled={!workers.length || saveMutation.isPending}
+                        disabled={!workers.length || saveMutation.isPending || selectedDate > attendanceToday()}
                       >
                         {saveMutation.isPending ? (
                           <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
@@ -554,7 +581,7 @@ export default function FactoryAttendance() {
 
             {/* Summary Cards */}
             {workers.length > 0 && (
-              <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+              <div className="attendance-kpi-grid grid grid-cols-2 gap-3 xl:grid-cols-4">
                 <SummaryCard
                   icon={<Users className="h-4 w-4" />}
                   label="Total"
@@ -591,8 +618,8 @@ export default function FactoryAttendance() {
             )}
 
             {/* Attendance Table */}
-            <Card className="overflow-hidden border-border/70 bg-card/75 shadow-none">
-              <CardHeader className="gap-3 border-b border-border/60 bg-muted/15 px-4 py-4 sm:px-5">
+            <Card className="attendance-register overflow-hidden border-border/70 bg-card/75 shadow-none">
+              <CardHeader className="attendance-register-header gap-3 border-b border-border/60 bg-muted/15 px-4 py-4 sm:px-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <CardTitle className="flex items-center gap-2 text-base">
@@ -681,8 +708,8 @@ export default function FactoryAttendance() {
                 ) : (
                   <>
                     {/* Desktop table */}
-                    <div className="hidden overflow-x-auto sm:block">
-                      <table className="w-full text-sm">
+                    <div className="attendance-table-scroll hidden overflow-x-auto sm:block">
+                      <table className="attendance-table w-full text-sm">
                         <thead className="sticky top-0 z-30 bg-muted">
                           <tr className="border-b border-border/60">
                             <th className="text-left px-4 py-2 font-medium text-muted-foreground w-8">#</th>
@@ -700,21 +727,21 @@ export default function FactoryAttendance() {
                               <tr
                                 key={worker.id}
                                 data-testid={`row-worker-${worker.id}`}
-                                className="border-b border-border/50 transition-colors last:border-0 hover:bg-muted/20"
+                                className="attendance-table-row border-b border-border/50 transition-colors last:border-0 hover:bg-muted/20"
                               >
                                 <td className="px-4 py-2 text-muted-foreground">{idx + 1}</td>
                                 <td
-                                  className="px-4 py-2 font-mono text-xs text-muted-foreground"
+                                  className="attendance-worker-code px-4 py-2 font-mono text-xs text-muted-foreground"
                                   data-testid={`text-worker-code-${worker.id}`}
                                 >
                                   {worker.employeeCode ?? "—"}
                                 </td>
                                 <td className="px-4 py-2" dir="auto">
-                                  <div className="font-medium" data-testid={`text-worker-name-${worker.id}`}>
+                                  <div className="attendance-worker-name font-medium" data-testid={`text-worker-name-${worker.id}`}>
                                     {worker.fullName}
                                   </div>
                                   {(worker.position || worker.department) && (
-                                    <div className="mt-0.5 text-[11px] text-muted-foreground">
+                                    <div className="attendance-worker-position mt-0.5 text-[11px] text-muted-foreground">
                                       {worker.position || worker.department}
                                     </div>
                                   )}
@@ -726,7 +753,8 @@ export default function FactoryAttendance() {
                                   >
                                     <SelectTrigger
                                       data-testid={`select-status-${worker.id}`}
-                                      className={`h-9 rounded-lg bg-background/70 text-xs font-medium ${STATUS_COLORS[status] ?? ""}`}
+                                      data-attendance-status={status}
+                                      className={`attendance-status-trigger h-9 rounded-lg bg-background/70 text-xs font-medium ${STATUS_COLORS[status] ?? ""}`}
                                     >
                                       <SelectValue />
                                     </SelectTrigger>
@@ -745,7 +773,7 @@ export default function FactoryAttendance() {
                                     placeholder="Optional notes"
                                     value={notesMap[worker.id] ?? ""}
                                     onChange={(e) => setNotes(worker.id, e.target.value)}
-                                    className="h-9 rounded-lg bg-background/70 text-xs"
+                                    className="attendance-notes-input h-9 rounded-lg bg-background/70 text-xs"
                                     dir="auto"
                                   />
                                 </td>
@@ -765,7 +793,7 @@ export default function FactoryAttendance() {
                           <div
                             key={worker.id}
                             data-testid={`card-worker-${worker.id}`}
-                            className="space-y-3 rounded-xl border border-border/70 bg-background/40 p-3.5 shadow-xs"
+                            className="attendance-worker-mobile space-y-3 rounded-xl border border-border/70 bg-background/40 p-3.5 shadow-xs"
                           >
                             <div className="flex items-start justify-between gap-2">
                               <div>
@@ -792,7 +820,8 @@ export default function FactoryAttendance() {
                             <Select value={status} onValueChange={(v) => setStatus(worker.id, v as AttendanceStatus)}>
                               <SelectTrigger
                                 data-testid={`select-status-mobile-${worker.id}`}
-                                className={`h-10 rounded-lg bg-background/70 text-sm font-medium ${STATUS_COLORS[status] ?? ""}`}
+                                data-attendance-status={status}
+                                className={`attendance-status-trigger h-10 rounded-lg bg-background/70 text-sm font-medium ${STATUS_COLORS[status] ?? ""}`}
                               >
                                 <SelectValue />
                               </SelectTrigger>
@@ -809,7 +838,7 @@ export default function FactoryAttendance() {
                               placeholder="Notes (optional)"
                               value={notesMap[worker.id] ?? ""}
                               onChange={(e) => setNotes(worker.id, e.target.value)}
-                              className="h-9 rounded-lg bg-background/70 text-xs"
+                              className="attendance-notes-input h-9 rounded-lg bg-background/70 text-xs"
                               dir="auto"
                             />
                           </div>
@@ -820,7 +849,7 @@ export default function FactoryAttendance() {
                 )}
 
                 {workers.length > 0 && (
-                  <div className="sticky bottom-0 z-20 flex flex-col gap-2 border-t border-border/70 bg-background/95 px-4 py-3 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
+                  <div className="attendance-save-bar sticky bottom-0 z-20 flex flex-col gap-2 border-t border-border/70 bg-background/95 px-4 py-3 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       <span>
                         <strong className="text-foreground">{counts.present}</strong> present
@@ -840,7 +869,7 @@ export default function FactoryAttendance() {
                       className="rounded-xl shadow-xs sm:min-w-36"
                       data-testid="button-save-attendance-sticky"
                       onClick={handleSave}
-                      disabled={saveMutation.isPending}
+                      disabled={saveMutation.isPending || selectedDate > attendanceToday()}
                     >
                       {saveMutation.isPending ? (
                         <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
@@ -856,6 +885,13 @@ export default function FactoryAttendance() {
           </>
         )}
 
+        <AttendanceAdminApprovalDialog
+          open={approvalOpen}
+          onOpenChange={setApprovalOpen}
+          onApprove={approveAttendanceSave}
+          isPending={saveMutation.isPending}
+          dates={approvalDates}
+        />
         <AttendanceReportImage
           ref={attendanceReportRef}
           selectedDate={selectedDate}

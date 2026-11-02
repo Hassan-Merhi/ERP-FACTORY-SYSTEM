@@ -7,6 +7,7 @@ import { sql } from "drizzle-orm";
 import { db, pool } from "../server/db";
 import { toMoney } from "../server/lib/money";
 import { postFactoryVoucherTx } from "../server/services/factory/factoryVoucherPosting";
+import { assertHistoricalFreightBatchNotReapplied } from "./historical-freight-batch-replay-guard";
 import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,
@@ -30,6 +31,9 @@ type Original = {
 };
 
 async function run(apply: boolean) {
+  // The four reviewed journals have ALREADY been posted, and the charge-64
+  // reversal was later retired. Replaying --apply is not an idempotent repair.
+  assertHistoricalFreightBatchNotReapplied(apply);
   await db.transaction(async (tx) => {
     // Exact source-document lock: no guess based on currently configured FX.
     const containers = await tx.execute(sql`

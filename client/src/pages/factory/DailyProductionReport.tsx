@@ -15,6 +15,7 @@ import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { useDailyProductionReport } from "./dailyproductionreport/useDailyProductionReport";
 import { ProductionTabPanel } from "./dailyproductionreport/components/ProductionTabPanel";
 import ProductComparisonCharts from "./productcomparison/ProductComparisonCharts";
+import "./factoryshippingcontainers/shipping-redesign.css";
 
 type OverviewTab = "otw-tracking" | "production" | "comparison" | "product-comparison" | "shipping" | "sheets";
 
@@ -56,9 +57,13 @@ export default function DailyProductionReport() {
   const show = (tab: OverviewTab) => visibleTabs.includes(tab);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-4 pt-4 pb-3 border-b shrink-0">
-        <PageHeader title="Overview" subtitle="Manufacturing overview — output metrics &amp; bale lifecycle" />
+    <div className={`flex flex-col h-full overflow-hidden ${effectiveActiveTab === "shipping" ? "shipping-overview-shell" : ""}`}>
+      <div className={effectiveActiveTab === "shipping" ? "shipping-overview-header shrink-0 px-5 pt-5 pb-4" : "px-4 pt-4 pb-3 border-b shrink-0"}>
+        <PageHeader
+          title="Overview"
+          subtitle="Manufacturing overview — output metrics &amp; bale lifecycle"
+          icon={effectiveActiveTab === "shipping" ? <span className="shipping-overview-icon"><Ship className="h-5 w-5" /></span> : undefined}
+        />
       </div>
 
       {visibleTabs.length === 0 ? (
@@ -69,7 +74,7 @@ export default function DailyProductionReport() {
           onValueChange={(value) => setActiveTab(value as OverviewTab)}
           className="flex flex-col flex-1 overflow-hidden"
         >
-          <div className="erp-mobile-scroll-tabs mx-4 mt-3 mb-0 shrink-0 pb-1">
+          <div className={`erp-mobile-scroll-tabs mx-4 mt-3 mb-0 shrink-0 pb-1 ${effectiveActiveTab === "shipping" ? "shipping-overview-tabs" : ""}`}>
             <TabsList
               className="w-max min-w-full sm:min-w-0 sm:w-fit"
               aria-label="Production reports"
@@ -142,7 +147,7 @@ export default function DailyProductionReport() {
           )}
 
           {show("shipping") && (
-            <TabsContent value="shipping" className="flex-1 overflow-hidden p-4 mt-0 data-[state=inactive]:hidden">
+            <TabsContent value="shipping" className="flex-1 overflow-y-auto p-4 mt-0 data-[state=inactive]:hidden">
               <FactoryShippingContainers />
             </TabsContent>
           )}

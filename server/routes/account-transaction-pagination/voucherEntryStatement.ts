@@ -84,6 +84,8 @@ export function genericFilteredCte(
           v.voucher_type AS "voucherType",
           COALESCE(v.effective_date::date, v.voucher_date::date)::text AS "voucherDate",
           v.description AS "voucherDescription",
+          v.company_id AS "companyId",
+          v.created_at::text AS "createdAt",
            v.currency,
           COALESCE(v.effective_date::date, v.voucher_date::date) AS sort_date,
           v.id AS sort_id
@@ -95,7 +97,9 @@ export function genericFilteredCte(
           v.voucher_date,
           v.effective_date,
           v.description,
-          v.currency
+          v.currency,
+          v.company_id,
+          v.created_at
       )`,
     };
   }
@@ -122,6 +126,7 @@ export function genericFilteredCte(
         v.voucher_type AS "voucherType",
         COALESCE(v.effective_date::date, v.voucher_date::date)::text AS "voucherDate",
         v.description AS "voucherDescription",
+        v.created_at::text AS "createdAt",
         v.company_id AS "companyId",
         v.currency,
         COALESCE(v.effective_date::date, v.voucher_date::date) AS sort_date,

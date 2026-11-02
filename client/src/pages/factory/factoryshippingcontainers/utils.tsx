@@ -62,7 +62,10 @@ function fmtDate(d: string | null | undefined): string {
 export // ─── Column visibility config ──────────────────────────────────────────────────
 const SHIPPING_COLS = [
   { id: "orderDate", label: "Order Date" },
+  { id: "invoiceNumber", label: "Invoice #" },
+  { id: "clientName", label: "Client" },
   { id: "status", label: "Status" },
+  { id: "containerNumber", label: "Container #" },
   { id: "destination", label: "Destination" },
   { id: "eta", label: "ETA" },
   { id: "arrived", label: "Arrived" },

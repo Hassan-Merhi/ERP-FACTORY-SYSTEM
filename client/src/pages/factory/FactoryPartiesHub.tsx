@@ -38,14 +38,14 @@ export default function FactoryPartiesHub() {
   const showSuppliers = sections.includes("suppliers");
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden bg-slate-50/30 dark:bg-[#080f20]">
       <Tabs
         value={section}
         onValueChange={(value) => setSection(value as Section)}
         className="flex flex-col h-full overflow-hidden"
       >
-        {/* Shared page-header grammar (accent bar, icon, subtitle) like the other hubs and the ERP pages. */}
-        <div className="shrink-0 px-4 pt-3 [&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-2">
+        {/* Presentation only: preserve the hub query state and permission-gated tabs. */}
+        <div className="relative mx-4 mt-4 shrink-0 overflow-hidden rounded-2xl border border-blue-500/15 bg-linear-to-r from-blue-500/10 via-background to-cyan-500/5 px-4 py-4 shadow-sm dark:border-blue-400/20 dark:from-blue-600/15 dark:via-[#0b1933] dark:to-blue-950/30 [&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-0">
           <PageHeader
             title="Parties"
             subtitle="Customers and suppliers of the factory"
@@ -57,16 +57,16 @@ export default function FactoryPartiesHub() {
             links={[{ href: "/factory/contacts", label: "Contacts" }]}
           />
         </div>
-        <div className="erp-mobile-scroll-tabs border-b px-4 pb-1 shrink-0">
-          <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Factory parties sections">
+        <div className="erp-mobile-scroll-tabs shrink-0 border-b border-border/50 px-4 pb-3 pt-3">
+          <TabsList className="h-12 w-max min-w-full rounded-2xl border border-border/60 bg-muted/60 p-1 shadow-sm sm:min-w-0 sm:w-fit dark:border-blue-400/20 dark:bg-slate-900/80" aria-label="Factory parties sections">
             {showCustomers && (
-              <TabsTrigger value="customers" data-testid="tab-parties-customers">
+              <TabsTrigger value="customers" data-testid="tab-parties-customers" className="h-10 rounded-xl px-5 font-semibold data-[state=active]:bg-blue-600 data-[state=active]:text-white dark:data-[state=active]:bg-blue-600 dark:data-[state=active]:text-white">
                 <Users className="h-4 w-4 mr-2" />
                 Customers
               </TabsTrigger>
             )}
             {showSuppliers && (
-              <TabsTrigger value="suppliers" data-testid="tab-parties-suppliers">
+              <TabsTrigger value="suppliers" data-testid="tab-parties-suppliers" className="h-10 rounded-xl px-5 font-semibold data-[state=active]:bg-blue-600 data-[state=active]:text-white dark:data-[state=active]:bg-blue-600 dark:data-[state=active]:text-white">
                 <UserRound className="h-4 w-4 mr-2" />
                 Suppliers
               </TabsTrigger>
@@ -75,13 +75,13 @@ export default function FactoryPartiesHub() {
         </div>
 
         {showCustomers && (
-          <TabsContent value="customers" className="flex-1 overflow-auto mt-0 p-4">
+          <TabsContent value="customers" className="mt-0 min-h-0 flex-1 overflow-auto p-0">
             <FactoryCustomers />
           </TabsContent>
         )}
 
         {showSuppliers && (
-          <TabsContent value="suppliers" className="flex-1 overflow-auto mt-0 p-4">
+          <TabsContent value="suppliers" className="mt-0 min-h-0 flex-1 overflow-auto p-4 sm:p-6">
             <FactorySuppliers />
           </TabsContent>
         )}

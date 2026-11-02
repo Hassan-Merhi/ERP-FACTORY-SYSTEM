@@ -1,0 +1,456 @@
+/*
+ * Attendance-only visual refresh.
+ * Scoped to FactoryAttendance; intentionally does not change the data model,
+ * status options, server calls, access rules, or save/export handlers.
+ * Use the existing utility layer so this stylesheet does not override unrelated pages.
+ */
+@layer theme, base, components, utilities;
+
+@layer utilities {
+  .factory-attendance-refresh {
+    --attendance-border: rgba(99, 112, 159, 0.21);
+    --attendance-panel: #fff;
+    --attendance-panel-soft: #f8f9ff;
+    --attendance-ink: #202641;
+    --attendance-muted: #64708d;
+    --attendance-accent: #7145d8;
+    --attendance-field: #fff;
+    --attendance-row-hover: #f3f1ff;
+    --attendance-purple-soft: #f0ebff;
+    background: radial-gradient(ellipse at 91% 1%, rgba(124, 71, 235, .09), transparent 420px),
+      radial-gradient(ellipse at 2% 0%, rgba(54, 121, 235, .06), transparent 370px);
+    color: var(--attendance-ink);
+  }
+
+  .dark .factory-attendance-refresh {
+    --attendance-border: rgba(120, 139, 192, 0.24);
+    --attendance-panel: #10172b;
+    --attendance-panel-soft: #131c34;
+    --attendance-ink: #f3f5ff;
+    --attendance-muted: #aab4ce;
+    --attendance-accent: #a784ff;
+    --attendance-field: #111a30;
+    --attendance-row-hover: #1b2543;
+    --attendance-purple-soft: #30235f;
+    background: radial-gradient(ellipse at 89% 0%, rgba(117, 45, 236, .17), transparent 430px),
+      radial-gradient(ellipse at 5% 15%, rgba(53, 81, 180, .10), transparent 390px),
+      #0d1323;
+  }
+
+  .factory-attendance-refresh > .space-y-4 {
+    max-width: 1580px;
+    gap: 18px;
+  }
+
+  /* Attendance command header */
+  .factory-attendance-refresh > .space-y-4 > .attendance-hero {
+    isolation: isolate;
+    overflow: hidden;
+    border: 1px solid var(--attendance-border);
+    border-radius: 22px;
+    padding: 22px 24px;
+    background: linear-gradient(115deg, var(--attendance-panel), var(--attendance-panel-soft));
+    box-shadow: 0 16px 36px -33px rgba(47, 33, 103, .42);
+  }
+
+  .dark .factory-attendance-refresh > .space-y-4 > .attendance-hero {
+    background: linear-gradient(110deg, #141b33, #17152d 70%, #241944);
+  }
+
+  .factory-attendance-refresh > .space-y-4 > .attendance-hero::before {
+    height: 3px;
+    background: linear-gradient(90deg, #327fff, #8a50ff, #bb87ff, transparent 90%);
+  }
+
+  .factory-attendance-refresh > .space-y-4 > .attendance-hero::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    width: 290px;
+    height: 290px;
+    top: -185px;
+    right: -45px;
+    border: 1px solid rgba(144, 91, 250, .24);
+    border-radius: 50%;
+    box-shadow: 0 0 0 40px rgba(133, 73, 231, .05), 0 0 0 85px rgba(122, 71, 217, .035);
+    pointer-events: none;
+  }
+
+  .factory-attendance-refresh .attendance-hero h2 {
+    color: var(--attendance-ink);
+    font-size: clamp(1.25rem, 1.6vw, 1.7rem);
+    font-weight: 750;
+    letter-spacing: -.035em;
+  }
+
+  .factory-attendance-refresh .attendance-hero .grid.place-items-center {
+    color: #794de4;
+    border-color: rgba(124, 76, 226, .27);
+    background: linear-gradient(145deg, rgba(136, 81, 250, .19), rgba(68, 111, 244, .10));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12);
+  }
+
+  .dark .factory-attendance-refresh .attendance-hero .grid.place-items-center {
+    color: #c2a6ff;
+  }
+
+  /* Do not move or remove the original save, bulk-action, WhatsApp and date-range controls. */
+  .factory-attendance-refresh .attendance-command-card,
+  .factory-attendance-refresh .attendance-register {
+    border: 1px solid var(--attendance-border);
+    border-radius: 20px;
+    background: var(--attendance-panel);
+    box-shadow: 0 14px 38px -35px rgba(40, 36, 92, .6);
+  }
+
+  .dark .factory-attendance-refresh .attendance-command-card,
+  .dark .factory-attendance-refresh .attendance-register {
+    background: linear-gradient(165deg, #151d35, #101728 74%);
+    box-shadow: 0 16px 42px -33px rgba(0, 0, 0, .75);
+  }
+
+  .factory-attendance-refresh .attendance-command-card > div {
+    padding: 20px;
+  }
+
+  .factory-attendance-refresh .attendance-command-card p.text-sm.font-semibold {
+    color: var(--attendance-ink);
+  }
+
+  .factory-attendance-refresh .attendance-command-card .grid.h-8 {
+    border: 1px solid rgba(125, 83, 224, .2);
+    background: var(--attendance-purple-soft);
+    color: var(--attendance-accent);
+  }
+
+  .factory-attendance-refresh .attendance-command-card input[type="date"],
+  .factory-attendance-refresh .attendance-register-header input,
+  .factory-attendance-refresh .attendance-register-header [role="combobox"] {
+    border: 1px solid var(--attendance-border);
+    border-radius: 12px;
+    background: var(--attendance-field);
+    color: var(--attendance-ink);
+    min-height: 39px;
+    box-shadow: none;
+  }
+
+  .factory-attendance-refresh .attendance-command-card button,
+  .factory-attendance-refresh .attendance-save-bar button {
+    border-radius: 12px;
+    font-weight: 650;
+  }
+
+  .factory-attendance-refresh button[data-testid="button-save-attendance"],
+  .factory-attendance-refresh button[data-testid="button-save-attendance-sticky"] {
+    background: linear-gradient(115deg, #7949ee, #5835c3);
+    border: 1px solid rgba(179, 156, 255, .4);
+    color: #fff;
+    box-shadow: 0 6px 18px -10px rgba(120, 58, 239, .9);
+  }
+
+  .factory-attendance-refresh button[data-testid="button-save-attendance"]:hover,
+  .factory-attendance-refresh button[data-testid="button-save-attendance-sticky"]:hover {
+    background: linear-gradient(115deg, #8b5af6, #6745da);
+  }
+
+  /* Summary cards: all values still originate from counts, including "Other" statuses. */
+  .factory-attendance-refresh .attendance-kpi-grid {
+    gap: 14px;
+  }
+
+  .factory-attendance-refresh .attendance-kpi-grid > .group {
+    min-height: 112px;
+    isolation: isolate;
+    border-radius: 18px;
+    border: 1px solid rgba(75, 119, 220, .3);
+    background: linear-gradient(125deg, #f6f9ff, #eaf1ff);
+    box-shadow: 0 10px 30px -25px rgba(28, 55, 115, .65);
+  }
+
+  .factory-attendance-refresh .attendance-kpi-grid > .group::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    right: -20px;
+    bottom: -55px;
+    width: 145px;
+    height: 110px;
+    transform: rotate(-22deg);
+    border-radius: 50%;
+    background: rgba(62, 123, 255, .09);
+    pointer-events: none;
+  }
+
+  .factory-attendance-refresh .attendance-kpi-grid > .group:nth-child(2) {
+    border-color: rgba(16, 185, 129, .36);
+    background: linear-gradient(125deg, #f1fdf9, #e4faf2);
+  }
+
+  .factory-attendance-refresh .attendance-kpi-grid > .group:nth-child(2)::after {
+    background: rgba(16, 185, 129, .12);
+  }
+
+  .factory-attendance-refresh .attendance-kpi-grid > .group:nth-child(3) {
+    border-color: rgba(244, 63, 94, .32);
+    background: linear-gradient(125deg, #fff5f7, #ffeaef);
+  }
+
+  .factory-attendance-refresh .attendance-kpi-grid > .group:nth-child(3)::after {
+    background: rgba(244, 63, 94, .12);
+  }
+
+  .factory-attendance-refresh .attendance-kpi-grid > .group:nth-child(4) {
+    border-color: rgba(245, 158, 11, .36);
+    background: linear-gradient(125deg, #fffbf2, #fff3dc);
+  }
+
+  .factory-attendance-refresh .attendance-kpi-grid > .group:nth-child(4)::after {
+    background: rgba(245, 158, 11, .12);
+  }
+
+  .dark .factory-attendance-refresh .attendance-kpi-grid > .group {
+    background: linear-gradient(120deg, #172a4a, #15203a 67%, #1a2951);
+  }
+
+  .dark .factory-attendance-refresh .attendance-kpi-grid > .group:nth-child(2) {
+    background: linear-gradient(120deg, #153a34, #112b2a 70%, #113b31);
+  }
+
+  .dark .factory-attendance-refresh .attendance-kpi-grid > .group:nth-child(3) {
+    background: linear-gradient(120deg, #3b2136, #2c1b2d 70%, #471c38);
+  }
+
+  .dark .factory-attendance-refresh .attendance-kpi-grid > .group:nth-child(4) {
+    background: linear-gradient(120deg, #3b3024, #2d2826 70%, #47331c);
+  }
+
+  .factory-attendance-refresh .attendance-kpi-grid > .group > div {
+    padding: 19px;
+    min-height: 110px;
+  }
+
+  .factory-attendance-refresh .attendance-kpi-grid > .group p:first-child {
+    color: var(--attendance-muted);
+    font-weight: 650;
+    font-size: 12px;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .factory-attendance-refresh .attendance-kpi-grid > .group p:nth-child(2) {
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: -.055em;
+  }
+
+  .factory-attendance-refresh .attendance-kpi-grid > .group > div > div:last-child {
+    height: 46px;
+    width: 46px;
+    border-radius: 14px;
+    border-color: rgba(108, 126, 183, .22);
+    background: rgba(116, 139, 225, .12);
+  }
+
+  /* Search, totals and status controls */
+  .factory-attendance-refresh .attendance-register-header {
+    background: linear-gradient(120deg, rgba(114, 79, 225, .045), transparent);
+    padding: 20px 22px;
+    border-color: var(--attendance-border);
+  }
+
+  .dark .factory-attendance-refresh .attendance-register-header {
+    background: linear-gradient(115deg, #1a2440, #181e34 58%, #231c47);
+  }
+
+  .factory-attendance-refresh .attendance-register-header [data-testid="input-attendance-worker-search"] {
+    min-height: 41px;
+  }
+
+  .factory-attendance-refresh .attendance-register-header .text-base {
+    color: var(--attendance-ink);
+    font-size: 1.1rem;
+    font-weight: 750;
+    letter-spacing: -.02em;
+  }
+
+  .factory-attendance-refresh .attendance-register-header .rounded-full {
+    background: var(--attendance-purple-soft);
+    color: var(--attendance-accent);
+    border-color: rgba(139, 93, 230, .24);
+    font-weight: 700;
+  }
+
+  .factory-attendance-refresh .attendance-table-scroll {
+    padding: 14px 16px 4px;
+  }
+
+  .factory-attendance-refresh .attendance-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    min-width: 690px;
+    color: var(--attendance-ink);
+  }
+
+  .factory-attendance-refresh .attendance-table thead {
+    background: #ece8fa;
+  }
+
+  .dark .factory-attendance-refresh .attendance-table thead {
+    background: #2d245c;
+  }
+
+  .factory-attendance-refresh .attendance-table thead tr,
+  .factory-attendance-refresh .attendance-table thead th {
+    border: 0;
+  }
+
+  .factory-attendance-refresh .attendance-table thead th {
+    height: 42px;
+    padding-block: 10px;
+    color: #665a9b;
+    font-weight: 750;
+    letter-spacing: .015em;
+    font-size: 12px;
+  }
+
+  .dark .factory-attendance-refresh .attendance-table thead th {
+    color: #d3c3ff;
+  }
+
+  .factory-attendance-refresh .attendance-table thead th:first-child {
+    border-radius: 12px 0 0 12px;
+  }
+
+  .factory-attendance-refresh .attendance-table thead th:last-child {
+    border-radius: 0 12px 12px 0;
+  }
+
+  .factory-attendance-refresh .attendance-table-row {
+    background: transparent;
+    border-color: var(--attendance-border);
+  }
+
+  .factory-attendance-refresh .attendance-table-row:nth-child(even) {
+    background: rgba(103, 88, 180, .035);
+  }
+
+  .dark .factory-attendance-refresh .attendance-table-row:nth-child(even) {
+    background: rgba(110, 117, 183, .055);
+  }
+
+  .factory-attendance-refresh .attendance-table-row:hover {
+    background: var(--attendance-row-hover);
+  }
+
+  .factory-attendance-refresh .attendance-table-row td {
+    padding-block: 9px;
+    border-color: var(--attendance-border);
+  }
+
+  .factory-attendance-refresh .attendance-worker-code {
+    font-weight: 700;
+    font-size: 12px;
+    color: var(--attendance-accent);
+  }
+
+  .factory-attendance-refresh .attendance-worker-name {
+    color: var(--attendance-ink);
+    font-weight: 700;
+    font-size: 13px;
+  }
+
+  .factory-attendance-refresh .attendance-worker-position {
+    color: var(--attendance-muted);
+    font-size: 11px;
+    letter-spacing: .01em;
+  }
+
+  .factory-attendance-refresh .attendance-status-trigger,
+  .factory-attendance-refresh .attendance-notes-input {
+    min-height: 37px;
+    border: 1px solid var(--attendance-border);
+    border-radius: 10px;
+    background: var(--attendance-field);
+    color: var(--attendance-ink);
+    box-shadow: none;
+  }
+
+  .factory-attendance-refresh .attendance-status-trigger {
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .factory-attendance-refresh .attendance-status-trigger[data-attendance-status="Present"] {
+    border-color: rgba(16, 185, 129, .3);
+    background: rgba(16, 185, 129, .1);
+    color: #05865f;
+  }
+
+  .dark .factory-attendance-refresh .attendance-status-trigger[data-attendance-status="Present"] {
+    background: rgba(22, 163, 113, .2);
+    color: #72efb5;
+  }
+
+  .factory-attendance-refresh .attendance-status-trigger[data-attendance-status="Absent"] {
+    border-color: rgba(244, 63, 94, .3);
+    background: rgba(244, 63, 94, .1);
+    color: #c6284a;
+  }
+
+  .dark .factory-attendance-refresh .attendance-status-trigger[data-attendance-status="Absent"] {
+    color: #ff95ad;
+  }
+
+  .factory-attendance-refresh .attendance-notes-input::placeholder {
+    color: var(--attendance-muted);
+    opacity: .75;
+  }
+
+  /* Keep the existing sticky save action and mobile controls available. */
+  .factory-attendance-refresh .attendance-save-bar {
+    background: var(--attendance-panel-soft);
+    border-top-color: var(--attendance-border);
+    color: var(--attendance-muted);
+  }
+
+  .factory-attendance-refresh .attendance-worker-mobile {
+    background: var(--attendance-panel-soft);
+    border-color: var(--attendance-border);
+  }
+
+  @media (max-width: 640px) {
+    .factory-attendance-refresh > .space-y-4 > .attendance-hero {
+      padding: 16px;
+      border-radius: 17px;
+    }
+
+    .factory-attendance-refresh .attendance-command-card > div,
+    .factory-attendance-refresh .attendance-register-header {
+      padding: 15px;
+    }
+
+    .factory-attendance-refresh .attendance-kpi-grid {
+      gap: 9px;
+    }
+
+    .factory-attendance-refresh .attendance-kpi-grid > .group {
+      min-height: 94px;
+      border-radius: 14px;
+    }
+
+    .factory-attendance-refresh .attendance-kpi-grid > .group > div {
+      padding: 13px;
+      min-height: 92px;
+    }
+
+    .factory-attendance-refresh .attendance-kpi-grid > .group p:nth-child(2) {
+      font-size: 1.5rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .factory-attendance-refresh .attendance-kpi-grid > .group {
+      transition: none;
+    }
+  }
+}

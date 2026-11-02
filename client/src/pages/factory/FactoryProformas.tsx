@@ -59,9 +59,13 @@ export default function FactoryProformas() {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col bg-gradient-to-b from-violet-500/[0.035] via-background to-background dark:from-violet-600/[0.08]">
       <FactoryProformasHeader
         customerId={customerId}
+        proformas={proformas}
+        proformasLoading={proformasLoading}
+        hideProformaPrice={model.hideProformaPrice}
+        formatAmount={model.formatAmount}
         setExcelImportName={model.setExcelImportName}
         setExcelImportLines={model.setExcelImportLines}
         setExcelImportErrors={model.setExcelImportErrors}
@@ -77,7 +81,7 @@ export default function FactoryProformas() {
       />
 
       {/* ── Content area ─────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-auto px-6 py-5">
+      <div className="min-h-0 flex-1 overflow-auto px-4 py-5 sm:px-6">
         {/* Loading skeletons */}
         {customerId && proformasLoading && (
           <div className="space-y-3">
@@ -118,7 +122,7 @@ export default function FactoryProformas() {
 
         {/* Proforma list */}
         {customerId && !proformasLoading && proformas.length > 0 && (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {/* Inactive toggle + search status */}
             {(() => {
               const inactiveCount = proformas.filter((p) => !p.isActive).length;
@@ -151,7 +155,7 @@ export default function FactoryProformas() {
                         }
                       }}
                       data-testid="button-expand-collapse-all"
-                      className="text-muted-foreground"
+                      className="rounded-lg text-muted-foreground hover:bg-violet-500/10 hover:text-violet-600 dark:hover:text-violet-300"
                     >
                       {allExpanded ? "Collapse all" : "Expand all"}
                     </Button>

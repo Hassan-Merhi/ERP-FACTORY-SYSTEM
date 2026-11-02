@@ -690,6 +690,55 @@ describe("Phase 7C read microcache", () => {
     expect(next).toHaveBeenCalledOnce();
   });
 
+  it("evicts customer balance lists after a proforma transfer or a voucher, without evicting unrelated references", () => {
+    const middleware = createReadMicrocacheMiddleware({ ttlMs: 300_000 });
+    const session = { userId: 7, currentCompanyId: 3, factoryCompanyId: 3, currentRole: "Admin" };
+    const customerList = makeRequest({
+      path: "/api/factory/customers",
+      originalUrl: "/api/factory/customers",
+      session,
+    });
+    const stockItems = makeRequest({
+      path: "/api/stock-items/light",
+      originalUrl: "/api/stock-items/light",
+      session,
+    });
+
+    storeJson(middleware, customerList, makeResponse(), [{ id: 1, balance: 100 }]);
+    storeJson(middleware, stockItems, makeResponse(), [{ id: 2 }]);
+
+    const transfer = makeResponse(200);
+    middleware(makeRequest({
+      method: "PATCH",
+      path: "/api/factory/customer-proformas/44/transfer",
+      originalUrl: "/api/factory/customer-proformas/44/transfer",
+      body: { targetCustomerId: 2 },
+      session,
+    }), transfer, vi.fn());
+    transfer.emit("finish");
+
+    const afterTransfer = vi.fn();
+    middleware(customerList, makeResponse(), afterTransfer);
+    expect(afterTransfer).toHaveBeenCalledOnce();
+    const unchangedStock = makeResponse();
+    middleware(stockItems, unchangedStock, vi.fn());
+    expect(unchangedStock.headers["X-ERP-Read-Cache"]).toBe("HIT");
+
+    storeJson(middleware, customerList, makeResponse(), [{ id: 1, balance: 50 }]);
+    const voucher = makeResponse(200);
+    middleware(makeRequest({
+      method: "POST",
+      path: "/api/vouchers",
+      originalUrl: "/api/vouchers",
+      session,
+    }), voucher, vi.fn());
+    voucher.emit("finish");
+
+    const afterVoucher = vi.fn();
+    middleware(customerList, makeResponse(), afterVoucher);
+    expect(afterVoucher).toHaveBeenCalledOnce();
+  });
+
   it("keeps other companies warm when one company writes", () => {
     const middleware = createReadMicrocacheMiddleware({ ttlMs: 5_000 });
     const company3 = makeRequest({

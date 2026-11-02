@@ -22,6 +22,7 @@ import {
 import { toMoney } from "../../lib/money";
 import { withStockTransferNarrations } from "../../services/inventory/stockTransferNarration";
 import { keepRoutineVoucher } from "../../services/accounting/operationalCorrectionVisibility";
+import { isInternalHistoricalSupplierCatchup } from "../../services/accounting/internalHistoricalSupplierRoutineVisibility";
 
 /**
  * After saving a journal voucher, if it has a customer entry + a ledger account entry,
@@ -56,7 +57,13 @@ export function registerVoucherQueryRoutes(app: Express) {
       }
 
       vouchers = (await withStockTransferNarrations(access.activeCompanyId, vouchers)).filter((voucher) =>
-        keepRoutineVoucher(voucher, req.session.currentRole)
+        keepRoutineVoucher(voucher, req.session.currentRole) &&
+        !isInternalHistoricalSupplierCatchup({
+          companyId: access.activeCompanyId,
+          voucherNumber: voucher.voucherNumber,
+          description: voucher.description,
+          createdAt: voucher.createdAt,
+        })
       );
 
       // Strip totalAmount from Stock Transfer vouchers for POS users

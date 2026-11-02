@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Pencil, X, EyeOff, Eye, AlertCircle, Palette, Search } from "lucide-react";
+import { ChevronDown, ChevronRight, Pencil, X, EyeOff, Eye, AlertCircle, Palette, Search, Layers3 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -135,11 +135,14 @@ export function BaleProductsView1({ model }: { model: Model }) {
     groupedProducts,
   } = model;
   return (
-    <div className="rounded-xl border overflow-hidden">
+    <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-blue-400/20 dark:bg-[#111c2e]">
       {/* Toolbar */}
-      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b bg-muted/20 flex-wrap">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 bg-gradient-to-r from-slate-50 via-white to-blue-50/60 px-4 py-4 dark:border-blue-300/15 dark:from-[#142444] dark:via-[#111e36] dark:to-[#101b31]">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-semibold text-sm">Product List</span>
+          <span className="flex items-center gap-2.5 text-base font-bold tracking-tight text-slate-900 dark:text-white">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400"><Layers3 className="h-5 w-5" /></span>
+            Product List
+          </span>
           {selectedIds.size > 0 && (
             <>
               <span className="text-xs text-muted-foreground border-l pl-2">{selectedIds.size} selected</span>
@@ -188,7 +191,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
                 setSelectedIds(new Set());
               }}
               placeholder="Search by name or code..."
-              className="pl-8 w-52 h-8 text-sm"
+              className="h-9 w-56 rounded-xl border-slate-300 bg-white/90 pl-9 text-sm shadow-sm focus-visible:ring-blue-500 dark:border-blue-300/20 dark:bg-[#0d192c]"
               data-testid="input-search-products"
             />
             {searchQuery && (
@@ -212,7 +215,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
                 setSelectedIds(new Set());
               }}
             >
-              <SelectTrigger className="w-40 h-8 text-sm" data-testid="select-filter-category">
+              <SelectTrigger className="h-9 w-40 rounded-xl border-slate-300 bg-white/90 text-sm shadow-sm dark:border-blue-300/20 dark:bg-[#0d192c]" data-testid="select-filter-category">
                 <SelectValue placeholder="All categories" />
               </SelectTrigger>
               <SelectContent>
@@ -233,7 +236,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
                 setSelectedIds(new Set());
               }}
             >
-              <SelectTrigger className="w-32 h-8 text-sm" data-testid="select-filter-weight">
+              <SelectTrigger className="h-9 w-32 rounded-xl border-slate-300 bg-white/90 text-sm shadow-sm dark:border-blue-300/20 dark:bg-[#0d192c]" data-testid="select-filter-weight">
                 <SelectValue placeholder="All weights" />
               </SelectTrigger>
               <SelectContent>
@@ -260,7 +263,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
                   <Button
                     size="sm"
                     variant={activeFilterCount > 0 ? "default" : "outline"}
-                    className="h-8"
+                    className="h-9 rounded-xl shadow-sm"
                     data-testid="button-filters-dropdown"
                   >
                     <AlertCircle className="h-3.5 w-3.5 mr-1.5" />
@@ -338,9 +341,9 @@ export function BaleProductsView1({ model }: { model: Model }) {
           </div>
         ) : condensedView ? (
           groupedProducts.length > 0 ? (
-            <Table mobileLayout="cards">
-              <TableHeader className="sticky top-0 z-30">
-                <TableRow className="bg-muted border-b-2 border-border/60 hover:bg-muted">
+            <Table mobileLayout="cards" wrapperClassName="rounded-none border-x-0 border-b-0 border-t-0 shadow-inner shadow-slate-200/20 dark:shadow-blue-400/5" className="[&_tbody_tr:hover]:bg-blue-50/70 dark:[&_tbody_tr:hover]:bg-blue-500/10 [&_td]:border-slate-200/70 dark:[&_td]:border-blue-200/10 [&_th]:border-slate-200/80 dark:[&_th]:border-blue-200/10">
+              <TableHeader className="sticky top-0 z-30 bg-slate-100 dark:bg-[#1b2c4d]">
+                <TableRow className="border-b border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-100 dark:border-blue-300/20 dark:bg-[#1b2c4d] dark:text-blue-100 dark:hover:bg-[#1b2c4d]">
                   <TableHead className="w-8"></TableHead>
                   <TableHead className="w-8"></TableHead>
                   <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
@@ -469,9 +472,9 @@ export function BaleProductsView1({ model }: { model: Model }) {
             <EmptyState onCreateClick={() => setCreateDialogOpen(true)} />
           )
         ) : activeProducts && activeProducts.length > 0 ? (
-          <Table mobileLayout="cards">
-            <TableHeader className="sticky top-0 z-30">
-              <TableRow className="bg-muted border-b-2 border-border/60 hover:bg-muted">
+          <Table mobileLayout="cards" wrapperClassName="rounded-none border-x-0 border-b-0 border-t-0 shadow-inner shadow-slate-200/20 dark:shadow-blue-400/5" className="[&_tbody_tr:hover]:bg-blue-50/70 dark:[&_tbody_tr:hover]:bg-blue-500/10 [&_td]:border-slate-200/70 dark:[&_td]:border-blue-200/10 [&_th]:border-slate-200/80 dark:[&_th]:border-blue-200/10">
+            <TableHeader className="sticky top-0 z-30 bg-slate-100 dark:bg-[#1b2c4d]">
+              <TableRow className="border-b border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-100 dark:border-blue-300/20 dark:bg-[#1b2c4d] dark:text-blue-100 dark:hover:bg-[#1b2c4d]">
                 <TableHead className="w-8">
                   <Checkbox
                     checked={activeProducts.length > 0 && activeProducts.every((p) => selectedIds.has(p.id))}
@@ -512,7 +515,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
                 <TableRow
                   key={product.id}
                   data-testid={`row-product-${product.id}`}
-                  className={selectedIds.has(product.id) ? "bg-muted/50" : ""}
+                  className={selectedIds.has(product.id) ? "bg-blue-50/80 dark:bg-blue-500/15" : ""}
                 >
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <Checkbox
@@ -521,7 +524,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
                       data-testid={`checkbox-product-${product.id}`}
                     />
                   </TableCell>
-                  <TableCell className="font-mono font-medium">{product.articleCode || "-"}</TableCell>
+                  <TableCell className="font-mono font-semibold text-slate-800 dark:text-slate-100">{product.articleCode || "-"}</TableCell>
                   <TableCell className="font-medium">
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                       <span>{product.name}</span>
@@ -533,22 +536,24 @@ export function BaleProductsView1({ model }: { model: Model }) {
                       />
                     </div>
                   </TableCell>
-                  <TableCell className="font-medium text-right" dir="rtl" lang="ar">
+                  <TableCell className="text-right font-medium text-slate-700 dark:text-slate-200" dir="rtl" lang="ar">
                     {product.nameAr || "—"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {product.categoryId ? categoryMap.get(product.categoryId) || "Uncategorized" : "Uncategorized"}
+                  <TableCell>
+                    <span className="inline-flex max-w-48 items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 dark:border-blue-400/25 dark:bg-blue-500/15 dark:text-blue-200">
+                      {product.categoryId ? categoryMap.get(product.categoryId) || "Uncategorized" : "Uncategorized"}
+                    </span>
                   </TableCell>
-                  <TableCell className="text-right font-mono">{product.weightPerBaleKg || "-"}</TableCell>
+                  <TableCell className="text-right font-mono font-semibold text-slate-800 dark:text-slate-100">{product.weightPerBaleKg || "-"}</TableCell>
                   {!hideAvgRate && (
-                    <TableCell className="text-right font-mono">
+                    <TableCell className="text-right font-mono font-semibold text-slate-800 dark:text-slate-100">
                       {product.productionPrice && parseFloat(product.productionPrice) > 0
                         ? parseFloat(product.productionPrice).toLocaleString()
                         : "—"}
                     </TableCell>
                   )}
                   {!hideSellingPriceBP && (
-                    <TableCell className="text-right font-mono">
+                    <TableCell className="text-right font-mono font-semibold text-slate-800 dark:text-slate-100">
                       {product.sellingPrice && parseFloat(product.sellingPrice) > 0
                         ? parseFloat(product.sellingPrice).toLocaleString()
                         : "—"}
@@ -582,9 +587,9 @@ export function BaleProductsView1({ model }: { model: Model }) {
                 Hidden Products ({hiddenProducts.length})
               </span>
             </div>
-            <Table mobileLayout="cards" wrapperClassName="max-h-[400px] overflow-auto">
-              <TableHeader className="sticky top-0 z-30">
-                <TableRow className="bg-muted border-b-2 border-border/60 hover:bg-muted">
+            <Table mobileLayout="cards" wrapperClassName="max-h-[400px] overflow-auto rounded-none border-x-0 border-b-0 dark:border-blue-400/10" className="[&_td]:border-slate-200/70 dark:[&_td]:border-blue-200/10">
+              <TableHeader className="sticky top-0 z-30 bg-slate-100 dark:bg-[#1b2c4d]">
+                <TableRow className="border-b border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-100 dark:border-blue-300/20 dark:bg-[#1b2c4d] dark:text-blue-100 dark:hover:bg-[#1b2c4d]">
                   <TableHead className="w-8">
                     <Checkbox
                       checked={hiddenProducts.length > 0 && hiddenProducts.every((p) => selectedIds.has(p.id))}
@@ -608,7 +613,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
                 {hiddenProducts.map((product) => (
                   <TableRow
                     key={product.id}
-                    className={selectedIds.has(product.id) ? "bg-muted/50" : ""}
+                    className={selectedIds.has(product.id) ? "bg-blue-50/80 dark:bg-blue-500/15" : ""}
                     data-testid={`row-hidden-product-${product.id}`}
                   >
                     <TableCell onClick={(e) => e.stopPropagation()}>
@@ -642,6 +647,6 @@ export function BaleProductsView1({ model }: { model: Model }) {
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }

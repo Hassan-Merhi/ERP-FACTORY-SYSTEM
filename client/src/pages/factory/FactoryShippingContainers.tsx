@@ -39,8 +39,6 @@ import { useLocation } from "wouter";
 
 import type { DisplayRow, ShippingRow, TrackingRow } from "./factoryshippingcontainers/types";
 import {
-  CLI_LEFT,
-  CTR_LEFT,
   INV_LEFT,
   LIST_KEY,
   SHIPPING_COLS,
@@ -83,7 +81,9 @@ export default function FactoryShippingContainers() {
     companyId?: number | null;
   }
   const { data: me } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
-  const { colVis, toggleCol, hiddenCount } = useShippingColumnVisibility(me?.id);
+  const { colVis, toggleCol, showAllCols, hiddenCount } = useShippingColumnVisibility(me?.id);
+  const clientLeft = colVis.invoiceNumber ? 130 : 0;
+  const containerLeft = clientLeft + (colVis.clientName ? 144 : 0);
 
   // ── Data ──────────────────────────────────────────────────────────────────────
   const { data: activeRows = [], isLoading } = useQuery<ShippingRow[]>({
@@ -280,14 +280,15 @@ export default function FactoryShippingContainers() {
 
   return (
     <>
-      <div className="space-y-4">
+      <div className="shipping-modern space-y-5">
+        <div className="shipping-workspace space-y-4">
         {/* ── Top Controls ── */}
         <div className="flex items-center gap-2 flex-wrap">
           <div className="relative flex-1 min-w-48">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search invoice, client, container, destination…"
-              className="pl-8"
+              className="shipping-search pl-9"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               data-testid="input-search"
@@ -295,6 +296,7 @@ export default function FactoryShippingContainers() {
           </div>
           <Button
             variant={showFilters ? "secondary" : "outline"}
+            className="shipping-action"
             onClick={() => setShowFilters((v) => !v)}
             data-testid="button-toggle-filters"
           >
@@ -304,7 +306,7 @@ export default function FactoryShippingContainers() {
           </Button>
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" data-testid="button-toggle-columns">
+              <Button variant="outline" className="shipping-action" data-testid="button-toggle-columns">
                 <SlidersHorizontal className="h-4 w-4 mr-1" />
                 Columns
                 {hiddenCount > 0 && (
@@ -314,10 +316,15 @@ export default function FactoryShippingContainers() {
                 )}
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-52 p-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 px-1">
-                Show / Hide Columns
-              </p>
+            <PopoverContent align="end" className="w-60 max-h-[min(75vh,540px)] overflow-y-auto p-2">
+              <div className="mb-2 flex items-center justify-between gap-2 px-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Show / Hide Columns
+                </p>
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={showAllCols} data-testid="button-show-all-columns">
+                  Show all
+                </Button>
+              </div>
               <div className="space-y-0.5">
                 {SHIPPING_COLS.map((col) => (
                   <label
@@ -345,7 +352,7 @@ export default function FactoryShippingContainers() {
         )}
 
         {/* ── Legend ── */}
-        <div className="flex items-center gap-4 flex-wrap text-xs text-muted-foreground">
+        <div className="shipping-legend flex items-center gap-4 flex-wrap text-xs">
           <span className="flex items-center gap-1">
             <CheckCircle2 className="h-3.5 w-3.5 text-green-600" /> Has documents
           </span>
@@ -358,21 +365,27 @@ export default function FactoryShippingContainers() {
         </div>
 
         {/* ── Main Table ── */}
-        <div className="rounded-md border">
-          <Table mobileLayout="cards" className="text-xs" style={{ minWidth: "1100px" }}>
+        <div className="shipping-grid">
+          <Table mobileLayout="cards" className="text-xs" scrollLabel="Shipping containers table">
             <TableHeader>
               <TableRow>
                 {colVis.orderDate && <TableHead className="text-xs w-20 min-w-[80px]">Order Date</TableHead>}
-                <TableHead className={stickyHeadBase} style={{ left: INV_LEFT, minWidth: "130px", width: "130px" }}>
-                  Invoice #
-                </TableHead>
-                <TableHead className={stickyHeadBase} style={{ left: CLI_LEFT, minWidth: "144px", width: "144px" }}>
-                  Client
-                </TableHead>
+                {colVis.invoiceNumber && (
+                  <TableHead className={cn(stickyHeadBase, "shipping-sticky")} style={{ left: INV_LEFT, minWidth: "130px", width: "130px" }}>
+                    Invoice #
+                  </TableHead>
+                )}
+                {colVis.clientName && (
+                  <TableHead className={cn(stickyHeadBase, "shipping-sticky")} style={{ left: clientLeft, minWidth: "144px", width: "144px" }}>
+                    Client
+                  </TableHead>
+                )}
                 {colVis.status && <TableHead className="text-xs w-24 min-w-[96px]">Status</TableHead>}
-                <TableHead className={stickyHeadBase} style={{ left: CTR_LEFT, minWidth: "120px", width: "120px" }}>
-                  Container #
-                </TableHead>
+                {colVis.containerNumber && (
+                  <TableHead className={cn(stickyHeadBase, "shipping-sticky")} style={{ left: containerLeft, minWidth: "120px", width: "120px" }}>
+                    Container #
+                  </TableHead>
+                )}
                 {colVis.destination && <TableHead className="text-xs min-w-[120px]">Destination</TableHead>}
                 {colVis.eta && <TableHead className="text-xs min-w-[100px]">ETA</TableHead>}
                 {colVis.arrived && <TableHead className="text-xs min-w-[90px]">Arrived</TableHead>}
@@ -408,17 +421,22 @@ export default function FactoryShippingContainers() {
                     )}
 
                     {/* Sticky: Invoice # */}
-                    <TableCell className={stickyCellBase} style={{ left: INV_LEFT }}>
-                      <span className="font-mono font-medium text-xs whitespace-nowrap">{r.invoiceNumber}</span>
-                    </TableCell>
+                    {colVis.invoiceNumber && (
+                      <TableCell className={cn(stickyCellBase, "shipping-sticky")} style={{ left: INV_LEFT }}>
+                        <span className="font-mono font-medium text-xs whitespace-nowrap">{r.invoiceNumber}</span>
+                      </TableCell>
+                    )}
 
                     {/* Sticky: Client */}
-                    <TableCell
-                      className={cn(stickyCellBase, "font-medium text-xs max-w-[144px] truncate")}
-                      style={{ left: CLI_LEFT }}
-                    >
-                      {r.clientName || "—"}
-                    </TableCell>
+                    {colVis.clientName && (
+                      <TableCell
+                        className={cn(stickyCellBase, "shipping-sticky font-medium text-xs max-w-[144px] truncate")}
+                        style={{ left: clientLeft }}
+                        title={r.clientName || ""}
+                      >
+                        {r.clientName || "—"}
+                      </TableCell>
+                    )}
 
                     {colVis.status && (
                       <TableCell>
@@ -435,7 +453,7 @@ export default function FactoryShippingContainers() {
                           }}
                           data-testid={`button-status-${r.id}`}
                         >
-                          <Badge className={cn("text-xs whitespace-nowrap cursor-pointer", statusColor(r.status))}>
+                          <Badge className={cn("shipping-status whitespace-nowrap cursor-pointer", statusColor(r.status))}>
                             {statusLabel(r.status)}
                           </Badge>
                         </button>
@@ -443,15 +461,17 @@ export default function FactoryShippingContainers() {
                     )}
 
                     {/* Sticky: Container # */}
-                    <TableCell className={stickyCellBase} style={{ left: CTR_LEFT }}>
-                      <EditableCellInput
-                        value={r.containerNumber || ""}
-                        placeholder="Enter #"
-                        onSave={(v) => syncOrderMutation.mutate({ id: r.id, patch: { containerNumber: v || null } })}
-                        testId={`cell-container-${r.id}`}
-                        saving={syncOrderMutation.isPending}
-                      />
-                    </TableCell>
+                    {colVis.containerNumber && (
+                      <TableCell className={cn(stickyCellBase, "shipping-sticky")} style={{ left: containerLeft }}>
+                        <EditableCellInput
+                          value={r.containerNumber || ""}
+                          placeholder="Enter #"
+                          onSave={(v) => syncOrderMutation.mutate({ id: r.id, patch: { containerNumber: v || null } })}
+                          testId={`cell-container-${r.id}`}
+                          saving={syncOrderMutation.isPending}
+                        />
+                      </TableCell>
+                    )}
 
                     {colVis.destination && (
                       <TableCell>
@@ -500,11 +520,11 @@ export default function FactoryShippingContainers() {
                     {colVis.finalized && (
                       <TableCell className="whitespace-nowrap">
                         {r.finalizedDate ? (
-                          <span className="text-green-700 dark:text-green-400 font-medium text-xs">
-                            {fmtDate(r.finalizedDate)}
+                          <span className="shipping-date shipping-date-complete">
+                            <CheckCircle2 className="mr-1 h-3 w-3" /> {fmtDate(r.finalizedDate)}
                           </span>
                         ) : (
-                          <span className="text-amber-600 dark:text-amber-400 italic text-xs">Not finalized</span>
+                          <span className="shipping-date shipping-date-pending">Not finalized</span>
                         )}
                       </TableCell>
                     )}
@@ -529,7 +549,7 @@ export default function FactoryShippingContainers() {
                     {colVis.containerCost && (
                       <TableCell className="text-xs whitespace-nowrap font-medium">
                         {r.grandTotal ? (
-                          <span className="text-foreground">${Number(r.grandTotal).toLocaleString()}</span>
+                          <span className="shipping-cost">${Number(r.grandTotal).toLocaleString()}</span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
@@ -612,14 +632,16 @@ export default function FactoryShippingContainers() {
           </Table>
         </div>
 
+        </div>
+
         {/* ── Scheduled Containers and Container Availability ── */}
         <ScheduledContainersTable />
         <ShippingAvailabilityTable />
 
         {/* ── Done / Hidden Containers ── */}
-        <div className="rounded-md border overflow-hidden">
+        <div className="shipping-subsection">
           <button
-            className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-muted-foreground hover-elevate bg-muted/20"
+            className="shipping-done-toggle w-full flex items-center justify-between px-4 py-3 text-sm font-medium"
             onClick={() => setDoneExpanded((v) => !v)}
             data-testid="button-toggle-done"
           >

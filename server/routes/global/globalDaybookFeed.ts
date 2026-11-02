@@ -9,6 +9,7 @@
  */
 import { pool } from "../../db";
 import { normalizeSearchText } from "@shared/searchNormalization";
+import { operationalHistoricalSupplierGlobalExclusionSql } from "../../services/accounting/internalHistoricalSupplierRoutineVisibility";
 
 type JournalInput = {
   targetCompanyIds: number[];
@@ -36,6 +37,9 @@ export async function getGlobalDaybookFeed(input: JournalInput) {
   const voucherWhere: string[] = [
     "v.company_id = ANY($1::integer[])",
     "v.deleted_at IS NULL",
+    // Multi-company operational All Daybook only. Do not remove posted
+    // accounting rows or supplier/creditor statement entries.
+    operationalHistoricalSupplierGlobalExclusionSql("v"),
   ];
   const offloadWhere: string[] = ["c.company_id = ANY($1::integer[])"];
 

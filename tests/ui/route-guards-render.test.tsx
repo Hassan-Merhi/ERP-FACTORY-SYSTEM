@@ -194,6 +194,44 @@ describe("FactoryRoutes with mocked user/access props", () => {
     expect(await screen.findByTestId("page-FactoryPayrollHub")).toBeInTheDocument();
   });
 
+  it("opens Factory Daybook for Admin and Developer but Cost Centers only for Developer", async () => {
+    const { FactoryRoutes } = await import("@/components/FactoryRoutes");
+    for (const { path, pageName, allowedRoles, deniedRoles } of [
+      {
+        path: "/factory/daybook",
+        pageName: "FactoryDaybook",
+        allowedRoles: ["Admin", "Developer"],
+        deniedRoles: ["Owner", "Manager"],
+      },
+      {
+        path: "/factory/cost-centers",
+        pageName: "CostCenters",
+        allowedRoles: ["Developer"],
+        deniedRoles: ["Admin", "Owner", "Manager"],
+      },
+    ]) {
+      for (const role of allowedRoles) {
+        const allowed = mountAt(
+          path,
+          <FactoryRoutes user={{ role } as any} myAccess={access} factoryDefaultPage="/factory/production-report" />
+        );
+        expect(await screen.findByTestId(`page-${pageName}`)).toBeInTheDocument();
+        allowed.unmount();
+      }
+
+      for (const role of deniedRoles) {
+        const denied = mountAt(
+          path,
+          <FactoryRoutes user={{ role } as any} myAccess={access} factoryDefaultPage="/factory/production-report" />
+        );
+        expect(await screen.findByTestId("page-DailyProductionReport")).toBeInTheDocument();
+        expect(denied.memory.history.at(-1)).toBe("/factory/production-report");
+        expect(screen.queryByTestId(`page-${pageName}`)).not.toBeInTheDocument();
+        denied.unmount();
+      }
+    }
+  });
+
   it("opens account groups to an Admin", async () => {
     const { FactoryRoutes } = await import("@/components/FactoryRoutes");
     mountAt(

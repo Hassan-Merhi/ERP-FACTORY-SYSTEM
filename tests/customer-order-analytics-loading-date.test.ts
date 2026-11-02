@@ -32,10 +32,13 @@ describe("customer order analytics official loading date", () => {
     expect(route).not.toContain("loadingFinalizedAt: null");
   });
 
-  it("restores the original date in the reopened loading confirmation dialog", () => {
+  it("shows the old date on reopening but permits an explicit correction", () => {
     const model = read("client/src/pages/factory/factorycontainerloadingscan/useFactoryContainerLoadingScanModel.ts");
     const dialog = read("client/src/pages/factory/factorycontainerloadingscan/FinalizeLoadingDialog.tsx");
     expect(model).toContain("orderDetail?.loadingFinalizedAt?.slice(0, 10)");
-    expect(dialog).toContain("disabled={!!model.orderDetail?.loadingFinalizedAt}");
+    expect(dialog).not.toContain("disabled={!!model.orderDetail?.loadingFinalizedAt}");
+    expect(dialog).toContain("onChange={(e) => model.setFinalizeDate(e.target.value)}");
+    expect(dialog).toContain("overrideLoadingDate");
+    expect(dialog).toContain("createNextLoading: true");
   });
 });
