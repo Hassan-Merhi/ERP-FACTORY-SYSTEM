@@ -94,7 +94,7 @@ function FactoryPOSScreen() {
       </section>
 
       {/* Display-only KPIs reuse the existing cart totals, without recalculating them. */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" aria-label="Current sale overview">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3" aria-label="Current sale overview">
         <div className="flex items-center justify-between rounded-2xl border border-blue-500/25 bg-gradient-to-r from-blue-600/15 to-blue-500/5 p-4 shadow-sm" data-testid="pos-kpi-items">
           <div>
             <p className="text-xs font-medium text-muted-foreground">Items</p>
@@ -109,7 +109,7 @@ function FactoryPOSScreen() {
           </div>
           <span className="rounded-xl bg-violet-500/15 p-3 text-violet-600 dark:text-violet-400"><Layers3 className="h-6 w-6" /></span>
         </div>
-        <div className="flex items-center justify-between rounded-2xl border border-emerald-500/25 bg-gradient-to-r from-emerald-600/15 to-emerald-500/5 p-4 shadow-sm" data-testid="pos-kpi-total">
+        <div className="col-span-2 flex items-center justify-between rounded-2xl border border-emerald-500/25 sm:col-span-1 bg-gradient-to-r from-emerald-600/15 to-emerald-500/5 p-4 shadow-sm" data-testid="pos-kpi-total">
           <div className="min-w-0">
             <p className="text-xs font-medium text-muted-foreground">Total</p>
             <p className="mt-1 truncate text-2xl font-bold tabular-nums">{model.ccPrefix}{formatNum(model.total)}</p>
