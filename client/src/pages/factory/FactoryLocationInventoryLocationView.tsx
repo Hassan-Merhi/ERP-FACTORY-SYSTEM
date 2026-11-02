@@ -1,3 +1,4 @@
+import "./FactoryLocationInventoryRedesign.css";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -26,17 +27,18 @@ export function FactoryLocationInventoryLocationView({ inventory }: { inventory:
     setRenameInput,
   } = inventory;
   return (
-    <div className="p-4 md:p-6 w-full space-y-6">
+    <div className="factory-location-inventory inventory-location-view p-4 md:p-6 w-full space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Location Inventory</h1>
+          <h1 className="inventory-page-heading text-2xl md:text-3xl font-bold tracking-tight">Location Inventory</h1>
           <p className="text-sm text-muted-foreground mt-1">Physical bales on ground by location</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant="outline"
             size="sm"
+            className="inventory-export-button"
             onClick={() => {
               const p = new URLSearchParams();
               if (hideAvgCost) p.set("includeCost", "0");
@@ -52,16 +54,16 @@ export function FactoryLocationInventoryLocationView({ inventory }: { inventory:
       </div>
 
       {/* Location selector */}
-      <div className="rounded-2xl border bg-card/30 overflow-hidden">
+      <div className="inventory-location-shell rounded-2xl border bg-card/30 overflow-hidden">
         <div className="border-b px-4 py-3 sm:px-5">
-          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <div className="inventory-selector-label flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             <MapPin className="h-3.5 w-3.5" />
             Select Location
           </div>
         </div>
         <div className="border-b px-4 py-4 sm:px-5">
           <div>
-            <div className="text-lg font-semibold tracking-tight">Location Inventory</div>
+            <div className="inventory-selector-title text-lg font-semibold tracking-tight">Location Inventory</div>
             <p className="text-xs text-muted-foreground mt-0.5">
               {locations.length} location{locations.length !== 1 ? "s" : ""} available
             </p>
@@ -72,7 +74,7 @@ export function FactoryLocationInventoryLocationView({ inventory }: { inventory:
               placeholder="Search locations..."
               value={locationSearch}
               onChange={(e) => setLocationSearch(e.target.value)}
-              className="pl-8 h-9 text-sm"
+              className="inventory-search-input pl-8 h-9 text-sm"
               data-testid="input-search-locations"
             />
           </div>
@@ -96,11 +98,11 @@ export function FactoryLocationInventoryLocationView({ inventory }: { inventory:
               {filteredLocations.map((location) => (
                 <div
                   key={location.id}
-                  className="group relative flex min-h-[82px] cursor-pointer items-center gap-3 rounded-xl border bg-background px-3.5 py-3 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/2 hover:shadow-md"
+                  className="inventory-location-card group relative flex min-h-[90px] cursor-pointer items-center gap-3 rounded-xl border bg-background px-3.5 py-3 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
                   onClick={() => handleLocationClick(location)}
                   data-testid={`row-location-${location.id}`}
                 >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <div className="inventory-location-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                     <MapPin className="h-5 w-5" />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -117,7 +119,7 @@ export function FactoryLocationInventoryLocationView({ inventory }: { inventory:
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+                  <ChevronRight className="inventory-location-chevron h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
                 </div>
               ))}
             </div>
