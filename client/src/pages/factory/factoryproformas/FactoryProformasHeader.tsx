@@ -11,6 +11,7 @@ interface FactoryProformasHeaderProps {
   proformas: Proforma[];
   proformasLoading: boolean;
   hideProformaPrice: boolean;
+  formatAmount: (amount: number | string | null | undefined) => string;
   setExcelImportName: Dispatch<SetStateAction<string>>;
   setExcelImportLines: Dispatch<
     SetStateAction<{ articleCode: string; productName: string; quantity: string; pricePerBale: string }[]>
@@ -33,6 +34,7 @@ export function FactoryProformasHeader(props: FactoryProformasHeaderProps) {
     proformas,
     proformasLoading,
     hideProformaPrice,
+    formatAmount,
     setExcelImportName,
     setExcelImportLines,
     setExcelImportErrors,
@@ -52,7 +54,6 @@ export function FactoryProformasHeader(props: FactoryProformasHeaderProps) {
   const totalBales = activeProformas.reduce((sum, proforma) => sum + Number(proforma.totalQty ?? 0), 0);
   const totalWeight = activeProformas.reduce((sum, proforma) => sum + Number(proforma.totalWeightKg ?? 0), 0);
   const totalAmount = activeProformas.reduce((sum, proforma) => sum + Number(proforma.totalAmount ?? 0), 0);
-  const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
   return (
     <>
@@ -74,7 +75,7 @@ export function FactoryProformasHeader(props: FactoryProformasHeaderProps) {
           {!hideProformaPrice && (
             <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/[0.12] to-orange-500/[0.04] p-3.5 shadow-sm dark:border-amber-400/25 dark:from-amber-500/20 dark:to-orange-500/[0.06]">
               <span className="rounded-xl bg-amber-500/15 p-2.5 text-amber-700 dark:bg-amber-400/20 dark:text-amber-200"><Wallet className="h-5 w-5" /></span>
-              <div className="min-w-0"><div className="text-xl font-bold tabular-nums">{proformasLoading ? "—" : money.format(totalAmount)}</div><div className="text-xs text-muted-foreground">Total Amount</div></div>
+              <div className="min-w-0"><div className="text-xl font-bold tabular-nums">{proformasLoading ? "—" : formatAmount(totalAmount)}</div><div className="text-xs text-muted-foreground">Total Amount</div></div>
             </div>
           )}
         </div>
@@ -84,8 +85,8 @@ export function FactoryProformasHeader(props: FactoryProformasHeaderProps) {
         <div className="flex items-center gap-3">
           <span className="rounded-xl bg-violet-500/10 p-2.5 text-violet-700 dark:bg-violet-400/15 dark:text-violet-300"><Users className="h-5 w-5" /></span>
           <div>
-          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Customer Proformas</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Price lists for bale sales per customer</p>
+            <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Customer Proformas</h1>
+            <p className="mt-0.5 text-sm text-muted-foreground">Price lists for bale sales per customer</p>
           </div>
         </div>
         {customerId && (
