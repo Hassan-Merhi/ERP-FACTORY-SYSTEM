@@ -137,6 +137,14 @@ async function recordOne(page, id, tour) {
           overlay.textContent = title + " — " + (index + 1) + ". " + instruction;
           window.scrollTo({ top: index === 0 ? 0 : index === 1 ? Math.max(0, document.documentElement.scrollHeight / 3) : document.documentElement.scrollHeight, behavior: "smooth" });
         }, { title: tour.title, instruction: tour.steps[i], index: i });
+        // Approved navigation-only interaction: inspect a different visible tab.
+        // Never click Save, Finalize, Approve, Delete, Pay or other write controls.
+        if (i === 1) {
+          const tabs = await page.$("[role=tab]:not([aria-selected=true]):not([disabled])");
+          if (tabs.length) {
+            await tabs[0].click().catch(() => undefined);
+          }
+        }
         await delay(2600);
         const end = Date.now() - started;
         captions.push(String(i + 1), timestamp(start) + " --> " + timestamp(end), tour.steps[i], "");

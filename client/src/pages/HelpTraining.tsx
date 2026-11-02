@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { BookOpen, ChevronRight, CirclePlay, Clapperboard, FileText, Search, ShieldCheck, Video } from "lucide-react";
-import { TRAINING_TOPICS, visibleTrainingTopics, type TrainingMode, type TrainingTopic } from "@/training/trainingCatalog";
+import { visibleTrainingTopics, type TrainingMode } from "@/training/trainingCatalog";
 import { publishedTrainingVideos } from "@/training/publishedVideos";
 
 interface Props {
