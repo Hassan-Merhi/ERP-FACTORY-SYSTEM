@@ -15,7 +15,13 @@ import type { Pool } from "pg";
 import type { DbTransaction } from "../db";
 import { readFactoryEdgeConfiguration } from "./edgeRuntimePolicy.mjs";
 import { hashEvidence } from "./edgeSyncStageProtocol.mjs";
-import { phase9StockAdjustEnvelope, type Phase9StockAdjustEvidence } from "./phase9StockEnvelope.mjs";
+import {
+  phase9StockAdjustEnvelope,
+  phase9StockTransferEnvelope,
+  type Phase9StockAdjustEvidence,
+  type Phase9StockTransferEvidence,
+} from "./phase9StockEnvelope.mjs";
+import { phase9StockItemEditEnvelope, type Phase9StockItemEditEvidence } from "./phase9StockItemEditEnvelope.mjs";
 
 export async function ensurePhase9StockOutboxSchema(queryable: Pick<Pool, "query">): Promise<void> {
   if (readFactoryEdgeConfiguration().mode !== "lan") return;
@@ -32,18 +38,17 @@ export async function ensurePhase9StockOutboxSchema(queryable: Pick<Pool, "query
       operation_id UUID NOT NULL,
       company_id INTEGER NOT NULL CHECK(company_id > 0),
       actor_user_id TEXT NOT NULL CHECK(length(actor_user_id) > 0),
+      -- The LAN source row: a canonical stock movement (quick adjust), a
+      -- stock transfer (transfer) or the edit's own sequence (item edit);
+      -- unique per kind.
       local_movement_id BIGINT NOT NULL CHECK(local_movement_id > 0 AND local_movement_id <= 2147483647),
-      operation_kind TEXT NOT NULL CHECK(operation_kind = 'stock.quick-adjust.v1'),
+      operation_kind TEXT NOT NULL CHECK(operation_kind IN ('stock.quick-adjust.v1', 'stock.transfer.v1', 'stock.item-edit.v1')),
       payload JSONB NOT NULL,
       payload_sha256 CHAR(64) NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
       PRIMARY KEY (site_id, sequence),
       UNIQUE (site_id, operation_id),
-      UNIQUE (site_id, local_movement_id),
-      CONSTRAINT factory_edge_stock_source_fk
-        FOREIGN KEY (local_movement_id)
-        REFERENCES canonical_stock_movements(id)
-        ON DELETE RESTRICT
+      UNIQUE (site_id, operation_kind, local_movement_id)
     )
   `);
   // Shared with the pressing install; both are idempotent.
@@ -89,5 +94,64 @@ export async function capturePhase9StockAdjustTx(
            ${event.companyId}, ${event.actorUserId}, ${event.localMovementId},
            ${event.kind}, ${payload}::jsonb, ${hash}
     FROM next_sequence
+  `);
+}
+
+/** Record a committed stock transfer on the same "stock" stream; no-op off the LAN primary. */
+export async function capturePhase9StockTransferTx(
+  tx: DbTransaction,
+  evidence: Phase9StockTransferEvidence
+): Promise<void> {
+  const config = readFactoryEdgeConfiguration();
+  if (config.mode !== "lan" || !config.primary) return;
+  const event = phase9StockTransferEnvelope(evidence);
+  const hash = hashEvidence(event);
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('factory-edge-stock-outbox-order'))`);
+  await tx.execute(sql`
+    WITH next_sequence AS (
+      INSERT INTO factory_edge_stock_counter (site_id, last_sequence)
+      VALUES (${config.siteId}::uuid, 1)
+      ON CONFLICT (site_id)
+        DO UPDATE SET last_sequence = factory_edge_stock_counter.last_sequence + 1
+      RETURNING last_sequence
+    )
+    INSERT INTO factory_edge_stock_outbox
+      (site_id, sequence, operation_id, company_id, actor_user_id,
+       local_movement_id, operation_kind, payload, payload_sha256)
+    SELECT ${config.siteId}::uuid, next_sequence.last_sequence, ${event.requestId}::uuid,
+           ${event.companyId}, ${event.actorUserId}, ${event.localTransferId},
+           ${event.kind}, ${JSON.stringify(event)}::jsonb, ${hash}
+    FROM next_sequence
+  `);
+}
+
+/**
+ * Record stock-item master edits (one event per call) on the "stock" stream.
+ * The edit's local reference is its own stream sequence, taken under the
+ * outbox order lock. No-op off the LAN primary.
+ */
+export async function capturePhase9StockItemEditTx(
+  tx: DbTransaction,
+  evidence: Omit<Phase9StockItemEditEvidence, "localEditId">
+): Promise<void> {
+  const config = readFactoryEdgeConfiguration();
+  if (config.mode !== "lan" || !config.primary) return;
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('factory-edge-stock-outbox-order'))`);
+  const counter = await tx.execute(sql`
+    INSERT INTO factory_edge_stock_counter (site_id, last_sequence)
+    VALUES (${config.siteId}::uuid, 1)
+    ON CONFLICT (site_id)
+      DO UPDATE SET last_sequence = factory_edge_stock_counter.last_sequence + 1
+    RETURNING last_sequence
+  `);
+  const sequence = Number((counter.rows[0] as { last_sequence: string | number }).last_sequence);
+  const event = phase9StockItemEditEnvelope({ ...evidence, localEditId: sequence });
+  await tx.execute(sql`
+    INSERT INTO factory_edge_stock_outbox
+      (site_id, sequence, operation_id, company_id, actor_user_id,
+       local_movement_id, operation_kind, payload, payload_sha256)
+    VALUES (${config.siteId}::uuid, ${sequence}, ${event.requestId}::uuid,
+            ${event.companyId}, ${event.actorUserId}, ${event.localEditId},
+            ${event.kind}, ${JSON.stringify(event)}::jsonb, ${hashEvidence(event)})
   `);
 }

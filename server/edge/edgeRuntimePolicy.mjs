@@ -116,6 +116,7 @@ export const PHASE9_STOCK_ADJUST_ROUTE = "POST /api/inventory/quick-adjust";
 export const PHASE9_POS_SALE_ROUTE = "POST /api/pos/sales";
 export const PHASE9_ATTACHMENT_UPLOAD_ROUTE = "POST /api/files/upload";
 export const PHASE9_PAYMENT_RECEIPT_ROUTE = "POST /api/vouchers/payment-receipt";
+export const PHASE9_STOCK_TRANSFER_ROUTE = "POST /api/stock-transfers";
 // A numeric container id, or the manifest template ":id" (which the route itself rejects as invalid).
 // POS sale edits (returns/corrections): PUT is canonical, PATCH the alias.
 export const PHASE9_POS_SALE_EDIT_PATH = /^\/api\/vouchers\/(?:[1-9][0-9]{0,9}|:id)\/sales$/;
@@ -144,6 +145,9 @@ const LAN_PRIMARY_CAPTURE_ALLOWLIST = new Set([
   // Phase 9 (owner policy 2026-11-02): supplier, customer and bank payments
   // and receipts, replayed through the same posting code at the LAN rate.
   PHASE9_PAYMENT_RECEIPT_ROUTE,
+  // Phase 9 (owner policy 2026-11-02): new stock transfers, replayed through
+  // the same transfer code on the LAN request id; a cloud shortfall is held.
+  PHASE9_STOCK_TRANSFER_ROUTE,
 ]);
 
 /** Approved parameterised captures: POST /api/containers/<id>/offload (quantity receipts). */

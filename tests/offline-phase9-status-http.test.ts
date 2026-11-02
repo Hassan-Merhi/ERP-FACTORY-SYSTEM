@@ -60,6 +60,7 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", () => ({
   PHASE9_POS_SALE_ROUTE: "POST /api/pos/sales",
   PHASE9_ATTACHMENT_UPLOAD_ROUTE: "POST /api/files/upload",
   PHASE9_PAYMENT_RECEIPT_ROUTE: "POST /api/vouchers/payment-receipt",
+  PHASE9_STOCK_TRANSFER_ROUTE: "POST /api/stock-transfers",
   phase9ApprovedCaptureRoute: () => null,
 }));
 vi.mock("../server/edge/edgeSyncReceiver", () => ({

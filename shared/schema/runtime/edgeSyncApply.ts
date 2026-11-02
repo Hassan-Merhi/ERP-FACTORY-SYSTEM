@@ -27,7 +27,6 @@ import {
 } from "drizzle-orm/pg-core";
 import { vouchers } from "../erp/vouchers";
 import { factoryPressingConfirmations } from "../factory/pressing-machine-tracking";
-import { canonicalStockMovements } from "./inventory";
 import { containerOffloads } from "../containers";
 import { storedFiles } from "../erp/documents";
 
@@ -157,12 +156,7 @@ export const factoryEdgeStockOutbox = pgTable(
   (t) => [
     primaryKey({ columns: [t.siteId, t.sequence] }),
     unique().on(t.siteId, t.operationId),
-    unique().on(t.siteId, t.localMovementId),
-    foreignKey({
-      name: "factory_edge_stock_source_fk",
-      columns: [t.localMovementId],
-      foreignColumns: [canonicalStockMovements.id],
-    }).onDelete("restrict"),
+    unique().on(t.siteId, t.operationKind, t.localMovementId),
   ]
 );
 

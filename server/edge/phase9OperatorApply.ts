@@ -30,6 +30,7 @@ import {
 import { isPhase9EventStream } from "./phase9EventProtocol.mjs";
 import { phase9PressingApplyHandler } from "./phase9PressingApply";
 import { phase9StockApplyHandler } from "./phase9StockApply";
+import { phase9StockTransferApplyHandler } from "./phase9StockTransferApply";
 import { phase9PosSaleApplyHandler } from "./phase9PosSaleApply";
 import {
   PHASE9_POS_SALE_CANCEL_KIND,
@@ -45,7 +46,7 @@ import { phase9AttachmentApplyHandler } from "./phase9AttachmentApply";
 import { PHASE9_ATTACHMENT_KIND } from "./phase9AttachmentEnvelope.mjs";
 import { phase9PaymentApplyHandler } from "./phase9PaymentApply";
 import { PHASE9_PAYMENT_KIND } from "./phase9PaymentEnvelope.mjs";
-import { PHASE9_STOCK_ADJUST_KIND } from "./phase9StockEnvelope.mjs";
+import { PHASE9_STOCK_ADJUST_KIND, PHASE9_STOCK_TRANSFER_KIND } from "./phase9StockEnvelope.mjs";
 import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,
@@ -59,6 +60,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 export const PHASE9_HANDLERS = Object.freeze({
   "pressing.confirmation.v1": phase9PressingApplyHandler,
   [PHASE9_STOCK_ADJUST_KIND]: phase9StockApplyHandler,
+  [PHASE9_STOCK_TRANSFER_KIND]: phase9StockTransferApplyHandler,
   [PHASE9_POS_SALE_KIND]: phase9PosSaleApplyHandler,
   [PHASE9_POS_SALE_EDIT_KIND]: phase9PosSaleEditApplyHandler,
   [PHASE9_POS_SALE_CANCEL_KIND]: phase9PosSaleCancelApplyHandler,

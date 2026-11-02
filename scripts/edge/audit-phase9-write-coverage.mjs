@@ -39,7 +39,13 @@ const SUPPORTED = new Map([
     policy: "stock.quick-adjust.v1",
     limitations:
       "Replayed as a quantity delta on the cloud balance; a below-zero result is held for an " +
-      "Admin/Developer approve/reject decision; transfers, imports and bulk stock edits stay cloud-only",
+      "Admin/Developer approve/reject decision",
+  }],
+  ["POST /api/stock-transfers", {
+    policy: "stock.transfer.v1",
+    limitations:
+      "New transfers only (the existing-voucher form is refused on the LAN); replayed on the LAN request id " +
+      "with a cloud voucher number; a cloud shortfall is held for an Admin/Developer decision",
   }],
   ["POST /api/pos/sales", {
     policy: "pos.sale.v1",

@@ -15,7 +15,9 @@ import { phase9PressingEnvelope } from "./phase9PressingEnvelope.mjs";
 import {
   PHASE9_STOCK_ADJUST_KIND,
   PHASE9_STOCK_NEGATIVE_CONFLICT,
+  PHASE9_STOCK_TRANSFER_KIND,
   phase9StockAdjustEnvelope,
+  phase9StockTransferEnvelope,
 } from "./phase9StockEnvelope.mjs";
 import {
   PHASE9_POS_CASH_ACCOUNT_CONFLICT,
@@ -87,6 +89,19 @@ function stockAdjustPayload(payload) {
   let rebuilt;
   try {
     rebuilt = phase9StockAdjustEnvelope(evidence);
+  } catch {
+    return null;
+  }
+  return stableEqual(rebuilt, payload) ? rebuilt : null;
+}
+
+function stockTransferPayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (payload.kind !== PHASE9_STOCK_TRANSFER_KIND) return null;
+  const { kind: _kind, ...evidence } = payload;
+  let rebuilt;
+  try {
+    rebuilt = phase9StockTransferEnvelope(evidence);
   } catch {
     return null;
   }
@@ -191,6 +206,11 @@ const STREAMS = Object.freeze({
       [PHASE9_STOCK_ADJUST_KIND]: Object.freeze({
         parse: stockAdjustPayload,
         localRef: (payload) => payload.localMovementId,
+        overridable: Object.freeze([PHASE9_STOCK_NEGATIVE_CONFLICT]),
+      }),
+      [PHASE9_STOCK_TRANSFER_KIND]: Object.freeze({
+        parse: stockTransferPayload,
+        localRef: (payload) => payload.localTransferId,
         overridable: Object.freeze([PHASE9_STOCK_NEGATIVE_CONFLICT]),
       }),
     }),

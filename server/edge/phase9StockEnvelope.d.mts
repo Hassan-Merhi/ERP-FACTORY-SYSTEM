@@ -20,3 +20,21 @@ export interface Phase9StockAdjustEnvelope extends Phase9StockAdjustEvidence {
   kind: "stock.quick-adjust.v1";
 }
 export function phase9StockAdjustEnvelope(evidence: Phase9StockAdjustEvidence): Phase9StockAdjustEnvelope;
+export const PHASE9_STOCK_TRANSFER_KIND: "stock.transfer.v1";
+export interface Phase9StockTransferEvidence {
+  companyId: number;
+  localTransferId: number;
+  actorUserId: string;
+  actorUsername: string;
+  requestId: string;
+  businessDate: string;
+  sourceLocationId: number | null;
+  destinationLocationId: number;
+  notes: string | null;
+  optional: boolean;
+  allowNegativeInventory: boolean;
+  items: Array<{ sourceLocationId: number; stockItemId: number; quantity: string; rate: string }>;
+}
+export function phase9StockTransferEnvelope(
+  evidence: Phase9StockTransferEvidence
+): Phase9StockTransferEvidence & { kind: "stock.transfer.v1" };

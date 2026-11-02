@@ -107,3 +107,91 @@ export function phase9StockAdjustEnvelope(evidence) {
     businessDate: evidence.businessDate,
   };
 }
+
+export const PHASE9_STOCK_TRANSFER_KIND = "stock.transfer.v1";
+const TRANSFER_FIELDS = Object.freeze([
+  "actorUserId",
+  "actorUsername",
+  "allowNegativeInventory",
+  "businessDate",
+  "companyId",
+  "destinationLocationId",
+  "items",
+  "localTransferId",
+  "notes",
+  "optional",
+  "requestId",
+  "sourceLocationId",
+]);
+const RATE = /^(?:0|[1-9][0-9]{0,14})(?:\.[0-9]{1,6})?$/;
+
+/**
+ * A stock transfer created on the factory LAN server (POST /api/stock-transfers),
+ * replayed in the cloud through the same transfer code with the same request
+ * id (the cloud's idempotency key).
+ */
+export function phase9StockTransferEnvelope(evidence) {
+  if (
+    !evidence ||
+    typeof evidence !== "object" ||
+    Array.isArray(evidence) ||
+    Object.keys(evidence).sort().join(",") !== TRANSFER_FIELDS.join(",") ||
+    !ref(evidence.companyId) ||
+    !ref(evidence.localTransferId) ||
+    !ref(evidence.destinationLocationId) ||
+    (evidence.sourceLocationId !== null && !ref(evidence.sourceLocationId)) ||
+    typeof evidence.actorUserId !== "string" ||
+    evidence.actorUserId.length < 1 ||
+    evidence.actorUserId.length > 255 ||
+    typeof evidence.actorUsername !== "string" ||
+    evidence.actorUsername.length < 1 ||
+    evidence.actorUsername.length > 255 ||
+    typeof evidence.requestId !== "string" ||
+    !UUID.test(evidence.requestId) ||
+    !validDay(evidence.businessDate) ||
+    (evidence.notes !== null && (typeof evidence.notes !== "string" || evidence.notes.length > 2000)) ||
+    typeof evidence.optional !== "boolean" ||
+    typeof evidence.allowNegativeInventory !== "boolean" ||
+    !Array.isArray(evidence.items) ||
+    evidence.items.length < 1 ||
+    evidence.items.length > 1000
+  ) {
+    throw new Phase9StockRefusal("PHASE9_STOCK_EVIDENCE_INVALID");
+  }
+  const items = evidence.items.map((line) => {
+    if (
+      !line ||
+      typeof line !== "object" ||
+      Array.isArray(line) ||
+      Object.keys(line).sort().join(",") !== "quantity,rate,sourceLocationId,stockItemId" ||
+      !ref(line.sourceLocationId) ||
+      !ref(line.stockItemId) ||
+      !validQuantity(line.quantity) ||
+      typeof line.rate !== "string" ||
+      !RATE.test(line.rate)
+    ) {
+      throw new Phase9StockRefusal("PHASE9_STOCK_EVIDENCE_INVALID");
+    }
+    return {
+      sourceLocationId: line.sourceLocationId,
+      stockItemId: line.stockItemId,
+      quantity: line.quantity,
+      rate: line.rate,
+    };
+  });
+  return {
+    kind: PHASE9_STOCK_TRANSFER_KIND,
+    requestId: evidence.requestId,
+    companyId: evidence.companyId,
+    actorUserId: evidence.actorUserId,
+    actorUsername: evidence.actorUsername,
+    localTransferId: evidence.localTransferId,
+    businessDate: evidence.businessDate,
+    sourceLocationId: evidence.sourceLocationId,
+    destinationLocationId: evidence.destinationLocationId,
+    notes: evidence.notes,
+    optional: evidence.optional,
+    allowNegativeInventory: evidence.allowNegativeInventory,
+    items,
+  };
+}

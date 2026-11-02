@@ -16,6 +16,7 @@ import {
   PHASE9_POS_SALE_ROUTE,
   phase9ApprovedCaptureRoute,
   PHASE9_STOCK_ADJUST_ROUTE,
+  PHASE9_STOCK_TRANSFER_ROUTE,
   readFactoryEdgeConfiguration,
 } from "./edgeRuntimePolicy.mjs";
 import { hasFactoryEdgeData } from "./edgeDatabaseProof.mjs";
@@ -264,6 +265,10 @@ export function registerFactoryEdgeBoundary(app: Express): void {
       pressingCaptureInstalled,
       {
         [PHASE9_STOCK_ADJUST_ROUTE]: {
+          installed: outboxInstalled("factory_edge_stock_outbox"),
+          code: "EDGE_PHASE9_STOCK_CAPTURE_NOT_INSTALLED",
+        },
+        [PHASE9_STOCK_TRANSFER_ROUTE]: {
           installed: outboxInstalled("factory_edge_stock_outbox"),
           code: "EDGE_PHASE9_STOCK_CAPTURE_NOT_INSTALLED",
         },

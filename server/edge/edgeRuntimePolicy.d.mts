@@ -30,6 +30,7 @@ export const PHASE9_STOCK_ADJUST_ROUTE: "POST /api/inventory/quick-adjust";
 export const PHASE9_POS_SALE_ROUTE: "POST /api/pos/sales";
 export const PHASE9_ATTACHMENT_UPLOAD_ROUTE: "POST /api/files/upload";
 export const PHASE9_PAYMENT_RECEIPT_ROUTE: "POST /api/vouchers/payment-receipt";
+export const PHASE9_STOCK_TRANSFER_ROUTE: "POST /api/stock-transfers";
 export const PHASE9_RECEIVING_OFFLOAD_PATH: RegExp;
 export const PHASE9_POS_SALE_EDIT_PATH: RegExp;
 export const PHASE9_VOUCHER_DELETE_PATH: RegExp;
