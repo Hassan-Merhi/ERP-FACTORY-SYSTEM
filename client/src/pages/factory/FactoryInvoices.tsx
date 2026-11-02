@@ -2,6 +2,9 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useTablePrefs } from "@/hooks/use-table-prefs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useCallback, useRef } from "react";
@@ -33,9 +36,26 @@ import {
   statusFilterCounts,
 } from "./factoryinvoices/invoiceCalculations";
 import { InvoiceGroupRow } from "./factoryinvoices/InvoiceGroupRow";
-import { InvoiceOrderRow, type EditableShippingField } from "./factoryinvoices/InvoiceOrderRow";
+import { InvoiceOrderRow, type EditableShippingField, type InvoiceColumnKey } from "./factoryinvoices/InvoiceOrderRow";
 import { ShippingAvailabilityTable } from "./factoryshippingcontainers/components/ShippingAvailabilityTable";
 import { ScheduledContainersTable } from "./factoryshippingcontainers/components/ScheduledContainersTable";
+
+// All permitted invoice columns are visible unless the user chooses to hide them.
+const INVOICE_OPTIONAL_COLUMNS: { key: InvoiceColumnKey; label: string }[] = [
+  { key: "loading", label: "Loading #" },
+  { key: "proforma", label: "Proforma" },
+  { key: "container", label: "Container" },
+  { key: "bookingInfo", label: "Booking Info" },
+  { key: "destination", label: "Destination" },
+  { key: "notes", label: "Notes" },
+  { key: "date", label: "Date" },
+  { key: "status", label: "Status" },
+  { key: "bales", label: "Bales" },
+  { key: "weight", label: "Weight" },
+  { key: "remaining", label: "Remaining" },
+  { key: "extras", label: "Extras" },
+  { key: "total", label: "Total" },
+];
 
 export default function FactoryInvoices() {
   const { toast } = useToast();
@@ -46,7 +66,6 @@ export default function FactoryInvoices() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("LOADING");
   const [customerFilter, setCustomerFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
-  const [compactView, setCompactView] = useState(true);
   const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -125,6 +144,28 @@ export default function FactoryInvoices() {
   const hidden: string[] = myAccess?.hiddenCostFields ?? [];
   const hideProformaCol = !isAdmin || hidden.includes("hide_invoicing_proforma_col");
   const hideTotalsUsd = hidden.includes("hide_invoicing_totals_usd");
+
+  // Use the existing durable table-preferences storage, scoped to the signed-in
+  // user and company so shared devices do not share presentation settings.
+  const { prefs: tablePrefs, setPrefs: setTablePrefs } = useTablePrefs(
+    `factory-invoices:user:${authUser?.id ?? "pending"}`,
+    { companyId: authUser?.currentCompanyId ?? null }
+  );
+  const allowedInvoiceColumns = INVOICE_OPTIONAL_COLUMNS.filter(({ key }) =>
+    (key !== "proforma" || !hideProformaCol) &&
+    (key !== "bookingInfo" || showBookingInfo) &&
+    (key !== "total" || !hideTotalsUsd)
+  );
+  const isColumnVisible = (key: InvoiceColumnKey): boolean =>
+    allowedInvoiceColumns.some((column) => column.key === key) && tablePrefs.columns?.[key] !== false;
+  const visibleOptionalColumns = allowedInvoiceColumns.filter(({ key }) => isColumnVisible(key)).length;
+  const setColumnVisible = (key: InvoiceColumnKey, visible: boolean) => {
+    if (!allowedInvoiceColumns.some((column) => column.key === key)) return;
+    setTablePrefs((previous) => ({
+      ...previous,
+      columns: { ...previous.columns, [key]: visible },
+    }));
+  };
 
   const { data: customers = [] } = useQuery<Customer[]>({
     queryKey: ["/api/factory/customers"],
@@ -320,10 +361,8 @@ export default function FactoryInvoices() {
     }
   };
 
-  // Column count for colspan calculations
-  // +1 for the drag-handle column
-  const colCount = 16 - (hideProformaCol ? 1 : 0) - (hideTotalsUsd ? 1 : 0) - (showBookingInfo ? 0 : 1)
-    - (compactView ? 2 + (showBookingInfo ? 1 : 0) + (hideTotalsUsd ? 0 : 1) : 0);
+  // Customer, Actions and drag handle are always present.
+  const colCount = 3 + visibleOptionalColumns;
 
   // Group orders by customer, preserving first-appearance order
   const customerGroups = groupOrdersByCustomer(filteredOrders);
@@ -360,10 +399,7 @@ export default function FactoryInvoices() {
   };
 
   const orderRowContext = {
-    compactView,
-    hideProformaCol,
-    showBookingInfo,
-    hideTotalsUsd,
+    isColumnVisible,
     formatDisplayDate,
     getStatusBadge,
     onRowClick: handleRowClick,
@@ -501,17 +537,38 @@ export default function FactoryInvoices() {
             <Filter className="mr-1.5 h-3.5 w-3.5" /> More Filters
             <ChevronDown className={cn("ml-1.5 h-3.5 w-3.5 transition-transform", showMoreFilters && "rotate-180")} />
           </Button>
-          <Button
-            size="sm"
-            variant={compactView ? "outline" : "secondary"}
-            className="h-9 rounded-lg text-xs"
-            onClick={() => setCompactView((value) => !value)}
-            aria-pressed={!compactView}
-            title={compactView ? "Show all invoice columns" : "Use compact invoice columns"}
-            data-testid="button-invoice-columns"
-          >
-            <SlidersHorizontal className="mr-1.5 h-3.5 w-3.5" /> {compactView ? "All Columns" : "Compact"}
-          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button size="sm" variant="outline" className="h-9 rounded-lg text-xs"
+                title="Choose visible invoice columns" data-testid="button-invoice-columns">
+                <SlidersHorizontal className="mr-1.5 h-3.5 w-3.5" />
+                Columns <span className="ml-1 text-muted-foreground">({visibleOptionalColumns}/{allowedInvoiceColumns.length})</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-64 p-3" data-testid="invoice-columns-menu">
+              <div className="text-sm font-semibold">Visible columns</div>
+              <p className="mt-0.5 text-xs text-muted-foreground">Your choices are saved on this device.</p>
+              <div className="mt-3 max-h-72 space-y-1 overflow-y-auto">
+                {allowedInvoiceColumns.map(({ key, label }) => (
+                  <label key={key} htmlFor={`invoice-column-${key}`}
+                    className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-muted/60">
+                    <Checkbox id={`invoice-column-${key}`} checked={isColumnVisible(key)}
+                      onCheckedChange={(checked) => setColumnVisible(key, checked === true)}
+                      data-testid={`checkbox-invoice-column-${key}`} />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-2">
+                <span className="text-[11px] text-muted-foreground">Customer & Actions stay visible</span>
+                <Button size="sm" variant="ghost" className="shrink-0 text-xs"
+                  onClick={() => setTablePrefs((previous) => ({ ...previous, columns: {} }))}
+                  data-testid="button-invoice-show-all-columns">
+                  Show all
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
         {showMoreFilters && (
           <div className="flex flex-wrap items-end gap-3 border-b border-border/60 bg-muted/20 px-3 py-3">
@@ -567,57 +624,21 @@ export default function FactoryInvoices() {
                 <TableRow className="border-b-2 border-border/60 bg-slate-100/80 hover:bg-slate-100/80 dark:bg-[#172940] dark:hover:bg-[#172940]">
                   {/* Drag handle column */}
                   <TableHead className="w-7 px-1" />
-                  <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Customer
-                  </TableHead>
-                  <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Loading #
-                  </TableHead>
-                  {!hideProformaCol && (
-                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      Proforma
-                    </TableHead>
-                  )}
-                  <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Container
-                  </TableHead>
-                  {showBookingInfo && !compactView && (
-                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      Booking Info
-                    </TableHead>
-                  )}
-                  <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Destination
-                  </TableHead>
-                  {!compactView && <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Notes
-                  </TableHead>}
-                  <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Date
-                  </TableHead>
-                  <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Status
-                  </TableHead>
-                  <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Bales
-                  </TableHead>
-                  <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Weight
-                  </TableHead>
-                  <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Remaining
-                  </TableHead>
-                  {!compactView && <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Extras
-                  </TableHead>}
-                  {!hideTotalsUsd && !compactView && (
-                    <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      Total
-                    </TableHead>
-                  )}
-                  <TableHead className="w-[120px] text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Actions
-                  </TableHead>
+                  <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Customer</TableHead>
+                  {isColumnVisible("loading") && <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Loading #</TableHead>}
+                  {isColumnVisible("proforma") && <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Proforma</TableHead>}
+                  {isColumnVisible("container") && <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Container</TableHead>}
+                  {isColumnVisible("bookingInfo") && <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Booking Info</TableHead>}
+                  {isColumnVisible("destination") && <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Destination</TableHead>}
+                  {isColumnVisible("notes") && <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Notes</TableHead>}
+                  {isColumnVisible("date") && <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Date</TableHead>}
+                  {isColumnVisible("status") && <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</TableHead>}
+                  {isColumnVisible("bales") && <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Bales</TableHead>}
+                  {isColumnVisible("weight") && <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Weight</TableHead>}
+                  {isColumnVisible("remaining") && <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Remaining</TableHead>}
+                  {isColumnVisible("extras") && <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Extras</TableHead>}
+                  {isColumnVisible("total") && <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Total</TableHead>}
+                  <TableHead className="w-[120px] text-xs font-semibold text-muted-foreground uppercase tracking-wide">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

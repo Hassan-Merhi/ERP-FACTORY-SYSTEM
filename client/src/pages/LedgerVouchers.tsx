@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
+import { isInternalHistoricalSupplierRoutineRow } from "@shared/internalHistoricalSupplierRoutineRow";
 
 interface VoucherEntry {
   id: number;
@@ -21,6 +22,9 @@ interface VoucherEntry {
   particulars: string;
   voucherType: string;
   voucherNumber: string;
+  voucherDescription?: string | null;
+  createdAt?: string | Date | null;
+  companyId?: number;
   debit: number;
   credit: number;
 }
@@ -155,7 +159,9 @@ export default function LedgerVouchers() {
                   </div>
                   <div className="text-right">
                     <p className="text-sm text-muted-foreground">
-                      {Array.isArray(data.vouchers) ? data.vouchers.length : 0} voucher(s)
+                      {Array.isArray(data.vouchers)
+                        ? data.vouchers.filter((v) => !isInternalHistoricalSupplierRoutineRow(v)).length
+                        : 0} voucher(s)
                     </p>
                   </div>
                 </div>
@@ -163,10 +169,12 @@ export default function LedgerVouchers() {
               <CardContent className="pt-4">
                 {(() => {
                   let runningBal = data.openingBalance;
+                  // Preserve every posted line when calculating the running
+                  // balance, then omit just the known internal catchup rows.
                   const vouchersWithBal = (Array.isArray(data.vouchers) ? data.vouchers : []).map((v) => {
                     runningBal = runningBal + v.credit - v.debit;
                     return { ...v, runningBalance: runningBal };
-                  });
+                  }).filter((v) => !isInternalHistoricalSupplierRoutineRow(v));
                   const formatBal = (bal: number) =>
                     bal === 0 ? "—" : `${formatAmount(Math.abs(bal))} ${bal >= 0 ? "Cr" : "Dr"}`;
                   return (
@@ -194,7 +202,7 @@ export default function LedgerVouchers() {
                               {formatBal(data.openingBalance)}
                             </TableCell>
                           </TableRow>
-                          {data.vouchers.length === 0 ? (
+                          {vouchersWithBal.length === 0 ? (
                             <TableRow>
                               <TableCell colSpan={6} className="text-center py-8">
                                 <p className="text-muted-foreground">No vouchers found for this period</p>

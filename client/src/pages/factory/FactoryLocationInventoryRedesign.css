@@ -1,0 +1,218 @@
+/* Factory Location Inventory visual refresh.
+   Deliberately scoped to this view: no changes to stock, pricing or accounting. */
+.factory-location-inventory {
+  --inventory-line: rgba(112, 122, 154, .19);
+  --inventory-violet: #8b5cf6;
+  background: radial-gradient(ellipse 72% 40% at 94% 0%, rgba(139, 92, 246, .075), transparent 75%);
+  min-height: 70vh;
+}
+.factory-location-inventory .inventory-page-heading,
+.factory-location-inventory .inventory-detail-title {
+  letter-spacing: -.04em;
+  font-weight: 750;
+}
+.factory-location-inventory .inventory-export-button {
+  border-color: rgba(139, 92, 246, .42);
+  background: linear-gradient(120deg, rgba(139, 92, 246, .14), rgba(139, 92, 246, .055));
+  color: inherit;
+  box-shadow: 0 3px 16px rgba(139, 92, 246, .07);
+}
+.factory-location-inventory .inventory-export-button:hover,
+.factory-location-inventory .inventory-columns-button:hover,
+.factory-location-inventory .inventory-filter-button:hover {
+  border-color: rgba(139, 92, 246, .65);
+  background: rgba(139, 92, 246, .13);
+}
+.factory-location-inventory .inventory-location-shell {
+  border-color: var(--inventory-line);
+  background: linear-gradient(155deg, rgba(139, 92, 246, .055), transparent 72%), var(--card);
+  box-shadow: 0 15px 45px rgba(19, 17, 42, .045);
+}
+.dark .factory-location-inventory .inventory-location-shell {
+  background: radial-gradient(ellipse at 95% 100%, rgba(108, 54, 189, .20), transparent 49%), linear-gradient(125deg, rgba(24, 25, 42, .93), rgba(16, 18, 29, .96));
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .13);
+}
+.factory-location-inventory .inventory-selector-label {
+  color: #7c3aed;
+  letter-spacing: .10em;
+}
+.dark .factory-location-inventory .inventory-selector-label { color: #c4b5fd; }
+.factory-location-inventory .inventory-selector-title { letter-spacing: -.025em; }
+.factory-location-inventory .inventory-search-input {
+  border-radius: .65rem;
+  border-color: var(--inventory-line);
+  background: rgba(255, 255, 255, .53);
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+.dark .factory-location-inventory .inventory-search-input { background: rgba(10, 13, 22, .48); }
+.factory-location-inventory .inventory-search-input:focus-visible {
+  border-color: rgba(139, 92, 246, .66);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, .12);
+}
+.factory-location-inventory .inventory-location-card {
+  border-color: rgba(139, 92, 246, .24);
+  background: linear-gradient(110deg, rgba(139, 92, 246, .075), rgba(139, 92, 246, .025) 65%, transparent);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .08);
+}
+.dark .factory-location-inventory .inventory-location-card {
+  background: linear-gradient(110deg, rgba(139, 92, 246, .18), rgba(33, 32, 54, .43) 60%, rgba(139, 92, 246, .06));
+}
+.factory-location-inventory .inventory-location-card:hover {
+  border-color: rgba(139, 92, 246, .7);
+  box-shadow: 0 9px 24px rgba(80, 39, 140, .11);
+}
+.factory-location-inventory .inventory-location-icon {
+  color: #7c3aed;
+  background: linear-gradient(140deg, rgba(167, 139, 250, .38), rgba(139, 92, 246, .14));
+  box-shadow: inset 0 0 0 1px rgba(139, 92, 246, .18);
+}
+.dark .factory-location-inventory .inventory-location-icon {
+  color: #e9d5ff;
+  background: linear-gradient(135deg, rgba(139, 92, 246, .65), rgba(91, 33, 182, .36));
+}
+.factory-location-inventory .inventory-location-chevron {
+  color: #7c3aed;
+  border-radius: .55rem;
+  background: rgba(139, 92, 246, .11);
+  box-sizing: content-box;
+  padding: 7px;
+}
+.dark .factory-location-inventory .inventory-location-chevron { color: #ddd6fe; }
+.factory-location-inventory .inventory-detail-header { padding: 2px 0 5px; }
+.factory-location-inventory .inventory-kpi-grid > * {
+  min-width: 0;
+  border-radius: 1rem;
+  border: 1px solid rgba(139, 92, 246, .16);
+  background: linear-gradient(115deg, rgba(139, 92, 246, .065), transparent 85%);
+}
+.factory-location-inventory .inventory-kpi-grid > .inventory-kpi-card,
+.factory-location-inventory .inventory-kpi-grid > .inventory-stat-card {
+  min-height: 100px;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  box-shadow: inset 0 1px rgba(255, 255, 255, .07), 0 6px 20px rgba(19, 17, 42, .04);
+}
+.factory-location-inventory .inventory-kpi-grid > .inventory-kpi-card::after,
+.factory-location-inventory .inventory-kpi-grid > .inventory-stat-card::after {
+  content: "";
+  position: absolute;
+  right: -18px;
+  bottom: -50px;
+  width: 125px;
+  height: 125px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: .035;
+  pointer-events: none;
+}
+.factory-location-inventory .inventory-kpi-grid > [data-testid="stat-total-bales"] {
+  color: inherit;
+  border-color: rgba(59, 130, 246, .26);
+  background: linear-gradient(130deg, rgba(59, 130, 246, .14), rgba(59, 130, 246, .035));
+}
+.factory-location-inventory .inventory-kpi-grid > [data-testid="stat-total-kg"] {
+  border-color: rgba(16, 185, 129, .27);
+  background: linear-gradient(130deg, rgba(16, 185, 129, .13), rgba(16, 185, 129, .028));
+}
+.factory-location-inventory .inventory-kpi-grid > .inventory-kpi-categories {
+  border-color: rgba(168, 85, 247, .26);
+  background: linear-gradient(130deg, rgba(168, 85, 247, .14), rgba(168, 85, 247, .035));
+}
+.factory-location-inventory .inventory-kpi-grid > .inventory-kpi-cost {
+  border-color: rgba(245, 158, 11, .27);
+  background: linear-gradient(130deg, rgba(245, 158, 11, .14), rgba(245, 158, 11, .03));
+}
+.factory-location-inventory .inventory-kpi-grid > .inventory-kpi-selling {
+  border-color: rgba(34, 197, 94, .27);
+  background: linear-gradient(130deg, rgba(34, 197, 94, .14), rgba(34, 197, 94, .03));
+}
+.factory-location-inventory .inventory-kpi-grid .inventory-kpi-card .text-xl,
+.factory-location-inventory .inventory-kpi-grid .inventory-stat-card .text-xl { font-size: 1.55rem; font-variant-numeric: tabular-nums; }
+.factory-location-inventory .inventory-kpi-grid .inventory-kpi-card .border-t { border-color: rgba(133, 139, 160, .18); }
+.factory-location-inventory .inventory-toolbar {
+  background: linear-gradient(110deg, rgba(139, 92, 246, .065), transparent 78%);
+}
+.factory-location-inventory .inventory-table-shell {
+  border-color: var(--inventory-line);
+  border-radius: 1rem;
+  background: var(--card);
+  box-shadow: 0 8px 28px rgba(18, 15, 38, .05);
+}
+.dark .factory-location-inventory .inventory-table-shell { background: rgba(14, 16, 25, .78); }
+.factory-location-inventory .inventory-filter-button,
+.factory-location-inventory .inventory-columns-button {
+  border-color: var(--inventory-line);
+  background: rgba(139, 92, 246, .035);
+}
+.factory-location-inventory .inventory-sort-chip {
+  padding: .3rem .65rem;
+  border-radius: .5rem;
+  border-color: var(--inventory-line);
+  transition: background .15s ease, border-color .15s ease;
+}
+.factory-location-inventory .inventory-sort-chip.is-active {
+  background: #7c3aed;
+  border-color: #7c3aed;
+  color: white;
+}
+.factory-location-inventory .inventory-table-frame {
+  border-color: var(--inventory-line);
+  border-radius: .7rem;
+}
+.factory-location-inventory .inventory-stock-table { border-collapse: separate; border-spacing: 0; }
+.factory-location-inventory .inventory-table-head {
+  background: linear-gradient(100deg, rgba(139, 92, 246, .14), rgba(99, 102, 241, .055));
+}
+.dark .factory-location-inventory .inventory-table-head {
+  background: linear-gradient(100deg, rgba(139, 92, 246, .21), rgba(32, 39, 63, .84));
+}
+.factory-location-inventory .inventory-table-head th { height: 44px; border-bottom: 1px solid rgba(139, 92, 246, .2); }
+.factory-location-inventory .inventory-product-row { transition: background .14s ease; }
+.factory-location-inventory .inventory-product-row:nth-child(even) { background: rgba(100, 116, 139, .035); }
+.dark .factory-location-inventory .inventory-product-row:nth-child(even) { background: rgba(100, 116, 139, .075); }
+.factory-location-inventory .inventory-product-row:hover { background: rgba(139, 92, 246, .095); }
+.factory-location-inventory .inventory-product-row td { padding-top: .57rem; padding-bottom: .57rem; border-color: var(--inventory-line); }
+.factory-location-inventory .inventory-product-row td:first-child button { font-weight: 650; }
+.factory-location-inventory .inventory-category-badge { border-radius: .42rem; letter-spacing: .015em; }
+.factory-location-inventory .inventory-section-total {
+  background: linear-gradient(95deg, rgba(139, 92, 246, .20), rgba(139, 92, 246, .065));
+  border-top: 1px solid rgba(139, 92, 246, .3);
+  border-bottom: 1px solid rgba(139, 92, 246, .20);
+}
+.dark .factory-location-inventory .inventory-section-total {
+  background: linear-gradient(95deg, rgba(139, 92, 246, .32), rgba(70, 41, 123, .19));
+}
+.factory-location-inventory .inventory-special-heading {
+  color: inherit;
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  letter-spacing: .055em;
+  padding: .35rem .1rem;
+}
+.factory-location-inventory .inventory-special-icon {
+  color: #9333ea;
+  padding: .35rem;
+  box-sizing: content-box;
+  border-radius: .55rem;
+  background: rgba(139, 92, 246, .13);
+}
+.dark .factory-location-inventory .inventory-special-icon { color: #d8b4fe; }
+.factory-location-inventory .inventory-mobile-card {
+  background: linear-gradient(125deg, rgba(139, 92, 246, .055), transparent 80%);
+  border-color: var(--inventory-line);
+}
+.factory-location-inventory .inventory-mobile-total {
+  background: linear-gradient(110deg, rgba(139, 92, 246, .16), rgba(139, 92, 246, .035));
+  border-color: rgba(139, 92, 246, .3);
+}
+.factory-location-inventory .inventory-table-footer {
+  background: rgba(139, 92, 246, .035);
+  border-color: var(--inventory-line);
+}
+@media (prefers-reduced-motion: reduce) {
+  .factory-location-inventory .inventory-location-card,
+  .factory-location-inventory .inventory-product-row,
+  .factory-location-inventory .inventory-sort-chip { transition: none; }
+}

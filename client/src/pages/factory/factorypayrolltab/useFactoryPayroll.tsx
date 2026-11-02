@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useMutation } from "@tanstack/react-query";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -143,6 +143,10 @@ export default function useFactoryPayroll() {
       return res.json();
     },
     staleTime: 5 * 60 * 1000,
+    // Keep the last valid projection visible during background refreshes or period changes.
+    // Never clear it to a loading placeholder after a successful response.
+    placeholderData: keepPreviousData,
+    refetchOnWindowFocus: false,
   });
 
   const projectionTotal = useMemo(() => (projectionRows ?? []).reduce((s, r) => s + (r.net ?? 0), 0), [projectionRows]);

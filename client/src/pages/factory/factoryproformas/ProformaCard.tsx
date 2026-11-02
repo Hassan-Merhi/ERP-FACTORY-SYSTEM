@@ -127,25 +127,25 @@ export function ProformaCard(props: ProformaCardProps) {
   return (
     <div
       data-testid={`card-proforma-${proforma.id}`}
-      className={`rounded-lg border bg-card transition-shadow ${isExpanded ? "shadow-xs" : ""} ${!proforma.isActive ? "opacity-60" : ""}`}
+      className={`overflow-hidden rounded-2xl border border-violet-500/15 bg-card shadow-sm transition-shadow dark:border-violet-400/20 ${isExpanded ? "shadow-md shadow-violet-500/5" : "hover:shadow-md"} ${!proforma.isActive ? "opacity-60" : ""}`}
     >
       {/* Card header row */}
-      <div className="flex items-center gap-2 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2 border-b border-violet-500/10 bg-gradient-to-r from-violet-500/[0.10] via-indigo-500/[0.04] to-transparent px-4 py-3.5 dark:from-violet-600/25 dark:via-indigo-500/10 sm:px-5">
         {/* Expand toggle */}
         <button
-          className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
+          className="flex min-w-[170px] flex-1 items-center gap-2.5 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
           onClick={onToggleExpand}
           data-testid={`button-expand-proforma-${proforma.id}`}
         >
           {isExpanded ? (
-            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+            <ChevronDown className="h-4 w-4 shrink-0 text-violet-600 dark:text-violet-300" />
           ) : (
             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           )}
-          <span className="font-semibold truncate">{proforma.name}</span>
+          <span className="truncate text-base font-bold tracking-tight sm:text-lg">{proforma.name}</span>
           {proforma.isActive && (
             <Badge
-              className="bg-green-600 text-white shrink-0 no-default-hover-elevate no-default-active-elevate"
+              className="shrink-0 rounded-full border border-emerald-400/20 bg-emerald-600 px-2.5 text-white no-default-hover-elevate no-default-active-elevate dark:bg-emerald-600/80"
               data-testid={`badge-active-${proforma.id}`}
             >
               Active
@@ -154,8 +154,8 @@ export function ProformaCard(props: ProformaCardProps) {
         </button>
 
         {/* Stats chips (hidden on tiny screens) */}
-        <div className="hidden sm:flex items-center gap-3 text-xs text-muted-foreground shrink-0">
-          <span data-testid={`badge-lines-count-${proforma.id}`} className="flex items-center gap-1">
+        <div className="order-3 hidden w-full flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground sm:flex lg:order-none lg:w-auto lg:shrink-0">
+          <span data-testid={`badge-lines-count-${proforma.id}`} className="flex items-center gap-1 font-medium">
             <Package className="h-3 w-3" />
             {lineCount} lines
           </span>
@@ -174,7 +174,7 @@ export function ProformaCard(props: ProformaCardProps) {
             </span>
           )}
           {!hideProformaPrice && totalAmount > 0 && (
-            <span data-testid={`text-total-amount-${proforma.id}`} className="font-mono font-medium text-foreground">
+            <span data-testid={`text-total-amount-${proforma.id}`} className="font-mono font-bold text-foreground">
               {formatAmount(totalAmount)}
             </span>
           )}
@@ -186,10 +186,11 @@ export function ProformaCard(props: ProformaCardProps) {
         </div>
 
         {/* Action buttons */}
-        <div className="flex items-center gap-0.5 shrink-0 ml-1">
+        <div className="ml-auto flex shrink-0 items-center gap-0.5">
           <Button
             variant="ghost"
             size="icon"
+            className="h-8 w-8 rounded-lg hover:bg-amber-500/10"
             onClick={() => toggleActiveMutation.mutate({ id: proforma.id, isActive: !proforma.isActive })}
             disabled={toggleActiveMutation.isPending}
             data-testid={`button-toggle-active-proforma-${proforma.id}`}
@@ -204,6 +205,7 @@ export function ProformaCard(props: ProformaCardProps) {
           <Button
             variant="ghost"
             size="icon"
+            className="h-8 w-8 rounded-lg hover:bg-violet-500/10"
             onClick={() =>
               navigate(`/factory/dispatch-batches?customerId=${customerId}&proformaId=${proforma.id}&openCreate=1`)
             }
@@ -215,7 +217,7 @@ export function ProformaCard(props: ProformaCardProps) {
           {canEdit && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" data-testid={`button-proforma-menu-${proforma.id}`}>
+                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-violet-500/10" data-testid={`button-proforma-menu-${proforma.id}`}>
                   <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
                 </Button>
               </DropdownMenuTrigger>
@@ -251,11 +253,11 @@ export function ProformaCard(props: ProformaCardProps) {
 
       {/* Expanded content */}
       {isExpanded && (
-        <div className="border-t">
+        <div>
           {/* Toolbar */}
-          <div className="flex items-center gap-2 px-4 py-2.5 bg-muted/30 flex-wrap">
+          <div className="flex flex-wrap items-center gap-2 border-b border-border/70 bg-gradient-to-r from-violet-500/[0.06] via-card to-card px-4 py-3 dark:from-violet-500/10 sm:px-5">
             {canEdit && (
-              <Button size="sm" onClick={onAddLine} data-testid={`button-add-line-${proforma.id}`}>
+              <Button size="sm" className="h-9 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 font-semibold text-white shadow-sm shadow-violet-500/20 hover:from-violet-500 hover:to-indigo-500" onClick={onAddLine} data-testid={`button-add-line-${proforma.id}`}>
                 <Plus className="mr-1.5 h-3.5 w-3.5" />
                 Add Item
               </Button>
@@ -265,6 +267,7 @@ export function ProformaCard(props: ProformaCardProps) {
                 size="sm"
                 variant="outline"
                 onClick={() => navigate(invoicingProformaEditPath(proforma.id, customerId))}
+                className="h-9 rounded-xl border-border/70 bg-background/70 px-3 shadow-sm"
                 data-testid={`button-edit-in-allocation-${proforma.id}`}
               >
                 <Pencil className="mr-1.5 h-3.5 w-3.5" />
@@ -276,6 +279,7 @@ export function ProformaCard(props: ProformaCardProps) {
               variant="outline"
               onClick={() => saveAgreedPricesMutation.mutate(proforma.id)}
               disabled={saveAgreedPricesMutation.isPending}
+              className="h-9 rounded-xl border-border/70 bg-background/70 px-3 shadow-sm"
               data-testid={`button-save-agreed-prices-${proforma.id}`}
               title="Save these prices as the customer's agreed prices"
             >
@@ -287,6 +291,7 @@ export function ProformaCard(props: ProformaCardProps) {
               variant="outline"
               onClick={() => applyProductionPricesMutation.mutate(proforma.id)}
               disabled={applyProductionPricesMutation.isPending}
+              className="h-9 rounded-xl border-border/70 bg-background/70 px-3 shadow-sm"
               data-testid={`button-apply-production-prices-${proforma.id}`}
               title="Set all line prices to the production (cost) price from the catalogue"
             >
@@ -297,6 +302,7 @@ export function ProformaCard(props: ProformaCardProps) {
               variant="outline"
               onClick={() => applyCatalogPricesMutation.mutate(proforma.id)}
               disabled={applyCatalogPricesMutation.isPending}
+              className="h-9 rounded-xl border-border/70 bg-background/70 px-3 shadow-sm"
               data-testid={`button-apply-selling-prices-${proforma.id}`}
               title="Set all line prices to the selling price from the catalogue"
             >
@@ -306,6 +312,7 @@ export function ProformaCard(props: ProformaCardProps) {
               size="sm"
               variant="outline"
               onClick={() => window.open(`/api/factory/customer-proformas/${proforma.id}/export/excel`, "_blank")}
+              className="h-9 rounded-xl border-border/70 bg-background/70 px-3 shadow-sm"
               data-testid={`button-export-excel-${proforma.id}`}
             >
               <Download className="mr-1.5 h-3.5 w-3.5" />
@@ -321,6 +328,7 @@ export function ProformaCard(props: ProformaCardProps) {
                 }
                 window.open(`/api/factory/customer-proformas/${proforma.id}/export/pdf`, "_blank");
               }}
+              className="h-9 rounded-xl border-border/70 bg-background/70 px-3 shadow-sm"
               data-testid={`button-export-pdf-${proforma.id}`}
             >
               <Download className="mr-1.5 h-3.5 w-3.5" />

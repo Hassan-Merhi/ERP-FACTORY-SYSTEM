@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 type HubQueryStateOptions<T extends string> = {
-  key: "section" | "tab";
+  key: "section" | "tab" | "mode";
   allowedValues: readonly T[];
   /**
    * All values understood by this hub, including values currently restricted.
@@ -21,7 +21,7 @@ function fallbackValue<T extends string>(allowedValues: readonly T[], defaultVal
 
 function readLegacyHash<T extends string>(
   url: URL,
-  key: "section" | "tab",
+  key: "section" | "tab" | "mode",
   knownValues: readonly T[],
 ): T | null {
   if (!url.hash) return null;

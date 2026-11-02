@@ -112,12 +112,12 @@ import {
   RawStockRecalculate,
   Settings,
   SpreadsheetEditor,
-  StockQuery,
   VoucherDetail,
   VoucherEdit,
   WipersReEntry,
 } from "@/lazyPages";
 
+const FactoryStockQueryWorkspace = lazy(() => import("@/pages/factory/FactoryStockQueryWorkspace"));
 const AccountGroups = lazy(() => import("@/pages/AccountGroups"));
 const FactoryInvoiceDetailBilingual = lazy(() => import("@/pages/factory/FactoryInvoiceDetailBilingual"));
 const FactoryProductionBonuses = lazy(() => import("@/pages/factory/FactoryProductionBonuses"));
@@ -144,7 +144,9 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
 
   return (
     <Switch>
-      <Route path="/factory/daybook" component={FactoryDaybook} />
+      <Route path="/factory/daybook">
+        {() => (isAdminOrDev ? <FactoryDaybook /> : <Redirect replace to={factoryDefaultPage} />)}
+      </Route>
       <Route path="/factory/transporters" component={FactoryTransporters} />
       <Route path="/factory/finance">
         <Redirect replace to="/factory/payroll-hub?section=workers" />
@@ -192,7 +194,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       </Route>
       <Route path="/factory/stock-bale-list" component={FactoryStockBaleList} />
       <Route path="/factory/stock-query/:id" component={FactoryStockItemDetail} />
-      <Route path="/factory/stock-query" component={StockQuery} />
+      <Route path="/factory/stock-query" component={FactoryStockQueryWorkspace} />
       <Route path="/factory/contacts" component={FactoryContacts} />
       <Route path="/factory/accounts" component={FactoryAccounts} />
       {isDeveloper && <Route path="/factory/accounting/open-items" component={AccountingOpenItems} />}
@@ -207,17 +209,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       {isDeveloper && <Route path="/factory/accounting/dashboard" component={UnifiedAccountingDashboard} />}
       {isDeveloper && <Route path="/factory/accounting/rollout" component={UnifiedAccountingRollout} />}
       <Route path="/factory/cost-centers">
-        {() =>
-          (isAdminOwnerOrDev || user?.role === "Manager") &&
-          (!myAccess ||
-            myAccess.fullAccess ||
-            myAccess.pageKeys?.includes("factory/cost-centers") ||
-            myAccess.pageKeys?.includes("factory/accounts")) ? (
-            <CostCenters />
-          ) : (
-            <Redirect replace to={factoryDefaultPage} />
-          )
-        }
+        {() => (isDeveloper ? <CostCenters /> : <Redirect replace to={factoryDefaultPage} />)}
       </Route>
       {isAdminOwnerOrDev && <Route path="/factory/account-groups" component={AccountGroups} />}
       <Route path="/factory/agents" component={Agents} />

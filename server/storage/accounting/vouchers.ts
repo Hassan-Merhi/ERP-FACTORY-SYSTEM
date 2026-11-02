@@ -121,6 +121,7 @@ export async function getVoucherEntriesByLedger(
        v.voucher_type                                              AS "voucherType",
        COALESCE(v.effective_date::date, v.voucher_date::date)      AS "voucherDate",
        v.description                                               AS "voucherDescription",
+       v.created_at::text                                          AS "createdAt",
        v.currency,
        v.company_id AS "companyId"
      FROM voucher_entries ve
@@ -130,7 +131,7 @@ export async function getVoucherEntriesByLedger(
        AND v.deleted_at IS NULL
        ${companyFilter}
        ${dateFilters}
-     GROUP BY v.id, v.voucher_number, v.voucher_type, v.voucher_date, v.effective_date, v.description, v.currency, v.company_id
+     GROUP BY v.id, v.voucher_number, v.voucher_type, v.voucher_date, v.effective_date, v.description, v.created_at, v.currency, v.company_id
      ORDER BY COALESCE(v.effective_date::date, v.voucher_date::date), v.id`,
     params
   );
@@ -300,6 +301,7 @@ export async function getVoucherEntriesBySupplier(
        v.voucher_type                                               AS "voucherType",
        COALESCE(v.effective_date::date, v.voucher_date::date)       AS "voucherDate",
        v.description                                                AS "voucherDescription",
+       v.created_at::text                                          AS "createdAt",
        v.company_id                                                 AS "companyId",
        v.currency
      FROM voucher_entries ve

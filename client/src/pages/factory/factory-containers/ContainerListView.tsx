@@ -85,11 +85,13 @@ export function ContainerListView({
   }
 
   return (
-    <div className="rounded-xl border overflow-hidden">
-      <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-3 border-b bg-muted/20">
-        <div className="flex items-center gap-2">
-          <Container className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-semibold">
+    <section className="overflow-hidden rounded-2xl border border-border/70 bg-card/95 shadow-sm dark:border-blue-200/10 dark:bg-slate-900/60" aria-label="All factory containers">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 bg-gradient-to-r from-blue-500/5 via-background/40 to-violet-500/5 px-4 py-4 sm:px-5">
+        <div className="flex items-center gap-3">
+          <span className="flex size-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-300">
+            <Container className="h-5 w-5" />
+          </span>
+          <span className="text-sm font-semibold tracking-tight sm:text-base">
             Containers ({filteredContainers?.length || 0}
             {filteredContainers?.length !== containers?.length ? ` of ${containers?.length}` : ""})
           </span>
@@ -106,7 +108,7 @@ export function ContainerListView({
           className="mb-0"
           filters={
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-40" data-testid="select-filter-status">
+              <SelectTrigger className="w-40 rounded-lg border-border/70 bg-background/80 shadow-sm" data-testid="select-filter-status">
                 <SelectValue placeholder="All Statuses" />
               </SelectTrigger>
               <SelectContent>
@@ -133,9 +135,9 @@ export function ContainerListView({
 
       <div data-horizontal-scroll="true" className="overflow-x-auto">
         {filteredContainers && filteredContainers.length > 0 ? (
-          <Table mobileLayout="cards" wrapperClassName="overflow-visible border-0 rounded-none">
-            <TableHeader className="sticky top-0 z-30 bg-background">
-              <TableRow className="bg-muted border-b-2 border-border/60 hover:bg-muted">
+          <Table mobileLayout="cards" wrapperClassName="overflow-visible rounded-none border-0">
+            <TableHeader className="sticky top-0 z-30 bg-card dark:bg-slate-900">
+              <TableRow className="border-b border-border/70 bg-blue-500/5 hover:bg-blue-500/5 dark:bg-slate-800/70 dark:hover:bg-slate-800/70">
                 <TableHead className="w-10 py-2">
                   <Checkbox
                     checked={filteredContainers.length > 0 && filteredContainers.every((c) => selectedIds.has(c.id))}
@@ -193,40 +195,42 @@ export function ContainerListView({
                 return [
                   <TableRow
                     key={`supplier-${supplierKey}`}
-                    className="bg-muted/40 hover-elevate cursor-pointer border-b border-border/50"
+                    className="cursor-pointer border-b border-border/60 bg-muted/30 transition-colors hover:bg-blue-500/10 dark:bg-slate-800/50 dark:hover:bg-slate-800/90"
                     onClick={() => toggleSupplier(supplierKey)}
                     data-testid={`row-supplier-group-${supplierKey}`}
                   >
-                    <TableCell className="w-10 py-2.5">
+                    <TableCell className="w-10 py-3.5">
                       {isExpanded ? (
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        <ChevronDown className="h-4 w-4 text-blue-600 dark:text-blue-300" />
                       ) : (
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
                       )}
                     </TableCell>
-                    <TableCell colSpan={2} className="py-2.5">
-                      <div className="flex items-center gap-2">
-                        <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span className="text-sm font-semibold">{supplierName}</span>
-                        <Badge variant="secondary" className="text-xs">
+                    <TableCell colSpan={2} className="py-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-300">
+                          <Building2 className="h-4 w-4" />
+                        </span>
+                        <span className="text-sm font-semibold tracking-tight">{supplierName}</span>
+                        <Badge variant="secondary" className="rounded-full border border-border/60 px-2.5 py-0.5 text-xs">
                           {count} container{count !== 1 ? "s" : ""}
                         </Badge>
                       </div>
                     </TableCell>
-                    <TableCell className="text-right font-mono font-semibold text-sm py-2.5">
+                    <TableCell className="py-3.5 text-right font-mono text-sm font-semibold tabular-nums">
                       {(() => {
                         const totalKg = groupContainers.reduce((s, c) => s + parseFloat(c.totalKg || "0"), 0);
                         return totalKg > 0 ? formatNumber(totalKg) : <span className="text-muted-foreground">—</span>;
                       })()}
                     </TableCell>
-                    <TableCell className="font-mono font-semibold text-sm py-2.5">
+                    <TableCell className="py-3.5 font-mono text-sm font-semibold tabular-nums">
                       {Array.from(groupTotals.entries()).map(([cc, amt]) => (
                         <div key={cc}>
                           {cc} {formatNumber(amt)}
                         </div>
                       ))}
                     </TableCell>
-                    <TableCell colSpan={2} className="py-2.5" />
+                    <TableCell colSpan={2} className="py-3.5" />
                   </TableRow>,
                   ...(isExpanded
                     ? groupContainers.map((c) => {
@@ -256,7 +260,7 @@ export function ContainerListView({
                           <TableRow
                             key={c.id}
                             data-testid={`row-factory-container-${c.id}`}
-                            className={selectedIds.has(c.id) ? "bg-muted/50" : ""}
+                            className={selectedIds.has(c.id) ? "border-border/40 bg-blue-500/10 dark:bg-blue-500/15" : "border-border/40 transition-colors hover:bg-blue-500/5 dark:hover:bg-blue-400/10"}
                           >
                             <TableCell className="w-10 pl-6">
                               <Checkbox
@@ -272,9 +276,9 @@ export function ContainerListView({
                                 data-testid={`checkbox-container-${c.id}`}
                               />
                             </TableCell>
-                            <TableCell className="font-semibold font-mono">
+                            <TableCell className="font-mono font-semibold tabular-nums">
                               <button
-                                className="hover:underline text-left cursor-pointer text-foreground"
+                                className="cursor-pointer text-left text-blue-700 hover:text-blue-600 hover:underline dark:text-blue-300 dark:hover:text-blue-200"
                                 onClick={() => onView(c)}
                                 data-testid={`button-view-container-${c.id}`}
                               >
@@ -288,14 +292,14 @@ export function ContainerListView({
                                 <span className="text-muted-foreground">—</span>
                               )}
                             </TableCell>
-                            <TableCell className="text-right font-mono" data-testid={`text-weight-${c.id}`}>
+                            <TableCell className="text-right font-mono tabular-nums" data-testid={`text-weight-${c.id}`}>
                               {parseFloat(c.totalKg || "0") > 0 ? (
                                 formatNumber(parseFloat(c.totalKg || "0"))
                               ) : (
                                 <span className="text-muted-foreground">—</span>
                               )}
                             </TableCell>
-                            <TableCell className="font-mono font-semibold">
+                            <TableCell className="font-mono font-semibold tabular-nums">
                               {totalValue > 0 ? (
                                 `${ccy} ${formatNumber(totalValue)}`
                               ) : (
@@ -306,7 +310,7 @@ export function ContainerListView({
                               <ContainerStatusBadge status={c.status} />
                             </TableCell>
                             <TableCell>
-                              <div className="flex gap-1">
+                              <div className="flex items-center gap-1">
                                 {c.status !== "OFFLOADED" && c.status !== "PARTIALLY_RECEIVED" && (
                                   <Tooltip>
                                     <TooltipTrigger asChild>
@@ -379,7 +383,7 @@ export function ContainerListView({
             </TableBody>
           </Table>
         ) : (
-          <div className="text-center py-8 text-muted-foreground">
+          <div className="py-16 text-center text-muted-foreground">
             <Container className="h-12 w-12 mx-auto mb-3 opacity-50" />
             {containers && containers.length > 0 ? (
               <>
@@ -395,6 +399,6 @@ export function ContainerListView({
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }

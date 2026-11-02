@@ -1,0 +1,315 @@
+/*
+ * Shipping Overview visual refresh. All selectors are scoped to the shipping
+ * tab so the rest of Factory retains its existing layout. No data or business
+ * logic is changed here. Colors follow the app's .dark theme switch.
+ */
+.shipping-overview-shell {
+  --shipping-outline: #d7e0ef;
+  --shipping-surface: #ffffff;
+  --shipping-surface-alt: #f5f8fe;
+  --shipping-header: #eaf0fa;
+  --shipping-text: #17243c;
+  --shipping-muted: #61708b;
+  --shipping-input: #f8faff;
+  --shipping-row-hover: #eaf3ff;
+  --shipping-shadow: 0 12px 32px -22px rgba(24, 53, 103, 0.3);
+}
+
+.dark .shipping-overview-shell {
+  --shipping-outline: #32425f;
+  --shipping-surface: #111827;
+  --shipping-surface-alt: #192238;
+  --shipping-header: #222e49;
+  --shipping-text: #eff5ff;
+  --shipping-muted: #aab8cf;
+  --shipping-input: #1b263d;
+  --shipping-row-hover: #253653;
+  --shipping-shadow: 0 18px 45px -24px rgba(0, 0, 0, 0.9);
+}
+
+.shipping-overview-header {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-bottom: 1px solid var(--shipping-outline);
+  background: linear-gradient(110deg, #f8fbff 0%, #eef4fe 62%, #e6efff 100%);
+}
+
+.dark .shipping-overview-header {
+  background: linear-gradient(110deg, #101624 0%, #121b2e 62%, #172951 100%);
+}
+
+.shipping-overview-header::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: 55%;
+  height: 150%;
+  right: -8%;
+  top: 20%;
+  border: 1px solid rgba(59, 130, 246, .28);
+  border-radius: 48%;
+  transform: rotate(-17deg);
+  background: linear-gradient(135deg, rgba(59, 130, 246, .11), transparent 67%);
+  pointer-events: none;
+}
+
+.shipping-overview-header [data-testid="page-header"] {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border: 0;
+}
+
+.shipping-overview-header [data-testid="page-header"] > div:last-child > div:first-child {
+  border-left-color: #3287ff;
+}
+
+.shipping-overview-icon {
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #9ec5ff;
+  border-radius: 13px;
+  background: linear-gradient(145deg, #e8f2ff, #c8dfff);
+  color: #0755b7;
+  box-shadow: 0 6px 20px rgba(42, 117, 238, .12);
+}
+
+.dark .shipping-overview-icon {
+  border-color: #1e5ab2;
+  background: linear-gradient(145deg, #215ca6, #0b2b60);
+  color: #f3f9ff;
+  box-shadow: 0 6px 23px rgba(13, 80, 193, .25);
+}
+
+.shipping-overview-tabs [role="tablist"] {
+  gap: 3px;
+  padding: 5px;
+  border: 1px solid var(--shipping-outline);
+  background: var(--shipping-surface-alt);
+  box-shadow: var(--shipping-shadow);
+}
+
+.shipping-overview-tabs [role="tab"] {
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-weight: 600;
+  transition: background-color .15s, border-color .15s, color .15s;
+}
+
+.shipping-overview-tabs [role="tab"][data-state="active"] {
+  border-color: #4e9aff;
+  background: linear-gradient(135deg, #2778df, #0758bf);
+  color: white;
+  box-shadow: 0 4px 14px rgba(20, 103, 227, .3);
+}
+
+.shipping-overview-tabs [role="tab"]:not([data-state="active"]):hover {
+  background: var(--shipping-row-hover);
+  color: var(--shipping-text);
+}
+
+.shipping-modern {
+  min-width: 0;
+  color: var(--shipping-text);
+}
+
+.shipping-modern .shipping-workspace {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--shipping-outline);
+  border-radius: 20px;
+  background: var(--shipping-surface);
+  box-shadow: var(--shipping-shadow);
+}
+
+.shipping-modern .shipping-search {
+  height: 43px;
+  border: 1px solid var(--shipping-outline);
+  border-radius: 11px;
+  background: var(--shipping-input);
+  color: var(--shipping-text);
+  box-shadow: 0 1px 2px rgba(39, 80, 137, .05);
+}
+
+.shipping-modern .shipping-search:focus-visible {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, .18);
+}
+
+.shipping-modern .shipping-action {
+  height: 42px;
+  gap: 6px;
+  border: 1px solid var(--shipping-outline);
+  border-radius: 10px;
+  background: var(--shipping-input);
+  color: var(--shipping-text);
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(23, 51, 97, .05);
+}
+
+.shipping-modern .shipping-action:hover {
+  border-color: #60a5fa;
+  background: var(--shipping-row-hover);
+}
+
+.shipping-modern .shipping-legend {
+  color: var(--shipping-muted);
+}
+
+.shipping-modern .shipping-grid {
+  min-width: 0;
+  border: 1px solid var(--shipping-outline);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 6px 20px -14px rgba(37, 78, 143, .23);
+}
+
+.shipping-modern .shipping-grid [data-table-scroll-region] {
+  border: 0;
+  border-radius: 0;
+}
+
+.shipping-modern .shipping-grid thead {
+  background: var(--shipping-header);
+  color: var(--shipping-text);
+}
+
+.shipping-modern .shipping-grid th {
+  height: 43px;
+  padding: 9px 11px;
+  background: var(--shipping-header);
+  border-color: var(--shipping-outline);
+  color: var(--shipping-text);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .045em;
+}
+
+.shipping-modern .shipping-grid td {
+  height: 43px;
+  padding: 8px 11px;
+  border-color: var(--shipping-outline);
+  color: var(--shipping-text);
+  font-size: 12px;
+}
+
+.shipping-modern .shipping-grid tbody tr {
+  border-color: var(--shipping-outline);
+  background: var(--shipping-surface);
+}
+
+.shipping-modern .shipping-grid tbody tr:nth-child(even) {
+  background: var(--shipping-surface-alt);
+}
+
+.shipping-modern .shipping-grid tbody tr:hover {
+  background: var(--shipping-row-hover);
+}
+
+.shipping-modern .shipping-grid .shipping-sticky {
+  background: var(--shipping-surface);
+}
+
+.shipping-modern .shipping-grid thead .shipping-sticky {
+  background: var(--shipping-header);
+}
+
+.shipping-modern .shipping-grid tbody tr:nth-child(even) .shipping-sticky {
+  background: var(--shipping-surface-alt);
+}
+
+.shipping-modern .shipping-grid tbody tr:hover .shipping-sticky {
+  background: var(--shipping-row-hover);
+}
+
+.shipping-modern .shipping-grid .shipping-editable {
+  border-radius: 6px;
+  padding: 4px 6px;
+  margin: -4px -6px;
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  min-height: 27px;
+  text-decoration: none;
+  transition: background-color .15s;
+}
+
+.shipping-modern .shipping-grid .shipping-editable:hover,
+.shipping-modern .shipping-grid .shipping-editable:focus-visible {
+  background: var(--shipping-row-hover);
+  outline: 1px solid #60a5fa;
+  text-decoration: none;
+}
+
+.shipping-modern .shipping-grid .shipping-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border: 1px solid rgba(59, 130, 246, .2);
+  border-radius: 8px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.shipping-modern .shipping-grid .shipping-date {
+  display: inline-flex;
+  align-items: center;
+  min-height: 23px;
+  border-radius: 7px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  font-style: normal;
+}
+
+.shipping-modern .shipping-grid .shipping-date-pending {
+  background: #fff1c6;
+  color: #925b00;
+}
+.dark .shipping-modern .shipping-grid .shipping-date-pending {
+  background: #483b1b;
+  color: #ffd85c;
+}
+.shipping-modern .shipping-grid .shipping-date-complete {
+  background: #d7f8e8;
+  color: #087748;
+}
+.dark .shipping-modern .shipping-grid .shipping-date-complete {
+  background: #103e33;
+  color: #5af0b5;
+}
+
+.shipping-modern .shipping-grid .shipping-cost {
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+  font-size: 12px;
+  letter-spacing: .01em;
+}
+
+.shipping-modern .shipping-subsection {
+  overflow: hidden;
+  border: 1px solid var(--shipping-outline);
+  border-radius: 13px;
+  background: var(--shipping-surface);
+  box-shadow: var(--shipping-shadow);
+}
+
+.shipping-modern .shipping-done-toggle {
+  border-bottom: 1px solid transparent;
+  background: var(--shipping-surface-alt);
+  color: var(--shipping-text);
+}
+
+.shipping-modern .shipping-done-toggle:hover {
+  background: var(--shipping-row-hover);
+}
+
+@media (max-width: 640px) {
+  .shipping-modern .shipping-workspace { padding: 12px; border-radius: 14px; }
+  .shipping-overview-header::after { width: 70%; }
+  .shipping-modern .shipping-grid [data-mobile-cards="true"] td { height: auto; }
+}

@@ -33,7 +33,7 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
 
   if (!result.labelPrint) {
     return (
-      <div className="rounded-xl border p-8 text-center text-muted-foreground">
+      <div className="rounded-2xl border border-blue-200/70 bg-linear-to-br from-blue-50 to-white p-8 text-center text-muted-foreground shadow-sm dark:border-blue-400/25 dark:from-slate-900 dark:to-slate-950">
         <Hash className="h-10 w-10 mx-auto mb-3 opacity-25" />
         <p className="text-sm">
           No record found for reference "<span className="font-mono">{model.searchValue}</span>"
@@ -59,20 +59,21 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
   };
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border overflow-hidden">
-        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b bg-muted/20 flex-wrap">
+    <div className="space-y-5">
+      <section className="overflow-hidden rounded-2xl border border-indigo-200/80 bg-white shadow-[0_12px_38px_-24px_rgba(30,64,175,0.35)] dark:border-indigo-400/25 dark:bg-[#111b31] dark:shadow-[0_16px_44px_-25px_rgba(79,70,229,0.45)]">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-indigo-100 bg-linear-to-r from-indigo-50 via-blue-50/65 to-white px-4 py-4 dark:border-indigo-300/20 dark:from-[#202b52] dark:via-[#172447] dark:to-[#111b31] sm:px-5">
           <div className="flex items-center gap-2 flex-wrap">
-            <Hash className="h-4 w-4 text-muted-foreground shrink-0" />
-            <span className="font-bold">Bale Reference Details</span>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"><Layers className="h-5 w-5" aria-hidden="true" /></span>
+            <h3 className="text-base font-bold tracking-tight sm:text-lg">Bale Reference Details</h3>
             {baleInfo && <BaleStatusBadge status={baleInfo.status} />}
           </div>
           {model.isAdmin && (
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex flex-wrap items-center gap-2">
               {(baleInfo?.status === "DELETED" || baleInfo?.status === "REMOVED") && (
                 <Button
                   size="sm"
                   variant="outline"
+                  className="h-9 rounded-lg border-blue-300/60 bg-white/70 font-medium dark:border-blue-400/30 dark:bg-slate-950/30"
                   disabled={model.restoreDeletedMutation.isPending}
                   onClick={() => model.setShowRestoreDeletedDialog(true)}
                   data-testid="button-restore-deleted"
@@ -84,7 +85,7 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
               {(baleInfo?.status === "RESERVED_FOR_ORDER" ||
                 baleInfo?.status === "RESERVED" ||
                 baleInfo?.status === "SOLD") && (
-                <Button size="sm" variant="outline" onClick={openSwap} data-testid="button-swap-bale">
+                <Button size="sm" variant="outline" className="h-9 rounded-lg border-amber-400/60 bg-amber-50/70 font-medium hover:bg-amber-100 dark:border-amber-500/50 dark:bg-amber-500/10 dark:hover:bg-amber-500/20" onClick={openSwap} data-testid="button-swap-bale">
                   <ArrowLeftRight className="h-3.5 w-3.5 mr-1 text-amber-500" />
                   Swap Bale
                 </Button>
@@ -93,6 +94,7 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
                 <Button
                   size="sm"
                   variant="outline"
+                  className="h-9 rounded-lg border-blue-400/50 bg-blue-50/60 font-medium hover:bg-blue-100 dark:border-blue-400/50 dark:bg-blue-500/10 dark:hover:bg-blue-500/20"
                   onClick={() => model.setShowReturnToStockDialog(true)}
                   data-testid="button-return-to-stock"
                 >
@@ -100,13 +102,14 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
                   Return to Stock
                 </Button>
               )}
-              <Button size="sm" variant="outline" onClick={openProductChange} data-testid="button-change-product">
+              <Button size="sm" variant="outline" className="h-9 rounded-lg border-slate-300 bg-white/70 font-medium dark:border-slate-500/50 dark:bg-slate-900/50" onClick={openProductChange} data-testid="button-change-product">
                 <Pencil className="h-3.5 w-3.5 mr-1" />
                 Change Product
               </Button>
               <Button
                 size="sm"
                 variant="destructive"
+                className="h-9 rounded-lg font-semibold shadow-sm shadow-red-500/15"
                 onClick={() => model.setShowDeleteDialog(true)}
                 data-testid="button-delete-bale-everywhere"
               >
@@ -117,17 +120,17 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
           )}
         </div>
 
-        <div className="px-4 py-4 space-y-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="space-y-4 p-3 sm:p-5">
+          <div className="grid grid-cols-2 gap-4 rounded-xl border border-slate-200/80 bg-slate-50/70 p-4 shadow-inner shadow-slate-100 dark:border-slate-600/30 dark:bg-slate-900/60 dark:shadow-none lg:grid-cols-4 lg:gap-5 lg:p-5">
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Reference Number</p>
-              <p className="font-mono text-lg font-bold" data-testid="text-reference-number">
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-slate-500 dark:text-slate-400">Reference Number</p>
+              <p className="break-all font-mono text-lg font-extrabold tracking-tight text-slate-900 dark:text-slate-50 sm:text-xl" data-testid="text-reference-number">
                 {labelPrint.referenceNumber}
               </p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Article Code</p>
-              <p className="font-mono font-semibold" data-testid="text-ref-article-code">
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-slate-500 dark:text-slate-400">Article Code</p>
+              <p className="break-all font-mono text-base font-bold text-slate-900 dark:text-slate-50" data-testid="text-ref-article-code">
                 {labelPrint.articleCode || "—"}
               </p>
               <p
@@ -139,8 +142,8 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
               </p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Product Name</p>
-              <p className="font-semibold" data-testid="text-bale-product-name">
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-slate-500 dark:text-slate-400">Product Name</p>
+              <p className="font-bold leading-snug text-slate-900 dark:text-slate-50" data-testid="text-bale-product-name">
                 {baleInfo?.productName || result.product?.name || "—"}
               </p>
               <p
@@ -152,15 +155,15 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
               </p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Pieces</p>
-              <p className="font-mono font-semibold" data-testid="text-ref-pieces">
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-slate-500 dark:text-slate-400">Pieces</p>
+              <p className="font-mono text-xl font-bold text-slate-900 dark:text-slate-50" data-testid="text-ref-pieces">
                 {labelPrint.pieces ?? 1}
               </p>
             </div>
             {baleInfo?.workerName && (
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Worker</p>
-                <p className="font-semibold flex items-center gap-1" data-testid="text-bale-worker-name">
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-slate-500 dark:text-slate-400">Worker</p>
+                <p className="flex items-center gap-1 font-semibold" data-testid="text-bale-worker-name">
                   <User className="h-3.5 w-3.5 text-muted-foreground" />
                   {baleInfo.workerName}
                 </p>
@@ -168,14 +171,14 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
             )}
           </div>
 
-          <div className="flex items-center gap-6 flex-wrap">
+          <div className="flex flex-wrap items-center gap-5 rounded-xl border border-slate-200/80 bg-white p-4 dark:border-slate-600/30 dark:bg-slate-900/35 sm:gap-8">
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-slate-500 dark:text-slate-400">
                 {baleInfo ? "Actual Weight" : "Approx. Weight"}
               </p>
               {baleInfo ? (
                 <button
-                  className="group flex items-center gap-1.5 hover:text-foreground"
+                  className="group flex items-center gap-2 rounded-md text-left transition-colors hover:text-blue-600 focus-visible:outline-2 focus-visible:outline-blue-500 dark:hover:text-blue-300"
                   onClick={() =>
                     model.setWeightEditBale({
                       id: baleInfo.id,
@@ -185,16 +188,16 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
                   }
                   title="Correct weight"
                 >
-                  <span className="font-bold font-mono text-base">{model.smartNum(baleInfo.weightKg)} KG</span>
+                  <span className="font-mono text-xl font-extrabold tracking-tight">{model.smartNum(baleInfo.weightKg)} KG</span>
                   <Pencil className="h-3.5 w-3.5 opacity-0 group-hover:opacity-60 shrink-0" />
                 </button>
               ) : (
-                <span className="font-bold font-mono text-base">{model.smartNum(labelPrint.approxWeightKg)} KG</span>
+                <span className="font-mono text-xl font-extrabold tracking-tight">{model.smartNum(labelPrint.approxWeightKg)} KG</span>
               )}
             </div>
             {baleInfo?.grade && (
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Grade</p>
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-slate-500 dark:text-slate-400">Grade</p>
                 <p className="font-semibold">{baleInfo.grade}</p>
               </div>
             )}
@@ -205,7 +208,7 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
               </div>
             )}
             {labelPrint.scannedAt ? (
-              <div className="ml-auto flex items-center gap-1.5 text-sm text-muted-foreground">
+              <div className="ml-auto flex items-center gap-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
                 <CheckCircle2 className="h-4 w-4 text-green-500" />
                 Scanned {model.formatDateOnly(labelPrint.scannedAt)}
               </div>
@@ -214,6 +217,7 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
                 <Button
                   size="sm"
                   variant="outline"
+                  className="h-10 rounded-lg border-blue-400/50 bg-blue-50/80 px-4 font-semibold text-blue-700 hover:bg-blue-100 dark:border-blue-400/40 dark:bg-blue-500/15 dark:text-blue-200 dark:hover:bg-blue-500/25"
                   disabled={model.markScanned.isPending}
                   onClick={() => model.markScanned.mutate(labelPrint.referenceNumber)}
                   data-testid="button-mark-scanned"
@@ -225,7 +229,7 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
           </div>
 
           {baleInfo && (
-            <div className="flex items-start gap-6 flex-wrap pt-3 border-t">
+            <div className="flex flex-wrap items-start gap-x-8 gap-y-3 rounded-xl border border-indigo-100/70 bg-indigo-50/40 p-4 dark:border-indigo-300/15 dark:bg-indigo-400/5">
               {(baleInfo.stockEntryDate || baleInfo.finalizedAt) && (
                 <InfoRow
                   label="Date Produced"
@@ -258,7 +262,7 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
             </div>
           )}
         </div>
-      </div>
+      </section>
 
       {result.auditHistory.length > 0 && (
         <div className="rounded-xl border overflow-hidden">
