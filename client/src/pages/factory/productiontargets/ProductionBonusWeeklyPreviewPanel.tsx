@@ -83,6 +83,8 @@ export function ProductionBonusWeeklyPreviewPanel({ initialDate }: { initialDate
       });
       setDecision(null); setReviewNote("");
       void queryClient.invalidateQueries({ queryKey: [reviewsEndpoint] });
+      void queryClient.invalidateQueries({ queryKey: ["/api/factory/production-target-bonuses/weekly-payments"] });
+      void queryClient.invalidateQueries({ queryKey: ["/api/factory/production-target-bonuses/checkout"] });
       void queryClient.invalidateQueries({ queryKey: [endpoint] });
     },
     onError: (cause: Error) => toast({

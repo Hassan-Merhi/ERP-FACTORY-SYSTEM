@@ -6,6 +6,8 @@ import {
   Download,
   ChevronDown,
   ChevronRight,
+  Layers3,
+  Archive,
   Tags,
   Pencil,
   Trash2,
@@ -65,7 +67,7 @@ export default function BaleProducts() {
   } = model;
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto max-w-none space-y-5 px-3 py-4 sm:px-6 sm:py-6" data-bale-products-modern="true">
       <input
         ref={fileInputRef}
         type="file"
@@ -76,22 +78,23 @@ export default function BaleProducts() {
       />
 
       {/* ── Page header ── */}
-      <div className="rounded-xl border overflow-hidden">
-        <div className="flex items-center justify-between gap-3 px-5 py-4 flex-wrap">
+      <div className="relative overflow-hidden rounded-2xl border border-blue-200/70 bg-gradient-to-br from-white via-blue-50/80 to-indigo-50/60 shadow-sm dark:border-blue-400/20 dark:from-[#101a30] dark:via-[#12254b] dark:to-[#0b1933]">
+        <div className="pointer-events-none absolute -right-20 -top-36 h-72 w-96 rounded-full bg-blue-400/10 blur-3xl dark:bg-indigo-500/20" />
+        <div className="relative flex items-center justify-between gap-4 px-4 py-5 sm:px-6 flex-wrap">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-              <Package className="h-5 w-5 text-primary" />
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-blue-300/50 bg-gradient-to-br from-indigo-500 to-blue-600 text-white shadow-lg shadow-blue-500/20 dark:border-blue-300/20">
+              <Package className="h-6 w-6" />
             </div>
             <div>
-              <h1 className="text-base font-semibold leading-tight">Bale Products</h1>
-              <p className="text-xs text-muted-foreground">Manage product types for bale production</p>
+              <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Bale Products</h1>
+              <p className="mt-0.5 text-xs text-slate-600 dark:text-blue-100/70">Manage product types for bale production</p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {isAdmin && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" data-testid="button-actions-menu">
+                  <Button variant="outline" className="border-slate-300 bg-white/80 shadow-sm dark:border-blue-300/30 dark:bg-[#172a4e]/80" data-testid="button-actions-menu">
                     Actions
                     <ChevronDown className="h-3 w-3 ml-2" />
                   </Button>
@@ -147,11 +150,30 @@ export default function BaleProducts() {
                 }
               }}
               data-testid="button-create-product"
+              className="bg-blue-600 text-white shadow-md shadow-blue-500/20 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
             >
               <Plus className="h-4 w-4 mr-2" />
               Create Product
             </Button>
           </div>
+        </div>
+        <div className="relative grid grid-cols-2 gap-3 border-t border-blue-200/60 px-4 py-4 sm:px-6 xl:grid-cols-4 dark:border-blue-200/10">
+          {[
+            { label: "Total Products", value: products?.length ?? 0, icon: Package, style: "border-blue-200 bg-blue-50/80 text-blue-700 dark:border-blue-400/25 dark:bg-blue-500/15 dark:text-blue-200" },
+            { label: "Categories", value: categories?.length ?? 0, icon: Tags, style: "border-violet-200 bg-violet-50/80 text-violet-700 dark:border-violet-400/25 dark:bg-violet-500/15 dark:text-violet-200" },
+            { label: "Active Products", value: (products ?? []).filter((product) => product.active !== false).length, icon: Layers3, style: "border-emerald-200 bg-emerald-50/80 text-emerald-700 dark:border-emerald-400/25 dark:bg-emerald-500/15 dark:text-emerald-200" },
+            { label: "Hidden Products", value: (products ?? []).filter((product) => product.active === false).length, icon: Archive, style: "border-amber-200 bg-amber-50/80 text-amber-700 dark:border-amber-400/25 dark:bg-amber-500/15 dark:text-amber-200" },
+          ].map(({ label, value, icon: Icon, style }) => (
+            <div key={label} className={`flex min-w-0 items-center gap-3 rounded-xl border px-3 py-3 shadow-sm ${style}`}>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-current/15 bg-white/50 dark:bg-white/5">
+                <Icon className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-[11px] font-medium opacity-80">{label}</p>
+                <p className="text-xl font-bold leading-tight tabular-nums">{value.toLocaleString()}</p>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

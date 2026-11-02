@@ -594,23 +594,26 @@ export function StockEntryTab({ showHistory = false, onOpenHistory }: StockEntry
   });
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-      <div className="xl:col-span-8 space-y-4">
+    <div className="stock-entry-workspace grid grid-cols-1 items-start gap-5 xl:grid-cols-12 xl:gap-6">
+      <div className="stock-entry-main min-w-0 space-y-4 xl:col-span-8">
         <Card className="border-none shadow-none bg-transparent">
-          <CardHeader className="px-0 pt-0 pb-4">
+          <CardHeader className="stock-entry-page-heading px-0 pb-4 pt-0">
             <div className="flex items-center justify-between gap-4 flex-wrap">
               <div className="flex items-center gap-2">
-                <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-primary/10 text-primary">
-                  <Package className="h-4 w-4" />
+                <div className="stock-entry-heading-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-sky-500">
+                  <Package className="h-5 w-5" />
                 </div>
-                <CardTitle className="text-base font-bold">New Production Entry</CardTitle>
+                <div className="min-w-0">
+                  <CardTitle className="text-lg font-extrabold tracking-tight sm:text-xl">New Production Entry</CardTitle>
+                  <p className="mt-1 text-xs text-muted-foreground sm:text-sm">Scan products to add production bales</p>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 {showHistory && onOpenHistory && (
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 gap-1.5 text-xs font-semibold"
+                    className="stock-entry-toolbar-button h-9 gap-1.5 rounded-xl px-3 text-xs font-semibold"
                     onClick={onOpenHistory}
                     data-testid="button-stock-entry-history"
                   >
@@ -621,7 +624,7 @@ export function StockEntryTab({ showHistory = false, onOpenHistory }: StockEntry
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-8 text-xs font-semibold gap-1.5"
+                  className="stock-entry-toolbar-button h-9 gap-1.5 rounded-xl border px-3 text-xs font-semibold"
                   onClick={() => {
                     setAdminAuthOpen(true);
                     setPendingCreateName("");
@@ -675,37 +678,41 @@ export function StockEntryTab({ showHistory = false, onOpenHistory }: StockEntry
               </div>
             </div>
           </CardHeader>
-          <CardContent className="px-0 space-y-4">
-            <StockEntryScanner
-              scanRef={scanRef}
-              scanInput={scanInput}
-              onScanInputChange={(val) => {
-                setScanInput(val);
-                setShowDropdown(true);
-              }}
-              onScanKeyDown={handleScanKeyDown}
-              onCameraScan={handleScan}
-              scanError={scanError}
-              showDropdown={showDropdown}
-              filteredProducts={filteredProducts}
-              onSelectProduct={selectProduct}
-            />
+          <CardContent className="stock-entry-content space-y-4 px-0">
+            <div className="stock-entry-scan-shell">
+              <StockEntryScanner
+                scanRef={scanRef}
+                scanInput={scanInput}
+                onScanInputChange={(val) => {
+                  setScanInput(val);
+                  setShowDropdown(true);
+                }}
+                onScanKeyDown={handleScanKeyDown}
+                onCameraScan={handleScan}
+                scanError={scanError}
+                showDropdown={showDropdown}
+                filteredProducts={filteredProducts}
+                onSelectProduct={selectProduct}
+              />
+            </div>
 
-            <StockEntryCart
-              cart={cart}
-              workers={workers}
-              workerCategoryFilter={workerCategoryFilter}
-              onUpdateQty={updateQty}
-              onSetQty={setQty}
-              onUpdateWeight={updateWeight}
-              onRemoveItem={removeItem}
-              onAssignWorker={assignWorker}
-              onSetLogoOverride={setLogoOverride}
-              allCustomers={allCustomers}
-              logoPickerOpen={logoPickerOpen}
-              onLogoPickerOpenChange={setLogoPickerOpen}
-              filteredWorkers={filteredWorkers}
-            />
+            <div className="stock-entry-cart-shell">
+              <StockEntryCart
+                cart={cart}
+                workers={workers}
+                workerCategoryFilter={workerCategoryFilter}
+                onUpdateQty={updateQty}
+                onSetQty={setQty}
+                onUpdateWeight={updateWeight}
+                onRemoveItem={removeItem}
+                onAssignWorker={assignWorker}
+                onSetLogoOverride={setLogoOverride}
+                allCustomers={allCustomers}
+                logoPickerOpen={logoPickerOpen}
+                onLogoPickerOpenChange={setLogoPickerOpen}
+                filteredWorkers={filteredWorkers}
+              />
+            </div>
 
             <StockEntryProductionPositions
               cart={cart}
@@ -718,7 +725,7 @@ export function StockEntryTab({ showHistory = false, onOpenHistory }: StockEntry
         </Card>
       </div>
 
-      <div className="xl:col-span-4 space-y-6">
+      <div className="stock-entry-options min-w-0 space-y-6 xl:col-span-4">
         <StockEntrySidebar
           selectedLocationId={selectedLocationId}
           onLocationChange={setSelectedLocationId}

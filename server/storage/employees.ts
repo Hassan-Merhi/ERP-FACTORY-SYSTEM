@@ -3,6 +3,7 @@ import { db } from "../db";
 import * as schema from "@shared/schema";
 import type { Employee, InsertEmployee } from "@shared/schema";
 import { MoneyDecimal, toMoney } from "../lib/money";
+import { loadEmployeeLedgerAmounts } from "../services/accounting/employeeLedgerAmounts";
 
 // Employees
 
@@ -126,11 +127,19 @@ export async function getAllEmployees(companyId: number): Promise<Employee[]> {
 export async function getEmployeesWithBalances(
   companyId: number
 ): Promise<Array<Employee & { calculatedBalance: string }>> {
-  const employees = await getAllEmployees(companyId);
+  const [employees, ledgerAmounts] = await Promise.all([
+    getAllEmployees(companyId),
+    loadEmployeeLedgerAmounts(companyId),
+  ]);
   return employees.map((employee) => {
+    const amounts = ledgerAmounts.get(employee.id);
+    const currentBalance = amounts?.currentBalance ?? "0.00";
     return {
       ...employee,
-      calculatedBalance: toMoney(employee.currentBalance).toFixed(2),
+      currentBalance,
+      calculatedBalance: currentBalance,
+      totalDeposits: amounts?.totalDeposits ?? "0.00",
+      totalWithdrawals: amounts?.totalWithdrawals ?? "0.00",
     };
   });
 }
@@ -149,8 +158,28 @@ export async function getEmployeeByCode(code: string): Promise<Employee | undefi
 export type CreateEmployeeInput = InsertEmployee & { code: string };
 
 export async function createEmployee(employee: CreateEmployeeInput): Promise<Employee> {
-  const [created] = await db.insert(schema.employees).values([employee]).returning();
-  return created;
+  // The employee opening form has always accepted a signed amount:
+  // positive means we owe the employee (Cr); negative is an advance (Dr).
+  // Store the unsigned opening plus its actual side so the accounting engine,
+  // Payroll, Accounts and exports all interpret the same entry.
+  const signedOpening = toMoney(employee.openingBalance);
+  const openingBalance = signedOpening.abs().toFixed(2);
+  const openingSide = signedOpening.isNegative() ? "Dr" : "Cr";
+  return db.transaction(async (tx) => {
+    const [created] = await tx.insert(schema.employees).values([{
+      ...employee,
+      openingBalance,
+      currentBalance: signedOpening.toFixed(2),
+    }]).returning();
+    if (!created) throw new Error("Employee creation did not return an employee");
+    // Runtime side column exists outside Drizzle's base employee model.
+    // Keep this update in the insertion transaction so it is all-or-nothing.
+    await tx.execute(sql`
+      UPDATE employees SET opening_balance_side = ${openingSide}
+      WHERE id = ${created.id} AND company_id = ${created.companyId}
+    `);
+    return { ...created, openingBalance, currentBalance: signedOpening.toFixed(2) };
+  });
 }
 
 export async function updateEmployee(

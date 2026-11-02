@@ -11,24 +11,8 @@ import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
 import { employees } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
-import { firstRow, resultRows } from "../../../../lib/queryResult";
+import { loadEmployeeLedgerAmounts } from "../../../../services/accounting/employeeLedgerAmounts";
 import { toMoney } from "../../../../lib/money";
-
-/**
- * Balance = opening + credits - debits, computed as decimals and stored at
- * cents (the SQL sums are exact numerics; adding them as floats could round
- * a half-cent the wrong way).
- */
-function rebuiltBalances(openingBalance: string | null, credits: string | null, debits: string | null) {
-  const deposits = toMoney(credits);
-  const withdrawals = toMoney(debits);
-  const balance = toMoney(openingBalance).plus(deposits).minus(withdrawals);
-  return {
-    currentBalance: balance.toFixed(2),
-    totalDeposits: deposits.toFixed(2),
-    totalWithdrawals: withdrawals.toFixed(2),
-  };
-}
 
 export function registerFactoryEmployeeRecalculateRoutes(app: Express) {
   // POST /api/factory/employees/recalculate-balances
@@ -58,36 +42,17 @@ export function registerFactoryEmployeeRecalculateRoutes(app: Express) {
 
       if (allEmployees.length === 0) return res.json({ updated: 0, employees: [] });
 
-      // For each employee, sum voucher entry credits and debits from non-deleted vouchers
-      // Join through employees table to avoid passing an array parameter to ANY()
-      const entrySums = await db.execute(sql`
-        SELECT
-          ve.employee_id,
-          COALESCE(SUM(ve.credit_amount::numeric), 0) AS total_credits,
-          COALESCE(SUM(ve.debit_amount::numeric), 0)  AS total_debits
-        FROM voucher_entries ve
-        INNER JOIN vouchers v ON v.id = ve.voucher_id
-        INNER JOIN employees e ON e.id = ve.employee_id
-        WHERE e.company_id = ${companyId}
-          AND e.employee_type = 'Employee'
-          AND e.deleted_at IS NULL
-          AND v.deleted_at IS NULL
-          AND v.optional = false
-        GROUP BY ve.employee_id
-      `);
-
-      // Build a map: empId → { credits, debits } (exact numeric text from SQL)
-      const sumMap = new Map<number, { credits: string | null; debits: string | null }>();
-      for (const row of resultRows<{ employee_id: number; total_credits: string | null; total_debits: string | null }>(
-        entrySums
-      )) {
-        sumMap.set(Number(row.employee_id), { credits: row.total_credits, debits: row.total_debits });
-      }
+      // Rebuild from the same posted, company-scoped ledger and opening side
+      // used by Accounts, employee statements, Payroll, and Excel exports.
+      const ledgerAmounts = await loadEmployeeLedgerAmounts(companyId);
 
       const results = [];
       for (const emp of allEmployees) {
-        const sums = sumMap.get(emp.id) || { credits: null, debits: null };
-        const rebuilt = rebuiltBalances(emp.openingBalance, sums.credits, sums.debits);
+        const rebuilt = ledgerAmounts.get(emp.id) ?? {
+          currentBalance: "0.00",
+          totalDeposits: "0.00",
+          totalWithdrawals: "0.00",
+        };
 
         await db.update(employees).set(rebuilt).where(eq(employees.id, emp.id));
 
@@ -122,19 +87,12 @@ export function registerFactoryEmployeeRecalculateRoutes(app: Express) {
         .where(and(eq(employees.id, empId), eq(employees.companyId, companyId), sql`${employees.deletedAt} IS NULL`));
       if (!emp) return res.status(404).json({ message: "Employee not found" });
 
-      const entrySums = await db.execute(sql`
-        SELECT
-          COALESCE(SUM(ve.credit_amount::numeric), 0) AS total_credits,
-          COALESCE(SUM(ve.debit_amount::numeric), 0)  AS total_debits
-        FROM voucher_entries ve
-        INNER JOIN vouchers v ON v.id = ve.voucher_id
-        WHERE ve.employee_id = ${empId}
-          AND v.deleted_at IS NULL
-          AND v.optional = false
-      `);
-
-      const row = firstRow<{ total_credits: string | null; total_debits: string | null }>(entrySums);
-      const rebuilt = rebuiltBalances(emp.openingBalance, row?.total_credits ?? null, row?.total_debits ?? null);
+      const ledgerAmounts = await loadEmployeeLedgerAmounts(companyId);
+      const rebuilt = ledgerAmounts.get(emp.id) ?? {
+        currentBalance: "0.00",
+        totalDeposits: "0.00",
+        totalWithdrawals: "0.00",
+      };
 
       await db.update(employees).set(rebuilt).where(eq(employees.id, empId));
 

@@ -6,7 +6,7 @@
  * Split out of FactoryDaybook.tsx unchanged; the "Total" column disappears
  * entirely when ERP cost permissions hide daybook amounts.
  */
-import { BookOpen, ChevronDown, ChevronRight, Eye } from "lucide-react";
+import { BookOpen, CalendarDays, ChevronDown, ChevronRight, Eye } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,7 +60,7 @@ function BaleSummaryRow({
     </Button>
   );
   return (
-    <div className={cn("flex w-full flex-wrap items-center border-t bg-muted/20 sm:grid", colsClass)}>
+    <div className={cn("flex w-full flex-wrap items-center border-t border-border/50 bg-muted/25 dark:bg-slate-900/35 sm:grid", colsClass)}>
       <div className="min-w-0 flex-1 py-2 pl-8 pr-2 sm:pl-14">
         <span className="text-sm text-foreground">
           {row.count} bale{row.count !== 1 ? "s" : ""}
@@ -95,7 +95,7 @@ function CondensedGroupRow({
   const expandedEntries = isExpanded ? model.getEntriesForCondensedRow(row.key) : [];
   const { variant: bv, className: bc } = getFactoryTxTypeBadge(row.txType);
   return (
-    <div className="w-full border-b last:border-b-0">
+    <div className="w-full border-b border-border/50 last:border-b-0">
       {/* Group type row */}
       <div
         data-testid={`row-condensed-${row.date}-${row.txType}`}
@@ -111,7 +111,7 @@ function CondensedGroupRow({
         aria-expanded={isExpanded}
         aria-label={`${formatTxType(row.txType)} on ${row.date}`}
         className={cn(
-          "grid w-full cursor-pointer items-center gap-x-2 py-3 pl-3 pr-3 hover-elevate sm:gap-x-0 sm:pl-6 sm:pr-4",
+          "grid w-full cursor-pointer items-center gap-x-2 py-3.5 pl-3 pr-3 transition-colors hover:bg-blue-50/70 focus-visible:bg-blue-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 dark:hover:bg-blue-500/10 dark:focus-visible:bg-blue-500/10 sm:gap-x-0 sm:pl-6 sm:pr-4",
           colsClass
         )}
       >
@@ -125,9 +125,9 @@ function CondensedGroupRow({
             {formatTxType(row.txType)}
           </Badge>
         </div>
-        <div className="text-center text-muted-foreground text-sm font-mono">{row.count}</div>
+        <div className="text-center text-muted-foreground text-sm font-mono tabular-nums">{row.count}</div>
         {model.showAmounts && (
-          <div className="min-w-0 wrap-break-word text-right font-mono text-sm font-medium">
+          <div className="min-w-0 wrap-break-word text-right font-mono text-sm font-semibold tabular-nums">
             {currencySymbol(row.currencyCode)}
             {formatNumber(row.totalAmountCurrency)}
             {row.currencyCode !== "USD" && (
@@ -171,13 +171,14 @@ function CondensedRows({ model }: { model: FactoryDaybookModel }) {
         return (
           <div key={date} className="w-full">
             {/* Date separator row */}
-            <div className={cn("grid w-full gap-x-2 border-b bg-muted/40 px-3 py-1.5 sm:gap-x-0 sm:px-4", colsClass)}>
-              <span className="min-w-0 wrap-break-word text-sm font-semibold">
+            <div className={cn("grid w-full items-center gap-x-2 border-b border-blue-200/60 bg-blue-50/70 px-3 py-2.5 dark:border-blue-500/20 dark:bg-blue-500/10 sm:gap-x-0 sm:px-4", colsClass)}>
+              <span className="flex min-w-0 items-center gap-2 wrap-break-word text-sm font-bold text-slate-800 dark:text-slate-100">
+                <CalendarDays className="h-4 w-4 shrink-0 text-blue-600 dark:text-sky-400" aria-hidden="true" />
                 {formatDisplayDate(date + "T00:00:00")}
               </span>
               <span />
               {showAmounts && (
-                <span className="min-w-0 wrap-break-word text-right font-mono text-sm font-medium">
+                <span className="min-w-0 wrap-break-word text-right font-mono text-sm font-bold tabular-nums">
                   {currencySymbol(dayCcy)}
                   {formatNumber(dayTotal)}
                 </span>
@@ -198,11 +199,13 @@ function CondensedRows({ model }: { model: FactoryDaybookModel }) {
 export function FactoryDaybookTable({ model }: { model: FactoryDaybookModel }) {
   const { isLoading, isError, error, refetch, filteredEntries, condensedRows, hasActiveFilters, showAmounts } = model;
   return (
-    <Card>
-      <CardHeader>
+    <Card className="overflow-hidden rounded-2xl border border-sky-200/60 bg-card shadow-sm dark:border-blue-500/20 dark:bg-slate-950/70">
+      <CardHeader className="border-b border-border/60 bg-gradient-to-r from-slate-50 to-white px-4 py-4 dark:from-slate-900 dark:to-slate-950 sm:px-6">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <CardTitle className="flex items-center gap-2">
-            <BookOpen className="h-5 w-5" />
+          <CardTitle className="flex items-center gap-3 text-base sm:text-lg">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-200/80 bg-blue-100/70 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/15 dark:text-sky-400">
+              <BookOpen className="h-5 w-5" aria-hidden="true" />
+            </span>
             Transactions
             {filteredEntries.length > 0 && (
               <span className="text-sm font-normal text-muted-foreground">
@@ -211,7 +214,7 @@ export function FactoryDaybookTable({ model }: { model: FactoryDaybookModel }) {
             )}
           </CardTitle>
         </div>
-        <CardDescription>All factory transactions in one view</CardDescription>
+        <CardDescription className="pl-[3.25rem]">All factory transactions in one view</CardDescription>
       </CardHeader>
       <CardContent className="p-0">
         {isLoading ? (
@@ -251,16 +254,16 @@ export function FactoryDaybookTable({ model }: { model: FactoryDaybookModel }) {
             {/* Header */}
             <div
               className={cn(
-                "sticky top-0 z-30 grid w-full gap-x-2 border-b bg-background px-3 py-2 sm:gap-x-0 sm:px-4",
+                "sticky top-0 z-30 grid w-full gap-x-2 border-b border-border/70 bg-slate-100/90 px-3 py-3 backdrop-blur-sm dark:bg-slate-900/95 sm:gap-x-0 sm:px-4",
                 daybookColumnsClass(showAmounts)
               )}
             >
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Date / Type</span>
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider text-center">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Date / Type</span>
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-center">
                 Count
               </span>
               {showAmounts && (
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider text-right">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right">
                   Total
                 </span>
               )}

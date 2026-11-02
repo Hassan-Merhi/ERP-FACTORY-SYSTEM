@@ -92,6 +92,7 @@ const FACTORY_NAV_ICONS: Record<string, typeof Package> = {
   "factory/pos": ShoppingCart,
   "factory/invoicing": FileText,
   "factory/location-inventory": MapPin,
+  "factory/stock-query": Package,
   "factory/containers-hub": Container,
   "factory/stock-allocation-v5": LayoutGrid,
   "factory/sheets-sacks": Layers,
@@ -203,11 +204,6 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
       items: s.items.filter((item) => {
         if (item.developerOnly && !isDeveloper) return false;
         if (item.adminOnly && !isAdmin) return false;
-        if (
-          item.accessKey === "factory/cost-centers" &&
-          !["Admin", "Owner", "Developer", "Manager"].includes(user?.role || "")
-        )
-          return false;
         if (item.featureFlag) {
           if (item.featureFlagDefaultOn) {
             if (settings && settings[item.featureFlag] === false) return false;
@@ -221,8 +217,7 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
           myAccess &&
           !myAccess.fullAccess &&
           myAccess.pageKeys.length > 0 &&
-          !hasFactoryPageKey(page, myAccess.pageKeys) &&
-          !(item.accessKey === "factory/cost-centers" && myAccess.pageKeys.includes("factory/accounts"))
+          !hasFactoryPageKey(page, myAccess.pageKeys)
         ) {
           return false;
         }

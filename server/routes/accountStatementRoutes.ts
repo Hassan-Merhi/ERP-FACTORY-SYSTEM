@@ -411,6 +411,7 @@ export function registerAccountStatementRoutes(app: Express) {
             kind: engineKind,
             id: ownedCustomerId ?? accountId,
             from: startDate ?? null,
+            asOf: endDate ?? null,
           })
         : null;
       // Dr positive (the worksheet's balance column).
@@ -474,8 +475,13 @@ export function registerAccountStatementRoutes(app: Express) {
       let totalCrExact = new MoneyDecimal(0);
       const enrichedRows = txRows.map((r) => {
         const projected = projectExportCurrencyRow(r as Record<string, unknown>);
-        const drExact = toMoney(projected.historicalBaseDebit);
-        const crExact = toMoney(projected.historicalBaseCredit);
+        // Employee Excel must foot to the on-screen employee ledger. The
+        // balance engine and statement use posted debit/credit amounts, not
+        // a separate FX projection that can restate the exported closing.
+        const drExact =
+          accountType === "employee" ? toMoney(r.debitAmount) : toMoney(projected.historicalBaseDebit);
+        const crExact =
+          accountType === "employee" ? toMoney(r.creditAmount) : toMoney(projected.historicalBaseCredit);
         runExact = runExact.plus(drExact).minus(crExact);
         totalDrExact = totalDrExact.plus(drExact);
         totalCrExact = totalCrExact.plus(crExact);

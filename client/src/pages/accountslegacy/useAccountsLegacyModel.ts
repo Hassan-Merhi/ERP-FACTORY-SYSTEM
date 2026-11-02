@@ -1,4 +1,5 @@
 import { searchAny } from "@shared/searchNormalization";
+import { isInternalHistoricalSupplierRoutineRow } from "@shared/internalHistoricalSupplierRoutineRow";
 import type { ClientErrorLike } from "@/lib/clientError";
 /**
  * Controller hook for the legacy Accounts Overview page.
@@ -579,8 +580,10 @@ export function useAccountsLegacyModel() {
     return storedOB + (rawTransactionData.preNetBalance ?? 0) + (Number.isFinite(memoPrePeriod) ? memoPrePeriod : 0);
   }, [rawTransactionData, selectedAccount]);
 
-  // Derived state
-  const vouchersWithBalance = useMemo(() => {
+  // Calculate ALL original posted lines first. The archived historical
+  // supplier batch must continue to affect running and closing balances.
+  // Only its routine table/card rows are removed from the interactive list.
+  const allVouchersWithBalance = useMemo(() => {
     if (!transactions.length) return [];
     let runBal = broughtForwardBalance;
     return transactions.map((t) => {
@@ -591,12 +594,21 @@ export function useAccountsLegacyModel() {
     });
   }, [transactions, broughtForwardBalance]);
 
+  const vouchersWithBalance = useMemo(() => allVouchersWithBalance.filter((row) =>
+    !isInternalHistoricalSupplierRoutineRow({
+      companyId: row.companyId ?? selectedCompany?.id,
+      voucherNumber: row.voucherNumber,
+      voucherDescription: row.voucherDescription,
+      createdAt: row.createdAt,
+    })
+  ), [allVouchersWithBalance, selectedCompany?.id]);
+
   const closingBalance = useMemo(() => {
-    if (vouchersWithBalance.length > 0) {
-      return vouchersWithBalance[vouchersWithBalance.length - 1].runningBalance;
+    if (allVouchersWithBalance.length > 0) {
+      return allVouchersWithBalance[allVouchersWithBalance.length - 1].runningBalance;
     }
     return broughtForwardBalance;
-  }, [vouchersWithBalance, broughtForwardBalance]);
+  }, [allVouchersWithBalance, broughtForwardBalance]);
 
   const filteredAccounts = useMemo(() => {
     return allAccounts.filter((a) => searchAny(searchTerm, a.name, a.code));

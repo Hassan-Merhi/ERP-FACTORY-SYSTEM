@@ -183,6 +183,9 @@ export function classifyRealtimeWrite(url: string, body: unknown): RealtimeWrite
     ])
   ) {
     topics = ["accounting"];
+  } else if (/^\/api\/factory\/customer-proformas\/\d+\/transfer\/?$/.test(path)) {
+    // Ownership changes affect customer-list balances as well as proforma cards.
+    topics = ["factory", "reference"];
   } else if (path.startsWith("/api/factory/daybook")) {
     topics = ["factory", "accounting"];
   } else if (startsWithAny(path, ["/api/factory/payroll", "/api/factory-payroll"])) {

@@ -573,6 +573,9 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     return requirement("factory/analytics");
   }
 
+  if (hasPrefix(path, "/stock-query-report")) {
+    return requirement("factory/stock-query");
+  }
   if (hasPrefix(path, "/location-inventory")) {
     if (isWrite(req)) return requirement("factory/location-inventory");
     // Factory POS reads the selling location's stock to build its product picker.
@@ -604,7 +607,10 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     return requirement("factory/bales-hub", ["hide_tab_bales_history"]);
   }
   if (hasPrefix(path, "/bale-product-detail")) {
-    return requirement("factory/bales-hub", ["hide_tab_bales_products"]);
+    return anyOf(
+      requirement("factory/bales-hub", ["hide_tab_bales_products"]),
+      requirement("factory/stock-query")
+    );
   }
   if (hasPrefix(path, "/bale-product-images")) {
     return requirement("factory/bale-product-images");

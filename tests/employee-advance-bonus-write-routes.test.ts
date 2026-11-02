@@ -230,6 +230,30 @@ describe("DELETE /api/factory/employee-advances/:id", () => {
   });
 });
 
+describe("GET /api/factory/employee-bonuses", () => {
+  it("returns real employee names and exact bonus dates without changing balances", async () => {
+    const bonus = await giveBonus("23.75");
+    const beforeRead = await employeeTotals(employeeId);
+
+    const response = await agent.get("/api/factory/employee-bonuses").expect(200);
+    const record = response.body.find((row: { id: number }) => row.id === bonus.id);
+
+    expect(record).toMatchObject({
+      id: bonus.id,
+      employeeId,
+      bonusDate: "2026-04-01",
+      firstName: TEST_PREFIX,
+      lastName: "Tester",
+    });
+    // Keep the existing response fields for older consumers.
+    expect(record.employee_id).toBe(employeeId);
+    expect(record.bonus_date.slice(0, 10)).toBe("2026-04-01");
+    expect(await employeeTotals(employeeId)).toEqual(beforeRead);
+
+    await agent.delete("/api/factory/employee-bonuses/" + bonus.id).expect(200);
+  });
+});
+
 describe("POST /api/factory/employee-bonuses", () => {
   it("posts a balanced journal and moves the employee's balance and deposits", async () => {
     const before = await employeeTotals(employeeId);
