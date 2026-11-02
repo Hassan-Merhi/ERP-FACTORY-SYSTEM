@@ -240,7 +240,7 @@
   border: 1px solid var(--voucher-line);
   border-radius: 12px;
 }
-.voucher-workspace .voucher-journal-summary > div {
+.voucher-workspace .voucher-journal-summary > div:nth-child(-n+2) {
   border-color: var(--voucher-line);
   border-radius: 11px;
   background-color: var(--voucher-subtle);
