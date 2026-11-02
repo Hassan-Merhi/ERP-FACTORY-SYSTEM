@@ -78,7 +78,7 @@ export function DailyStockSummary({ date }: { date: string }) {
         {isToday ? "Today" : "Production"}
       </div>
       <div className="grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3">
-        <div className="flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-emerald-500/25 bg-gradient-to-br from-emerald-500/15 via-card to-card p-4 shadow-sm">
+        <div data-summary-tone="emerald" className="flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-emerald-500/25 bg-gradient-to-br from-emerald-500/15 via-card to-card p-4 shadow-sm">
           <div className="flex min-w-0 items-center gap-3">
             <span className="rounded-xl bg-emerald-500/15 p-3 text-emerald-500"><Factory className="h-5 w-5" /></span>
             <div className="min-w-0">
@@ -94,7 +94,7 @@ export function DailyStockSummary({ date }: { date: string }) {
             <span className="text-[11px] text-muted-foreground">{t("totalWeight")}</span>
           </div>
         </div>
-        <div className="flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-500/15 via-card to-card p-4 shadow-sm">
+        <div data-summary-tone="amber" className="flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-500/15 via-card to-card p-4 shadow-sm">
           <div className="flex min-w-0 items-center gap-3">
             <span className="rounded-xl bg-amber-500/15 p-3 text-amber-500"><Trash2 className="h-5 w-5" /></span>
             <div className="min-w-0">
@@ -110,7 +110,7 @@ export function DailyStockSummary({ date }: { date: string }) {
             <span className="text-[11px] text-muted-foreground">{t("totalWeight")}</span>
           </div>
         </div>
-        <div className="flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-sky-500/25 bg-gradient-to-br from-sky-500/15 via-card to-card p-4 shadow-sm">
+        <div data-summary-tone="sky" className="flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-sky-500/25 bg-gradient-to-br from-sky-500/15 via-card to-card p-4 shadow-sm">
           <div className="flex min-w-0 items-center gap-3">
             <span className="rounded-xl bg-sky-500/15 p-3 text-sky-500"><Layers3 className="h-5 w-5" /></span>
             <div className="min-w-0">
