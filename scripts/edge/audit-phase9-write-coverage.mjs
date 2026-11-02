@@ -47,6 +47,12 @@ const SUPPORTED = new Map([
       "Cash, USD, non-supplier-partner sales with a client sale id; LAN invoice series; replayed through " +
       "the sale service on clientSaleId; below-zero stock or a changed till account is held for review",
   }],
+  ["POST /api/containers/:id/offload", {
+    policy: "receiving.container-offload.v1",
+    limitations:
+      "First offload against existing purchase orders, quantities only (no duties, charges or cost " +
+      "corrections); cloud prices apply; changed order quantities are held for review; edits stay cloud-only",
+  }],
 ]);
 
 function moduleForPath(path) {

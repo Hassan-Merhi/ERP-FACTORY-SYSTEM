@@ -32,6 +32,8 @@ import { phase9PressingApplyHandler } from "./phase9PressingApply";
 import { phase9StockApplyHandler } from "./phase9StockApply";
 import { phase9PosSaleApplyHandler } from "./phase9PosSaleApply";
 import { PHASE9_POS_SALE_KIND } from "./phase9PosSaleEnvelope.mjs";
+import { phase9ReceivingApplyHandler } from "./phase9ReceivingApply";
+import { PHASE9_RECEIVING_KIND } from "./phase9ReceivingEnvelope.mjs";
 import { PHASE9_STOCK_ADJUST_KIND } from "./phase9StockEnvelope.mjs";
 import {
   createTenantDatabaseScope,
@@ -47,6 +49,7 @@ export const PHASE9_HANDLERS = Object.freeze({
   "pressing.confirmation.v1": phase9PressingApplyHandler,
   [PHASE9_STOCK_ADJUST_KIND]: phase9StockApplyHandler,
   [PHASE9_POS_SALE_KIND]: phase9PosSaleApplyHandler,
+  [PHASE9_RECEIVING_KIND]: phase9ReceivingApplyHandler,
 });
 
 const REVIEWER_ROLES = ["Admin", "Developer"];

@@ -58,6 +58,7 @@ vi.mock("../server/edge/edgeRuntimePolicy.mjs", () => ({
   PHASE9_PRESSING_CONFIRM_ROUTE: "POST /api/factory/pressing-machines/confirm",
   PHASE9_STOCK_ADJUST_ROUTE: "POST /api/inventory/quick-adjust",
   PHASE9_POS_SALE_ROUTE: "POST /api/pos/sales",
+  phase9ApprovedCaptureRoute: () => null,
 }));
 vi.mock("../server/edge/edgeSyncReceiver", () => ({
   registerCloudEdgeSyncReceiver: () => undefined,

@@ -12,6 +12,7 @@ import {
   edgeStatusPayload,
   PHASE9_PRESSING_CONFIRM_ROUTE,
   PHASE9_POS_SALE_ROUTE,
+  phase9ApprovedCaptureRoute,
   PHASE9_STOCK_ADJUST_ROUTE,
   readFactoryEdgeConfiguration,
 } from "./edgeRuntimePolicy.mjs";
@@ -90,8 +91,8 @@ export function makeFactoryEdgeWriteGuard(
     }
 
     // Same rule for every other approved Phase 9 route and its own outbox.
-    const capture =
-      config.mode === "lan" && config.primary ? routeCaptures[`${req.method.toUpperCase()} ${path}`] : null;
+    const routeKey = config.mode === "lan" && config.primary ? phase9ApprovedCaptureRoute(req.method, path) : null;
+    const capture = routeKey ? routeCaptures[routeKey] : undefined;
     if (capture) {
       try {
         if (!(await capture.installed())) return res.status(503).json({ code: capture.code });
@@ -267,6 +268,10 @@ export function registerFactoryEdgeBoundary(app: Express): void {
         [PHASE9_POS_SALE_ROUTE]: {
           installed: outboxInstalled("factory_edge_pos_outbox"),
           code: "EDGE_PHASE9_POS_CAPTURE_NOT_INSTALLED",
+        },
+        "POST /api/containers/:id/offload": {
+          installed: outboxInstalled("factory_edge_receiving_outbox"),
+          code: "EDGE_PHASE9_RECEIVING_CAPTURE_NOT_INSTALLED",
         },
       }
     )

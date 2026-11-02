@@ -114,6 +114,8 @@ export function readFactoryEdgeConfiguration(env = process.env) {
 export const PHASE9_PRESSING_CONFIRM_ROUTE = "POST /api/factory/pressing-machines/confirm";
 export const PHASE9_STOCK_ADJUST_ROUTE = "POST /api/inventory/quick-adjust";
 export const PHASE9_POS_SALE_ROUTE = "POST /api/pos/sales";
+// A numeric container id, or the manifest template ":id" (which the route itself rejects as invalid).
+export const PHASE9_RECEIVING_OFFLOAD_PATH = /^\/api\/containers\/(?:[1-9][0-9]{0,9}|:id)\/offload$/;
 
 // No module without atomic capture and validated replay is implicitly enabled
 // by a one-time operator primary acknowledgement. Add routes only after
@@ -132,13 +134,23 @@ const LAN_PRIMARY_CAPTURE_ALLOWLIST = new Set([
   PHASE9_POS_SALE_ROUTE,
 ]);
 
+/** Approved parameterised captures: POST /api/containers/<id>/offload (quantity receipts). */
+export function phase9ApprovedCaptureRoute(method, path) {
+  const key = `${String(method).toUpperCase()} ${path}`;
+  if (LAN_PRIMARY_CAPTURE_ALLOWLIST.has(key)) return key;
+  if (String(method).toUpperCase() === "POST" && PHASE9_RECEIVING_OFFLOAD_PATH.test(path)) {
+    return "POST /api/containers/:id/offload";
+  }
+  return null;
+}
+
 export function edgeBlocksWrite(config, method, path) {
   const verb = String(method).toUpperCase();
   if (["GET", "HEAD", "OPTIONS"].includes(verb)) return false;
   if (SAFE_SESSION_WRITES.has(`${verb} ${path}`)) return false;
   if (config.mode === "cloud") return config.writeMode === "fenced";
   if (!config.primary) return true;
-  return !LAN_PRIMARY_CAPTURE_ALLOWLIST.has(`${verb} ${path}`);
+  return phase9ApprovedCaptureRoute(verb, path) === null;
 }
 
 export function edgeStatusPayload(config, databaseProvisioned = false) {

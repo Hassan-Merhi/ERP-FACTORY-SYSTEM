@@ -124,6 +124,7 @@ describe("factory LAN edge deployment policy", () => {
         "/api/factory/pressing-machines/confirm",
         "/api/inventory/quick-adjust",
         "/api/pos/sales",
+        "/api/containers/42/offload",
       ]) {
         expect(edgeBlocksWrite(config, "POST", approved)).toBe(mode === "read-only");
         for (const verb of ["PUT", "PATCH", "DELETE"]) {
@@ -133,6 +134,8 @@ describe("factory LAN edge deployment policy", () => {
       for (const path of [
         "/api/factory/pressing-machines/void",
         "/api/pos/retail/sales",
+        "/api/containers/42/offload/extra",
+        "/api/containers/abc/offload",
         "/api/inventory/silent-transfer/apply",
         "/api/attachments",
         "/api/payments",

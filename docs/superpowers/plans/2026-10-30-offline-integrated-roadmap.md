@@ -111,6 +111,13 @@ The owner chose to make all remaining workflows available offline (stock movemen
 - The rule is enforced on the LAN at capture (the voucher rolls back with a 4xx) and again against current cloud account types at apply.
 - Evidence: `tests/offline-phase8-cash-box.node.test.mjs` (policy) and `tests/offline-phase8-cash-box-posting.test.ts` (cloud posting on the full schema, with supplier/bank refusals).
 
+### Phase 9 supplier receiving — container offload (2026-11-02, development)
+
+- `POST /api/containers/:id/offload` is an approved LAN-primary write, stream `receiving`, kind `receiving.container-offload.v1`. Owner policy: a first offload against the container's existing purchase orders, quantities only; duties, charges, cost corrections, agent lines and offload edits are refused offline (`server/routes/containers/containerOffloadOfflinePolicy.ts`).
+- The offload lifecycle now runs on a caller-provided transaction (`executeContainerOffloadLifecycleTx`): the LAN captures in the offload transaction, and the cloud replay (`server/edge/phase9ReceivingApply.ts`) runs the same lifecycle on the Phase 9 receipt's transaction. Cloud purchase order prices value the stock. A quantity digest (no prices) detects order changes, which are held for approve/reject; an already-offloaded or non-offloadable container can only be rejected.
+- Evidence: `tests/offline-phase9-receiving.test.ts` (quantity-only policy, LAN capture with digest, cloud replay, no double receipt, held/approved changed order).
+- Coverage: 5 approved captures, 3 session-only, 1,170 blocked.
+
 ## Phase 10 — Offline identity, conflicts, secure storage and server controls
 - Implement reviewed local-session/cold-start policy, encrypted legacy-cache migration, authorization/role revocation, and scoped credentials and browser/device protections.
 - Add deterministic multi-device conflict review with no silent financial/stock overwrites.

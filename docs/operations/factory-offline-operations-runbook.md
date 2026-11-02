@@ -35,9 +35,10 @@ an open cloud epoch.
 | Pressing scan confirmation (physical bale press) | yes, existing machine assignments only | `pressing` (Phase 9) | `server/edge/phase9OperatorApply.ts apply pressing` |
 | Stock movement: inventory quick adjust (add / subtract at a location) | yes, existing items and locations | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — replayed as a delta; below zero is held for Admin/Developer approve/reject |
 | POS cash sale (USD, cash account, non-supplier-partner company) | yes, numbered `LAN-<site>-000123` | `pos` (Phase 9) | `server/edge/phase9OperatorApply.ts apply pos` — replayed through the sale service on its `clientSaleId`; keeps the offline price; below-zero stock or a changed till account is held for Admin/Developer approve/reject |
+| Supplier receiving: first container offload against its existing purchase orders, quantities only | yes, no duties/charges/cost corrections | `receiving` (Phase 9) | `server/edge/phase9OperatorApply.ts apply receiving` — same offload lifecycle on the receipt's transaction; cloud prices apply; changed order quantities are held for Admin/Developer approve/reject |
 | Login, logout, company switch | yes (session only) | none | n/a |
 | All reads covered by prepared offline reads | yes | n/a | n/a |
-| Everything else (1,171 write routes) | **refused** with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION` | none | n/a |
+| Everything else (1,170 write routes) | **refused** with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION` | none | n/a |
 
 `node scripts/edge/audit-phase9-write-coverage.mjs` prints the exact current
 inventory and fails if any route becomes writable on the LAN without a reviewed
@@ -63,8 +64,9 @@ reconciled safely, which is worse than refusing them.
   money and stock together through the central posting engine with
   multi-currency, tax and numbering rules. Offline POS covers cash USD sales
   and offline payments cover factory cash-box Payment/Receipt vouchers only;
-  supplier/customer payments, bank movements and receiving still need their
-  own capture, replay and drill.
+  supplier/customer payments and bank movements still need their own capture,
+  replay and drill. Offline receiving covers a container's first,
+  quantity-only offload; offload edits and charges stay online-only.
 - **Attachments and documents:** files are not in the database transaction, so
   they need a content-addressed upload transfer and verification step that does
   not exist yet.
@@ -190,7 +192,7 @@ transaction rolls back, the conflict is written to
   `rejected-conflict` receipt and the stream continues. The cloud record is
   never overwritten; if the LAN fact must still be recorded, enter it again in
   the cloud as a new, normal transaction.
-- **Approve instead (stock and POS):** a stock movement held as
+- **Approve instead (stock, POS and receiving):** a stock movement held as
   `PHASE9_STOCK_WOULD_GO_NEGATIVE` (for example a physical count proves the
   LAN issue happened and a cloud receipt is late) can be applied anyway with
   `... phase9OperatorApply.ts approve stock <sequence> <reviewer-username>
@@ -200,6 +202,9 @@ transaction rolls back, the conflict is written to
   rejected. Every other check still runs on the approved apply. For POS, a
   sale held as `PHASE9_POS_STOCK_WOULD_GO_NEGATIVE` or
   `PHASE9_POS_CASH_ACCOUNT_CHANGED` can be approved with `approve pos ...`.
+  A receipt held as `PHASE9_RECEIVING_ORDER_CHANGED` can be approved with
+  `approve receiving ...`; the cloud then receives its current order
+  quantities.
 - POS replays run through the normal sale service in its own transaction;
   exactly-once comes from the sale's `clientSaleId` (the LAN operation id), so
   an apply interrupted after the sale committed is reported as

@@ -23,6 +23,16 @@ import {
   PHASE9_POS_SALE_KIND,
   phase9PosSaleEnvelope,
 } from "./phase9PosSaleEnvelope.mjs";
+import {
+  PHASE9_RECEIVING_KIND,
+  PHASE9_RECEIVING_ORDER_CHANGED,
+  phase9ReceivingEnvelope,
+} from "./phase9ReceivingEnvelope.mjs";
+import {
+  PHASE9_ATTACHMENT_FOLDER_MISSING,
+  PHASE9_ATTACHMENT_KIND,
+  phase9AttachmentEnvelope,
+} from "./phase9AttachmentEnvelope.mjs";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HASH = /^[0-9a-f]{64}$/;
@@ -89,6 +99,32 @@ function posSalePayload(payload) {
   return stableEqual(rebuilt, payload) ? rebuilt : null;
 }
 
+function receivingPayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (payload.kind !== PHASE9_RECEIVING_KIND) return null;
+  const { kind: _kind, ...evidence } = payload;
+  let rebuilt;
+  try {
+    rebuilt = phase9ReceivingEnvelope(evidence);
+  } catch {
+    return null;
+  }
+  return stableEqual(rebuilt, payload) ? rebuilt : null;
+}
+
+function attachmentPayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (payload.kind !== PHASE9_ATTACHMENT_KIND) return null;
+  const { kind: _kind, ...evidence } = payload;
+  let rebuilt;
+  try {
+    rebuilt = phase9AttachmentEnvelope(evidence);
+  } catch {
+    return null;
+  }
+  return stableEqual(rebuilt, payload) ? rebuilt : null;
+}
+
 /**
  * `overridable` lists the conflict codes an Admin/Developer may resolve with
  * an "approve-override" decision (apply anyway). Every other conflict can
@@ -119,6 +155,24 @@ const STREAMS = Object.freeze({
         parse: posSalePayload,
         localRef: (payload) => payload.localVoucherId,
         overridable: Object.freeze([PHASE9_POS_NEGATIVE_CONFLICT, PHASE9_POS_CASH_ACCOUNT_CONFLICT]),
+      }),
+    }),
+  }),
+  receiving: Object.freeze({
+    kinds: Object.freeze({
+      [PHASE9_RECEIVING_KIND]: Object.freeze({
+        parse: receivingPayload,
+        localRef: (payload) => payload.localOffloadId,
+        overridable: Object.freeze([PHASE9_RECEIVING_ORDER_CHANGED]),
+      }),
+    }),
+  }),
+  attachments: Object.freeze({
+    kinds: Object.freeze({
+      [PHASE9_ATTACHMENT_KIND]: Object.freeze({
+        parse: attachmentPayload,
+        localRef: (payload) => payload.localFileId,
+        overridable: Object.freeze([PHASE9_ATTACHMENT_FOLDER_MISSING]),
       }),
     }),
   }),
