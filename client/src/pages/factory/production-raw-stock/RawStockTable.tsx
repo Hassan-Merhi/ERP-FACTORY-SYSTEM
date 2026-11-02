@@ -69,8 +69,8 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
 
   return (
     <>
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="min-w-0 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-0.5">
           <p className="text-xs text-muted-foreground">
             {showZeroBalance
               ? "Showing all sources, including empty balances."
@@ -82,7 +82,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
               variant="outline"
               size="sm"
               onClick={() => setShowZeroBalance((visible) => !visible)}
-              className="h-8 gap-2 rounded-lg border-slate-300 bg-background px-3 text-xs font-semibold shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:bg-primary/5 hover:shadow-md dark:border-slate-700"
+              className="h-9 gap-2 rounded-xl border-slate-300/80 bg-card px-3 text-xs font-semibold shadow-sm transition-colors hover:border-blue-400/60 hover:bg-blue-50/70 dark:border-slate-700 dark:hover:bg-slate-800"
               aria-pressed={showZeroBalance}
               data-testid="button-toggle-zero-balance"
             >
@@ -94,7 +94,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
 
         <div className="space-y-3 md:hidden phone-land:block" data-testid="raw-stock-mobile-list">
           {categories.length === 0 ? (
-            <div className="rounded-xl border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
+            <div className="rounded-2xl border border-border/70 bg-card px-4 py-8 text-center text-sm text-muted-foreground shadow-sm">
               {zeroBalanceCount > 0 ? "All sources currently have a zero free balance." : "No raw stock available"}
             </div>
           ) : (
@@ -105,10 +105,10 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
               const catValue = rows.reduce((sum, row) => sum + parseFloat(row.valueRemainingUsd), 0);
 
               return (
-                <div key={`mobile-cat-${cat}`} className="overflow-hidden rounded-xl border bg-card shadow-xs">
+                <div key={`mobile-cat-${cat}`} className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
                   <button
                     type="button"
-                    className="flex min-h-11 w-full items-center justify-between gap-3 bg-muted/30 px-3 py-2.5 text-left"
+                    className="flex min-h-11 w-full items-center justify-between gap-3 bg-linear-to-r from-slate-50 to-card px-3 py-3 text-left dark:from-slate-800/65 dark:to-card"
                     onClick={() => toggleCategory(cat)}
                     data-testid={`button-mobile-raw-stock-category-${cat}`}
                   >
@@ -119,7 +119,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
                         ) : (
                           <ChevronRight className="h-4 w-4 shrink-0" />
                         )}
-                        <FlaskRound className="h-4 w-4 shrink-0 text-primary/70" />
+                        <FlaskRound className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
                         <span className="truncate text-sm font-semibold">{cat}</span>
                         <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[11px] font-normal">
                           {rows.length}
@@ -137,7 +137,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
                       {rows.map((row, idx) => (
                         <div
                           key={`mobile-${cat}-${idx}`}
-                          className="space-y-3 p-3"
+                          className="space-y-3 bg-card p-3"
                           data-testid={`card-raw-stock-mobile-${row.supplierId}`}
                         >
                           <div className="flex items-start justify-between gap-3">
@@ -168,25 +168,25 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
                           </div>
 
                           <div className="grid grid-cols-2 gap-2 text-xs">
-                            <div className="rounded-lg bg-muted/40 p-2">
+                            <div className="rounded-xl border border-border/40 bg-muted/30 p-2">
                               <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Received</div>
                               <div className="mt-0.5 font-mono font-medium">
                                 {formatNumber(parseFloat(row.receivedKg))} kg
                               </div>
                             </div>
-                            <div className="rounded-lg bg-muted/40 p-2">
+                            <div className="rounded-xl border border-border/40 bg-muted/30 p-2">
                               <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Used</div>
                               <div className="mt-0.5 font-mono font-medium">
                                 {formatNumber(parseFloat(row.usedKg))} kg
                               </div>
                             </div>
-                            <div className="rounded-lg bg-muted/40 p-2">
+                            <div className="rounded-xl border border-border/40 bg-muted/30 p-2">
                               <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Value</div>
                               <div className="mt-0.5 font-mono font-medium">
                                 ${formatNumber(parseFloat(row.valueRemainingUsd))}
                               </div>
                             </div>
-                            <div className="rounded-lg bg-muted/40 p-2">
+                            <div className="rounded-xl border border-border/40 bg-muted/30 p-2">
                               <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Cost / kg</div>
                               <div className="mt-0.5 font-mono font-medium">
                                 ${parseFloat(row.costPerKgUsd || "0").toFixed(6)}
@@ -239,16 +239,16 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
           )}
         </div>
 
-        <div className="hidden overflow-hidden rounded-md border bg-card shadow-xs md:block phone-land:hidden">
+        <div className="hidden overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm md:block phone-land:hidden">
           <Table stickyFirstColumn>
-            <TableHeader className="bg-muted">
+            <TableHeader className="bg-linear-to-r from-slate-100 via-slate-50 to-slate-100 dark:from-slate-800 dark:via-slate-800/80 dark:to-slate-800">
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-[300px] py-4">Source / Supplier</TableHead>
-                <TableHead className="text-right py-4">Total Received</TableHead>
-                <TableHead className="text-right py-4">Total Used</TableHead>
-                <TableHead className="text-right py-4 font-semibold text-foreground">Available (Free)</TableHead>
-                <TableHead className="text-right py-4">Value (USD)</TableHead>
-                <TableHead className="w-[120px] py-4"></TableHead>
+                <TableHead className="w-[300px] py-3 text-[11px] font-bold uppercase tracking-wide">Source / Supplier</TableHead>
+                <TableHead className="py-3 text-right text-[11px] font-bold uppercase tracking-wide">Total Received</TableHead>
+                <TableHead className="py-3 text-right text-[11px] font-bold uppercase tracking-wide">Total Used</TableHead>
+                <TableHead className="py-3 text-right text-[11px] font-bold uppercase tracking-wide text-foreground">Available (Free)</TableHead>
+                <TableHead className="py-3 text-right text-[11px] font-bold uppercase tracking-wide">Value (USD)</TableHead>
+                <TableHead className="w-[120px] py-3"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -273,7 +273,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
                     <>
                       <TableRow
                         key={`cat-${cat}`}
-                        className="bg-muted/30 cursor-pointer hover:bg-muted/50 group/cat select-none"
+                        className="group/cat cursor-pointer select-none bg-slate-50/90 transition-colors hover:bg-blue-50 dark:bg-slate-800/35 dark:hover:bg-slate-800/70"
                         onClick={() => toggleCategory(cat)}
                       >
                         <TableCell className="font-semibold py-3 flex items-center gap-2">
@@ -284,11 +284,11 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
                               <ChevronRight className="h-3.5 w-3.5" />
                             )}
                           </div>
-                          <FlaskRound className="h-4 w-4 text-primary/70" />
+                          <FlaskRound className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                           {cat}
                           <Badge
                             variant="outline"
-                            className="ml-2 font-normal text-[11px] px-1.5 h-4.5 bg-background/50"
+                            className="ml-2 h-5 rounded-full border-border/70 bg-background/70 px-2 text-[11px] font-medium"
                           >
                             {rows.length} source{rows.length !== 1 ? "s" : ""}
                           </Badge>
@@ -312,13 +312,13 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
                         rows.map((row, idx) => (
                           <TableRow
                             key={`${cat}-${idx}`}
-                            className="group hover:bg-accent/5 transition-colors"
+                            className="group even:bg-muted/15 transition-colors hover:bg-blue-50/50 dark:hover:bg-blue-400/5"
                             data-testid={`row-raw-stock-${row.supplierId}`}
                           >
                             <TableCell className="pl-12 py-3">
                               <div className="flex flex-col">
                                 <button
-                                  className="font-medium text-sm text-foreground hover:text-primary hover:underline text-left w-fit cursor-pointer"
+                                  className="w-fit cursor-pointer text-left text-sm font-semibold text-foreground hover:text-blue-600 hover:underline dark:hover:text-blue-400"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     openHistory(row);
@@ -361,7 +361,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
                               </div>
                             </TableCell>
                             <TableCell className="py-3 text-right pr-4">
-                              <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity">
+                              <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 touch:opacity-100">
                                 <Button
                                   size="icon"
                                   variant="ghost"
