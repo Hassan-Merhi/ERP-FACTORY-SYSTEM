@@ -1,6 +1,12 @@
+import { useState, type ReactNode } from "react";
 import {
   ArrowRightLeft,
   Calendar,
+  Boxes,
+  Search,
+  Truck,
+  UsersRound,
+  Wallet,
   ChevronRight,
   Eye,
   EyeOff,
@@ -13,10 +19,10 @@ import {
   Trash2,
   Weight,
 } from "lucide-react";
-import { PageHeader } from "@/components/PageHeader";
 import { PageState } from "@/components/ui/page-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,55 +38,87 @@ import type { SupplierFilter, useFactorySuppliersModel } from "./useFactorySuppl
 type SuppliersModel = ReturnType<typeof useFactorySuppliersModel>;
 
 export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) {
+  // Search only narrows displayed rows; balances remain based on all suppliers.
+  const [supplierSearch, setSupplierSearch] = useState("");
+  const searchQuery = supplierSearch.trim().toLocaleLowerCase();
+  const visibleSuppliers = model.filteredTopLevel.filter((supplier) =>
+    supplier.name.toLocaleLowerCase().includes(searchQuery)
+  );
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <PageHeader title="Brokers & Suppliers" />
-          <p className="text-muted-foreground mt-1">
-            {model.brokerCount} brokers · {model.standaloneCount} standalone
-          </p>
-        </div>
-        <Button
-          onClick={() => {
-            model.resetForm();
-            model.setCreateOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Supplier
-        </Button>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Metric label="Brokers" value={model.brokerCount} />
-        <Metric label="Standalone Suppliers" value={model.standaloneCount} />
-        <Metric label="Total Containers" value={model.totalContainers} />
-        <div className="rounded-xl border p-4">
-          <div className="text-xs text-muted-foreground">Supplier balances (USD equivalent)</div>
-          <div className="text-sm font-semibold mt-1">
-            <span className="text-muted-foreground">You owe </span>
-            <span className="text-red-600 dark:text-red-400" data-testid="text-total-usd-owed">
-              -${model.formatNum(model.totalUsdOwed.toFixed(2))}
-            </span>
+    <div data-testid="factory-suppliers-directory" className="relative isolate space-y-5 rounded-3xl border border-slate-200/80 bg-gradient-to-br from-slate-50 via-white to-blue-50/50 p-4 shadow-sm sm:p-6 dark:border-[#1c3655] dark:from-[#07182c] dark:via-[#091729] dark:to-[#061322] dark:shadow-[0_18px_48px_rgba(0,0,0,0.22)]">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-3.5">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-blue-400/25 bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-[0_8px_24px_rgba(37,99,235,0.20)]">
+            <Truck className="h-5 w-5" aria-hidden="true" />
           </div>
-          <div className="text-sm">
-            <span className="text-muted-foreground">Owed to you </span>
-            <span className="text-green-600 dark:text-green-400" data-testid="text-total-usd-overpaid">
-              ${model.formatNum(model.totalUsdOverpaid.toFixed(2))}
-            </span>
-          </div>
-          {model.unpricedSupplierCount > 0 && (
-            <p className="text-[11px] text-amber-600" role="alert">
-              {model.unpricedSupplierCount} supplier(s) excluded: missing FX rates or broker statement
+          <div className="min-w-0">
+            <h2 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl dark:text-white">Brokers &amp; Suppliers</h2>
+            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-300">
+              {model.brokerCount} brokers · {model.standaloneCount} standalone
             </p>
-          )}
+          </div>
+        </div>
+        <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+          <div className="relative min-w-0 flex-1 lg:w-72">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+            <Input
+              value={supplierSearch}
+              onChange={(event) => setSupplierSearch(event.target.value)}
+              placeholder="Search suppliers..."
+              aria-label="Search suppliers"
+              data-testid="input-search-suppliers"
+              className="h-10 w-full rounded-xl border-slate-200 bg-white pl-10 text-slate-900 placeholder:text-slate-400 dark:border-[#365171] dark:bg-[#0d2139] dark:text-white dark:placeholder:text-slate-400"
+            />
+          </div>
+          <Button
+            className="h-10 shrink-0 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 px-4 font-semibold text-white shadow-md shadow-blue-600/15 hover:from-blue-500 hover:to-blue-600"
+            onClick={() => {
+              model.resetForm();
+              model.setCreateOpen(true);
+            }}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Supplier
+          </Button>
         </div>
       </div>
 
-      <div className="flex items-center gap-3 flex-wrap">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Metric label="Brokers" value={model.brokerCount} icon={<UsersRound className="h-5 w-5" />} tone="blue" />
+        <Metric label="Standalone Suppliers" value={model.standaloneCount} icon={<Boxes className="h-5 w-5" />} tone="emerald" />
+        <Metric label="Total Containers" value={model.totalContainers} icon={<Package className="h-5 w-5" />} tone="violet" />
+        <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-4 shadow-sm dark:border-amber-500/35 dark:from-[#382c1c] dark:to-[#211d1b]">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+              <Wallet className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-slate-600 dark:text-slate-200">Supplier balances (USD equivalent)</p>
+              <div className="mt-1 text-sm">
+                <span className="text-slate-600 dark:text-slate-300">You owe </span>
+                <span className="font-bold tabular-nums text-red-600 dark:text-red-400" data-testid="text-total-usd-owed">
+                  {"-$" + model.formatNum(model.totalUsdOwed.toFixed(2))}
+                </span>
+              </div>
+              <div className="text-sm">
+                <span className="text-slate-600 dark:text-slate-300">Owed to you </span>
+                <span className="font-bold tabular-nums text-emerald-600 dark:text-emerald-400" data-testid="text-total-usd-overpaid">
+                  {"$" + model.formatNum(model.totalUsdOverpaid.toFixed(2))}
+                </span>
+              </div>
+              {model.unpricedSupplierCount > 0 && (
+                <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300" role="alert">
+                  {model.unpricedSupplierCount} supplier(s) excluded: missing FX rates or broker statement
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
         <Select value={model.activeFilter} onValueChange={(value) => model.setActiveFilter(value as SupplierFilter)}>
-          <SelectTrigger className="w-36" data-testid="select-supplier-filter">
+          <SelectTrigger className="h-10 w-44 rounded-xl border-slate-200 bg-white dark:border-[#365171] dark:bg-[#0d2139]" data-testid="select-supplier-filter">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -92,21 +130,24 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
             <SelectItem value="has-foreign">Has Foreign Currency</SelectItem>
           </SelectContent>
         </Select>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-[#365171] dark:bg-[#0d2139]">
           <Switch
             checked={model.listIncludeOtw}
             onCheckedChange={model.setListIncludeOtw}
             id="list-otw-toggle"
             data-testid="switch-include-otw"
           />
-          <label htmlFor="list-otw-toggle" className="text-sm cursor-pointer select-none">
+          <label htmlFor="list-otw-toggle" className="cursor-pointer select-none text-sm font-medium">
             Include OTW
           </label>
         </div>
+        <span className="ml-auto text-xs text-slate-500 dark:text-slate-400" aria-live="polite">
+          Showing {visibleSuppliers.length} of {model.filteredTopLevel.length} suppliers
+        </span>
       </div>
 
-      <div className="rounded-xl border divide-y">
-        {model.filteredTopLevel.map((supplier) => {
+      <div className="space-y-3" aria-label="Supplier directory">
+        {visibleSuppliers.map((supplier) => {
           // One rule for every supplier and broker: the inside statement's
           // signed pools as USD + Σ(native × Factory Settings rate).
           // Positive = we owe them (shown red, negative); negative = they owe us (green).
@@ -149,37 +190,51 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
             else model.setStatementSupplierId(supplier.id);
           };
           return (
-            <div key={supplier.id} className="p-4 flex items-center justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold flex items-center gap-2 flex-wrap">
-                  {supplier.name}
-                  {isBroker && <Badge variant="secondary">Broker</Badge>}
+            <div
+              key={supplier.id}
+              className="relative flex flex-col gap-3 overflow-hidden rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50/50 lg:flex-row lg:items-center lg:gap-4 dark:border-[#28435f] dark:bg-[#101f33]/90 dark:hover:border-blue-500/50 dark:hover:bg-[#142b46]"
+            >
+              <div className={isBroker ? "absolute inset-y-3 left-0 w-1 rounded-r-full bg-emerald-500" : "absolute inset-y-3 left-0 w-1 rounded-r-full bg-blue-500"} aria-hidden="true" />
+              <div className="flex min-w-0 flex-1 items-center gap-3 pl-1.5">
+                <div
+                  className={isBroker
+                    ? "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-sm font-bold text-white shadow-sm"
+                    : "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 text-sm font-bold text-white shadow-sm"}
+                  aria-hidden="true"
+                >
+                  {supplier.name.trim().split(/\s+/).slice(0, 2).map((part) => part.charAt(0)).join("").toUpperCase()}
                 </div>
-                <div className="text-sm text-muted-foreground flex items-center gap-2 flex-wrap mt-0.5">
-                  <span className="flex items-center gap-1">
-                    <Package className="h-3 w-3" />
-                    {supplier.totalContainers} containers
-                  </span>
-                  {otwCount > 0 && (
-                    <Badge variant="outline" className="text-amber-600 border-amber-400 text-[11px]">
-                      {otwCount} OTW
-                    </Badge>
-                  )}
-                  {kgNumber > 0 && (
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 font-semibold text-slate-900 dark:text-white">
+                    <span className="break-words">{supplier.name}</span>
+                    {isBroker && <Badge variant="secondary" className="border border-slate-200 bg-slate-100 text-slate-700 dark:border-[#456180] dark:bg-[#273b56] dark:text-slate-100">Broker</Badge>}
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 sm:text-sm dark:text-slate-300">
                     <span className="flex items-center gap-1">
-                      <Weight className="h-3 w-3" />
-                      {model.formatKg(supplier.totalKg)}
+                      <Package className="h-3.5 w-3.5" aria-hidden="true" />
+                      {supplier.totalContainers} containers
                     </span>
-                  )}
-                  <span className="flex items-center gap-1">
-                    <Calendar className="h-3 w-3" />
-                    Last: {supplier.lastContainerDate ? model.formatDate(supplier.lastContainerDate) : "—"}
-                  </span>
+                    {otwCount > 0 && (
+                      <Badge variant="outline" className="border-amber-500/70 bg-amber-50 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+                        {otwCount} OTW
+                      </Badge>
+                    )}
+                    {kgNumber > 0 && (
+                      <span className="flex items-center gap-1">
+                        <Weight className="h-3.5 w-3.5" aria-hidden="true" />
+                        {model.formatKg(supplier.totalKg)}
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1">
+                      <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
+                      Last: {supplier.lastContainerDate ? model.formatDate(supplier.lastContainerDate) : "—"}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <div className="text-right shrink-0 space-y-1" data-testid={`supplier-directory-balance-${supplier.id}`}>
-                <div className="text-xs text-muted-foreground">
+              <div className="min-w-0 space-y-1 text-left lg:max-w-[300px] lg:flex-[0_1_280px] lg:text-right" data-testid={`supplier-directory-balance-${supplier.id}`}>
+                <div className="text-xs text-slate-500 dark:text-slate-300">
                   {usdEquivalent === null || Math.abs(usdEquivalent) <= 0.005
                     ? "Balance (USD equivalent)"
                     : usdEquivalent > 0
@@ -192,7 +247,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                   </div>
                 ) : (
                   <div
-                    className={`font-semibold text-sm tabular-nums ${
+                    className={`text-base font-bold tabular-nums ${
                       usdEquivalent > 0.005
                         ? "text-red-600 dark:text-red-400"
                         : usdEquivalent < -0.005
@@ -207,18 +262,20 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex shrink-0 items-center gap-1 self-start lg:self-auto">
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
+                  className="rounded-lg border-blue-200 bg-blue-50 font-semibold text-blue-700 hover:bg-blue-100 dark:border-blue-600/60 dark:bg-blue-600/20 dark:text-blue-100 dark:hover:bg-blue-600/30"
                   onClick={openSupplier}
                   data-testid={`btn-view-supplier-${supplier.id}`}
                 >
+                  <Eye className="mr-1.5 h-4 w-4" aria-hidden="true" />
                   View
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" data-testid={`btn-menu-supplier-${supplier.id}`}>
+                    <Button variant="ghost" size="icon" className="rounded-lg" data-testid={`btn-menu-supplier-${supplier.id}`}>
                       <MoreVertical className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -339,12 +396,14 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <ChevronRight className="h-4 w-4 text-muted-foreground cursor-pointer" onClick={openSupplier} />
+                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" aria-label={`Open ${supplier.name}`} onClick={openSupplier}>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                </Button>
               </div>
             </div>
           );
         })}
-        {model.filteredTopLevel.length === 0 && !model.isLoading && (
+        {visibleSuppliers.length === 0 && !model.isLoading && (
           <PageState title="No suppliers found" icon={Package} className="border-0" />
         )}
       </div>
@@ -354,11 +413,36 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
+function Metric({
+  label,
+  value,
+  icon,
+  tone,
+}: {
+  label: string;
+  value: number;
+  icon: ReactNode;
+  tone: "blue" | "emerald" | "violet";
+}) {
+  const styles = {
+    blue: "border-blue-200 from-blue-50 to-white dark:border-blue-500/50 dark:from-[#10365a] dark:to-[#09263e]",
+    emerald: "border-emerald-200 from-emerald-50 to-white dark:border-emerald-500/50 dark:from-[#0b3939] dark:to-[#0b292e]",
+    violet: "border-violet-200 from-violet-50 to-white dark:border-violet-500/50 dark:from-[#342051] dark:to-[#201b43]",
+  };
+  const iconStyles = {
+    blue: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300",
+    emerald: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
+    violet: "bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300",
+  };
   return (
-    <div className="rounded-xl border p-4">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="text-2xl font-bold mt-1">{value}</div>
+    <div className={"flex min-h-28 items-center gap-3 rounded-2xl border bg-gradient-to-br p-4 shadow-sm " + styles[tone]}>
+      <div className={"flex h-11 w-11 shrink-0 items-center justify-center rounded-xl " + iconStyles[tone]} aria-hidden="true">
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <div className="text-xs font-semibold text-slate-600 dark:text-slate-200">{label}</div>
+        <div className="mt-1 text-2xl font-bold leading-none tabular-nums text-slate-900 dark:text-white">{value}</div>
+      </div>
     </div>
   );
 }

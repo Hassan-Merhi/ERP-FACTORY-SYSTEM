@@ -99,11 +99,11 @@ export function ProformaLinesTable({
   }
 
   return (
-    <div>
-      <Table mobileLayout="cards" wrapperClassName="max-h-[400px] overflow-auto">
-        <TableHeader className="sticky top-0 z-30 bg-background">
-          <TableRow>
-            <TableHead className="text-xs uppercase tracking-wide text-muted-foreground font-medium">
+    <div className="bg-card">
+      <Table mobileLayout="cards" wrapperClassName="max-h-[440px] overflow-auto">
+        <TableHeader className="sticky top-0 z-30 bg-violet-50 dark:bg-[#241c3d]">
+          <TableRow className="border-b border-violet-500/20">
+            <TableHead className="text-[11px] uppercase tracking-wider text-violet-800 dark:text-violet-200 font-bold">
               Article Code
             </TableHead>
             <TableHead className="text-xs uppercase tracking-wide text-muted-foreground font-medium">
@@ -134,17 +134,17 @@ export function ProformaLinesTable({
               const lineTotal = line.quantity * lineWt;
               const isEditingQty = inlineQtyLineId === line.id;
               return (
-                <TableRow key={line.id} className="hover:bg-muted/40" data-testid={`row-line-${line.id}`}>
+                <TableRow key={line.id} className="even:bg-muted/20 hover:bg-violet-500/[0.06] dark:hover:bg-violet-400/[0.08]" data-testid={`row-line-${line.id}`}>
                   <TableCell
-                    className="font-mono text-xs text-muted-foreground py-2.5"
+                    className="py-3 font-mono text-xs text-muted-foreground"
                     data-testid={`text-article-code-${line.id}`}
                   >
                     {line.articleCode}
                   </TableCell>
-                  <TableCell className="text-sm font-medium py-2.5" data-testid={`text-product-name-${line.id}`}>
+                  <TableCell className="py-3 text-sm font-semibold" data-testid={`text-product-name-${line.id}`}>
                     {line.productName}
                   </TableCell>
-                  <TableCell className="text-right font-mono py-2.5" data-testid={`text-quantity-${line.id}`}>
+                  <TableCell className="py-3 text-right font-mono tabular-nums" data-testid={`text-quantity-${line.id}`}>
                     {canEdit && isEditingQty ? (
                       <Input
                         type="number"
@@ -175,7 +175,7 @@ export function ProformaLinesTable({
                     )}
                   </TableCell>
                   <TableCell
-                    className="text-right font-mono text-sm text-muted-foreground py-2.5"
+                    className="py-3 text-right font-mono text-sm tabular-nums text-muted-foreground"
                     data-testid={`text-kg-bale-${line.id}`}
                   >
                     {lineWt % 1 === 0 ? lineWt.toLocaleString() : lineWt.toFixed(2)}
@@ -188,7 +188,7 @@ export function ProformaLinesTable({
                   </TableCell>
                   {!hideProformaPrice && (
                     <TableCell
-                      className="text-right font-mono font-medium py-2.5"
+                      className="py-3 text-right font-mono font-semibold tabular-nums"
                       data-testid={`text-price-${line.id}`}
                     >
                       {formatAmount(effectivePricePerBale(line))}
@@ -200,12 +200,12 @@ export function ProformaLinesTable({
                     </TableCell>
                   )}
                   {canEdit && (
-                    <TableCell className="py-2.5">
+                    <TableCell className="py-3">
                       <div className="flex items-center gap-0.5 justify-end">
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7"
+                          className="h-7 w-7 rounded-lg hover:bg-violet-500/10"
                           onClick={() => onEditLine(line)}
                           data-testid={`button-edit-line-${line.id}`}
                         >
@@ -231,7 +231,7 @@ export function ProformaLinesTable({
       </Table>
 
       {/* Summary footer */}
-      <div className="flex items-center gap-6 px-4 py-3 bg-muted/20 border-t text-sm flex-wrap">
+      <div className="flex flex-wrap items-center gap-6 border-t border-violet-500/15 bg-gradient-to-r from-violet-500/[0.07] via-card to-card px-5 py-3.5 text-sm">
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-muted-foreground">Bales</span>
           <span className="font-semibold font-mono" data-testid={`text-total-qty-${proformaId}`}>
