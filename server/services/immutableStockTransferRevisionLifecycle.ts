@@ -414,14 +414,15 @@ export async function approveImmutableStockTransferRevision(
   companyIdInput: number,
   revisionIdInput: number,
   reviewerIdInput: string,
-  auditTx?: AuditTxHook<ReviewImmutableRevisionResult>
+  auditTx?: AuditTxHook<ReviewImmutableRevisionResult>,
+  existingTx?: Parameters<Parameters<typeof db.transaction>[0]>[0]
 ): Promise<ReviewImmutableRevisionResult> {
   const companyId = positiveInteger(companyIdInput, "Company ID");
   const revisionId = positiveInteger(revisionIdInput, "Revision ID");
   const reviewerId = String(reviewerIdInput || "").trim();
   if (!reviewerId) throw new Error("Reviewer ID is required");
 
-  return db.transaction(async (tx) => {
+  const executeApproval = async (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => {
     const finish = finishWithAudit(tx, auditTx);
     const requested = await lockedRevision(tx, revisionId);
     if (!requested) throw new Error("Revision not found");
@@ -781,7 +782,10 @@ export async function approveImmutableStockTransferRevision(
       totalAmount,
       items: toRevisionAuditItems(revisionItems, auditRates),
     });
-  });
+  };
+  // Batch callers share one parent transaction so either every transfer is
+  // approved or none of their inventory, voucher, or audit changes commit.
+  return existingTx ? executeApproval(existingTx) : db.transaction(executeApproval);
 }
 
 export async function rejectImmutableStockTransferRevision(

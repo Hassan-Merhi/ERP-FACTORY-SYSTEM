@@ -262,6 +262,9 @@ export function useFactoryProformasModel() {
     onSuccess: (data: { targetCustomerName?: string }) => {
       toast({ title: "Proforma transferred", description: `Proforma moved to ${data.targetCustomerName}` });
       invalidateCustomerProformas();
+      // Both the source and destination customer may have new balances.
+      // Refresh the list and any open statement immediately in this tab.
+      queryClient.invalidateQueries({ predicate: keyStartsWith("/api/factory/customers") });
       setTransferProforma(null);
       setTransferTargetCustomerId("");
     },

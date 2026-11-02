@@ -54,6 +54,9 @@ import { registerProcessErrorHandlers } from "./startup/registerProcessErrorHand
 import { runStartupMigrations, warmupDb } from "./startup/runServerStartupMigrations";
 import { ensureFactoryStaffTrackingSchema } from "./startup/factoryStaffTrackingSchema";
 import { ensureFactoryTargetBonusPaymentSchema } from "./startup/ensureFactoryTargetBonusPaymentSchema";
+import { inspectHistoricalProductionBonusExpenseAccounts } from "./services/factory/productionBonusExpenseReclassification";
+import { applyApprovedZakariaOpeningCredit } from "./startup/applyApprovedZakariaOpeningCredit";
+import { applyApprovedEmployeeOpeningCredits } from "./startup/applyApprovedEmployeeOpeningCredits";
 import { ensureSupplierTrackingShopDutyDefaults } from "./startup/ensureSupplierTrackingShopDutyDefaults";
 import { ensureZambiaHistoricalPurchaseCost } from "./startup/ensureZambiaHistoricalPurchaseCost";
 import { ensureFactoryContainerPlannerSchemaOnBoot } from "./startup/factoryContainerPlannerSchema";
@@ -359,6 +362,46 @@ let migrationsDone = false;
       // Financial payout table must exist before any posting route becomes reachable.
       // Fatal on error: never serve a deployment with accounting schema missing.
       await ensureFactoryTargetBonusPaymentSchema(pool);
+      // Owner-confirmed: HADI L'SHI Zakaria El Ali #103's $9,930.12
+      // opening is Cr, not Dr. Scoped, audited and idempotent; never alters
+      // salary/bonus postings or other employees.
+      await applyApprovedZakariaOpeningCredit();
+      // The historical payroll import used positive openings for employee
+      // credits; several records still carry the default Dr side. Correct the
+      // verified records once with before/after audit; never alter vouchers.
+      try {
+        await applyApprovedEmployeeOpeningCredits();
+      } catch (openingRepairError: unknown) {
+        logger.error("[startup] Historical employee openings were not fully corrected", {
+          error: getErrorMessage(openingRepairError),
+        });
+        // Do not take the whole ERP offline for a historical correction.
+        // Failed database transactions roll back; errors remain visible here.
+      }
+      // The one-time historical bonus reclassification has already been applied.
+      // Never rerun a historical voucher mutation on every server startup.
+      // A later legitimate voucher edit can change a paid amount while its old
+      // claim still reflects the original value. Report that discrepancy for
+      // audited reconciliation; do not change accounting or take ERP offline.
+      if (process.env.RENDER_SERVICE_ID === "srv-d6kibgtactks739u7vl0") {
+        try {
+          const database = await pool.query<{ name: string }>("SELECT current_database() AS name");
+          if (database.rows[0]?.name !== "erp_db_qscj_64lv_e7rz_8744_2lm3") {
+            logger.warn("[startup] Historical bonus inspection skipped on unexpected database");
+          } else {
+            const inspection = await inspectHistoricalProductionBonusExpenseAccounts();
+            if (inspection.inspected !== 9 || inspection.discrepancies.length > 0) {
+              logger.warn("[startup] Historical production bonus claims require manual reconciliation", inspection);
+            } else {
+              logger.info("[startup] Historical production bonus expense accounts reconciled", inspection);
+            }
+          }
+        } catch (inspectionError: unknown) {
+          logger.warn("[startup] Historical production bonus inspection unavailable; serving without changing posted vouchers", {
+            error: getErrorMessage(inspectionError),
+          });
+        }
+      }
       // The Container Planner's registered migrations are never applied by
       // production's boot path, so ensure its tables here unconditionally. A
       // failure after retries is fatal: the previous deployment stays live rather

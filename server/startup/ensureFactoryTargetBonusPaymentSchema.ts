@@ -117,4 +117,41 @@ export async function ensureFactoryTargetBonusPaymentSchema(pool: Pick<Pool, "qu
     CREATE INDEX IF NOT EXISTS factory_bonus_weekly_payments_date_idx
     ON factory_target_bonus_weekly_payments (company_id, payment_date DESC, worker_id)
   `);
+  // Discretionary/manual payouts are separately recorded from calculated
+  // bonus awards, so an entered amount cannot silently rewrite a frozen review.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS factory_target_bonus_manual_payments (
+      id BIGSERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      worker_id INTEGER NOT NULL REFERENCES factory_workers(id) ON DELETE RESTRICT,
+      week_start DATE NOT NULL,
+      amount_usd NUMERIC(18,2) NOT NULL CHECK (amount_usd > 0 AND amount_usd <= 1000000),
+      payment_date DATE NOT NULL CHECK (payment_date >= week_start),
+      request_key UUID NOT NULL,
+      cash_ledger_account_id INTEGER NOT NULL REFERENCES ledger_accounts(id) ON DELETE RESTRICT,
+      expense_ledger_account_id INTEGER NOT NULL REFERENCES ledger_accounts(id) ON DELETE RESTRICT,
+      payment_voucher_id INTEGER NOT NULL REFERENCES vouchers(id) ON DELETE RESTRICT,
+      status VARCHAR(12) NOT NULL DEFAULT 'POSTED' CHECK (status IN ('POSTED','REVERSED')),
+      posted_by VARCHAR(255) NOT NULL,
+      posted_at TIMESTAMP NOT NULL DEFAULT now(),
+      reversal_voucher_id INTEGER REFERENCES vouchers(id) ON DELETE RESTRICT,
+      reversed_by VARCHAR(255),
+      reversed_at TIMESTAMP,
+      reversal_reason TEXT,
+      CONSTRAINT factory_manual_bonus_request_worker_unique UNIQUE (company_id,request_key,worker_id),
+      CONSTRAINT factory_manual_bonus_voucher_unique UNIQUE (payment_voucher_id),
+      CONSTRAINT factory_manual_bonus_reversal_state CHECK (
+        (status = 'POSTED' AND reversal_voucher_id IS NULL AND reversed_at IS NULL)
+        OR (status = 'REVERSED' AND reversal_voucher_id IS NOT NULL AND reversed_at IS NOT NULL)
+      )
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS factory_manual_bonus_worker_week_idx
+    ON factory_target_bonus_manual_payments (company_id,worker_id,week_start,status)
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS factory_manual_bonus_date_idx
+    ON factory_target_bonus_manual_payments (company_id,payment_date DESC)
+  `);
 }

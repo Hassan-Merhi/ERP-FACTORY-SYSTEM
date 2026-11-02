@@ -145,6 +145,11 @@ export function FinalizeLoadingDialog({ model }: { model: FactoryContainerLoadin
   const { linkedProforma, proformaProgress, bales, totalWeight, finalizeMutation } = model;
   const hasProformaReview = !!linkedProforma && proformaProgress.length > 0;
   const hasRemaining = hasProformaReview && proformaProgress.some((line) => line.remaining > 0);
+  const previousLoadingDate = model.orderDetail?.loadingFinalizedAt?.slice(0, 10);
+  // Reopened loadings display their old date by default. Only an explicit
+  // change allows the server to replace that previously confirmed date.
+  const overrideLoadingDate = !!previousLoadingDate && model.finalizeDate !== previousLoadingDate;
+  const hasValidDate = /^\d{4}-\d{2}-\d{2}$/.test(model.finalizeDate);
   return (
     <Dialog open={model.showFinalizeDialog} onOpenChange={model.setShowFinalizeDialog}>
       <DialogContent className="max-w-2xl rounded-2xl">
@@ -178,12 +183,12 @@ export function FinalizeLoadingDialog({ model }: { model: FactoryContainerLoadin
             </>
           )}
           <div className="space-y-1">
-            <label className="text-sm font-medium">{model.tr("loadingDate")}</label>
+            <label htmlFor="finalize-loading-date" className="text-sm font-medium">{model.tr("loadingDate")}</label>
             <input
+              id="finalize-loading-date"
               type="date"
               value={model.finalizeDate}
               onChange={(e) => model.setFinalizeDate(e.target.value)}
-              disabled={!!model.orderDetail?.loadingFinalizedAt}
               className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
               data-testid="input-finalize-date"
             />
@@ -202,8 +207,8 @@ export function FinalizeLoadingDialog({ model }: { model: FactoryContainerLoadin
               {model.tr("cancel")}
             </Button>
             <Button
-              onClick={() => finalizeMutation.mutate({ txDate: model.finalizeDate })}
-              disabled={finalizeMutation.isPending}
+              onClick={() => finalizeMutation.mutate({ txDate: model.finalizeDate, overrideLoadingDate })}
+              disabled={finalizeMutation.isPending || !hasValidDate}
               data-testid="button-confirm-finalize"
             >
               <CheckCircle className="mr-2 h-4 w-4" />
@@ -212,8 +217,8 @@ export function FinalizeLoadingDialog({ model }: { model: FactoryContainerLoadin
             {hasRemaining && (
               <Button
                 variant="secondary"
-                onClick={() => finalizeMutation.mutate({ txDate: model.finalizeDate, createNextLoading: true })}
-                disabled={finalizeMutation.isPending}
+                onClick={() => finalizeMutation.mutate({ txDate: model.finalizeDate, overrideLoadingDate, createNextLoading: true })}
+                disabled={finalizeMutation.isPending || !hasValidDate}
                 data-testid="button-finalize-open-next-loading"
               >
                 {finalizeMutation.isPending ? model.tr("finalizing") : model.tr("finalizeOpenNextLoading")}

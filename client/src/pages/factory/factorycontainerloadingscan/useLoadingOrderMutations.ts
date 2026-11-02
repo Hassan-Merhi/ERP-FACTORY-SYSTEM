@@ -214,6 +214,7 @@ export function useLoadingOrderMutations({
   const finalizeMutation = useMutation({
     mutationFn: async (variables: {
       txDate?: string;
+      overrideLoadingDate?: boolean;
       createCarryoverProforma?: boolean;
       createNextLoading?: boolean;
     }) => {

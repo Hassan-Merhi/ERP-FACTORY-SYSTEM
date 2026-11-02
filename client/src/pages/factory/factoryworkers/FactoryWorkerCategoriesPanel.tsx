@@ -16,20 +16,20 @@ export function FactoryWorkerCategoriesPanel({ model }: FactoryWorkersModelProps
   return (
     <>
       {showCategories && (
-        <TabsContent value="categories" className="mt-4">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
+        <TabsContent value="categories" className="mt-0">
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-gradient-to-r from-primary/5 to-transparent p-4">
               <p className="text-sm text-muted-foreground">
                 Group workers into categories to quickly filter them during stock entry and history.
               </p>
-              <Button onClick={openNewCategory} data-testid="button-add-category">
+              <Button onClick={openNewCategory} className="rounded-lg shadow-sm" data-testid="button-add-category">
                 <Plus className="h-4 w-4 mr-2" />
                 New Category
               </Button>
             </div>
 
             {categories.length === 0 ? (
-              <div className="text-center py-16 text-muted-foreground border rounded-md">
+              <div className="rounded-xl border border-dashed bg-muted/20 py-16 text-center text-muted-foreground">
                 <Layers className="mx-auto h-8 w-8 mb-3 opacity-40" />
                 <p className="font-medium">No categories yet</p>
                 <p className="text-sm mt-1">Create a category to group workers for quick filtering</p>
@@ -43,7 +43,7 @@ export function FactoryWorkerCategoriesPanel({ model }: FactoryWorkersModelProps
                   return (
                     <div
                       key={cat.id}
-                      className="rounded-xl border p-4 space-y-3"
+                      className="space-y-3 rounded-xl border border-border/70 bg-card/80 p-5 shadow-sm transition-shadow hover:shadow-md"
                       data-testid={`card-category-${cat.id}`}
                     >
                       <div className="flex items-start justify-between gap-2">

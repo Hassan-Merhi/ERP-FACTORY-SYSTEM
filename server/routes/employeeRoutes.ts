@@ -18,11 +18,11 @@ export function registerEmployeeRoutes(app: Express) {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });
       }
-      const employees = await storage.getAllEmployees(req.session.currentCompanyId);
+      const employees = await storage.getEmployeesWithBalances(req.session.currentCompanyId);
       // Ensure proper camelCase field names for frontend
       const transformedEmployees = employees.map((emp) => {
-        // Use stored currentBalance which is kept in sync by payroll operations and journal vouchers
-        // The syncEmployeePayrollBalance function updates currentBalance when vouchers are created/edited/deleted
+        // This is the ledger-authoritative amount: Cr positive for Payroll.
+        // Do not fall back to the write-side employee.current_balance cache.
         const currentBalance = toMoney(emp.currentBalance).toNumber();
 
         return {
@@ -149,23 +149,10 @@ export function registerEmployeeRoutes(app: Express) {
         resolvedCode = parsed.code;
       }
 
-      let employee = await storage.createEmployee({ ...parsed, code: resolvedCode });
-
-      // Initialize currentBalance to opening balance if provided
-      if (parsed.openingBalance && (parseMoneyInput(parsed.openingBalance)?.gt(0) ?? false)) {
-        await db
-          .update(employees)
-          .set({
-            currentBalance: parsed.openingBalance,
-          })
-          .where(eq(employees.id, employee.id));
-
-        employee = {
-          ...employee,
-          currentBalance: parsed.openingBalance,
-        };
-      }
-
+      // Storage atomically normalizes a signed opening: positive is Credit,
+      // negative is Debit. It also initializes the payroll balance with the
+      // same sign, so a later separate update cannot invert it.
+      const employee = await storage.createEmployee({ ...parsed, code: resolvedCode });
       res.status(201).json(employee);
     } catch (error: unknown) {
       const dbError = masterDataDbErrorResponse(error, "employee", req.session.currentCompanyId);

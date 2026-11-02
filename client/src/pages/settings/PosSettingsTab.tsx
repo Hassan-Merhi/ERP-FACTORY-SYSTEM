@@ -9,6 +9,7 @@ import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { Upload, ShoppingCart } from "lucide-react";
 import { CompanyTimezoneCard } from "./CompanyTimezoneCard";
+import { PosTransferApprovalSettingsCard } from "./PosTransferApprovalSettingsCard";
 import { useCompany } from "@/contexts/CompanyContext";
 
 export function PosSettingsTab() {
@@ -94,6 +95,7 @@ export function PosSettingsTab() {
           />
         </div>
       </Card>
+      <PosTransferApprovalSettingsCard />
     </div>
   );
 }

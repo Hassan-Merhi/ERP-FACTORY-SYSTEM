@@ -10,12 +10,13 @@ import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuCheckboxItem,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {} from "@/components/ui/dialog";
-import { LayoutGrid, Plus, Save, FileDown, Upload, Download, X, Link2, Link2Off } from "lucide-react";
+import { LayoutGrid, Columns3, Plus, Save, FileDown, Upload, Download, X, Link2, Link2Off } from "lucide-react";
 
 import type {
   ApiSheet,
@@ -68,6 +69,44 @@ export default function FactoryStatusBuilder() {
 
   const [viewMode, setViewMode] = useState<"sheet" | "history">("sheet");
 
+  // Display-only preferences: hiding a column never removes cells, changes formulas,
+  // or alters the saved sheet. Preferences are local to this browser and sheet.
+  const [hiddenColumnsBySheet, setHiddenColumnsBySheet] = useState<Record<string, string[]>>(() => {
+    try {
+      const stored = window.localStorage.getItem("factory-status-builder:hidden-columns:v1");
+      const parsed: unknown = stored ? JSON.parse(stored) : {};
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+      return Object.fromEntries(
+        Object.entries(parsed).filter((entry): entry is [string, string[]] =>
+          Array.isArray(entry[1]) && entry[1].every((id: unknown) => typeof id === "string")
+        )
+      );
+    } catch {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        "factory-status-builder:hidden-columns:v1",
+        JSON.stringify(hiddenColumnsBySheet)
+      );
+    } catch {
+      // Browser storage may be disabled; column visibility still works for this session.
+    }
+  }, [hiddenColumnsBySheet]);
+
+  const setColumnHidden = (sheetId: string, columnId: string, hidden: boolean) => {
+    setHiddenColumnsBySheet((prev) => {
+      const ids = prev[sheetId] ?? [];
+      return {
+        ...prev,
+        [sheetId]: hidden ? Array.from(new Set([...ids, columnId])) : ids.filter((id) => id !== columnId),
+      };
+    });
+  };
+
   const fmtLabel = useCallback(
     (label: string): string => {
       if (/^\d{4}-\d{2}-\d{2}$/.test(label)) return formatDisplayDate(label);
@@ -89,6 +128,7 @@ export default function FactoryStatusBuilder() {
   }, [apiSheets, initialised]);
 
   const activeSheet = localSheets[activeIdx] ?? null;
+  const hiddenColIds = activeSheet ? (hiddenColumnsBySheet[activeSheet.stableId] ?? []) : [];
   const isDirty = localSheets.some((s) => s.dirty);
 
   // ── History log ────────────────────────────────────────────────────────────
@@ -390,7 +430,15 @@ export default function FactoryStatusBuilder() {
       const sheet = localSheets[activeIdx];
       if (!sheet) return;
       const rowCount = sheet.rows.length;
-      const colCount = sheet.columns.length;
+      const hiddenIds = hiddenColumnsBySheet[sheet.stableId] ?? [];
+      const visibleCols = sheet.columns
+        .map((col, index) => hiddenIds.includes(col.id) ? -1 : index)
+        .filter((index) => index !== -1);
+      const visiblePosition = visibleCols.indexOf(ci);
+      const previousCol = visiblePosition > 0 ? visibleCols[visiblePosition - 1] : null;
+      const nextCol = visiblePosition >= 0 && visiblePosition < visibleCols.length - 1
+        ? visibleCols[visiblePosition + 1]
+        : null;
 
       if (e.key === "Enter") {
         e.preventDefault();
@@ -407,11 +455,11 @@ export default function FactoryStatusBuilder() {
       } else if (e.key === "Tab") {
         e.preventDefault();
         if (e.shiftKey) {
-          if (ci > 0) focusCell(ri, ci - 1);
-          else if (ri > 0) focusCell(ri - 1, colCount - 1);
+          if (previousCol !== null) focusCell(ri, previousCol);
+          else if (ri > 0 && visibleCols.length > 0) focusCell(ri - 1, visibleCols[visibleCols.length - 1]);
         } else {
-          if (ci < colCount - 1) focusCell(ri, ci + 1);
-          else if (ri < rowCount - 1) focusCell(ri + 1, 0);
+          if (nextCol !== null) focusCell(ri, nextCol);
+          else if (ri < rowCount - 1 && visibleCols.length > 0) focusCell(ri + 1, visibleCols[0]);
         }
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
@@ -421,19 +469,19 @@ export default function FactoryStatusBuilder() {
         if (ri < rowCount - 1) focusCell(ri + 1, ci);
       } else if (e.key === "ArrowLeft") {
         const input = e.currentTarget;
-        if (input.selectionStart === 0 && input.selectionEnd === 0 && ci > 0) {
+        if (input.selectionStart === 0 && input.selectionEnd === 0 && previousCol !== null) {
           e.preventDefault();
-          focusCell(ri, ci - 1);
+          focusCell(ri, previousCol);
         }
       } else if (e.key === "ArrowRight") {
         const input = e.currentTarget;
-        if (input.selectionStart === input.value.length && ci < colCount - 1) {
+        if (input.selectionStart === input.value.length && nextCol !== null) {
           e.preventDefault();
-          focusCell(ri, ci + 1);
+          focusCell(ri, nextCol);
         }
       }
     },
-    [localSheets, activeIdx, focusCell, updateSheet]
+    [localSheets, activeIdx, focusCell, updateSheet, hiddenColumnsBySheet]
   );
 
   useEffect(() => {
@@ -456,7 +504,7 @@ export default function FactoryStatusBuilder() {
 
   return (
     <>
-      <div className="flex flex-col flex-1 min-h-0 bg-background">
+      <div className="flex flex-col flex-1 min-h-0 overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm dark:shadow-black/20">
         {/* Link dialog */}
         <LinkDialog
           state={linkDialog}
@@ -466,9 +514,11 @@ export default function FactoryStatusBuilder() {
         />
 
         {/* Toolbar */}
-        <div className="flex items-center gap-2 px-4 py-2 border-b flex-wrap">
-          <LayoutGrid className="h-4 w-4 text-muted-foreground shrink-0" />
-          <span className="text-sm font-semibold text-foreground mr-2">Factory Sheets</span>
+        <div className="flex items-center gap-2 border-b border-border/60 bg-gradient-to-r from-muted/70 via-card to-card px-4 py-3 flex-wrap">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-600 ring-1 ring-blue-500/20 dark:bg-blue-500/15 dark:text-blue-400">
+            <LayoutGrid className="h-4 w-4" />
+          </span>
+          <span className="text-base font-semibold tracking-tight text-foreground mr-2">Factory Sheets</span>
           <div className="flex-1" />
           <input
             ref={fileInputRef}
@@ -487,6 +537,7 @@ export default function FactoryStatusBuilder() {
             variant="outline"
             onClick={() => window.open("/api/factory/status-builder/sheets/template", "_blank")}
             data-testid="sb-button-download-template"
+            className="rounded-lg border-border/70 bg-background/70 font-medium shadow-sm hover:bg-accent"
           >
             <FileDown className="h-3.5 w-3.5 mr-1.5" />
             Template
@@ -497,6 +548,7 @@ export default function FactoryStatusBuilder() {
             onClick={() => fileInputRef.current?.click()}
             disabled={importMutation.isPending}
             data-testid="sb-button-import-excel"
+            className="rounded-lg border-border/70 bg-background/70 font-medium shadow-sm hover:bg-accent"
           >
             <Upload className="h-3.5 w-3.5 mr-1.5" />
             Import Excel
@@ -507,6 +559,7 @@ export default function FactoryStatusBuilder() {
             onClick={handleExport}
             disabled={localSheets.length === 0}
             data-testid="sb-button-export-excel"
+            className="rounded-lg border-border/70 bg-background/70 font-medium shadow-sm hover:bg-accent"
           >
             <Download className="h-3.5 w-3.5 mr-1.5" />
             Export Excel
@@ -524,6 +577,7 @@ export default function FactoryStatusBuilder() {
             }}
             disabled={!isDirty || saveMutation.isPending}
             data-testid="sb-button-save"
+            className="rounded-lg bg-blue-600 font-semibold text-white shadow-sm shadow-blue-600/15 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
           >
             <Save className="h-3.5 w-3.5 mr-1.5" />
             {saveMutation.isPending ? "Saving…" : "Save"}
@@ -532,7 +586,8 @@ export default function FactoryStatusBuilder() {
 
         <StatusViewToggle viewMode={viewMode} onChange={setViewMode} />
 
-        <div className="erp-mobile-scroll-tabs border-b px-4 pb-1">
+        <div className="flex items-center gap-3 border-b border-border/60 px-4 py-2">
+          <div className="erp-mobile-scroll-tabs min-w-0 flex-1">
           <div className="flex w-max items-center gap-1">
             <TabsList className="w-max" aria-label="Status sheet pages">
               {localSheets.map((s, idx) => (
@@ -557,6 +612,47 @@ export default function FactoryStatusBuilder() {
               Add page
             </button>
           </div>
+          </div>
+          {activeSheet && viewMode === "sheet" && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 rounded-lg border-border/70 bg-background/80 text-foreground shadow-sm"
+                  data-testid="sb-button-columns"
+                  aria-label="Choose visible columns"
+                >
+                  <Columns3 className="mr-1.5 h-4 w-4 text-blue-500" />
+                  Columns
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 rounded-lg">
+                <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                  Show or hide columns
+                </div>
+                <DropdownMenuSeparator />
+                {activeSheet.columns.map((col, ci) => (
+                  <DropdownMenuCheckboxItem
+                    key={col.id}
+                    checked={!hiddenColIds.includes(col.id)}
+                    onCheckedChange={(checked) => setColumnHidden(activeSheet.stableId, col.id, !checked)}
+                    data-testid={`sb-toggle-column-${ci}`}
+                  >
+                    <span className="truncate">{col.label || `Column ${ci + 1}`}</span>
+                  </DropdownMenuCheckboxItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => setHiddenColumnsBySheet((prev) => ({ ...prev, [activeSheet.stableId]: [] }))}
+                  data-testid="sb-show-all-columns"
+                >
+                  Show all columns
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
         {/* Content */}
@@ -571,24 +667,24 @@ export default function FactoryStatusBuilder() {
           <StatusHistoryPanel historyLoading={historyLoading} historyLog={historyLog} />
         ) : (
           /* ── Spreadsheet grid ── */
-          <div className="flex-1 overflow-auto p-4">
-            <div className="w-fit">
-              <table className="border-collapse text-sm" data-testid="sb-grid-table">
+          <div className="flex-1 min-h-0 overflow-auto px-4 pb-5 pt-4">
+            <div className="w-fit min-w-full overflow-hidden rounded-xl border border-border/70 bg-background shadow-sm">
+              <table className="w-full border-separate border-spacing-0 text-sm" data-testid="sb-grid-table">
                 <thead className="sticky top-0 z-30">
                   <tr>
-                    <th className="border border-border bg-muted px-2 py-1.5 text-left font-medium text-muted-foreground min-w-[180px]">
+                    <th className="min-w-[230px] border-b border-r border-border/60 bg-slate-100 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:bg-slate-800/90">
                       Label
                     </th>
                     {activeSheet.columns.map((col, ci) => (
                       <th
                         key={col.id}
-                        className="border border-border bg-muted px-1 py-1 text-center font-medium min-w-[130px]"
+                        className={`min-w-[180px] border-b border-r border-border/60 bg-slate-100 px-2 py-2 text-center font-medium dark:bg-slate-800/90 ${hiddenColIds.includes(col.id) ? "hidden" : ""}`}
                       >
                         <div className="flex items-center gap-1">
                           <Input
                             value={col.label}
                             onChange={(e) => setColumnHeader(ci, e.target.value)}
-                            className="h-7 text-xs text-center font-semibold border-0 bg-transparent focus-visible:ring-1 focus-visible:ring-primary px-1"
+                            className="h-8 border-0 bg-transparent px-1 text-center text-xs font-bold tracking-wide text-foreground shadow-none focus-visible:ring-1 focus-visible:ring-primary"
                             data-testid={`sb-input-col-header-${ci}`}
                           />
                           <button
@@ -596,14 +692,15 @@ export default function FactoryStatusBuilder() {
                             onClick={() =>
                               setPendingDelete({ type: "col", idx: ci, label: col.label || `Column ${ci + 1}` })
                             }
-                            className="text-muted-foreground hover:text-destructive shrink-0 transition-colors"
+                            className="shrink-0 rounded p-1 text-muted-foreground/70 transition-colors hover:bg-destructive/10 hover:text-destructive"
+                            title="Delete column (removes data); use Columns to hide instead"
                           >
                             <X className="h-3 w-3" />
                           </button>
                         </div>
                       </th>
                     ))}
-                    <th className="border border-border bg-muted px-2 py-1.5 text-center">
+                    <th className="border-b border-border/60 bg-slate-100 px-3 py-2 text-center dark:bg-slate-800/90">
                       <button
                         data-testid="sb-button-add-column"
                         onClick={addColumn}
@@ -618,14 +715,14 @@ export default function FactoryStatusBuilder() {
 
                 <tbody>
                   {activeSheet.rows.map((row, ri) => (
-                    <tr key={row.id} className="group hover:bg-muted/30">
+                    <tr key={row.id} className="group transition-colors hover:bg-blue-500/[0.035] dark:hover:bg-blue-400/[0.055]">
                       {/* Row label */}
-                      <td className="border border-border px-1 py-0.5 bg-muted/20">
+                      <td className="border-b border-r border-border/50 bg-muted/20 px-2 py-1 group-hover:bg-muted/40">
                         <div className="flex items-center gap-1">
                           <Input
                             value={fmtLabel(row.label)}
                             onChange={(e) => setRowLabel(ri, e.target.value)}
-                            className="h-7 text-xs border-0 bg-transparent focus-visible:ring-1 focus-visible:ring-primary px-1 flex-1"
+                            className="h-9 flex-1 border-0 bg-transparent px-2 text-sm font-medium text-foreground shadow-none focus-visible:ring-1 focus-visible:ring-primary"
                             data-testid={`sb-input-row-label-${ri}`}
                             dir="auto"
                           />
@@ -698,7 +795,7 @@ export default function FactoryStatusBuilder() {
                         return (
                           <td
                             key={col.id}
-                            className={`border border-border px-0 py-0 ${isDiff ? "bg-muted/20" : isTotal ? "bg-blue-50/60 dark:bg-blue-950/30" : ""}`}
+                            className={`border-b border-r border-border/50 px-0 py-0 ${isDiff ? "bg-muted/20" : isTotal ? "bg-blue-500/[0.075] dark:bg-blue-600/[0.13]" : ""} ${hiddenColIds.includes(col.id) ? "hidden" : ""}`}
                           >
                             <div className="relative group/cell">
                               {isDiff || isTotal || isLinked ? (
@@ -710,7 +807,7 @@ export default function FactoryStatusBuilder() {
                                         ? `sb-diff-cell-${ri}-${ci}`
                                         : `sb-total-cell-${ri}-${ci}`
                                   }
-                                  className={`h-7 px-2 flex items-center gap-1 text-xs tabular-nums select-none cursor-default
+                                  className={`h-10 px-3 flex items-center gap-1 text-sm font-medium tabular-nums select-none cursor-default
                                     ${isErrorVal ? "text-red-500 font-mono" : isNeg ? "text-red-500" : isDiff ? "text-foreground font-medium" : isTotal ? "text-blue-700 dark:text-blue-300 font-semibold" : "text-foreground"}
                                     ${isTextVal ? "justify-start" : "justify-center"}`}
                                   title={
@@ -734,7 +831,7 @@ export default function FactoryStatusBuilder() {
                                   value={fmt(cell.value)}
                                   onChange={(e) => setCellDirect(ri, ci, e.target.value)}
                                   onKeyDown={(e) => handleCellKeyDown(e, ri, ci)}
-                                  className={`h-7 text-xs border-0 bg-transparent focus-visible:ring-1 focus-visible:ring-primary px-2 tabular-nums
+                                  className={`h-10 border-0 bg-transparent px-3 text-sm font-medium shadow-none focus-visible:ring-1 focus-visible:ring-primary tabular-nums
                                     ${isNeg ? "text-red-500" : ""}
                                     ${isTextVal ? "text-left" : "text-center"}`}
                                   data-testid={`sb-input-cell-${ri}-${ci}`}
@@ -828,26 +925,26 @@ export default function FactoryStatusBuilder() {
 
                   {/* Add row */}
                   <tr>
-                    <td className="border border-border px-1 py-0.5 bg-muted/10">
+                    <td className="border-b border-r border-border/50 bg-muted/10 px-2 py-2">
                       <button
                         data-testid="sb-button-add-row"
                         onClick={addRow}
-                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-full px-1"
+                        className="flex w-full items-center gap-1 rounded px-2 text-xs font-medium text-muted-foreground transition-colors hover:text-blue-600 dark:hover:text-blue-400"
                       >
                         <Plus className="h-3 w-3" />
                         Add row
                       </button>
                     </td>
-                    {activeSheet.columns.map((_, ci) => (
-                      <td key={ci} className="border border-border" />
+                    {activeSheet.columns.map((col) => (
+                      <td key={col.id} className={`border-b border-r border-border/50 ${hiddenColIds.includes(col.id) ? "hidden" : ""}`} />
                     ))}
-                    <td className="border border-border" />
+                    <td className="border-b border-border/50" />
                   </tr>
 
                   {/* Footer — DIFFERENCE row */}
                   {activeSheet.rows.length > 0 && (
-                    <tr className="bg-amber-50/60 dark:bg-amber-950/20">
-                      <td className="border border-border px-2 py-1.5">
+                    <tr className="bg-amber-500/[0.10] dark:bg-amber-950/35">
+                      <td className="border-t-2 border-r border-amber-500/40 px-4 py-3">
                         <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">DIFFERENCE</span>
                       </td>
                       {diffRow.map((val, ci) => {
@@ -855,7 +952,7 @@ export default function FactoryStatusBuilder() {
                         return (
                           <td
                             key={ci}
-                            className="border border-border px-2 py-1.5 text-xs font-semibold text-center tabular-nums"
+                            className={`border-t-2 border-r border-amber-500/40 px-3 py-3 text-center text-sm font-bold tabular-nums ${hiddenColIds.includes(activeSheet.columns[ci]?.id) ? "hidden" : ""}`}
                             data-testid={`sb-footer-diff-${ci}`}
                           >
                             <span className={isNeg ? "text-red-500" : "text-amber-700 dark:text-amber-400"}>

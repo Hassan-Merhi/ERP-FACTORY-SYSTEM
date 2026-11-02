@@ -241,14 +241,14 @@ export default function ProductionRawStock() {
 
   return (
     <div className="min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-6" data-testid="production-raw-stock-page">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4">
+      <div className="relative flex flex-col gap-4 rounded-2xl border border-amber-200/60 bg-linear-to-r from-amber-50/80 via-card to-card px-4 py-4 shadow-sm dark:border-amber-500/10 dark:from-amber-500/10 dark:via-card dark:to-card sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-5 sm:px-5">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-500/25 bg-linear-to-br from-amber-500/30 to-amber-600/10">
-            <FlaskConical className="h-4.5 w-4.5 text-amber-500" />
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-amber-500/30 bg-linear-to-br from-amber-400/25 to-amber-600/10 shadow-sm dark:shadow-amber-500/10">
+            <FlaskConical className="h-5 w-5 text-amber-600 dark:text-amber-400" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-lg font-bold leading-tight">Raw Production</h1>
-            <p className="text-xs leading-tight text-muted-foreground">
+            <h1 className="text-xl font-bold leading-tight tracking-tight sm:text-2xl">Raw Production</h1>
+            <p className="mt-1 text-xs leading-snug text-muted-foreground">
               Raw stock inventory and daily mix batch management
             </p>
           </div>
@@ -257,14 +257,14 @@ export default function ProductionRawStock() {
           <Button
             variant="outline"
             onClick={() => setFixedPlannerOpen(true)}
-            className="h-11 gap-2 rounded-lg border-blue-500/40 px-3 text-xs font-semibold sm:h-9"
+            className="h-11 gap-2 rounded-xl border-blue-300/60 bg-card/80 px-3 text-xs font-semibold shadow-sm transition-colors hover:border-blue-500/50 hover:bg-blue-500/5 dark:border-blue-400/25 sm:h-10"
             data-testid="button-fixed-production-planner"
           >
             <Calculator className="h-4 w-4" /> {translateFixedProductionPlanner("title", language)}
           </Button>
           <Button
             onClick={() => setCreateMixBatchOpen(true)}
-            className="h-11 gap-2 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white shadow-xs transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md dark:bg-blue-500 dark:hover:bg-blue-400 sm:h-9"
+            className="h-11 gap-2 rounded-xl bg-blue-600 px-3 text-xs font-bold text-white shadow-sm shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md dark:bg-blue-500 dark:text-white dark:hover:bg-blue-400 sm:h-10"
             data-testid="button-create-mix-batch"
           >
             <Layers className="h-4 w-4" /> <span className="hidden sm:inline">New Mix Batch</span>
@@ -272,7 +272,7 @@ export default function ProductionRawStock() {
           </Button>
           <Button
             onClick={() => setOffloadDialogOpen(true)}
-            className="h-11 gap-2 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-xs transition-all hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-md dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400 sm:h-9"
+            className="h-11 gap-2 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white shadow-sm shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-md dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400 sm:h-10"
             data-testid="button-offload-container"
           >
             <ArrowDown className="h-4 w-4" /> Offload Container
@@ -280,7 +280,7 @@ export default function ProductionRawStock() {
           <Button
             variant="outline"
             onClick={() => setCategoriesDialogOpen(true)}
-            className="h-11 gap-2 rounded-lg border-amber-500/40 bg-amber-500/5 px-3 text-xs font-semibold text-amber-700 shadow-xs transition-all hover:-translate-y-0.5 hover:border-amber-500/60 hover:bg-amber-500/10 hover:shadow-md dark:text-amber-300 min-[360px]:col-span-2 sm:h-9 sm:w-auto"
+            className="h-11 gap-2 rounded-xl border-amber-500/40 bg-amber-500/5 px-3 text-xs font-bold text-amber-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-amber-500/70 hover:bg-amber-500/10 hover:shadow-md dark:text-amber-300 min-[360px]:col-span-2 sm:h-10 sm:w-auto"
             data-testid="button-manage-categories"
           >
             <Tag className="h-4 w-4" /> Categories

@@ -14,6 +14,7 @@ import { userLocations } from "@shared/schema";
 import { parseMoneyInput } from "../lib/money";
 import { parsePositiveInt } from "../lib/listPagination";
 import { filterRoutineCorrection, ROUTINE_CORRECTION_VOUCHER_ID } from "../services/accounting/operationalCorrectionVisibility";
+import { operationalHistoricalSupplierExclusionSql } from "../services/accounting/internalHistoricalSupplierRoutineVisibility";
 
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 250;
@@ -98,6 +99,9 @@ export function registerDaybookPaginationRoutes(app: Express): void {
         "v.voucher_number NOT LIKE 'SP-STOCK-%'",
         "v.voucher_number NOT LIKE 'SP-OPNSTK-%'",
         ...(filterRoutineCorrection(companyId, req.session.currentRole) ? [`v.id <> ${ROUTINE_CORRECTION_VOUCHER_ID}`] : []),
+        // This is an operational daybook projection, not the official GL.
+        // Exclude only the known Oct-14 catchup batch before counting/paging.
+        operationalHistoricalSupplierExclusionSql(companyId, "v"),
       ];
       const offloadConditions = [
         "c.company_id = $1",

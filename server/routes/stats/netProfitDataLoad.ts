@@ -4,6 +4,7 @@ import { storage } from "../../storage";
 import { resultRows } from "../../lib/queryResult";
 import { toMoney } from "../../lib/money";
 import { notFiscalClosingVoucherText } from "../../services/accounting/balances/periodReportRules";
+import { getNetProfitFuturePnlPolicy } from "./netProfitFuturePnlPolicy";
 
 /** One ledger account row as mapped to camelCase below: the original columns
  *  guaranteed to exist in every deployment (including pre-migration prod).
@@ -50,7 +51,11 @@ export interface NetProfitData {
  *
  * config/report-characterization.json pins the endpoint's output across the move.
  */
-export async function loadNetProfitData(companyId: number, toDate: string | null | undefined): Promise<NetProfitData> {
+export async function loadNetProfitData(
+  companyId: number,
+  toDate: string | null | undefined,
+  liveBusinessDate?: string | null,
+): Promise<NetProfitData> {
   // Program 6D optimization: replace the large per-row entry materialisations
   // with grouped-SQL queries. Wave 10: customers, suppliers and employees come
   // from the one balance engine (services/accounting/balances/netPositionParties.ts),
@@ -67,8 +72,10 @@ export async function loadNetProfitData(companyId: number, toDate: string | null
   //
   // pool.query is used (not db.select) to avoid the Drizzle ::cast-in-sql-template
   // issue documented in the project memory.
-  const _entryParams = toDate ? [companyId, toDate] : [companyId];
-  const _dateClause = toDate ? "AND COALESCE(v.effective_date, v.voucher_date) <= $2" : "";
+  const futurePnlPolicy = getNetProfitFuturePnlPolicy(companyId, toDate, liveBusinessDate);
+  const _entryParams = futurePnlPolicy.params;
+  const _dateClause = futurePnlPolicy.ledgerDateFilter;
+  const _futurePnlFilter = futurePnlPolicy.futurePnlFilter;
 
   // ── Schema-resilient column probe ────────────────────────────────────────
   // Production may be running with RUN_STARTUP_MIGRATIONS=false so the
@@ -171,6 +178,8 @@ export async function loadNetProfitData(companyId: number, toDate: string | null
         total_credit: string;
         close_debit: string;
         close_credit: string;
+        future_pnl_debit: string;
+        future_pnl_credit: string;
       }>(
         `SELECT ve.ledger_account_id,
             SUM(COALESCE(ve.base_debit_amount,  ve.debit_amount)::numeric)  AS total_debit,
@@ -178,7 +187,11 @@ export async function loadNetProfitData(companyId: number, toDate: string | null
             COALESCE(SUM(COALESCE(ve.base_debit_amount,  ve.debit_amount)::numeric)
               FILTER (WHERE NOT (${notFiscalClosingVoucherText("v")})), 0) AS close_debit,
             COALESCE(SUM(COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric)
-              FILTER (WHERE NOT (${notFiscalClosingVoucherText("v")})), 0) AS close_credit
+              FILTER (WHERE NOT (${notFiscalClosingVoucherText("v")})), 0) AS close_credit,
+            COALESCE(SUM(COALESCE(ve.base_debit_amount, ve.debit_amount)::numeric)
+              FILTER (WHERE (${notFiscalClosingVoucherText("v")}) ${_futurePnlFilter}), 0) AS future_pnl_debit,
+            COALESCE(SUM(COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric)
+              FILTER (WHERE (${notFiscalClosingVoucherText("v")}) ${_futurePnlFilter}), 0) AS future_pnl_credit
      FROM voucher_entries ve
      JOIN vouchers        v  ON ve.voucher_id        = v.id
      JOIN ledger_accounts la ON ve.ledger_account_id = la.id
@@ -197,6 +210,8 @@ export async function loadNetProfitData(companyId: number, toDate: string | null
           total_credit: string;
           close_debit: string;
           close_credit: string;
+          future_pnl_debit: string;
+          future_pnl_credit: string;
         }>(
           `SELECT ve.ledger_account_id,
               SUM(ve.debit_amount::numeric)  AS total_debit,
@@ -204,7 +219,11 @@ export async function loadNetProfitData(companyId: number, toDate: string | null
               COALESCE(SUM(ve.debit_amount::numeric)
                 FILTER (WHERE NOT (${notFiscalClosingVoucherText("v")})), 0) AS close_debit,
               COALESCE(SUM(ve.credit_amount::numeric)
-                FILTER (WHERE NOT (${notFiscalClosingVoucherText("v")})), 0) AS close_credit
+                FILTER (WHERE NOT (${notFiscalClosingVoucherText("v")})), 0) AS close_credit,
+              COALESCE(SUM(ve.debit_amount::numeric)
+                FILTER (WHERE (${notFiscalClosingVoucherText("v")}) ${_futurePnlFilter}), 0) AS future_pnl_debit,
+              COALESCE(SUM(ve.credit_amount::numeric)
+                FILTER (WHERE (${notFiscalClosingVoucherText("v")}) ${_futurePnlFilter}), 0) AS future_pnl_credit
        FROM voucher_entries ve
        JOIN vouchers        v  ON ve.voucher_id        = v.id
        JOIN ledger_accounts la ON ve.ledger_account_id = la.id
@@ -249,8 +268,8 @@ export async function loadNetProfitData(companyId: number, toDate: string | null
         credit: toMoney(row.total_credit).toNumber(),
       });
       profitAndLossBalances.set(Number(row.ledger_account_id), {
-        debit: toMoney(row.total_debit).minus(toMoney(row.close_debit)).toNumber(),
-        credit: toMoney(row.total_credit).minus(toMoney(row.close_credit)).toNumber(),
+        debit: toMoney(row.total_debit).minus(toMoney(row.close_debit)).minus(toMoney(row.future_pnl_debit)).toNumber(),
+        credit: toMoney(row.total_credit).minus(toMoney(row.close_credit)).minus(toMoney(row.future_pnl_credit)).toNumber(),
       });
     }
   }

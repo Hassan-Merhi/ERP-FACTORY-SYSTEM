@@ -17,6 +17,7 @@ import {
 } from "@shared/schema";
 import { eq, and, or, desc, sql, inArray, isNull } from "drizzle-orm";
 import { sumMoney, toMoney } from "../../lib/money";
+import { operationalHistoricalSupplierExclusionSql } from "../../services/accounting/internalHistoricalSupplierRoutineVisibility";
 
 /**
  * A live voucher's daybook amounts: the voucher total, its rate (1 when unset
@@ -134,6 +135,10 @@ export function registerFactoryDaybookRoutes(app: Express) {
                 AND p.status = 'REVERSED'))
           OR (${factoryDaybookEntries.txType} IN ('PRODUCTION_TARGET_WEEKLY_BONUS_PAYMENT','PRODUCTION_TARGET_WEEKLY_BONUS_REVERSAL')
             AND EXISTS (SELECT 1 FROM factory_target_bonus_weekly_payments p
+              WHERE p.company_id = ${companyId} AND p.id = ${factoryDaybookEntries.referenceId}
+                AND p.status = 'REVERSED'))
+          OR (${factoryDaybookEntries.txType} IN ('PRODUCTION_TARGET_MANUAL_BONUS_PAYMENT','PRODUCTION_TARGET_MANUAL_BONUS_REVERSAL')
+            AND EXISTS (SELECT 1 FROM factory_target_bonus_manual_payments p
               WHERE p.company_id = ${companyId} AND p.id = ${factoryDaybookEntries.referenceId}
                 AND p.status = 'REVERSED'))
         )`,
@@ -368,6 +373,9 @@ export function registerFactoryDaybookRoutes(app: Express) {
           )`,
           sql`${vouchers.deletedAt} IS NULL`,
           inArray(vouchers.voucherType, ["Payment", "Receipt", "Journal"]),
+          // Routine synthetic voucher view only; retain actual factory daybook
+          // source transactions and all official financial journals.
+          sql.raw(operationalHistoricalSupplierExclusionSql(companyId, "vouchers")),
         ];
         if (startDate)
           voucherConds.push(sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) >= ${startDate}`);
