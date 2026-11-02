@@ -20,8 +20,10 @@ import {
 import {
   PHASE9_POS_CASH_ACCOUNT_CONFLICT,
   PHASE9_POS_NEGATIVE_CONFLICT,
+  PHASE9_POS_SALE_CANCEL_KIND,
   PHASE9_POS_SALE_EDIT_KIND,
   PHASE9_POS_SALE_KIND,
+  phase9PosSaleCancelEnvelope,
   phase9PosSaleEditEnvelope,
   phase9PosSaleEnvelope,
 } from "./phase9PosSaleEnvelope.mjs";
@@ -117,6 +119,19 @@ function posSaleEditPayload(payload) {
   return stableEqual(rebuilt, payload) ? rebuilt : null;
 }
 
+function posSaleCancelPayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (payload.kind !== PHASE9_POS_SALE_CANCEL_KIND) return null;
+  const { kind: _kind, ...evidence } = payload;
+  let rebuilt;
+  try {
+    rebuilt = phase9PosSaleCancelEnvelope(evidence);
+  } catch {
+    return null;
+  }
+  return stableEqual(rebuilt, payload) ? rebuilt : null;
+}
+
 function receivingPayload(payload) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
   if (payload.kind !== PHASE9_RECEIVING_KIND) return null;
@@ -192,6 +207,11 @@ const STREAMS = Object.freeze({
         parse: posSaleEditPayload,
         localRef: (payload) => payload.localVoucherId,
         overridable: Object.freeze([PHASE9_POS_NEGATIVE_CONFLICT]),
+      }),
+      [PHASE9_POS_SALE_CANCEL_KIND]: Object.freeze({
+        parse: posSaleCancelPayload,
+        localRef: (payload) => payload.localVoucherId,
+        overridable: Object.freeze([]),
       }),
     }),
   }),

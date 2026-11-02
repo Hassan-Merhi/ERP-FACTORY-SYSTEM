@@ -31,7 +31,13 @@ import { isPhase9EventStream } from "./phase9EventProtocol.mjs";
 import { phase9PressingApplyHandler } from "./phase9PressingApply";
 import { phase9StockApplyHandler } from "./phase9StockApply";
 import { phase9PosSaleApplyHandler } from "./phase9PosSaleApply";
-import { PHASE9_POS_SALE_EDIT_KIND, PHASE9_POS_SALE_KIND } from "./phase9PosSaleEnvelope.mjs";
+import {
+  PHASE9_POS_SALE_CANCEL_KIND,
+  PHASE9_POS_SALE_EDIT_KIND,
+  PHASE9_POS_SALE_KIND,
+} from "./phase9PosSaleEnvelope.mjs";
+import { phase9PosSaleCancelApplyHandler } from "./phase9PosSaleCancelApply";
+import { recalculateIntercompanyForDate } from "../routes/helpers/intercompanyHelpers";
 import { phase9PosSaleEditApplyHandler } from "./phase9PosSaleEditApply";
 import { phase9ReceivingApplyHandler } from "./phase9ReceivingApply";
 import { PHASE9_RECEIVING_KIND } from "./phase9ReceivingEnvelope.mjs";
@@ -55,6 +61,7 @@ export const PHASE9_HANDLERS = Object.freeze({
   [PHASE9_STOCK_ADJUST_KIND]: phase9StockApplyHandler,
   [PHASE9_POS_SALE_KIND]: phase9PosSaleApplyHandler,
   [PHASE9_POS_SALE_EDIT_KIND]: phase9PosSaleEditApplyHandler,
+  [PHASE9_POS_SALE_CANCEL_KIND]: phase9PosSaleCancelApplyHandler,
   [PHASE9_RECEIVING_KIND]: phase9ReceivingApplyHandler,
   [PHASE9_ATTACHMENT_KIND]: phase9AttachmentApplyHandler,
   [PHASE9_PAYMENT_KIND]: phase9PaymentApplyHandler,
@@ -109,11 +116,21 @@ export async function runPhase9OperatorApply(stream: string) {
   const config = readPhase9OperatorConfig();
   return runWithDatabaseScopeRuntimeContext(createTenantDatabaseScope(config.companyId), async () => {
     const client = await pool.connect();
+    let receipts;
     try {
-      return await applyPendingStagedEvents(client, { ...config, stream }, PHASE9_HANDLERS);
+      receipts = await applyPendingStagedEvents(client, { ...config, stream }, PHASE9_HANDLERS);
     } finally {
       client.release();
     }
+    // After commit, as the live delete route does: a cancelled sale leaves the
+    // intercompany POS mirror for its date (the rebuild never throws).
+    const cancelledDates = new Set(
+      receipts
+        .filter((receipt) => receipt.kind === PHASE9_POS_SALE_CANCEL_KIND && receipt.outcome === "cloud-applied")
+        .map((receipt) => String(receipt.businessDate))
+    );
+    for (const date of cancelledDates) await recalculateIntercompanyForDate(config.companyId, date);
+    return receipts;
   });
 }
 

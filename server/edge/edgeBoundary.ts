@@ -275,6 +275,10 @@ export function registerFactoryEdgeBoundary(app: Express): void {
           installed: outboxInstalled("factory_edge_pos_outbox"),
           code: "EDGE_PHASE9_POS_CAPTURE_NOT_INSTALLED",
         },
+        "DELETE /api/vouchers/:id": {
+          installed: outboxInstalled("factory_edge_pos_outbox"),
+          code: "EDGE_PHASE9_POS_CAPTURE_NOT_INSTALLED",
+        },
         "PATCH /api/vouchers/:id/sales": {
           installed: outboxInstalled("factory_edge_pos_outbox"),
           code: "EDGE_PHASE9_POS_CAPTURE_NOT_INSTALLED",

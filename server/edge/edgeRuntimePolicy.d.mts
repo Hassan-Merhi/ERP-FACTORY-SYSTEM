@@ -32,4 +32,5 @@ export const PHASE9_ATTACHMENT_UPLOAD_ROUTE: "POST /api/files/upload";
 export const PHASE9_PAYMENT_RECEIPT_ROUTE: "POST /api/vouchers/payment-receipt";
 export const PHASE9_RECEIVING_OFFLOAD_PATH: RegExp;
 export const PHASE9_POS_SALE_EDIT_PATH: RegExp;
+export const PHASE9_VOUCHER_DELETE_PATH: RegExp;
 export function phase9ApprovedCaptureRoute(method: string, path: string): string | null;

@@ -16,8 +16,10 @@ import { readFactoryEdgeConfiguration } from "./edgeRuntimePolicy.mjs";
 import { hashEvidence } from "./edgeSyncStageProtocol.mjs";
 import {
   phase9PosInvoiceNumber,
+  phase9PosSaleCancelEnvelope,
   phase9PosSaleEditEnvelope,
   phase9PosSaleEnvelope,
+  type Phase9PosSaleCancelEvidence,
   type Phase9PosSaleEditEvidence,
   type Phase9PosSaleEvidence,
 } from "./phase9PosSaleEnvelope.mjs";
@@ -51,7 +53,7 @@ export async function ensurePhase9PosOutboxSchema(queryable: Pick<Pool, "query">
       actor_user_id TEXT NOT NULL CHECK(length(actor_user_id) > 0),
       local_voucher_id INTEGER NOT NULL CHECK(local_voucher_id > 0),
       lan_invoice_number TEXT,
-      operation_kind TEXT NOT NULL CHECK(operation_kind IN ('pos.sale.v1', 'pos.sale-edit.v1')),
+      operation_kind TEXT NOT NULL CHECK(operation_kind IN ('pos.sale.v1', 'pos.sale-edit.v1', 'pos.sale-cancel.v1')),
       payload JSONB NOT NULL,
       payload_sha256 CHAR(64) NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
@@ -121,9 +123,24 @@ export async function capturePhase9PosSaleEditTx(
   tx: DbTransaction,
   evidence: Phase9PosSaleEditEvidence
 ): Promise<void> {
+  await insertPosFollowUpTx(tx, phase9PosSaleEditEnvelope(evidence));
+}
+
+/** Record a committed sale cancellation (voucher delete) on the same "pos" stream. */
+export async function capturePhase9PosSaleCancelTx(
+  tx: DbTransaction,
+  evidence: Phase9PosSaleCancelEvidence
+): Promise<void> {
+  await insertPosFollowUpTx(tx, phase9PosSaleCancelEnvelope(evidence));
+}
+
+/** An edit or cancellation of a sale: next pos sequence, no LAN invoice number. */
+async function insertPosFollowUpTx(
+  tx: DbTransaction,
+  event: { kind: string; requestId: string; companyId: number; actorUserId: string; localVoucherId: number }
+): Promise<void> {
   const config = readFactoryEdgeConfiguration();
   if (config.mode !== "lan" || !config.primary || !config.siteId) return;
-  const event = phase9PosSaleEditEnvelope(evidence);
   const hash = hashEvidence(event);
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('factory-edge-pos-outbox-order'))`);
   await tx.execute(sql`

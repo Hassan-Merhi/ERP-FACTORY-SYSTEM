@@ -25,6 +25,11 @@ import { phase9PosSaleApplyHandler, type Phase9PosSaleEvent } from "../server/ed
 import { phase9PosSaleEditApplyHandler, type Phase9PosSaleEditEvent } from "../server/edge/phase9PosSaleEditApply";
 import { updatePosSale } from "../server/services/pos/edit/updateSaleService";
 import {
+  phase9PosSaleCancelApplyHandler,
+  type Phase9PosSaleCancelEvent,
+} from "../server/edge/phase9PosSaleCancelApply";
+import request from "supertest";
+import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,
 } from "../server/services/security/databaseScopeRuntimeContext";
@@ -385,5 +390,68 @@ describe("Phase 9 offline POS sale cloud replay", () => {
     });
     // Two of the three units came back to stock.
     expect(await stock(ctx.stockItemIds[1])).toBe(before + 2);
+  });
+
+  it("records a sale cancellation on the LAN (sales only) and replays it on the cloud's copy", async () => {
+    const agent = request.agent(ctx.app);
+    await agent.post("/api/auth/login").send({ username: `${PREFIX}_testuser`, password: "testpassword123" });
+    await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId });
+    edge.config = LAN;
+    try {
+      const clientSaleId = randomUUID();
+      const sold = await sale({ clientSaleId });
+      const voucherId = (sold.body as { voucher: { id: number } }).voucher.id;
+      const deleted = await agent.delete(`/api/vouchers/${voucherId}`);
+      expect(deleted.status, JSON.stringify(deleted.body)).toBe(200);
+      const evidence = await pool.query(
+        "SELECT payload FROM factory_edge_pos_outbox WHERE operation_kind = 'pos.sale-cancel.v1' AND local_voucher_id = $1",
+        [voucherId]
+      );
+      expect(evidence.rows[0].payload.voucherRef).toEqual({ clientSaleId, voucherId });
+    } finally {
+      edge.config = CLOUD;
+    }
+
+    const saleEvent = posEvent(10);
+    await replay(saleEvent);
+    const before = await stock(ctx.stockItemIds[1]);
+    const payload = {
+      kind: "pos.sale-cancel.v1",
+      requestId: randomUUID(),
+      companyId: ctx.companyId,
+      actorUserId: ctx.userId,
+      actorUsername: `${PREFIX}_testuser`,
+      localVoucherId: 900100,
+      businessDate: "2026-10-31",
+      voucherRef: { clientSaleId: saleEvent.operationId, voucherId: 900100 },
+    };
+    const cancelEvent = {
+      sequence: "11",
+      operationId: payload.requestId,
+      companyId: ctx.companyId,
+      actorUserId: ctx.userId,
+      kind: payload.kind,
+      localRef: payload.localVoucherId,
+      payload,
+      payloadSha256: hashEvidence(payload),
+    };
+    validatePhase9Event("pos", cancelEvent);
+    await runWithDatabaseScopeRuntimeContext(createTenantDatabaseScope(ctx.companyId), async () => {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const event = cancelEvent as unknown as Phase9PosSaleCancelEvent;
+        await phase9PosSaleCancelApplyHandler.authorize(client, event);
+        const result = await phase9PosSaleCancelApplyHandler.apply(client, event);
+        expect(await phase9PosSaleCancelApplyHandler.verify(client, event, result)).toBe(true);
+        await expect(phase9PosSaleCancelApplyHandler.apply(client, event)).rejects.toThrow(
+          "PHASE9_POS_SALE_ALREADY_CANCELLED"
+        );
+        await client.query("ROLLBACK");
+      } finally {
+        client.release();
+      }
+    });
+    expect(await stock(ctx.stockItemIds[1])).toBe(before);
   });
 });

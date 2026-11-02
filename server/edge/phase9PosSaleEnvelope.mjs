@@ -258,3 +258,53 @@ export function phase9PosSaleEditEnvelope(evidence) {
     },
   };
 }
+
+export const PHASE9_POS_SALE_CANCEL_KIND = "pos.sale-cancel.v1";
+const CANCEL_FIELDS = Object.freeze([
+  "actorUserId",
+  "actorUsername",
+  "businessDate",
+  "companyId",
+  "localVoucherId",
+  "requestId",
+  "voucherRef",
+]);
+
+/** A POS sale cancelled (voucher deleted) on the factory LAN server. */
+export function phase9PosSaleCancelEnvelope(evidence) {
+  if (
+    !evidence ||
+    typeof evidence !== "object" ||
+    Array.isArray(evidence) ||
+    Object.keys(evidence).sort().join(",") !== CANCEL_FIELDS.join(",") ||
+    !ref(evidence.companyId) ||
+    !ref(evidence.localVoucherId) ||
+    typeof evidence.actorUserId !== "string" ||
+    evidence.actorUserId.length < 1 ||
+    evidence.actorUserId.length > 255 ||
+    typeof evidence.actorUsername !== "string" ||
+    evidence.actorUsername.length < 1 ||
+    evidence.actorUsername.length > 255 ||
+    typeof evidence.requestId !== "string" ||
+    !UUID.test(evidence.requestId) ||
+    !validDay(evidence.businessDate) ||
+    !evidence.voucherRef ||
+    typeof evidence.voucherRef !== "object" ||
+    Object.keys(evidence.voucherRef).sort().join(",") !== "clientSaleId,voucherId" ||
+    (evidence.voucherRef.clientSaleId !== null &&
+      (typeof evidence.voucherRef.clientSaleId !== "string" || !UUID.test(evidence.voucherRef.clientSaleId))) ||
+    !ref(evidence.voucherRef.voucherId)
+  ) {
+    throw new Phase9PosSaleRefusal("PHASE9_POS_EVIDENCE_INVALID");
+  }
+  return {
+    kind: PHASE9_POS_SALE_CANCEL_KIND,
+    requestId: evidence.requestId,
+    companyId: evidence.companyId,
+    actorUserId: evidence.actorUserId,
+    actorUsername: evidence.actorUsername,
+    localVoucherId: evidence.localVoucherId,
+    businessDate: evidence.businessDate,
+    voucherRef: { clientSaleId: evidence.voucherRef.clientSaleId, voucherId: evidence.voucherRef.voucherId },
+  };
+}

@@ -119,6 +119,8 @@ export const PHASE9_PAYMENT_RECEIPT_ROUTE = "POST /api/vouchers/payment-receipt"
 // A numeric container id, or the manifest template ":id" (which the route itself rejects as invalid).
 // POS sale edits (returns/corrections): PUT is canonical, PATCH the alias.
 export const PHASE9_POS_SALE_EDIT_PATH = /^\/api\/vouchers\/(?:[1-9][0-9]{0,9}|:id)\/sales$/;
+// POS sale cancellation: the voucher delete route (sales only, checked in the route).
+export const PHASE9_VOUCHER_DELETE_PATH = /^\/api\/vouchers\/(?:[1-9][0-9]{0,9}|:id)$/;
 export const PHASE9_RECEIVING_OFFLOAD_PATH = /^\/api\/containers\/(?:[1-9][0-9]{0,9}|:id)\/offload$/;
 
 // No module without atomic capture and validated replay is implicitly enabled
@@ -156,6 +158,7 @@ export function phase9ApprovedCaptureRoute(method, path) {
   if ((verb === "PUT" || verb === "PATCH") && PHASE9_POS_SALE_EDIT_PATH.test(path)) {
     return `${verb} /api/vouchers/:id/sales`;
   }
+  if (verb === "DELETE" && PHASE9_VOUCHER_DELETE_PATH.test(path)) return "DELETE /api/vouchers/:id";
   return null;
 }
 

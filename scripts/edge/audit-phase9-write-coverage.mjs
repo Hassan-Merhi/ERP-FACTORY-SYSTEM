@@ -73,6 +73,12 @@ const SUPPORTED = new Map([
     policy: "pos.sale-edit.v1",
     limitations: "Compatibility alias of the sale edit (same handler and replay)",
   }],
+  ["DELETE /api/vouchers/:id", {
+    policy: "pos.sale-cancel.v1",
+    limitations:
+      "Offline only for POS sales (other voucher deletes are refused on the LAN); replayed through the same " +
+      "delete code on the sale's stream; a missing or already-cancelled sale is reject-only",
+  }],
   ["POST /api/vouchers/payment-receipt", {
     policy: "voucher.payment-receipt.v1",
     limitations:

@@ -54,3 +54,16 @@ export interface Phase9PosSaleEditEnvelope extends Phase9PosSaleEditEvidence {
   kind: "pos.sale-edit.v1";
 }
 export function phase9PosSaleEditEnvelope(evidence: Phase9PosSaleEditEvidence): Phase9PosSaleEditEnvelope;
+export const PHASE9_POS_SALE_CANCEL_KIND: "pos.sale-cancel.v1";
+export interface Phase9PosSaleCancelEvidence {
+  companyId: number;
+  localVoucherId: number;
+  actorUserId: string;
+  actorUsername: string;
+  requestId: string;
+  businessDate: string;
+  voucherRef: { clientSaleId: string | null; voucherId: number };
+}
+export function phase9PosSaleCancelEnvelope(
+  evidence: Phase9PosSaleCancelEvidence
+): Phase9PosSaleCancelEvidence & { kind: "pos.sale-cancel.v1" };

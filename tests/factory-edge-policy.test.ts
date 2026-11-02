@@ -142,6 +142,9 @@ describe("factory LAN edge deployment policy", () => {
       for (const verb of ["POST", "DELETE"]) {
         expect(edgeBlocksWrite(config, verb, "/api/vouchers/42/sales")).toBe(true);
       }
+      // POS sale cancellation: DELETE of a voucher (the route itself refuses non-sales).
+      expect(edgeBlocksWrite(config, "DELETE", "/api/vouchers/42")).toBe(mode === "read-only");
+      expect(edgeBlocksWrite(config, "PUT", "/api/vouchers/42")).toBe(true);
       for (const path of [
         "/api/factory/pressing-machines/void",
         "/api/pos/retail/sales",
