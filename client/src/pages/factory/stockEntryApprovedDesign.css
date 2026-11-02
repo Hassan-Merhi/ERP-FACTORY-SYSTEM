@@ -59,11 +59,6 @@
       linear-gradient(135deg, rgb(16 185 129 / .07), var(--entry-panel) 67%);
     box-shadow: var(--entry-glow), inset 0 1px rgb(255 255 255 / .065);
   }
-  /* The result list lives in an isolated stacking context. Raise that panel
-     only while matches are visible so the cart below cannot cover suggestions. */
-  .bale-entry-refresh .stock-entry-scan-shell:has(.stock-entry-results) {
-    z-index: 10;
-  }
   .bale-entry-refresh .stock-entry-scan-shell::before {
     content: "";
     pointer-events: none;
