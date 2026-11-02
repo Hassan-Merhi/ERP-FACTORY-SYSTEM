@@ -93,12 +93,12 @@ export default function FactoryWorkersHub() {
     <Tabs value={tab} onValueChange={(value) => setTab(value as TabValue)}>
       <div className="erp-mobile-scroll-tabs mb-4 pb-1">
         <TabsList
-          className="w-max min-w-full sm:min-w-0 sm:w-fit"
+          className="w-max min-w-full rounded-xl border border-slate-200 bg-slate-100/80 p-1 shadow-sm sm:min-w-0 sm:w-fit dark:border-blue-900/60 dark:bg-[#121f34]"
           aria-label="Worker sections"
           data-testid="tabs-workers-section"
         >
           {visibleOptions.map(({ value, label, icon: ItemIcon }) => (
-            <TabsTrigger key={value} value={value} data-testid={`tab-workers-${value}`}>
+            <TabsTrigger key={value} value={value} data-testid={`tab-workers-${value}`} className="gap-2 rounded-lg px-4 py-2 font-semibold transition-colors data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-[0_3px_12px_rgba(37,99,235,0.3)] dark:data-[state=active]:bg-blue-600 dark:data-[state=active]:text-white">
               <ItemIcon className="h-4 w-4 shrink-0" />
               {label}
             </TabsTrigger>
