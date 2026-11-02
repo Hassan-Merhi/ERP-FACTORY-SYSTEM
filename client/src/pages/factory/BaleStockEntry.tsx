@@ -13,6 +13,7 @@ import FactoryProductionTargets from "./FactoryProductionTargets";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translateFactoryStaffTrackingText } from "@/i18n/factoryStaffTrackingTranslations";
 import "./factoryTrackingModern.css";
+import "./baleStockEntryRefresh.css";
 
 import { StockEntryTab } from "./bale-stock-entry/StockEntryTab";
 import { DailyStockSummary } from "./bale-stock-entry/DailyStockSummary";
@@ -112,8 +113,8 @@ export default function BaleStockEntry() {
   }
 
   return (
-    <FactoryMobilePage>
-      <FactoryMobileHeader>
+    <FactoryMobilePage className="bale-entry-refresh">
+      <FactoryMobileHeader className="bale-entry-header">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-500/25 bg-linear-to-br from-emerald-500/30 to-emerald-600/10">
             <ScanLine className="h-5 w-5 text-emerald-500" />
@@ -148,33 +149,33 @@ export default function BaleStockEntry() {
         className="min-w-0"
       >
         <div className="erp-mobile-scroll-tabs pb-1">
-          <TabsList aria-label="Bale stock entry sections" className="w-max min-w-full rounded-2xl border border-border/70 bg-card/70 p-1 sm:min-w-0 sm:w-fit">
+          <TabsList aria-label="Bale stock entry sections" className="bale-entry-tabs-list w-max min-w-full sm:min-w-0 sm:w-fit">
             {showEntry && (
-              <TabsTrigger value="entry" data-testid="tab-stock-entry">
+              <TabsTrigger value="entry" data-testid="tab-stock-entry" className="bale-entry-tab">
                 <ScanLine className="mr-1 h-4 w-4" />
                 Stock Entry
               </TabsTrigger>
             )}
             {showGroundScan && (
-              <TabsTrigger value="ground-scan" data-testid="tab-ground-scan">
+              <TabsTrigger value="ground-scan" data-testid="tab-ground-scan" className="bale-entry-tab">
                 <ScanLine className="mr-1 h-4 w-4" />
                 Ground Scan
               </TabsTrigger>
             )}
             {showDailyScan && (
-              <TabsTrigger value="daily-scan" data-testid="tab-daily-scan">
+              <TabsTrigger value="daily-scan" data-testid="tab-daily-scan" className="bale-entry-tab">
                 <CalendarDays className="mr-1 h-4 w-4" />
                 Daily Scan
               </TabsTrigger>
             )}
             {showPressingMachines && (
-              <TabsTrigger value="pressing-machines" data-testid="tab-pressing-machines" className="rounded-xl px-4 data-[state=active]:bg-blue-600 data-[state=active]:font-bold data-[state=active]:text-white">
+              <TabsTrigger value="pressing-machines" data-testid="tab-pressing-machines" className="bale-entry-tab">
                 <Cog className="mr-1 h-4 w-4" />
                 Pressing Machines
               </TabsTrigger>
             )}
             {showProductionTargets && (
-              <TabsTrigger value="production-targets" data-testid="tab-production-targets">
+              <TabsTrigger value="production-targets" data-testid="tab-production-targets" className="bale-entry-tab">
                 <Target className="mr-1 h-4 w-4" />
                 {tr("productionTargets")}
               </TabsTrigger>
