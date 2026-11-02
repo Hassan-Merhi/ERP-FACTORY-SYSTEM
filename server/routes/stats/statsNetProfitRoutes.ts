@@ -70,7 +70,9 @@ export function registerStatsNetProfitRoutes(app: Express) {
       // grouped balance maps - are loaded in ./netProfitDataLoad.
       const [netPositionCurrency, reportData, companySettings] = await Promise.all([
         getNetPositionCurrencySummary(companyId, toDate),
-        loadNetProfitData(companyId, toDate),
+        // Live P&L is as-of the Beirut business day. All-time supplier/creditor
+        // and balance-sheet maps remain unchanged in the data loader.
+        loadNetProfitData(companyId, toDate, businessToday),
         storage.getCompanySettings(companyId),
       ]);
       const { companyRecord, companyAccounts, companyBaseCurrency, accountBalances, profitAndLossBalances } =
