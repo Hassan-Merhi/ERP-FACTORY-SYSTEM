@@ -7,7 +7,7 @@
  * overlays, bale panel, setup card, progress panel and dialogs are separate
  * views in the same folder.
  */
-import { CheckCircle, Clock, Container, Package, Save, Scale, ScanLine } from "lucide-react";
+import { CheckCircle, Clock, Container, Package, Save, Scale } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatNumber } from "./customerLoadingFormat";
