@@ -181,6 +181,8 @@
 
   .bale-stock-entry-modern [data-factory-daily-summary] strong {
     letter-spacing: -.03em;
+  }
+  .bale-stock-entry-modern [data-factory-daily-summary] > div:nth-child(2) > div > div:first-child strong {
     color: var(--bse-text);
   }
   .bale-stock-entry-modern [data-factory-daily-summary] .text-muted-foreground {
