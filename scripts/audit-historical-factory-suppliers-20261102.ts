@@ -19,6 +19,7 @@ import { classifyFreightOffsetEvidence } from "./historical-supplier-freight-off
 import { previewHistoricalChargesPeriodNeutrality, type HistoricalClearingPeriodRow } from "./historical-charges-period-neutral-preflight";
 import { inspectHistoricalPostOffloadLink, type HistoricalPostOffloadLink } from "./historical-post-offload-voucher-source-audit";
 import { assessPostOffloadDuplicateSource, type PostOffloadDuplicateSourceReview } from "./historical-freight-batch-replay-guard";
+import { previewCharge64CreditorImpact } from "./historical-charge64-creditor-impact-preview";
 
 const COMPANY = 12;
 const EXPECTED_GOODS = 38;
@@ -454,6 +455,116 @@ export async function auditHistoricalFactorySuppliers() {
       ].join("\n"), [COMPANY]
     )).rows[0];
 
+    // Single-source case: a real, subsequently deleted Oct-14 correction
+    // would have changed a named creditor's liability, not a supplier party.
+    // Model that creditor and P&L impact as a counterfactual; no GL writes.
+    const creditorAccounts = (await client.query<SqlRow>(
+      [
+        "SELECT a.code,a.account_type,a.opening_balance::text,a.opening_balance_side,",
+        "COALESCE(SUM(e.debit_amount),0)::text AS posted_dr,",
+        "COALESCE(SUM(e.credit_amount),0)::text AS posted_cr",
+        "FROM ledger_accounts a LEFT JOIN voucher_entries e ON e.ledger_account_id=a.id",
+        "LEFT JOIN vouchers v ON v.id=e.voucher_id AND v.company_id=$1",
+        "AND v.deleted_at IS NULL AND COALESCE(v.optional,false)=false",
+        "WHERE a.company_id=$1 AND a.code='WALMDACLE' AND a.deleted_at IS NULL",
+        "AND (e.id IS NULL OR v.id IS NOT NULL)",
+        "GROUP BY a.code,a.account_type,a.opening_balance,a.opening_balance_side",
+      ].join("\n"), [COMPANY]
+    )).rows;
+    const creditor = creditorAccounts[0];
+    if (!creditor || creditorAccounts.length !== 1) throw new Error("WALMDACLE creditor ledger missing/ambiguous");
+
+    const charge64Vouchers = (await client.query<SqlRow>(
+      [
+        "SELECT v.id,v.voucher_number,v.total_amount::text AS total_amount,",
+        "v.deleted_at::text AS deleted_at,COUNT(e.id)::int AS lines,",
+        "COALESCE(SUM(CASE WHEN e.ledger_account_id=a_creditor.id THEN e.credit_amount ELSE 0 END),0)::text AS creditor_credit,",
+        "COALESCE(SUM(CASE WHEN e.ledger_account_id=a_creditor.id THEN e.debit_amount ELSE 0 END),0)::text AS creditor_debit,",
+        "COALESCE(SUM(CASE WHEN e.ledger_account_id=a_clearing.id THEN e.debit_amount ELSE 0 END),0)::text AS clearing_debit,",
+        "COALESCE(SUM(CASE WHEN e.ledger_account_id=a_clearing.id THEN e.credit_amount ELSE 0 END),0)::text AS clearing_credit",
+        "FROM vouchers v JOIN voucher_entries e ON e.voucher_id=v.id",
+        "JOIN ledger_accounts a_creditor ON a_creditor.company_id=$1 AND a_creditor.code='WALMDACLE'",
+        "JOIN ledger_accounts a_clearing ON a_clearing.company_id=$1 AND a_clearing.code='FACTORY_CHARGES_PAYABLE'",
+        "WHERE v.company_id=$1 AND v.id IN(9309,9341,15976)",
+        "GROUP BY v.id,v.voucher_number,v.total_amount,v.deleted_at ORDER BY v.id",
+      ].join("\n"), [COMPANY]
+    )).rows;
+    const charge64VoucherMap = new Map(charge64Vouchers.map((row) => [num(row.id),row]));
+    const extraCharge = charge64VoucherMap.get(9309);
+    const retainedCharge = charge64VoucherMap.get(9341);
+    const retiredCorrection = charge64VoucherMap.get(15976);
+    if (!extraCharge || !retainedCharge || !retiredCorrection) throw new Error("Charge #64 historical voucher proof missing");
+    if (num(extraCharge.lines)!==2 || num(retainedCharge.lines)!==2 ||
+        num(retiredCorrection.lines)!==2 ||
+        extraCharge.deleted_at != null || retainedCharge.deleted_at != null ||
+        retiredCorrection.deleted_at == null ||
+        !money(extraCharge.creditor_credit).eq(extraCharge.total_amount) ||
+        !money(retainedCharge.creditor_credit).eq(retainedCharge.total_amount) ||
+        !money(retiredCorrection.creditor_debit).eq(retiredCorrection.total_amount) ||
+        !money(retiredCorrection.clearing_credit).eq(retiredCorrection.total_amount)) {
+      throw new Error("Charge #64 posting and retired correction no longer match independently verified GL legs");
+    }
+
+    const daybook64 = (await client.query<SqlRow>(
+      "SELECT id,reference_id,amount_usd::text,amount_currency::text,meta_json " +
+      "FROM factory_daybook_entries WHERE company_id=$1 AND id=14136 AND reference_id=83 AND tx_type='OTHER_CHARGE'",
+      [COMPANY]
+    )).rows[0];
+    if (!daybook64 || !String(daybook64.meta_json).includes('"chargeId":64')) {
+      throw new Error("Charge 64 daybook evidence changed; cannot simulate correction");
+    }
+
+    const audit64 = (await client.query<SqlRow>(
+      [
+        "SELECT COUNT(*) FILTER(WHERE record_id=9309 AND action='update'",
+        "AND changes->'amount'->>'new'='1692.96')::int AS amount_edits,",
+        "COUNT(*) FILTER(WHERE record_id=15976 AND action='delete')::int AS delete_events,",
+        "MAX(reason) FILTER(WHERE record_id=15976 AND action='delete') AS delete_reason",
+        "FROM audit_log WHERE company_id=$1 AND table_name='vouchers' AND record_id IN(9309,15976)",
+      ].join("\n"), [COMPANY]
+    )).rows[0];
+    const latestCreditorPayment = (await client.query<SqlRow>(
+      [
+        "SELECT v.voucher_date::text AS payment_date,e.debit_amount::text AS payment_amount",
+        "FROM voucher_entries e JOIN vouchers v ON v.id=e.voucher_id",
+        "WHERE e.company_id=$1 AND e.ledger_account_id=(SELECT id FROM ledger_accounts",
+        "WHERE company_id=$1 AND code='WALMDACLE')",
+        "AND v.company_id=$1 AND v.deleted_at IS NULL AND COALESCE(v.optional,false)=false",
+        "AND e.debit_amount>0 AND v.description ILIKE '%WALID%'",
+        "ORDER BY v.voucher_date DESC,v.id DESC LIMIT 1",
+      ].join("\n"), [COMPANY]
+    )).rows[0];
+    const fiscalCloseEvidence = (await client.query<SqlRow>(
+      "SELECT COUNT(*)::int AS reviewed_closures FROM accounting_fiscal_reviewed_closures WHERE company_id=$1",
+      [COMPANY]
+    )).rows[0];
+    const charge64CreditorImpactPreview = previewCharge64CreditorImpact({
+      creditorAccountCode: String(creditor.code),
+      creditorAccountType: String(creditor.account_type),
+      creditorPostedDebitUsd: String(creditor.posted_dr),
+      creditorPostedCreditUsd: String(creditor.posted_cr),
+      creditorOpeningBalanceUsd: String(creditor.opening_balance),
+      creditorOpeningBalanceSide: creditor.opening_balance_side==null ? null : String(creditor.opening_balance_side),
+      factoryClearingAccountCode: String(payableAccount.code),
+      factoryClearingAccountType: String(payableAccount.accountType),
+      factoryClearingPostedDebitUsd: String(payableAccount.debitUsd),
+      daybookNativeAmountUsd: String(daybook64.amount_usd),
+      retainedVoucherId: num(retainedCharge.id),
+      retainedVoucherNativeAmountUsd: String(retainedCharge.total_amount),
+      retainedCreditorCreditUsd: String(retainedCharge.creditor_credit),
+      extraVoucherId: num(extraCharge.id),
+      extraVoucherNativeAmountUsd: String(extraCharge.total_amount),
+      extraCreditorCreditUsd: String(extraCharge.creditor_credit),
+      priorCorrectionVoucherId: num(retiredCorrection.id),
+      priorCorrectionDeletedAt: String(retiredCorrection.deleted_at),
+      correctionDeletedAuditEventCount: num(audit64?.delete_events),
+      correctionDeletionReason: audit64?.delete_reason == null ? null : String(audit64.delete_reason),
+      originalAmountEditAuditEventCount: num(audit64?.amount_edits),
+      latestCreditorPaymentDate: latestCreditorPayment?.payment_date == null ? null : String(latestCreditorPayment.payment_date),
+      latestCreditorPaymentAmountUsd: latestCreditorPayment?.payment_amount == null ? null : String(latestCreditorPayment.payment_amount),
+      fiscalReviewedCloseCount: num(fiscalCloseEvidence?.reviewed_closures),
+    });
+
     const businessDate = factoryBusinessDateInBeirut(new Date());
     const lineageCoverage = {
       factoryBaleCount: num(baleLineage?.factory_bale_count),
@@ -617,6 +728,7 @@ export async function auditHistoricalFactorySuppliers() {
       accountClassificationAudit: {
         accounts: accountClassificationAudit,
         clearingPeriodNeutralityPreview,
+        charge64CreditorImpactPreview,
         postOffloadSourceEvidence: {
           activePocVouchers: postOffloadSourceLinks.length,
           sourceMatched: postOffloadSourceLinks.filter((row) => row.status === "SOURCE_IDENTITY_MATCHED").length,
