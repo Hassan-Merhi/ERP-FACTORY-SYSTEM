@@ -144,7 +144,7 @@ async function recordOne(page, id, tour) {
         // Never click Save, Finalize, Approve, Delete, Pay or other write controls.
         if (i === 1) {
           const tabs = await page.$("[role=tab]:not([aria-selected=true]):not([disabled])");
-          if (tabs.length) {
+          if (tabs.length > 0) {
             await tabs[0].click().catch(() => undefined);
           }
         }

@@ -30,7 +30,7 @@ export default function HelpTraining({ mode, role, accessKeys, fullAccess = fals
   const categories = ["All topics", ...new Set(visible.map((topic) => topic.category))];
   const home = mode === "factory" ? "/factory/production-report" : "/tracking";
   const videoUrl = active ? publishedTrainingVideos[active.id] : undefined;
-  const supportedVideo = videoUrl && (/^https:\/\//.test(videoUrl) || videoUrl.startsWith("/training-media/"));
+  const supportedVideo = videoUrl && videoUrl.startsWith("/api/training/media/");
 
   return (
     <main className="mx-auto w-full max-w-7xl space-y-6 px-4 py-5 sm:px-7" data-testid="help-training">
