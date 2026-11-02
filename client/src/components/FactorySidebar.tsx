@@ -322,6 +322,7 @@ export function FactorySidebar({
         )}
 
         <div className="mt-4 pt-3 border-t border-sidebar-border/60 space-y-0.5">
+          <SidebarFlatLink href="/factory/help-training" icon={BookOpen} label="Help & Training" testId="link-factory-help-training" />
           {isDeveloper && (
             <SidebarFlatLink
               href="/factory/spreadsheet"
