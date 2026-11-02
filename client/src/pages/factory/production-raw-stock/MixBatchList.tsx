@@ -141,22 +141,22 @@ export function MixBatchList({
   const blendedCost = sumTotal > 0 ? weightedCost / sumTotal : 0;
 
   return (
-    <Card className="min-w-0 shadow-xs" data-testid="mix-batch-list">
-      <CardHeader className="flex flex-col gap-4 pb-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+    <Card className="min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm" data-testid="mix-batch-list">
+      <CardHeader className="flex flex-col gap-4 border-b border-border/50 bg-linear-to-r from-amber-50/55 via-card to-card p-4 dark:from-amber-500/5 dark:via-card dark:to-card sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:p-5">
         <div className="min-w-0 space-y-1">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Layers className="h-4.5 w-4.5 shrink-0 text-amber-500" />
+          <CardTitle className="flex items-center gap-2.5 text-lg font-bold tracking-tight sm:text-xl">
+            <Layers className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
             Recent Mix Batches
           </CardTitle>
           <p className="text-xs text-muted-foreground">Historical list of blends and their cost origins</p>
         </div>
 
-        <div className="grid w-full grid-cols-1 gap-2 rounded-lg border border-border/50 bg-muted/50 p-2 min-[420px]:grid-cols-[minmax(0,1fr)_auto] sm:w-auto sm:p-1">
+        <div className="grid w-full grid-cols-1 gap-2 rounded-xl border border-border/70 bg-muted/30 p-2 shadow-sm min-[420px]:grid-cols-[minmax(0,1fr)_auto] sm:w-auto sm:p-1.5">
           <input
             type="date"
             value={mixBatchDate}
             onChange={(e) => setMixBatchDate(e.target.value)}
-            className="min-h-11 min-w-0 w-full rounded-md border border-input bg-background px-2 py-1 text-base font-medium outline-hidden focus:ring-1 focus:ring-ring sm:min-h-0 sm:w-auto sm:border-none sm:bg-transparent sm:text-sm sm:focus:ring-0"
+            className="min-h-11 min-w-0 w-full rounded-lg border border-input bg-background px-3 py-1 text-base font-semibold outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9 sm:w-auto sm:text-sm"
             data-testid="input-mix-batch-date"
           />
           <Button
@@ -165,7 +165,7 @@ export function MixBatchList({
             onClick={onSendWhatsApp}
             disabled={isSendingWhatsApp || reportLoading || reportAllocations === null || mixBatchesByDate.length === 0}
             data-testid="button-send-mix-batch-whatsapp"
-            className="h-11 w-full gap-2 sm:h-8 sm:w-auto"
+            className="h-11 w-full gap-2 rounded-lg border-border/80 bg-card font-medium shadow-sm sm:h-9 sm:w-auto"
           >
             {isSendingWhatsApp ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -182,7 +182,7 @@ export function MixBatchList({
               value={exportPeriod}
               onChange={(event) => setExportPeriod(event.target.value as "month" | "all-time")}
               aria-label="Excel cost report period"
-              className="h-10 min-w-0 rounded-md border border-input bg-background px-2 text-sm font-medium"
+              className="h-10 min-w-0 rounded-xl border border-input bg-background px-3 text-sm font-semibold shadow-sm"
               data-testid="select-mix-batch-export-period"
             >
               <option value="month">Selected Month</option>
@@ -194,7 +194,7 @@ export function MixBatchList({
                 value={exportMonth}
                 onChange={(event) => setExportMonth(event.target.value)}
                 aria-label="Excel dashboard month"
-                className="h-10 min-w-0 rounded-md border border-input bg-background px-2 text-sm font-medium sm:w-36"
+                className="h-10 min-w-0 rounded-xl border border-input bg-background px-3 text-sm font-semibold shadow-sm sm:w-40"
                 data-testid="input-mix-batch-export-month"
               />
             )}
@@ -203,7 +203,7 @@ export function MixBatchList({
               size="sm"
               onClick={handleExportExcel}
               disabled={isLoading || isExportingExcel || mixBatches.length === 0 || (exportPeriod === "month" && !exportMonth)}
-              className="h-10 gap-2 border-emerald-500/40 font-semibold text-emerald-700 dark:text-emerald-300"
+              className="h-10 gap-2 rounded-xl border-emerald-500/40 bg-emerald-500/5 font-bold text-emerald-700 shadow-sm hover:bg-emerald-500/10 dark:text-emerald-300"
               data-testid="button-export-mix-batch-cost-excel"
             >
               {isExportingExcel ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
@@ -225,7 +225,7 @@ export function MixBatchList({
         />
       </CardHeader>
 
-      <CardContent className="min-w-0">
+      <CardContent className="min-w-0 p-4 sm:p-5">
         {isLoading ? (
           <div className="space-y-2">
             <Skeleton className="h-12 w-full" />
@@ -235,7 +235,7 @@ export function MixBatchList({
         ) : mixBatches.length > 0 ? (
           <>
             <div className="space-y-3 md:hidden phone-land:block" data-testid="mix-batch-mobile-list">
-              <div className="grid grid-cols-2 gap-2 rounded-xl border bg-muted/30 p-3">
+              <div className="grid grid-cols-2 gap-2 rounded-xl border border-border/60 bg-muted/25 p-3">
                 <div>
                   <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Total Weight</div>
                   <div className="mt-0.5 font-mono text-sm font-bold" data-testid="text-mix-mobile-summary-total">
@@ -266,7 +266,7 @@ export function MixBatchList({
                 return (
                   <div
                     key={`mobile-${batch.id}`}
-                    className="rounded-xl border bg-card p-3 shadow-xs"
+                    className="rounded-2xl border border-border/70 bg-card p-3 shadow-sm"
                     data-testid={`card-mix-batch-mobile-${batch.id}`}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -342,9 +342,9 @@ export function MixBatchList({
               )}
             </div>
 
-            <div className="hidden overflow-x-auto md:block phone-land:hidden">
+            <div className="hidden overflow-x-auto rounded-xl border border-border/70 md:block phone-land:hidden">
               <Table>
-                <TableHeader>
+                <TableHeader className="bg-slate-100/80 dark:bg-slate-800/70">
                   <TableRow>
                     <TableHead className="min-w-40">Batch Code</TableHead>
                     <TableHead>Name</TableHead>
@@ -358,7 +358,7 @@ export function MixBatchList({
                   {visibleMixBatches.map((batch) => {
                     const total = parseFloat(batch.totalWeightKg) || 0;
                     return (
-                      <TableRow key={batch.id} data-testid={`row-mix-batch-${batch.id}`}>
+                      <TableRow key={batch.id} className="even:bg-muted/15 transition-colors hover:bg-blue-50/50 dark:hover:bg-blue-400/5" data-testid={`row-mix-batch-${batch.id}`}>
                         <TableCell
                           className="font-mono font-medium text-sm cursor-pointer hover:underline text-primary"
                           onClick={() => onViewDetail(batch)}
@@ -422,7 +422,7 @@ export function MixBatchList({
                     </tr>
                   </tbody>
                 )}
-                <tfoot className="border-t-2 border-border bg-muted/40">
+                <tfoot className="border-t-2 border-border bg-slate-100/60 dark:bg-slate-800/50">
                   <TableRow className="hover:bg-transparent">
                     <TableCell colSpan={3} className="px-4 py-3 text-sm font-semibold text-foreground">
                       Combined Total

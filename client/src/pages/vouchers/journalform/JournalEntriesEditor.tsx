@@ -281,7 +281,7 @@ export function JournalEntriesEditor({ model }: { model: Model }) {
         )}
       </div>
 
-      <div className="hidden sm:block border rounded-xl overflow-hidden overflow-x-auto">
+      <div className="voucher-journal-table hidden sm:block border rounded-xl overflow-hidden overflow-x-auto">
         <table className="w-full min-w-[500px]">
           <thead className="bg-muted/40">
             <tr className="h-9">
@@ -544,7 +544,7 @@ export function JournalEntriesEditor({ model }: { model: Model }) {
         </table>
       </div>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="voucher-journal-summary flex flex-wrap gap-3">
         <div className="rounded-lg border bg-muted/40 px-4 py-2 flex flex-col gap-0.5">
           <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Total Debit</span>
           <span className="text-sm font-semibold font-mono text-emerald-600 dark:text-emerald-400">
@@ -595,7 +595,7 @@ export function JournalEntriesEditor({ model }: { model: Model }) {
         )}
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="voucher-journal-actions flex flex-wrap items-center justify-between gap-3">
         <FormField
           control={journalForm.control}
           name="optional"
@@ -641,6 +641,7 @@ export function JournalEntriesEditor({ model }: { model: Model }) {
             <Button
               type="submit"
               disabled={journalMutation.isPending || Math.abs(totalDebit - totalCredit) > 0.01}
+              className="voucher-journal-save-button"
               data-testid="button-save-journal-voucher"
             >
               {journalMutation.isPending ? "Saving..." : "Save Journal Voucher"}

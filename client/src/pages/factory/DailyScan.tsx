@@ -71,13 +71,13 @@ function StatusBadge({
   isInLoadingOrder: boolean;
   isDeleted: boolean;
 }) {
-  if (isDeleted) return <Badge className="bg-red-600 text-white border-0">Deleted</Badge>;
+  if (isDeleted) return <Badge className="daily-scan-status bg-red-600 text-white border-0">Deleted</Badge>;
   const s = (status || "").toUpperCase();
   if (isInLoadingOrder || s === "LOADING" || s === "LOADED")
-    return <Badge className="bg-amber-500 text-white border-0">Pending Loading</Badge>;
-  if (s === "IN_STOCK") return <Badge className="bg-green-600 text-white border-0">In Stock</Badge>;
-  if (s === "SOLD") return <Badge className="bg-red-600 text-white border-0">Sold</Badge>;
-  if (s === "RESERVED_FOR_ORDER") return <Badge className="bg-blue-600 text-white border-0">Reserved</Badge>;
+    return <Badge className="daily-scan-status bg-amber-500 text-white border-0">Pending Loading</Badge>;
+  if (s === "IN_STOCK") return <Badge className="daily-scan-status bg-green-600 text-white border-0">In Stock</Badge>;
+  if (s === "SOLD") return <Badge className="daily-scan-status bg-red-600 text-white border-0">Sold</Badge>;
+  if (s === "RESERVED_FOR_ORDER") return <Badge className="daily-scan-status bg-blue-600 text-white border-0">Reserved</Badge>;
   return <Badge variant="outline">{status || "—"}</Badge>;
 }
 
@@ -351,9 +351,9 @@ export default function DailyScan() {
   };
 
   return (
-    <div className="space-y-4 pt-4 relative">
+    <div className="daily-scan-modern space-y-4 pt-4 relative">
       {/* ── Date navigation ── */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="daily-scan-toolbar flex items-center gap-2 flex-wrap">
         <Button
           variant="outline"
           size="icon"
@@ -363,7 +363,7 @@ export default function DailyScan() {
           <ChevronLeft className="h-4 w-4" />
         </Button>
 
-        <div className="flex items-center gap-1.5 border rounded-md px-2 py-1">
+        <div className="daily-scan-date flex items-center gap-1.5 border rounded-md px-2 py-1">
           <CalendarDays className="h-4 w-4 text-muted-foreground" />
           <input
             type="date"
@@ -402,7 +402,7 @@ export default function DailyScan() {
               {scanned.length}/{totalBales} verified · {formatNumber(scannedKg)}/{formatNumber(totalKg)} kg
             </span>
           )}
-          <Button variant="outline" size="sm" onClick={handleExport} data-testid="button-daily-scan-export">
+          <Button className="daily-scan-export" variant="outline" size="sm" onClick={handleExport} data-testid="button-daily-scan-export">
             <Download className="h-4 w-4 mr-1" />
             Export
           </Button>
@@ -410,19 +410,19 @@ export default function DailyScan() {
       </div>
 
       {/* ── Scan input ── */}
-      <div className="flex gap-2">
+      <div className="daily-scan-scanner flex gap-2">
         <Input
           ref={scanRef}
           value={scanInput}
           onChange={(e) => setScanInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleScan()}
           placeholder="Scan bale ref code / barcode…"
-          className="font-mono"
+          className="daily-scan-input font-mono"
           data-testid="input-daily-scan-ref"
           disabled={scanning}
         />
         <MobileBarcodeScanner onScan={(code) => void handleScan(code)} disabled={scanning} />
-        <Button onClick={() => void handleScan()} disabled={scanning || !scanInput.trim()} data-testid="button-daily-scan-submit">
+        <Button className="daily-scan-submit" onClick={() => void handleScan()} disabled={scanning || !scanInput.trim()} data-testid="button-daily-scan-submit">
           {scanning ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
@@ -445,7 +445,7 @@ export default function DailyScan() {
         <div className="space-y-4">
           {/* ── All-done banner ── */}
           {allDone && (
-            <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/40 px-4 py-3 text-sm text-green-800 dark:text-green-300">
+            <div className="daily-scan-success flex items-center gap-2 rounded-md border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/40 px-4 py-3 text-sm text-green-800 dark:text-green-300">
               <CheckCircle2 className="h-4 w-4 shrink-0" />
               All {totalBales} bales verified for {formatDisplay(selectedDate)}
             </div>
@@ -454,13 +454,13 @@ export default function DailyScan() {
           {/* ── Unscanned section (top) ── */}
           {unscanned.length > 0 && (
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
+              <div className="daily-scan-alert flex items-center gap-2">
                 <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
                 <span className="text-sm font-medium">
                   Unverified — {unscanned.length} bale{unscanned.length !== 1 ? "s" : ""} remaining
                 </span>
               </div>
-              <div className="rounded-md border overflow-x-auto">
+              <div className="daily-scan-table rounded-md border overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -526,7 +526,7 @@ export default function DailyScan() {
               <button
                 type="button"
                 onClick={() => setShowScanned((v) => !v)}
-                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                className="daily-scan-scanned-toggle flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
                 data-testid="button-toggle-scanned-section"
               >
                 {showScanned ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -535,7 +535,7 @@ export default function DailyScan() {
               </button>
 
               {showScanned && (
-                <div className="rounded-md border opacity-80 overflow-x-auto">
+                <div className="daily-scan-table daily-scan-table-completed rounded-md border opacity-80 overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>

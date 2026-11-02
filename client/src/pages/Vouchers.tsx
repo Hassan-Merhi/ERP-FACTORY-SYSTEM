@@ -16,6 +16,7 @@ import { ReceiptVoucherTab } from "@/components/vouchers/ReceiptVoucherTab";
 import { CreditNoteTab } from "@/components/vouchers/CreditNoteTab";
 import { CreateAccountModal } from "@/components/vouchers/CreateAccountModal";
 import { PageHeader } from "@/components/PageHeader";
+import "@/pages/vouchers/voucher-premium.css";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -601,11 +602,11 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   };
 
   return (
-    <div className="space-y-4 md:space-y-5">
+    <div className={`space-y-4 md:space-y-5 ${!isPOS && (activeTab === "payment" || activeTab === "receipt" || activeTab === "journal") ? `voucher-workspace voucher-workspace--${activeTab}` : ""}`}>
       {isPOS ? (
         <PageHeader title="Stock Transfer" subtitle="Transfer stock between locations" />
       ) : !isFactoryMode ? (
-        <PageHeader title="Vouchers" />
+        <PageHeader title="Vouchers" subtitle="Create and manage payment, receipt, and journal entries" />
       ) : (
         <div className="flex items-start justify-between gap-3 pb-4 border-b">
           <div>

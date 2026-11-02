@@ -518,6 +518,35 @@ describe("customer loading intelligence route", () => {
       expect(savedFields.verifiedAt.toISOString()).toBe("2026-10-15T12:00:00.000Z");
     });
 
+    it("allows an explicitly changed date on a reopened reusable-proforma loading", async () => {
+      const firstCompletedAt = new Date("2026-10-10T12:00:00.000Z");
+      setup({ order: { ...order, loadingFinalizedAt: firstCompletedAt } });
+      const response = resHarness();
+      await routes.get("POST /api/factory/customer-orders/:id/finalize-loading")!(
+        req({ body: { txDate: "2026-11-01", overrideLoadingDate: true }, params: { id: "10" } }),
+        response
+      );
+
+      expect(response.statusCode).toBe(200);
+      const savedFields = harness.db.update.mock.results
+        .flatMap((result: any) => result.value.set.mock.calls.map(([fields]: any[]) => fields))
+        .find((fields: any) => "loadingFinalizedAt" in fields);
+      expect(savedFields.loadingFinalizedAt.toISOString()).toBe("2026-11-01T12:00:00.000Z");
+      expect(savedFields.verifiedAt.toISOString()).toBe("2026-11-01T12:00:00.000Z");
+    });
+
+    it("rejects a requested date override without a date", async () => {
+      const response = resHarness();
+      await routes.get("POST /api/factory/customer-orders/:id/finalize-loading")!(
+        req({ body: { overrideLoadingDate: true }, params: { id: "10" } }),
+        response
+      );
+
+      expect(response.statusCode).toBe(400);
+      expect(response.body.message).toMatch(/Select a loading date/);
+      expect(harness.db.update).not.toHaveBeenCalled();
+    });
+
     it("does not leave a finalized order or carried-over proforma after a transaction error", async () => {
       setup();
       harness.db.transaction.mockRejectedValueOnce(new Error("daybook write failed"));

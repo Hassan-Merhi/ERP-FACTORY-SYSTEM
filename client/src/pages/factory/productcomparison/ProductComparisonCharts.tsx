@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { memo, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { AlertTriangle, ArrowLeftRight, BarChart3, CalendarDays, Package, Scale, X } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, BarChart3, CalendarDays, Layers3, Package, Scale, TrendingDown, TrendingUp, X } from "lucide-react";
 
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { getFactoryProductComparisonCopy } from "@/i18n/factoryProductComparisonTranslations";
@@ -30,6 +30,7 @@ import {
   type ComparisonRange,
   type ProductComparisonPeriod,
 } from "./utils";
+import "./product-comparison-premium.css";
 
 type Metric = "bales" | "weight";
 
@@ -113,13 +114,27 @@ function formatRangeLabel(range: ComparisonRange, period: ProductComparisonPerio
   return `${formatter.format(from)} – ${formatter.format(to)}`;
 }
 
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+type StatKind = "products" | "selected" | "compared" | "difference";
+type StatTone = "violet" | "blue" | "green" | "rose";
+
+function Stat({ label, value, sub, kind, tone }: {
+  label: string;
+  value: string;
+  sub?: string;
+  kind: StatKind;
+  tone: StatTone;
+}) {
+  const Icon = kind === "products" ? Layers3 : kind === "selected" ? Package : kind === "compared" ? TrendingUp : TrendingDown;
+
   return (
-    <Card className="min-w-0">
-      <CardContent className="p-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-        <p className="mt-1 wrap-break-word text-xl font-bold tabular-nums">{value}</p>
-        {sub ? <p className="mt-1 wrap-break-word text-xs text-muted-foreground">{sub}</p> : null}
+    <Card className={`pc-stat-card pc-stat-card--${tone} min-w-0`}>
+      <CardContent className="flex h-full min-h-[112px] items-center gap-3 p-4 sm:p-5">
+        <span className="pc-stat-icon" aria-hidden="true"><Icon className="h-6 w-6" /></span>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wide pc-stat-label">{label}</p>
+          <p className="mt-1 break-words text-2xl font-extrabold tabular-nums tracking-tight">{value}</p>
+          {sub ? <p className="mt-0.5 break-words text-xs pc-stat-sub">{sub}</p> : null}
+        </div>
       </CardContent>
     </Card>
   );
@@ -174,13 +189,14 @@ const ProductChartCard = memo(function ProductChartCard({
 
   return (
     <ResponsiveChartPanel
-      className="min-h-[410px]"
+      className="pc-product-chart min-h-[410px]"
       data-testid={`product-comparison-chart-${product.id}`}
       style={{ contentVisibility: "auto", containIntrinsicSize: "410px" }}
     >
       <div className="mb-3 flex min-w-0 items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="wrap-break-word text-base font-semibold">{localizedName}</h3>
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="pc-product-icon" aria-hidden="true"><Package className="h-4 w-4" /></span>
+          <h3 className="min-w-0 wrap-break-word text-base font-bold">{localizedName}</h3>
         </div>
         {product.active === false ? (
           <Badge variant="outline" className="shrink-0">
@@ -190,16 +206,16 @@ const ProductChartCard = memo(function ProductChartCard({
       </div>
 
       <div className="mb-3 grid grid-cols-2 gap-2 text-xs">
-        <div className="rounded-lg border border-chart-1/30 bg-chart-1/10 p-2.5">
+        <div className="pc-value-card pc-value-card--selected p-3">
           <p className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="h-2.5 w-2.5 rounded-full bg-chart-1" aria-hidden="true" />
+            <span className="h-2.5 w-2.5 rounded-full pc-value-dot--selected" aria-hidden="true" />
             {currentLabel}
           </p>
-          <p className="mt-1 font-semibold tabular-nums">{formatMetric(selectedValue, metric)}</p>
+          <p className="mt-1 text-base font-bold tabular-nums">{formatMetric(selectedValue, metric)}</p>
         </div>
-        <div className="rounded-lg border border-chart-2/30 bg-chart-2/10 p-2.5">
+        <div className="pc-value-card pc-value-card--compared p-3">
           <p className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="h-2.5 w-2.5 rounded-full bg-chart-2" aria-hidden="true" />
+            <span className="h-2.5 w-2.5 rounded-full pc-value-dot--compared" aria-hidden="true" />
             {comparedLabel}
           </p>
           <p className="mt-1 font-semibold tabular-nums">{formatMetric(comparisonValue, metric)}</p>
@@ -210,29 +226,41 @@ const ProductChartCard = memo(function ProductChartCard({
         <div className="h-[245px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 12, right: 12, left: 0, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="period" tick={{ fontSize: 11 }} interval={0} />
+              <defs>
+                <linearGradient id={`pc-current-bar-${product.id}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--pc-bar-blue-top)" />
+                  <stop offset="100%" stopColor="var(--pc-bar-blue-bottom)" />
+                </linearGradient>
+                <linearGradient id={`pc-compared-bar-${product.id}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--pc-bar-green-top)" />
+                  <stop offset="100%" stopColor="var(--pc-bar-green-bottom)" />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="var(--pc-chart-grid)" strokeDasharray="3 4" vertical={false} />
+              <XAxis dataKey="period" tick={{ fontSize: 11, fill: "var(--pc-chart-label)" }} interval={0} />
               <YAxis
                 allowDecimals={metric === "weight"}
-                tick={{ fontSize: 11 }}
+                tick={{ fontSize: 11, fill: "var(--pc-chart-label)" }}
                 tickFormatter={(value) => (metric === "bales" ? fmtNum(Number(value)) : fmtKg(Number(value)))}
               />
               <Tooltip
+                contentStyle={{ background: "var(--pc-tooltip-bg)", border: "1px solid var(--pc-border)", color: "var(--pc-text)", borderRadius: 12 }}
+                labelStyle={{ color: "var(--pc-text)" }}
                 formatter={(value) => [
                   formatMetric(Number(value), metric),
                   metric === "bales" ? balesLabel : weightLabel,
                 ]}
               />
               <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={96}>
-                <Cell fill="hsl(var(--chart-1))" />
-                <Cell fill="hsl(var(--chart-2))" />
+                <Cell fill={`url(#pc-current-bar-${product.id})`} />
+                <Cell fill={`url(#pc-compared-bar-${product.id})`} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
       </ResponsiveChartViewport>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 border-t pt-3 text-xs">
+      <div className="pc-chart-footer mt-3 grid grid-cols-2 gap-2 border-t pt-3 text-xs">
         <div>
           <p className="text-muted-foreground">{differenceLabel}</p>
           <p className="mt-0.5 font-semibold tabular-nums">
@@ -455,13 +483,16 @@ export default function ProductComparisonCharts() {
   const hasFilter = selectedCategories.length > 0 || selectedGrades.length > 0;
 
   return (
-    <div className="space-y-5" data-testid="factory-product-comparison">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-xl font-bold tracking-tight">{copy.title}</h2>
-        <p className="text-sm text-muted-foreground">{copy.subtitle}</p>
+    <div className="product-comparison-premium space-y-5" data-testid="factory-product-comparison">
+      <div className="pc-page-heading flex items-center gap-4">
+        <span className="pc-heading-icon" aria-hidden="true"><BarChart3 className="h-6 w-6" /></span>
+        <div className="min-w-0">
+          <h2 className="text-2xl font-extrabold tracking-tight">{copy.title}</h2>
+          <p className="mt-0.5 text-sm pc-heading-subtitle">{copy.subtitle}</p>
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="pc-toolbar flex flex-wrap items-center gap-2">
         {(
           [
             ["day", copy.daily],
@@ -475,6 +506,8 @@ export default function ProductComparisonCharts() {
             type="button"
             size="sm"
             variant={period === value ? "default" : "outline"}
+            className="pc-control-button"
+            aria-pressed={period === value}
             onClick={() => setPeriod(value)}
             data-testid={`product-comparison-period-${value}`}
           >
@@ -483,11 +516,13 @@ export default function ProductComparisonCharts() {
         ))}
 
         {period !== "custom" ? (
-          <div className="ml-0 flex items-center gap-1 rounded-md border p-1 sm:ml-2">
+          <div className="pc-switch-group ml-0 flex items-center gap-1 rounded-xl border p-1 sm:ml-2">
             <Button
               type="button"
               size="sm"
               variant={direction === "previous" ? "secondary" : "ghost"}
+              className="pc-control-button"
+              aria-pressed={direction === "previous"}
               onClick={() => setDirection("previous")}
               data-testid="product-comparison-direction-previous"
             >
@@ -498,6 +533,8 @@ export default function ProductComparisonCharts() {
               type="button"
               size="sm"
               variant={direction === "next" ? "secondary" : "ghost"}
+              className="pc-control-button"
+              aria-pressed={direction === "next"}
               onClick={() => setDirection("next")}
               data-testid="product-comparison-direction-next"
             >
@@ -506,11 +543,13 @@ export default function ProductComparisonCharts() {
           </div>
         ) : null}
 
-        <div className="ml-0 flex items-center gap-1 rounded-md border p-1 sm:ml-auto">
+        <div className="pc-switch-group ml-0 flex items-center gap-1 rounded-xl border p-1 sm:ml-auto">
           <Button
             type="button"
             size="sm"
             variant={metric === "bales" ? "secondary" : "ghost"}
+            className="pc-control-button"
+            aria-pressed={metric === "bales"}
             onClick={() => setMetric("bales")}
             data-testid="product-comparison-metric-bales"
           >
@@ -521,6 +560,8 @@ export default function ProductComparisonCharts() {
             type="button"
             size="sm"
             variant={metric === "weight" ? "secondary" : "ghost"}
+            className="pc-control-button"
+            aria-pressed={metric === "weight"}
             onClick={() => setMetric("weight")}
             data-testid="product-comparison-metric-weight"
           >
@@ -530,8 +571,8 @@ export default function ProductComparisonCharts() {
         </div>
       </div>
 
-      <Card>
-        <CardContent className="p-4">
+      <Card className="pc-date-panel">
+        <CardContent className="p-4 sm:p-5">
           {period === "custom" ? (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               {[
@@ -545,7 +586,7 @@ export default function ProductComparisonCharts() {
                       <span>{copy.from}</span>
                       <input
                         type="date"
-                        className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground"
+                        className="pc-date-input w-full rounded-lg border px-3 py-2 text-sm"
                         value={value[0]}
                         onChange={(event) => setter([event.target.value, value[1]])}
                       />
@@ -554,7 +595,7 @@ export default function ProductComparisonCharts() {
                       <span>{copy.to}</span>
                       <input
                         type="date"
-                        className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground"
+                        className="pc-date-input w-full rounded-lg border px-3 py-2 text-sm"
                         value={value[1]}
                         onChange={(event) => setter([value[0], event.target.value])}
                       />
@@ -573,7 +614,7 @@ export default function ProductComparisonCharts() {
                 {period === "day" ? (
                   <input
                     type="date"
-                    className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground"
+                    className="pc-date-input w-full rounded-lg border px-3 py-2 text-sm"
                     value={day}
                     onChange={(event) => setDay(event.target.value)}
                     data-testid="product-comparison-anchor-day"
@@ -581,7 +622,7 @@ export default function ProductComparisonCharts() {
                 ) : period === "month" ? (
                   <input
                     type="month"
-                    className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground"
+                    className="pc-date-input w-full rounded-lg border px-3 py-2 text-sm"
                     value={month}
                     onChange={(event) => setMonth(event.target.value)}
                     data-testid="product-comparison-anchor-month"
@@ -591,7 +632,7 @@ export default function ProductComparisonCharts() {
                     type="number"
                     min="1900"
                     max="2200"
-                    className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground"
+                    className="pc-date-input w-full rounded-lg border px-3 py-2 text-sm"
                     value={year}
                     onChange={(event) => setYear(event.target.value)}
                     data-testid="product-comparison-anchor-year"
@@ -600,11 +641,11 @@ export default function ProductComparisonCharts() {
               </label>
 
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <div className="rounded-lg border bg-muted/20 p-3">
+                <div className="pc-period-summary rounded-xl border p-3">
                   <p className="text-xs text-muted-foreground">{copy.selectedPeriod}</p>
                   <p className="mt-1 text-sm font-semibold">{selectedLabel}</p>
                 </div>
-                <div className="rounded-lg border bg-muted/20 p-3">
+                <div className="pc-period-summary pc-period-summary--comparison rounded-xl border p-3">
                   <p className="text-xs text-muted-foreground">{copy.comparisonPeriod}</p>
                   <p className="mt-1 text-sm font-semibold">{comparisonLabel}</p>
                 </div>
@@ -621,7 +662,7 @@ export default function ProductComparisonCharts() {
         </CardContent>
       </Card>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="pc-filters flex flex-wrap items-center gap-2">
         <MultiSelectFilter
           options={categoryOptions}
           selected={selectedCategories}
@@ -670,7 +711,7 @@ export default function ProductComparisonCharts() {
           {selectedCatalogRows.map((product) => {
             const key = productKey(product);
             return (
-              <Badge key={key} variant="secondary" className="max-w-full gap-1.5 py-1">
+              <Badge key={key} variant="secondary" className="pc-product-chip max-w-full gap-1.5 px-3 py-1.5">
                 <span className="max-w-[260px] truncate">{localizedProductName(product, language)}</span>
                 <button
                   type="button"
@@ -687,7 +728,7 @@ export default function ProductComparisonCharts() {
       ) : null}
 
       {selectedProducts.length === 0 ? (
-        <Card className="border-dashed">
+        <Card className="pc-empty-state border-dashed">
           <CardContent className="flex min-h-[240px] flex-col items-center justify-center p-8 text-center">
             <BarChart3 className="mb-3 h-10 w-10 text-muted-foreground" />
             <p className="font-semibold">{copy.noSelectionTitle}</p>
@@ -697,11 +738,13 @@ export default function ProductComparisonCharts() {
       ) : (
         <>
           <ResponsiveMetricGrid>
-            <Stat label={copy.selectedProducts} value={fmtNum(selectedProducts.length)} />
-            <Stat label={copy.selectedTotal} value={formatMetric(totals.selected, metric)} sub={selectedLabel} />
-            <Stat label={copy.comparisonTotal} value={formatMetric(totals.comparison, metric)} sub={comparisonLabel} />
+            <Stat label={copy.selectedProducts} value={fmtNum(selectedProducts.length)} kind="products" tone="violet" />
+            <Stat label={copy.selectedTotal} value={formatMetric(totals.selected, metric)} sub={selectedLabel} kind="selected" tone="blue" />
+            <Stat label={copy.comparisonTotal} value={formatMetric(totals.comparison, metric)} sub={comparisonLabel} kind="compared" tone="green" />
             <Stat
               label={copy.difference}
+              kind="difference"
+              tone={totals.difference < 0 ? "rose" : totals.difference > 0 ? "green" : "blue"}
               value={`${totals.difference > 0 ? "+" : ""}${formatMetric(totals.difference, metric)}`}
               sub={
                 totals.change === null
