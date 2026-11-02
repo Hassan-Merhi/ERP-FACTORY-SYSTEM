@@ -143,9 +143,14 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
       const { employeeId } = req.query as { employeeId?: string };
       const empFilter = employeeId ? sql`AND eb.employee_id = ${parseInt(employeeId)}` : sql``;
       const result = await db.execute(sql`
-        SELECT eb.*, e.first_name, e.last_name, e.code as employee_code
+        -- Preserve legacy snake_case fields while supplying the camelCase contract
+        -- used by Payroll & Benefits > Employees > Bonuses. Read-only; no ledger writes.
+        SELECT eb.*, eb.employee_id AS "employeeId",
+               eb.bonus_date::text AS "bonusDate",
+               e.first_name AS "firstName", e.last_name AS "lastName",
+               e.code AS "employeeCode"
         FROM employee_bonuses eb
-        LEFT JOIN employees e ON e.id = eb.employee_id
+        LEFT JOIN employees e ON e.id = eb.employee_id AND e.company_id = eb.company_id
         WHERE eb.company_id = ${companyId}
           ${empFilter}
         ORDER BY eb.bonus_date DESC, eb.id DESC
