@@ -133,7 +133,7 @@ export function StockEntryScanner({
             ref={listRef}
             role="listbox"
             aria-label="Matching bale products"
-            className="stock-entry-results absolute z-50 mt-2 max-h-72 w-full overflow-y-auto overscroll-contain rounded-xl border bg-background shadow-xl max-sm:relative max-sm:mt-2 max-sm:max-h-[min(20rem,45dvh)]"
+            className="stock-entry-results relative z-10 mt-2 max-h-72 w-full overflow-y-auto overscroll-contain rounded-xl border bg-background shadow-xl max-sm:max-h-[min(20rem,45dvh)]"
           >
             {filteredProducts.map((p, idx) => (
               <button
