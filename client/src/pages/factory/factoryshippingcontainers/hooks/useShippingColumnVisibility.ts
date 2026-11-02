@@ -27,6 +27,15 @@ export function useShippingColumnVisibility(userId: string | number | null | und
     });
   }
 
+  function showAllCols() {
+    setColVis({ ...DEFAULT_COL_VIS });
+    try {
+      if (userId) localStorage.setItem(`fsc_col_vis_${userId}`, JSON.stringify(DEFAULT_COL_VIS));
+    } catch {
+      // Keep the in-memory preference even when persistence is unavailable.
+    }
+  }
+
   const hiddenCount = SHIPPING_COLS.filter((column) => !colVis[column.id]).length;
-  return { colVis, toggleCol, hiddenCount };
+  return { colVis, toggleCol, showAllCols, hiddenCount };
 }
