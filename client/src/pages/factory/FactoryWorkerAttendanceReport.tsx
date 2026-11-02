@@ -438,16 +438,25 @@ export default function FactoryWorkerAttendanceReport() {
 
           {/* ── Summary cards ───────────────────────────────────────────────── */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 print:grid-cols-5">
-            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:shadow-none border-blue-300/70 dark:border-blue-500/60 bg-gradient-to-br from-blue-50 via-blue-50/70 to-white dark:from-[#1a3866] dark:via-[#112848] dark:to-[#0d1b32]">
-              <CardContent className="flex min-h-[106px] items-center gap-3 p-4"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-blue-100 text-blue-600 dark:bg-blue-500/25 dark:text-blue-300"><UsersRound className="h-6 w-6" /></div><div className="min-w-0">
+            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:bg-none print:shadow-none border-blue-300/70 dark:border-blue-500/60 bg-gradient-to-br from-blue-50 via-blue-50/70 to-white dark:from-[#1a3866] dark:via-[#112848] dark:to-[#0d1b32]">
+              <CardContent className="flex min-h-[106px] items-center gap-3 p-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-blue-100 text-blue-600 dark:bg-blue-500/25 dark:text-blue-300">
+                  <UsersRound className="h-6 w-6" />
+                </div>
+                <div className="min-w-0">
                 <p className="mb-1 text-xs font-medium text-muted-foreground">Workers</p>
                 <p className="text-2xl font-bold tabular-nums tracking-tight" data-testid="stat-total-workers">
                   {filteredWorkers.length}
                 </p>
-              </div></CardContent>
+                </div>
+              </CardContent>
             </Card>
-            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:shadow-none border-emerald-300/70 dark:border-emerald-500/60 bg-gradient-to-br from-emerald-50 via-emerald-50/70 to-white dark:from-[#104e44] dark:via-[#0b382f] dark:to-[#0a2527]">
-              <CardContent className="flex min-h-[106px] items-center gap-3 p-4"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"><CalendarCheck2 className="h-6 w-6" /></div><div className="min-w-0">
+            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:bg-none print:shadow-none border-emerald-300/70 dark:border-emerald-500/60 bg-gradient-to-br from-emerald-50 via-emerald-50/70 to-white dark:from-[#104e44] dark:via-[#0b382f] dark:to-[#0a2527]">
+              <CardContent className="flex min-h-[106px] items-center gap-3 p-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">
+                  <CalendarCheck2 className="h-6 w-6" />
+                </div>
+                <div className="min-w-0">
                 <p className="mb-1 text-xs font-medium text-muted-foreground">Attendance Rate</p>
                 <p
                   className={cn(
@@ -464,18 +473,28 @@ export default function FactoryWorkerAttendanceReport() {
                 >
                   {overallPct !== null ? `${overallPct}%` : "—"}
                 </p>
-              </div></CardContent>
+                </div>
+              </CardContent>
             </Card>
-            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:shadow-none border-violet-300/70 dark:border-violet-500/60 bg-gradient-to-br from-violet-50 via-violet-50/70 to-white dark:from-[#403061] dark:via-[#302448] dark:to-[#1b1a38]">
-              <CardContent className="flex min-h-[106px] items-center gap-3 p-4"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-violet-100 text-violet-700 dark:bg-violet-500/25 dark:text-violet-300"><Coins className="h-6 w-6" /></div><div className="min-w-0">
+            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:bg-none print:shadow-none border-violet-300/70 dark:border-violet-500/60 bg-gradient-to-br from-violet-50 via-violet-50/70 to-white dark:from-[#403061] dark:via-[#302448] dark:to-[#1b1a38]">
+              <CardContent className="flex min-h-[106px] items-center gap-3 p-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-violet-100 text-violet-700 dark:bg-violet-500/25 dark:text-violet-300">
+                  <Coins className="h-6 w-6" />
+                </div>
+                <div className="min-w-0">
                 <p className="mb-1 text-xs font-medium text-muted-foreground">Expected Salary</p>
                 <p className="break-words text-xl font-bold tabular-nums tracking-tight text-foreground" data-testid="stat-expected-salary">
                   {salaryKpi ? fmtCurrency(salaryKpi.totalExpected) : "—"}
                 </p>
-              </div></CardContent>
+                </div>
+              </CardContent>
             </Card>
-            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:shadow-none border-cyan-300/70 dark:border-cyan-500/60 bg-gradient-to-br from-cyan-50 via-cyan-50/70 to-white dark:from-[#0f4654] dark:via-[#103440] dark:to-[#0b2534]">
-              <CardContent className="flex min-h-[106px] items-center gap-3 p-4"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300"><HandCoins className="h-6 w-6" /></div><div className="min-w-0">
+            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:bg-none print:shadow-none border-cyan-300/70 dark:border-cyan-500/60 bg-gradient-to-br from-cyan-50 via-cyan-50/70 to-white dark:from-[#0f4654] dark:via-[#103440] dark:to-[#0b2534]">
+              <CardContent className="flex min-h-[106px] items-center gap-3 p-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300">
+                  <HandCoins className="h-6 w-6" />
+                </div>
+                <div className="min-w-0">
                 <p className="mb-1 text-xs font-medium text-muted-foreground">Paid Salary</p>
                 <p
                   className="break-words text-xl font-bold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400"
@@ -483,10 +502,15 @@ export default function FactoryWorkerAttendanceReport() {
                 >
                   {salaryKpi ? fmtCurrency(salaryKpi.totalPaid) : "—"}
                 </p>
-              </div></CardContent>
+                </div>
+              </CardContent>
             </Card>
-            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:shadow-none border-amber-300/80 dark:border-amber-500/70 bg-gradient-to-br from-amber-50 via-amber-50/70 to-white dark:from-[#54411e] dark:via-[#3c301c] dark:to-[#29241b]">
-              <CardContent className="flex min-h-[106px] items-center gap-3 p-4"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"><Wallet className="h-6 w-6" /></div><div className="min-w-0">
+            <Card className="relative min-w-0 overflow-hidden rounded-2xl border shadow-sm dark:shadow-[0_12px_25px_rgba(0,0,0,0.22)] print:rounded-none print:border-gray-300 print:bg-white print:bg-none print:shadow-none border-amber-300/80 dark:border-amber-500/70 bg-gradient-to-br from-amber-50 via-amber-50/70 to-white dark:from-[#54411e] dark:via-[#3c301c] dark:to-[#29241b]">
+              <CardContent className="flex min-h-[106px] items-center gap-3 p-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl print:hidden bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+                  <Wallet className="h-6 w-6" />
+                </div>
+                <div className="min-w-0">
                 <p className="mb-1 text-xs font-medium text-muted-foreground">Remaining Salary</p>
                 <p
                   className={cn(
@@ -510,7 +534,8 @@ export default function FactoryWorkerAttendanceReport() {
                 {salaryKpi && salaryKpi.totalRemaining < 0 && (
                   <p className="text-[11px] text-blue-500 dark:text-blue-400 mt-0.5">Overpaid</p>
                 )}
-              </div></CardContent>
+                </div>
+              </CardContent>
             </Card>
           </div>
 
@@ -546,10 +571,10 @@ export default function FactoryWorkerAttendanceReport() {
               <table className="w-full text-xs border-collapse min-w-max print:text-[11px]">
                 <thead>
                   <tr className="bg-slate-100 text-slate-700 dark:bg-[#172b49] dark:text-slate-200 print:bg-gray-100 print:text-black">
-                    <th className="sticky left-0 top-0 z-30 min-w-[70px] whitespace-nowrap border-b border-r border-slate-200 bg-slate-100 px-3 py-3 text-left font-semibold dark:border-[#2b4060] dark:bg-[#172b49] print:bg-gray-100">
+                    <th className="sticky left-0 top-0 z-30 min-w-[88px] whitespace-nowrap border-b border-r border-slate-200 bg-slate-100 px-3 py-3 text-left font-semibold dark:border-[#2b4060] dark:bg-[#172b49] print:bg-gray-100">
                       Code
                     </th>
-                    <th className="sticky left-[70px] top-0 z-30 min-w-[160px] whitespace-nowrap border-b border-r border-slate-200 bg-slate-100 px-3 py-3 text-left font-semibold dark:border-[#2b4060] dark:bg-[#172b49] print:bg-gray-100">
+                    <th className="sticky left-[88px] top-0 z-30 min-w-[160px] whitespace-nowrap border-b border-r border-slate-200 bg-slate-100 px-3 py-3 text-left font-semibold dark:border-[#2b4060] dark:bg-[#172b49] print:bg-gray-100">
                       Worker
                     </th>
                     {data.dates.map(({ date, label, abbr, isWeekend }) => (
@@ -597,7 +622,7 @@ export default function FactoryWorkerAttendanceReport() {
                       </td>
                       <td
                         className={cn(
-                          "sticky left-[70px] z-10 whitespace-nowrap border-r border-slate-100 px-3 py-2 font-semibold dark:border-[#253651]",
+                          "sticky left-[88px] z-10 whitespace-nowrap border-r border-slate-100 px-3 py-2 font-semibold dark:border-[#253651]",
                           idx % 2 === 0 ? "bg-white dark:bg-[#0c172a]" : "bg-slate-50/70 dark:bg-[#101e33]"
                         )}
                       >
@@ -680,7 +705,7 @@ export default function FactoryWorkerAttendanceReport() {
                   {/* ── Daily summary row ────────────────────────────────────── */}
                   <tr className="sticky bottom-0 border-t-2 border-blue-200 bg-blue-50 font-semibold dark:border-blue-900/70 dark:bg-[#183050] print:bg-gray-100">
                     <td className="px-2 py-2 border-r sticky left-0 bg-blue-50 dark:bg-[#183050] z-10 text-muted-foreground text-[11px] print:bg-gray-100" />
-                    <td className="px-3 py-2 border-r sticky left-[70px] bg-blue-50 dark:bg-[#183050] z-10 text-muted-foreground text-[11px] whitespace-nowrap print:bg-gray-100">
+                    <td className="px-3 py-2 border-r sticky left-[88px] bg-blue-50 dark:bg-[#183050] z-10 text-muted-foreground text-[11px] whitespace-nowrap print:bg-gray-100">
                       Daily Total
                     </td>
                     {data.dates.map(({ date }) => {
