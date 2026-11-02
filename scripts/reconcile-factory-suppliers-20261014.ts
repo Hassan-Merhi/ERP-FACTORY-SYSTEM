@@ -9,7 +9,8 @@
  * uses the canonical, balanced, idempotent factory engine and its source identity.
  *
  * Dry-run: npx tsx scripts/reconcile-factory-suppliers-20261014.ts
- * Apply:   npx tsx scripts/reconcile-factory-suppliers-20261014.ts --apply
+ * Historical --apply is permanently disabled: 86 journals were posted and
+ * supplier balances must be preserved exactly as currently verified.
  */
 import { sql } from "drizzle-orm";
 import { db, pool, type DbTransaction } from "../server/db";
@@ -19,6 +20,7 @@ import { factoryBusinessDateInBeirut, futureDatedSupplierGoods } from "./histori
 import { systemAccountIdsTx } from "../server/services/accounting/perpetualInventory/linkedJournal";
 import { syncContainerCommissionJournalTx } from "../server/services/factory/containerCommissionJournal";
 import { postFactoryVoucherTx } from "../server/services/factory/factoryVoucherPosting";
+import { assertHistoricalSupplierBackfillFrozen } from "./historical-supplier-balance-freeze";
 import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,
@@ -133,6 +135,9 @@ async function verifyOpeningBalance(): Promise<void> {
 }
 
 async function run(apply: boolean): Promise<void> {
+  // This company-12 posting already ran in production on 2026-10-14.
+  // Disallow a replay before even reading the snapshot or opening a tx.
+  assertHistoricalSupplierBackfillFrozen(apply);
   const rows = await snapshot();
   const byId = new Map(rows.map((row) => [Number(row.id), row]));
   if ([...GOODS_IDS, ...COMMISSION_IDS].some((id) => !byId.has(id))) {
