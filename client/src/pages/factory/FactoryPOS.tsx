@@ -125,7 +125,7 @@ function FactoryPOSScreen() {
       <FactoryPosMobileCart model={model} />
 
       {/* ── DESKTOP: table + right product panel (hidden on mobile) ── */}
-      <div className="hidden md:flex flex-col lg:flex-row gap-4 items-start">
+      <div className="hidden flex-col gap-4 md:flex lg:flex-row lg:items-start">
         {/* Main Table */}
         <Card className="flex-1 overflow-hidden min-w-0 rounded-2xl border-border/70 shadow-sm">
           <FactoryPosCartTable model={model} />
