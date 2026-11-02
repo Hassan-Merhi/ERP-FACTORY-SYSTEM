@@ -73,8 +73,10 @@ export default function FactoryInvoicing() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="shrink-0 border-b border-border/70 bg-background">
-        <div className={activeTab === "invoices"
-          ? "mx-3 mt-2 rounded-2xl border border-blue-500/20 bg-gradient-to-r from-emerald-500/[0.08] via-blue-500/[0.07] to-violet-500/[0.08] px-3 pt-3 dark:from-[#0b2b32] dark:via-[#0d2038] dark:to-[#1b1c39] sm:mx-4 sm:px-4"
+        <div className={(activeTab === "invoices" || activeTab === "proformas")
+          ? activeTab === "proformas"
+            ? "mx-3 mt-2 rounded-2xl border border-violet-500/20 bg-gradient-to-r from-violet-500/[0.09] via-indigo-500/[0.06] to-fuchsia-500/[0.08] px-3 pt-3 dark:from-[#1a1535] dark:via-[#101b35] dark:to-[#22143d] sm:mx-4 sm:px-4"
+            : "mx-3 mt-2 rounded-2xl border border-blue-500/20 bg-gradient-to-r from-emerald-500/[0.08] via-blue-500/[0.07] to-violet-500/[0.08] px-3 pt-3 dark:from-[#0b2b32] dark:via-[#0d2038] dark:to-[#1b1c39] sm:mx-4 sm:px-4"
           : "px-4 pt-3"}>
           <div className="[&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-3">
             <PageHeader
@@ -82,7 +84,9 @@ export default function FactoryInvoicing() {
               subtitle="Manage proformas, invoices and container shipments"
               icon={activeTab === "invoices"
                 ? <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/15"><FileText className="h-6 w-6" /></span>
-                : <FileText className="h-5 w-5" />}
+                : activeTab === "proformas"
+                  ? <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-500/20"><FileText className="h-6 w-6" /></span>
+                  : <FileText className="h-5 w-5" />}
               showBackButton={false}
             >
               {activeTab === "invoices" && canOpenNewInvoice && (
