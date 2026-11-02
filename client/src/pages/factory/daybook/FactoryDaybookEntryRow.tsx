@@ -89,7 +89,7 @@ export function FactoryDaybookEntryRow({
       onClick={isBaleTransfer ? (e) => model.handleEntryClick(entry, e) : undefined}
       // Phones stack the description above its amount and actions; sm+ keeps the column grid.
       className={cn(
-        "flex w-full flex-wrap items-center border-t bg-muted/20 sm:grid",
+        "flex w-full flex-wrap items-center border-t border-border/50 bg-muted/20 transition-colors hover:bg-blue-50/40 dark:bg-slate-900/40 dark:hover:bg-blue-500/5 sm:grid",
         colsClass,
         isBaleTransfer && "cursor-pointer"
       )}

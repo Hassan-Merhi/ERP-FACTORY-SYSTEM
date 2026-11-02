@@ -15,6 +15,7 @@ import { sql } from "drizzle-orm";
 import { db, pool, type DbTransaction } from "../server/db";
 import { MoneyDecimal, toMoney } from "../server/lib/money";
 import { getPartyBalance } from "../server/services/accounting/balances/ledgerBalanceEngine";
+import { factoryBusinessDateInBeirut, futureDatedSupplierGoods } from "./historical-supplier-date-safety";
 import { systemAccountIdsTx } from "../server/services/accounting/perpetualInventory/linkedJournal";
 import { syncContainerCommissionJournalTx } from "../server/services/factory/containerCommissionJournal";
 import { postFactoryVoucherTx } from "../server/services/factory/factoryVoucherPosting";
@@ -163,6 +164,19 @@ async function run(apply: boolean): Promise<void> {
     new MoneyDecimal(0)
   );
   if (!expectedCommission.eq("32500")) throw new Error("NASRA commission preflight differs from $32,500");
+  // A container's estimated arrival date is not evidence of when goods
+  // became an accounting expense. In particular, never backfill a voucher
+  // into a future period merely because the ETA was stored on the container.
+  // Use the factory's local business day, not the server's UTC day.
+  const businessToday = factoryBusinessDateInBeirut(new Date());
+  const futureDated = futureDatedSupplierGoods(importIds.map((id) => byId.get(id)!), businessToday);
+  if (futureDated.length) {
+    console.warn(`[SupplierRepair] ${futureDated.length} goods imports have a future voucher date:`,
+      futureDated.map((row) => `${row.container_number}=${row.arrival_date || row.created_on}`).join(", "));
+    if (apply) {
+      throw new Error("Refusing historical supplier postings with future voucher dates. Reconcile source dates and existing GL first; no vouchers have been posted by this run.");
+    }
+  }
   console.log(`[SupplierRepair] ${apply ? "APPLY" : "DRY RUN"}: 38 goods, 48 NASRA commissions, 1 BANIN opening liability already held.`);
   for (const [currency, amount] of native) console.log(`[SupplierRepair] Goods ${currency}: ${amount.toFixed(2)}`);
   console.log(`[SupplierRepair] NASRA commission USD: ${expectedCommission.toFixed(2)}`);
