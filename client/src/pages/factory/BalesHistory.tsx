@@ -171,7 +171,7 @@ export default function BalesHistory() {
                 data-testid="badge-total-bales"
                 className="bales-modern-kpi-value border-0 bg-transparent px-0 py-0 text-foreground shadow-none"
               >
-                {totalBales}
+                {totalBales} bales
               </Badge>
               <div className="bales-modern-kpi-caption">Bales</div>
             </div>
