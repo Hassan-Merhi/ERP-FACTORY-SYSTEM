@@ -17,6 +17,7 @@ import { previewHistoricalCostAllocation } from "./historical-supplier-cost-allo
 import { inspectFactoryAccountType, type FactoryAccountAuditRow } from "./historical-supplier-ledger-classification";
 import { classifyFreightOffsetEvidence } from "./historical-supplier-freight-offset-review";
 import { previewHistoricalChargesPeriodNeutrality, type HistoricalClearingPeriodRow } from "./historical-charges-period-neutral-preflight";
+import { inspectHistoricalPostOffloadLink, type HistoricalPostOffloadLink } from "./historical-post-offload-voucher-source-audit";
 
 const COMPANY = 12;
 const EXPECTED_GOODS = 38;
@@ -300,6 +301,28 @@ export async function auditHistoricalFactorySuppliers() {
       expectedVoucherCount: payableAccount.voucherCount,
     });
 
+    // Trace native POC voucher amounts back to a persistent source charge ID.
+    // Some old charge rows have voucher_id updated to a different voucher;
+    // that mismatch is evidence for review, never proof of double-booking.
+    const pocRows = (await client.query<HistoricalPostOffloadLink & SqlRow>(
+      [
+        "SELECT v.id AS \"voucherId\",v.voucher_number AS \"voucherNumber\",",
+        "SUBSTRING(v.voucher_number FROM '^FACTORY-POC-(?:BACKFILL-)?([0-9]+)-')::int AS \"voucherContainerId\",",
+        "SUBSTRING(v.voucher_number FROM '^FACTORY-POC-(?:BACKFILL-)?[0-9]+-([0-9]+)')::int AS \"parsedSourceChargeId\",",
+        "v.total_amount::text AS \"voucherNativeAmount\",v.currency AS \"voucherCurrency\",",
+        "c.id AS \"sourceChargeId\",c.voucher_id AS \"sourceVoucherId\",",
+        "c.container_id AS \"sourceContainerId\",c.amount::text AS \"sourceNativeAmount\",",
+        "c.currency_code AS \"sourceCurrency\",c.deleted_at::text AS \"sourceDeletedAt\",",
+        "c.supplier_inventory_value_delta_usd::text AS \"sourceInventoryValueDeltaUsd\"",
+        "FROM vouchers v LEFT JOIN factory_offload_additional_charges c",
+        "ON c.company_id=v.company_id AND c.id=SUBSTRING(v.voucher_number FROM",
+        "'^FACTORY-POC-(?:BACKFILL-)?[0-9]+-([0-9]+)')::int",
+        "WHERE v.company_id=$1 AND v.deleted_at IS NULL AND COALESCE(v.optional,false)=false",
+        "AND v.voucher_number LIKE 'FACTORY-POC-%' ORDER BY v.id",
+      ].join("\n"), [COMPANY]
+    )).rows;
+    const postOffloadSourceLinks = pocRows.map(inspectHistoricalPostOffloadLink);
+
     // Container-specific active freight journals, not amount-only duplicate
     // detection. Exact FREIGHT offsets indicate paired GL legs, NOT a second
     // expense or permission to debit inventory.
@@ -544,6 +567,15 @@ export async function auditHistoricalFactorySuppliers() {
       accountClassificationAudit: {
         accounts: accountClassificationAudit,
         clearingPeriodNeutralityPreview,
+        postOffloadSourceEvidence: {
+          activePocVouchers: postOffloadSourceLinks.length,
+          sourceMatched: postOffloadSourceLinks.filter((row) => row.status === "SOURCE_IDENTITY_MATCHED").length,
+          requiresSourceReview: postOffloadSourceLinks.filter((row) => row.status !== "SOURCE_IDENTITY_MATCHED").length,
+          sourceInventoryDeltaRecordedCount: postOffloadSourceLinks.filter((row) => row.recordedInventoryDeltaUsd != null).length,
+          sourceInventoryDeltaIsRecognizedGLAsset: false,
+          warning: "Native source amount and voucher amount must match before accounting interpretation. Old voucher link differences are not proven duplicated costs.",
+          exceptions: postOffloadSourceLinks.filter((row) => row.status !== "SOURCE_IDENTITY_MATCHED"),
+        },
         typeMismatches: accountClassificationAudit.filter((account) => account.mismatch).length,
         financialImpactToReclassifyUsd: null,
         payableCounterpartBreakdown: payableCounterparts.map((row) => ({
