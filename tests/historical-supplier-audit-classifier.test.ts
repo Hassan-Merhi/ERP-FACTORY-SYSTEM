@@ -37,6 +37,30 @@ describe("Historical supplier backend audit classification", () => {
       .toContain("SOURCE_VS_GL_AMOUNT_REQUIRES_REVIEW");
     expect(classifyHistoricalSupplierVoucher(base)).not.toContain("SOURCE_VS_GL_AMOUNT_REQUIRES_REVIEW");
   });
+  it("uses the commission supplier rather than the goods supplier", () => {
+    const correct = classifyHistoricalSupplierVoucher({ ...base,
+      expectedSupplierId: 27, linkedSupplierId: 27,
+      sourceCurrency: "USD", voucherCurrency: "USD",
+    });
+    expect(correct).not.toContain("SOURCE_SUPPLIER_MISMATCH");
+    const incorrect = classifyHistoricalSupplierVoucher({ ...base,
+      expectedSupplierId: 27, linkedSupplierId: 60,
+    });
+    expect(incorrect).toContain("SOURCE_SUPPLIER_MISMATCH");
+  });
+  it("flags arrival dates after a recorded physical offload", () => {
+    expect(classifyHistoricalSupplierVoucher({ ...base,
+      storedArrivalDate: "2026-12-11", firstOffloadedAt: "2026-06-19 10:23:36",
+    })).toContain("ARRIVAL_DATE_AFTER_STOCK_OFFLOAD");
+  });
+  it("flags a currency mismatch or an unbalanced voucher without creating corrections", () => {
+    const flags = classifyHistoricalSupplierVoucher({ ...base,
+      sourceCurrency: "EUR", voucherCurrency: "USD",
+      voucherDebitsUsd: "118.00", voucherCreditsUsd: "100.00",
+    });
+    expect(flags).toContain("SOURCE_VOUCHER_CURRENCY_MISMATCH");
+    expect(flags).toContain("VOUCHER_NOT_BALANCED");
+  });
   it("flags possible expense overlap but does not propose a journal", () => {
     const flags = classifyHistoricalSupplierVoucher({ ...base, relatedExpenseCount: 2 });
     expect(flags).toContain("OTHER_FACTORY_EXPENSE_LINES_CHECK_FOR_OVERLAP");
