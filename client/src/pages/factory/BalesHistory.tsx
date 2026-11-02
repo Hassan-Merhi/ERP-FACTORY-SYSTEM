@@ -19,6 +19,10 @@ import {
   ShieldAlert,
   FileSpreadsheet,
   Upload,
+  Boxes,
+  Weight,
+  PackageCheck,
+  Shirt,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -144,28 +148,51 @@ export default function BalesHistory() {
   ).length;
 
   return (
-    <div className="space-y-4">
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-linear-to-br from-emerald-500/30 to-emerald-600/10 border border-emerald-500/25 shrink-0">
-            <Package className="h-4.5 w-4.5 text-emerald-500" />
+    <div className="bales-history-modern">
+      {/* ── Inventory overview: counts still come directly from the existing model ── */}
+      <div className="bales-modern-summary-card">
+        <div className="bales-modern-heading">
+          <div className="bales-modern-heading-icon">
+            <Package className="h-5 w-5" aria-hidden="true" />
           </div>
           <div>
             <h1 className="text-lg font-bold leading-tight">Bales</h1>
-            <p className="text-xs text-muted-foreground leading-tight">Stock history, status management and removal</p>
+            <p className="text-xs text-muted-foreground leading-tight">
+              Stock history, status management and removal
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge variant="secondary" data-testid="badge-total-bales" className="font-mono">
-            {totalBales} bales
-          </Badge>
-          <Badge variant="outline" data-testid="badge-total-weight" className="font-mono">
-            {formatLabelNum(totalWeight)} kg
-          </Badge>
+        <div className="bales-modern-actions">
+          <div className="bales-modern-kpi">
+            <span className="bales-modern-kpi-icon"><Boxes className="h-4 w-4" aria-hidden="true" /></span>
+            <div>
+              <Badge
+                variant="secondary"
+                data-testid="badge-total-bales"
+                className="bales-modern-kpi-value border-0 bg-transparent px-0 py-0 text-foreground shadow-none"
+              >
+                {totalBales}
+              </Badge>
+              <div className="bales-modern-kpi-caption">Bales</div>
+            </div>
+          </div>
+          <div className="bales-modern-kpi">
+            <span className="bales-modern-kpi-icon weight"><Weight className="h-4 w-4" aria-hidden="true" /></span>
+            <div>
+              <Badge
+                variant="outline"
+                data-testid="badge-total-weight"
+                className="bales-modern-kpi-value border-0 bg-transparent px-0 py-0 text-foreground shadow-none"
+              >
+                {formatLabelNum(totalWeight)} kg
+              </Badge>
+              <div className="bales-modern-kpi-caption">Total weight</div>
+            </div>
+          </div>
           <Button
             size="sm"
             variant="outline"
+            className="bales-modern-export"
             onClick={() => setShowExportDialog(true)}
             data-testid="button-export-stock-register"
           >
@@ -176,52 +203,40 @@ export default function BalesHistory() {
       </div>
 
       {/* ── Date stats strip ── */}
-      <div className="rounded-xl border bg-card">
-        <div className="flex items-center gap-4 px-4 py-2.5 flex-wrap">
-          <Input
-            type="date"
-            value={summaryDate}
-            onChange={(e) => setDateFilter(e.target.value || todayStr)}
-            className="h-7 w-36 text-xs"
-            data-testid="input-summary-date"
-          />
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">In Stock</span>
-            <span className="text-sm font-bold font-mono tabular-nums" data-testid="text-today-qty">
-              {regularQty}
-            </span>
-            <span className="text-xs text-muted-foreground font-mono" data-testid="text-today-kg">
-              {formatLabelNum(regularKg)} kg
-            </span>
-          </div>
-          <div className="w-px h-4 bg-border" />
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Garbage</span>
-            <span className="text-sm font-bold font-mono tabular-nums" data-testid="text-today-garbage-qty">
-              {garbageQty}
-            </span>
-            <span className="text-xs text-muted-foreground font-mono" data-testid="text-today-garbage-kg">
-              {formatLabelNum(garbageKg)} kg
-            </span>
-          </div>
-          <div className="w-px h-4 bg-border" />
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Wipers</span>
-            <span className="text-sm font-bold font-mono tabular-nums" data-testid="text-today-wipers-qty">
-              {wipersQty}
-            </span>
-            <span className="text-xs text-muted-foreground font-mono" data-testid="text-today-wipers-kg">
-              {formatLabelNum(wipersKg)} kg
-            </span>
-          </div>
+      <div className="bales-modern-date-strip">
+        <Input
+          type="date"
+          value={summaryDate}
+          onChange={(e) => setDateFilter(e.target.value || todayStr)}
+          className="h-8 w-36 text-xs"
+          data-testid="input-summary-date"
+          aria-label="Bale summary date"
+        />
+        <div className="bales-modern-stat">
+          <span className="bales-modern-stat-icon stock"><PackageCheck className="h-4 w-4" aria-hidden="true" /></span>
+          <span className="bales-modern-stat-label">In Stock</span>
+          <span className="bales-modern-stat-value" data-testid="text-today-qty">{regularQty}</span>
+          <span className="bales-modern-stat-unit" data-testid="text-today-kg">{formatLabelNum(regularKg)} kg</span>
+        </div>
+        <div className="bales-modern-stat">
+          <span className="bales-modern-stat-icon garbage"><Trash2 className="h-4 w-4" aria-hidden="true" /></span>
+          <span className="bales-modern-stat-label">Garbage</span>
+          <span className="bales-modern-stat-value" data-testid="text-today-garbage-qty">{garbageQty}</span>
+          <span className="bales-modern-stat-unit" data-testid="text-today-garbage-kg">{formatLabelNum(garbageKg)} kg</span>
+        </div>
+        <div className="bales-modern-stat">
+          <span className="bales-modern-stat-icon wipers"><Shirt className="h-4 w-4" aria-hidden="true" /></span>
+          <span className="bales-modern-stat-label">Wipers</span>
+          <span className="bales-modern-stat-value" data-testid="text-today-wipers-qty">{wipersQty}</span>
+          <span className="bales-modern-stat-unit" data-testid="text-today-wipers-kg">{formatLabelNum(wipersKg)} kg</span>
         </div>
       </div>
 
       {/* ── Main table card ── */}
-      <div className="rounded-xl border overflow-hidden">
+      <div className="bales-modern-table-card">
         {/* Toolbar */}
-        <div className="flex items-center gap-2 px-3 py-2.5 border-b bg-muted/20 flex-wrap">
-          <div className="relative flex-1 min-w-[180px]">
+        <div className="bales-modern-toolbar">
+          <div className="bales-modern-search relative flex-1 min-w-[180px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               placeholder="Search by ref #, code, product, batch..."
@@ -247,7 +262,7 @@ export default function BalesHistory() {
               type="date"
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value)}
-              className="w-[140px] h-8 text-sm"
+              className="bales-modern-date-input w-[140px] h-8 text-sm"
               data-testid="input-date-filter"
             />
             <Button
@@ -363,7 +378,7 @@ export default function BalesHistory() {
 
         {/* Selection action bar */}
         {selectedIds.size > 0 && (
-          <div className="flex items-center gap-3 px-3 py-2 border-b bg-muted/40 flex-wrap">
+          <div className="bales-modern-selection flex items-center gap-3 px-3 py-2 flex-wrap">
             <CheckSquare className="h-4 w-4 text-muted-foreground shrink-0" />
             <span className="text-sm font-medium">{selectedIds.size} selected</span>
             <Select value={bulkStatus} onValueChange={setBulkStatus}>
@@ -434,7 +449,7 @@ export default function BalesHistory() {
         ) : (
           <div>
             <Table>
-              <TableHeader className="sticky top-0 z-30 bg-muted border-b-2 border-border/60">
+              <TableHeader className="sticky top-0 z-30 border-b border-border/60">
                 <TableRow>
                   <TableHead className="w-10">
                     <Checkbox
@@ -480,7 +495,7 @@ export default function BalesHistory() {
                     // ── Group summary row ──
                     <TableRow
                       key={`group-${group.key}`}
-                      className="bg-muted/20 hover-elevate cursor-pointer"
+                      className="cursor-pointer"
                       data-testid={`row-group-${group.key}`}
                     >
                       <TableCell>
@@ -742,7 +757,7 @@ export default function BalesHistory() {
 
         {/* ── Pagination ── */}
         {serverTotalPages > 1 && (
-          <div className="flex items-center justify-between py-3 px-1">
+          <div className="bales-modern-pagination flex items-center justify-between">
             <span className="text-sm text-muted-foreground">
               Page {currentPage} of {serverTotalPages} &mdash; {serverTotal.toLocaleString()} bales total
             </span>
