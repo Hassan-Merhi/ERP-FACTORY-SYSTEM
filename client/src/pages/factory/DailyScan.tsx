@@ -445,7 +445,7 @@ export default function DailyScan() {
         <div className="space-y-4">
           {/* ── All-done banner ── */}
           {allDone && (
-            <div className="daily-scan-alert flex items-center gap-2 rounded-md border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/40 px-4 py-3 text-sm text-green-800 dark:text-green-300">
+            <div className="daily-scan-success flex items-center gap-2 rounded-md border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/40 px-4 py-3 text-sm text-green-800 dark:text-green-300">
               <CheckCircle2 className="h-4 w-4 shrink-0" />
               All {totalBales} bales verified for {formatDisplay(selectedDate)}
             </div>
