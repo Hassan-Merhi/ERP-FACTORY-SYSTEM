@@ -4,7 +4,6 @@ import {
   inspectHistoricalCorrectionBalanceProtection,
   type HistoricalCorrectionLinePreview,
 } from "../scripts/historical-supplier-balance-freeze";
-import { previewCharge64CreditorImpact } from "../scripts/historical-charge64-creditor-impact-preview";
 
 const expense: HistoricalCorrectionLinePreview = {
   accountKind: "ledger", accountCode: "FACTORY_FREIGHT_EXPENSE",
