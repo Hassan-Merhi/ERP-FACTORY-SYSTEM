@@ -149,23 +149,10 @@ export function registerEmployeeRoutes(app: Express) {
         resolvedCode = parsed.code;
       }
 
-      let employee = await storage.createEmployee({ ...parsed, code: resolvedCode });
-
-      // Initialize currentBalance to opening balance if provided
-      if (parsed.openingBalance && (parseMoneyInput(parsed.openingBalance)?.gt(0) ?? false)) {
-        await db
-          .update(employees)
-          .set({
-            currentBalance: parsed.openingBalance,
-          })
-          .where(eq(employees.id, employee.id));
-
-        employee = {
-          ...employee,
-          currentBalance: parsed.openingBalance,
-        };
-      }
-
+      // Storage atomically normalizes a signed opening: positive is Credit,
+      // negative is Debit. It also initializes the payroll balance with the
+      // same sign, so a later separate update cannot invert it.
+      const employee = await storage.createEmployee({ ...parsed, code: resolvedCode });
       res.status(201).json(employee);
     } catch (error: unknown) {
       const dbError = masterDataDbErrorResponse(error, "employee", req.session.currentCompanyId);

@@ -55,6 +55,7 @@ import { ensureFactoryStaffTrackingSchema } from "./startup/factoryStaffTracking
 import { ensureFactoryTargetBonusPaymentSchema } from "./startup/ensureFactoryTargetBonusPaymentSchema";
 import { inspectHistoricalProductionBonusExpenseAccounts } from "./services/factory/productionBonusExpenseReclassification";
 import { applyApprovedZakariaOpeningCredit } from "./startup/applyApprovedZakariaOpeningCredit";
+import { applyApprovedEmployeeOpeningCredits } from "./startup/applyApprovedEmployeeOpeningCredits";
 import { ensureSupplierTrackingShopDutyDefaults } from "./startup/ensureSupplierTrackingShopDutyDefaults";
 import { ensureZambiaHistoricalPurchaseCost } from "./startup/ensureZambiaHistoricalPurchaseCost";
 import { ensureFactoryContainerPlannerSchemaOnBoot } from "./startup/factoryContainerPlannerSchema";
@@ -361,6 +362,18 @@ let migrationsDone = false;
       // opening is Cr, not Dr. Scoped, audited and idempotent; never alters
       // salary/bonus postings or other employees.
       await applyApprovedZakariaOpeningCredit();
+      // The historical payroll import used positive openings for employee
+      // credits; several records still carry the default Dr side. Correct the
+      // verified records once with before/after audit; never alter vouchers.
+      try {
+        await applyApprovedEmployeeOpeningCredits();
+      } catch (openingRepairError: unknown) {
+        logger.error("[startup] Historical employee openings were not fully corrected", {
+          error: getErrorMessage(openingRepairError),
+        });
+        // Do not take the whole ERP offline for a historical correction.
+        // Failed database transactions roll back; errors remain visible here.
+      }
       // The one-time historical bonus reclassification has already been applied.
       // Never rerun a historical voucher mutation on every server startup.
       // A later legitimate voucher edit can change a paid amount while its old

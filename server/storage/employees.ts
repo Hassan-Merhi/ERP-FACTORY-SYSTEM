@@ -158,8 +158,28 @@ export async function getEmployeeByCode(code: string): Promise<Employee | undefi
 export type CreateEmployeeInput = InsertEmployee & { code: string };
 
 export async function createEmployee(employee: CreateEmployeeInput): Promise<Employee> {
-  const [created] = await db.insert(schema.employees).values([employee]).returning();
-  return created;
+  // The employee opening form has always accepted a signed amount:
+  // positive means we owe the employee (Cr); negative is an advance (Dr).
+  // Store the unsigned opening plus its actual side so the accounting engine,
+  // Payroll, Accounts and exports all interpret the same entry.
+  const signedOpening = toMoney(employee.openingBalance);
+  const openingBalance = signedOpening.abs().toFixed(2);
+  const openingSide = signedOpening.isNegative() ? "Dr" : "Cr";
+  return db.transaction(async (tx) => {
+    const [created] = await tx.insert(schema.employees).values([{
+      ...employee,
+      openingBalance,
+      currentBalance: signedOpening.toFixed(2),
+    }]).returning();
+    if (!created) throw new Error("Employee creation did not return an employee");
+    // Runtime side column exists outside Drizzle's base employee model.
+    // Keep this update in the insertion transaction so it is all-or-nothing.
+    await tx.execute(sql`
+      UPDATE employees SET opening_balance_side = ${openingSide}
+      WHERE id = ${created.id} AND company_id = ${created.companyId}
+    `);
+    return { ...created, openingBalance, currentBalance: signedOpening.toFixed(2) };
+  });
 }
 
 export async function updateEmployee(
