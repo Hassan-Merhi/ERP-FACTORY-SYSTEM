@@ -163,18 +163,17 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(perWorker).toContain("modern");
   });
 
-  it("shows target, absent target, expected target, and produced-minus-expected KPIs", () => {
+  it("shows target, expected target, produced and produced-minus-expected KPIs", () => {
     const production = src("client/src/pages/factory/FactoryProductionTargets.tsx");
     const model = src("client/src/pages/factory/factoryProductionTargetsModel.ts");
+    // The Production Targets dashboard redesign (#2659) keeps these KPI cards;
+    // absent targets still reduce the expected figure in the model below.
     expect(production).toContain('tr("totalTarget")');
-    expect(production).toContain('tr("totalAbsentTarget")');
     expect(production).toContain('tr("totalExpected")');
     expect(production).toContain('tr("totalWorkers")');
-    expect(production).toContain('tr("totalAbsent")');
-    expect(production).toContain('tr("totalPresent")');
+    expect(production).toContain('tr("totalProduced")');
     expect(production).toContain('tr("diff")');
-    expect(production).toContain("grid-cols-3");
-    expect(production).toContain("sm:grid-cols-2 xl:grid-cols-6");
+    expect(production).toContain('className="pt-kpi-grid"');
     expect(model).toContain("absentTarget");
     expect(model).toContain("const expected = target - absentTarget");
     // Same sign as the row difference (produced - target), per #1697.

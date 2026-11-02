@@ -48,8 +48,9 @@ afterAll(async () => {
     [ctx.companyId]
   );
   await pool.query("DELETE FROM salary_advances WHERE company_id = $1", [ctx.companyId]);
-  await pool.query("DELETE FROM employees WHERE id IN ($1, $2)", [fromWorkerId, toWorkerId]);
+  // The advance vouchers reference the workers, so remove them first.
   await cleanupTestData(PREFIX);
+  await pool.query("DELETE FROM employees WHERE id IN ($1, $2)", [fromWorkerId, toWorkerId]);
   closeTestServer();
 }, 60000);
 

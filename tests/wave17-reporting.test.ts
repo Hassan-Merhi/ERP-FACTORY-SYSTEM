@@ -272,7 +272,9 @@ beforeAll(async () => {
     { ledger: cash, debit: "30.00" },
     { customer: ids.CU2, credit: "30.00" },
   ]);
-  await sale(daysAgo(5), "20.00");
+  // Recent and in the current month on any day of it: five days back would fall
+  // inside the closed period on the 1st-5th.
+  await sale(daysAgo(Math.min(5, now.getUTCDate() - 1)), "20.00");
 }, 180_000);
 
 afterAll(async () => {
