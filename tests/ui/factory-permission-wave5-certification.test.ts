@@ -203,6 +203,22 @@ describe("Wave 5 Factory user-profile certification", () => {
     expect(guardedRedirect(unrestricted, "/factory/spreadsheet", "Developer", true)).toBeNull();
   });
 
+  it("reserves Factory Daybook and Cost Centers for Developer only", () => {
+    for (const route of ["/factory/daybook", "/factory/cost-centers"]) {
+      const page = resolveFactoryPage(route)!;
+      expect(page.accessLevel).toBe("developer");
+      expect(FACTORY_SETTINGS_PAGES).not.toContain(page);
+      for (const role of ["User", "Manager", "Admin", "Owner"]) {
+        expect(factoryPageAllowsRole(page, role)).toBe(false);
+        expect(guardedRedirect(unrestricted, route, role, role === "Admin" || role === "Owner")).toBe(
+          "/factory/production-report"
+        );
+      }
+      expect(factoryPageAllowsRole(page, "Developer")).toBe(true);
+      expect(guardedRedirect(unrestricted, route, "Developer", true)).toBeNull();
+    }
+  });
+
   it("keeps an unrestricted normal user unrestricted on user-level pages", () => {
     expect(guardedRedirect(unrestricted, "/factory/accounts")).toBeNull();
     expect(guardedRedirect(unrestricted, "/factory/invoicing")).toBeNull();
@@ -218,7 +234,7 @@ describe("Wave 5 Factory user-profile certification", () => {
   it("certifies several-page users without widening the allow-list", () => {
     expect(guardedRedirect(severalPages, "/factory/accounts")).toBeNull();
     expect(guardedRedirect(severalPages, "/factory/vouchers/91/edit")).toBeNull();
-    expect(guardedRedirect(severalPages, "/factory/daybook?tab=activity")).toBeNull();
+    expect(guardedRedirect(severalPages, "/factory/daybook?tab=activity")).toBe("/factory/accounts");
     expect(guardedRedirect(severalPages, "/factory/raw-materials")).toBe("/factory/accounts");
   });
 
