@@ -70,7 +70,8 @@ for (const token of [
   'role="option"',
   'type="button"',
   'enterKeyHint="done"',
-  "max-sm:relative",
+  // #2755 keeps the results list in flow and caps it on phones instead of max-sm:relative.
+  "max-sm:max-h-[min(20rem,45dvh)]",
   "FactoryMobileStatus",
 ]) {
   if (!scanner.includes(token)) failures.push(`Factory scanner contract missing: ${token}`);
@@ -82,7 +83,7 @@ for (const token of [
   "ResponsiveDataListActions",
   // Since #2173 landscape phones keep the card list too (phone-land variant).
   'className="md:hidden phone-land:block"',
-  'className="hidden overflow-hidden rounded-xl border bg-card/50 md:block phone-land:hidden"',
+  "stock-entry-desktop-table hidden overflow-hidden rounded-2xl border bg-card/50 md:block phone-land:hidden",
   'scrollLabel="Bales ready for stock entry"',
   'minimumWidth="56rem"',
   'inputMode="numeric"',

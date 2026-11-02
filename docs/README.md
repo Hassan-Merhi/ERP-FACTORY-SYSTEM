@@ -30,6 +30,8 @@ failure, so a correct document cannot quietly become undiscoverable.
 |---|---|
 | [accounting-flow.md](accounting-flow.md) | Voucher types, posting, the ledger |
 | [accounting-audit-2026-10.md](accounting-audit-2026-10.md) | Accounting audit findings, production evidence and remediation waves |
+| [historical-supplier-named-creditor-balance-freeze-20261102.md](historical-supplier-named-creditor-balance-freeze-20261102.md) | Company 12: verified supplier and named-creditor balances are frozen; reconciliation must not change them |
+| [net-profit-future-dated-historical-imports-live-pnl-cutoff-20261102.md](net-profit-future-dated-historical-imports-live-pnl-cutoff-20261102.md) | Live net profit excludes future-dated historical import vouchers (as-of cutoff) |
 | [unified-accounting-phase1.md](unified-accounting-phase1.md) | Unified accounting (ERP, Factory, Rentals): Phase 1: Foundation |
 | [unified-accounting-phase2.md](unified-accounting-phase2.md) | Unified accounting (ERP, Factory, Rentals): Phase 2: Posting and Voucher Lifecycle |
 | [unified-accounting-phase3.md](unified-accounting-phase3.md) | Unified accounting (ERP, Factory, Rentals): Phase 3: Customer, Supplier and Tenant Open-Item Reconciliation |
@@ -79,6 +81,23 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [fx-monetary-valuation/phase-5-historical-cache-audit.md](fx-monetary-valuation/phase-5-historical-cache-audit.md) | FX monetary valuation: dated rate preview, historical lock, rate-save idempotency and audit |
 | [fx-monetary-valuation/phase-6-reconciliation-release-gate.md](fx-monetary-valuation/phase-6-reconciliation-release-gate.md) | FX monetary valuation: reconciliation gates and release checklist |
 | [fx-monetary-valuation/phase-7-verification-and-fixes.md](fx-monetary-valuation/phase-7-verification-and-fixes.md) | FX monetary valuation: defects found in Phases 1–6, their fixes, executed verification and remaining release blockers |
+
+## Company 12 historical supplier reconciliation (2026-11-02)
+
+| Doc | What it covers |
+|---|---|
+| [backend-historical-supplier-cost-allocation-preview-20261102.md](backend-historical-supplier-cost-allocation-preview-20261102.md) | Company 12 historical supplier cost allocation — backend preview (November 2, 2026) |
+| [backend-historical-supplier-expense-audit-phase1.md](backend-historical-supplier-expense-audit-phase1.md) | Private backend supplier expense audit — Phase 1 |
+| [company12-internal-historical-supplier-voucher-operational-visibility-20261102.md](company12-internal-historical-supplier-voucher-operational-visibility-20261102.md) | Company 12 historical supplier catchup — internal posted reconciliation, not routine Journal vouchers (2026-11-02) |
+| [historical-charge-64-duplicate-correction-lifecycle-20261102.md](historical-charge-64-duplicate-correction-lifecycle-20261102.md) | Company 12 charge #64 duplicate posting: correction lifecycle and replay safety (2026-11-02) |
+| [historical-charge64-creditor-ledger-impact-preview-20261102.md](historical-charge64-creditor-ledger-impact-preview-20261102.md) | Charge 64 / Container 83 — named-creditor correction impact, read-only (2026-11-02) |
+| [historical-factory-charges-period-neutral-preflight-20261102.md](historical-factory-charges-period-neutral-preflight-20261102.md) | Factory historical charges — period-neutral GL reclassification preflight (2026-11-02) |
+| [historical-factory-ledger-account-classification-investigation-20261102.md](historical-factory-ledger-account-classification-investigation-20261102.md) | Company 12 historical supplier reconciliation — account classification and alternate lineage |
+| [historical-post-offload-charge-voucher-source-linkage-20261102.md](historical-post-offload-charge-voucher-source-linkage-20261102.md) | Historical post-offload source/voucher lineage check — 2026-11-02 |
+| [historical-supplier-analytics-balance-routine-visibility-20261102.md](historical-supplier-analytics-balance-routine-visibility-20261102.md) | Company 12 — hide completed reconciliation rows in Analytics / Balances (2026-11-02) |
+| [historical-supplier-backfill-accounting-audit-20261102.md](historical-supplier-backfill-accounting-audit-20261102.md) | Historical supplier backfill — company 12 accounting investigation (2026-11-02) |
+| [historical-supplier-done-voucher-global-daybook-and-transfer-hide-20261102.md](historical-supplier-done-voucher-global-daybook-and-transfer-hide-20261102.md) | Company 12: completed historical supplier catchup entries — remaining routine screens (2026-11-02) |
+| [historical-supplier-freight-source-journal-overlap-20261102.md](historical-supplier-freight-source-journal-overlap-20261102.md) | Historical supplier import / freight journal overlap preview — November 2, 2026 |
 
 ## Operating it
 

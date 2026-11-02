@@ -84,7 +84,8 @@ for (const token of ['data-workspace-route={routePath}', 'data-erp-route={routeP
 }
 
 for (const [name, source, tokens] of [
-  ["Agents (list panel)", agentsList, ['data-testid="button-add-agent"', '"w-72 shrink-0']],
+  // The redesigned list panel (#2742 era) is anchored by its test id rather than its width class.
+  ["Agents (list panel)", agentsList, ['data-testid="button-add-agent"', 'data-testid="agent-list-panel"']],
   ["Agents (statement panel)", agentsStatement, ['data-testid="text-agent-account-name"']],
   ["Account Groups", accountGroups, ['data-testid="button-create-group"', '"w-72 border-r flex flex-col shrink-0']],
   ["Chat", chat, ['data-testid="chat-page"', '"w-64 shrink-0 flex flex-col']],
@@ -94,8 +95,11 @@ for (const [name, source, tokens] of [
   }
 }
 
+// The hover-revealed action group keeps its touch reveal, whatever the class order.
+if (!/className="[^"]*\bopacity-0\b[^"]*\bgroup-hover:opacity-100\b[^"]*\btouch:opacity-100\b[^"]*"/.test(rawStock)) {
+  failures.push("Raw Production touch-action anchor changed or disappeared: hover actions without touch:opacity-100");
+}
 for (const token of [
-  'opacity-0 group-hover:opacity-100 touch:opacity-100',
   'data-testid={`button-adjust-${row.supplierId}`}',
   'data-testid={`button-deduct-${row.supplierId}`}',
   'data-testid={`button-batch-${row.supplierId}`}',

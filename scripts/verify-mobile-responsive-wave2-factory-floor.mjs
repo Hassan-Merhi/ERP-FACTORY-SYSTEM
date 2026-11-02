@@ -44,7 +44,7 @@ requireTokens("Raw Production page", sources.rawPage, [
 requireTokens("Raw Stock", sources.rawTable, [
   'data-testid="raw-stock-mobile-list"',
   "space-y-3 md:hidden",
-  "hidden overflow-hidden rounded-md border bg-card shadow-xs md:block",
+  "hidden overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm md:block phone-land:hidden",
   'data-testid={`button-adjust-mobile-${row.supplierId}`}',
   'data-testid={`button-deduct-mobile-${row.supplierId}`}',
   'data-testid={`button-batch-mobile-${row.supplierId}`}',
@@ -53,7 +53,7 @@ requireTokens("Raw Stock", sources.rawTable, [
 requireTokens("Mix Batch history", sources.mixBatches, [
   'data-testid="mix-batch-mobile-list"',
   "space-y-3 md:hidden",
-  "hidden overflow-x-auto md:block",
+  "hidden overflow-x-auto rounded-xl border border-border/70 md:block phone-land:hidden",
   'data-testid="input-mix-batch-date"',
   'data-testid={`button-edit-mix-batch-mobile-${batch.id}`}',
   'data-testid={`button-delete-mix-batch-mobile-${batch.id}`}',
@@ -61,7 +61,7 @@ requireTokens("Mix Batch history", sources.mixBatches, [
 
 requireTokens("Container Loading", sources.containerLoading, [
   'data-testid="factory-container-loading-page"',
-  "p-3 sm:p-4 lg:p-6",
+  "p-3 dark:bg-[#080f1c] sm:p-4 lg:p-6",
   "flex min-h-0 min-w-0 flex-1 flex-col gap-4 xl:flex-row",
   "mobile-action-bar",
 ]);
