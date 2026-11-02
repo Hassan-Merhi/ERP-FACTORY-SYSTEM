@@ -33,15 +33,15 @@ type SuppliersModel = ReturnType<typeof useFactorySuppliersModel>;
 
 export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div className="space-y-5" data-testid="factory-suppliers-directory">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-4">
         <div>
           <PageHeader title="Brokers & Suppliers" />
-          <p className="text-muted-foreground mt-1">
+          <p className="mt-1 text-sm text-muted-foreground">
             {model.brokerCount} brokers · {model.standaloneCount} standalone
           </p>
         </div>
-        <Button
+        <Button className="h-10 rounded-xl bg-blue-600 text-white shadow-sm hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
           onClick={() => {
             model.resetForm();
             model.setCreateOpen(true);
@@ -52,11 +52,11 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <Metric label="Brokers" value={model.brokerCount} />
         <Metric label="Standalone Suppliers" value={model.standaloneCount} />
         <Metric label="Total Containers" value={model.totalContainers} />
-        <div className="rounded-xl border p-4">
+        <div className="rounded-2xl border border-rose-500/25 bg-rose-500/5 p-4 shadow-sm dark:border-rose-400/30 dark:bg-rose-500/10">
           <div className="text-xs text-muted-foreground">Supplier balances (USD equivalent)</div>
           <div className="text-sm font-semibold mt-1">
             <span className="text-muted-foreground">You owe </span>
@@ -78,9 +78,9 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
         </div>
       </div>
 
-      <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border/60 bg-card/70 p-3 shadow-sm dark:border-blue-400/20 dark:bg-slate-900/45">
         <Select value={model.activeFilter} onValueChange={(value) => model.setActiveFilter(value as SupplierFilter)}>
-          <SelectTrigger className="w-36" data-testid="select-supplier-filter">
+          <SelectTrigger className="w-40 rounded-xl" data-testid="select-supplier-filter">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -105,7 +105,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
         </div>
       </div>
 
-      <div className="rounded-xl border divide-y">
+      <div className="divide-y overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm dark:divide-blue-400/15 dark:border-blue-400/20 dark:bg-slate-950/40">
         {model.filteredTopLevel.map((supplier) => {
           // One rule for every supplier and broker: the inside statement's
           // signed pools as USD + Σ(native × Factory Settings rate).
@@ -149,13 +149,13 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
             else model.setStatementSupplierId(supplier.id);
           };
           return (
-            <div key={supplier.id} className="p-4 flex items-center justify-between gap-4">
+            <div key={supplier.id} className="flex flex-wrap items-center justify-between gap-4 p-4 transition-colors hover:bg-blue-500/5 sm:flex-nowrap dark:hover:bg-blue-500/10">
               <div className="flex-1 min-w-0">
-                <div className="font-semibold flex items-center gap-2 flex-wrap">
+                <div className="flex flex-wrap items-center gap-2 font-semibold text-foreground">
                   {supplier.name}
                   {isBroker && <Badge variant="secondary">Broker</Badge>}
                 </div>
-                <div className="text-sm text-muted-foreground flex items-center gap-2 flex-wrap mt-0.5">
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <Package className="h-3 w-3" />
                     {supplier.totalContainers} containers
@@ -178,7 +178,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                 </div>
               </div>
 
-              <div className="text-right shrink-0 space-y-1" data-testid={`supplier-directory-balance-${supplier.id}`}>
+              <div className="min-w-0 shrink-0 space-y-1 text-right" data-testid={`supplier-directory-balance-${supplier.id}`}>
                 <div className="text-xs text-muted-foreground">
                   {usdEquivalent === null || Math.abs(usdEquivalent) <= 0.005
                     ? "Balance (USD equivalent)"
@@ -192,7 +192,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                   </div>
                 ) : (
                   <div
-                    className={`font-semibold text-sm tabular-nums ${
+                    className={`text-base font-bold tabular-nums ${
                       usdEquivalent > 0.005
                         ? "text-red-600 dark:text-red-400"
                         : usdEquivalent < -0.005
@@ -209,8 +209,9 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
+                  className="rounded-xl"
                   onClick={openSupplier}
                   data-testid={`btn-view-supplier-${supplier.id}`}
                 >
@@ -218,7 +219,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" data-testid={`btn-menu-supplier-${supplier.id}`}>
+                    <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl" data-testid={`btn-menu-supplier-${supplier.id}`}>
                       <MoreVertical className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -356,9 +357,9 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
 
 function Metric({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-xl border p-4">
+    <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 shadow-sm dark:border-blue-400/25 dark:bg-blue-500/10">
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="text-2xl font-bold mt-1">{value}</div>
+      <div className="mt-1 text-2xl font-bold tabular-nums">{value}</div>
     </div>
   );
 }
