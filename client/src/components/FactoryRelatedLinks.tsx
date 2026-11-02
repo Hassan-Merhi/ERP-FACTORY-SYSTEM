@@ -39,16 +39,11 @@ export function FactoryRelatedLinks({
   const visibleLinks = links.filter(({ href }) => {
     const page = resolveFactoryPage(href);
     if (!page || !factoryPageAllowsRole(page, role)) return false;
-    if (page.key === "factory/cost-centers" && !["Admin", "Owner", "Developer", "Manager"].includes(role)) {
-      return false;
-    }
     if (page.hideKey && access.hiddenCostFields?.includes(page.hideKey)) return false;
-    // Factory's route guard bypasses per-user allow-lists for privileged
-    // roles, except Cost Centers which has its own explicit route-level grant.
-    if (page.key !== "factory/cost-centers" && ["Admin", "Owner", "Developer"].includes(role)) return true;
-    if (access.fullAccess || hasFactoryPageKey(page, access.pageKeys ?? [])) return true;
-    // The existing Cost Centers route also accepts access through Accounts.
-    return page.key === "factory/cost-centers" && access.pageKeys?.includes("factory/accounts");
+    // The Factory route guard bypasses per-user page lists for privileged roles.
+    // The canonical registry now restricts Cost Centers to Developer only.
+    if (["Admin", "Owner", "Developer"].includes(role)) return true;
+    return access.fullAccess || hasFactoryPageKey(page, access.pageKeys ?? []);
   });
   if (visibleLinks.length === 0) return null;
 
