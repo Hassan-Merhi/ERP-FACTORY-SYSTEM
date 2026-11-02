@@ -190,37 +190,51 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
             else model.setStatementSupplierId(supplier.id);
           };
           return (
-            <div key={supplier.id} className="p-4 flex items-center justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold flex items-center gap-2 flex-wrap">
-                  {supplier.name}
-                  {isBroker && <Badge variant="secondary">Broker</Badge>}
+            <div
+              key={supplier.id}
+              className="relative flex flex-col gap-3 overflow-hidden rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50/50 lg:flex-row lg:items-center lg:gap-4 dark:border-[#28435f] dark:bg-[#101f33]/90 dark:hover:border-blue-500/50 dark:hover:bg-[#142b46]"
+            >
+              <div className={isBroker ? "absolute inset-y-3 left-0 w-1 rounded-r-full bg-emerald-500" : "absolute inset-y-3 left-0 w-1 rounded-r-full bg-blue-500"} aria-hidden="true" />
+              <div className="flex min-w-0 flex-1 items-center gap-3 pl-1.5">
+                <div
+                  className={isBroker
+                    ? "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-sm font-bold text-white shadow-sm"
+                    : "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 text-sm font-bold text-white shadow-sm"}
+                  aria-hidden="true"
+                >
+                  {supplier.name.trim().split(/\s+/).slice(0, 2).map((part) => part.charAt(0)).join("").toUpperCase()}
                 </div>
-                <div className="text-sm text-muted-foreground flex items-center gap-2 flex-wrap mt-0.5">
-                  <span className="flex items-center gap-1">
-                    <Package className="h-3 w-3" />
-                    {supplier.totalContainers} containers
-                  </span>
-                  {otwCount > 0 && (
-                    <Badge variant="outline" className="text-amber-600 border-amber-400 text-[11px]">
-                      {otwCount} OTW
-                    </Badge>
-                  )}
-                  {kgNumber > 0 && (
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 font-semibold text-slate-900 dark:text-white">
+                    <span className="break-words">{supplier.name}</span>
+                    {isBroker && <Badge variant="secondary" className="border border-slate-200 bg-slate-100 text-slate-700 dark:border-[#456180] dark:bg-[#273b56] dark:text-slate-100">Broker</Badge>}
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 sm:text-sm dark:text-slate-300">
                     <span className="flex items-center gap-1">
-                      <Weight className="h-3 w-3" />
-                      {model.formatKg(supplier.totalKg)}
+                      <Package className="h-3.5 w-3.5" aria-hidden="true" />
+                      {supplier.totalContainers} containers
                     </span>
-                  )}
-                  <span className="flex items-center gap-1">
-                    <Calendar className="h-3 w-3" />
-                    Last: {supplier.lastContainerDate ? model.formatDate(supplier.lastContainerDate) : "—"}
-                  </span>
+                    {otwCount > 0 && (
+                      <Badge variant="outline" className="border-amber-500/70 bg-amber-50 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+                        {otwCount} OTW
+                      </Badge>
+                    )}
+                    {kgNumber > 0 && (
+                      <span className="flex items-center gap-1">
+                        <Weight className="h-3.5 w-3.5" aria-hidden="true" />
+                        {model.formatKg(supplier.totalKg)}
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1">
+                      <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
+                      Last: {supplier.lastContainerDate ? model.formatDate(supplier.lastContainerDate) : "—"}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <div className="text-right shrink-0 space-y-1" data-testid={`supplier-directory-balance-${supplier.id}`}>
-                <div className="text-xs text-muted-foreground">
+              <div className="min-w-0 space-y-1 text-left lg:max-w-[300px] lg:flex-[0_1_280px] lg:text-right" data-testid={`supplier-directory-balance-${supplier.id}`}>
+                <div className="text-xs text-slate-500 dark:text-slate-300">
                   {usdEquivalent === null || Math.abs(usdEquivalent) <= 0.005
                     ? "Balance (USD equivalent)"
                     : usdEquivalent > 0
@@ -233,7 +247,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                   </div>
                 ) : (
                   <div
-                    className={`font-semibold text-sm tabular-nums ${
+                    className={`text-base font-bold tabular-nums ${
                       usdEquivalent > 0.005
                         ? "text-red-600 dark:text-red-400"
                         : usdEquivalent < -0.005
@@ -248,18 +262,20 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex shrink-0 items-center gap-1 self-start lg:self-auto">
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
+                  className="rounded-lg border-blue-200 bg-blue-50 font-semibold text-blue-700 hover:bg-blue-100 dark:border-blue-600/60 dark:bg-blue-600/20 dark:text-blue-100 dark:hover:bg-blue-600/30"
                   onClick={openSupplier}
                   data-testid={`btn-view-supplier-${supplier.id}`}
                 >
+                  <Eye className="mr-1.5 h-4 w-4" aria-hidden="true" />
                   View
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" data-testid={`btn-menu-supplier-${supplier.id}`}>
+                    <Button variant="ghost" size="icon" className="rounded-lg" data-testid={`btn-menu-supplier-${supplier.id}`}>
                       <MoreVertical className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -380,7 +396,9 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <ChevronRight className="h-4 w-4 text-muted-foreground cursor-pointer" onClick={openSupplier} />
+                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" aria-label={`Open ${supplier.name}`} onClick={openSupplier}>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                </Button>
               </div>
             </div>
           );
