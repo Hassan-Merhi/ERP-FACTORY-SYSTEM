@@ -377,6 +377,10 @@ function readTopicsForPath(path: string): RealtimeInvalidationTopic[] | undefine
     return ["reference"];
   }
 
+  // The customer list includes live ledger and unposted balances, not just identity data.
+  // A proforma transfer, order update, or voucher must evict this cached projection.
+  if (path === "/api/factory/customers") return ["factory", "accounting", "reference"];
+
   if (path === "/api/factory/cash-accounts") return ["reference", "accounting"];
 
   if (path === "/api/factory/workers" || path === "/api/factory/employees") {
