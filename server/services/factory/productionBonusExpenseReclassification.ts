@@ -171,24 +171,25 @@ export async function inspectHistoricalProductionBonusExpenseAccounts(): Promise
       GROUP BY p.id, p.payment_voucher_id, p.amount_usd, p.status, ea.code
       ORDER BY p.id
     `));
+    const money = (value: unknown) => toMoney(value == null ? "0" : String(value));
     const discrepancies = result.filter((r) => {
-      const claimed = toMoney(r.claimedUsd);
-      const debit = toMoney(r.postedExpenseDebitUsd);
-      const credit = toMoney(r.postedCashCreditUsd);
+      const claimed = money(r.claimedUsd);
+      const debit = money(r.postedExpenseDebitUsd);
+      const credit = money(r.postedCashCreditUsd);
       return Number(r.lineCount) !== 2 ||
         String(r.status) !== "POSTED" ||
         String(r.expenseAccountCode) !== NEW_CODE ||
         r.voucherLive !== true ||
         !debit.eq(credit) ||
-        !debit.eq(toMoney(r.totalDebits)) ||
-        !credit.eq(toMoney(r.totalCredits)) ||
+        !debit.eq(money(r.totalDebits)) ||
+        !credit.eq(money(r.totalCredits)) ||
         !claimed.eq(debit);
     }).map((r) => ({
       paymentId: Number(r.paymentId),
       voucherId: Number(r.voucherId),
-      claimedUsd: toMoney(r.claimedUsd).toFixed(2),
-      postedExpenseDebitUsd: toMoney(r.postedExpenseDebitUsd).toFixed(2),
-      postedCashCreditUsd: toMoney(r.postedCashCreditUsd).toFixed(2),
+      claimedUsd: money(r.claimedUsd).toFixed(2),
+      postedExpenseDebitUsd: money(r.postedExpenseDebitUsd).toFixed(2),
+      postedCashCreditUsd: money(r.postedCashCreditUsd).toFixed(2),
       expenseAccountCode: String(r.expenseAccountCode ?? ""),
       lineCount: Number(r.lineCount),
       status: String(r.status),
