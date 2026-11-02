@@ -37,7 +37,7 @@ test("Phase 8 refuses voucher IDs, tenant, stock, party, location and currency d
   const changes = [
     { id: 89 },
     { companyId: 7 },
-    { voucherType: "Payment" },
+    { voucherType: "Sales" },
     { currency: "ZMW" },
     { optional: true },
     { locationId: 3 },

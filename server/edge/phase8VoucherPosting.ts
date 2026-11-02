@@ -16,6 +16,7 @@ import { createDatabasePostingDependencies } from "../services/accounting/databa
 import { buildGenericVoucherPostingRequest } from "../services/accounting/genericVoucherPosting";
 import { Phase8ApplyRefusal } from "./phase8ApplyStore.mjs";
 import { approvedPhase8JournalShape } from "./phase8VoucherPolicy.mjs";
+import { phase8CashBoxRefusal } from "./phase8CashBoxPolicy.mjs";
 
 type Phase8VoucherEvent = {
   siteId?: string;
@@ -50,6 +51,13 @@ export async function postApprovedPhase8Journal(
   ) {
     throw new Phase8ApplyRefusal("PHASE8_LEDGER_TARGET_NOT_APPROVED");
   }
+  // Factory cash-box Payment/Receipt: re-checked against CURRENT cloud types.
+  const cashBoxRefusal = phase8CashBoxRefusal(
+    shape.voucherType,
+    shape.entries,
+    new Map(accounts.map((account) => [Number(account.id), String(account.accountType ?? "")]))
+  );
+  if (cashBoxRefusal) throw new Phase8ApplyRefusal(cashBoxRefusal);
   // NEVER apply the LAN voucher's original primary key or display number.
   // Database-posting dependencies recheck tenant ownership, fiscal period,
   // balanced amounts and idempotency against the target cloud company.
@@ -57,7 +65,7 @@ export async function postApprovedPhase8Journal(
     companyId: event.companyId,
     clientRequestId: `edge:${siteId}:${event.operationId}`,
     voucher: {
-      voucherType: "Journal",
+      voucherType: shape.voucherType,
       voucherDate: shape.date,
       description: shape.voucher.description ?? null,
       currency: "USD",

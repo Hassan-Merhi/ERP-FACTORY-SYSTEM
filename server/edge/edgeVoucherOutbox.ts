@@ -9,6 +9,9 @@ import { sql } from "drizzle-orm";
 import type { DbTransaction } from "../db";
 import { readFactoryEdgeConfiguration } from "./edgeRuntimePolicy.mjs";
 import { EdgeRefusal } from "./edgeRefusal";
+import { resultRows } from "../lib/queryResult";
+import { PostingValidationError } from "../services/accounting/postingValidationError";
+import { PHASE8_CASH_BOX_VOUCHER_TYPES, phase8CashBoxRefusal } from "./phase8CashBoxPolicy.mjs";
 
 export async function ensureEdgeVoucherOutboxSchema(queryable: Pick<Pool, "query">): Promise<void> {
   const config = readFactoryEdgeConfiguration();
@@ -128,6 +131,36 @@ export interface EdgeVoucherEvidence {
   entries: readonly unknown[];
 }
 
+/**
+ * Owner policy: offline Payment/Receipt vouchers move only the factory cash
+ * box against expense/income accounts (phase8CashBoxPolicy). Checked against
+ * the LAN database here so a non-compliant voucher rolls back now instead of
+ * blocking the cloud replay later; the cloud re-checks at apply.
+ */
+async function assertCashBoxVoucherTx(tx: DbTransaction, evidence: EdgeVoucherEvidence): Promise<void> {
+  const voucherType = String((evidence.voucher as { voucherType?: unknown } | null)?.voucherType ?? "");
+  if (!PHASE8_CASH_BOX_VOUCHER_TYPES.includes(voucherType as "Payment" | "Receipt")) return;
+  const entries = evidence.entries as Array<{ ledgerAccountId: number; debitAmount?: unknown; creditAmount?: unknown }>;
+  const ids = [...new Set(entries.map((entry) => Number(entry.ledgerAccountId)))];
+  const result = await tx.execute(sql`
+    SELECT id, account_type FROM ledger_accounts
+     WHERE company_id = ${evidence.companyId} AND id IN (${sql.join(
+       ids.map((id) => sql`${id}`),
+       sql`, `
+     )})
+  `);
+  const types = new Map(
+    resultRows<{ id: number; account_type: string }>(result).map((row) => [Number(row.id), String(row.account_type)])
+  );
+  const refusal = phase8CashBoxRefusal(voucherType, entries, types);
+  if (refusal) {
+    throw new PostingValidationError(
+      refusal,
+      "Offline payments and receipts may only move the factory cash box against expense or income accounts."
+    );
+  }
+}
+
 export async function captureEdgeVoucherTx(tx: DbTransaction, evidence: EdgeVoucherEvidence): Promise<void> {
   const config = readFactoryEdgeConfiguration();
   if (config.mode !== "lan" || !config.primary) return;
@@ -149,6 +182,7 @@ export async function captureEdgeVoucherTx(tx: DbTransaction, evidence: EdgeVouc
     throw new EdgeRefusal("EDGE_OUTBOX_OPERATION_ID_INVALID");
   }
   const operationId = evidence.requestId;
+  await assertCashBoxVoucherTx(tx, evidence);
   const payload = canonicalEdgeVoucherPayload(evidence.voucher, evidence.entries);
   const hash = createHash("sha256").update(payload, "utf8").digest("hex");
   // Ordered captures serialize to commit in the same order as sequence

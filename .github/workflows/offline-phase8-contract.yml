@@ -9,6 +9,7 @@ on:
       - 'server/edge/phase8*.d.mts'
       - 'server/edge/phase8*.ts'
       - 'server/edge/phase8VoucherPolicy.mjs'
+      - 'server/edge/phase8CashBoxPolicy.mjs'
       - 'server/edge/phase8VoucherPolicy.d.mts'
       - 'server/edge/edgeBoundary.ts'
       - 'server/edge/edgeSyncReceiver.ts'
@@ -81,6 +82,7 @@ on:
       - 'server/edge/phase8*.d.mts'
       - 'server/edge/phase8*.ts'
       - 'server/edge/phase8VoucherPolicy.mjs'
+      - 'server/edge/phase8CashBoxPolicy.mjs'
       - 'server/edge/phase8VoucherPolicy.d.mts'
       - 'server/edge/edgeBoundary.ts'
       - 'server/edge/edgeSyncReceiver.ts'
@@ -178,6 +180,8 @@ jobs:
         run: node --test tests/offline-phase8-contract.test.mjs
       - name: Refuse unsafe initial voucher source shapes
         run: node --test tests/offline-phase8-posting-shape.test.mjs
+      - name: Test factory cash-box payment/receipt policy (no bank, no supplier payments)
+        run: node --test tests/offline-phase8-cash-box.node.test.mjs
       - name: Verify Phase 9 scoped status + full write inventory safety
         run: node --test tests/offline-phase9-status.node.test.mjs tests/offline-phase9-write-coverage.node.test.mjs
       - name: Audit all registered business writes (unapproved paths remain blocked)

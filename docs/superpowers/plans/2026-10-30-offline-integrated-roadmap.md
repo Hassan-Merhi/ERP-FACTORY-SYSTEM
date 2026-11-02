@@ -105,6 +105,12 @@ The owner chose to make all remaining workflows available offline (stock movemen
 - Evidence: `tests/offline-phase9-pos-sale.test.ts` (LAN capture, series, retry, refusals; cloud replay, lost-ACK, held/approved below-zero, bad till account, divergence). The shared store, relay and decision mechanics are the ones proven by the stock drill.
 - Coverage: 4 approved captures, 3 session-only, 1,171 blocked.
 
+### Phase 9 offline payments — factory cash box (2026-11-02, development)
+
+- The Phase 8 voucher pipeline (posting and receipt in one cloud transaction) now also accepts USD `Payment` and `Receipt` vouchers that move exactly one Cash-type ledger account against expense (Payment) or income (Receipt) accounts (`server/edge/phase8CashBoxPolicy.mjs`). Bank, payable, receivable, stock, employee and intercompany accounts are refused, which keeps bank transfers and supplier/customer payments online-only as the owner decided.
+- The rule is enforced on the LAN at capture (the voucher rolls back with a 4xx) and again against current cloud account types at apply.
+- Evidence: `tests/offline-phase8-cash-box.node.test.mjs` (policy) and `tests/offline-phase8-cash-box-posting.test.ts` (cloud posting on the full schema, with supplier/bank refusals).
+
 ## Phase 10 — Offline identity, conflicts, secure storage and server controls
 - Implement reviewed local-session/cold-start policy, encrypted legacy-cache migration, authorization/role revocation, and scoped credentials and browser/device protections.
 - Add deterministic multi-device conflict review with no silent financial/stock overwrites.

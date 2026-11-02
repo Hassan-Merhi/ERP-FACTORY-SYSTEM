@@ -23,7 +23,7 @@ export function approvedPhase8JournalShape(event) {
     voucher.id !== event.localVoucherId ||
     voucher.companyId !== event.companyId ||
     voucher.optional === true ||
-    voucher.voucherType !== "Journal" ||
+    !["Journal", "Payment", "Receipt"].includes(voucher.voucherType) ||
     String(voucher.currency ?? "USD") !== "USD" ||
     voucher.locationId != null ||
     voucher.effectiveDate != null ||
@@ -56,5 +56,11 @@ export function approvedPhase8JournalShape(event) {
       narration: typeof entry.narration === "string" ? entry.narration : null,
     };
   });
-  return { voucher, date, entries: sanitizedEntries, ledgerAccountIds: [...targetIds] };
+  return {
+    voucher,
+    voucherType: voucher.voucherType,
+    date,
+    entries: sanitizedEntries,
+    ledgerAccountIds: [...targetIds],
+  };
 }

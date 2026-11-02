@@ -1,7 +1,10 @@
 /**
  * Phase 8 initial LAN capture is intentionally narrower than the generic
- * voucher HTTP route: USD active journals with ledger accounts only. Other
- * voucher types, currencies, attachments and stock remain blocked in Phase 9.
+ * voucher HTTP route: USD active journals with ledger accounts only, plus
+ * factory cash-box Payment/Receipt vouchers whose account types are checked
+ * against the database by phase8CashBoxPolicy (at the LAN guard and again at
+ * cloud apply). Other voucher types, currencies, attachments and stock remain
+ * blocked.
  * The restrictions below guarantee the protected central route handles it.
  */
 const MONEY = /^(?:0|[1-9][0-9]{0,14})(?:\.[0-9]{1,2})?$/;
@@ -47,7 +50,7 @@ export function supportsPhase8LanVoucherCapture(body) {
   const voucher = body.voucher;
   if (
     Object.keys(voucher).some((key) => !HEADER.has(key)) ||
-    voucher.voucherType !== "Journal" ||
+    !["Journal", "Payment", "Receipt"].includes(voucher.voucherType) ||
     voucher.optional === true ||
     String(voucher.currency ?? "USD") !== "USD" ||
     voucher.locationId != null ||

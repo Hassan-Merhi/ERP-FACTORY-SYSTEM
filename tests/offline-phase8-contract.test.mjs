@@ -23,7 +23,8 @@ const journal = {
 test("LAN captures only explicitly supported USD ledger-only journals", () => {
   assert.equal(supportsPhase8LanVoucherCapture(journal), true);
   for (const changed of [
-    { voucher: { ...journal.voucher, voucherType: "Payment" } },
+    { voucher: { ...journal.voucher, voucherType: "Sales" } },
+    { voucher: { ...journal.voucher, voucherType: "Contra" } },
     { voucher: { ...journal.voucher, currency: "ZMW" } },
     { voucher: { ...journal.voucher, optional: true } },
     { voucher: { ...journal.voucher, locationId: 4 } },

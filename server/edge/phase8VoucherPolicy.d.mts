@@ -11,6 +11,7 @@ export interface Phase8SourceVoucherEvent {
 }
 export interface Phase8JournalShape {
   voucher: Record<string, unknown>;
+  voucherType: "Journal" | "Payment" | "Receipt";
   date: string;
   entries: Array<{
     ledgerAccountId: number;
