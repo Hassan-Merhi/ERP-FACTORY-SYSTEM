@@ -47,6 +47,9 @@ interface Container extends SqlRow {
   created_on: string;
   supplier_id: number | null;
   supplier_name: string | null;
+  commission_supplier_id: number | null;
+  commission_supplier_name: string | null;
+  commission_currency_code: string | null;
   total_kg: string;
   rate_per_kg: string;
   currency_code: string | null;
@@ -112,11 +115,13 @@ export async function auditHistoricalFactorySuppliers() {
       [
         "SELECT c.id,c.container_number,c.status,c.arrival_date::text AS arrival_date,",
         "c.created_at::date::text AS created_on,c.supplier_id,fs.name AS supplier_name,",
+        "c.commission_supplier_id,cs.name AS commission_supplier_name,c.commission_currency_code,",
         "c.total_kg::text AS total_kg,c.rate_per_kg::text AS rate_per_kg,",
         "c.currency_code,c.fx_rate_to_usd::text AS fx_rate_to_usd,",
         "c.commission_amount::text AS commission_amount",
         "FROM factory_containers c LEFT JOIN factory_suppliers fs",
         "ON fs.company_id=c.company_id AND fs.id=c.supplier_id",
+        "LEFT JOIN factory_suppliers cs ON cs.company_id=c.company_id AND cs.id=c.commission_supplier_id",
         "WHERE c.company_id=$1 AND c.id=ANY($2::int[]) AND c.deleted_at IS NULL",
       ].join("\n"), [COMPANY, containerIds]
     )).rows;
@@ -201,14 +206,33 @@ export async function auditHistoricalFactorySuppliers() {
       const expectedNative = kind === "goods"
         ? money(container.total_kg).times(money(container.rate_per_kg))
         : money(container.commission_amount);
-      const expectedUsd = expectedNative.times(money(container.fx_rate_to_usd ?? 1));
+      const sourceCurrency = String(kind === "goods" ? container.currency_code ?? "USD" :
+        container.commission_currency_code ?? container.currency_code ?? "USD").toUpperCase();
+      const containerCurrency = String(container.currency_code ?? "USD").toUpperCase();
+      const expectedSourceFx = sourceCurrency === "USD" ? money(1)
+        : sourceCurrency === containerCurrency && container.fx_rate_to_usd != null
+          ? money(container.fx_rate_to_usd) : null;
+      const expectedUsd = expectedSourceFx == null ? null : fixed(expectedNative.times(expectedSourceFx));
+      const linkedSupplierLine = lines.find((line) => line.factory_supplier_id != null);
+      const linkedSupplierId = linkedSupplierLine?.factory_supplier_id ?? null;
+      const expectedSupplierId = kind === "goods" ? container.supplier_id : container.commission_supplier_id;
+      const totalDebit = lines.reduce((sum, line) => sum.plus(money(line.debit_usd)), money(0));
+      const totalCredit = lines.reduce((sum, line) => sum.plus(money(line.credit_usd)), money(0));
       const flags = classifyHistoricalSupplierVoucher({
         voucherDate: head.voucher_date,
         postingDate: head.recorded_at.slice(0, 10),
         businessDate,
         expenseDebitUsd: fixed(debits),
         supplierCreditUsd: fixed(supplierCr),
-        expectedUsd: kind === "goods" ? fixed(expectedUsd) : null,
+        expectedUsd,
+        expectedSupplierId,
+        linkedSupplierId,
+        sourceCurrency,
+        voucherCurrency: head.currency,
+        voucherDebitsUsd: fixed(totalDebit),
+        voucherCreditsUsd: fixed(totalCredit),
+        storedArrivalDate: container.arrival_date,
+        firstOffloadedAt: raw?.first_offloaded_at == null ? null : String(raw.first_offloaded_at),
         receivedKg: String(raw?.received_kg ?? "0"),
         usedKg: String(raw?.used_kg ?? "0"),
         remainingKg: String(raw?.remaining_kg ?? "0"),
@@ -218,15 +242,22 @@ export async function auditHistoricalFactorySuppliers() {
         voucherId: id,
         voucherNumber: head.voucher_number,
         kind, containerId, containerNumber: container.container_number,
-        supplierId: container.supplier_id,
-        supplierName: container.supplier_name,
+        supplierId: linkedSupplierId,
+        supplierName: linkedSupplierLine?.supplier_name ?? null,
+        sourceSupplierId: expectedSupplierId,
+        sourceSupplierName: kind === "goods" ? container.supplier_name : container.commission_supplier_name,
+        sourceGoodsSupplierId: container.supplier_id,
+        sourceGoodsSupplierName: container.supplier_name,
         voucherDate: head.voucher_date, postedAt: head.recorded_at,
         storedArrivalDate: container.arrival_date,
         containerCreatedDate: container.created_on,
         containerStatus: container.status,
         currency: head.currency, exchangeRate: head.exchange_rate,
+        sourceCurrency,
         sourceNativeAmount: fixed(expectedNative),
-        sourceExpectedUsd: kind === "goods" ? fixed(expectedUsd) : null,
+        sourceExpectedUsd: expectedUsd,
+        voucherTotalDebitUsd: fixed(totalDebit),
+        voucherTotalCreditUsd: fixed(totalCredit),
         expenseDebitUsd: fixed(debits),
         supplierDebitUsd: fixed(supplierDr),
         supplierCreditUsd: fixed(supplierCr),
