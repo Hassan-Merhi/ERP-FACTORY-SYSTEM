@@ -20,7 +20,7 @@ interface FilterPanelProps {
  */
 export function FilterPanel({ filterDocs, setFilterDocs, filterStatus, setFilterStatus }: FilterPanelProps) {
   return (
-    <div className="flex flex-wrap gap-3 items-center p-3 rounded-md border bg-muted/30">
+    <div className="flex flex-wrap gap-3 items-center rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
       <div className="space-y-1">
         <p className="text-xs text-muted-foreground">Documents</p>
         <Select
