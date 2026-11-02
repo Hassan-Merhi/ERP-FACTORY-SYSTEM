@@ -1,8 +1,8 @@
 /**
  * Agent list panel (left side of the Agent Ledger page).
  *
- * Extracted from pages/Agents.tsx; markup, styling, and test ids are
- * unchanged.
+ * The panel uses premium light/dark styling while keeping agent selection,
+ * add/remove controls, search behavior, and test ids unchanged.
  */
 import { Plus, Trash2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
