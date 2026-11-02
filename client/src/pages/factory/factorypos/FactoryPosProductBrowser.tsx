@@ -5,10 +5,11 @@
  * the ↑↓/Enter/Escape handling used for barcode scanning, and items are still
  * added on mouseDown so focus never leaves the search box.
  */
-import { Check, Package, Plus, Search } from "lucide-react";
+import { Check, NotepadText, Package, Plus, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { formatNum } from "./utils";
 import type { FactoryPosModel } from "./useFactoryPosModel";
@@ -16,9 +17,27 @@ import type { FactoryPosModel } from "./useFactoryPosModel";
 export function FactoryPosProductBrowser({ model }: { model: FactoryPosModel }) {
   const { ccPrefix, filteredInventory } = model;
   return (
-    <Card className="flex w-full lg:w-96 flex-col sticky top-4 max-h-[calc(100vh-8rem)] self-start">
-      <div className="p-4 border-b">
-        <h3 className="text-sm font-medium mb-2">Products</h3>
+    <div className="sticky top-4 flex w-full flex-col gap-3 self-start lg:w-96">
+      <Card className="rounded-2xl border-border/70 p-4 shadow-sm">
+        <label htmlFor="factory-pos-desktop-notes" className="mb-2 flex items-center gap-2 text-sm font-semibold">
+          <NotepadText className="h-4 w-4 text-orange-500" aria-hidden="true" />
+          Notes (optional)
+        </label>
+        <Textarea
+          id="factory-pos-desktop-notes"
+          placeholder="Notes (optional)"
+          value={model.notes}
+          onChange={(e) => model.setNotes(e.target.value)}
+          className="min-h-20 resize-y rounded-xl border-border/70 bg-background/60"
+          data-testid="input-notes"
+        />
+      </Card>
+      <Card className="flex min-h-[280px] flex-col overflow-hidden rounded-2xl border-border/70 shadow-sm">
+      <div className="border-b border-border/70 p-4">
+        <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+          <Package className="h-4 w-4 text-orange-500" aria-hidden="true" />
+          Products
+        </h3>
         <p className="text-xs text-muted-foreground mb-3">Type or scan a barcode — ↑↓ to navigate, Enter to add</p>
         <div className="flex items-center gap-2">
         <div className="relative min-w-0 flex-1">
@@ -32,7 +51,7 @@ export function FactoryPosProductBrowser({ model }: { model: FactoryPosModel }) 
               model.setHighlightedIndex(0);
             }}
             onKeyDown={model.handleSearchKeyDown}
-            className="pl-9"
+            className="rounded-xl border-border/70 bg-background/60 pl-9 focus-visible:ring-orange-500/50"
             autoFocus
             data-testid="input-product-search"
           />
@@ -40,10 +59,10 @@ export function FactoryPosProductBrowser({ model }: { model: FactoryPosModel }) 
         <MobileBarcodeScanner onScan={(code) => model.scanProductFromCamera(code)} disabled={!model.locationId} />
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto p-3">
+      <div className="min-h-[190px] max-h-[calc(100vh-24rem)] flex-1 overflow-y-auto p-3">
         {!model.locationId ? (
-          <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground">
-            <Package className="h-8 w-8 opacity-40" />
+          <div className="flex min-h-40 flex-col items-center justify-center gap-3 rounded-xl border border-orange-500/10 bg-orange-500/5 text-muted-foreground">
+            <Package className="h-9 w-9 text-orange-500/70" />
             <span className="text-sm">Select a location first</span>
           </div>
         ) : model.invLoading ? (
@@ -101,6 +120,7 @@ export function FactoryPosProductBrowser({ model }: { model: FactoryPosModel }) 
           </div>
         )}
       </div>
-    </Card>
+      </Card>
+    </div>
   );
 }
