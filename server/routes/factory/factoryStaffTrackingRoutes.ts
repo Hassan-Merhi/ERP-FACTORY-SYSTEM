@@ -839,6 +839,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
             changes: {
               approvedBy: { new: attendanceApprover.username },
               approvedByUserId: { new: attendanceApprover.id },
+              authorizationMethod: { new: attendanceApprover.authorizationMethod },
               periodStart: { new: periodStart },
               periodEnd: { new: periodEnd },
               personIds: { new: normalizedRecords.map(({ personType, personId }) => `${personType}:${personId}`) },
