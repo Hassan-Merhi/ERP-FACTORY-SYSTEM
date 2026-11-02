@@ -44,7 +44,7 @@ export default function FactoryPartiesHub() {
         className="flex flex-col h-full overflow-hidden"
       >
         {/* Shared page-header grammar (accent bar, icon, subtitle) like the other hubs and the ERP pages. */}
-        <div className="shrink-0 px-4 pt-3 [&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-2">
+        <div className="shrink-0 border-b border-slate-200/70 bg-gradient-to-r from-slate-50 via-white to-blue-50/60 px-4 pt-3 dark:border-[#1b3452] dark:from-[#0a182c] dark:via-[#0a1b34] dark:to-[#09172b] [&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-2">
           <PageHeader
             title="Parties"
             subtitle="Customers and suppliers of the factory"
@@ -52,16 +52,16 @@ export default function FactoryPartiesHub() {
             showBackButton={false}
           />
         </div>
-        <div className="erp-mobile-scroll-tabs border-b px-4 pb-1 shrink-0">
-          <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Factory parties sections">
+        <div className="erp-mobile-scroll-tabs shrink-0 border-b border-slate-200/70 bg-slate-50/70 px-4 pb-2 pt-1 dark:border-[#1b3452] dark:bg-[#071628]">
+          <TabsList className="w-max min-w-full rounded-xl bg-slate-200/50 p-1 sm:w-fit sm:min-w-0 dark:bg-[#14263d]" aria-label="Factory parties sections">
             {showCustomers && (
-              <TabsTrigger value="customers" data-testid="tab-parties-customers">
+              <TabsTrigger value="customers" className="rounded-lg px-4 py-2 font-semibold transition-colors data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-sm dark:text-slate-300 dark:data-[state=active]:bg-blue-600 dark:data-[state=active]:text-white" data-testid="tab-parties-customers">
                 <Users className="h-4 w-4 mr-2" />
                 Customers
               </TabsTrigger>
             )}
             {showSuppliers && (
-              <TabsTrigger value="suppliers" data-testid="tab-parties-suppliers">
+              <TabsTrigger value="suppliers" className="rounded-lg px-4 py-2 font-semibold transition-colors data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-sm dark:text-slate-300 dark:data-[state=active]:bg-blue-600 dark:data-[state=active]:text-white" data-testid="tab-parties-suppliers">
                 <UserRound className="h-4 w-4 mr-2" />
                 Suppliers
               </TabsTrigger>
