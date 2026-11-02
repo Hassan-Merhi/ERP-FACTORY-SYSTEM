@@ -56,3 +56,13 @@ export function operationalHistoricalSupplierExclusionSql(
       AND ${alias}.created_at < TIMESTAMP '2026-10-15')
   )`;
 }
+
+// Global Transaction Journal can combine several companies in one result.
+// Scope the same presentation filter to company 12 *per row*, never assume
+// all requested companies are the selected company.
+export function operationalHistoricalSupplierGlobalExclusionSql(
+  alias: "v" | "vouchers",
+): string {
+  return `(${alias}.company_id <> ${HISTORICAL_SUPPLIER_ROUTINE_COMPANY_ID} OR
+    ${operationalHistoricalSupplierExclusionSql(HISTORICAL_SUPPLIER_ROUTINE_COMPANY_ID, alias)})`;
+}
