@@ -270,7 +270,8 @@ export async function auditHistoricalFactorySuppliers() {
         "COUNT(DISTINCT v.id)::int AS freight_voucher_count,",
         "COALESCE(SUM(CASE WHEN la.code='FREIGHT' THEN ve.debit_amount ELSE 0 END),0)::text AS freight_dr,",
         "COALESCE(SUM(CASE WHEN la.code='FREIGHT' THEN ve.credit_amount ELSE 0 END),0)::text AS freight_cr,",
-        "COALESCE(SUM(CASE WHEN la.code='FACTORY_CHARGES_PAYABLE' THEN ve.debit_amount ELSE 0 END),0)::text AS clearing_dr",
+        "COALESCE(SUM(CASE WHEN la.code='FACTORY_CHARGES_PAYABLE' THEN ve.debit_amount ELSE 0 END),0)::text AS clearing_dr,",
+        "STRING_AGG(DISTINCT COALESCE(la.code,'(nonledger)'),', ' ORDER BY COALESCE(la.code,'(nonledger)')) AS source_account_codes",
         "FROM vouchers v JOIN voucher_entries ve ON ve.voucher_id=v.id",
         "LEFT JOIN ledger_accounts la ON la.id=ve.ledger_account_id",
         "WHERE v.company_id=$1 AND v.deleted_at IS NULL AND COALESCE(v.optional,false)=false",
@@ -372,6 +373,7 @@ export async function auditHistoricalFactorySuppliers() {
       const freightOffsetReview = kind === "goods" ? classifyFreightOffsetEvidence({
         containerId,
         freightVoucherCount: num(freight?.freight_voucher_count),
+        freightSourceAccountCodes: freight?.source_account_codes == null ? undefined : String(freight.source_account_codes),
         freightDebitUsd: String(freight?.freight_dr ?? "0"),
         freightCreditUsd: String(freight?.freight_cr ?? "0"),
         chargeClearingDebitUsd: String(freight?.clearing_dr ?? "0"),
