@@ -238,17 +238,32 @@ describe("factory daybook pagination client", () => {
     await expect(fetchAllDaybookEntries(params)).rejects.toThrow("Page gone");
   });
 
-  it("exports pages without rows as empty and treats a missing page count as one page", async () => {
+  it("refuses pages without rows and treats a missing page count as one page", async () => {
+    // Since #2784 an export never renders an incomplete list: a page without
+    // rows is an error, not an empty page.
     harness.previousFetch.mockResolvedValueOnce(
       new Response(JSON.stringify({ items: null }), { status: 200, headers: { "Content-Type": "application/json" } })
     );
-    await expect(fetchAllDaybookEntries(new URLSearchParams())).resolves.toEqual([]);
+    await expect(fetchAllDaybookEntries(new URLSearchParams())).rejects.toThrow(
+      "Incomplete daybook response: first page is missing"
+    );
 
     harness.previousFetch
       .mockResolvedValueOnce(page([{ id: 1 }], 1, 2, 2, 250))
       .mockResolvedValueOnce(new Response(JSON.stringify({ page: 2 }), { status: 200 }));
-    await expect(fetchAllDaybookEntries(new URLSearchParams())).resolves.toEqual([{ id: 1 }]);
+    await expect(fetchAllDaybookEntries(new URLSearchParams())).rejects.toThrow(
+      "Incomplete daybook response on page 2"
+    );
     expect(harness.previousFetch).toHaveBeenCalledTimes(3);
+
+    harness.previousFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ items: [{ id: 1 }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+    await expect(fetchAllDaybookEntries(new URLSearchParams())).resolves.toEqual([{ id: 1 }]);
+    expect(harness.previousFetch).toHaveBeenCalledTimes(4);
   });
 
   it("recovers from a network error, a refused page or an unreadable one", async () => {
