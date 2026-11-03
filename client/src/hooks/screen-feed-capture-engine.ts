@@ -21,7 +21,7 @@ const SCROLL_KEY_ATTRIBUTE = "data-screenfeed-scroll-key";
 
 const isDev = import.meta.env.DEV;
 
-type Html2Canvas = (typeof import("html2canvas"))["default"];
+type Html2Canvas = (typeof import("html2canvas-pro"))["default"];
 type CaptureSource = "dom" | "retry" | "fallback";
 export type ScreenFeedFailureStage = "render" | "encode" | "upload" | "pipeline";
 let html2canvasPromise: Promise<Html2Canvas> | null = null;
@@ -75,7 +75,7 @@ interface ScrollSnapshotLease {
 
 async function loadHtml2Canvas(): Promise<Html2Canvas> {
   if (!html2canvasPromise) {
-    html2canvasPromise = import("html2canvas")
+    html2canvasPromise = import("html2canvas-pro")
       .then((module) => module.default)
       .catch((error) => {
         html2canvasPromise = null;

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const html2canvas = vi.fn();
-vi.mock("html2canvas", () => ({ default: (...args: unknown[]) => html2canvas(...args) }));
+vi.mock("html2canvas-pro", () => ({ default: (...args: unknown[]) => html2canvas(...args) }));
 
 import { captureAndUploadScreenFrame } from "./screen-feed-capture-engine";
 
