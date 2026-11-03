@@ -1,5 +1,35 @@
 # October 2026 factory payroll — owner-approved, auditable backend reconciliation
 
+## Production posting result (verified)
+
+**Applied at 2026-11-03 09:29:42 UTC** on the verified production ERP service
+and company 12. The company-scoped central engine committed both balanced,
+historically dated adjustment vouchers and then verified the accounting
+postcondition inside the same transaction:
+
+- Voucher **#17120**, October 17, 2026: $145.16
+- Voucher **#17121**, October 31, 2026: $290.65
+- **Actual October salary expense:** $47,182.95 before -> **$46,747.14** after
+- **New payroll-overpayment receivable:** $435.81
+- **Six affected payrolls' Daybook cash:** $977.42 before and after
+- **Affected workers' operational outstanding advance balances:** $0.00 before and after
+- **DRAFT wages retained as accrued, not paid:** $582.26
+
+Render startup log: `[startup] October payroll overlap accounting reconciliation`
+with `status=posted`, voucher IDs `[17120,17121]`, and verified before/after
+figures. The posting engine and database audit triggers retained permanent
+traceability. Original cash vouchers, payroll rows, worker advances and
+Daybook entries were not edited or hidden.
+
+The $582.26 accrual/pay difference is **not an unresolved duplicate salary
+expense**: it represents draft-period wage accrual ($76.26 pending net
+settlement and $506 in applied historical salary advances). Expenses and
+payments are different accounting measures, so the two displays should not
+be forced equal.
+
+---
+
+
 **Company:** HMD factory Lebanon, company 12. **Source:** Render production original ERP database.
 **Scope:** 2026-10-01 through 2026-10-31. **No frontend work.**
 
