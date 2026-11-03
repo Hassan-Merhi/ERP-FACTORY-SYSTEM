@@ -9,7 +9,6 @@ on:
 permissions:
   contents: read
   actions: read
-  issues: write
 
 concurrency:
   group: nightly-erp-training-main
@@ -66,6 +65,8 @@ jobs:
   notify:
     needs: [plan, record]
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.record == 'true'
+    permissions:
+      issues: write
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
