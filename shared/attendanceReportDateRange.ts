@@ -7,7 +7,7 @@ export const ATTENDANCE_REPORT_MAX_DAYS = 366;
 const ONE_DAY_MS = 86_400_000;
 
 function utcMidnight(isoDate: string): number | null {
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(isoDate)) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return null;
   const time = Date.parse(`${isoDate}T00:00:00Z`);
   if (!Number.isFinite(time)) return null;
   return new Date(time).toISOString().slice(0, 10) === isoDate ? time : null;
