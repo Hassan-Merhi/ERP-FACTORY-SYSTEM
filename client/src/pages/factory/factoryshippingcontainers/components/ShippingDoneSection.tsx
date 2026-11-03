@@ -36,7 +36,6 @@ export function ShippingDoneSection({
   restorePending, onView, onRestore, onAskDelete,
 }: DoneSectionProps) {
   return (
-        {/* ── Done / Hidden Containers ── */}
         <div className="shipping-subsection">
           <button
             className="shipping-done-toggle w-full flex items-center justify-between px-4 py-3 text-sm font-medium"
