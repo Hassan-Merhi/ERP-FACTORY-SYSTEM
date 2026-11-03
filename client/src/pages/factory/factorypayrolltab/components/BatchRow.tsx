@@ -31,6 +31,7 @@ export function BatchRow({
   setFixAcctCashId,
   setFixAcctOpen,
   setUndoTargetId,
+  setDeleteTargetId,
   setDeleteBatchGroup,
   formatDisplayDate,
   condensed,
@@ -277,6 +278,16 @@ export function BatchRow({
                           title="Undo — reverses all accounting entries"
                         >
                           <RotateCcw className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => setDeleteTargetId(payroll.id)}
+                          data-testid={`button-delete-payroll-${payroll.id}`}
+                          title="Delete payroll — reverse payment and journal entries, then remove the record"
+                          aria-label="Delete payroll and reverse accounting"
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
                     </TableCell>
