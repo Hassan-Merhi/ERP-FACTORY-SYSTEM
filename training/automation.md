@@ -1,34 +1,33 @@
-# ERP & Factory Training — private storage and gateway deployment
+# ERP & Factory automated training — private video storage
 
-Status: **Vercel private storage exists; gateway NOT deployed; ERP integration NOT merged**. No tutorial has been uploaded or published. Training recordings use disposable local companies, never real accounting, inventory or payroll.
+Updated: 2026-11-03. Implementation is on draft PR #2763, not merged into the live ERP.
 
-## Verified storage (November 3, 2026)
-- Vercel store: `erp-factory-training-media`, ID `store_TXyFGTsySrCeQhOj`, private, region `pdx1`, 0 objects.
-- Connected Vercel project: `erp-training-storage-access`, ID `prj_Ev2ficF3T5o43OciPNkIRmyg10lN`, production and preview access. The project has **no deployment**.
-- The project has `BLOB_STORE_ID` and `BLOB_WEBHOOK_PUBLIC_KEY`. New Vercel functions use automatically rotated OIDC tokens instead of a persistent `BLOB_READ_WRITE_TOKEN`. Do not copy expiring tokens into Render.
-- The legacy training PR currently expects a long-lived Vercel token: **do not deploy that integration** until it has been replaced and tested.
+## Infrastructure status
 
-## Selected gateway design — not yet implemented
-1. **Read:** a logged-in ERP employee requests one approved tutorial. The Render backend checks company, role and page access. Render authenticates the request to a dedicated Vercel gateway, including the exact immutable object key. Vercel uses its own OIDC identity to mint a short-lived, object-specific read-only signed Blob URL. Render immediately fetches the media using that URL and streams it back to the authenticated ERP session, including video byte-range requests. No Blob token reaches the browser.
-2. **Write:** only the manually approved GitHub `training-publication` job may request an upload grant. Verify its GitHub Actions OIDC JWT signature and the exact repository ID, main branch, approved workflow and protected environment. Use Vercel Blob client uploads for large WebM files, with strict pathname, content-type and size limits. Do not route raw videos through Vercel Functions: they have a 4.5 MB request-size limit.
-3. **Gateway identity:** Use a dedicated strong shared secret stored only in Render and Vercel for server-to-server signing requests. Validate timestamps and signatures; avoid open upload endpoints. Do not enable publication before the gateway's public endpoints reject unauthenticated requests.
-4. **Publishing:** write only immutable `training/videos/{topic}/{sourceSha}.webm|vtt|png` keys. Human review of the actual recorded video precedes any upload and a second PR review precedes ERP publication. No automatic self-approval.
+- **Vercel production gateway: READY.** Project: `erp-training-storage-access` (`prj_Ev2ficF3T5o43OciPNkIRmyg10lN`); deployment `dpl_GhYDfPv53Npd4i8mEKVnnm2xHmo6`. Production hostname: `https://erp-training-storage-access.vercel.app`.
+- **Verified against production:** `GET /api/health` returned HTTP 200; an unsigned `GET /api/sign` with a valid training key returned HTTP 403; `GET /api/upload-url` returned HTTP 405. This verifies route startup and fail-closed unauthenticated access, **not** end-to-end uploads or signed playback.
+- **Private Vercel Blob:** `erp-factory-training-media` (`store_TXyFGTsySrCeQhOj`, `pdx1`); connected to the gateway project. No approved videos uploaded yet.
+- Vercel automatically rotates the gateway's Blob OIDC identity. The production gateway has a **sensitive** `TRAINING_GATEWAY_READ_SECRET` configured; its value must never enter source code, PR comments, screenshots, or logs.
+- The gateway's code is under `training/gateway` on the feature branch. Changes to the ERP backend and the GitHub publication workflow are on the same branch.
+- The Vercel project has been configured to disable automatic preview deployments to reduce unrelated builds. The connected monorepo's default production branch is still `main`; while `main` lacks `training/gateway`, auto-build attempts on `main` can still fail with `NOW_SANDBOX_WORKER_ROOTDIR_NOT_EXIST`. These failures do not imply that the previously verified gateway production alias is down. Configure the Vercel project's production branch explicitly for the gateway source, or isolate the gateway in a dedicated repository, rather than turning on full monorepo builds.
 
-Vercel reference documentation:
-- https://vercel.com/changelog/vercel-blob-now-supports-oidc-authentication
-- https://vercel.com/changelog/signed-urls-are-now-available-for-vercel-blob
-- https://vercel.com/docs/vercel-blob/client-upload
-- https://vercel.com/docs/functions/limitations
+## Design and security
 
-## Outstanding blockers
-- **Gateway implementation/deployment:** The connected repository code-writing operation was blocked during the attempted guarded gateway implementation. No gateway code was published, no API route deployed, and no shared secret configured. This must be completed and security-reviewed before changing production env vars.
-- **GitHub Actions:** #2764 reports jobs failing before runner assignment. Full CI, read-only browser recording, and publishing are still unverified.
-- **GitHub protected environment:** must require human reviewers and restrict deployment to main. Pending.
-- **ERP:** draft PR #2763 is not merged. Live accounting and Factory data are unchanged.
+1. Nightly workflow `.github/workflows/nightly-training-audit.yml` compares repository changes and records up to 16 predefined read-only browser tours against a **throwaway local** ERP/Factory database. It never connects to live production data.
+2. A person reviews the WebM, screenshots, VTT captions and Markdown instructions.
+3. The protected `training-publication` GitHub workflow validates the source recording; only a manually approved job from the intended repository, `main`, and the protected environment can acquire a short-lived PUT grant from `/api/upload-url` using GitHub Actions OIDC. No permanent Blob token is needed on GitHub.
+4. The gateway limits object paths to `training/videos/{topic}/{40-char-source-sha}.{webm|vtt|png}`, validates identity and constrains media types/sizes. It uses `@vercel/blob@2.4.0` signed URLs for immutable objects.
+5. For reads, ERP `/api/training/media/:topic` first verifies logged-in user, selected company and role/page access. The Render server then HMAC-signs a request to `/api/sign`. The gateway returns a short-lived single-key signed GET URL, consumed by Render; employees never see the Blob credential or gateway HMAC secret. Video range requests and captions stream through the authenticated ERP route.
+6. Manifest entries become visible only after a separate publication PR is reviewed, merged and deployed.
 
-## Acceptance checks before launch
-- Vercel deployment is READY and its public API returns 401 without valid server/workflow identity.
-- Signing API validates immutable allowed key patterns and an expiry less than five minutes; no open signing proxy or public bucket.
-- Approved upload runs only from GitHub main protected environment and cannot overwrite an existing object.
-- Video range seeking and captions work from Render, with only authorized role access, while unauthorized and unauthenticated requests fail.
-- Nightly fixture recording works with GitHub Actions; no production URL, database, supplier balance, inventory or journal change is permitted.
+## Remaining activation steps
+
+- **Complete CI on the latest PR commit.** Previous checks included a training-guide typing error (fixed in commit `1c737ecc12797d08a72f0d72bebe3f153c0ae789`), but many TypeScript errors in separate factory/accounting modules and an i18n ratchet failure remain. Do not merge while required checks fail.
+- **Fix the Vercel Git auto-build scope.** Unrelated ERP branches lack `training/gateway` and must not be selected as the training app's deployment source. Use Vercel Project Settings → Git → Production Branch to choose the intended gateway branch or move the gateway to a separate repository. Re-enable previews only when their branch selection is safe.
+- **Configure protected publication environment** `training-publication` with human required reviewers, `main` branch restriction and explicit `TRAINING_PUBLICATION_APPROVAL_ENABLED=true` only once reviewers are configured.
+- **After testing, configure the ERP Render service** (merge these variables, do not replace unrelated values): `TRAINING_MEDIA_PROVIDER=vercel`, `TRAINING_MEDIA_GATEWAY_URL=https://erp-training-storage-access.vercel.app`, `TRAINING_GATEWAY_READ_SECRET` with the same secret as the protected gateway environment. This environment update may redeploy the ERP; defer it until main contains the approved integration.
+- Verify a signed video grant and a denied grant, one disposable recording, one human-approved video upload, authenticated and unauthorized playback and byte-range support before enabling publication.
+
+## Production data and limitations
+
+No live ERP accounting, supplier balances, journal vouchers, payroll, attendance, stock or invoice data is used by the recorder. The implemented recorder tours are deterministic and read-only, not a generative AI that independently submits transactions. No tutorial has been recorded, approved and published end-to-end yet. No Railway infrastructure is used.
