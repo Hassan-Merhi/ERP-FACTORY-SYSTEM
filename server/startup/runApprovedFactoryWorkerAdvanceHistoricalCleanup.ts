@@ -157,7 +157,7 @@ async function assertHistoricalEvidence(tx: DbTransaction): Promise<void> {
     SELECT COUNT(*) FILTER (WHERE id=69 AND advance_id=274 AND worker_id=37 AND
       amount=88 AND repayment_date='2026-07-10' AND cash_account_id=${CASH} AND
       notes='test')::int AS matched,
-      COUNT(*) FILTER (WHERE advance_id=267)::int AS duplicate_repayments
+      COUNT(*) FILTER (WHERE advance_id IN (267,272,277))::int AS duplicate_repayments
     FROM factory_advance_repayments WHERE company_id=${COMPANY}
   `)).rows as Row[];
   must(num(repay?.matched) === 1 && num(repay?.duplicate_repayments) === 0, "REPAYMENT_CHANGED");
