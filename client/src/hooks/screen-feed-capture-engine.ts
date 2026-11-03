@@ -513,7 +513,11 @@ export async function captureAndUploadScreenFrame(input: {
 
   const startedAt = Date.now();
   const captured = await captureCanvas(input.scrollElements);
-  if (!input.shouldContinue() || document.visibilityState !== "visible" || window.location.href !== input.expectedPath) {
+  if (
+    !input.shouldContinue() ||
+    document.visibilityState !== "visible" ||
+    window.location.href !== input.expectedPath
+  ) {
     trace("capture-discarded");
     return cancelledResult(input.lastUploadedClickTs, startedAt);
   }
