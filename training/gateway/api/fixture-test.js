@@ -30,7 +30,7 @@ export default {
         pathname: key, operation: "put", validUntil: Date.now() + 90000,
       });
       const putUrl = new URL(putGrant.presignedUrl);
-      if (putUrl.hostname !== host || putUrl.pathname !== "/" + key) throw Error("unexpected signed PUT host=" + putUrl.hostname + " pathValid=" + (putUrl.pathname === "/" + key));
+      if (putUrl.hostname !== host || putUrl.pathname !== "/" + key) throw Error("unexpected signed PUT host=" + putUrl.hostname + " pathPrefix=" + putUrl.pathname.slice(0,95) + " queryKeys=" + Array.from(putUrl.searchParams.keys()).join(","));
       const putResult = await fetch(putUrl, {
         method: "PUT", body: fixture, headers: { "Content-Type": "video/webm" }, redirect: "error",
       });
