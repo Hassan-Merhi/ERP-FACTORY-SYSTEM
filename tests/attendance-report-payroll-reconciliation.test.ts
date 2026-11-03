@@ -84,8 +84,22 @@ describe("attendance report payroll reconciliation", () => {
 
   it("sums distinct nonoverlapping weekly payrolls and calculates remaining exactly", () => {
     const rows = [
-      payroll({ id: 1, periodStart: "2026-10-01", periodEnd: "2026-10-07", netSalary: "199.99", advances: "80.01", status: "PAID" }),
-      payroll({ id: 2, periodStart: "2026-10-08", periodEnd: "2026-10-14", netSalary: "120.09", advances: "30.00", status: "APPROVED" }),
+      payroll({
+        id: 1,
+        periodStart: "2026-10-01",
+        periodEnd: "2026-10-07",
+        netSalary: "199.99",
+        advances: "80.01",
+        status: "PAID",
+      }),
+      payroll({
+        id: 2,
+        periodStart: "2026-10-08",
+        periodEnd: "2026-10-14",
+        netSalary: "120.09",
+        advances: "30.00",
+        status: "APPROVED",
+      }),
     ];
     expect(salary(rows)).toMatchObject({
       expectedSalary: "430.09",

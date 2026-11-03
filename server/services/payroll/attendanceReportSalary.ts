@@ -53,7 +53,7 @@ const isPaid = (row: AttendanceReportPayrollRecord) => row.status.toUpperCase() 
 export function selectAttendanceReportPayrolls(
   payrolls: AttendanceReportPayrollRecord[],
   startDate: string,
-  endDate: string,
+  endDate: string
 ): AttendanceReportPayrollRecord[] {
   const candidates = payrolls
     .filter((row) => row.periodStart >= startDate && row.periodEnd <= endDate && row.periodStart <= row.periodEnd)
@@ -88,7 +88,7 @@ function estimateUnpostedSalary(input: AttendanceReportSalaryInput) {
     const statuses = Object.entries(input.attendance)
       .filter(([date]) => date >= cursor && date <= segmentEnd)
       .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
-      .map(([, status]) => status === "HalfDay" ? "Half Day" : status);
+      .map(([, status]) => (status === "HalfDay" ? "Half Day" : status));
     const calculated = calculateFactoryPayroll({
       salaryType: input.salaryType,
       baseSalary: Number(input.baseSalary || "0"),
@@ -103,9 +103,8 @@ function estimateUnpostedSalary(input: AttendanceReportSalaryInput) {
     });
     result = result.plus(money(calculated.netSalary));
     if (input.salaryType === "Monthly") {
-      const days = Math.round(
-        (Date.parse(segmentEnd + "T00:00:00Z") - Date.parse(cursor + "T00:00:00Z")) / 86_400_000
-      ) + 1;
+      const days =
+        Math.round((Date.parse(segmentEnd + "T00:00:00Z") - Date.parse(cursor + "T00:00:00Z")) / 86_400_000) + 1;
       result = result.plus(money(input.transportAllowance).times(days).div(calendarDays));
     }
     const next = new Date(Date.parse(segmentEnd + "T00:00:00Z") + 86_400_000);
@@ -130,10 +129,7 @@ export function reconcileAttendanceReportSalary(input: AttendanceReportSalaryInp
 
   // net_salary = cash due after advances; an advance has already been paid
   // and must count as settled salary, not as money still owed to the worker.
-  const expected = selected.reduce(
-    (total, row) => total.plus(money(row.netSalary)).plus(money(row.advances)),
-    zero(),
-  );
+  const expected = selected.reduce((total, row) => total.plus(money(row.netSalary)).plus(money(row.advances)), zero());
   const paidRows = selected.filter(isPaid);
   const cashPaid = paidRows.reduce((total, row) => total.plus(money(row.netSalary)), zero());
   // Advances were disbursed before this payroll. Their deduction already
