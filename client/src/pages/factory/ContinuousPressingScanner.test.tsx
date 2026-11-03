@@ -123,7 +123,7 @@ describe("ContinuousPressingScanner camera lifecycle", () => {
     fireEvent.click(screen.getByRole("button", { name: /start scanner/i }));
     await waitFor(() => expect(screen.getByText("Manual mode")).toBeInTheDocument());
     expect(screen.getByRole("alert")).toHaveTextContent("Use manual entry below");
-    fireEvent.change(screen.getByLabelText("Manual bale barcode"), { target: { value: "  ref300210 " } });
+    fireEvent.change(screen.getByLabelText("Manual item barcode"), { target: { value: "  ref300210 " } });
     fireEvent.click(screen.getByRole("button", { name: /read barcode/i }));
     await waitFor(() => expect(onBarcode).toHaveBeenCalledTimes(1));
     expect(onBarcode.mock.calls[0][0].barcode).toBe("ref300210");

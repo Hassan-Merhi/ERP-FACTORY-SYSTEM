@@ -318,7 +318,11 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
       // Production Targets payments are a separate authoritative payment source.
       // Display them on the Workers > Bonuses history without duplicating a worker_bonuses
       // record, creating another payable, or exposing the legacy pay/delete actions.
-      const productionHistory = status === "pending" ? [] : (await db.execute(sql`
+      const productionHistory =
+        status === "pending"
+          ? []
+          : (
+              await db.execute(sql`
         SELECT p.id, p.worker_id AS "workerId", p.payment_date::text AS "bonusDate",
           p.amount_usd::text AS amount,
           'Manual Production Bonus - week ' || p.week_start::text AS notes,
@@ -359,10 +363,14 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
         WHERE p.company_id=${companyId}
           ${workerId ? sql`AND p.worker_id=${parseInt(workerId)}` : sql``}
           ${status === "paid" ? sql`AND p.status='POSTED'` : sql``}
-      `)).rows;
-      const legacy = result.rows.map(row => ({...row, source: "worker"}));
-      res.json([...legacy, ...productionHistory].sort((a,b) =>
-        String(b.bonusDate).localeCompare(String(a.bonusDate)) || Number(b.id)-Number(a.id)));
+      `)
+            ).rows;
+      const legacy = result.rows.map((row) => ({ ...row, source: "worker" }));
+      res.json(
+        ([...legacy, ...productionHistory] as Array<Record<string, unknown>>).sort(
+          (a, b) => String(b.bonusDate).localeCompare(String(a.bonusDate)) || Number(b.id) - Number(a.id)
+        )
+      );
     } catch (err: unknown) {
       res.status(500).json({ message: getErrorMessage(err) });
     }

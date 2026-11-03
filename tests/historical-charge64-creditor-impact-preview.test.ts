@@ -34,7 +34,7 @@ const verified: Charge64CreditorImpactInput = {
 describe("Company-12 charge-64 creditor exposure: always a nonposting preview", () => {
   it("shows the named creditor would move even though no factory supplier-party entries change", () => {
     const r = previewCharge64CreditorImpact(verified);
-    expect(r.source.extraVoucherId).toBe(9309);
+    expect(r.source.duplicateVoucherId).toBe(9309);
     expect(r.sourceDaybookAmountUsd).toBe("1692.00");
     expect(r.sourceNativeAmountVarianceUsd).toBe("0.96");
     expect(r.postedCreditorNetDebitBeforeUsd).toBe("983.34");
@@ -57,14 +57,16 @@ describe("Company-12 charge-64 creditor exposure: always a nonposting preview", 
   });
   it("guards a mismatch between source daybook and retained voucher", () => {
     const r = previewCharge64CreditorImpact({
-      ...verified, retainedVoucherNativeAmountUsd: "1700.00",
+      ...verified,
+      retainedVoucherNativeAmountUsd: "1700.00",
     });
     expect(r.blockers).toContain("SOURCE_CHARGE_AMOUNT_OR_GL_PAIR_MISMATCH");
     expect(r.readyToPost).toBe(false);
   });
   it("guards a different ledger or deleted-correction lifecycle", () => {
     const r = previewCharge64CreditorImpact({
-      ...verified, creditorAccountCode: "OTHER",
+      ...verified,
+      creditorAccountCode: "OTHER",
       priorCorrectionDeletedAt: null,
       originalAmountEditAuditEventCount: 0,
     });
@@ -75,7 +77,8 @@ describe("Company-12 charge-64 creditor exposure: always a nonposting preview", 
   });
   it("does not invent an opening balance when the sign is not known", () => {
     const r = previewCharge64CreditorImpact({
-      ...verified, creditorOpeningBalanceSide: null,
+      ...verified,
+      creditorOpeningBalanceSide: null,
     });
     expect(r.blockers).toContain("CREDITOR_OPENING_BALANCE_SIDE_UNKNOWN");
     expect(r.openingInclusiveNetDebitBeforeUsd).toBeNull();

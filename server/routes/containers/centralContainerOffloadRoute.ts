@@ -10,6 +10,7 @@ import {
   executeContainerOffloadLifecycle,
   type ContainerOffloadLifecycleMode,
 } from "../../services/containers/offload-lifecycle";
+import { offlineReceivingCapture } from "./containerOffloadOfflinePolicy";
 
 async function runCentralOffload(req: Request, res: Response, mode: ContainerOffloadLifecycleMode): Promise<void> {
   const startedAt = Date.now();
@@ -38,7 +39,7 @@ async function runCentralOffload(req: Request, res: Response, mode: ContainerOff
   const offloadDate = data.offloadDate || getClientDate(req);
 
   try {
-    const result = await executeContainerOffloadLifecycle({
+    const input = {
       companyId,
       containerId,
       mode,
@@ -57,7 +58,14 @@ async function runCentralOffload(req: Request, res: Response, mode: ContainerOff
       agentChargeLines: data.agentChargeLines ?? [],
       // Wave 15 (M10): cost corrections need Admin/Owner.
       actorRole: req.session.currentRole ?? null,
-    });
+    };
+    const result = await executeContainerOffloadLifecycle(
+      input,
+      offlineReceivingCapture(
+        { userId: String(req.session.userId), username: req.session.username || "unknown" },
+        input
+      )
+    );
 
     logger.info("Atomic container offload lifecycle completed", {
       module: "containers",

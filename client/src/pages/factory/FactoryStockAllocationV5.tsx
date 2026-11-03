@@ -65,7 +65,6 @@ export default function FactoryStockAllocationV5() {
     setCancelSuperUser,
     setCancelSuperPass,
     query,
-    garbageWipersCount,
     rows,
     allCategories,
     totals,
@@ -80,48 +79,133 @@ export default function FactoryStockAllocationV5() {
   /* ── Render ───────────────────────────────────────────────────────────── */
   return (
     <div className="flex min-w-0 flex-col pb-6" data-testid="factory-stock-allocation-v5-page">
-
       <section className="px-3 pb-3 pt-5 sm:px-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-violet-500/30 bg-violet-500/15 text-violet-500"><Package className="h-6 w-6" /></div>
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-violet-500/30 bg-violet-500/15 text-violet-500">
+              <Package className="h-6 w-6" />
+            </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Stock Allocation</h1>
-                {totals && totals.shortageCount > 0 && <Badge variant="destructive" className="gap-1 text-xs"><AlertTriangle className="h-3 w-3" />{totals.shortageCount} shortages</Badge>}
+                {totals && totals.shortageCount > 0 && (
+                  <Badge variant="destructive" className="gap-1 text-xs">
+                    <AlertTriangle className="h-3 w-3" />
+                    {totals.shortageCount} shortages
+                  </Badge>
+                )}
               </div>
-              <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">Monitor product stock, expected loading and available balances.</p>
+              <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">
+                Monitor product stock, expected loading and available balances.
+              </p>
             </div>
           </div>
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-            <Button size="icon" variant="outline" className="h-9 w-9 rounded-lg" onClick={handleRefresh} disabled={query.isFetching} aria-label="Refresh stock allocation" data-testid="button-v5-refresh">
-              {refreshFlash ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <RefreshCw className={cn("h-4 w-4", query.isFetching && "animate-spin")} />}
+            <Button
+              size="icon"
+              variant="outline"
+              className="h-9 w-9 rounded-lg"
+              onClick={handleRefresh}
+              disabled={query.isFetching}
+              aria-label="Refresh stock allocation"
+              data-testid="button-v5-refresh"
+            >
+              {refreshFlash ? (
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              ) : (
+                <RefreshCw className={cn("h-4 w-4", query.isFetching && "animate-spin")} />
+              )}
             </Button>
-            <Button variant="outline" size="sm" className="h-9 gap-1.5 rounded-lg" onClick={() => setExportDialogOpen(true)} disabled={rows.length === 0} data-testid="button-v5-export-excel"><FileDown className="h-4 w-4" />Export</Button>
-            <Button variant="outline" size="sm" className="h-9 gap-1.5 rounded-lg" onClick={() => setRestoreDialogOpen(true)} data-testid="button-v5-restore-cancelled"><RotateCcw className="h-4 w-4" />Restore Cancelled</Button>
-            <Button size="sm" className="h-9 gap-1.5 rounded-lg bg-violet-600 text-white shadow-md shadow-violet-500/20 hover:bg-violet-700" onClick={() => setLocation("/factory/stock-allocation-v5/proformas/new")} data-testid="button-v5-open-create-proforma"><Plus className="h-4 w-4" />Create Proforma</Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 rounded-lg"
+              onClick={() => setExportDialogOpen(true)}
+              disabled={rows.length === 0}
+              data-testid="button-v5-export-excel"
+            >
+              <FileDown className="h-4 w-4" />
+              Export
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 rounded-lg"
+              onClick={() => setRestoreDialogOpen(true)}
+              data-testid="button-v5-restore-cancelled"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Restore Cancelled
+            </Button>
+            <Button
+              size="sm"
+              className="h-9 gap-1.5 rounded-lg bg-violet-600 text-white shadow-md shadow-violet-500/20 hover:bg-violet-700"
+              onClick={() => setLocation("/factory/stock-allocation-v5/proformas/new")}
+              data-testid="button-v5-open-create-proforma"
+            >
+              <Plus className="h-4 w-4" />
+              Create Proforma
+            </Button>
           </div>
         </div>
         <div className="mt-5 grid grid-cols-2 gap-2.5 lg:grid-cols-3 xl:grid-cols-5">
           <div className="flex min-w-0 items-center gap-3 rounded-xl border border-violet-500/25 bg-violet-500/[0.08] p-3.5 shadow-sm">
-            <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-500/20 text-violet-500 sm:flex"><Package className="h-5 w-5" /></div>
-            <div className="min-w-0"><p className="text-xs font-medium text-muted-foreground">Total Products</p><p className="mt-1 text-2xl font-bold tabular-nums">{(query.data?.rows.length ?? 0).toLocaleString()}</p></div>
+            <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-500/20 text-violet-500 sm:flex">
+              <Package className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-muted-foreground">Total Products</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums">{(query.data?.rows.length ?? 0).toLocaleString()}</p>
+            </div>
           </div>
           <div className="flex min-w-0 items-center gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] p-3.5 shadow-sm">
-            <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-500 sm:flex"><Boxes className="h-5 w-5" /></div>
-            <div className="min-w-0"><p className="text-xs font-medium text-muted-foreground">Stock Available</p><p className="mt-1 text-2xl font-bold tabular-nums text-emerald-500">{(totals?.stockAvailable ?? 0).toLocaleString()}</p></div>
+            <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-500 sm:flex">
+              <Boxes className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-muted-foreground">Stock Available</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-500">
+                {(totals?.stockAvailable ?? 0).toLocaleString()}
+              </p>
+            </div>
           </div>
           <div className="flex min-w-0 items-center gap-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] p-3.5 shadow-sm">
-            <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-500 sm:flex"><Container className="h-5 w-5" /></div>
-            <div className="min-w-0"><p className="text-xs font-medium text-muted-foreground">Expected to Load</p><p className="mt-1 text-2xl font-bold tabular-nums text-amber-500">{(totals?.expectedToLoad ?? 0).toLocaleString()}</p></div>
+            <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-500 sm:flex">
+              <Container className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-muted-foreground">Expected to Load</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-amber-500">
+                {(totals?.expectedToLoad ?? 0).toLocaleString()}
+              </p>
+            </div>
           </div>
           <div className="flex min-w-0 items-center gap-3 rounded-xl border border-sky-500/25 bg-sky-500/[0.07] p-3.5 shadow-sm">
-            <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-500/15 text-sky-500 sm:flex"><Truck className="h-5 w-5" /></div>
-            <div className="min-w-0"><p className="text-xs font-medium text-muted-foreground">Total Loaded</p><p className="mt-1 text-2xl font-bold tabular-nums text-sky-500">{(totals?.totalLoaded ?? 0).toLocaleString()}</p></div>
+            <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-500/15 text-sky-500 sm:flex">
+              <Truck className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-muted-foreground">Total Loaded</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-sky-500">
+                {(totals?.totalLoaded ?? 0).toLocaleString()}
+              </p>
+            </div>
           </div>
           <div className="col-span-2 flex min-w-0 items-center gap-3 rounded-xl border border-rose-500/25 bg-rose-500/[0.07] p-3.5 shadow-sm lg:col-span-1">
-            <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-rose-500/15 text-rose-500 sm:flex"><Scale className="h-5 w-5" /></div>
-            <div className="min-w-0"><p className="text-xs font-medium text-muted-foreground">Net Available Balance</p><p className={cn("mt-1 text-2xl font-bold tabular-nums", (totals?.freeToPromise ?? 0) < 0 ? "text-rose-500" : "text-emerald-500")}>{(totals?.freeToPromise ?? 0).toLocaleString()}</p></div>
+            <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-rose-500/15 text-rose-500 sm:flex">
+              <Scale className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-muted-foreground">Net Available Balance</p>
+              <p
+                className={cn(
+                  "mt-1 text-2xl font-bold tabular-nums",
+                  (totals?.freeToPromise ?? 0) < 0 ? "text-rose-500" : "text-emerald-500"
+                )}
+              >
+                {(totals?.freeToPromise ?? 0).toLocaleString()}
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -153,7 +237,11 @@ export default function FactoryStockAllocationV5() {
 
           {/* Category multi-select */}
           {allCategories.length > 0 && (
-            <div ref={catDropRef} className="relative min-w-[150px] flex-1 sm:flex-none" data-testid="select-v5-category-filter">
+            <div
+              ref={catDropRef}
+              className="relative min-w-[150px] flex-1 sm:flex-none"
+              data-testid="select-v5-category-filter"
+            >
               <button
                 onClick={() => setCatDropOpen((v) => !v)}
                 className={cn(
@@ -231,23 +319,73 @@ export default function FactoryStockAllocationV5() {
           )}
         </div>
 
-
         {/* Compact, accessible filter switches. No duplicate export/refresh buttons. */}
         <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 text-xs font-medium xl:w-auto">
-          <button type="button" onClick={() => setHideZero((v) => !v)} data-testid="button-v5-toggle-zero" aria-pressed={!hideZero} className="flex items-center gap-2 text-foreground hover:text-violet-500">
-            <span className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors", !hideZero ? "bg-violet-600" : "bg-muted-foreground/30")}>
-              <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all", !hideZero ? "left-[18px]" : "left-0.5")} />
-            </span>Show Zero Rows
+          <button
+            type="button"
+            onClick={() => setHideZero((v) => !v)}
+            data-testid="button-v5-toggle-zero"
+            aria-pressed={!hideZero}
+            className="flex items-center gap-2 text-foreground hover:text-violet-500"
+          >
+            <span
+              className={cn(
+                "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+                !hideZero ? "bg-violet-600" : "bg-muted-foreground/30"
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all",
+                  !hideZero ? "left-[18px]" : "left-0.5"
+                )}
+              />
+            </span>
+            Show Zero Rows
           </button>
-          <button type="button" onClick={() => setShowNegativeOnly((v) => !v)} data-testid="button-v5-toggle-negative-only" aria-pressed={showNegativeOnly} className="flex items-center gap-2 text-foreground hover:text-violet-500">
-            <span className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors", showNegativeOnly ? "bg-violet-600" : "bg-muted-foreground/30")}>
-              <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all", showNegativeOnly ? "left-[18px]" : "left-0.5")} />
-            </span>Negative Only
+          <button
+            type="button"
+            onClick={() => setShowNegativeOnly((v) => !v)}
+            data-testid="button-v5-toggle-negative-only"
+            aria-pressed={showNegativeOnly}
+            className="flex items-center gap-2 text-foreground hover:text-violet-500"
+          >
+            <span
+              className={cn(
+                "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+                showNegativeOnly ? "bg-violet-600" : "bg-muted-foreground/30"
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all",
+                  showNegativeOnly ? "left-[18px]" : "left-0.5"
+                )}
+              />
+            </span>
+            Negative Only
           </button>
-          <button type="button" onClick={() => setShowGarbageWipers((v) => !v)} data-testid="button-v5-toggle-garbage-wipers" aria-pressed={showGarbageWipers} className="flex items-center gap-2 text-foreground hover:text-violet-500">
-            <span className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors", showGarbageWipers ? "bg-violet-600" : "bg-muted-foreground/30")}>
-              <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all", showGarbageWipers ? "left-[18px]" : "left-0.5")} />
-            </span>Show Garbage/Wipers
+          <button
+            type="button"
+            onClick={() => setShowGarbageWipers((v) => !v)}
+            data-testid="button-v5-toggle-garbage-wipers"
+            aria-pressed={showGarbageWipers}
+            className="flex items-center gap-2 text-foreground hover:text-violet-500"
+          >
+            <span
+              className={cn(
+                "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+                showGarbageWipers ? "bg-violet-600" : "bg-muted-foreground/30"
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all",
+                  showGarbageWipers ? "left-[18px]" : "left-0.5"
+                )}
+              />
+            </span>
+            Show Garbage/Wipers
           </button>
         </div>
       </div>
@@ -277,7 +415,10 @@ export default function FactoryStockAllocationV5() {
         <>
           <FactoryStockAllocationV5MobileList model={model} />
 
-          <div data-horizontal-scroll="true" className="hidden overflow-x-auto md:block phone-land:hidden mx-3 rounded-b-xl border border-t-0 bg-card shadow-sm sm:mx-5">
+          <div
+            data-horizontal-scroll="true"
+            className="hidden overflow-x-auto md:block phone-land:hidden mx-3 rounded-b-xl border border-t-0 bg-card shadow-sm sm:mx-5"
+          >
             <table className="w-full min-w-[1080px] table-fixed border-collapse text-sm">
               <colgroup>
                 <col style={{ width: "29%" }} />
@@ -290,7 +431,9 @@ export default function FactoryStockAllocationV5() {
               </colgroup>
               <thead>
                 <tr className="sticky top-0 z-30 bg-slate-100 text-slate-700 dark:bg-slate-800/95 dark:text-slate-200">
-                  <th className="sticky left-0 z-20 border-b border-r bg-slate-100 px-4 py-3 text-left text-xs font-semibold dark:bg-slate-800/95">Product</th>
+                  <th className="sticky left-0 z-20 border-b border-r bg-slate-100 px-4 py-3 text-left text-xs font-semibold dark:bg-slate-800/95">
+                    Product
+                  </th>
                   <th className="border-b border-r px-3 py-3 text-left text-xs font-semibold">Code</th>
                   <th className="px-2 py-3 text-center text-xs font-semibold border-b border-r whitespace-nowrap text-green-700 dark:text-green-400">
                     Stock Available
@@ -304,9 +447,7 @@ export default function FactoryStockAllocationV5() {
                   <th className="px-2 py-3 text-center text-xs font-semibold border-b border-r whitespace-nowrap">
                     Available Balance
                   </th>
-                  <th className="border-b px-2 py-3 text-center text-xs font-semibold whitespace-nowrap">
-                    Action
-                  </th>
+                  <th className="border-b px-2 py-3 text-center text-xs font-semibold whitespace-nowrap">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -327,11 +468,17 @@ export default function FactoryStockAllocationV5() {
                       >
                         <td className="sticky left-0 z-10 border-r bg-inherit px-4 py-2.5">
                           <div className="flex min-w-0 items-center gap-3">
-                            <span className="flex h-4 w-4 shrink-0 items-center justify-center">{isShortage && <AlertTriangle className="h-4 w-4 text-rose-500" />}</span>
-                            <span className="block truncate text-xs font-semibold sm:text-sm" title={row.productName}>{row.productName}</span>
+                            <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                              {isShortage && <AlertTriangle className="h-4 w-4 text-rose-500" />}
+                            </span>
+                            <span className="block truncate text-xs font-semibold sm:text-sm" title={row.productName}>
+                              {row.productName}
+                            </span>
                           </div>
                         </td>
-                        <td className="border-r px-3 py-2.5 font-mono text-xs text-muted-foreground">{row.articleCode}</td>
+                        <td className="border-r px-3 py-2.5 font-mono text-xs text-muted-foreground">
+                          {row.articleCode}
+                        </td>
 
                         <td className="border-r px-2 py-2.5 text-center font-mono text-xs tabular-nums">
                           {row.stockAvailable > 0 ? (
@@ -481,7 +628,11 @@ export default function FactoryStockAllocationV5() {
                                       variant="outline"
                                       className="h-5 px-2 text-[11px]"
                                       data-testid={`button-v5-edit-proforma-${proforma.proformaId}`}
-                                      onClick={() => setLocation(`/factory/stock-allocation-v5/proformas/${proforma.proformaId}/edit`)}
+                                      onClick={() =>
+                                        setLocation(
+                                          `/factory/stock-allocation-v5/proformas/${proforma.proformaId}/edit`
+                                        )
+                                      }
                                     >
                                       <Pencil className="h-2.5 w-2.5 mr-1" />
                                       Edit Proforma

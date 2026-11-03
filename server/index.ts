@@ -12,6 +12,11 @@
  */
 import express from "express";
 import { createHttpApp } from "./httpApp";
+import { registerFactoryEdgeBoundary } from "./edge/edgeBoundary";
+import { ensureEdgeVoucherOutboxSchema } from "./edge/edgeVoucherOutbox";
+import { ensureCloudEdgeStageSchema } from "./edge/edgeCloudStaging";
+import { readCloudSyncStageConfiguration } from "./edge/edgeSyncStageProtocol.mjs";
+import { readFactoryEdgeConfiguration, shouldStartEdgeBackgroundJobs } from "./edge/edgeRuntimePolicy.mjs";
 import compression from "compression";
 import { securityHeadersMiddleware } from "./security/securityHeaders";
 import { registerRoutes } from "./routes";
@@ -74,6 +79,7 @@ import { runApprovedUkBasma38 } from "./startup/runApprovedUkBasma38";
 import { runApprovedHmdEurogulfFreightRepair } from "./startup/runApprovedHmdEurogulfFreightRepair";
 import { runApprovedFactoryDestinationNormalization } from "./startup/runApprovedFactoryDestinationNormalization";
 import { runApprovedMali53DestinationNormalization } from "./startup/runApprovedMali53DestinationNormalization";
+import { runApprovedFactoryWorkerAdvanceLedgerRepair } from "./startup/runApprovedFactoryWorkerAdvanceLedgerRepair";
 import { ensureFactorySheetsSacksSchema } from "./startup/factorySheetsSacksSchema";
 import { ensureSpGitTracking } from "./lib/spGitTracking";
 import { ensureRecurringJournalSchema } from "./services/accounting/ensureRecurringJournalSchema";
@@ -146,6 +152,10 @@ app.set("etag", false);
 const sessionMiddleware = buildSessionMiddleware();
 app.use(sessionMiddleware);
 
+// Read-only LAN edge safety boundary + same-origin server identity endpoint.
+// Cloud stays unchanged; edge requests never silently proxy to cloud.
+registerFactoryEdgeBoundary(app);
+
 // Globally block all mutation requests (POST/PUT/PATCH/DELETE) for View Only role.
 // Must run after session middleware so req.session.currentRole is populated.
 app.use(blockViewOnlyWrites);
@@ -203,8 +213,8 @@ let migrationsDone = false;
     try {
       // The server selects the signal using the authenticated session's
       // effective role. Never trust a client-provided role for this decision.
-      const target = req.session?.userId &&
-        ["Admin", "Owner", "Developer"].includes(req.session.currentRole ?? "")
+      const target =
+        req.session?.userId && ["Admin", "Owner", "Developer"].includes(req.session.currentRole ?? "")
           ? "privileged"
           : "regular";
       const forceRefreshToken = await readGlobalForceRefreshToken(target);
@@ -234,7 +244,7 @@ let migrationsDone = false;
   // Valid websocket upgrades are handled by the upgrade path. Plain HTTP GET
   // requests to /ws should fail explicitly instead of falling through to the SPA.
   registerWebSocketHttpFallback(app);
-  if (process.env.ENABLE_SCHEDULERS !== "false") {
+  if (process.env.ENABLE_SCHEDULERS !== "false" && shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())) {
     startScheduler();
     logger.info("[Schedulers] Started (ENABLE_SCHEDULERS != false)");
   } else {
@@ -300,6 +310,8 @@ let migrationsDone = false;
       // columns, fiscal/factory tables) — see startup/ensureRuntimeSchema.ts.
       await ensureCanonicalStockMovementJournal(pool);
       await ensureRuntimeSchema(pool);
+      await ensureEdgeVoucherOutboxSchema(pool);
+      await ensureCloudEdgeStageSchema(pool, readCloudSyncStageConfiguration().enabled);
       // Needs fiscal_period_closures from ensureRuntimeSchema. Fatal on failure:
       // serving writes without the closed-period lock would let closed books change.
       await ensureClosedPeriodGuard(pool);
@@ -344,7 +356,9 @@ let migrationsDone = false;
       } catch (err: unknown) {
         logger.error("[startup] Sheets & Sacks schema ensure failed", { error: String(err) });
       }
-      await bootstrapRecurringJournalFromEnvironment();
+      if (shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())) {
+        await bootstrapRecurringJournalFromEnvironment();
+      }
       try {
         // Factory Production Targets and Attendance Register must be available
         // even when production skips the bulk startup migration pass.
@@ -393,9 +407,12 @@ let migrationsDone = false;
             }
           }
         } catch (inspectionError: unknown) {
-          logger.warn("[startup] Historical production bonus inspection unavailable; serving without changing posted vouchers", {
-            error: getErrorMessage(inspectionError),
-          });
+          logger.warn(
+            "[startup] Historical production bonus inspection unavailable; serving without changing posted vouchers",
+            {
+              error: getErrorMessage(inspectionError),
+            }
+          );
         }
       }
       // The Container Planner's registered migrations are never applied by
@@ -409,31 +426,43 @@ let migrationsDone = false;
       await ensureFactoryBaleOrderIntegrity(pool);
       // Explicitly owner-approved, one-time monetary correction. Disabled by
       // default and guarded against repeat execution or accounting cutover.
-      await runApprovedLegacyBaleUnitCostRepair(pool);
-      // Owner-approved (2026-10-17) follow-up for the remaining historical/sold bales.
-      await runApprovedLegacySoldBaleUnitCostRepair(pool);
-      // One-time owner-authorized, company-12 historical loading-date reconciliation.
-      // Atomic before-image audit and exact first-submission evidence are required.
-      await runApprovedCustomerLoadingDateRepair(pool);
-      // Restore the original date for a historically confirmed order returned to LOADING.
-      await runApprovedReturnedLoadingDateRepair(pool);
-      // Owner-approved, idempotent reclassification of 18 original factory import payables.
-      // No-op unless explicitly enabled on the verified production Render service.
-      await runApprovedFactoryPayableReclassification();
-      await runApprovedFactoryPayableUndo();
-      // One-time exact goods payable catch-up for ABO SOBHI container TCLU8160430.
-      await runApprovedAboSobhiGoods82();
-      // One-time, source-reviewed, owner-approved company-12 JABER liability reassignment.
-      await runApprovedAboJaberPayableFix();
-      // Exact-source, owner-requested UK BASMA supplier statement reconciliation.
-      await runApprovedUkBasma38();
-      // Owner-approved EUROGULF freight reclass; no-op without exact Render opt-in.
-      await runApprovedHmdEurogulfFreightRepair();
-      // Owner-approved Factory customer order destination spelling consolidation.
-      // Opt-in only; exact company, database, before-images and audit are verified.
-      await runApprovedFactoryDestinationNormalization(pool);
-      // One-time, audited destination label consolidation on the finalized MALI 53 order.
-      await runApprovedMali53DestinationNormalization(pool);
+      // Startup repair writers are forbidden on independently authoritative LAN
+      // databases and on a cloud explicitly fenced for factory handoff.
+      if (shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())) {
+        await runApprovedLegacyBaleUnitCostRepair(pool);
+        // Owner-approved (2026-10-17) follow-up for the remaining historical/sold bales.
+        await runApprovedLegacySoldBaleUnitCostRepair(pool);
+        // One-time owner-authorized, company-12 historical loading-date reconciliation.
+        // Atomic before-image audit and exact first-submission evidence are required.
+        await runApprovedCustomerLoadingDateRepair(pool);
+        // Restore the original date for a historically confirmed order returned to LOADING.
+        await runApprovedReturnedLoadingDateRepair(pool);
+        // Owner-approved, idempotent reclassification of 18 original factory import payables.
+        // No-op unless explicitly enabled on the verified production Render service.
+        await runApprovedFactoryPayableReclassification();
+        await runApprovedFactoryPayableUndo();
+        // One-time exact goods payable catch-up for ABO SOBHI container TCLU8160430.
+        await runApprovedAboSobhiGoods82();
+        // One-time, source-reviewed, owner-approved company-12 JABER liability reassignment.
+        await runApprovedAboJaberPayableFix();
+        // Exact-source, owner-requested UK BASMA supplier statement reconciliation.
+        await runApprovedUkBasma38();
+        // Owner-approved EUROGULF freight reclass; no-op without exact Render opt-in.
+        await runApprovedHmdEurogulfFreightRepair();
+        // Owner-approved Factory customer order destination spelling consolidation.
+        // Opt-in only; exact company, database, before-images and audit are verified.
+        await runApprovedFactoryDestinationNormalization(pool);
+        // One-time, audited destination label consolidation on the finalized MALI 53 order.
+        await runApprovedMali53DestinationNormalization(pool);
+        // Opt-in, production company 12 only; no UI or reporting substitution.
+        try {
+          await runApprovedFactoryWorkerAdvanceLedgerRepair();
+        } catch (advanceRepairError: unknown) {
+          logger.error("[startup] Factory worker advance accrual correction blocked", {
+            error: getErrorMessage(advanceRepairError),
+          });
+        }
+      }
       if (migrationsEnabled) {
         try {
           await runMigrations();
@@ -451,7 +480,13 @@ let migrationsDone = false;
       logger.info("[startup] ✓ Supplier Partner GIT tracking schema ensured");
     })
     .then(() => {
-      listenWithRetry(server, port, () => runPostStartupJobs());
+      listenWithRetry(server, port, () => {
+        if (shouldStartEdgeBackgroundJobs(readFactoryEdgeConfiguration())) {
+          runPostStartupJobs();
+        } else {
+          logger.info("[FactoryEdge] Background startup jobs disabled by LAN mode or cloud writer fence");
+        }
+      });
     })
     .catch((err: unknown) => {
       logger.error("Fatal startup error:", { error: getErrorMessage(err) ?? err });

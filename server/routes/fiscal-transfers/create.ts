@@ -4,6 +4,7 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
+import { offlineEdgeText } from "../../i18n/offlineEdgeMessages";
 import type { Express, Request } from "express";
 import { getErrorMessage, getErrorStack } from "../../lib/httpHandlers";
 import { db } from "../../db";
@@ -11,27 +12,20 @@ import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
 import { getClientDate } from "../../lib/dateUtils";
 import { logger } from "../../lib/logger";
-import { inventory, stockTransferVouchers, stockTransferItems, vouchers, locations } from "@shared/schema";
+import { inventory, locations } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
-import { MoneyDecimal, parseMoneyInput, toMoney } from "../../lib/money";
-import { stockTransferNarrationTx } from "../../services/inventory/stockTransferNarration";
-import { allocateVoucherNumberTx } from "../../services/accounting/voucherNumbering";
+import { parseMoneyInput, toMoney } from "../../lib/money";
 import { allStockItemsOwned, ownLocationIds } from "../helpers/companyOwnership";
 import { sendTransferWhatsApp } from "../../helpers/sendTransferWhatsApp";
 import { getActiveCompanyPermissionContext } from "../../services/security/activeCompanyPermissionContext";
-import {
-  applyStockTransferInventoryTx,
-  assertTransferCompanyScopeTx,
-  DuplicateStockTransferError,
-  StockTransferPolicyError,
-} from "../../storage/stock-ops/transfers-create";
-import { lockInventoryRow } from "../../storage/inventoryRowLock";
+import { DuplicateStockTransferError, StockTransferPolicyError } from "../../storage/stock-ops/transfers-create";
+import { createStockTransferTx } from "../../services/inventory/createStockTransfer";
+import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
+import { capturePhase9StockTransferTx } from "../../edge/phase9StockOutbox";
+import { stockTransferEvidence } from "./stockTransferOfflineEvidence";
 import { sendBaleMirrorMovementRefusal } from "../../services/accounting/perpetualInventory/cutoverRefusal";
 import {
-  findExistingStockDocumentTx,
-  recordStockDocumentTx,
   resolveStockDocumentRequestId,
-  stockDocumentIdempotencyKey,
   StockDocumentIdempotencyError,
 } from "../../services/inventory/stockDocumentIdempotency";
 
@@ -163,158 +157,47 @@ export function registerStockTransferCreateRoutes(app: Express) {
               .json({ message: `Item ${item.stockItemId}: Source and destination cannot be the same` });
           }
         }
-        // Create Stock Transfer voucher, items, and update inventory atomically
+        // Voucher, items and the journalled inventory movement are created atomically by createStockTransferTx.
         const effectiveDate = voucherDate || getClientDate(req);
 
         // A transfer moves stock the moment it commits, so a double click or a
-        // retried request must not move it twice. The key is the caller's own
-        // request id; a caller that sends none is served exactly as before.
-        const idempotencyKey = requestId
-          ? stockDocumentIdempotencyKey({ sourceType: "stock-transfer", companyId, clientRequestId: requestId })
-          : null;
-
+        // retried request must not move it twice: createStockTransferTx keys it
+        // on the caller's own request id (stockDocumentIdempotencyKey); a caller
+        // that sends none is served exactly as before.
+        const lanCapture = isPhase9LanPrimary();
         const txResult = await db.transaction(async (tx) => {
-          if (idempotencyKey) {
-            const existingTransferId = await findExistingStockDocumentTx({ tx, companyId, idempotencyKey });
-            if (existingTransferId) {
-              const [existingTransfer] = await tx
-                .select()
-                .from(stockTransferVouchers)
-                .where(eq(stockTransferVouchers.id, existingTransferId))
-                .limit(1);
-              const [existingVoucher] = existingTransfer
-                ? await tx
-                    .select()
-                    .from(vouchers)
-                    .where(and(eq(vouchers.id, existingTransfer.voucherId), eq(vouchers.companyId, companyId)))
-                    .limit(1)
-                : [];
-              if (existingTransfer && existingVoucher) {
-                const existingItems = await tx
-                  .select()
-                  .from(stockTransferItems)
-                  .where(eq(stockTransferItems.transferId, existingTransfer.id));
-                return {
-                  transfer: existingTransfer,
-                  transferItems: existingItems,
-                  newVoucher: existingVoucher,
-                  replayed: true,
-                };
-              }
-              throw new StockDocumentIdempotencyError(
-                "STOCK_DOCUMENT_IDEMPOTENCY_CORRUPT",
-                `Stock transfer idempotency marker ${idempotencyKey} references a missing transfer`
-              );
-            }
-          }
-
-          const normalizedMovementItems = [...items]
-            .map((item) => ({
-              sourceLocationId: Number(item.sourceLocationId || sourceLocationId),
-              stockItemId: Number(item.stockItemId),
-              quantity: String(item.quantity),
-              rate: item.rate == null ? "0" : String(item.rate),
-            }))
-            .sort((a, b) => a.sourceLocationId - b.sourceLocationId || a.stockItemId - b.stockItemId);
-
-          await assertTransferCompanyScopeTx(tx, companyId, Number(destinationLocationId), normalizedMovementItems);
-
-          const [newVoucher] = await tx
-            .insert(vouchers)
-            .values({
-              companyId,
-              voucherType: "Stock Transfer",
-              // Phase 22 (B), PE8: the gapless number (a stock document header,
-              // no ledger lines, so not an engine posting).
-              voucherNumber: await allocateVoucherNumberTx(tx, {
-                companyId,
-                voucherType: "Stock Transfer",
-                voucherDate: effectiveDate,
-              }),
-              voucherDate: effectiveDate,
-              description: (typeof notes === "string" ? notes.trim() : "") || await stockTransferNarrationTx(
-                tx,
-                companyId,
-                normalizedMovementItems.map((item) => item.sourceLocationId),
-                Number(destinationLocationId)
-              ),
-              totalAmount: "0",
-              optional: optional === true,
-            })
-            .returning();
-
-          const [transfer] = await tx
-            .insert(stockTransferVouchers)
-            .values({
-              voucherId: newVoucher.id,
-              sourceLocationId: resolvedHeaderSourceId,
-              destinationLocationId,
-              notes: notes || null,
-              inventoryApplied: optional !== true,
-            })
-            .returning();
-
-          // Line totals are taken at cents and the voucher total is their sum,
-          // so the header always equals the lines it carries.
-          let totalAmount = new MoneyDecimal(0);
-          const transferItems = [];
-
-          for (const item of normalizedMovementItems) {
-            const quantity = toMoney(item.quantity);
-            const sourceInv = await lockInventoryRow(tx, item.sourceLocationId, item.stockItemId);
-            const rateText = sourceInv?.average_rate ?? item.rate ?? "0";
-            const rate = toMoney(String(rateText || "0"));
-            const totalItemAmount = quantity.times(rate).toDecimalPlaces(2);
-            totalAmount = totalAmount.plus(totalItemAmount);
-
-            const [insertedItem] = await tx
-              .insert(stockTransferItems)
-              .values({
-                transferId: transfer.id,
-                stockItemId: item.stockItemId,
-                sourceLocationId: item.sourceLocationId,
-                quantity: quantity.toString(),
-                rate: rate.toFixed(2),
-                totalAmount: totalItemAmount.toFixed(2),
-              })
-              .returning();
-
-            transferItems.push(insertedItem);
-          }
-
-          if (!optional) {
-            await applyStockTransferInventoryTx(tx, {
-              companyId,
-              transferId: transfer.id,
-              sourceVoucherId: newVoucher.id,
-              destinationLocationId: Number(destinationLocationId),
-              items: transferItems.map((item) => ({
-                sourceLocationId: item.sourceLocationId!,
-                stockItemId: item.stockItemId,
-                quantity: item.quantity,
-                rate: item.rate,
-              })),
-              allowNegativeInventory: allowNegativeInventory !== false,
-            });
-          }
-
-          await tx
-            .update(vouchers)
-            .set({ totalAmount: totalAmount.toFixed(2) })
-            .where(eq(vouchers.id, newVoucher.id));
-
-          if (idempotencyKey) {
-            await recordStockDocumentTx({
+          const created = await createStockTransferTx(tx, {
+            companyId,
+            requestId,
+            items,
+            sourceLocationId,
+            destinationLocationId,
+            resolvedHeaderSourceId,
+            effectiveDate,
+            notes,
+            optional,
+            allowNegativeInventory,
+            actorUserId: _uid,
+          });
+          // Factory LAN server during an outage: record the transfer's inputs
+          // on the "stock" stream, in this transaction.
+          if (lanCapture && !created.replayed) {
+            await capturePhase9StockTransferTx(
               tx,
-              companyId,
-              idempotencyKey,
-              documentId: transfer.id,
-              sourceType: "stock-transfer",
-              actorUserId: _uid,
-            });
+              stockTransferEvidence(req, created, {
+                companyId,
+                requestId,
+                items,
+                sourceLocationId,
+                destinationLocationId,
+                effectiveDate,
+                notes,
+                optional,
+                allowNegativeInventory,
+              })
+            );
           }
-
-          return { transfer, transferItems, newVoucher, replayed: false };
+          return created;
         });
 
         res.status(201).json({
@@ -367,7 +250,14 @@ export function registerStockTransferCreateRoutes(app: Express) {
         return;
       }
 
-      // Original flow: Use existing voucher (voucherId required)
+      // Original flow: Use existing voucher (voucherId required). The factory
+      // LAN server records new transfers only; this form stays cloud-only.
+      if (isPhase9LanPrimary()) {
+        return res.status(409).json({
+          code: "EDGE_PHASE9_STOCK_TRANSFER_FORM_CLOUD_ONLY",
+          message: offlineEdgeText("stockTransferFormCloudOnly", req.headers["accept-language"]),
+        });
+      }
       if (!companyId) {
         return res.status(400).json({ message: "No company selected" });
       }

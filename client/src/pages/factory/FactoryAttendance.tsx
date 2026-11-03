@@ -11,32 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+
 import { useToast } from "@/hooks/use-toast";
-import { useAuthenticatedUser } from "@/app/useAuthenticatedUser";
-import {
-  CalendarDays,
-  CheckCircle,
-  XCircle,
-  RotateCcw,
-  Save,
-  Printer,
-  FileDown,
-  Users,
-  UserCheck,
-  UserX,
-  Clock,
-  ChevronDown,
-  Loader2,
-  MessageCircle,
-  Search,
-} from "lucide-react";
+import { CalendarDays, Save, Printer, FileDown, Loader2, MessageCircle, Search } from "lucide-react";
 
 import type {
   AttendanceBulkRecord,
@@ -61,11 +38,16 @@ import {
   todayStr,
 } from "./factoryattendance/utils";
 import { PerWorkerView } from "./factoryattendance/components/PerWorkerView";
-import { SummaryCard } from "./factoryattendance/components/SummaryCard";
+import { AttendanceActionsMenu } from "./factoryattendance/components/AttendanceActionsMenu";
+import { AttendanceSummaryGrid } from "./factoryattendance/components/AttendanceSummaryGrid";
 import { AttendanceReportImage } from "./factoryattendance/components/AttendanceReportImage";
 import { LanguageChoiceDialog } from "./factoryattendance/components/LanguageChoiceDialog";
 import { AttendanceAdminApprovalDialog } from "./factoryattendance/components/AttendanceAdminApprovalDialog";
-import { attendancePastDates, attendanceToday, type AttendanceAdminCredentials } from "./factoryattendance/attendanceEditPolicy";
+import {
+  attendancePastDates,
+  attendanceToday,
+  type AttendanceAdminCredentials,
+} from "./factoryattendance/attendanceEditPolicy";
 import "./factoryTrackingModern.css";
 import "./factoryAttendanceRefresh.css";
 
@@ -75,8 +57,6 @@ interface AttendanceWhatsappSettings {
 
 export default function FactoryAttendance() {
   const { toast } = useToast();
-  const { user } = useAuthenticatedUser();
-  const isOwner = (user?.currentRole ?? user?.role) === "Owner";
   const [mode, setMode] = useState<ViewMode>(getInitialMode);
 
   const showDailyAttendance = () => {
@@ -201,14 +181,14 @@ export default function FactoryAttendance() {
       notes: notesMap[w.id] || undefined,
     }));
     const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
-    if (priorDates.length && !isOwner) {
+    if (priorDates.length) {
       setApprovalDates(priorDates);
       setPendingApprovalRecords(records);
       setApprovalOpen(true);
     } else {
       saveMutation.mutate({ records });
     }
-  }, [data, selectedDate, shift, attendanceMap, notesMap, saveMutation, isOwner]);
+  }, [data, selectedDate, shift, attendanceMap, notesMap, saveMutation]);
 
   const approveAttendanceSave = (credentials: AttendanceAdminCredentials) => {
     if (pendingApprovalRecords) saveMutation.mutate({ records: pendingApprovalRecords, credentials });
@@ -378,8 +358,10 @@ export default function FactoryAttendance() {
               <Badge variant="outline" className="rounded-full bg-background/50 px-2.5 py-1 text-[11px] font-medium">
                 {formatDate(selectedDate)}
               </Badge>
-              {selectedDate < attendanceToday() && !isOwner && (
-                <Badge variant="secondary" className="rounded-full">Earlier date — Admin approval required to save</Badge>
+              {selectedDate < attendanceToday() && (
+                <Badge variant="secondary" className="rounded-full">
+                  Earlier date — Admin approval required to save
+                </Badge>
               )}
             </div>
           </div>
@@ -444,57 +426,12 @@ export default function FactoryAttendance() {
                         {sendWhatsappImageMutation.isPending ? "Sending…" : "Send WhatsApp Image"}
                       </Button>
 
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="default"
-                            data-testid="button-actions-dropdown"
-                            disabled={!workers.length}
-                            className="rounded-xl"
-                          >
-                            Actions
-                            <ChevronDown className="ml-1 h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-52">
-                          <DropdownMenuItem data-testid="menu-mark-all-present" onClick={() => markAll("Present")}>
-                            <UserCheck className="mr-2 h-4 w-4" />
-                            Mark All Present
-                          </DropdownMenuItem>
-                          <DropdownMenuItem data-testid="menu-mark-all-absent" onClick={() => markAll("Absent")}>
-                            <UserX className="mr-2 h-4 w-4" />
-                            Mark All Absent
-                          </DropdownMenuItem>
-                          <DropdownMenuItem data-testid="menu-reset" onClick={reset}>
-                            <RotateCcw className="mr-2 h-4 w-4" />
-                            Reset
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem data-testid="menu-print-blank" onClick={() => setPrintDialog("blank")}>
-                            <Printer className="mr-2 h-4 w-4" />
-                            Print Blank Sheet
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            data-testid="menu-export-excel-blank"
-                            onClick={() => setPrintDialog("excel-blank")}
-                          >
-                            <FileDown className="mr-2 h-4 w-4" />
-                            Blank Excel
-                          </DropdownMenuItem>
-                          <DropdownMenuItem data-testid="menu-export-pdf" onClick={() => setPrintDialog("results")}>
-                            <Printer className="mr-2 h-4 w-4" />
-                            Export PDF
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            data-testid="menu-export-excel"
-                            onClick={() => setPrintDialog("excel-results")}
-                          >
-                            <FileDown className="mr-2 h-4 w-4" />
-                            Export Excel
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <AttendanceActionsMenu
+                        disabled={!workers.length}
+                        onMarkAll={markAll}
+                        onReset={reset}
+                        onPrint={setPrintDialog}
+                      />
 
                       <Button
                         size="default"
@@ -583,42 +520,7 @@ export default function FactoryAttendance() {
             </Card>
 
             {/* Summary Cards */}
-            {workers.length > 0 && (
-              <div className="attendance-kpi-grid grid grid-cols-2 gap-3 xl:grid-cols-4">
-                <SummaryCard
-                  icon={<Users className="h-4 w-4" />}
-                  label="Total"
-                  value={counts.total}
-                  color="text-foreground"
-                  testId="stat-total"
-                  modern
-                />
-                <SummaryCard
-                  icon={<CheckCircle className="h-4 w-4" />}
-                  label="Present"
-                  value={counts.present}
-                  color="text-green-600 dark:text-green-400"
-                  testId="stat-present"
-                  modern
-                />
-                <SummaryCard
-                  icon={<XCircle className="h-4 w-4" />}
-                  label="Absent"
-                  value={counts.absent}
-                  color="text-red-600 dark:text-red-400"
-                  testId="stat-absent"
-                  modern
-                />
-                <SummaryCard
-                  icon={<Clock className="h-4 w-4" />}
-                  label="Other"
-                  value={counts.other}
-                  color="text-amber-600 dark:text-amber-400"
-                  testId="stat-other"
-                  modern
-                />
-              </div>
-            )}
+            {workers.length > 0 && <AttendanceSummaryGrid counts={counts} />}
 
             {/* Attendance Table */}
             <Card className="attendance-register overflow-hidden border-border/70 bg-card/75 shadow-none">
@@ -740,7 +642,10 @@ export default function FactoryAttendance() {
                                   {worker.employeeCode ?? "—"}
                                 </td>
                                 <td className="px-4 py-2" dir="auto">
-                                  <div className="attendance-worker-name font-medium" data-testid={`text-worker-name-${worker.id}`}>
+                                  <div
+                                    className="attendance-worker-name font-medium"
+                                    data-testid={`text-worker-name-${worker.id}`}
+                                  >
                                     {worker.fullName}
                                   </div>
                                   {(worker.position || worker.department) && (

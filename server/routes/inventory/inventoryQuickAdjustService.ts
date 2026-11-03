@@ -1,24 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
-import { companies, inventory } from "@shared/schema";
+import { eq } from "drizzle-orm";
+import { companies } from "@shared/schema";
 
 import { db } from "../../db";
-import { adjustInventory } from "../../inventoryHelper";
+import { capturePhase9StockAdjustTx } from "../../edge/phase9StockOutbox";
 import { getErrorMessage } from "../../lib/httpHandlers";
-import { inventoryQuantity } from "../../lib/inventoryMath";
-import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
-import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
-import {
-  inventoryMovementLine,
-  postInventoryMovementJournalTx,
-} from "../../services/accounting/perpetualInventory/inventoryMovementJournal";
-import { writeAuditEvent } from "../../services/audit";
 import { storage } from "../../storage";
 import { InventoryRouteError } from "./inventoryErrors";
+import { applyQuickAdjustmentCoreTx } from "./inventoryQuickAdjustCore";
 import type { InventoryAuditActor, QuickAdjustmentInput } from "./inventoryRequestContext";
-import { parseMoneyInput, toMoney } from "../../lib/money";
-
-const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
 export async function quickAdjustInventory(companyId: number, input: QuickAdjustmentInput, actor: InventoryAuditActor) {
   const [company] = await db
@@ -46,93 +36,38 @@ export async function quickAdjustInventory(companyId: number, input: QuickAdjust
   let result;
   try {
     result = await db.transaction(async (tx) => {
-      const [existingInventory] = await tx
-        .select()
-        .from(inventory)
-        .where(and(eq(inventory.stockItemId, input.stockItemId), eq(inventory.locationId, input.locationId)))
-        .limit(1);
-
-      const normalizedQuantity = parseMoneyInput(inventoryQuantity(input.quantity))?.toNumber() ?? NaN;
-      if (!Number.isFinite(normalizedQuantity) || normalizedQuantity <= 0) {
-        throw new InventoryRouteError(400, "Quantity must be at least 0.001 units.");
-      }
-
-      const currentQuantity = existingInventory ? toMoney(existingInventory.quantity).toNumber() : 0;
-      const adjustedQuantity = input.type === "add" ? normalizedQuantity : -normalizedQuantity;
-      const newQuantity = currentQuantity + adjustedQuantity;
-      if (newQuantity < 0) {
-        throw new InventoryRouteError(
-          400,
-          `Cannot subtract ${normalizedQuantity} units. Only ${currentQuantity} units available at this location.`
-        );
-      }
-
-      const preAdjustmentRate = existingInventory ? toMoney(existingInventory.averageRate).toNumber() : 0;
-      const adjustment = await adjustInventory(tx, input.locationId, input.stockItemId, adjustedQuantity, companyId);
       const operationId = randomUUID();
-      const movementUnitCost =
-        input.type === "subtract" && Number.isFinite(preAdjustmentRate)
-          ? Math.max(preAdjustmentRate, 0)
-          : adjustment.averageRate;
-      await postStockMovementTx(
-        tx,
-        {
-          companyId,
-          stockItemId: input.stockItemId,
-          kind: "adjustment",
-          quantity: inventoryQuantity(normalizedQuantity),
-          unitCost: String(movementUnitCost),
-          fromLocationId: input.type === "subtract" ? input.locationId : undefined,
-          toLocationId: input.type === "add" ? input.locationId : undefined,
-          occurredAt: new Date().toISOString(),
-          source: {
-            sourceType: "inventory_quick_adjustment",
-            sourceId: operationId,
-            idempotencyKey: `inventory-quick-adjust:${companyId}:${operationId}`,
-          },
-          allowNegativeStock: true,
-        },
-        canonicalStockMovementAdapter
-      );
-      // Wave 11: under perpetual inventory the ledger moves with the sub-ledger
-      // (Dr/Cr Inventory against INVENTORY_ADJUSTMENT), in this transaction.
-      const journal = await postInventoryMovementJournalTx(tx, {
+      const occurredAt = new Date().toISOString();
+      const applied = await applyQuickAdjustmentCoreTx(tx, {
         companyId,
-        sourceType: "quick-adjust",
-        sourceId: operationId,
-        date: new Date().toISOString().slice(0, 10),
-        reference: `${stockItem.code} @ ${location.name}`,
-        lines: [inventoryMovementLine(adjustment, { stockItemId: input.stockItemId, locationId: input.locationId })],
-        offsetAccountCode: "INVENTORY_ADJUSTMENT",
-        narration: "Inventory quick adjustment",
+        stockItem: { id: stockItem.id, code: stockItem.code },
+        location: { id: location.id, name: location.name },
+        direction: input.type,
+        quantity: input.quantity,
         actor,
-        locationId: input.locationId,
+        operationId,
+        occurredAt,
+        allowNegative: false,
       });
-      // The audit is written with the movement: both commit or neither does.
-      await writeAuditEvent(
-        {
-          ...actor,
-          companyId,
-          action: "update",
-          tableName: "inventory",
-          recordId: stockItem.id,
-          recordIdentifier: `${stockItem.code} @ ${location.name}`,
-          changes: {
-            item: { old: stockItem.code, new: stockItem.code },
-            location: { new: location.name },
-            adjustmentType: { new: input.type === "add" ? "Add Stock" : "Subtract Stock" },
-            quantity: { old: String(adjustment.previousQuantity), new: String(adjustment.newQuantity) },
-            adjustment: { new: `${input.type === "add" ? "+" : "-"}${Math.abs(adjustedQuantity)}` },
-            valueDelta: { new: adjustment.valueDelta },
-            ...(journal ? { journal: { new: journal.voucherNumber } } : {}),
-          },
-        },
-        tx
-      );
+      // On the factory LAN server this records the committed movement for
+      // cloud replay in the same transaction; elsewhere it does nothing.
+      await capturePhase9StockAdjustTx(tx, {
+        companyId,
+        localMovementId: applied.movementId,
+        stockItemId: stockItem.id,
+        locationId: location.id,
+        actorUserId: String(actor.userId),
+        actorUsername: actor.username,
+        requestId: operationId,
+        direction: input.type,
+        quantity: applied.normalizedQuantity,
+        occurredAt,
+        businessDate: occurredAt.slice(0, 10),
+      });
       return {
-        currentQuantity: adjustment.previousQuantity,
-        newQuantity: adjustment.newQuantity,
-        adjustedQuantity,
+        currentQuantity: applied.previousQuantity,
+        newQuantity: applied.newQuantity,
+        adjustedQuantity: applied.adjustedQuantity,
       };
     });
   } catch (error: unknown) {

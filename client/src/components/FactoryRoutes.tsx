@@ -149,7 +149,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
         {() => <HelpTraining mode="factory" role={user?.role} accessKeys={myAccess?.pageKeys} fullAccess={myAccess?.fullAccess} />}
       </Route>
       <Route path="/factory/daybook">
-        {() => (isAdminOrDev ? <FactoryDaybook /> : <Redirect replace to={factoryDefaultPage} />)}
+        {() => (isAdminOwnerOrDev ? <FactoryDaybook /> : <Redirect replace to={factoryDefaultPage} />)}
       </Route>
       <Route path="/factory/transporters" component={FactoryTransporters} />
       <Route path="/factory/finance">
