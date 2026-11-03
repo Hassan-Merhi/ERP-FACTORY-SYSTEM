@@ -80,6 +80,7 @@ import { runApprovedHmdEurogulfFreightRepair } from "./startup/runApprovedHmdEur
 import { runApprovedFactoryDestinationNormalization } from "./startup/runApprovedFactoryDestinationNormalization";
 import { runApprovedMali53DestinationNormalization } from "./startup/runApprovedMali53DestinationNormalization";
 import { runApprovedFactoryWorkerAdvanceLedgerRepair } from "./startup/runApprovedFactoryWorkerAdvanceLedgerRepair";
+import { inspectOctoberPayrollJournalIntegrity20261103 } from "./startup/inspectOctoberPayrollJournalIntegrity20261103";
 import { ensureFactorySheetsSacksSchema } from "./startup/factorySheetsSacksSchema";
 import { ensureSpGitTracking } from "./lib/spGitTracking";
 import { ensureRecurringJournalSchema } from "./services/accounting/ensureRecurringJournalSchema";
@@ -460,6 +461,16 @@ let migrationsDone = false;
         } catch (advanceRepairError: unknown) {
           logger.error("[startup] Factory worker advance accrual correction blocked", {
             error: getErrorMessage(advanceRepairError),
+          });
+        }
+        // Explicitly opted-in, tenant-scoped READ-ONLY inspection. It only
+        // logs posted October payroll accrual/payment evidence and closed books;
+        // never changes cash, advances, payroll rows or journal entries.
+        try {
+          await inspectOctoberPayrollJournalIntegrity20261103();
+        } catch (payrollInspectionError: unknown) {
+          logger.error("[startup] October payroll journal inspection unavailable", {
+            error: getErrorMessage(payrollInspectionError),
           });
         }
       }
