@@ -79,6 +79,7 @@ import { runApprovedUkBasma38 } from "./startup/runApprovedUkBasma38";
 import { runApprovedHmdEurogulfFreightRepair } from "./startup/runApprovedHmdEurogulfFreightRepair";
 import { runApprovedFactoryDestinationNormalization } from "./startup/runApprovedFactoryDestinationNormalization";
 import { runApprovedMali53DestinationNormalization } from "./startup/runApprovedMali53DestinationNormalization";
+import { runApprovedFactoryWorkerAdvanceLedgerRepair } from "./startup/runApprovedFactoryWorkerAdvanceLedgerRepair";
 import { ensureFactorySheetsSacksSchema } from "./startup/factorySheetsSacksSchema";
 import { ensureSpGitTracking } from "./lib/spGitTracking";
 import { ensureRecurringJournalSchema } from "./services/accounting/ensureRecurringJournalSchema";
@@ -453,6 +454,14 @@ let migrationsDone = false;
         await runApprovedFactoryDestinationNormalization(pool);
         // One-time, audited destination label consolidation on the finalized MALI 53 order.
         await runApprovedMali53DestinationNormalization(pool);
+        // Opt-in, production company 12 only; no UI or reporting substitution.
+        try {
+          await runApprovedFactoryWorkerAdvanceLedgerRepair();
+        } catch (advanceRepairError: unknown) {
+          logger.error("[startup] Factory worker advance accrual correction blocked", {
+            error: getErrorMessage(advanceRepairError),
+          });
+        }
       }
       if (migrationsEnabled) {
         try {

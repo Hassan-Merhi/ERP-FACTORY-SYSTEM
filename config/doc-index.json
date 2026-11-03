@@ -156,9 +156,9 @@
     }
   ],
   "classification": {
-    "docs/README.md": "reference",
     "docs/accounting-audit-2026-10.md": "reference",
     "docs/accounting-flow.md": "reference",
+    "docs/accounting/factory-worker-advance-ledger-audit-2026-11-03.md": "reference",
     "docs/api-quickstart.md": "reference",
     "docs/architecture.md": "reference",
     "docs/archive/accounting-engine-audit.md": "record",
@@ -404,8 +404,8 @@
     "docs/historical-supplier-analytics-balance-routine-visibility-20261102.md": "reference",
     "docs/historical-supplier-done-voucher-global-daybook-and-transfer-hide-20261102.md": "reference",
     "docs/historical-supplier-named-creditor-balance-freeze-20261102.md": "reference",
-    "docs/i18n/README.md": "reference",
     "docs/i18n/phases-1-4-global-language-foundation.md": "reference",
+    "docs/i18n/README.md": "reference",
     "docs/inventory-cost-memory-policy.md": "reference",
     "docs/inventory-flow.md": "reference",
     "docs/mobile-tablet-web-regression.md": "reference",
@@ -451,6 +451,7 @@
     "docs/program-1-incident-response-runbook.md": "reference",
     "docs/program-8b-approval-exception-workflows.md": "reference",
     "docs/properties-navigation-registry.md": "reference",
+    "docs/README.md": "reference",
     "docs/releases.md": "reference",
     "docs/remote-support-phase-17-transport-resilience.md": "reference",
     "docs/remote-support-phase-18-control-coverage.md": "reference",
