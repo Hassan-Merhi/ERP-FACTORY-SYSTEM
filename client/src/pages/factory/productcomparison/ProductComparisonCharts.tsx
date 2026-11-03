@@ -31,7 +31,6 @@ import {
   type ProductComparisonPeriod,
 } from "./utils";
 import "./product-comparison-premium.css";
-import "./product-comparison-mobile-touch.css";
 
 type Metric = "bales" | "weight";
 
