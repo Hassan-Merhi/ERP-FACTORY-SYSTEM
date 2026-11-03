@@ -7,7 +7,7 @@ const host = "txyfgtsysrceqhoj.private.blob.vercel-storage.com";
 
 export default async function handler(request) {
   if (request.method !== "GET") return Response.json({ error: "method" }, { status: 405 });
-  const key = new URL(request.url).searchParams.get("key") || "";
+  const key = new URL(request.url, "https://gateway.invalid").searchParams.get("key") || "";
   if (!allowed.test(key)) return Response.json({ error: "invalid key" }, { status: 400 });
   const secret = process.env.TRAINING_GATEWAY_READ_SECRET || "";
   const time = request.headers.get("x-training-time") || "";
