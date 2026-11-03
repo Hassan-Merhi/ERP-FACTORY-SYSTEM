@@ -240,4 +240,28 @@ describe("screen feed capture engine", () => {
     await captureOnce(fetchMock);
     expect(strippedSrc).toBeNull();
   });
+  it("recovers an unsupported oklab color instead of uploading a text-only fallback", async () => {
+    let retryRanColorNormalization = false;
+    html2canvas
+      .mockRejectedValueOnce(new Error('Attempting to parse an unsupported color function "oklab"'))
+      .mockImplementationOnce(async (_element, options: { onclone?: (doc: Document) => void }) => {
+        const getComputedStyle = vi.spyOn(window, "getComputedStyle");
+        try {
+          options.onclone?.(document);
+          retryRanColorNormalization = getComputedStyle.mock.calls.length > 0;
+        } finally {
+          getComputedStyle.mockRestore();
+        }
+        return makeCanvas(1200, 800, false);
+      });
+
+    const { result, body } = await captureOnce(fetchMock);
+
+    expect(result.uploaded).toBe(true);
+    expect(result.failed).toBe(false);
+    expect(body.capture.source).toBe("retry");
+    expect(body.capture.failureReason).toContain("oklab");
+    expect(retryRanColorNormalization).toBe(true);
+  });
+
 });
