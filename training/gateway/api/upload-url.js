@@ -40,7 +40,7 @@ export default { async fetch(request) {
       allowedContentTypes: [type], maximumSizeInBytes: size, allowOverwrite: false,
     });
     const result = await presignUrl(token, {
-      pathname: key, operation: "put", validUntil: Date.now() + 10 * 60000,
+      pathname: key, operation: "put", access: "private", validUntil: Date.now() + 10 * 60000,
     });
     const url = new URL(result.presignedUrl);
     // Signed PUT uses Vercel's control-plane /api/blob/ endpoint rather than

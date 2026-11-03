@@ -29,7 +29,7 @@ export default {
         allowedContentTypes: ["video/webm"], maximumSizeInBytes: 4096, allowOverwrite: false,
       });
       const putGrant = await presignUrl(putToken, {
-        pathname: key, operation: "put", validUntil: Date.now() + 90000,
+        pathname: key, operation: "put", access: "private", validUntil: Date.now() + 90000,
       });
       const putUrl = new URL(putGrant.presignedUrl);
       if (putUrl.protocol !== "https:" || putUrl.origin !== "https://vercel.com" ||
