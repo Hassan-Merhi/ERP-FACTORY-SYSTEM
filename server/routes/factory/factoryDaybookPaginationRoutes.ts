@@ -218,12 +218,16 @@ export function registerFactoryDaybookPaginationRoutes(app: Express): void {
 
       if (startDate) {
         const param = bind(startDate);
-        realConditions.push(`COALESCE(live_voucher.effective_date, f.effective_date, f.tx_date) >= ${param}::date`);
+        // Restrict the source table BEFORE expensive integrity joins. Its existing
+        // (company_id, tx_date) index makes a single-day view inexpensive.
+        // Filtering by COALESCE(live_voucher.effective_date, ...) here forced
+        // a full scan and 30s statement timeouts on production.
+        realConditions.push(`f.tx_date >= ${param}::date`);
         voucherConditions.push(`COALESCE(v.effective_date, v.voucher_date) >= ${param}::date`);
       }
       if (endDate) {
         const param = bind(endDate);
-        realConditions.push(`COALESCE(live_voucher.effective_date, f.effective_date, f.tx_date) <= ${param}::date`);
+        realConditions.push(`f.tx_date <= ${param}::date`);
         voucherConditions.push(`COALESCE(v.effective_date, v.voucher_date) <= ${param}::date`);
       }
       if (txType) {
