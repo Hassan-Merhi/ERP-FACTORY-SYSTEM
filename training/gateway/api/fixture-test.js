@@ -55,15 +55,22 @@ export default {
       } else {
         report.uploadReceiptKind = receiptText.trim().slice(0, 60);
       }
-      try {
-        const stored = await get(key, { access: "private" });
-        report.sdkReadStatus = stored?.statusCode ?? null;
-        if (stored?.stream) {
-          const actualBytes = Buffer.from(await new Response(stored.stream).arrayBuffer());
-          report.sdkReadSha256 = createHash("sha256").update(actualBytes).digest("hex");
+      report.uploadReceiptSize = typeof receiptText === "string" && receiptText.startsWith("{")
+        ? (JSON.parse(receiptText).size ?? null) : null;
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        try {
+          const stored = await get(key, { access: "private", useCache: false });
+          report.sdkReadAttempts = attempt;
+          report.sdkReadStatus = stored?.statusCode ?? null;
+          if (stored?.stream) {
+            const actualBytes = Buffer.from(await new Response(stored.stream).arrayBuffer());
+            report.sdkReadSha256 = createHash("sha256").update(actualBytes).digest("hex");
+            break;
+          }
+        } catch (storageError) {
+          report.sdkReadError = storageError instanceof Error ? storageError.name : "Unknown storage error";
         }
-      } catch (storageError) {
-        report.sdkReadError = storageError instanceof Error ? storageError.name : "Unknown storage error";
+        await new Promise((resolve) => setTimeout(resolve, 1500));
       }
 
       const raw = await fetch("https://" + host + "/" + key, { redirect: "error" });
