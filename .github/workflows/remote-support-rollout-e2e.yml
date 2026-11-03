@@ -58,7 +58,7 @@ jobs:
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.1"
+          node-version: "24.22.2"
 
       - name: Verify Phase 17 transport and policy invariants
         run: node scripts/verify-remote-support-phase17-invariants.mjs
@@ -75,7 +75,7 @@ jobs:
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.1"
+          node-version: "24.22.2"
 
       - name: Require staging target
         shell: bash

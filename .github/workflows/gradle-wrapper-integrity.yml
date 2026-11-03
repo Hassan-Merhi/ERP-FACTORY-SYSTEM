@@ -43,4 +43,4 @@ jobs:
           echo "Official Gradle 8.12-family wrapper JAR and Gradle 9.8.1 distribution SHA-256 are pinned."
 
       - name: Validate wrapper JARs and homoglyph lookalikes against official Gradle releases
-        uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
