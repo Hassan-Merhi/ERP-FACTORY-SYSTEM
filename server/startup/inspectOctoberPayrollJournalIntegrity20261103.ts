@@ -154,13 +154,48 @@ export async function inspectOctoberPayrollJournalIntegrity20261103(): Promise<v
         repaymentRows: r.repayment_rows, repaymentTotal: amount(r.repayment_total),
       }));
 
+      // Verify the actual P&L salary account movement across ALL journal
+      // sources (not only PAYROLL-GEN). This catches an unposted DRAFT and
+      // unrelated manual salary vouchers that a payroll-table sum cannot see.
+      const salaryLedger = resultRows<{
+        voucher_number: string;
+        voucher_date: string;
+        salary_dr: string;
+        salary_cr: string;
+        net_salary: string;
+      }>(await tx.execute(sql`
+        SELECT v.voucher_number, v.voucher_date::text AS voucher_date,
+               COALESCE(sum(e.debit_amount),0)::text AS salary_dr,
+               COALESCE(sum(e.credit_amount),0)::text AS salary_cr,
+               COALESCE(sum(e.debit_amount-e.credit_amount),0)::text AS net_salary
+        FROM vouchers v
+        JOIN voucher_entries e ON e.voucher_id=v.id AND e.company_id=${COMPANY}
+        JOIN ledger_accounts la ON la.id=e.ledger_account_id AND la.company_id=${COMPANY}
+        WHERE v.company_id=${COMPANY} AND v.optional=false AND v.deleted_at IS NULL
+          AND COALESCE(v.effective_date,v.voucher_date) >= DATE '2026-10-01'
+          AND COALESCE(v.effective_date,v.voucher_date) <= DATE '2026-10-31'
+          AND (la.name LIKE 'Salary Expense - %' OR la.parent_id IN (
+            SELECT la2.id FROM ledger_accounts la2
+            WHERE la2.company_id=${COMPANY} AND la2.name='Salary Expense - Workers'
+              AND la2.deleted_at IS NULL
+          ))
+        GROUP BY v.id,v.voucher_number,v.voucher_date
+        ORDER BY v.voucher_number
+      `)).map((row) => ({
+        voucher: row.voucher_number,
+        date: row.voucher_date,
+        dr: amount(row.salary_dr),
+        cr: amount(row.salary_cr),
+        net: amount(row.net_salary),
+      }));
+
       const [closed] = resultRows<{ closed_through: string | null }>(await tx.execute(sql`
         SELECT max(period_end_date)::text AS closed_through
         FROM fiscal_period_closures WHERE company_id=${COMPANY} AND status='CLOSED'
       `));
 
       return { companyId: COMPANY, month: "2026-10", closedThrough: closed?.closed_through ?? null,
-        summary, accruals, payments };
+        summary, accruals, payments, salaryLedger };
     }),
     "owner-approved-october-payroll-journal-inspection"
   );
@@ -180,6 +215,14 @@ export async function inspectOctoberPayrollJournalIntegrity20261103(): Promise<v
     logger.info("[october-payroll-journal-audit] READ_ONLY accrual", {
       companyId: COMPANY,
       accountingSnapshots: row,
+    });
+  }
+  logger.info("[october-payroll-journal-audit] READ_ONLY salary ledger count", {
+    companyId: COMPANY, accountingSnapshots: { voucherCount: report.salaryLedger.length },
+  });
+  for (const row of report.salaryLedger) {
+    logger.info("[october-payroll-journal-audit] READ_ONLY salary ledger voucher", {
+      companyId: COMPANY, accountingSnapshots: row,
     });
   }
   for (const row of report.payments) {
