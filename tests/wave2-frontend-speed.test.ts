@@ -133,6 +133,7 @@ describe("Wave 2 frontend speed contracts", () => {
       "/node_modules/xlsx-js-style/",
       "/node_modules/jspdf/",
       "/node_modules/html2canvas/",
+      "/node_modules/html2canvas-pro/",
       "/node_modules/recharts/",
     ]) {
       expect(audit).toContain(marker);

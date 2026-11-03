@@ -154,7 +154,7 @@ export default defineConfig({
           // jsPDF is only used by export actions. Let dynamic import boundaries
           // own it instead of forcing a manual chunk that can become a static
           // dependency of shared application chunks.
-          if (id.includes("node_modules/html2canvas/")) {
+          if (id.includes("node_modules/html2canvas/") || id.includes("node_modules/html2canvas-pro/")) {
             return "html2canvas-vendor";
           }
         },

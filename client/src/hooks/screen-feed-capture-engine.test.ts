@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const html2canvas = vi.fn();
-vi.mock("html2canvas", () => ({ default: (...args: unknown[]) => html2canvas(...args) }));
+vi.mock("html2canvas-pro", () => ({ default: (...args: unknown[]) => html2canvas(...args) }));
 
 import { captureAndUploadScreenFrame } from "./screen-feed-capture-engine";
 
@@ -93,6 +93,24 @@ describe("screen feed capture engine", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it("renders fast frames at the final JPEG width instead of downscaling a larger capture", async () => {
+    vi.stubGlobal("innerWidth", 1920);
+    html2canvas.mockResolvedValue(makeCanvas(1120, 630, false));
+    await captureOnce(fetchMock, true);
+
+    const options = html2canvas.mock.calls[0]?.[1] as { scale: number };
+    expect(options.scale).toBeCloseTo(1120 / 1920, 4);
+  });
+
+  it("retains a larger image for standard-quality viewing", async () => {
+    vi.stubGlobal("innerWidth", 1920);
+    html2canvas.mockResolvedValue(makeCanvas(1440, 810, false));
+    await captureOnce(fetchMock, false);
+
+    const options = html2canvas.mock.calls[0]?.[1] as { scale: number };
+    expect(options.scale).toBeCloseTo(1440 / 1920, 4);
   });
 
   it("never renders through foreignObject, whose output cannot be encoded", async () => {
@@ -354,5 +372,29 @@ describe("screen feed capture engine", () => {
       );
       document.body.innerHTML = "";
     });
+  });
+
+  it("recovers an unsupported oklab color instead of uploading a text-only fallback", async () => {
+    let retryRanColorNormalization = false;
+    html2canvas
+      .mockRejectedValueOnce(new Error('Attempting to parse an unsupported color function "oklab"'))
+      .mockImplementationOnce(async (_element, options: { onclone?: (doc: Document) => void }) => {
+        const getComputedStyle = vi.spyOn(window, "getComputedStyle");
+        try {
+          options.onclone?.(document);
+          retryRanColorNormalization = getComputedStyle.mock.calls.length > 0;
+        } finally {
+          getComputedStyle.mockRestore();
+        }
+        return makeCanvas(1200, 800, false);
+      });
+
+    const { result, body } = await captureOnce(fetchMock);
+
+    expect(result.uploaded).toBe(true);
+    expect(result.failed).toBe(false);
+    expect(body.capture.source).toBe("retry");
+    expect(body.capture.failureReason).toContain("oklab");
+    expect(retryRanColorNormalization).toBe(true);
   });
 });
