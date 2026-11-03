@@ -11,6 +11,12 @@ import type { Express } from "express";
 import path from "path";
 import fs from "fs";
 
+export function registerMissingApiJsonHandler(app: Express): void {
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ code: "API_ROUTE_NOT_FOUND", message: "API endpoint not found" });
+  });
+}
+
 export function serveProductionClient(app: Express): void {
   // Custom static file serving with proper cache headers
   const distPath = path.resolve(import.meta.dirname, "public");
@@ -42,6 +48,10 @@ export function serveProductionClient(app: Express): void {
   app.use("/assets", (_req, res) => {
     res.status(404).end();
   });
+
+  // API routes must never fall through to the SPA's HTML index page. A missing
+  // API route otherwise returns HTTP 200 + <!DOCTYPE html>, breaking JSON readers.
+  registerMissingApiJsonHandler(app);
 
   // Fallback to index.html with no-cache headers (SPA routing)
   app.use("/{*splat}", (_req, res) => {
