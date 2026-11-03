@@ -64,14 +64,16 @@ describe("factory daybook pagination client", () => {
 
   it("does not resolve a full Daybook read until every matching row has arrived", async () => {
     let resolveLastPage!: (response: Response) => void;
-    const lastPage = new Promise<Response>((resolve) => { resolveLastPage = resolve; });
-    harness.previousFetch
-      .mockResolvedValueOnce(page([{ id: 1 }], 1, 2, 2, 250))
-      .mockReturnValueOnce(lastPage);
+    const lastPage = new Promise<Response>((resolve) => {
+      resolveLastPage = resolve;
+    });
+    harness.previousFetch.mockResolvedValueOnce(page([{ id: 1 }], 1, 2, 2, 250)).mockReturnValueOnce(lastPage);
 
     let settled = false;
-    const complete = fetchAllDaybookEntries(new URLSearchParams({ startDate: "2026-10-31" }))
-      .then((rows) => { settled = true; return rows; });
+    const complete = fetchAllDaybookEntries(new URLSearchParams({ startDate: "2026-10-31" })).then((rows) => {
+      settled = true;
+      return rows;
+    });
 
     // First page data never escapes to the consumer as a partial result.
     await Promise.resolve();
