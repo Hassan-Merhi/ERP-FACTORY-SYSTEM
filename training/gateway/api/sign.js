@@ -3,7 +3,7 @@ import { issueSignedToken, presignUrl } from "@vercel/blob";
 
 const store = "store_TXyFGTsySrCeQhOj";
 const allowed = /^training\/videos\/[a-z0-9-]{1,80}\/[0-9a-f]{40}\.(?:webm|vtt|png)$/;
-const host = "txyfgtsysrceqhoj.private.blob.vercel-storage.com";
+const host = "store_txyfgtsysrceqhoj.private.blob.vercel-storage.com";
 
 export default { async fetch(request) {
   if (request.method !== "GET") return Response.json({ error: "method" }, { status: 405 });

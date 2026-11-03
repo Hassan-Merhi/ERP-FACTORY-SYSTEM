@@ -18,7 +18,7 @@ export default {
     }
     const sha = randomBytes(20).toString("hex");
     const key = "training/videos/gateway-fixture/" + sha + ".webm";
-    const host = "txyfgtsysrceqhoj.private.blob.vercel-storage.com";
+    const host = "store_txyfgtsysrceqhoj.private.blob.vercel-storage.com";
     const report = { bytes: fixture.length, expectedSha256: createHash("sha256").update(fixture).digest("hex") };
     let uploaded = false;
     try {

@@ -86,7 +86,7 @@ export async function authenticatedVercelTrainingObjectRequest(
     const body = await grant.json() as { url?: unknown };
     if (typeof body.url !== "string" || body.url.length > 8000) return null;
     const url = new URL(body.url);
-    if (url.protocol !== "https:" || url.host !== "txyfgtsysrceqhoj.private.blob.vercel-storage.com" ||
+    if (url.protocol !== "https:" || url.host !== "store_txyfgtsysrceqhoj.private.blob.vercel-storage.com" ||
         url.pathname !== "/" + key || !url.searchParams.has("vercel-blob-delegation") ||
         !url.searchParams.has("vercel-blob-signature")) return null;
     return { url: url.toString(), headers: range ? { range } : {} };
