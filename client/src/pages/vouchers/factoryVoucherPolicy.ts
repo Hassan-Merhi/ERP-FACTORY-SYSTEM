@@ -17,3 +17,15 @@ export function shouldShowFactoryVoucherTab(
 ): boolean {
   return !ALWAYS_HIDDEN_FACTORY_VOUCHER_TABS.has(tab) && !hiddenCostFields.includes(permissionKey);
 }
+
+export type VoucherTab = "payment" | "receipt" | "journal" | "transfer" | "transferorder" | "adjustment" | "creditnote";
+
+export const FACTORY_VOUCHER_HIDDEN_KEYS: Record<VoucherTab, string> = {
+  payment: "hide_tab_vouchers_payment",
+  receipt: "hide_tab_vouchers_receipt",
+  journal: "hide_tab_vouchers_journal",
+  transfer: "hide_tab_vouchers_transfer",
+  transferorder: "hide_tab_vouchers_transferorder",
+  adjustment: "hide_tab_vouchers_adjustment",
+  creditnote: "hide_tab_vouchers_creditnote",
+};
