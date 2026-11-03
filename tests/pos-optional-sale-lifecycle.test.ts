@@ -9,11 +9,13 @@ import { posOptionalLinkedSettlementBlocked } from "../server/services/pos/posOp
 describe("ERP POS optional status safety policy", () => {
   it("allows ordinary ERP itemized sales and excludes unrelated voucher types", () => {
     expect(posOptionalLinkedSettlementBlocked("Sales", true, "standard", false)).toBe(false);
+    expect(posOptionalLinkedSettlementBlocked("Receipt", true, "standard", false)).toBe(false);
     expect(posOptionalLinkedSettlementBlocked("Journal", true, "supplier_partner", true)).toBe(false);
     expect(posOptionalLinkedSettlementBlocked("Sales", false, "supplier_partner", true)).toBe(false);
   });
   it("blocks supplier partner settlements and all configured intercompany mirror setups", () => {
     expect(posOptionalLinkedSettlementBlocked("Sales", true, "supplier_partner", false)).toBe(true);
+    expect(posOptionalLinkedSettlementBlocked("Receipt", true, "supplier_partner", false)).toBe(true);
     expect(posOptionalLinkedSettlementBlocked("Sales", true, "standard", true)).toBe(true);
   });
 });

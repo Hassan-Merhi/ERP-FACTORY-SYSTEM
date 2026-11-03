@@ -25,7 +25,7 @@ export function posOptionalLinkedSettlementBlocked(
   companyType: string | null | undefined,
   hasIntercompanyConfig: boolean
 ): boolean {
-  return voucherType === "Sales" && hasSalesItems &&
+  return ["Sales", "Receipt", "POS"].includes(voucherType) && hasSalesItems &&
     (companyType === "supplier_partner" || hasIntercompanyConfig);
 }
 

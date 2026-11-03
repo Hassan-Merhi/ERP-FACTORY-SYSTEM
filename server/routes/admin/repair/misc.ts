@@ -10,7 +10,7 @@ import { logger } from "../../../lib/logger";
 import { voucherMutationBlockReason } from "../../../lib/migratedVoucherGuard";
 import { db } from "../../../db";
 import { requireAuth, requireRole, requireNonPOS } from "../../../auth";
-import { stockTransferVouchers, stockTransferItems, vouchers } from "@shared/schema";
+import { stockTransferVouchers, stockTransferItems, salesItems, vouchers } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { adjustInventory } from "../../../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
@@ -57,7 +57,11 @@ export function registerAdminRepairMiscRoutes(app: Express) {
         // bypasses the stock reversal ledger, would leave returned inventory
         // in stock and would overstate assets. The dedicated PATCH route locks
         // the sale and reissues its items, value, and COGS together.
-        if (voucher.voucherType === "Sales") {
+        const [itemizedSaleLine] = ["Sales", "Receipt", "POS"].includes(voucher.voucherType)
+          ? await db.select({ id: salesItems.id }).from(salesItems)
+              .where(eq(salesItems.voucherId, voucherId)).limit(1)
+          : [];
+        if (itemizedSaleLine) {
           return res.status(409).json({
             code: "POS_SALE_ACTIVATION_REQUIRES_STOCK_TOGGLE",
             message: "Reactivate POS sales using PATCH /api/vouchers/:id/optional with optional=false so stock and accounting are restored together.",
