@@ -83,7 +83,7 @@ export function normalizeUnsupportedScreenFeedColors(doc: Document): void {
 
   // Only used if a first render failed with an unsupported CSS color.
   // A standard frame never incurs this computed-style traversal.
-  for (const element of [doc.documentElement, ...doc.querySelectorAll("*")]) {
+  for (const element of [doc.documentElement, ...Array.from(doc.querySelectorAll("*"))]) {
     if (!(element instanceof view.Element)) continue;
     const computed = view.getComputedStyle(element);
     for (const property of COLOR_PROPERTIES) {
