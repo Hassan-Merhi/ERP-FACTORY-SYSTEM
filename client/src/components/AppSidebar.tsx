@@ -15,7 +15,6 @@ import {
   PieChart,
   Ship,
   Calculator,
-  CalendarDays,
   MessageCircle,
   TableProperties,
   ExternalLink,
