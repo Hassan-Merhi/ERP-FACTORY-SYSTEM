@@ -15,7 +15,7 @@ import {
   sendIntercompanyTransferLegRefusal,
 } from "../../../services/accounting/intercompanyTransferLegGuard";
 import { syncEmployeeBalancesFromEntries } from "../../_helpers";
-import { writeVoucherAuditTx } from "../../helpers/voucherAuditTrail";
+import { readVoucherAuditState, writeVoucherAuditTx } from "../../helpers/voucherAuditTrail";
 import type Decimal from "decimal.js";
 import { vouchers } from "@shared/schema";
 import { eq } from "drizzle-orm";
