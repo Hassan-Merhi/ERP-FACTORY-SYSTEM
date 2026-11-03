@@ -80,6 +80,7 @@ import { runApprovedHmdEurogulfFreightRepair } from "./startup/runApprovedHmdEur
 import { runApprovedFactoryDestinationNormalization } from "./startup/runApprovedFactoryDestinationNormalization";
 import { runApprovedMali53DestinationNormalization } from "./startup/runApprovedMali53DestinationNormalization";
 import { runApprovedFactoryWorkerAdvanceLedgerRepair } from "./startup/runApprovedFactoryWorkerAdvanceLedgerRepair";
+import { runApprovedFactoryWorkerAdvanceHistoricalCleanup } from "./startup/runApprovedFactoryWorkerAdvanceHistoricalCleanup";
 import { ensureFactorySheetsSacksSchema } from "./startup/factorySheetsSacksSchema";
 import { ensureSpGitTracking } from "./lib/spGitTracking";
 import { ensureRecurringJournalSchema } from "./services/accounting/ensureRecurringJournalSchema";
@@ -460,6 +461,15 @@ let migrationsDone = false;
         } catch (advanceRepairError: unknown) {
           logger.error("[startup] Factory worker advance accrual correction blocked", {
             error: getErrorMessage(advanceRepairError),
+          });
+        }
+        // Separate owner-approved original-date source/GL correction.
+        // It is disabled without its exact one-time Render env opt-in.
+        try {
+          await runApprovedFactoryWorkerAdvanceHistoricalCleanup();
+        } catch (historicalAdvanceError: unknown) {
+          logger.error("[startup] Historical worker advance repair blocked", {
+            error: getErrorMessage(historicalAdvanceError),
           });
         }
       }
