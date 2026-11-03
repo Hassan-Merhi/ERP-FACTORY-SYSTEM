@@ -28,7 +28,7 @@ import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/per
 import { syncFactoryInvoiceForChargeVoucherTx } from "../../../services/accounting/perpetualInventory/factoryInvoice";
 import { sendBaleMirrorMovementRefusal } from "../../../services/accounting/perpetualInventory/cutoverRefusal";
 import { assertVoucherEditableTx, sendVoucherCorrectionRefusal } from "../../../services/accounting/voucherCorrection";
-import { assertStoredVoucherLinesValidTx } from "../../../services/accounting/voucherEntryReplacement";
+import { assertStoredVoucherLinesValidTx, replacementErrorStatus } from "../../../services/accounting/voucherEntryReplacement";
 
 export function registerVoucherOptionalUpdateRoutes(app: Express) {
   // Toggle optional status for a voucher
@@ -194,6 +194,11 @@ export function registerVoucherOptionalUpdateRoutes(app: Express) {
     } catch (error: unknown) {
       if (sendBaleMirrorMovementRefusal(res, error)) return;
       if (sendVoucherCorrectionRefusal(res, error)) return;
+      // Stored-line validation is a client error, not an internal failure.
+      // Keep the transaction rollback and reject unbalanced activation with HTTP 400.
+      if (replacementErrorStatus(error) !== null) {
+        return res.status(400).json({ message: getErrorMessage(error) });
+      }
       if ((error as { name?: string }).name === "ValidationError") {
         return res.status(400).json({ message: getErrorMessage(error) });
       }
