@@ -109,11 +109,28 @@ async function recordOne(page, id, tour) {
   page.on("request", onRequest);
   try {
     const response = await page.goto(base + tour.route, { waitUntil: "domcontentloaded", timeout });
-    if (!response?.ok()) throw new Error("Page failed to load (" + response?.status() + ")");
+    // Puppeteer returns null for same-document navigations. The ERP uses client-side
+    // routing, so a null navigation response is not evidence that the page failed.
+    // Still reject real HTTP failures and verify the returned HTML, authenticated
+    // application shell, expected route, and meaningful visible page content.
+    if (response && !response.ok()) {
+      throw new Error("Page HTTP navigation failed (" + response.status() + ") at " + tour.route);
+    }
+    const http = await page.evaluate(async (route) => {
+      const result = await fetch(route, { credentials: "include", cache: "no-store", redirect: "manual" });
+      return { status: result.status, type: result.headers.get("content-type") || "" };
+    }, tour.route);
+    if (http.status !== 200 || !http.type.includes("text/html")) {
+      throw new Error("Training page GET failed (" + http.status + ", " + http.type + ") at " + tour.route);
+    }
     await page.waitForSelector("#main-content", { visible: true, timeout });
-    await delay(1600);
+    await page.waitForFunction(() => {
+      const main = document.querySelector("#main-content");
+      return Boolean(main && main.textContent && main.textContent.trim().length > 20);
+    }, { timeout });
     const actualPath = new URL(page.url()).pathname;
     if (actualPath !== tour.route) throw new Error("Unexpected redirect to " + actualPath + " for " + tour.route);
+    await delay(1600);
     const pageDetails = await page.evaluate(() => {
       const heading = document.querySelector("h1, h2");
       const tabs = Array.from(document.querySelectorAll("[role=tab]"))
@@ -143,10 +160,8 @@ async function recordOne(page, id, tour) {
         // Approved navigation-only interaction: inspect a different visible tab.
         // Never click Save, Finalize, Approve, Delete, Pay or other write controls.
         if (i === 1) {
-          const tabs = await page.$("[role=tab]:not([aria-selected=true]):not([disabled])");
-          if (tabs.length > 0) {
-            await tabs[0].click().catch(() => undefined);
-          }
+          const tab = await page.$("[role=tab]:not([aria-selected=true]):not([disabled])");
+          if (tab) await tab.click().catch(() => undefined);
         }
         await delay(2600);
         const end = Date.now() - started;
