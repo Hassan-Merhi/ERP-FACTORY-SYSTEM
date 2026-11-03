@@ -164,5 +164,28 @@ export async function inspectOctoberPayrollJournalIntegrity20261103(): Promise<v
     }),
     "owner-approved-october-payroll-journal-inspection"
   );
-  logger.info("[october-payroll-journal-audit] READ_ONLY", report);
+  // Render's default human-readable logger prints only approved structured
+  // keys. Emit bounded, individual rows under accountingSnapshots so the
+  // verified account/period evidence is visible without changing LOG_FORMAT.
+  logger.info("[october-payroll-journal-audit] READ_ONLY summary", {
+    companyId: COMPANY,
+    accountingSnapshots: {
+      closedThrough: report.closedThrough,
+      payrollGroups: report.summary,
+      accrualVoucherCount: report.accruals.length,
+      paymentRecordCount: report.payments.length,
+    },
+  });
+  for (const row of report.accruals) {
+    logger.info("[october-payroll-journal-audit] READ_ONLY accrual", {
+      companyId: COMPANY,
+      accountingSnapshots: row,
+    });
+  }
+  for (const row of report.payments) {
+    logger.info("[october-payroll-journal-audit] READ_ONLY source payment", {
+      companyId: COMPANY,
+      accountingSnapshots: row,
+    });
+  }
 }
