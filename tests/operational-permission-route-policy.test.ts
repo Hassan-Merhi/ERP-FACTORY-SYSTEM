@@ -37,6 +37,8 @@ const REVIEWED_UNGUARDED_ROUTES: Record<string, string> = {
     "Bale-label print preparation (Automatic Priority Printing); owned by the Factory label-printing pages in the backend access boundary, like /api/bale-label-prints. Not an invoice print.",
   "POST /api/factory/customer-orders/loading-list/automatic-print-preflight":
     "Single-bale form of the label print preparation above; same Factory page boundary. Not an invoice print.",
+  "POST /api/factory/customer-orders/:id/container-extra-items/import":
+    "Admin/Owner/Developer-only upload of validated workbook rows into one customer order's container extra items (same in-handler role gate as its GET/PUT/DELETE siblings); not a bulk company data import.",
 };
 
 const MUTATION = new Set(["POST", "PUT", "PATCH", "DELETE"]);

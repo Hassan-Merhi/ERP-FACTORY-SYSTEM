@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { CalendarDays } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
@@ -48,13 +48,16 @@ export function ProductionTargetsDateRangeDialog({
   const [firstDay, setFirstDay] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  const { start, end } = range;
+  // Reset only when the dialog opens or the dates change, using the latest
+  // range object without re-running on every new object identity.
+  const latestRange = useRef(range);
+  latestRange.current = range;
   useEffect(() => {
     if (!open) return;
-    setSelected({ start, end });
+    setSelected(latestRange.current);
     setFirstDay(null);
     setError("");
-  }, [open, start, end]);
+  }, [open, range.start, range.end]);
 
   const pickDate = (date: Date) => {
     const day = localDateStr(date);

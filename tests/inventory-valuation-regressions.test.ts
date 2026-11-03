@@ -161,8 +161,9 @@ describe("inventory valuation regression guards", () => {
     expect(Number(state.inventory.quantity)).toBe(16);
     expect(Number(state.inventory.total_value)).toBeCloseTo(1066.4, 2);
     expect(Number(state.inventory.average_rate)).toBeCloseTo(66.65, 2);
-    // Positive stock clears stale shortage layers without changing its value (d8fabd8).
-    expect(state.layers).toEqual([]);
+    // clearResolvedNegativeLayers: at non-negative stock a shortage layer is
+    // stale metadata and is removed; quantity and value above are unchanged.
+    expect(state.layers).toHaveLength(0);
   });
 
   it("POS edit reversal releases shortage attributed to that sale and recreates it symmetrically", async () => {
@@ -314,8 +315,9 @@ describe("inventory valuation regression guards", () => {
     expect(Number(state.inventory.quantity)).toBe(20);
     expect(Number(state.inventory.total_value)).toBeCloseTo(1333, 2);
     expect(Number(state.inventory.average_rate)).toBeCloseTo(66.65, 2);
-    // Positive stock clears stale shortage layers without changing its value (d8fabd8).
-    expect(state.layers).toEqual([]);
+    // clearResolvedNegativeLayers: at non-negative stock a shortage layer is
+    // stale metadata and is removed; quantity and value above are unchanged.
+    expect(state.layers).toHaveLength(0);
   });
 
   it("preserves an exact stored total value through an unchanged POS edit", async () => {
@@ -354,7 +356,8 @@ describe("inventory valuation regression guards", () => {
     expect(Number(state.inventory.quantity)).toBe(18);
     expect(Number(state.inventory.total_value)).toBeCloseTo(1224.41, 2);
     expect(Number(state.inventory.average_rate)).toBeCloseTo(68.02, 2);
-    // Positive stock clears stale shortage layers without changing its value (d8fabd8).
-    expect(state.layers).toEqual([]);
+    // clearResolvedNegativeLayers: at non-negative stock a shortage layer is
+    // stale metadata and is removed; quantity and value above are unchanged.
+    expect(state.layers).toHaveLength(0);
   });
 });

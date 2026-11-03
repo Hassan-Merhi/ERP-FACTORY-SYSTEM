@@ -10,12 +10,7 @@ import { db } from "../../db";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { syncEmployeeBalancesFromEntries } from "../_helpers";
-import { writeVoucherAuditTx } from "../helpers/voucherAuditTrail";
-import {
-  erpRequestSourceId,
-  postManualVoucherTx,
-  sessionPostingActor,
-} from "../../services/accounting/erpVoucherPosting";
+import { erpRequestSourceId } from "../../services/accounting/erpVoucherPosting";
 import {
   assertVoucherEditableTx,
   recordVoucherEditAuditTx,
@@ -24,47 +19,27 @@ import {
 import { rebalanceVoucherRoundingTx } from "../../services/accounting/engineRounding";
 import { triggerIntercompanyNotifications } from "../intercompanyNotificationRoutes";
 import { autoReallocateLoansAccounts } from "../../lib/transporterAllocation";
-import { vouchers, voucherEntries, customers, ledgerAccounts } from "@shared/schema";
+import { vouchers, voucherEntries } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { checkAccountWhatsAppRule } from "../factoryWhatsappRoutes";
 
-import { factorySettings as fSettings, factoryDaybookEntries as fde } from "@shared/schema";
-import { normalizeVoucherEntryAmounts, erpRateToDaybookFxRateToUsd } from "../../services/accounting/currencyAmounts";
+import { normalizeVoucherEntryAmounts } from "../../services/accounting/currencyAmounts";
 import { isVoucherAccountType, voucherEntryAccountLink } from "../../services/accounting/voucherEntryAccountLink";
 import { syncContainerChargeVoucherEditTx } from "../../services/containers/offload-lifecycle/charge-voucher-sync";
-import type Decimal from "decimal.js";
-import { MoneyDecimal, parseMoneyInput, toMoney } from "../../lib/money";
+import { randomUUID } from "node:crypto";
+import {
+  paymentVoucherTotals,
+  postPaymentReceiptVoucherTx,
+  writePaymentReceiptDaybookEntry,
+} from "../../services/accounting/paymentReceiptVoucherPosting";
+import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
+import { capturePhase9PaymentTx, paymentReceiptEvidence } from "../../edge/phase9PaymentOutbox";
 
 /**
  * After saving a journal voucher, if it has a customer entry + a ledger account entry,
  * look for order charges linked to that ledger account for that customer.
  * If exactly one charge is found, update its amount and recalculate the order totals.
  */
-
-/**
- * A payment or receipt voucher's totals, exact: the entries summed in the
- * voucher currency and the base (USD) total stored on the voucher, CFA ÷ rate
- * for non-USD vouchers. Null when an entry amount is not a number.
- */
-function paymentVoucherTotals(
-  entries: readonly { amount?: unknown }[],
-  currency: string,
-  rateRaw: string | number | null
-): { transactionTotal: Decimal; baseTotal: Decimal } | null {
-  let transactionTotal: Decimal = new MoneyDecimal(0);
-  for (const entry of entries) {
-    const amount =
-      entry.amount === undefined || entry.amount === null || entry.amount === ""
-        ? new MoneyDecimal(0)
-        : parseMoneyInput(entry.amount);
-    if (!amount) return null;
-    transactionTotal = transactionTotal.plus(amount);
-  }
-  const cfaPerUsd = currency !== "USD" && rateRaw ? parseMoneyInput(rateRaw) : null;
-  const baseTotal =
-    currency !== "USD" && cfaPerUsd && cfaPerUsd.gt(0) ? transactionTotal.div(cfaPerUsd) : transactionTotal;
-  return { transactionTotal, baseTotal };
-}
 
 export function registerVoucherPaymentRoutes(app: Express) {
   app.post("/api/vouchers/payment-receipt", requireAuth, requireNonPOS, async (req, res) => {
@@ -114,306 +89,56 @@ export function registerVoucherPaymentRoutes(app: Express) {
       );
       // For CFA vouchers: baseTotal = transactionTotal / cfaPerUsd (CFA ÷ rate = USD)
       // For USD vouchers: baseTotal = transactionTotal (no conversion)
-      const totals = paymentVoucherTotals(entries, vCurrency, vRateRaw);
-      if (!totals) return res.status(400).json({ message: "Invalid amount" });
-      const { baseTotal } = totals;
-
-      // Use database transaction for atomic operation
+      if (!paymentVoucherTotals(entries, vCurrency, vRateRaw)) {
+        return res.status(400).json({ message: "Invalid amount" });
+      }
       const companyId = req.session.currentCompanyId!;
-
-      // Helper: build the voucher-entry account field set for a given
-      // (accountType, accountId).  Handles three things in one place:
-      //   1. Validates the referenced row belongs to the current company
-      //      (security: prevents cross-company injection).
-      //   2. For accountType === "customer", also stamps ledgerAccountId
-      //      from the linked customer ledger so the row shows up in BOTH
-      //      the Customers view and the linked-ledger view (Phase 4).
-      //   3. For accountType === "ledger" where the ledger is linked to a
-      //      customer, also stamps customerId for the same reason.
-      // The OR clause in factoryCustomerLedger.buildFactoryCustomerLedgerEntries
-      // makes this denormalization safe (no double-counting).
-      const buildAccountField = async (accountType: string, accountId: number): Promise<Record<string, number>> => {
-        const field: Record<string, number> = {};
-        if (accountType === "ledger") {
-          const [acct] = await db
-            .select({ id: ledgerAccounts.id, companyId: ledgerAccounts.companyId })
-            .from(ledgerAccounts)
-            .where(eq(ledgerAccounts.id, accountId))
-            .limit(1);
-          if (!acct || acct.companyId !== companyId) {
-            throw new Error(`Ledger account ${accountId} not found in current company.`);
-          }
-          field.ledgerAccountId = accountId;
-          // Auto-fill customerId if this ledger is customer-linked
-          const [linkedCust] = await db
-            .select({ id: customers.id })
-            .from(customers)
-            .where(and(eq(customers.ledgerAccountId, accountId), eq(customers.companyId, companyId)))
-            .limit(1);
-          if (linkedCust) field.customerId = linkedCust.id;
-        } else if (accountType === "customer") {
-          const [cust] = await db
-            .select({ id: customers.id, ledgerAccountId: customers.ledgerAccountId })
-            .from(customers)
-            .where(and(eq(customers.id, accountId), eq(customers.companyId, companyId)))
-            .limit(1);
-          if (!cust) {
-            throw new Error(`Customer ${accountId} not found in current company.`);
-          }
-          field.customerId = accountId;
-          if (cust.ledgerAccountId) field.ledgerAccountId = cust.ledgerAccountId;
-        } else if (accountType === "bank") {
-          field.bankAccountId = accountId;
-        } else if (accountType === "supplier") {
-          field.supplierId = accountId;
-        } else if (accountType === "factorySupplier") {
-          field.factorySupplierId = accountId;
-        } else if (accountType === "employee") {
-          field.employeeId = accountId;
-        } else if (accountType === "fixedAsset") {
-          field.fixedAssetId = accountId;
-        }
-        return field;
-      };
-
+      const lanCapture = isPhase9LanPrimary();
       const result = await db.transaction(async (tx) => {
-        const voucherEntriesToCreate = [];
-
-        // Pre-compute the payment-account field once (same for every entry)
-        const paymentAccountField = await buildAccountField(paymentAccountType, paymentAccountId);
-
-        // Create entries based on voucher type.
-        // Each entry amount is the original transaction-currency (CFA) value as typed.
-        // normalizeVoucherEntryAmounts() converts it to historical base (USD) for
-        // debitAmount / creditAmount (backward-compat columns) and fills all new fields.
-        for (const entry of entries) {
-          const amount: string = entry.amount;
-          const narration = notes || null;
-
-          const entryAccountField = await buildAccountField(entry.accountType, entry.accountId);
-
-          const isLiabilityPaymentAccount =
-            paymentAccountType === "supplier" ||
-            paymentAccountType === "factorySupplier" ||
-            paymentAccountType === "employee";
-
-          // Normalize the transaction amount once per entry (DR side and CR side).
-          // normDR: this entry carries the debit leg; normCR: the credit leg.
-          const normDR = normalizeVoucherEntryAmounts({
-            transactionCurrency: vCurrency,
-            baseCurrency: "USD",
-            transactionDebitAmount: amount,
-            transactionCreditAmount: "0",
-            historicalRate: vRateRaw,
-          });
-          const normCR = normalizeVoucherEntryAmounts({
-            transactionCurrency: vCurrency,
-            baseCurrency: "USD",
-            transactionDebitAmount: "0",
-            transactionCreditAmount: amount,
-            historicalRate: vRateRaw,
-          });
-
-          if (voucherType === "Payment") {
-            if (isLiabilityPaymentAccount) {
-              // Payment from liability account (supplier/employee):
-              // DR payment account (reduce liability)
-              // CR contra account
-              voucherEntriesToCreate.push({
-                ...paymentAccountField,
-                debitAmount: normDR.debitAmount,
-                creditAmount: normDR.creditAmount,
-                transactionCurrency: normDR.transactionCurrency,
-                transactionDebitAmount: normDR.transactionDebitAmount,
-                transactionCreditAmount: normDR.transactionCreditAmount,
-                baseDebitAmount: normDR.baseDebitAmount,
-                baseCreditAmount: normDR.baseCreditAmount,
-                historicalExchangeRate: normDR.historicalExchangeRate,
-                rateConvention: normDR.rateConvention,
-                narration,
-              });
-              voucherEntriesToCreate.push({
-                ...entryAccountField,
-                debitAmount: normCR.debitAmount,
-                creditAmount: normCR.creditAmount,
-                transactionCurrency: normCR.transactionCurrency,
-                transactionDebitAmount: normCR.transactionDebitAmount,
-                transactionCreditAmount: normCR.transactionCreditAmount,
-                baseDebitAmount: normCR.baseDebitAmount,
-                baseCreditAmount: normCR.baseCreditAmount,
-                historicalExchangeRate: normCR.historicalExchangeRate,
-                rateConvention: normCR.rateConvention,
-                narration,
-              });
-            } else {
-              // Payment from asset account (cash/bank/ledger):
-              // DR contra account (expense/asset purchased)
-              // CR payment account (cash goes out)
-              voucherEntriesToCreate.push({
-                ...entryAccountField,
-                debitAmount: normDR.debitAmount,
-                creditAmount: normDR.creditAmount,
-                transactionCurrency: normDR.transactionCurrency,
-                transactionDebitAmount: normDR.transactionDebitAmount,
-                transactionCreditAmount: normDR.transactionCreditAmount,
-                baseDebitAmount: normDR.baseDebitAmount,
-                baseCreditAmount: normDR.baseCreditAmount,
-                historicalExchangeRate: normDR.historicalExchangeRate,
-                rateConvention: normDR.rateConvention,
-                narration,
-              });
-              voucherEntriesToCreate.push({
-                ...paymentAccountField,
-                debitAmount: normCR.debitAmount,
-                creditAmount: normCR.creditAmount,
-                transactionCurrency: normCR.transactionCurrency,
-                transactionDebitAmount: normCR.transactionDebitAmount,
-                transactionCreditAmount: normCR.transactionCreditAmount,
-                baseDebitAmount: normCR.baseDebitAmount,
-                baseCreditAmount: normCR.baseCreditAmount,
-                historicalExchangeRate: normCR.historicalExchangeRate,
-                rateConvention: normCR.rateConvention,
-                narration,
-              });
-            }
-          } else {
-            if (isLiabilityPaymentAccount) {
-              // Receipt into liability account (supplier/employee):
-              // DR contra account (source, e.g. loans)
-              // CR payment account (increase liability)
-              voucherEntriesToCreate.push({
-                ...entryAccountField,
-                debitAmount: normDR.debitAmount,
-                creditAmount: normDR.creditAmount,
-                transactionCurrency: normDR.transactionCurrency,
-                transactionDebitAmount: normDR.transactionDebitAmount,
-                transactionCreditAmount: normDR.transactionCreditAmount,
-                baseDebitAmount: normDR.baseDebitAmount,
-                baseCreditAmount: normDR.baseCreditAmount,
-                historicalExchangeRate: normDR.historicalExchangeRate,
-                rateConvention: normDR.rateConvention,
-                narration,
-              });
-              voucherEntriesToCreate.push({
-                ...paymentAccountField,
-                debitAmount: normCR.debitAmount,
-                creditAmount: normCR.creditAmount,
-                transactionCurrency: normCR.transactionCurrency,
-                transactionDebitAmount: normCR.transactionDebitAmount,
-                transactionCreditAmount: normCR.transactionCreditAmount,
-                baseDebitAmount: normCR.baseDebitAmount,
-                baseCreditAmount: normCR.baseCreditAmount,
-                historicalExchangeRate: normCR.historicalExchangeRate,
-                rateConvention: normCR.rateConvention,
-                narration,
-              });
-            } else {
-              // Receipt into asset account (cash/bank/ledger):
-              // DR payment account (cash comes in)
-              // CR contra account (income/liability)
-              voucherEntriesToCreate.push({
-                ...paymentAccountField,
-                debitAmount: normDR.debitAmount,
-                creditAmount: normDR.creditAmount,
-                transactionCurrency: normDR.transactionCurrency,
-                transactionDebitAmount: normDR.transactionDebitAmount,
-                transactionCreditAmount: normDR.transactionCreditAmount,
-                baseDebitAmount: normDR.baseDebitAmount,
-                baseCreditAmount: normDR.baseCreditAmount,
-                historicalExchangeRate: normDR.historicalExchangeRate,
-                rateConvention: normDR.rateConvention,
-                narration,
-              });
-              voucherEntriesToCreate.push({
-                ...entryAccountField,
-                debitAmount: normCR.debitAmount,
-                creditAmount: normCR.creditAmount,
-                transactionCurrency: normCR.transactionCurrency,
-                transactionDebitAmount: normCR.transactionDebitAmount,
-                transactionCreditAmount: normCR.transactionCreditAmount,
-                baseDebitAmount: normCR.baseDebitAmount,
-                baseCreditAmount: normCR.baseCreditAmount,
-                historicalExchangeRate: normCR.historicalExchangeRate,
-                rateConvention: normCR.rateConvention,
-                narration,
-              });
-            }
-          }
-        }
-
-        // Phase 22 (B): an active voucher posts through the central engine (number
-        // allocated there); an optional one keeps a direct insert with an
-        // allocated number (it is off the ledger and may be unbalanced).
-        const posted = await postManualVoucherTx(tx, {
+        const posted = await postPaymentReceiptVoucherTx(tx, {
           companyId,
           voucherType,
           voucherDate,
-          description: notes || null,
+          paymentAccountType,
+          paymentAccountId,
+          entries,
+          notes: notes || null,
+          optional: optional === true,
           currency: vCurrency,
           exchangeRate: vRateRaw ? String(vRateRaw) : null,
           effectiveDate: effectiveDate || null,
-          optional: optional === true,
-          optionalTotalAmount: baseTotal.toFixed(6),
-          entries: voucherEntriesToCreate,
-          source: { type: "payment-receipt-legacy", id: `${companyId}:${erpRequestSourceId(req)}` },
-          actor: sessionPostingActor(req, `${voucherType} creation`),
+          sourceId: `${companyId}:${erpRequestSourceId(req)}`,
+          actor: { userId: req.session.userId, username: req.session.username },
+          reason: `${voucherType} creation`,
         });
-        if (posted.replayed) return { voucher: posted.voucher, entries: posted.entries };
-        const createdVoucher = posted.voucher;
-        const createdEntries = posted.entries;
-
-        // Wave 12: employee balances and the audit row are written in this transaction.
-        if (!createdVoucher.optional) {
-          await syncEmployeeBalancesFromEntries(createdEntries, req.session.currentCompanyId!, false, tx);
-        }
-        await writeVoucherAuditTx(tx, {
-          actor: {
-            userId: req.session.userId,
-            username: req.session.username,
-            companyId: req.session.currentCompanyId,
-          },
-          action: "create",
-          voucherId: createdVoucher.id,
-          before: null,
-          after: { voucher: createdVoucher, entries: createdEntries },
-        });
-
-        return { voucher: createdVoucher, entries: createdEntries };
-      });
-
-      // Write to factory daybook if this company has factory settings
-      try {
-        const cid = req.session.currentCompanyId!;
-        const [fSetting] = await db.select().from(fSettings).where(eq(fSettings.companyId, cid));
-        if (fSetting) {
-          const vType = result.voucher.voucherType;
-          const txType = vType === "Payment" ? "PAYMENT" : vType === "Receipt" ? "RECEIPT" : "JOURNAL";
-          const daybookCurrency = result.voucher.currency || "USD";
-          // vouchers.totalAmount now stores the historical base (USD) amount.
-          // transactionTotal (CFA) = baseTotal * cfaPerUsd for non-USD vouchers.
-          const daybookBaseTotal = toMoney(result.voucher.totalAmount);
-          const daybookRate = result.voucher.exchangeRate ? toMoney(result.voucher.exchangeRate) : new MoneyDecimal(1);
-          // Reconstruct the original CFA total: base × rate (TRANSACTION_PER_BASE).
-          const daybookAmtCurrency =
-            daybookCurrency !== "USD" && daybookRate.gt(0) ? daybookBaseTotal.times(daybookRate) : daybookBaseTotal;
-          // factory_daybook_entries.fx_rate_to_usd expects USD-per-foreign-unit.
-          // The ERP voucher stores CFA-per-USD (TRANSACTION_PER_BASE), so we invert.
-          const daybookFxRateToUsd = erpRateToDaybookFxRateToUsd(daybookCurrency, "USD", result.voucher.exchangeRate);
-          await db.insert(fde).values({
-            companyId: cid,
-            txDate: result.voucher.voucherDate,
-            txType,
-            referenceId: result.voucher.id,
-            referenceTable: "vouchers",
-            description: result.voucher.description || `${vType} voucher #${result.voucher.voucherNumber}`,
-            currencyCode: daybookCurrency,
-            amountCurrency: daybookAmtCurrency.toFixed(),
-            fxRateToUsd: daybookFxRateToUsd,
-            amountUsd: daybookBaseTotal.toFixed(),
-            createdBy: null,
-            effectiveDate: result.voucher.effectiveDate || null,
+        // Factory LAN server during an outage: record the committed voucher's
+        // inputs for exactly-once replay in the cloud, in this transaction.
+        if (lanCapture && !posted.replayed) {
+          await capturePhase9PaymentTx(tx, {
+            companyId,
+            localVoucherId: posted.voucher.id,
+            actorUserId: String(req.session.userId),
+            actorUsername: req.session.username || "unknown",
+            requestId: randomUUID(),
+            voucher: paymentReceiptEvidence({
+              voucherType,
+              voucherDate,
+              paymentAccountType,
+              paymentAccountId,
+              entries,
+              notes: notes || null,
+              optional: optional === true,
+              currency: vCurrency,
+              exchangeRate: vRateRaw ? String(vRateRaw) : null,
+              effectiveDate: effectiveDate || null,
+            }),
           });
         }
+        return { voucher: posted.voucher, entries: posted.entries };
+      });
+
+      try {
+        await writePaymentReceiptDaybookEntry(db, req.session.currentCompanyId!, result.voucher);
       } catch (dbErr) {
         logger.error("Factory daybook write failed (non-fatal):", { error: dbErr });
       }

@@ -195,6 +195,11 @@ export function ApplicationLanguageProvider({ children }: { children: ReactNode 
   );
 }
 
+/** Safe in embedded widgets and test shells that have no language provider. */
+export function useOptionalApplicationLanguage() {
+  return useContext(ApplicationLanguageContext);
+}
+
 export function useApplicationLanguage() {
   const value = useContext(ApplicationLanguageContext);
   if (!value) throw new Error("useApplicationLanguage must be used inside ApplicationLanguageProvider");

@@ -8,10 +8,19 @@ import { resolveFactoryNetPositionAsOf } from "../../../services/factory/netPosi
 import { loadFactoryNetPositionEmployees } from "../../../services/factory/netPositionEmployees";
 
 import { factoryWorkers, employees } from "@shared/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, or, sql } from "drizzle-orm";
 import { sqlArray } from "../../../lib/sqlArray";
+import { validateAttendanceReportDateRange } from "@shared/attendanceReportDateRange";
 import { resultRows } from "../../../lib/queryResult";
-import { MoneyDecimal, sumMoney, toMoney } from "../../../lib/money";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
+import {
+  reconcileAttendanceReportSalary,
+  type AttendanceReportPayrollRecord,
+} from "../../../services/payroll/attendanceReportSalary";
+import {
+  reconcilePeriodPayrolls,
+  type PayrollReconciliationRecord,
+} from "../../../services/payroll/periodPayrollReconciliation";
 
 export function registerEmployeeAttendanceRoutes(app: Express) {
   app.get("/api/factory/net-position/payroll-breakdown", requireAuth, async (req: Request, res: Response) => {
@@ -47,7 +56,7 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
   // ─── Monthly Attendance Report ───────────────────────────────────────────────
   // GET /api/factory/workers/attendance-report?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
   // Also supports legacy ?year=YYYY&month=M params.
-  // Returns all active workers + attendance matrix for the given date range.
+  // Returns active workers plus inactive workers with payroll records for the selected period.
   app.get("/api/factory/workers/attendance-report", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -75,25 +84,35 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
         endDate = `${year}-${String(month).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
       }
 
-      // Build dates array
-      const dates: { date: string; label: string; abbr: string; isWeekend: boolean }[] = [];
-      const startMs = new Date(startDate + "T00:00:00").getTime();
-      const endMs = new Date(endDate + "T00:00:00").getTime();
-      if (isNaN(startMs) || isNaN(endMs) || startMs > endMs) {
-        return res.status(400).json({ message: "Invalid date range" });
+      // Validate before allocating date columns or running any report queries.
+      // Editing a native date input can temporarily emit years like 0002,
+      // which used to produce multi-decade/century reports over 70 MB.
+      const dateRangeError = validateAttendanceReportDateRange(startDate, endDate);
+      if (dateRangeError) {
+        return res.status(400).json({
+          code: "ATTENDANCE_REPORT_INVALID_RANGE",
+          message: dateRangeError,
+        });
       }
+
+      // Use UTC days consistently even across daylight-saving transitions.
+      const dates: { date: string; label: string; abbr: string; isWeekend: boolean }[] = [];
+      const startMs = Date.parse(`${startDate}T00:00:00Z`);
+      const endMs = Date.parse(`${endDate}T00:00:00Z`);
       const multiMonth = startDate.substring(0, 7) !== endDate.substring(0, 7);
       const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       for (let ms = startMs; ms <= endMs; ms += 86400000) {
         const d = new Date(ms);
         const iso = d.toISOString().substring(0, 10);
-        const dow = d.getDay();
-        const dayNum = d.getDate();
-        const label = multiMonth ? `${MONTH_ABBR[d.getMonth()]} ${dayNum}` : String(dayNum);
+        const dow = d.getUTCDay();
+        const dayNum = d.getUTCDate();
+        const label = multiMonth ? `${MONTH_ABBR[d.getUTCMonth()]} ${dayNum}` : String(dayNum);
         dates.push({ date: iso, label, abbr: DAY_ABBR[dow], isWeekend: dow === 0 || dow === 6 });
       }
 
-      // All active workers for this company
+      // Include currently inactive workers ONLY when they have a payroll for
+      // the requested period. This retains genuine former-worker wages while
+      // avoiding phantom salary estimates for terminated workers with no pay.
       const workers = await db
         .select({
           id: factoryWorkers.id,
@@ -105,7 +124,21 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
           transportAllowance: factoryWorkers.transportAllowance,
         })
         .from(factoryWorkers)
-        .where(and(eq(factoryWorkers.companyId, companyId), eq(factoryWorkers.active, true)))
+        .where(
+          and(
+            eq(factoryWorkers.companyId, companyId),
+            or(
+              eq(factoryWorkers.active, true),
+              sql`EXISTS (
+                SELECT 1 FROM factory_payrolls historical_payroll
+                WHERE historical_payroll.company_id = ${companyId}
+                  AND historical_payroll.worker_id = ${factoryWorkers.id}
+                  AND historical_payroll.period_start >= ${startDate}::date
+                  AND historical_payroll.period_end <= ${endDate}::date
+              )`
+            )
+          )
+        )
         .orderBy(factoryWorkers.fullName);
 
       if (workers.length === 0) {
@@ -120,6 +153,7 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
       }
 
       const workerIds = workers.map((w) => w.id);
+      const reportWorkerIds = new Set(workerIds);
 
       // Attendance rows for this date range
       const attRows = await db.execute(
@@ -159,26 +193,70 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
         else if (r.status === "Absent") dailySummary[r.date].absent++;
       }
 
-      // Fetch paid payrolls overlapping the date range for these workers
-      const paidPayrollRows = await db.execute(
-        sql`SELECT worker_id AS "workerId", net_salary AS "netSalary"
-            FROM factory_payrolls
-            WHERE company_id = ${companyId}
-              AND status = 'PAID'
-              AND period_start <= ${endDate}::date
-              AND period_end   >= ${startDate}::date
-              AND worker_id = ANY(${sqlArray(workerIds)})`
+      // Reconcile against stored payroll entitlements and settlements instead of
+      // comparing today's attendance estimate to only cash net_salary. Only
+      // payroll periods wholly within the selected range are eligible; the
+      // reconciliation helper removes overlapping partial payrolls per worker.
+      const payrollRows = await db.execute(
+        sql`SELECT p.id, p.worker_id AS "workerId",
+                   p.period_start::text AS "periodStart",
+                   p.period_end::text AS "periodEnd",
+                   p.status, p.net_salary AS "netSalary", p.advances,
+                   COALESCE(w.active, false) AS "workerActive",
+                   EXISTS (
+                     SELECT 1
+                     FROM factory_daybook_entries d
+                     WHERE d.company_id = p.company_id
+                       AND d.reference_id = p.id
+                       AND d.reference_table = 'factory_payrolls'
+                       AND d.tx_type = 'PAYROLL_PAYMENT'
+                   ) AS "hasDaybookPayment"
+            FROM factory_payrolls p
+            LEFT JOIN factory_workers w
+              ON w.id = p.worker_id AND w.company_id = p.company_id
+            WHERE p.company_id = ${companyId}
+              AND p.period_start >= ${startDate}::date
+              AND p.period_end <= ${endDate}::date`
       );
-      const paidPayrollList: { workerId: number; netSalary: string }[] = resultRows<{
+      const payrollByWorker = new Map<number, AttendanceReportPayrollRecord[]>();
+      const reconciliationRecords: PayrollReconciliationRecord[] = [];
+      for (const row of resultRows<{
+        id: number;
         workerId: number;
+        periodStart: string;
+        periodEnd: string;
+        status: string;
         netSalary: string | null;
-      }>(paidPayrollRows).map((r) => ({
-        workerId: Number(r.workerId),
-        netSalary: r.netSalary ?? "0",
-      }));
-      const paidSalaryMap = new Map<number, string[]>();
-      for (const r of paidPayrollList) {
-        paidSalaryMap.set(r.workerId, [...(paidSalaryMap.get(r.workerId) || []), r.netSalary]);
+        advances: string | null;
+        workerActive: boolean;
+        hasDaybookPayment: boolean;
+      }>(payrollRows)) {
+        const workerId = Number(row.workerId);
+        reconciliationRecords.push({
+          id: Number(row.id),
+          workerId,
+          workerActive: row.workerActive,
+          status: row.status,
+          periodStart: row.periodStart,
+          periodEnd: row.periodEnd,
+          netSalary: row.netSalary ?? "0",
+          advances: row.advances ?? "0",
+          hasDaybookPayment: row.hasDaybookPayment,
+        });
+        // The report includes inactive workers with payroll activity in this
+        // period, but never workers outside the selected company/pay window.
+        if (!reportWorkerIds.has(workerId)) continue;
+        const matching = payrollByWorker.get(workerId) ?? [];
+        matching.push({
+          id: Number(row.id),
+          workerId,
+          periodStart: row.periodStart,
+          periodEnd: row.periodEnd,
+          status: row.status,
+          netSalary: row.netSalary ?? "0",
+          advances: row.advances ?? "0",
+        });
+        payrollByWorker.set(workerId, matching);
       }
 
       let totalPresent = 0;
@@ -200,11 +278,21 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
 
         const recordedCount = presentCount + absentCount;
         const attendancePct = recordedCount > 0 ? Math.round((presentCount / recordedCount) * 100) : null;
+        const salary = reconcileAttendanceReportSalary({
+          startDate,
+          endDate,
+          salaryType: w.salaryType ?? "Monthly",
+          baseSalary: w.baseSalary ?? "0",
+          transportAllowance: w.transportAllowance ?? "0",
+          attendance,
+          payrolls: payrollByWorker.get(w.id) ?? [],
+        });
 
         return {
           id: w.id,
           employeeCode: w.employeeCode,
           fullName: w.fullName,
+          active: w.active,
           attendance,
           presentCount,
           absentCount,
@@ -213,7 +301,7 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
           baseSalary: w.baseSalary ?? "0",
           salaryType: w.salaryType ?? "Monthly",
           transportAllowance: w.transportAllowance ?? "0",
-          paidSalary: sumMoney(paidSalaryMap.get(w.id) || []).toFixed(2),
+          ...salary,
         };
       });
 
@@ -222,9 +310,12 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
         endDate,
         dates,
         workers: workerResults,
+        payrollReconciliation: reconcilePeriodPayrolls(reconciliationRecords, startDate, endDate),
         dailySummary,
         totals: {
           workers: workers.length,
+          activeWorkers: workers.filter((w) => w.active).length,
+          inactiveWorkers: workers.filter((w) => !w.active).length,
           presentDays: totalPresent,
           absentDays: totalAbsent,
           totalPossibleDays: workers.length * dates.length,

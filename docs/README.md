@@ -30,8 +30,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 |---|---|
 | [accounting-flow.md](accounting-flow.md) | Voucher types, posting, the ledger |
 | [accounting-audit-2026-10.md](accounting-audit-2026-10.md) | Accounting audit findings, production evidence and remediation waves |
-| [historical-supplier-named-creditor-balance-freeze-20261102.md](historical-supplier-named-creditor-balance-freeze-20261102.md) | Company 12: verified supplier and named-creditor balances are frozen; reconciliation must not change them |
-| [net-profit-future-dated-historical-imports-live-pnl-cutoff-20261102.md](net-profit-future-dated-historical-imports-live-pnl-cutoff-20261102.md) | Live net profit excludes future-dated historical import vouchers (as-of cutoff) |
+| [accounting/factory-worker-advance-ledger-audit-2026-11-03.md](accounting/factory-worker-advance-ledger-audit-2026-11-03.md) | Factory Worker Advances production reconciliation, verified accrual repair, and residual historical exceptions |
 | [unified-accounting-phase1.md](unified-accounting-phase1.md) | Unified accounting (ERP, Factory, Rentals): Phase 1: Foundation |
 | [unified-accounting-phase2.md](unified-accounting-phase2.md) | Unified accounting (ERP, Factory, Rentals): Phase 2: Posting and Voucher Lifecycle |
 | [unified-accounting-phase3.md](unified-accounting-phase3.md) | Unified accounting (ERP, Factory, Rentals): Phase 3: Customer, Supplier and Tenant Open-Item Reconciliation |
@@ -65,8 +64,8 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [pressing-machine-tracking-phase5.md](pressing-machine-tracking-phase5.md) | Pressing Machines Phase 5: IndexedDB offline queue, ordered retry with immutable request IDs, Pending/Sending/Confirmed/Rejected states |
 | [pressing-machine-tracking-phase6.md](pressing-machine-tracking-phase6.md) | Pressing Machines Phase 6: permanent history, filters, saved views, Excel export limits |
 | [pressing-machine-tracking-phase7.md](pressing-machine-tracking-phase7.md) | Pressing Machines Phase 7: configured shifts, overnight rollover, recorded downtime, observed analytics |
-| [pressing-scan-simple-mode.md](pressing-scan-simple-mode.md) | Simplified Pressing Scan mode: worker camera view, P1–P3 daily totals, hourly KG targets |
 | [pressing-machine-tracking-phase8.md](pressing-machine-tracking-phase8.md) | Pressing Machines Phase 8: supervisor voids, append-only corrections, audited rescans and the executed verification record |
+| [pressing-scan-simple-mode.md](pressing-scan-simple-mode.md) | Pressing Scan simplified Ground Scan mode: the current user-based worker scan workflow |
 | [erp-test-company.md](erp-test-company.md) | Provisioning an isolated ERP test company and its limited tester account |
 | [automatic-priority-print-loading.md](automatic-priority-print-loading.md) | Automatic Priority Printing & Loading: company switch, automatic loading allocation, priority-colored labels, physical bale deletion and Priority #1 recovery |
 | [priority-scan-fixed-palette-color-block.md](priority-scan-fixed-palette-color-block.md) | Priority Scan fixed 11-color palette, solid color-box priority labels, legacy-color moves and saved-color print/reprint checks |
@@ -82,23 +81,6 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [fx-monetary-valuation/phase-6-reconciliation-release-gate.md](fx-monetary-valuation/phase-6-reconciliation-release-gate.md) | FX monetary valuation: reconciliation gates and release checklist |
 | [fx-monetary-valuation/phase-7-verification-and-fixes.md](fx-monetary-valuation/phase-7-verification-and-fixes.md) | FX monetary valuation: defects found in Phases 1–6, their fixes, executed verification and remaining release blockers |
 
-## Company 12 historical supplier reconciliation (2026-11-02)
-
-| Doc | What it covers |
-|---|---|
-| [backend-historical-supplier-cost-allocation-preview-20261102.md](backend-historical-supplier-cost-allocation-preview-20261102.md) | Company 12 historical supplier cost allocation — backend preview (November 2, 2026) |
-| [backend-historical-supplier-expense-audit-phase1.md](backend-historical-supplier-expense-audit-phase1.md) | Private backend supplier expense audit — Phase 1 |
-| [company12-internal-historical-supplier-voucher-operational-visibility-20261102.md](company12-internal-historical-supplier-voucher-operational-visibility-20261102.md) | Company 12 historical supplier catchup — internal posted reconciliation, not routine Journal vouchers (2026-11-02) |
-| [historical-charge-64-duplicate-correction-lifecycle-20261102.md](historical-charge-64-duplicate-correction-lifecycle-20261102.md) | Company 12 charge #64 duplicate posting: correction lifecycle and replay safety (2026-11-02) |
-| [historical-charge64-creditor-ledger-impact-preview-20261102.md](historical-charge64-creditor-ledger-impact-preview-20261102.md) | Charge 64 / Container 83 — named-creditor correction impact, read-only (2026-11-02) |
-| [historical-factory-charges-period-neutral-preflight-20261102.md](historical-factory-charges-period-neutral-preflight-20261102.md) | Factory historical charges — period-neutral GL reclassification preflight (2026-11-02) |
-| [historical-factory-ledger-account-classification-investigation-20261102.md](historical-factory-ledger-account-classification-investigation-20261102.md) | Company 12 historical supplier reconciliation — account classification and alternate lineage |
-| [historical-post-offload-charge-voucher-source-linkage-20261102.md](historical-post-offload-charge-voucher-source-linkage-20261102.md) | Historical post-offload source/voucher lineage check — 2026-11-02 |
-| [historical-supplier-analytics-balance-routine-visibility-20261102.md](historical-supplier-analytics-balance-routine-visibility-20261102.md) | Company 12 — hide completed reconciliation rows in Analytics / Balances (2026-11-02) |
-| [historical-supplier-backfill-accounting-audit-20261102.md](historical-supplier-backfill-accounting-audit-20261102.md) | Historical supplier backfill — company 12 accounting investigation (2026-11-02) |
-| [historical-supplier-done-voucher-global-daybook-and-transfer-hide-20261102.md](historical-supplier-done-voucher-global-daybook-and-transfer-hide-20261102.md) | Company 12: completed historical supplier catchup entries — remaining routine screens (2026-11-02) |
-| [historical-supplier-freight-source-journal-overlap-20261102.md](historical-supplier-freight-source-journal-overlap-20261102.md) | Historical supplier import / freight journal overlap preview — November 2, 2026 |
-
 ## Operating it
 
 | Doc | What it covers |
@@ -111,8 +93,6 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [render-production-logging.md](render-production-logging.md) | Logging configuration on Render |
 | [program-1-incident-response-runbook.md](program-1-incident-response-runbook.md) | Incident response |
 | [troubleshooting.md](troubleshooting.md) | Common failures and fixes |
-| [global-force-refresh-all-users-2026-10-28.md](global-force-refresh-all-users-2026-10-28.md) | Role-scoped force refresh of regular and Admin/Owner/Developer devices |
-| [one-time-pwa-force-refresh-2026-10-28.md](one-time-pwa-force-refresh-2026-10-28.md) | The one-time web/PWA refresh campaign (`erp-v13` service worker, iOS marker) |
 | [fresh-db-bootstrap.md](fresh-db-bootstrap.md) | Known gap bootstrapping an empty database |
 
 ## Building and testing
@@ -141,6 +121,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [shared-ui-phase-8-claude-handoff.md](shared-ui-phase-8-claude-handoff.md) | Phase 8 review scope and verification mandate |
 | [api-quickstart.md](api-quickstart.md) | Calling the API |
 | [compatibility.md](compatibility.md) | Supported browsers and platforms |
+| [coverage-program.md](coverage-program.md) | Coverage targets and phases, the UI test harness, measured coverage and removal candidates |
 
 ## Security and permissions
 
@@ -162,7 +143,6 @@ These describe work in progress and carry live figures bound to their sources.
 | [erp-90-phases-3-6.md](erp-90-phases-3-6.md) | ERP 90/100 Phases 3–6: tenant isolation, accounting and inventory convergence |
 | [god-file-split-program.md](god-file-split-program.md) | Splitting oversized files, and the harness that makes a split provable |
 | [system-quality-program.md](system-quality-program.md) | Type safety, test breadth, documentation state, configuration coherence |
-| [coverage-program.md](coverage-program.md) | Coverage targets and phases, the UI test harness, measured coverage and removal candidates |
 | [Retail fashion variants Wave 1 spec](superpowers/specs/2026-10-03-retail-fashion-variants-wave1-design.md) | Current Retail color + size variant and variant-image contract |
 | [Retail fashion variants Wave 1 plan](superpowers/plans/2026-10-03-retail-fashion-variants-wave1.md) | Implementation and verification plan for the current Retail fashion-variant rollout |
 | [Retail Wave 2 spec](superpowers/specs/2026-10-05-retail-wave2-customers-pricing-tax-stock-count-design.md) | Current Retail customers, discounts, tax foundation and physical stock-count contract |
@@ -239,6 +219,24 @@ describes lasting behaviour gets promoted out, and promoting one means
 reclassifying it in `config/doc-index.json` — which is the moment to check that
 it is actually still true.
 
+## Offline mode and factory LAN (development only)
+
+The following references document **unmerged, production-disabled** work.
+Encrypted checkpoint transfer is not automatic database reconciliation.
+
+| Doc | What it covers |
+|---|---|
+| [offline-phase2-read-coverage.md](offline-phase2-read-coverage.md) | Exact offline GET allowlist and release limits |
+| [operations/factory-lan-edge.md](operations/factory-lan-edge.md) | Phase 3 LAN server setup, trusted TLS, database cutover controls |
+| [operations/factory-lan-phase4-checkpoint-transfer.md](operations/factory-lan-phase4-checkpoint-transfer.md) | Phase 4 cloud write fence and encrypted staging; remaining sync blockers |
+| [operations/factory-lan-phase6-certification.md](operations/factory-lan-phase6-certification.md) | Phase 6 independent release gate; not yet certified |
+| [operations/factory-offline-operations-runbook.md](operations/factory-offline-operations-runbook.md) | Phases 9–11 offline workflows, authority handover, conflicts, backup/restore, monitoring and verification evidence |
+| [superpowers/plans/2026-10-30-offline-phase5.md](superpowers/plans/2026-10-30-offline-phase5.md) | Phase 5 browser snapshot encryption and limitations |
+| [superpowers/plans/2026-10-30-offline-integrated-roadmap.md](superpowers/plans/2026-10-30-offline-integrated-roadmap.md) | Remaining offline work planned for Phases 7–11 |
+| [superpowers/plans/2026-10-29-offline-phase1.md](superpowers/plans/2026-10-29-offline-phase1.md) | Phase 1 outbox scope and acceptance |
+| [superpowers/plans/2026-10-29-offline-phase2.md](superpowers/plans/2026-10-29-offline-phase2.md) | Phase 2 prepared reads and identity requirements |
+| [superpowers/plans/2026-10-29-offline-phase3.md](superpowers/plans/2026-10-29-offline-phase3.md) | Phase 3 factory server safety and acceptance |
+
 ## Current reference index additions
 
 These current-reference documents are indexed here for audit coverage. Their behavior is described in each linked file.
@@ -260,3 +258,16 @@ These current-reference documents are indexed here for audit coverage. Their beh
 | [production-target-bonus-phases-1-2.md](production-target-bonus-phases-1-2.md) | Current production target bonus phases 1 2 reference |
 | [production-target-bonuses-phase7-reporting.md](production-target-bonuses-phase7-reporting.md) | Current production target bonuses phase7 reporting reference |
 | [production-target-bonuses-unified-integration.md](production-target-bonuses-unified-integration.md) | Current production target bonuses unified integration reference |
+| [company12-internal-historical-supplier-voucher-operational-visibility-20261102.md](company12-internal-historical-supplier-voucher-operational-visibility-20261102.md) | Company 12 historical supplier catchup: shown as internal posted reconciliation, not routine Journal vouchers |
+| [historical-charge-64-duplicate-correction-lifecycle-20261102.md](historical-charge-64-duplicate-correction-lifecycle-20261102.md) | Company 12 charge #64 duplicate posting: correction lifecycle and replay safety |
+| [historical-supplier-analytics-balance-routine-visibility-20261102.md](historical-supplier-analytics-balance-routine-visibility-20261102.md) | Company 12: completed reconciliation rows hidden in Analytics and Balances (ledger totals unchanged) |
+| [company12-worker-advance-internal-reconciliation-routine-visibility-20261103.md](company12-worker-advance-internal-reconciliation-routine-visibility-20261103.md) | Company 12: dated worker-advance GL backfill journals classified as internal in routine Accounts, Analytics and Daybook lists, with totals preserved |
+| [accounting/company12-october-payroll-overpayment-reporting-exclusion-20261103.md](accounting/company12-october-payroll-overpayment-reporting-exclusion-20261103.md) | Company 12: the October 2026 payroll overpayment receivable is excluded from Accounts, Analytics and management Net Position views without changing ledger totals |
+| [historical-supplier-done-voucher-global-daybook-and-transfer-hide-20261102.md](historical-supplier-done-voucher-global-daybook-and-transfer-hide-20261102.md) | Company 12: completed historical supplier catchup entries on the remaining routine screens |
+| [historical-supplier-named-creditor-balance-freeze-20261102.md](historical-supplier-named-creditor-balance-freeze-20261102.md) | Company 12: historical supplier and named-creditor balance freeze |
+| [net-profit-future-dated-historical-imports-live-pnl-cutoff-20261102.md](net-profit-future-dated-historical-imports-live-pnl-cutoff-20261102.md) | Net profit live as-of report: future-dated historical imports cut off |
+
+| [October 2026 salary reconciliation](accounting/october-2026-salary-reconciliation-20261103.md) | Read-only October payroll, paid cash and salary advances reconciliation (no journal edits) |
+| [Factory worker-advance ledger audit](accounting/factory-worker-advance-ledger-audit-2026-11-03.md) | Current worker-advance ledger investigation, safeguards and payment evidence |
+
+| [October 2026 payroll overlap reconciliation](accounting/october-2026-paid-payroll-overlap-reclassification-20261103.md) | Current safeguards and backdated accounting evidence for approved paid-payroll overlap reclassification |

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Camera, CheckCircle2, Flashlight, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useApplicationLanguageCode } from "@/contexts/ApplicationLanguageContext";
+import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translateCameraScanTitle } from "@/i18n/mobileCameraScanTranslations";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -37,7 +37,8 @@ export function MobileBarcodeScanner({
   className,
   feedback = null,
 }: MobileBarcodeScannerProps) {
-  const language = useApplicationLanguageCode();
+  // Shared scanner: tolerate rendering outside the language provider.
+  const language = useOptionalApplicationLanguage()?.language ?? "en";
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastDetected, setLastDetected] = useState("");
@@ -68,8 +69,8 @@ export function MobileBarcodeScanner({
     let canceled = false;
     let timeout: ReturnType<typeof setTimeout> | undefined;
     let stream: MediaStream | undefined;
-    let previewVideo: HTMLVideoElement | null = null;
     let decoder: CameraBarcodeDecoder | null = null;
+    const videoElement = videoRef.current;
     // Re-presenting the same retail item should count again after a brief removal;
     // suppress duplicate frames while leaving different barcodes immediately scannable.
     const gate = new ContinuousScanGate(1200, 2);
@@ -124,7 +125,6 @@ export function MobileBarcodeScanner({
         const video = videoRef.current;
         if (!video) throw new Error("Camera preview could not open.");
         video.srcObject = acquired;
-        previewVideo = video;
         await video.play();
         if (canceled) return;
         const track = acquired.getVideoTracks?.()[0];
@@ -179,7 +179,7 @@ export function MobileBarcodeScanner({
       document.removeEventListener("visibilitychange", onVisibilityChange);
       stream?.getTracks().forEach((track) => track.stop());
       trackRef.current = null;
-      if (previewVideo) previewVideo.srcObject = null;
+      if (videoElement) videoElement.srcObject = null;
       decoder?.dispose();
       gate.reset();
     };

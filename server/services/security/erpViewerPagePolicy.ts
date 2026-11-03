@@ -7,11 +7,13 @@ import { FEATURE_KEYS } from "@shared/schema";
  * the write-only Create Voucher page stay excluded.
  *
  * The View Only HTTP middleware separately rejects business mutations.
+ * Owners also retain Daybook even when their saved page list is stale.
  * Other roles continue to use their explicitly assigned ERP page keys.
  */
 export function effectiveErpPageKeys(role: string, savedPageKeys: readonly string[]): string[] {
   if (role === "View Only") {
     return FEATURE_KEYS.filter((key) => key !== "dashboard" && key !== "settings" && key !== "create");
   }
+  if (role === "Owner") return [...new Set([...savedPageKeys, "daybook"])];
   return [...savedPageKeys];
 }

@@ -39,7 +39,8 @@ assert(documentation.includes("Pagination must not change totals or balances"), 
 // The grouped net-profit SQL was extracted from the route into netProfitDataLoad.ts.
 // Guard the active loader rather than the old file location so refactors cannot make
 // this check fail while the actual company-scoping and mixed-FX protections remain intact.
-// The live report also passes the business date for its as-of cutoff.
+// main passes the business date as a third argument (live P&L cutoff for
+// future-dated historical imports); the company scope and as-of date stay first.
 assert(netProfitRoute.includes("loadNetProfitData(companyId, toDate"), "Net-profit route must continue using the guarded grouped-data loader.");
 assert(
   netProfitDataLoad.includes("WHERE la.company_id = $1"),

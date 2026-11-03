@@ -4,9 +4,25 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
-import { Loader2, CalendarDays, Printer, ChevronLeft, ChevronRight, Pencil, EyeOff, Eye, UsersRound, CalendarCheck2, Coins, HandCoins, Wallet } from "lucide-react";
+import {
+  Loader2,
+  CalendarDays,
+  Printer,
+  ChevronLeft,
+  ChevronRight,
+  Pencil,
+  EyeOff,
+  Eye,
+  UsersRound,
+  CalendarCheck2,
+  Coins,
+  HandCoins,
+  Wallet,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
+import { AttendanceReportRequestError, readAttendanceReportResponse } from "./factoryworkerattendancereport/reportResponse";
+import { validateAttendanceReportDateRange } from "@shared/attendanceReportDateRange";
 
 import type {
   AttendanceFilter,
@@ -17,7 +33,6 @@ import type {
 import {
   CYCLE,
   MONTH_NAMES,
-  computeWorkerExpectedSalary,
   fmtCurrency,
   isoMonthEnd,
   isoMonthStart,
@@ -69,6 +84,10 @@ export default function FactoryWorkerAttendanceReport() {
     return { startDate: customStart, endDate: customEnd };
   }, [mode, customStart, customEnd]);
 
+  const dateRangeError = useMemo(
+    () => validateAttendanceReportDateRange(startDate, endDate),
+    [startDate, endDate]
+  );
   const queryKey = ["/api/factory/workers/attendance-report", startDate, endDate];
 
   const { data, isLoading, isError, error, refetch } = useQuery<AttendanceReportData>({
@@ -76,14 +95,17 @@ export default function FactoryWorkerAttendanceReport() {
     queryFn: async () => {
       const res = await fetch(`/api/factory/workers/attendance-report?startDate=${startDate}&endDate=${endDate}`, {
         credentials: "include",
+        cache: "no-store",
+        headers: { Accept: "application/json" },
       });
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.message || "Failed");
-      }
-      return res.json();
+      return readAttendanceReportResponse(res);
     },
-    retry: 1,
+    enabled: dateRangeError === null,
+    // A proxy 502/503 can be transient. Do not retry denied, missing or malformed responses.
+    retry: (failureCount, requestError) =>
+      failureCount < 2 &&
+      (!(requestError instanceof AttendanceReportRequestError) || requestError.retryable),
+    retryDelay: (failureCount) => Math.min(1000 * 2 ** failureCount, 3000),
   });
 
   /* Mutation: save single cell */
@@ -179,16 +201,21 @@ export default function FactoryWorkerAttendanceReport() {
     return ws;
   }, [sortedWorkers, filter, hideFullAbsent]);
 
-  /* Salary KPIs — computed from currently filtered workers */
+  /* Backend reconciles payroll, cash paid and advance settlements by period.
+     Sum in cents so KPI/print totals agree exactly with stored payroll values. */
   const salaryKpi = useMemo(() => {
     if (!data || !data.dates.length) return null;
-    let totalExpected = 0;
-    let totalPaid = 0;
+    let expectedCents = 0;
+    let paidCents = 0;
     for (const w of filteredWorkers) {
-      totalExpected += computeWorkerExpectedSalary(w, data.dates);
-      totalPaid += parseFloat(w.paidSalary || "0");
+      expectedCents += Math.round(Number(w.expectedSalary || "0") * 100);
+      paidCents += Math.round(Number(w.paidSalary || "0") * 100);
     }
-    return { totalExpected, totalPaid, totalRemaining: totalExpected - totalPaid };
+    return {
+      totalExpected: expectedCents / 100,
+      totalPaid: paidCents / 100,
+      totalRemaining: (expectedCents - paidCents) / 100,
+    };
   }, [filteredWorkers, data]);
 
   /* Counts for filter badges */
@@ -230,8 +257,13 @@ export default function FactoryWorkerAttendanceReport() {
       {/* ── Header bar ─────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3 print:hidden">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-400/30 bg-blue-500/10 text-blue-600 dark:text-blue-300"><CalendarDays className="h-5 w-5" /></span>
-          <div><h2 className="text-xl font-bold tracking-tight sm:text-2xl">Attendance Report</h2><p className="text-xs text-muted-foreground">Workforce attendance and salary overview</p></div>
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-400/30 bg-blue-500/10 text-blue-600 dark:text-blue-300">
+            <CalendarDays className="h-5 w-5" />
+          </span>
+          <div>
+            <h2 className="text-xl font-bold tracking-tight sm:text-2xl">Attendance Report</h2>
+            <p className="text-xs text-muted-foreground">Workforce attendance and salary overview</p>
+          </div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -265,7 +297,12 @@ export default function FactoryWorkerAttendanceReport() {
                 setMode(m);
               }}
               data-testid={`mode-${m}`}
-              className={cn("h-8 rounded-lg px-4 text-xs font-semibold transition-colors", mode === m ? "bg-blue-600 text-white shadow-[0_2px_10px_rgba(37,99,235,0.35)] hover:bg-blue-700 hover:text-white dark:bg-blue-600 dark:hover:bg-blue-500" : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-blue-950/70")}
+              className={cn(
+                "h-8 rounded-lg px-4 text-xs font-semibold transition-colors",
+                mode === m
+                  ? "bg-blue-600 text-white shadow-[0_2px_10px_rgba(37,99,235,0.35)] hover:bg-blue-700 hover:text-white dark:bg-blue-600 dark:hover:bg-blue-500"
+                  : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-blue-950/70"
+              )}
             >
               {m === "today" ? "Today" : m === "yesterday" ? "Yesterday" : m === "thisMonth" ? "This Month" : "Custom"}
             </Button>
@@ -330,7 +367,12 @@ export default function FactoryWorkerAttendanceReport() {
             size="sm"
             onClick={() => setFilter("all")}
             data-testid="filter-all"
-            className={cn("h-8 rounded-lg px-3 text-xs font-semibold transition-colors", filter === "all" ? "bg-blue-600 text-white shadow-sm hover:bg-blue-700 hover:text-white dark:bg-blue-600" : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-blue-950/70")}
+            className={cn(
+              "h-8 rounded-lg px-3 text-xs font-semibold transition-colors",
+              filter === "all"
+                ? "bg-blue-600 text-white shadow-sm hover:bg-blue-700 hover:text-white dark:bg-blue-600"
+                : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-blue-950/70"
+            )}
           >
             All
             {data && (
@@ -344,7 +386,12 @@ export default function FactoryWorkerAttendanceReport() {
             size="sm"
             onClick={() => setFilter("present")}
             data-testid="filter-present"
-            className={cn("h-8 rounded-lg px-3 text-xs font-semibold transition-colors", filter === "present" ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300" : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-blue-950/70")}
+            className={cn(
+              "h-8 rounded-lg px-3 text-xs font-semibold transition-colors",
+              filter === "present"
+                ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300"
+                : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-blue-950/70"
+            )}
           >
             No Absences
             {data && (
@@ -358,7 +405,12 @@ export default function FactoryWorkerAttendanceReport() {
             size="sm"
             onClick={() => setFilter("absent")}
             data-testid="filter-absent"
-            className={cn("h-8 rounded-lg px-3 text-xs font-semibold transition-colors", filter === "absent" ? "bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-300" : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-blue-950/70")}
+            className={cn(
+              "h-8 rounded-lg px-3 text-xs font-semibold transition-colors",
+              filter === "absent"
+                ? "bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-300"
+                : "text-muted-foreground hover:bg-slate-100 dark:hover:bg-blue-950/70"
+            )}
           >
             Has Absences
             {data && (
@@ -376,7 +428,11 @@ export default function FactoryWorkerAttendanceReport() {
             size="sm"
             onClick={() => setHideFullAbsent((v) => !v)}
             data-testid="toggle-hide-full-absent"
-            className={cn("h-9 gap-1.5 rounded-lg border-slate-200 px-3 text-xs font-semibold dark:border-blue-900/60 dark:bg-[#122037]", hideFullAbsent && "border-blue-400 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-500/15 dark:text-blue-300")}
+            className={cn(
+              "h-9 gap-1.5 rounded-lg border-slate-200 px-3 text-xs font-semibold dark:border-blue-900/60 dark:bg-[#122037]",
+              hideFullAbsent &&
+                "border-blue-400 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-500/15 dark:text-blue-300"
+            )}
           >
             {hideFullAbsent ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
             {hideFullAbsent ? "Show" : "Hide"} fully absent
@@ -395,13 +451,25 @@ export default function FactoryWorkerAttendanceReport() {
           size="sm"
           onClick={() => setEditMode((v) => !v)}
           data-testid="toggle-edit-mode"
-          className={cn("h-9 gap-1.5 rounded-lg border-slate-200 px-3 text-xs font-semibold dark:border-blue-900/60 dark:bg-[#122037]", editMode && "border-blue-400 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-500/15 dark:text-blue-300")}
+          className={cn(
+            "h-9 gap-1.5 rounded-lg border-slate-200 px-3 text-xs font-semibold dark:border-blue-900/60 dark:bg-[#122037]",
+            editMode &&
+              "border-blue-400 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-500/15 dark:text-blue-300"
+          )}
         >
           <Pencil className="h-3.5 w-3.5" />
           {editMode ? "Editing" : "Edit"}
           {saveMutation.isPending && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
         </Button>
       </div>
+
+      {dateRangeError && (
+        <Card>
+          <CardContent className="p-4 text-sm text-muted-foreground">
+            {dateRangeError}
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Loading / Error ─────────────────────────────────────────────────── */}
       {isLoading && (
@@ -444,10 +512,16 @@ export default function FactoryWorkerAttendanceReport() {
                   <UsersRound className="h-6 w-6" />
                 </div>
                 <div className="min-w-0">
-                <p className="mb-1 text-xs font-medium text-muted-foreground">Workers</p>
-                <p className="text-2xl font-bold tabular-nums tracking-tight" data-testid="stat-total-workers">
-                  {filteredWorkers.length}
-                </p>
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">Workers</p>
+                  <p className="text-2xl font-bold tabular-nums tracking-tight" data-testid="stat-total-workers">
+                    {filteredWorkers.length}
+                  </p>
+                  {filteredWorkers.some((worker) => worker.active === false) && (
+                    <p className="mt-1 text-[10px] text-muted-foreground" data-testid="stat-worker-status-breakdown">
+                      {filteredWorkers.filter((worker) => worker.active !== false).length} active ·{" "}
+                      {filteredWorkers.filter((worker) => worker.active === false).length} inactive
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -457,22 +531,22 @@ export default function FactoryWorkerAttendanceReport() {
                   <CalendarCheck2 className="h-6 w-6" />
                 </div>
                 <div className="min-w-0">
-                <p className="mb-1 text-xs font-medium text-muted-foreground">Attendance Rate</p>
-                <p
-                  className={cn(
-                    "text-2xl font-bold tabular-nums tracking-tight",
-                    overallPct === null
-                      ? "text-muted-foreground"
-                      : overallPct >= 90
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : overallPct >= 75
-                          ? "text-amber-600 dark:text-amber-400"
-                          : "text-red-500 dark:text-red-400"
-                  )}
-                  data-testid="stat-attendance-pct"
-                >
-                  {overallPct !== null ? `${overallPct}%` : "—"}
-                </p>
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">Attendance Rate</p>
+                  <p
+                    className={cn(
+                      "text-2xl font-bold tabular-nums tracking-tight",
+                      overallPct === null
+                        ? "text-muted-foreground"
+                        : overallPct >= 90
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : overallPct >= 75
+                            ? "text-amber-600 dark:text-amber-400"
+                            : "text-red-500 dark:text-red-400"
+                    )}
+                    data-testid="stat-attendance-pct"
+                  >
+                    {overallPct !== null ? `${overallPct}%` : "—"}
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -482,10 +556,13 @@ export default function FactoryWorkerAttendanceReport() {
                   <Coins className="h-6 w-6" />
                 </div>
                 <div className="min-w-0">
-                <p className="mb-1 text-xs font-medium text-muted-foreground">Expected Salary</p>
-                <p className="break-words text-xl font-bold tabular-nums tracking-tight text-foreground" data-testid="stat-expected-salary">
-                  {salaryKpi ? fmtCurrency(salaryKpi.totalExpected) : "—"}
-                </p>
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">Expected Salary</p>
+                  <p
+                    className="break-words text-xl font-bold tabular-nums tracking-tight text-foreground"
+                    data-testid="stat-expected-salary"
+                  >
+                    {salaryKpi ? fmtCurrency(salaryKpi.totalExpected) : "—"}
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -495,13 +572,13 @@ export default function FactoryWorkerAttendanceReport() {
                   <HandCoins className="h-6 w-6" />
                 </div>
                 <div className="min-w-0">
-                <p className="mb-1 text-xs font-medium text-muted-foreground">Paid Salary</p>
-                <p
-                  className="break-words text-xl font-bold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400"
-                  data-testid="stat-paid-salary"
-                >
-                  {salaryKpi ? fmtCurrency(salaryKpi.totalPaid) : "—"}
-                </p>
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">Paid Salary</p>
+                  <p
+                    className="break-words text-xl font-bold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400"
+                    data-testid="stat-paid-salary"
+                  >
+                    {salaryKpi ? fmtCurrency(salaryKpi.totalPaid) : "—"}
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -511,29 +588,29 @@ export default function FactoryWorkerAttendanceReport() {
                   <Wallet className="h-6 w-6" />
                 </div>
                 <div className="min-w-0">
-                <p className="mb-1 text-xs font-medium text-muted-foreground">Remaining Salary</p>
-                <p
-                  className={cn(
-                    "break-words text-xl font-bold tabular-nums tracking-tight",
-                    !salaryKpi
-                      ? "text-muted-foreground"
-                      : salaryKpi.totalRemaining < 0
-                        ? "text-blue-600 dark:text-blue-400"
-                        : salaryKpi.totalRemaining === 0
-                          ? "text-emerald-600 dark:text-emerald-400"
-                          : "text-amber-600 dark:text-amber-400"
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">Remaining Salary</p>
+                  <p
+                    className={cn(
+                      "break-words text-xl font-bold tabular-nums tracking-tight",
+                      !salaryKpi
+                        ? "text-muted-foreground"
+                        : salaryKpi.totalRemaining < 0
+                          ? "text-blue-600 dark:text-blue-400"
+                          : salaryKpi.totalRemaining === 0
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-amber-600 dark:text-amber-400"
+                    )}
+                    data-testid="stat-remaining-salary"
+                  >
+                    {salaryKpi
+                      ? salaryKpi.totalRemaining < 0
+                        ? `Overpaid ${fmtCurrency(Math.abs(salaryKpi.totalRemaining))}`
+                        : fmtCurrency(salaryKpi.totalRemaining)
+                      : "—"}
+                  </p>
+                  {salaryKpi && salaryKpi.totalRemaining < 0 && (
+                    <p className="text-[11px] text-blue-500 dark:text-blue-400 mt-0.5">Overpaid</p>
                   )}
-                  data-testid="stat-remaining-salary"
-                >
-                  {salaryKpi
-                    ? salaryKpi.totalRemaining < 0
-                      ? `Overpaid ${fmtCurrency(Math.abs(salaryKpi.totalRemaining))}`
-                      : fmtCurrency(salaryKpi.totalRemaining)
-                    : "—"}
-                </p>
-                {salaryKpi && salaryKpi.totalRemaining < 0 && (
-                  <p className="text-[11px] text-blue-500 dark:text-blue-400 mt-0.5">Overpaid</p>
-                )}
                 </div>
               </CardContent>
             </Card>
@@ -556,7 +633,7 @@ export default function FactoryWorkerAttendanceReport() {
           {data.workers.length === 0 ? (
             <Card>
               <CardContent className="p-10 text-center text-muted-foreground">
-                No active workers found. Add workers first from the Workers tab.
+                No workers or payroll records found for this period.
               </CardContent>
             </Card>
           ) : filteredWorkers.length === 0 ? (
@@ -609,7 +686,10 @@ export default function FactoryWorkerAttendanceReport() {
                   {filteredWorkers.map((worker, idx) => (
                     <tr
                       key={worker.id}
-                      className={cn("border-b border-slate-100 transition-colors hover:bg-blue-50/70 dark:border-[#253651] dark:hover:bg-[#1a3456]", idx % 2 === 0 ? "bg-white dark:bg-[#0c172a]" : "bg-slate-50/70 dark:bg-[#101e33]")}
+                      className={cn(
+                        "border-b border-slate-100 transition-colors hover:bg-blue-50/70 dark:border-[#253651] dark:hover:bg-[#1a3456]",
+                        idx % 2 === 0 ? "bg-white dark:bg-[#0c172a]" : "bg-slate-50/70 dark:bg-[#101e33]"
+                      )}
                       data-testid={`row-worker-${worker.id}`}
                     >
                       <td
@@ -629,6 +709,11 @@ export default function FactoryWorkerAttendanceReport() {
                         <span className="truncate block max-w-[180px]" title={worker.fullName}>
                           {worker.fullName}
                         </span>
+                        {worker.active === false && (
+                          <span className="mt-0.5 inline-block rounded border border-amber-400/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                            Inactive
+                          </span>
+                        )}
                       </td>
 
                       {data.dates.map(({ date, isWeekend }) => {
@@ -646,10 +731,14 @@ export default function FactoryWorkerAttendanceReport() {
                               <StatusPill
                                 status={status}
                                 absentsOnly={filter === "absent"}
-                                editable={editMode}
-                                onClick={editMode ? () => cycleCell(worker.id, date, status) : undefined}
+                                editable={editMode && worker.active !== false}
+                                onClick={
+                                  editMode && worker.active !== false
+                                    ? () => cycleCell(worker.id, date, status)
+                                    : undefined
+                                }
                                 onKeyDown={
-                                  editMode
+                                  editMode && worker.active !== false
                                     ? (e) => {
                                         const setStatus = (val: string) => {
                                           e.preventDefault();
@@ -661,7 +750,7 @@ export default function FactoryWorkerAttendanceReport() {
                                         if (e.key === "p" || e.key === "P") setStatus("Present");
                                         else if (e.key === "a" || e.key === "A") setStatus("Absent");
                                         else if (e.key === "l" || e.key === "L") setStatus("Leave");
-                                        else if (e.key === "h" || e.key === "H") setStatus("HalfDay");
+                                        else if (e.key === "h" || e.key === "H") setStatus("Half Day");
                                         else if (e.key === "Delete" || e.key === "Backspace") setStatus("");
                                         else if (e.key === " " || e.key === "Enter") {
                                           e.preventDefault();

@@ -418,9 +418,9 @@ export function PayrollPaymentDialogs({ payroll }: { payroll: FactoryPayrollStat
       <Dialog open={deleteTargetId !== null} onOpenChange={(open) => !open && setDeleteTargetId(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Draft Payroll</DialogTitle>
+            <DialogTitle>Delete Payroll and Reverse Accounting</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this draft payroll record? This action cannot be undone.
+              This will reverse any posted payroll payment and associated journal entries, remove the payroll record, and restore its advance deductions. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

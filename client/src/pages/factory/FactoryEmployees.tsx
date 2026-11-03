@@ -465,7 +465,7 @@ export default function FactoryEmployees() {
                     </TableCell>
                     <TableCell className="py-3">
                       <div
-                        className="flex items-center justify-end gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 sm:touch:opacity-100"
+                        className="flex items-center justify-end gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 touch:opacity-100"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <Button

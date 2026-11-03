@@ -119,6 +119,7 @@ export async function closeShift(
           and(
             eq(schema.vouchers.shiftId, id),
             eq(schema.vouchers.voucherType, "Sales"),
+            eq(schema.vouchers.optional, false),
             isNull(schema.vouchers.deletedAt)
           )
         );

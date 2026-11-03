@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
+import { FactoryRelatedLinks } from "@/components/FactoryRelatedLinks";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, UserRound } from "lucide-react";
 import FactoryCustomers from "@/pages/factory/FactoryCustomers";
@@ -51,17 +52,32 @@ export default function FactoryPartiesHub() {
             icon={<Users className="h-5 w-5" />}
             showBackButton={false}
           />
+          <FactoryRelatedLinks
+            className="justify-end pb-2"
+            links={[{ href: "/factory/contacts", label: "Contacts" }]}
+          />
         </div>
         <div className="erp-mobile-scroll-tabs shrink-0 border-b border-border/50 px-4 pb-3 pt-3">
-          <TabsList className="h-12 w-max min-w-full rounded-2xl border border-border/60 bg-muted/60 p-1 shadow-sm sm:min-w-0 sm:w-fit dark:border-blue-400/20 dark:bg-slate-900/80" aria-label="Factory parties sections">
+          <TabsList
+            className="h-12 w-max min-w-full rounded-2xl border border-border/60 bg-muted/60 p-1 shadow-sm sm:min-w-0 sm:w-fit dark:border-blue-400/20 dark:bg-slate-900/80"
+            aria-label="Factory parties sections"
+          >
             {showCustomers && (
-              <TabsTrigger value="customers" data-testid="tab-parties-customers" className="h-10 rounded-xl px-5 font-semibold data-[state=active]:bg-blue-600 data-[state=active]:text-white dark:data-[state=active]:bg-blue-600 dark:data-[state=active]:text-white">
+              <TabsTrigger
+                value="customers"
+                data-testid="tab-parties-customers"
+                className="h-10 rounded-xl px-5 font-semibold data-[state=active]:bg-blue-600 data-[state=active]:text-white dark:data-[state=active]:bg-blue-600 dark:data-[state=active]:text-white"
+              >
                 <Users className="h-4 w-4 mr-2" />
                 Customers
               </TabsTrigger>
             )}
             {showSuppliers && (
-              <TabsTrigger value="suppliers" data-testid="tab-parties-suppliers" className="h-10 rounded-xl px-5 font-semibold data-[state=active]:bg-blue-600 data-[state=active]:text-white dark:data-[state=active]:bg-blue-600 dark:data-[state=active]:text-white">
+              <TabsTrigger
+                value="suppliers"
+                data-testid="tab-parties-suppliers"
+                className="h-10 rounded-xl px-5 font-semibold data-[state=active]:bg-blue-600 data-[state=active]:text-white dark:data-[state=active]:bg-blue-600 dark:data-[state=active]:text-white"
+              >
                 <UserRound className="h-4 w-4 mr-2" />
                 Suppliers
               </TabsTrigger>

@@ -365,9 +365,9 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
           ${status === "paid" ? sql`AND p.status='POSTED'` : sql``}
       `)
             ).rows;
-      const legacy: Array<Record<string, unknown>> = result.rows.map((row) => ({ ...row, source: "worker" }));
+      const legacy = result.rows.map((row) => ({ ...row, source: "worker" }));
       res.json(
-        [...legacy, ...productionHistory].sort(
+        ([...legacy, ...productionHistory] as Array<Record<string, unknown>>).sort(
           (a, b) => String(b.bonusDate).localeCompare(String(a.bonusDate)) || Number(b.id) - Number(a.id)
         )
       );

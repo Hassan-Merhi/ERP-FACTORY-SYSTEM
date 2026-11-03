@@ -57,7 +57,6 @@ export default function FactoryPriceList() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Focus only when changing cells, not on every digit typed.
-  // Refocus only when a different cell starts editing, not on every draft keystroke.
   const editingCellKey = editingCell ? `${editingCell.productId}:${editingCell.field}` : null;
   useEffect(() => {
     if (!editingCellKey) return;

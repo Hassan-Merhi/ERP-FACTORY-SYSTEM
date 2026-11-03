@@ -4,6 +4,7 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
+import { offlineEdgeText } from "../../../i18n/offlineEdgeMessages";
 import type { Express, Request, Response } from "express";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { getErrorMessage } from "../../../lib/httpHandlers";
@@ -12,6 +13,10 @@ import { requireAuth } from "../../../auth";
 import { upload } from "../../_helpers";
 import { storedFiles, fileFolders } from "@shared/schema";
 import { eq, and, desc, asc } from "drizzle-orm";
+import { createHash, randomUUID } from "node:crypto";
+import { isPhase9LanPrimary } from "../../../edge/phase9PosOutbox";
+import { capturePhase9AttachmentTx } from "../../../edge/phase9AttachmentOutbox";
+import { PHASE9_ATTACHMENT_MAX_BYTES } from "../../../edge/phase9AttachmentEnvelope.mjs";
 
 export function registerFileRoutes(app: Express) {
   app.get("/api/file-folders", requireAuth, async (req: import("express").Request, res) => {
@@ -123,22 +128,51 @@ export function registerFileRoutes(app: Express) {
       if (!companyId) return res.status(400).json({ message: "No company context" });
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
       const { description, folderId } = req.body;
-      const fileData = req.file.buffer.toString("base64");
+      const file = req.file;
+      // Owner policy: offline uploads on the factory LAN server are capped at 10 MB.
+      const lanCapture = isPhase9LanPrimary();
+      if (lanCapture && file.size > PHASE9_ATTACHMENT_MAX_BYTES) {
+        return res.status(413).json({
+          code: "EDGE_ATTACHMENT_TOO_LARGE",
+          message: offlineEdgeText("attachmentTooLarge", req.headers["accept-language"]),
+        });
+      }
+      const fileData = file.buffer.toString("base64");
       const folderIdNum = folderId ? parseInt(folderId) : null;
-      const [inserted] = await db
-        .insert(storedFiles)
-        .values({
-          companyId,
-          folderId: folderIdNum,
-          fileName: req.file.originalname,
-          displayName: null,
-          fileType: req.file.mimetype,
-          fileSize: req.file.size,
-          fileData,
-          description: description || null,
-          uploadedBy: null,
-        })
-        .returning({ id: storedFiles.id });
+      const inserted = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .insert(storedFiles)
+          .values({
+            companyId,
+            folderId: folderIdNum,
+            fileName: file.originalname,
+            displayName: null,
+            fileType: file.mimetype,
+            fileSize: file.size,
+            fileData,
+            description: description || null,
+            uploadedBy: null,
+          })
+          .returning({ id: storedFiles.id });
+        if (lanCapture) {
+          // The record syncs first; the bytes follow, verified by this SHA-256.
+          await capturePhase9AttachmentTx(tx, {
+            companyId,
+            localFileId: row.id,
+            folderId: Number.isSafeInteger(folderIdNum) && folderIdNum! > 0 ? folderIdNum : null,
+            actorUserId: String(req.session.userId),
+            actorUsername: req.session.username || "unknown",
+            requestId: randomUUID(),
+            fileName: file.originalname.slice(0, 255) || "file",
+            fileType: (file.mimetype || "application/octet-stream").slice(0, 255),
+            fileSize: file.size,
+            description: typeof description === "string" && description ? description.slice(0, 1000) : null,
+            sha256: createHash("sha256").update(file.buffer).digest("hex"),
+            uploadedOn: new Date().toISOString().slice(0, 10),
+          });
+        }
+        return row;
+      });
       res.json({ id: inserted.id, message: "File uploaded successfully" });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });

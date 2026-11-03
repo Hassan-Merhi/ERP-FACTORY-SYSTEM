@@ -218,6 +218,10 @@ export function registerFactoryDaybookPaginationRoutes(app: Express): void {
 
       if (startDate) {
         const param = bind(startDate);
+        // Restrict the source table BEFORE expensive integrity joins. Its existing
+        // (company_id, tx_date) index makes a single-day view inexpensive.
+        // Filtering by COALESCE(live_voucher.effective_date, ...) here forced
+        // a full scan and 30s statement timeouts on production.
         realConditions.push(`f.tx_date >= ${param}::date`);
         voucherConditions.push(`COALESCE(v.effective_date, v.voucher_date) >= ${param}::date`);
       }
@@ -400,7 +404,7 @@ export function registerFactoryDaybookPaginationRoutes(app: Express): void {
               "metaJson", "currencyCode", "amountCurrency", "fxRateToUsd", "amountUsd", "effectiveDate",
               "createdAt", "createdBy", optional, "voucherNumber", sort_date
             FROM filtered
-            ORDER BY sort_date ${sortDirection}, ABS(id) ${sortDirection}
+            ORDER BY sort_date ${sortDirection}, ABS(id) ${sortDirection}, id ${sortDirection}
             LIMIT ${limitParam} OFFSET ${offsetParam}
           )
           ${filterOptionsOnly
@@ -409,7 +413,7 @@ export function registerFactoryDaybookPaginationRoutes(app: Express): void {
             (SELECT COUNT(*)::int FROM filtered) AS total,
             COALESCE(
               (
-                SELECT jsonb_agg(to_jsonb(page_rows) - 'sort_date' ORDER BY sort_date ${sortDirection}, ABS(id) ${sortDirection})
+                SELECT jsonb_agg(to_jsonb(page_rows) - 'sort_date' ORDER BY sort_date ${sortDirection}, ABS(id) ${sortDirection}, id ${sortDirection})
                 FROM page_rows
               ),
               '[]'::jsonb

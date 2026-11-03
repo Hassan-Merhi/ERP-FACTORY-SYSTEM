@@ -74,6 +74,7 @@ describe("factory camera decoder", () => {
     const decoder = await createBundledCameraDecoder();
     expect(await decoder!.detect(fakeVideo(2560, 1440))).toEqual([]);
     const canvas = zxingBrowser.decodeFromCanvas.mock.calls[0][0] as HTMLCanvasElement;
+    // ZXING_MAX_EDGE is 1024: a 2560px frame is scaled by 0.4.
     expect(canvas.width).toBe(1024);
     // Most frames only decode the center band, reducing work on high-res phones.
     expect(canvas.height).toBe(322);

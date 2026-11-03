@@ -18,10 +18,11 @@ import { loadProductionTargetsRosterIds } from "./productionTargetsRoster";
 type Row = Record<string, unknown>;
 const first = (result: unknown): Row | undefined => resultRows<Row>(result)[0];
 const all = (result: unknown): Row[] => resultRows<Row>(result);
-// A function declaration (not an arrow) so TypeScript narrows after a call.
-function bad(status: number, message: string): never {
+// Annotated so a call narrows like a throw (TypeScript only narrows on
+// never-returning functions with an explicit type).
+const bad: (status: number, message: string) => never = (status, message) => {
   throw new HttpError(status, message);
-}
+};
 const id = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 export type ManualBonusSelection = { workerId: number; amount: string };
 export type ManualBonusCommand = {

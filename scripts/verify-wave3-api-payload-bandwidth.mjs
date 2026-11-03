@@ -71,7 +71,9 @@ for (const field of [
   requireText(products, field, `Bale-product picker projection is missing ${field}.`);
 }
 const productPicker = products.slice(products.indexOf('req.query.profile === "picker"'), products.indexOf("const results = await db.select()"));
-// The picker carries sellingPrice so article selection can prefill a price (7e40231).
+// sellingPrice is intentionally part of the picker (container extra items use
+// agreed selling prices, 7e40231); internal cost and heavy text stay out.
+requireText(productPicker, "sellingPrice:", "Bale-product picker must expose sellingPrice for container pricing.");
 for (const forbidden of ["description:", "descriptionAr:", "descriptionFr:", "productionPrice:", "createdAt:", "updatedAt:"]) {
   forbidText(productPicker, forbidden, `Bale-product picker must not select ${forbidden}`);
 }

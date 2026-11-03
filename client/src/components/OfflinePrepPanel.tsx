@@ -19,6 +19,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,13 +27,19 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { useToast } from "@/hooks/use-toast";
 import { useConnectivity } from "@/contexts/ConnectivityContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { applicationEnglishTranslations } from "@/i18n/applicationTranslations";
+import { buildPacks, type PrepProgress, type OfflineReadiness } from "@/lib/offlinePrep";
 import {
-  runOfflinePrep,
-  getOfflineReadiness,
-  buildPacks,
-  type PrepProgress,
-  type OfflineReadiness,
-} from "@/lib/offlinePrep";
+  getOfflineReadGrant,
+  getVerifiedOfflineReadScope,
+  isVerifiedOfflineReadVaultUnlocked,
+  lockVerifiedOfflineReadVault,
+  unlockVerifiedOfflineReadVault,
+} from "@/lib/offline/offlineReadCache";
+import { getScopedOfflineReadiness, runScopedOfflinePrep } from "@/lib/offline/scopedOfflinePrep";
+import { OfflineWriteStatusPanel } from "@/components/OfflineWriteStatusPanel";
+import { FactoryEdgeOperatorPanel } from "@/components/FactoryEdgeOperatorPanel";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -73,6 +80,8 @@ export function OfflinePrepPanel() {
 
 function OfflinePrepPanelContent() {
   const { isOnline } = useConnectivity();
+  const language = useOptionalApplicationLanguage();
+  const t = language?.t ?? ((key: keyof typeof applicationEnglishTranslations) => applicationEnglishTranslations[key]);
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
   const companyId: number = selectedCompany?.id ?? 0;
@@ -82,17 +91,45 @@ function OfflinePrepPanelContent() {
   const [progress, setProgress] = useState<PrepProgress | null>(null);
   const [running, setRunning] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [vaultPassphrase, setVaultPassphrase] = useState("");
+  const [protectedSnapshot, setProtectedSnapshot] = useState(false);
+  const [vaultUnlocked, setVaultUnlocked] = useState(false);
+
+  useEffect(() => {
+    setVaultPassphrase("");
+    setVaultUnlocked(false);
+    setProtectedSnapshot(false);
+  }, [companyId]);
 
   const loadReadiness = useCallback(async () => {
-    const r = await getOfflineReadiness();
+    const actor = getVerifiedOfflineReadScope();
+    if (!actor || actor.companyId !== companyId) {
+      setReadiness(null);
+      setProtectedSnapshot(false);
+      setVaultUnlocked(false);
+      return;
+    }
+    const [r, grant] = await Promise.all([getScopedOfflineReadiness(actor), getOfflineReadGrant(actor)]);
     setReadiness(r);
-  }, []);
+    setProtectedSnapshot(grant?.protection === "erp-offline-aes-gcm-v1");
+    setVaultUnlocked(isVerifiedOfflineReadVaultUnlocked(actor));
+  }, [companyId]);
 
   useEffect(() => {
     void loadReadiness();
+    window.addEventListener("erp:offline-read-scope-verified", loadReadiness);
+    return () => window.removeEventListener("erp:offline-read-scope-verified", loadReadiness);
   }, [loadReadiness]);
 
   const handlePrepare = async () => {
+    if (vaultPassphrase.length < 12) {
+      toast({
+        title: t("offlineVault.passphraseRequiredTitle"),
+        description: t("offlineVault.passphraseRequiredDetail"),
+        variant: "destructive",
+      });
+      return;
+    }
     if (!isOnline) {
       toast({
         title: "You're offline",
@@ -115,9 +152,22 @@ function OfflinePrepPanelContent() {
     });
 
     try {
-      await runOfflinePrep(companyId, (p) => setProgress({ ...p }));
+      const outcome = await runScopedOfflinePrep(
+        companyId,
+        (p) => setProgress({ ...p }),
+        selectedCompany?.companyType ?? "properties",
+        vaultPassphrase
+      );
       await loadReadiness();
-      toast({ title: "Device prepared", description: "All offline data downloaded and ready." });
+      if (outcome.phase === "done") {
+        toast({ title: t("offlineReads.preparedTitle"), description: t("offlineReads.preparedDetail") });
+      } else {
+        toast({
+          title: t("offlineReads.incompleteTitle"),
+          description: t("offlineReads.incompleteDetail"),
+          variant: "destructive",
+        });
+      }
     } catch (e) {
       toast({
         title: "Preparation failed",
@@ -125,8 +175,22 @@ function OfflinePrepPanelContent() {
         variant: "destructive",
       });
     } finally {
+      setVaultPassphrase("");
       setRunning(false);
     }
+  };
+
+  const handleUnlock = async () => {
+    const unlocked = await unlockVerifiedOfflineReadVault(vaultPassphrase);
+    setVaultPassphrase("");
+    setVaultUnlocked(unlocked);
+    toast({
+      title: unlocked ? "Offline snapshots unlocked" : "Unlock failed",
+      description: unlocked
+        ? "Prepared data is available only while your verified session remains active."
+        : "Check your passphrase and your verified session. No saved data was changed.",
+      variant: unlocked ? "default" : "destructive",
+    });
   };
 
   // Summarise readiness
@@ -145,11 +209,18 @@ function OfflinePrepPanelContent() {
           Not prepared
         </Badge>
       );
+    if (readiness.ready && protectedSnapshot && !vaultUnlocked)
+      return (
+        <Badge variant="outline" className="gap-1">
+          <Shield className="h-3 w-3" />
+          Prepared · Locked
+        </Badge>
+      );
     if (readiness.ready)
       return (
         <Badge className="gap-1 bg-green-600 dark:bg-green-700 text-white">
           <CheckCircle2 className="h-3 w-3" />
-          Offline Ready
+          {t("offlineReads.readyLabel")}
         </Badge>
       );
     if (readiness.partial)
@@ -173,9 +244,7 @@ function OfflinePrepPanelContent() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h3 className="font-semibold text-base">Offline Device Preparation</h3>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Download all business data to this device so the app works without internet.
-          </p>
+          <p className="text-sm text-muted-foreground mt-0.5">{t("offlineReads.intro")}</p>
         </div>
         {statusBadge()}
       </div>
@@ -227,6 +296,43 @@ function OfflinePrepPanelContent() {
           })}
         </div>
       )}
+
+      {/* Encrypted snapshot vault: never store the passphrase or bypass live auth. */}
+      <div className="rounded-md border p-3 space-y-2">
+        <label htmlFor="offline-vault-passphrase" className="text-sm font-medium">
+          {t("offlineVault.passphraseLabel")}
+        </label>
+        <Input
+          id="offline-vault-passphrase"
+          type="password"
+          autoComplete="new-password"
+          value={vaultPassphrase}
+          onChange={(event) => setVaultPassphrase(event.target.value)}
+          placeholder={t("offlineVault.passphrasePlaceholder")}
+          disabled={running}
+        />
+        <p className="text-xs text-muted-foreground">{t("offlineVault.passphraseHelp")}</p>
+        {readiness?.ready && protectedSnapshot && (
+          <div className="flex flex-wrap items-center gap-2">
+            {vaultUnlocked ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  lockVerifiedOfflineReadVault();
+                  setVaultUnlocked(false);
+                }}
+              >
+                {t("offlineVault.lock")}
+              </Button>
+            ) : (
+              <Button size="sm" variant="outline" disabled={vaultPassphrase.length < 12} onClick={handleUnlock}>
+                {t("offlineVault.unlock")}
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Action button */}
       <Button
@@ -283,20 +389,20 @@ function OfflinePrepPanelContent() {
           {(progress.phase === "done" || progress.phase === "error") && (
             <div
               className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm ${
-                progress.failedDatasets === 0
+                progress.phase === "done" && progress.failedDatasets === 0
                   ? "bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-300"
                   : "bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300"
               }`}
             >
-              {progress.failedDatasets === 0 ? (
+              {progress.phase === "done" && progress.failedDatasets === 0 ? (
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
               ) : (
                 <AlertCircle className="h-4 w-4 shrink-0" />
               )}
               <span>
-                {progress.failedDatasets === 0
-                  ? "Device is offline-ready. All datasets downloaded."
-                  : `${progress.completedDatasets} datasets OK · ${progress.failedDatasets} failed.`}
+                {progress.phase === "done" && progress.failedDatasets === 0
+                  ? t("offlineReads.preparedDetail")
+                  : t("offlineReads.incompleteDetail")}
               </span>
             </div>
           )}
@@ -359,6 +465,10 @@ function OfflinePrepPanelContent() {
         </div>
       )}
 
+      <OfflineWriteStatusPanel />
+
+      <FactoryEdgeOperatorPanel />
+
       {/* Pages that still need server */}
       <Collapsible>
         <CollapsibleTrigger asChild>
@@ -370,11 +480,8 @@ function OfflinePrepPanelContent() {
         <CollapsibleContent>
           <div className="mt-2 rounded-md border bg-muted/30 p-3 space-y-3 text-xs text-muted-foreground">
             <div>
-              <p className="font-medium text-foreground mb-1">Forms &amp; write operations — work offline</p>
-              <p>
-                Recording payments, container entries, daybook entries, vouchers, and other form submissions are saved
-                locally and auto-synced the moment WiFi returns. The banner at the top shows how many are queued.
-              </p>
+              <p className="font-medium text-foreground mb-1">{t("offlineReads.writeLimitTitle")}</p>
+              <p>{t("offlineReads.writeLimitDetail")}</p>
             </div>
             <div>
               <p className="font-medium text-foreground mb-1">Features that truly require internet:</p>
@@ -385,7 +492,7 @@ function OfflinePrepPanelContent() {
                 <li>First login — a valid session must already exist</li>
               </ul>
             </div>
-            <p>Everything else — browsing, searching, and submitting forms — works fully offline.</p>
+            <p>{t("offlineReads.exactCoverageDetail")}</p>
           </div>
         </CollapsibleContent>
       </Collapsible>

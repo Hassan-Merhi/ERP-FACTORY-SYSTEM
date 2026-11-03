@@ -8,7 +8,7 @@ const harness = vi.hoisted(() => ({
 }));
 
 vi.mock("@tanstack/react-query", async (importOriginal) => ({
-  // The shared query client module constructs a real QueryCache.
+  // Keep real exports (QueryCache, QueryClient, ...) used by shared modules.
   ...(await importOriginal<typeof import("@tanstack/react-query")>()),
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
   useQuery: ({ queryKey }: any) => {

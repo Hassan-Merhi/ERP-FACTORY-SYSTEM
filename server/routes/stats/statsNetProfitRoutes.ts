@@ -1,3 +1,4 @@
+import { isExcludedFromCompany12ManagementReports } from "../../lib/payrollOverpaymentReporting";
 import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
@@ -134,7 +135,8 @@ export function registerStatsNetProfitRoutes(app: Express) {
                 a.subType === "sp_payable"
             )
           : companyAccounts.filter((a) => a.subType !== "sp_stock" && a.subType !== "sp_cost_clearing")
-      ).filter((a) => !parties.customerLedgerIds.has(a.id));
+      ).filter((a) => !parties.customerLedgerIds.has(a.id) &&
+        !isExcludedFromCompany12ManagementReports(companyId, a));
       // Perpetual inventory (wave 8.5): from the cut-over the ledger carries the stock.
       const ledgerStock = !isSupplierPartner && (await ledgerCarriesStock(companyId, toDate));
       const classified = classifyNetPositionAccounts(accountsForClassify, accountBalances, {

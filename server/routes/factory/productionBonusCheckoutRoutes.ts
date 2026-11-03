@@ -26,11 +26,7 @@ import {
   splitExtraBalesByCategory,
   workerCategoryCredits,
 } from "@shared/productionBonusCheckoutMath";
-import {
-  latestUnpaidWorkerRate,
-  rateChangeMayRepriceReview,
-  type LatestBonusRateVersion,
-} from "@shared/productionBonusUnpaidRatePolicy";
+import { latestUnpaidWorkerRate, rateChangeMayRepriceReview } from "@shared/productionBonusUnpaidRatePolicy";
 import { isProductionWorkday, mondayOfProductionBonusWeek } from "@shared/productionTargetBonusWeeklyMethod";
 import {
   parseManualBonusCommand,
@@ -62,10 +58,11 @@ type Offer = {
 };
 type RecordRow = Record<string, unknown>;
 const rows = (x: unknown): RecordRow[] => resultRows(x) as RecordRow[];
-// A function declaration (not an arrow) so TypeScript narrows after a call.
-function fail(status: number, message: string): never {
+// Annotated so a call narrows like a throw (TypeScript only narrows on
+// never-returning functions with an explicit type).
+const fail: (status: number, message: string) => never = (status: number, message: string): never => {
   throw Object.assign(new Error(message), { status });
-}
+};
 const usd = (value: Decimal.Value) => new Decimal(value).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2);
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const allowed = (req: Request) => ["Admin", "Owner"].includes(String(req.session.currentRole || req.user?.role || ""));
@@ -228,9 +225,7 @@ async function calculateOffers(
   const categoryClaims = new Set(
     rows(categoryReviewsResult).map((row) => String(row.date).slice(0, 10) + ":" + Number(row.id))
   );
-  const activeStandardRates: LatestBonusRateVersion[] = rows(standardRatesResult).map(
-    ({ scope, workerId, enabled, rate }) => ({ scope, workerId, enabled, rate })
-  );
+  const activeStandardRates = rows(standardRatesResult);
   const weeklyExtras = allocateWeeklyExtraBales(
     daily.map((day) => {
       const claim = claimsByDay.get(day.date + ":" + day.workerId);

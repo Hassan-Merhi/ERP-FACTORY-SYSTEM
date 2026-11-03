@@ -24,11 +24,21 @@ import { CommandPalette } from "./CommandPalette";
 vi.mock("wouter", () => ({ useLocation: () => ["/", vi.fn()] }));
 vi.mock("@/components/AppSidebar", () => ({
   isRetailHiddenErpPath: () => false,
-  useErpVisibleSections: () => ({ sections: [], visiblePinnedItems: [], visibleUtilityItems: [] }),
+  useErpVisibleSections: () => ({
+    sections: [],
+    visiblePinnedItems: [],
+    visibleUtilityItems: [],
+    isItemVisible: () => true,
+  }),
 }));
 vi.mock("@/contexts/CompanyContext", () => ({ useCompany: () => ({ selectedCompany: null }) }));
-vi.mock("@/components/FactorySidebar", () => ({ useFactoryVisibleSections: () => ({ sections: [] }) }));
-vi.mock("@/components/PropertiesSidebar", () => ({ PROPERTIES_NAV_SECTIONS: [] }));
+vi.mock("@/components/FactorySidebar", () => ({
+  useFactoryVisibleSections: () => ({ sections: [], isPinnedVisible: () => true, isHubTabVisible: () => true }),
+}));
+vi.mock("@/components/PropertiesSidebar", () => ({
+  PROPERTIES_NAV_SECTIONS: [],
+  getPropertiesVisibleNavSections: () => [],
+}));
 
 const CONVERGENCE = "Convergence Reconciliation";
 

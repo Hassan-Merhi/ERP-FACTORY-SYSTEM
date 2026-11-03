@@ -56,11 +56,11 @@ function fakeExecute(query: { parts: readonly string[]; values: unknown[] }) {
   harness.statements.push(source);
   const value = (phrase: string): unknown[] => (harness.responses.get(phrase) as unknown[]) ?? [];
   if (source.includes("SELECT pg_advisory_xact_lock")) return Promise.resolve({ rows: [] });
-  if (
-    source.includes("FROM ledger_accounts") &&
-    source.includes("account_type AS") &&
-    !source.includes("FACTORY_PRODUCTION_BONUS_EXPENSE")
-  )
+  // The bonus expense account read (49f011f) also selects account_type; answer
+  // it as the dedicated expense account before the cash-account branch below.
+  if (source.includes("SELECT id, active, sub_type") && source.includes("FACTORY_PRODUCTION_BONUS_EXPENSE"))
+    return Promise.resolve({ rows: [{ id: 51, active: true, subType: null, accountType: "Indirect Expense" }] });
+  if (source.includes("FROM ledger_accounts") && source.includes("account_type AS"))
     return Promise.resolve({ rows: [{ id: 41, active: true, accountType: "Cash", openingCurrency: "USD" }] });
   if (source.includes("FROM factory_target_bonus_reviews rv")) return Promise.resolve({ rows: value("review") });
   if (source.includes("FROM factory_workers WHERE"))
@@ -76,7 +76,7 @@ function fakeExecute(query: { parts: readonly string[]; values: unknown[] }) {
   if (source.includes("FROM factory_target_bonus_payments") && source.includes("WHERE company_id"))
     return Promise.resolve({ rows: value("reversal") });
   if (source.includes("SELECT id, active, sub_type"))
-    return Promise.resolve({ rows: [{ id: 51, active: true, subType: null, accountType: "Indirect Expense" }] });
+    return Promise.resolve({ rows: [{ id: 51, active: true, subType: null }] });
   return Promise.resolve({ rows: [] });
 }
 
@@ -103,7 +103,7 @@ describe("Production Targets payout transaction", () => {
     );
   });
 
-  it("posts a balanced Production Bonus Expense voucher, payment record, daybook and audit together", async () => {
+  it("posts a balanced Deposit Expense voucher, payment record, daybook and audit together", async () => {
     const result = await postTargetBonusPayments(3, command, actor);
     expect(result.posted).toBe(1);
     expect(result.results[0]).toMatchObject({ paymentId: 304, reviewId: 11, amount: "9.50", replayed: false });

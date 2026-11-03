@@ -438,7 +438,7 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
     expect((await call("GET /api/factory/pressing-machines/me", actors.supA)).body.canManage).toBe(true);
   });
 
-  it("lets only a supervisor void, leaves an immutable void, then links the replacement", async () => {
+  it("bounds the optional supervisor reason, leaves an immutable void, then links the replacement", async () => {
     const first = await scan(actors.opA1, "void", randomUUID());
     expect(first.statusCode).toBe(201);
     const route = "POST /api/factory/pressing-machines/confirmations/:id/void";
@@ -450,7 +450,7 @@ databaseDescribe("Pressing Scan — simplified user-based PostgreSQL integration
     expect((await call(route, actors.managerA, options)).statusCode).toBe(403);
     expect((await call(route, actors.posA, options)).statusCode).toBe(403);
     expect((await call(route, actors.supB, options)).statusCode).toBe(404);
-    // A reason is optional since one-click removal (7708285), but still bounded.
+    // The reason is optional (legacy clients may still send one) but stays bounded.
     expect((await call(route, actors.supA, { ...options, body: { reason: "x".repeat(1001) } })).statusCode).toBe(400);
     const corrected = await call(route, actors.supA, options);
     expect(corrected.statusCode).toBe(200);

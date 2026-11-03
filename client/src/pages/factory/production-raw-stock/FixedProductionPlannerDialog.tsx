@@ -129,6 +129,10 @@ export function FixedProductionPlannerDialog({
     refetchInterval: false,
   });
 
+  const { refetch: refetchPlan } = planQuery;
+  const { refetch: refetchOtw } = otwQuery;
+  const { refetch: refetchCategories } = categoryQuery;
+
   // Each opening starts a single fresh snapshot. Disabled React Query observers
   // never refetch due to Factory-wide invalidation, polling, or reconnect.
   const { refetch: refetchPlan } = planQuery;

@@ -7,10 +7,12 @@ import { bonusMoneyToCents, buildProductionTargetBonusReport } from "@shared/pro
 
 // Use typed text cells for source-controlled names/references; never let an
 // external worker name become a spreadsheet formula.
+// C0 control characters become spaces (code-point check, no control-char regex).
+function blankControlCharacters(text: string): string {
+  return Array.from(text, (char) => ((char.codePointAt(0) ?? 0) < 0x20 ? " " : char)).join("");
+}
 function safeText(value: string | null | undefined): string {
-  const text = Array.from(String(value ?? ""), (c) => (c.charCodeAt(0) < 32 ? " " : c))
-    .join("")
-    .slice(0, 1000);
+  const text = blankControlCharacters(String(value ?? "")).slice(0, 1000);
   return /^[=+@-]/.test(text) ? "'" + text : text;
 }
 const amount = (value: string) => bonusMoneyToCents(value) / 100;

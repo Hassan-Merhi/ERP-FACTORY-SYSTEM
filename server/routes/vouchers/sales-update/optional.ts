@@ -20,16 +20,15 @@ import type Decimal from "decimal.js";
 import { vouchers } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { nextCanonicalSourceRevision } from "../../../services/inventory/canonicalSourceRevision";
+import { assertPosOptionalSettlementSafeTx } from "../../../services/pos/posOptionalSafety";
+import { recalculateClosedPosShiftForOptionalToggleTx } from "../../../services/pos/posOptionalShift";
 import { postOptionalToggleResidualTx, toggleVoucherStockTx, voucherInventoryLedgerTx } from "./optionalStockToggle";
 import { syncPurchaseOrderGitForVoucherTx } from "../../../services/accounting/perpetualInventory/stockReceipts";
 import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/perpetualInventory/stockAdjustments";
 import { syncFactoryInvoiceForChargeVoucherTx } from "../../../services/accounting/perpetualInventory/factoryInvoice";
 import { sendBaleMirrorMovementRefusal } from "../../../services/accounting/perpetualInventory/cutoverRefusal";
 import { assertVoucherEditableTx, sendVoucherCorrectionRefusal } from "../../../services/accounting/voucherCorrection";
-import {
-  assertStoredVoucherLinesValidTx,
-  replacementErrorStatus,
-} from "../../../services/accounting/voucherEntryReplacement";
+import { assertStoredVoucherLinesValidTx } from "../../../services/accounting/voucherEntryReplacement";
 
 export function registerVoucherOptionalUpdateRoutes(app: Express) {
   // Toggle optional status for a voucher
@@ -82,39 +81,33 @@ export function registerVoucherOptionalUpdateRoutes(app: Express) {
         }
       }
 
-      const wasOptional = existingVoucher.optional;
       const willBeOptional = optional;
 
-      // Activation (optional → active) is refused before any side effect when the
-      // stored lines do not satisfy the active-voucher rules for the type (an active
-      // balanced-type voucher must balance exactly) — wave 9 ledger safety.
-      if (wasOptional && !willBeOptional) {
-        try {
-          await assertStoredVoucherLinesValidTx(db, { ...existingVoucher, optional: false });
-        } catch (validationError: unknown) {
-          const status = replacementErrorStatus(validationError);
-          if (status) return res.status(status).json({ message: getErrorMessage(validationError) });
-          throw validationError;
-        }
-      }
-
-      // Wrap entire optional toggle in a transaction
-      const toggleVoucher = {
-        id,
-        companyId: existingVoucher.companyId,
-        voucherNumber: existingVoucher.voucherNumber,
-        voucherDate: String(existingVoucher.voucherDate),
-        voucherType: existingVoucher.voucherType,
-        locationId: existingVoucher.locationId,
-      };
+      // The lock and fresh optional flag MUST be read in the transaction.
+      // A second simultaneous click must never restore or deduct the same
+      // inventory a second time based on an earlier, stale HTTP read.
       await db.transaction(async (tx) => {
-        // Phase 22 A (owner decision, G10): posted -> optional (and back) is an
-        // edit: refused in a closed period (409 VOUCHER_CLOSED_PERIOD_REVERSE_INSTEAD;
-        // reverse the voucher instead) and audited with the full snapshot below.
-        const auditBefore =
-          wasOptional !== willBeOptional
-            ? (await assertVoucherEditableTx(tx, id, { companyId: existingVoucher.companyId })).before
-            : await readVoucherAuditState(tx, id);
+        const { voucher: lockedVoucher, before: auditBefore } = await assertVoucherEditableTx(tx, id, {
+          companyId: existingVoucher.companyId,
+        });
+        const wasOptional = lockedVoucher.optional;
+        if (wasOptional === willBeOptional) return;
+        await assertPosOptionalSettlementSafeTx(tx, lockedVoucher);
+
+        // Re-check balanced lines while the voucher is locked, not against the
+        // pre-transaction snapshot. A failed activation changes no inventory.
+        if (wasOptional && !willBeOptional) {
+          await assertStoredVoucherLinesValidTx(tx, { ...lockedVoucher, optional: false });
+        }
+
+        const toggleVoucher = {
+          id,
+          companyId: lockedVoucher.companyId,
+          voucherNumber: lockedVoucher.voucherNumber,
+          voucherDate: String(lockedVoucher.voucherDate),
+          voucherType: lockedVoucher.voucherType,
+          locationId: lockedVoucher.locationId,
+        };
         const ledgerBefore = await voucherInventoryLedgerTx(tx, toggleVoucher);
         let toggleDeltas: Decimal[] = [];
         let toggleRevision: number | null = null;
@@ -147,8 +140,13 @@ export function registerVoucherOptionalUpdateRoutes(app: Express) {
           toggleRevision = evidenceRevision;
         }
 
-        // Update the optional field inside transaction
+        // Update the optional field inside the same stock/accounting transaction.
         await tx.update(vouchers).set({ optional }).where(eq(vouchers.id, id));
+        await recalculateClosedPosShiftForOptionalToggleTx(tx, {
+          companyId: lockedVoucher.companyId,
+          shiftId: lockedVoucher.shiftId,
+          voucherType: lockedVoucher.voucherType,
+        });
         // Perpetual inventory (wave 8.2): an optional PO voucher is not in transit.
         await syncPurchaseOrderGitForVoucherTx(tx, existingVoucher.companyId, id);
         // Perpetual inventory (wave 8.3): an optional stock adjustment carries no inventory line.

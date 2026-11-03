@@ -29,7 +29,7 @@ const NAVY = "FF17324F",
   PALE = "FFF1F5F9",
   WHITE = "FFFFFFFF";
 const safeText = (text: string | null | undefined) => {
-  const value = Array.from(String(text ?? ""), (c) => (c.charCodeAt(0) < 32 ? " " : c))
+  const value = Array.from(String(text ?? ""), (char) => ((char.codePointAt(0) ?? 0) < 0x20 ? " " : char))
     .join("")
     .slice(0, 1000);
   return /^[=+\-@]/.test(value) ? "'" + value : value;

@@ -1,10 +1,13 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2308,
-  "middlewareMountCount": 138,
+  "routeCount": 2311,
+  "middlewareMountCount": 139,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
+    "GET /api/training/media/:topic [requireAuth > <anonymous>]",
+    "GET /api/training/media/:topic/captions [requireAuth > <anonymous>]",
+    "GET /api/training/media/:topic/screenshot [requireAuth > <anonymous>]",
     "POST /api/vouchers/bulk-delete [protectCorrectionBulkDelete]",
     "POST /api/voucher-entries [protectCorrectionEntryInsert]",
     "POST /api/vouchers [<anonymous>]",
@@ -2413,6 +2416,7 @@
     "USE /api/containers/sync-all-vouchers [standalonePoRepairBoundary]",
     "USE / [<anonymous>]",
     "USE / [<anonymous>]",
+    "USE /api/vouchers/with-entries [enforceOfflineOperationScope]",
     "USE /api/vouchers/payment-receipt [guardFxWalletPaymentSource]",
     "USE /api/pos [requireAuth]",
     "USE /api/pos [enforcePosOperationalPermissionScope]",

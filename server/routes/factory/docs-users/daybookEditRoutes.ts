@@ -12,8 +12,6 @@ import { errorStatus, getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { resultRows } from "../../../lib/queryResult";
-import { reverseTargetBonusPayment } from "../../../services/factory/targetBonusPaymentService";
-import { reverseWeeklyBonusPayment } from "../../../services/factory/weeklyBonusPaymentService";
 import { requireAuth } from "../../../auth";
 import { writeDaybookEntry, recalculateContainerCosts } from "../_helpers";
 import { resolveStoredFxRate, UnresolvedExchangeRateError } from "../../../services/factory/currencyConversion";
@@ -36,7 +34,7 @@ import {
 } from "@shared/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import type Decimal from "decimal.js";
-import { MoneyDecimal, parseMoneyInput, toMoney, type MoneyInput } from "../../../lib/money";
+import { MoneyDecimal, parseMoneyInput, toMoney } from "../../../lib/money";
 import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
 import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 import { cancelFxAgentSettlementVoucherTx } from "../../../services/factory/fxAgentSettlementCancellation";
@@ -44,24 +42,12 @@ import {
   editPostedFactoryVoucherTx,
   sendVoucherCorrectionRefusal,
 } from "../../../services/factory/factoryVoucherCorrection";
-
-/**
- * Posting source types of the factory employee cash vouchers whose void moves
- * the employee balances back (the engine-numbered successors of EMP-DEP- /
- * EMP-WD- / EMP-PAY-; see employee-crud/cash.ts, bulk-withdraw.ts, bulk-payroll.ts).
- */
-const EMPLOYEE_CASH_POSTING_SOURCE_TYPES = [
-  "factory-employee-deposit",
-  "factory-employee-withdrawal",
-  "factory-bulk-withdrawal",
-  "factory-bulk-payroll",
-];
-
-/** A voucher's exchange rate; a missing, zero or unreadable one counts as 1. */
-const voucherFxRate = (rate: MoneyInput) => {
-  const parsed = toMoney(rate || "1");
-  return parsed.isZero() ? new MoneyDecimal(1) : parsed;
-};
+import {
+  bonusSource,
+  EMPLOYEE_CASH_POSTING_SOURCE_TYPES,
+  reverseBonusFromDaybook,
+  voucherFxRate,
+} from "./daybookEditPolicy";
 
 export function registerFactoryDaybookEditRoutes(app: Express) {
   // ─────── DAYBOOK ENTRY EDIT ───────
@@ -568,26 +554,6 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
   // Bonus payments are source-backed financial claims, not disposable daybook text.
   // Delete from Daybook means post an exact offsetting Receipt, mark claim REVERSED,
   // and retain both voucher and daybook audit rows. Never hard-delete either claim.
-  const bonusSource = (table: string | null, id: number | null) => {
-    if (!id || !Number.isSafeInteger(id) || id <= 0) return null;
-    if (table === "factory_target_bonus_payments") return { kind: "daily" as const, id };
-    if (table === "factory_target_bonus_weekly_payments") return { kind: "weekly" as const, id };
-    return null;
-  };
-  const reverseBonusFromDaybook = async (
-    req: Request,
-    companyId: number,
-    source: { kind: "daily" | "weekly"; id: number }
-  ) => {
-    const userId = String(req.session.userId || "");
-    const actor = { userId, username: String(req.session.username || userId) };
-    const reason = "Deleted from Factory Daybook (accounting reversal)";
-    const date = getClientDate(req);
-    return source.kind === "daily"
-      ? reverseTargetBonusPayment(companyId, source.id, date, reason, actor)
-      : reverseWeeklyBonusPayment(companyId, source.id, date, reason, actor);
-  };
-
   // DELETE /api/factory/daybook/entry/:id — non-financial entry deletion, or
   // audited payment reversal for Production Targets bonuses.
   app.delete("/api/factory/daybook/entry/:id", requireAuth, async (req: Request, res: Response) => {

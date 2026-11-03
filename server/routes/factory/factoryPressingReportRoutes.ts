@@ -123,14 +123,6 @@ function conditions(ctx: QueryCtx, filters: PressingReportFilters) {
   }
   return { args, where };
 }
-type PressingOperatorTotal = { userId: string; name: string | null; totalBales: number; totalKg: string };
-type PressingSummary = {
-  totalBales: number;
-  totalKg: string;
-  voidedBales: number;
-  byOperator: PressingOperatorTotal[];
-};
-
 function invalidDateTimeRange(filters: Pick<PressingReportFilters, "from" | "to" | "fromTime" | "toTime">): boolean {
   return Boolean(
     (filters.fromTime && !filters.from) ||
@@ -247,14 +239,14 @@ async function report(ctx: QueryCtx, filters: PressingReportFilters) {
     pool.query(sumSql, sumConditions.args),
     pool.query(perOperatorSql, sumConditions.args),
   ]);
-  const filteredSummary: PressingSummary = {
+  const filteredSummary = {
     ...(summary.rows[0] ?? { totalBales: 0, totalKg: "0", voidedBales: 0 }),
     byOperator: byOperator.rows,
   };
   // Filtering the table to P2 should not make P1/P3 or ALL WORKERS show
   // zero. Keep the dashboard across all operators for the selected date,
   // barcode, status and KG, while the history/export obey userId.
-  let overview: PressingSummary = filteredSummary;
+  let overview = filteredSummary;
   if (ctx.supervisor && filters.userId) {
     const allConditions = conditions(ctx, { ...filters, userId: undefined });
     const [allSummary, allOperators] = await Promise.all([
@@ -272,8 +264,8 @@ async function report(ctx: QueryCtx, filters: PressingReportFilters) {
     ...new Set<string>(
       [
         ...rows.rows.map((row) => row.operatorUserId),
-        ...filteredSummary.byOperator.map((row) => row.userId),
-        ...overview.byOperator.map((row) => row.userId),
+        ...filteredSummary.byOperator.map((row: { userId: string }) => row.userId),
+        ...overview.byOperator.map((row: { userId: string }) => row.userId),
       ].filter((value): value is string => typeof value === "string" && value.length > 0)
     ),
   ];
@@ -291,14 +283,14 @@ async function report(ctx: QueryCtx, filters: PressingReportFilters) {
     total: Number(count.rows[0]?.total || 0),
     summary: {
       ...filteredSummary,
-      byOperator: filteredSummary.byOperator.map((row) => ({
+      byOperator: filteredSummary.byOperator.map((row: { userId: string }) => ({
         ...row,
         name: displayName(row.userId),
       })),
     },
     overview: {
       ...overview,
-      byOperator: overview.byOperator.map((row) => ({
+      byOperator: overview.byOperator.map((row: { userId: string }) => ({
         ...row,
         name: displayName(row.userId),
       })),

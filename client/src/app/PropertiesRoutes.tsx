@@ -1,5 +1,6 @@
 import { Switch, Route, Redirect } from "wouter";
 import PropertiesRentalsHub from "@/pages/properties/PropertiesRentalsHub";
+import { AccountingToolbox } from "@/lazyPages";
 import type { AuthenticatedUser } from "@/contracts/sessionContracts";
 import {
   AccountGroups,
@@ -53,6 +54,7 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
     <Switch>
       <Route path="/properties/dashboard" component={PropertiesDashboard} />
       <Route path="/properties/accounts" component={PropertiesAccounts} />
+      {isDeveloper && <Route path="/properties/accounting/toolbox" component={AccountingToolbox} />}
       {isDeveloper && <Route path="/properties/accounting/open-items" component={AccountingOpenItems} />}
       {isDeveloper && <Route path="/properties/accounting/cash-bank" component={CashBankReconciliation} />}
       {isDeveloper && <Route path="/properties/accounting/monetary-fx" component={MonetaryFxAccounting} />}

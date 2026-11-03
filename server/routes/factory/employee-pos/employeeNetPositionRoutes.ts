@@ -1,3 +1,4 @@
+import { isExcludedFromCompany12ManagementReports } from "../../../lib/payrollOverpaymentReporting";
 import { FactoryNetPositionDateError } from "@shared/factoryNetPositionAsOf";
 import {
   resolveFactoryNetPositionAsOf,
@@ -12,7 +13,7 @@ import { loadFactoryHistoricalCoverage } from "../../../services/factory/netPosi
 import { loadFxWalletHistoryGaps } from "../../../services/factory/netPositionFxWalletCoverage";
 import { finishFactoryNetPosition } from "./netPositionHistoricalResponse";
 import { projectFactoryNetPositionMonetaryFx } from "./netPositionMonetaryFxProjection";
-import { computeLiveFactoryPrepaidRent } from "./netPositionLiveRent";
+import { computeLiveFactoryRentalPositions } from "./netPositionLiveRent";
 import {
   fxAgentTablesExist,
   loadFxAgentWallets,
@@ -363,7 +364,10 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
           });
         }
       }
-      const classified = classifyNetPositionAccounts(factoryAccounts as AccountLike[], projectedAccountBalances, {
+      const classified = classifyNetPositionAccounts(
+        factoryAccounts.filter((account) => !isExcludedFromCompany12ManagementReports(companyId, account)) as AccountLike[],
+        projectedAccountBalances,
+        {
         ledgerStockAccounts: ledgerStock,
         additionalExcludedCodes: factoryExcludedCodes,
         // Supplier-type ledger accounts are independently calculated.
@@ -579,15 +583,13 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       const totalCustomerDr = round2(customerDrItems.reduce((s, c) => s + c.balanceUsd, 0));
       const totalCustomerCr = round2(customerCrItems.reduce((s, c) => s + Math.abs(c.balanceUsd), 0));
 
-      // ── Rental (company is the LANDLORD collecting rent from shop tenants) ──────
-      // Uses the same billing-day-aware logic as the Shop Rentals dashboard so
-      // the value here always matches what the user sees on that page.
-      //
-      // CREDIT  = tenants paid MORE than expected → advance money we hold (asset)
-      // OUTSTANDING = tenants still OWE us → receivable (asset)
-      // Prepaid Rent = CREDIT + OUTSTANDING  (both are "What We Have")
-      const prepaidRent = historicalAssets?.prepaidRent ?? (await computeLiveFactoryPrepaidRent(companyId, asOf));
-      const rentPayable = historicalAssets?.rentPayable ?? 0;
+      // ── Factory shop rent: prepaid asset versus unpaid-rent liability ─────
+      // Match Shop Rentals' credit by counting only POSTED rent paid in excess
+      // of billing-day-aware expected rent. Do not add outstanding rent to
+      // Prepaid Rent: unpaid contracts belong in Rent Payable on the other side.
+      const liveRent = historicalAssets ? null : await computeLiveFactoryRentalPositions(companyId, asOf);
+      const prepaidRent = historicalAssets?.prepaidRent ?? liveRent?.prepaidRent ?? 0;
+      const rentPayable = historicalAssets?.rentPayable ?? liveRent?.rentPayable ?? 0;
 
       // One signed, dated Employee projection shared with payroll-breakdown.
       // Today preserves employees.current_balance; historical dates replay

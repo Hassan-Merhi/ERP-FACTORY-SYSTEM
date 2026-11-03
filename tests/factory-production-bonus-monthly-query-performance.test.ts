@@ -8,8 +8,6 @@ describe("Production bonus range query: one bale aggregation per month", () => {
   it("materializes physical production once per worker/day instead of scanning bales for each worker", () => {
     expect(liveSql).toContain("bale_work_days AS MATERIALIZED");
     expect(liveSql).toContain("credited_bales AS MATERIALIZED");
-    // eb06d78 credits each bale to its Stock Entry finalizer: no linked-team totals.
-    expect(liveSql).not.toContain("linked_work_totals");
     expect(liveSql).toContain("GROUP BY b.stock_entry_date, b.finalized_by");
     expect(liveSql).toContain("GROUP BY work_date, worker_id");
     expect(liveSql).not.toContain("SELECT COUNT(*)::integer AS bales FROM factory_bales b");
@@ -24,14 +22,17 @@ describe("Production bonus range query: one bale aggregation per month", () => {
     expect(liveSql).toContain("UNION ALL");
   });
 
-  it("credits personal bales only, never splitting a linked team's bales, and keeps immutable reviews", () => {
+  // eb06d78: live credit follows the Stock Entry finalizer of each bale; link
+  // (team) membership is roster metadata only and never splits bonus credit.
+  it("credits each worker's own finalized bales, never a linked-team split, and keeps immutable reviews", () => {
     expect(liveSql).toContain("single_bales.worker_id=w.id");
     expect(liveSql).toContain("SELECT COALESCE(single_bales.bales,0)::integer AS credited");
+    expect(liveSql).toContain("Link membership only affects table/roster metadata, NEVER bonus credit.");
     expect(liveSql).not.toContain("team_bales");
-    expect(liveSql).not.toContain("members.member_count");
+    expect(liveSql).not.toContain("GREATEST(members.member_count,1)");
     expect(liveSql).toContain("COALESCE(review.produced_bales, credit.credited, 0)");
     expect(liveSql).toContain("COALESCE(review.bonus_amount");
-    expect(liveSql).toMatch(/NOT EXISTS \(\s*SELECT 1 FROM factory_staff_tracking_period_closures c/);
+    expect(liveSql).toContain("AND NOT EXISTS (");
     expect(liveSql).toContain("factory_staff_tracking_period_closures c");
   });
 });

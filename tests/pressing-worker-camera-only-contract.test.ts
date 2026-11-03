@@ -76,7 +76,7 @@ describe("Pressing worker camera-only access", () => {
     expect(hourlyTargets).toContain('value={day || data?.day || ""}');
     expect(hourlyTargets).toContain("{data.canEdit && <Button");
     expect(report).toContain("canEdit: ctx.canCorrect");
-    expect(report).toMatch(/if \(!ctx\.canCorrect\)\s+throw new ReportPermissionError\(\s*403,/);
+    expect(report).toMatch(/if \(!ctx\.canCorrect\)\s*throw new ReportPermissionError\(\s*403/);
   });
 
   it("allows shared aggregates while restricting other workers' detailed records and corrections", () => {

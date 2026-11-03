@@ -5,18 +5,16 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useDateFormat } from "@/contexts/DateFormatContext";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuCheckboxItem,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {} from "@/components/ui/dialog";
-import { LayoutGrid, Columns3, Plus, Save, FileDown, Upload, Download, X, Link2, Link2Off } from "lucide-react";
+import { LayoutGrid, Plus, X, Link2, Link2Off } from "lucide-react";
 
 import type {
   ApiSheet,
@@ -43,6 +41,9 @@ import { LinkDialog } from "./factorystatusbuilder/components/LinkDialog";
 import { StatusHistoryPanel } from "./factorystatusbuilder/components/StatusHistoryPanel";
 import { DeleteConfirmationDialog } from "./factorystatusbuilder/components/DeleteConfirmationDialog";
 import { StatusViewToggle } from "./factorystatusbuilder/components/StatusViewToggle";
+import { StatusBuilderToolbar } from "./factorystatusbuilder/components/StatusBuilderToolbar";
+import { StatusColumnsMenu } from "./factorystatusbuilder/components/StatusColumnsMenu";
+import { StatusAddRow } from "./factorystatusbuilder/components/StatusAddRow";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export default function FactoryStatusBuilder() {
@@ -77,8 +78,9 @@ export default function FactoryStatusBuilder() {
       const parsed: unknown = stored ? JSON.parse(stored) : {};
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
       return Object.fromEntries(
-        Object.entries(parsed).filter((entry): entry is [string, string[]] =>
-          Array.isArray(entry[1]) && entry[1].every((id: unknown) => typeof id === "string")
+        Object.entries(parsed).filter(
+          (entry): entry is [string, string[]] =>
+            Array.isArray(entry[1]) && entry[1].every((id: unknown) => typeof id === "string")
         )
       );
     } catch {
@@ -88,10 +90,7 @@ export default function FactoryStatusBuilder() {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(
-        "factory-status-builder:hidden-columns:v1",
-        JSON.stringify(hiddenColumnsBySheet)
-      );
+      window.localStorage.setItem("factory-status-builder:hidden-columns:v1", JSON.stringify(hiddenColumnsBySheet));
     } catch {
       // Browser storage may be disabled; column visibility still works for this session.
     }
@@ -432,13 +431,12 @@ export default function FactoryStatusBuilder() {
       const rowCount = sheet.rows.length;
       const hiddenIds = hiddenColumnsBySheet[sheet.stableId] ?? [];
       const visibleCols = sheet.columns
-        .map((col, index) => hiddenIds.includes(col.id) ? -1 : index)
+        .map((col, index) => (hiddenIds.includes(col.id) ? -1 : index))
         .filter((index) => index !== -1);
       const visiblePosition = visibleCols.indexOf(ci);
       const previousCol = visiblePosition > 0 ? visibleCols[visiblePosition - 1] : null;
-      const nextCol = visiblePosition >= 0 && visiblePosition < visibleCols.length - 1
-        ? visibleCols[visiblePosition + 1]
-        : null;
+      const nextCol =
+        visiblePosition >= 0 && visiblePosition < visibleCols.length - 1 ? visibleCols[visiblePosition + 1] : null;
 
       if (e.key === "Enter") {
         e.preventDefault();
@@ -514,144 +512,57 @@ export default function FactoryStatusBuilder() {
         />
 
         {/* Toolbar */}
-        <div className="flex items-center gap-2 border-b border-border/60 bg-gradient-to-r from-muted/70 via-card to-card px-4 py-3 flex-wrap">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-600 ring-1 ring-blue-500/20 dark:bg-blue-500/15 dark:text-blue-400">
-            <LayoutGrid className="h-4 w-4" />
-          </span>
-          <span className="text-base font-semibold tracking-tight text-foreground mr-2">Factory Sheets</span>
-          <div className="flex-1" />
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) importMutation.mutate(f);
-              e.target.value = "";
-            }}
-            data-testid="sb-input-import-file"
-          />
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => window.open("/api/factory/status-builder/sheets/template", "_blank")}
-            data-testid="sb-button-download-template"
-            className="rounded-lg border-border/70 bg-background/70 font-medium shadow-sm hover:bg-accent"
-          >
-            <FileDown className="h-3.5 w-3.5 mr-1.5" />
-            Template
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={importMutation.isPending}
-            data-testid="sb-button-import-excel"
-            className="rounded-lg border-border/70 bg-background/70 font-medium shadow-sm hover:bg-accent"
-          >
-            <Upload className="h-3.5 w-3.5 mr-1.5" />
-            Import Excel
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleExport}
-            disabled={localSheets.length === 0}
-            data-testid="sb-button-export-excel"
-            className="rounded-lg border-border/70 bg-background/70 font-medium shadow-sm hover:bg-accent"
-          >
-            <Download className="h-3.5 w-3.5 mr-1.5" />
-            Export Excel
-          </Button>
-          {savedAt && !isDirty && (
-            <span className="text-xs text-muted-foreground" data-testid="sb-text-autosaved">
-              Autosaved {savedAt}
-            </span>
-          )}
-          <Button
-            size="sm"
-            onClick={() => {
-              silentSaveRef.current = false;
-              saveMutation.mutate(localSheets);
-            }}
-            disabled={!isDirty || saveMutation.isPending}
-            data-testid="sb-button-save"
-            className="rounded-lg bg-blue-600 font-semibold text-white shadow-sm shadow-blue-600/15 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
-          >
-            <Save className="h-3.5 w-3.5 mr-1.5" />
-            {saveMutation.isPending ? "Saving…" : "Save"}
-          </Button>
-        </div>
+        <StatusBuilderToolbar
+          fileInputRef={fileInputRef}
+          onImportFile={(file) => importMutation.mutate(file)}
+          importPending={importMutation.isPending}
+          onExport={handleExport}
+          exportDisabled={localSheets.length === 0}
+          savedAt={savedAt}
+          isDirty={isDirty}
+          savePending={saveMutation.isPending}
+          onSave={() => {
+            silentSaveRef.current = false;
+            saveMutation.mutate(localSheets);
+          }}
+        />
 
         <StatusViewToggle viewMode={viewMode} onChange={setViewMode} />
 
         <div className="flex items-center gap-3 border-b border-border/60 px-4 py-2">
           <div className="erp-mobile-scroll-tabs min-w-0 flex-1">
-          <div className="flex w-max items-center gap-1">
-            <TabsList className="w-max" aria-label="Status sheet pages">
-              {localSheets.map((s, idx) => (
-                <TabLabel
-                  key={s.id ?? `new-${idx}`}
-                  name={s.name}
-                  active={idx === activeIdx}
-                  onActivate={() => setActiveIdx(idx)}
-                  onRename={(v) => renameTab(idx, v)}
-                  onDelete={() => deleteTab(idx)}
-                  canDelete={localSheets.length > 1}
-                />
-              ))}
-            </TabsList>
-            <button
-              type="button"
-              data-testid="sb-button-add-tab"
-              onClick={addTab}
-              className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Add page
-            </button>
-          </div>
+            <div className="flex w-max items-center gap-1">
+              <TabsList className="w-max" aria-label="Status sheet pages">
+                {localSheets.map((s, idx) => (
+                  <TabLabel
+                    key={s.id ?? `new-${idx}`}
+                    name={s.name}
+                    active={idx === activeIdx}
+                    onActivate={() => setActiveIdx(idx)}
+                    onRename={(v) => renameTab(idx, v)}
+                    onDelete={() => deleteTab(idx)}
+                    canDelete={localSheets.length > 1}
+                  />
+                ))}
+              </TabsList>
+              <button
+                type="button"
+                data-testid="sb-button-add-tab"
+                onClick={addTab}
+                className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add page
+              </button>
+            </div>
           </div>
           {activeSheet && viewMode === "sheet" && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="shrink-0 rounded-lg border-border/70 bg-background/80 text-foreground shadow-sm"
-                  data-testid="sb-button-columns"
-                  aria-label="Choose visible columns"
-                >
-                  <Columns3 className="mr-1.5 h-4 w-4 text-blue-500" />
-                  Columns
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56 rounded-lg">
-                <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                  Show or hide columns
-                </div>
-                <DropdownMenuSeparator />
-                {activeSheet.columns.map((col, ci) => (
-                  <DropdownMenuCheckboxItem
-                    key={col.id}
-                    checked={!hiddenColIds.includes(col.id)}
-                    onCheckedChange={(checked) => setColumnHidden(activeSheet.stableId, col.id, !checked)}
-                    data-testid={`sb-toggle-column-${ci}`}
-                  >
-                    <span className="truncate">{col.label || `Column ${ci + 1}`}</span>
-                  </DropdownMenuCheckboxItem>
-                ))}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={() => setHiddenColumnsBySheet((prev) => ({ ...prev, [activeSheet.stableId]: [] }))}
-                  data-testid="sb-show-all-columns"
-                >
-                  Show all columns
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <StatusColumnsMenu
+              columns={activeSheet.columns}
+              hiddenColumnIds={hiddenColIds}
+              onSetHidden={(columnId, hidden) => setColumnHidden(activeSheet.stableId, columnId, hidden)}
+              onShowAll={() => setHiddenColumnsBySheet((prev) => ({ ...prev, [activeSheet.stableId]: [] }))}
+            />
           )}
         </div>
 
@@ -715,7 +626,10 @@ export default function FactoryStatusBuilder() {
 
                 <tbody>
                   {activeSheet.rows.map((row, ri) => (
-                    <tr key={row.id} className="group transition-colors hover:bg-blue-500/[0.035] dark:hover:bg-blue-400/[0.055]">
+                    <tr
+                      key={row.id}
+                      className="group transition-colors hover:bg-blue-500/[0.035] dark:hover:bg-blue-400/[0.055]"
+                    >
                       {/* Row label */}
                       <td className="border-b border-r border-border/50 bg-muted/20 px-2 py-1 group-hover:bg-muted/40">
                         <div className="flex items-center gap-1">
@@ -923,23 +837,11 @@ export default function FactoryStatusBuilder() {
                     </tr>
                   ))}
 
-                  {/* Add row */}
-                  <tr>
-                    <td className="border-b border-r border-border/50 bg-muted/10 px-2 py-2">
-                      <button
-                        data-testid="sb-button-add-row"
-                        onClick={addRow}
-                        className="flex w-full items-center gap-1 rounded px-2 text-xs font-medium text-muted-foreground transition-colors hover:text-blue-600 dark:hover:text-blue-400"
-                      >
-                        <Plus className="h-3 w-3" />
-                        Add row
-                      </button>
-                    </td>
-                    {activeSheet.columns.map((col) => (
-                      <td key={col.id} className={`border-b border-r border-border/50 ${hiddenColIds.includes(col.id) ? "hidden" : ""}`} />
-                    ))}
-                    <td className="border-b border-border/50" />
-                  </tr>
+                  <StatusAddRow
+                    columnIds={activeSheet.columns.map((col) => col.id)}
+                    hiddenColumnIds={hiddenColIds}
+                    onAddRow={addRow}
+                  />
 
                   {/* Footer — DIFFERENCE row */}
                   {activeSheet.rows.length > 0 && (

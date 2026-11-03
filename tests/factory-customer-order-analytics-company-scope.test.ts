@@ -80,12 +80,13 @@ beforeAll(async () => {
     ownOrderId = await insertOrder(client, companyA, own.rows[0].id, `${tag}-OWN-ART`);
     await client.query(
       `UPDATE customer_orders
-       SET freight_amount = 20, other_charges_total = 5, grand_total = 125
+       SET destination = 'L''SHI', freight_amount = 20, other_charges_total = 5, grand_total = 125
        WHERE id = $1`,
       [ownOrderId]
     );
     // An order row that points at another company's customer (integrity drift).
-    await insertOrder(client, companyA, foreign.rows[0].id, `${tag}-DRIFT-ART`);
+    const driftOrderId = await insertOrder(client, companyA, foreign.rows[0].id, `${tag}-DRIFT-ART`);
+    await client.query(`UPDATE customer_orders SET destination = 'MALI' WHERE id = $1`, [driftOrderId]);
   });
 });
 
@@ -122,6 +123,29 @@ describe("Factory customer order analytics company scope", () => {
     const names = (response.body.rows as Array<{ customerName: string | null }>).map((row) => row.customerName);
     expect(names).toContain("Own Customer");
     expect(names).not.toContain("Foreign Customer");
+  });
+
+  it("filters exact destinations across all customers and preserves matching totals", async () => {
+    harness.session = { factoryCompanyId: companyA };
+
+    const response = await request(app)
+      .get("/api/factory/analytics/customer-orders")
+      .query({ status: "all", destinationExact: "l'shi" });
+    expect(response.status).toBe(200);
+    expect(response.body.destinations).toEqual(["L'SHI", "MALI"]);
+    expect(response.body.summary.totalOrders).toBe(1);
+    expect(response.body.summary.totalInvoiceAmount).toBe(100);
+    expect(response.body.rows).toHaveLength(1);
+    expect(response.body.rows[0].orders[0].orderId).toBe(ownOrderId);
+    expect(response.body.rows[0].orders[0].destination).toBe("L'SHI");
+
+    const missing = await request(app)
+      .get("/api/factory/analytics/customer-orders")
+      .query({ status: "all", destinationExact: "UNKNOWN" });
+    expect(missing.status).toBe(200);
+    expect(missing.body.summary.totalOrders).toBe(0);
+    expect(missing.body.rows).toEqual([]);
+    expect(missing.body.destinations).toEqual(["L'SHI", "MALI"]);
   });
 
   it("toggles freight and other charges without changing the no-charges default", async () => {

@@ -1,10 +1,8 @@
 /**
- * Today's Prepaid Rent for Factory Net Position (the company is the landlord
- * collecting rent from FACTORY shop tenants). Moved verbatim from the route;
- * past dates use netPositionHistoricalAssets instead.
- *
- * Uses the same billing-day-aware logic as the Shop Rentals dashboard:
- * per ACTIVE contract on an active unit, |expected due by asOf - POSTED paid|.
+ * Today's Factory rental balance-sheet positions. This company pays rent on
+ * FACTORY shop leases. Billing-day-aware credits (paid over due) are prepaid
+ * assets; unpaid rent (due over paid) is a distinct rent-payable liability.
+ * Historical requests use netPositionHistoricalAssets instead.
  */
 import { and, eq, inArray } from "drizzle-orm";
 import type Decimal from "decimal.js";
@@ -12,16 +10,23 @@ import { propertyContracts, propertyMonthlyLedger, propertyUnits } from "@shared
 import { db, pool } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { getRentalBillingDay, getRentalPeriodDueDate } from "../../../services/rental/rentalPeriodService";
+import { sumRentalContractPositions } from "../../../services/factory/netPositionHistoricalAssets";
 
-const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
-
-export async function computeLiveFactoryPrepaidRent(companyId: number, asOf: string): Promise<number> {
+export async function computeLiveFactoryRentalPositions(
+  companyId: number,
+  asOf: string
+): Promise<{ prepaidRent: number; rentPayable: number }> {
   // All FACTORY units owned by this company
   const rentalUnitsRows = await db
     .select({ id: propertyUnits.id })
     .from(propertyUnits)
     .where(
-      and(eq(propertyUnits.companyId, companyId), eq(propertyUnits.module, "FACTORY"), eq(propertyUnits.active, true))
+      and(
+        eq(propertyUnits.companyId, companyId),
+        eq(propertyUnits.module, "FACTORY"),
+        eq(propertyUnits.unitType, "SHOP"),
+        eq(propertyUnits.active, true)
+      )
     );
 
   if (rentalUnitsRows.length > 0) {
@@ -75,22 +80,22 @@ export async function computeLiveFactoryPrepaidRent(companyId: number, asOf: str
       const { rows: postedRows } = await pool.query<{ contract_id: string; paid: string }>(
         `SELECT contract_id, COALESCE(SUM(amount::numeric), 0) AS paid
            FROM property_payments
-           WHERE contract_id = ANY($1) AND posting_status = 'POSTED' AND payment_date <= $2
+           WHERE contract_id = ANY($1) AND company_id = $3 AND module = 'FACTORY'
+             AND posting_status = 'POSTED' AND payment_date <= $2
+             AND ledger_row_id IS NOT NULL
            GROUP BY contract_id`,
-        [contractIds, asOf]
+        [contractIds, asOf, companyId]
       );
       const paidAsOfByContract = new Map<number, Decimal>();
       postedRows.forEach((r) => paidAsOfByContract.set(parseInt(r.contract_id), toMoney(r.paid)));
 
-      // Positive = tenant still owes (outstanding receivable); negative =
-      // tenant overpaid (advance credit we hold). Both count at their size.
-      let rentTotal = new MoneyDecimal(0);
-      for (const c of activeContracts) {
-        const expected = expectedAsOfByContract.get(c.id) ?? new MoneyDecimal(0);
-        rentTotal = rentTotal.plus(expected.minus(paidAsOfByContract.get(c.id) ?? 0).abs());
-      }
-      return round2(rentTotal.toNumber());
+      return sumRentalContractPositions(
+        activeContracts.map((contract) => ({
+          expected: (expectedAsOfByContract.get(contract.id) ?? new MoneyDecimal(0)).toFixed(),
+          paid: (paidAsOfByContract.get(contract.id) ?? new MoneyDecimal(0)).toFixed(),
+        }))
+      );
     }
   }
-  return 0;
+  return { prepaidRent: 0, rentPayable: 0 };
 }

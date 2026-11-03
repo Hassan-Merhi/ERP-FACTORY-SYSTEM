@@ -16,7 +16,7 @@
  * ledger's Inventory did not move with the sub-ledger.
  */
 import type Decimal from "decimal.js";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import {
   creditNoteItems,
@@ -29,6 +29,9 @@ import {
 
 import type { DbTransaction } from "../../../db";
 import { adjustInventory } from "../../../inventoryHelper";
+import { firstRow } from "../../../lib/queryResult";
+import { HttpError } from "../../../lib/httpHandlers";
+import { restorePosSaleInventoryForReversal } from "../../../services/pos/edit/reverseOriginalSaleInventory";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { assertNoBaleMirrorMovementTx } from "../../../services/accounting/perpetualInventory/cutoverRefusal";
 import {
@@ -274,6 +277,42 @@ export async function toggleVoucherStockTx(tx: DbTransaction, context: ToggleCon
 
   const saleItems = await tx.select().from(salesItems).where(eq(salesItems.voucherId, voucher.id));
   if (saleItems.length > 0) {
+    if (!voucher.locationId) {
+      throw new HttpError(409, "Cannot change a stocked POS sale without its original stock location");
+    }
+
+    // Reactivation must not quietly oversell stock that was sold after the
+    // voucher became optional. Lock every affected row in a stable order,
+    // checking the combined quantity for repeated item lines before issuing
+    // ANY stock. The transaction keeps these row locks until commit.
+    if (!willBeOptional) {
+      const requiredByItem = new Map<number, Decimal>();
+      for (const item of saleItems) {
+        requiredByItem.set(
+          item.stockItemId,
+          (requiredByItem.get(item.stockItemId) ?? new MoneyDecimal(0)).plus(toMoney(item.quantity).abs())
+        );
+      }
+      for (const [stockItemId, required] of [...requiredByItem.entries()].sort((a, b) => a[0] - b[0])) {
+        const current = firstRow<{ quantity: string | number | null }>(
+          await tx.execute(sql`
+            SELECT quantity::text AS quantity
+            FROM inventory
+            WHERE company_id = ${companyId}
+              AND location_id = ${voucher.locationId}
+              AND stock_item_id = ${stockItemId}
+            FOR UPDATE
+          `)
+        );
+        if (!current || toMoney(current.quantity).lt(required)) {
+          throw new HttpError(
+            409,
+            `Cannot reactivate POS ${voucher.voucherNumber}: insufficient stock at the original location for item ${stockItemId} (required ${required.toString()}, available ${current?.quantity ?? "0"}).`
+          );
+        }
+      }
+    }
+
     let saleRelieved = new MoneyDecimal(0);
     if (voucher.locationId) {
       const values = willBeOptional ? await saleLineValuesTx(tx, companyId, voucher.id, saleItems) : null;
@@ -283,16 +322,19 @@ export async function toggleVoucherStockTx(tx: DbTransaction, context: ToggleCon
         if (values) {
           const entry = values.get(item.id);
           value = entry?.value ?? new MoneyDecimal(0);
-          deltas.push(
-            await restoreIssuedValueTx(tx, {
-              companyId,
-              locationId: voucher.locationId,
-              stockItemId: item.stockItemId,
-              quantity,
-              value,
-              exact: entry?.exact,
-            })
-          );
+          // Use the POS reversal path to release only negative-stock shortage
+          // layers actually resolved by this sale. A generic stock receipt
+          // would consume unrelated historical layers and corrupt valuation.
+          const restored = await restorePosSaleInventoryForReversal(tx, {
+            companyId,
+            locationId: voucher.locationId,
+            stockItemId: item.stockItemId,
+            quantity: quantity.toNumber(),
+            voucherId: voucher.id,
+            value,
+            exact: entry?.exact,
+          });
+          deltas.push(toMoney(restored.newTotalValue).minus(toMoney(restored.previousTotalValue)));
         } else {
           const issued = await adjustInventory(
             tx,

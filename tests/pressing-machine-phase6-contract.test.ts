@@ -95,7 +95,7 @@ describe("pressing machine Phase 6 reporting contracts", () => {
     expect(server).toContain("interval '1 minute'");
     expect(server).toContain("invalidDateTimeRange(body.filters)");
     expect(server).toContain("const PRESSING_LOCAL_DATE_SQL");
-    expect(server).toMatch(/" GROUP BY "\s*\+\s*PRESSING_LOCAL_DATE_SQL/);
+    expect(server).toMatch(/GROUP BY ["'] \+\s*PRESSING_LOCAL_DATE_SQL/);
     expect(server).toContain('push("c.machine_id = ?", filters.machineId)');
     expect(server).toContain('push("c.weight_kg = ?::numeric", filters.weightKg)');
     expect(server).toContain('push("c.shift_id = ?", filters.shiftId)');
@@ -131,7 +131,7 @@ describe("pressing machine Phase 6 reporting contracts", () => {
     expect(page).toContain("Scanned Items");
     expect(page).toContain('<th className="p-3">Product name</th>');
     expect(page).toContain('{row.productName || "—"}');
-    expect(page).toMatch(/"operatorName",\s+"productName",\s+"bales"/);
+    expect(page).toContain('"operatorName", "productName", "bales"');
     expect(page).toContain("useState(false)");
     expect(page).toContain('aria-label="Pressing KG filter"');
     expect(page).toContain("pressing-kpi-");

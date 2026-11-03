@@ -62,6 +62,27 @@ describe("factory daybook pagination client", () => {
     });
   });
 
+  it("does not resolve a full Daybook read until every matching row has arrived", async () => {
+    let resolveLastPage!: (response: Response) => void;
+    const lastPage = new Promise<Response>((resolve) => { resolveLastPage = resolve; });
+    harness.previousFetch
+      .mockResolvedValueOnce(page([{ id: 1 }], 1, 2, 2, 250))
+      .mockReturnValueOnce(lastPage);
+
+    let settled = false;
+    const complete = fetchAllDaybookEntries(new URLSearchParams({ startDate: "2026-10-31" }))
+      .then((rows) => { settled = true; return rows; });
+
+    // First page data never escapes to the consumer as a partial result.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    resolveLastPage(page([{ id: 2 }], 2, 2, 2, 250));
+    expect((await complete).map((row) => row.id)).toEqual([1, 2]);
+    expect(settled).toBe(true);
+  });
+
   it("automatically loads every remaining page without scrolling and merges the rows", async () => {
     harness.previousFetch
       .mockResolvedValueOnce(page([{ id: 1 }], 1, 3, 205))

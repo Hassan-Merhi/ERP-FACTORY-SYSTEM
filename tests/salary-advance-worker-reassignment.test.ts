@@ -48,9 +48,13 @@ afterAll(async () => {
     [ctx.companyId]
   );
   await pool.query("DELETE FROM salary_advances WHERE company_id = $1", [ctx.companyId]);
-  // The advance vouchers reference the workers, so remove them first.
-  await cleanupTestData(PREFIX);
+  // The posted advance voucher still references the workers; cleanupTestData
+  // removes the vouchers themselves, but the entries must go before the workers.
+  await pool.query("DELETE FROM voucher_entries WHERE voucher_id IN (SELECT id FROM vouchers WHERE company_id = $1)", [
+    ctx.companyId,
+  ]);
   await pool.query("DELETE FROM employees WHERE id IN ($1, $2)", [fromWorkerId, toWorkerId]);
+  await cleanupTestData(PREFIX);
   closeTestServer();
 }, 60000);
 

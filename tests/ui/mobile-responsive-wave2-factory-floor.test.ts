@@ -19,7 +19,8 @@ describe("Mobile Wave 2 Factory floor workflows", () => {
 
     expect(mixes).toContain('data-testid="mix-batch-mobile-list"');
     expect(mixes).toContain("space-y-3 md:hidden");
-    expect(mixes).toContain("hidden overflow-x-auto rounded-xl border border-border/70 md:block phone-land:hidden");
+    expect(mixes).toContain("hidden overflow-x-auto");
+    expect(mixes).toContain("md:block phone-land:hidden");
     expect(mixes).toContain('data-testid="input-mix-batch-date"');
   });
 

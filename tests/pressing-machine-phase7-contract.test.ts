@@ -28,7 +28,8 @@ describe("Simplified pressing workflow replaces Phase 7 operational configuratio
   });
   it("pressing confirmation is attributed to authenticated user with no shift dependency", () => {
     expect(confirm).toContain("const shiftId = null");
-    expect(confirm).toContain('userId, userNameSnapshot: operator.displayName?.trim() || "Display name not set"');
+    // #2559: the snapshot is the company display name, never the login username.
+    expect(confirm).toMatch(/userId,\s*userNameSnapshot: operator\.displayName\?\.trim\(\)/);
     expect(confirm).not.toContain("matchingShift(");
     expect(confirm).not.toContain("factoryPressingDowntime");
     expect(confirm).not.toContain("PRESSING_MACHINE_DOWN");

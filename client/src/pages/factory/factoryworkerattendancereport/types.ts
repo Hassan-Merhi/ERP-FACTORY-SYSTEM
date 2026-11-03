@@ -16,6 +16,8 @@ export interface WorkerReportRow {
   id: number;
   employeeCode: string;
   fullName: string;
+  /** Inactive workers are included only when they have recorded payroll for the selected period. */
+  active?: boolean;
   attendance: Record<string, string>;
   presentCount: number;
   absentCount: number;
@@ -24,7 +26,12 @@ export interface WorkerReportRow {
   baseSalary: string;
   salaryType: string;
   transportAllowance: string;
+  expectedSalary: string;
   paidSalary: string;
+  remainingSalary: string;
+  cashPaidSalary: string;
+  advancesSettled: string;
+  salarySource: "payroll" | "attendance_estimate";
 }
 
 export interface AttendanceReportData {
@@ -35,6 +42,8 @@ export interface AttendanceReportData {
   dailySummary: Record<string, { present: number; absent: number }>;
   totals: {
     workers: number;
+    activeWorkers?: number;
+    inactiveWorkers?: number;
     presentDays: number;
     absentDays: number;
     totalPossibleDays: number;

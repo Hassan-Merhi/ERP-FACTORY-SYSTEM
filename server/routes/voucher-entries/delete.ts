@@ -1,5 +1,8 @@
 import { cancelFxAgentSettlementVoucherTx } from "../../services/factory/fxAgentSettlementCancellation";
-import { sessionRetirementActor } from "../../services/accounting/voucherRetirement";
+import { offlineEdgeText } from "../../i18n/offlineEdgeMessages";
+import { sessionRetirementActor, type VoucherRetirementActor } from "../../services/accounting/voucherRetirement";
+import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
+import { capturePosSaleCancelOfflineTx } from "../../services/pos/posSaleCancelOfflineCapture";
 import { getClientDate } from "../../lib/dateUtils";
 /**
  * voucherEntryRoutes: VoucherDelete endpoints.
@@ -92,6 +95,128 @@ export async function softDeleteInterCompanyCounterpartTx(
   );
 }
 
+export interface DeleteVoucherInput {
+  companyId: number;
+  voucher: NonNullable<Awaited<ReturnType<typeof storage.getVoucherById>>>;
+  occurredAt: string;
+  asOfDate: string;
+  actor: { userId: string | undefined; username: string | undefined };
+  retirementActor: VoucherRetirementActor;
+}
+
+/**
+ * The delete of one voucher on the caller's transaction: stock and COGS
+ * reversal, employee balances, linked property payments and inter-company
+ * counterparts, soft delete and the audit. Shared by DELETE /api/vouchers/:id
+ * and the Phase 9 cloud replay of a POS sale cancelled on the factory server.
+ */
+export async function deleteVoucherTx(tx: DbTransaction, input: DeleteVoucherInput): Promise<void> {
+  const { companyId, voucher, occurredAt } = input;
+  const id = voucher.id;
+  if (
+    await cancelFxAgentSettlementVoucherTx({
+      tx,
+      companyId,
+      voucherId: id,
+      actor: input.retirementActor,
+      asOfDate: input.asOfDate,
+    })
+  )
+    return;
+  const auditBefore = await readVoucherAuditState(tx, id);
+  // Wave 11: every stock document moves back exactly the value its lines
+  // moved, and a sale's COGS journal leaves with it (voucherStockReversal).
+  await reverseVoucherStockTx(tx, {
+    companyId,
+    voucher,
+    occurredAt,
+    actor: {
+      userId: input.actor.userId,
+      username: input.actor.username,
+      reason: `Delete voucher ${voucher.voucherNumber}`,
+    },
+    sourcePrefix: "voucher_delete",
+    keyPrefix: "voucher-delete",
+  });
+
+  if (!voucher.optional) {
+    const entries = await tx.select().from(voucherEntries).where(eq(voucherEntries.voucherId, id));
+
+    // Reverse the entries' effect on employee balances, in this transaction (wave 12).
+    await syncEmployeeBalancesFromEntries(
+      entries.map((e) => ({
+        ledgerAccountId: e.ledgerAccountId,
+        employeeId: e.employeeId,
+        debitAmount: e.debitAmount,
+        creditAmount: e.creditAmount,
+      })),
+      companyId,
+      true, // reverse
+      tx
+    );
+  }
+
+  // IMPORTANT: If this voucher is linked to a property payment entry,
+  // reverse the monthly ledger and delete the payment log row so the
+  // rent balance and payment history stay consistent.
+  const linkedPayments = await tx.select().from(propertyPayments).where(eq(propertyPayments.voucherId, id));
+  for (const pmt of linkedPayments) {
+    if (pmt.ledgerRowId) {
+      await tx.execute(sql`
+          UPDATE property_monthly_ledger
+          SET paid_amount = GREATEST(0, paid_amount - ${pmt.amount}::numeric)
+          WHERE id = ${pmt.ledgerRowId}
+        `);
+    }
+    await tx.delete(propertyPayments).where(eq(propertyPayments.id, pmt.id));
+  }
+
+  // IMPORTANT: If this voucher is one side of an inter-company transfer,
+  // also take the OTHER side out of the books and remove the transfer record.
+  // Wave 9: the other side is soft-deleted (lines kept) and audited under its
+  // own company, in this transaction — it used to be hard-deleted unaudited.
+  const linkedTransfersSingle = await tx
+    .select()
+    .from(interCompanyTransfers)
+    .where(or(eq(interCompanyTransfers.fromVoucherId, id), eq(interCompanyTransfers.toVoucherId, id)));
+  for (const transfer of linkedTransfersSingle) {
+    await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, transfer.id));
+    await softDeleteInterCompanyCounterpartTx(tx, {
+      transfer,
+      voucherId: id,
+      voucherNumber: voucher.voucherNumber,
+      actor: { userId: input.actor.userId, username: input.actor.username },
+    });
+  }
+
+  // Clean up any pending IC notification requests for this voucher
+  // so recipients stop seeing the bell notification for a deleted payment.
+  await tx
+    .delete(intercompanyPaymentRequests)
+    .where(and(eq(intercompanyPaymentRequests.fromVoucherId, id), eq(intercompanyPaymentRequests.status, "pending")));
+
+  // Soft delete: Keep voucher entries but set deletedAt on voucher
+  // This automatically excludes entries from balance calculations
+  // (calculateAccountBalance filters by isNull(vouchers.deletedAt))
+  await tx.update(vouchers).set({ deletedAt: new Date() }).where(eq(vouchers.id, id));
+  // Perpetual inventory (wave 8.2): a deleted PO voucher is no longer in transit.
+  await syncPurchaseOrderGitForVoucherTx(tx, companyId, id);
+  // Perpetual inventory (wave 8.4): an order whose charge this voucher carries re-syncs its invoice journal.
+  await syncFactoryInvoiceForChargeVoucherTx(tx, companyId, id);
+
+  // Wave 12 (decision 2): the deletion is audited with every line, in this
+  // transaction; a failed audit write refuses the delete. (It used to be
+  // written after commit, with lines read through `.catch(() => [])`.)
+  await writeVoucherAuditTx(tx, {
+    actor: { userId: input.actor.userId, username: input.actor.username, companyId },
+    action: "delete",
+    voucherId: id,
+    before: auditBefore,
+    after: null,
+    extra: { softDelete: { new: true } },
+  });
+}
+
 export function registerVoucherDeleteRoutes(app: Express) {
   // Delete a voucher (Admin only)
   app.delete("/api/vouchers/:id", requireAuth, requireRole("Admin"), async (req, res) => {
@@ -120,104 +245,25 @@ export function registerVoucherDeleteRoutes(app: Express) {
       const occurredAt = new Date().toISOString();
 
       // Wrap balance sync and deletion in a transaction
+      const lanCapture = isPhase9LanPrimary();
+      if (lanCapture && voucher.voucherType !== "Sales") {
+        return res.status(409).json({
+          code: "EDGE_VOUCHER_DELETE_OFFLINE_SALES_ONLY",
+          message: offlineEdgeText("voucherDeleteSalesOnly", req.headers["accept-language"]),
+        });
+      }
       await db.transaction(async (tx) => {
-        if (await cancelFxAgentSettlementVoucherTx({
-          tx, companyId, voucherId: id, actor: sessionRetirementActor(req), asOfDate: getClientDate(req),
-        })) return;
-        const auditBefore = await readVoucherAuditState(tx, id);
-        // Wave 11: every stock document moves back exactly the value its lines
-        // moved, and a sale's COGS journal leaves with it (voucherStockReversal).
-        await reverseVoucherStockTx(tx, {
+        await deleteVoucherTx(tx, {
           companyId,
           voucher,
           occurredAt,
-          actor: {
-            userId: req.session.userId,
-            username: req.session.username,
-            reason: `Delete voucher ${voucher.voucherNumber}`,
-          },
-          sourcePrefix: "voucher_delete",
-          keyPrefix: "voucher-delete",
+          asOfDate: getClientDate(req),
+          actor: { userId: req.session.userId, username: req.session.username },
+          retirementActor: sessionRetirementActor(req),
         });
-
-        if (!voucher.optional) {
-          const entries = await tx.select().from(voucherEntries).where(eq(voucherEntries.voucherId, id));
-
-          // Reverse the entries' effect on employee balances, in this transaction (wave 12).
-          await syncEmployeeBalancesFromEntries(
-            entries.map((e) => ({
-              ledgerAccountId: e.ledgerAccountId,
-              employeeId: e.employeeId,
-              debitAmount: e.debitAmount,
-              creditAmount: e.creditAmount,
-            })),
-            companyId,
-            true, // reverse
-            tx
-          );
-        }
-
-        // IMPORTANT: If this voucher is linked to a property payment entry,
-        // reverse the monthly ledger and delete the payment log row so the
-        // rent balance and payment history stay consistent.
-        const linkedPayments = await tx.select().from(propertyPayments).where(eq(propertyPayments.voucherId, id));
-        for (const pmt of linkedPayments) {
-          if (pmt.ledgerRowId) {
-            await tx.execute(sql`
-                UPDATE property_monthly_ledger
-                SET paid_amount = GREATEST(0, paid_amount - ${pmt.amount}::numeric)
-                WHERE id = ${pmt.ledgerRowId}
-              `);
-          }
-          await tx.delete(propertyPayments).where(eq(propertyPayments.id, pmt.id));
-        }
-
-        // IMPORTANT: If this voucher is one side of an inter-company transfer,
-        // also take the OTHER side out of the books and remove the transfer record.
-        // Wave 9: the other side is soft-deleted (lines kept) and audited under its
-        // own company, in this transaction — it used to be hard-deleted unaudited.
-        const linkedTransfersSingle = await tx
-          .select()
-          .from(interCompanyTransfers)
-          .where(or(eq(interCompanyTransfers.fromVoucherId, id), eq(interCompanyTransfers.toVoucherId, id)));
-        for (const transfer of linkedTransfersSingle) {
-          await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, transfer.id));
-          await softDeleteInterCompanyCounterpartTx(tx, {
-            transfer,
-            voucherId: id,
-            voucherNumber: voucher.voucherNumber,
-            actor: { userId: req.session.userId, username: req.session.username },
-          });
-        }
-
-        // Clean up any pending IC notification requests for this voucher
-        // so recipients stop seeing the bell notification for a deleted payment.
-        await tx
-          .delete(intercompanyPaymentRequests)
-          .where(
-            and(eq(intercompanyPaymentRequests.fromVoucherId, id), eq(intercompanyPaymentRequests.status, "pending"))
-          );
-
-        // Soft delete: Keep voucher entries but set deletedAt on voucher
-        // This automatically excludes entries from balance calculations
-        // (calculateAccountBalance filters by isNull(vouchers.deletedAt))
-        await tx.update(vouchers).set({ deletedAt: new Date() }).where(eq(vouchers.id, id));
-        // Perpetual inventory (wave 8.2): a deleted PO voucher is no longer in transit.
-        await syncPurchaseOrderGitForVoucherTx(tx, companyId, id);
-        // Perpetual inventory (wave 8.4): an order whose charge this voucher carries re-syncs its invoice journal.
-        await syncFactoryInvoiceForChargeVoucherTx(tx, companyId, id);
-
-        // Wave 12 (decision 2): the deletion is audited with every line, in this
-        // transaction; a failed audit write refuses the delete. (It used to be
-        // written after commit, with lines read through `.catch(() => [])`.)
-        await writeVoucherAuditTx(tx, {
-          actor: { userId: req.session.userId, username: req.session.username, companyId },
-          action: "delete",
-          voucherId: id,
-          before: auditBefore,
-          after: null,
-          extra: { softDelete: { new: true } },
-        });
+        // Factory LAN server during an outage: record the cancellation for
+        // replay on the sale's stream, in this transaction.
+        if (lanCapture) await capturePosSaleCancelOfflineTx(tx, { companyId, voucher, req });
       });
 
       // A deleted cash sale must leave the intercompany POS mirror for its date.

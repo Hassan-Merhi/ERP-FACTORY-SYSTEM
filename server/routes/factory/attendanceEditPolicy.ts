@@ -51,12 +51,12 @@ export type AttendanceAdminCredentials = {
   adminPassword?: unknown;
 };
 
-export type AttendanceApprover = { id: string; username: string };
+export type AttendanceApprover = { id: string; username: string; authorizationMethod: "admin_password" };
 
 /**
  * Returns undefined after sending a rejection, null for same-day records,
- * and the verifying Admin for older dates. Each save verifies the password
- * itself; no reusable override/session flag is issued.
+ * and a verifying company Admin for older dates. All roles, including Owners,
+ * require a fresh Admin username and password.
  */
 export async function requireAttendanceEditApproval(
   req: Request,
@@ -105,5 +105,5 @@ export async function requireAttendanceEditApproval(
     res.status(401).json({ message: "Invalid Admin credentials for this factory company" });
     return undefined;
   }
-  return { id: admin.id, username: admin.username };
+  return { id: admin.id, username: admin.username, authorizationMethod: "admin_password" };
 }
