@@ -135,9 +135,6 @@ export function FixedProductionPlannerDialog({
 
   // Each opening starts a single fresh snapshot. Disabled React Query observers
   // never refetch due to Factory-wide invalidation, polling, or reconnect.
-  const refetchPlan = planQuery.refetch;
-  const refetchOtw = otwQuery.refetch;
-  const refetchCategories = categoryQuery.refetch;
   useEffect(() => {
     if (!open) return;
     void Promise.all([refetchPlan(), refetchOtw(), refetchCategories()]);

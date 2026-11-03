@@ -39,9 +39,10 @@ export type HistoricalAssetLiabilityOperations = {
  * Split the balance-sheet positions per contract without offsetting tenants.
  * Overpayments are prepaid assets; unpaid rent is a separate liability.
  */
-export function sumRentalContractPositions(
-  positions: readonly { expected: string; paid: string }[]
-): { prepaidRent: number; rentPayable: number } {
+export function sumRentalContractPositions(positions: readonly { expected: string; paid: string }[]): {
+  prepaidRent: number;
+  rentPayable: number;
+} {
   let prepaidRent = new MoneyDecimal(0);
   let rentPayable = new MoneyDecimal(0);
   for (const position of positions) {
@@ -260,7 +261,7 @@ async function factoryWorkerAdvancesAsOf(companyId: number, scope: FactoryNetPos
 async function recordedFactoryRentalAsOf(
   companyId: number,
   scope: FactoryNetPositionAsOf
-): Promise<{ value: number; warnings: string[] } | null> {
+): Promise<{ prepaidRent: number; rentPayable: number; warnings: string[] } | null> {
   const [units, contracts, monthly, payments] = await Promise.all([
     loadFactoryRowsKnownAt("property_units", companyId, scope),
     loadFactoryRowsKnownAt("property_contracts", companyId, scope),
@@ -287,7 +288,7 @@ async function recordedFactoryRentalAsOf(
         : r.end_date != null && String(r.end_date).slice(0, 10) >= scope.asOf
     )
     .map((r) => ({ id: Number(r.id), startDate: String(r.start_date).slice(0, 10) }));
-  if (!selected.length) return { value: 0, warnings: [] };
+  if (!selected.length) return { prepaidRent: 0, rentPayable: 0, warnings: [] };
   const sums = new Map<
     number,
     { expected: InstanceType<typeof MoneyDecimal>; paid: InstanceType<typeof MoneyDecimal> }
@@ -322,13 +323,13 @@ async function recordedFactoryRentalAsOf(
     if (!r.posted_at) warnings.add("HISTORICAL_RENT_POSTING_TIMESTAMP_MISSING");
     row.paid = row.paid.plus(value(r.amount as string | number | null | undefined));
   }
-  const valueAtDate = sumRentalContractPositions(
+  const positions = sumRentalContractPositions(
     [...sums.values()].map((r) => ({
       expected: r.expected.toFixed(),
       paid: r.paid.toFixed(),
     }))
   );
-  return { value: valueAtDate, warnings: [...warnings] };
+  return { ...positions, warnings: [...warnings] };
 }
 
 async function factoryRentalAsOf(companyId: number, scope: FactoryNetPositionAsOf) {
