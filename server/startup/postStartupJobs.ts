@@ -17,6 +17,23 @@ export function runPostStartupJobs(): void {
   if (installed) return;
   installed = true;
 
+  // Owner-approved, backend-only rent reconciliation for Factory contract 34.
+  // Does not change the rental UI or original payment. Disabled unless the
+  // exact production opt-in is enabled; fully guarded and idempotent.
+  if (process.env.ERP_REPAIR_HADI_PREPAID_20261103 === "approved-hmd12-hadi34-5000") {
+    const prepaidRepairTimer = setTimeout(async () => {
+      try {
+        const { runApprovedHadiPrepaidRepair } = await import("./runApprovedHadiPrepaidRepair");
+        await runApprovedHadiPrepaidRepair();
+      } catch (error: unknown) {
+        logger.error("[HadiPrepaidRepair] Refused or failed without partial posting", {
+          error: getErrorMessage(error),
+        });
+      }
+    }, 3000);
+    unrefTimer(prepaidRepairTimer);
+  }
+
   // One-time, explicitly gated historical GL backfill for the audited 63 invoices.
   // This is OFF by default and uses the centralized posting engine with
   // per-invoice transaction rollback if the customer combined balance shifts.
