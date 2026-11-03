@@ -21,6 +21,7 @@ import { vouchers } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { nextCanonicalSourceRevision } from "../../../services/inventory/canonicalSourceRevision";
 import { assertPosOptionalSettlementSafeTx } from "../../../services/pos/posOptionalSafety";
+import { recalculateClosedPosShiftForOptionalToggleTx } from "../../../services/pos/posOptionalShift";
 import { postOptionalToggleResidualTx, toggleVoucherStockTx, voucherInventoryLedgerTx } from "./optionalStockToggle";
 import { syncPurchaseOrderGitForVoucherTx } from "../../../services/accounting/perpetualInventory/stockReceipts";
 import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/perpetualInventory/stockAdjustments";
@@ -142,6 +143,11 @@ export function registerVoucherOptionalUpdateRoutes(app: Express) {
 
         // Update the optional field inside the same stock/accounting transaction.
         await tx.update(vouchers).set({ optional }).where(eq(vouchers.id, id));
+        await recalculateClosedPosShiftForOptionalToggleTx(tx, {
+          companyId: lockedVoucher.companyId,
+          shiftId: lockedVoucher.shiftId,
+          voucherType: lockedVoucher.voucherType,
+        });
         // Perpetual inventory (wave 8.2): an optional PO voucher is not in transit.
         await syncPurchaseOrderGitForVoucherTx(tx, existingVoucher.companyId, id);
         // Perpetual inventory (wave 8.3): an optional stock adjustment carries no inventory line.
