@@ -23,6 +23,7 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
     factoryCustomerOrderAnalyticsError,
     factoryOrderPage,
     factoryOrderStatus,
+    factoryOrderDestination,
     factoryOrderIncludeCharges,
     formatAmount,
     formatDisplayDate,
@@ -37,6 +38,7 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
     setDetailsPeriod,
     setFactoryOrderPage,
     setFactoryOrderStatus,
+    setFactoryOrderDestination,
     setFactoryOrderIncludeCharges,
     setRangeEnd,
     setRangeStart,
@@ -92,6 +94,25 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                         <SelectItem value="VERIFIED">Verified</SelectItem>
                         <SelectItem value="VERIFIED_FINALIZED">Verified + Finalized</SelectItem>
                         <SelectItem value="FINALIZED">Finalized</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={factoryOrderDestination}
+                      onValueChange={(value) => {
+                        setFactoryOrderDestination(value);
+                        setFactoryOrderPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="w-full sm:w-[180px]" data-testid="select-factory-order-destination">
+                        <SelectValue placeholder="All destinations" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All destinations</SelectItem>
+                        {(factoryCustomerOrderAnalytics?.destinations ?? []).map((destination) => (
+                          <SelectItem key={destination} value={destination}>
+                            {destination}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <Button
@@ -177,6 +198,7 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                           <TableHeader className="sticky top-0 z-30 bg-background">
                             <TableRow>
                               <TableHead>Customer / Container</TableHead>
+                              <TableHead>Destination</TableHead>
                               <TableHead className="text-right">Total Weight</TableHead>
                               <TableHead className="text-right">
                                 {factoryOrderIncludeCharges ? "Total Cost (With Charges)" : "Total Cost (No Charges)"}
@@ -189,6 +211,9 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                             {factoryCustomerOrderAnalytics.rows.map((customerRow, customerIndex) => {
                               const customerKey = String(customerRow.customerId ?? `unknown-${customerIndex}`);
                               const expanded = expandedOrderCustomers.has(customerKey);
+                              const destinations = Array.from(new Set(
+                                customerRow.orders.map((order) => order.destination?.trim()).filter((value): value is string => !!value)
+                              ));
                               return (
                                 <Fragment key={customerKey}>
                                   <TableRow className="bg-muted/20">
@@ -214,6 +239,9 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                                           </div>
                                         </div>
                                       </button>
+                                    </TableCell>
+                                    <TableCell className="text-sm">
+                                      {destinations.length === 0 ? "—" : destinations.length === 1 ? destinations[0] : "Multiple destinations"}
                                     </TableCell>
                                     <TableCell className="text-right font-mono">
                                       {customerRow.totalWeightKg.toLocaleString(undefined, {
@@ -270,6 +298,7 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                                               )}
                                             </div>
                                           </TableCell>
+                                          <TableCell className="text-sm">{order.destination?.trim() || "—"}</TableCell>
                                           <TableCell className="text-right font-mono">
                                             {order.totalWeightKg.toLocaleString(undefined, {
                                               maximumFractionDigits: 2,
