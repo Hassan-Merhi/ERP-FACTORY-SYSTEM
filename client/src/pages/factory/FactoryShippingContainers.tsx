@@ -28,6 +28,7 @@ import {
   Trash2,
   RotateCcw,
   Check,
+  CheckCircle2,
   Loader2,
   SlidersHorizontal,
   ArrowLeft,
