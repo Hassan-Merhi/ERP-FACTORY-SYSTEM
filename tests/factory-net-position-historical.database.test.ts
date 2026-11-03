@@ -450,12 +450,14 @@ databaseDescribe("Factory Net Position historical date filter (database)", () =>
     // Payroll payable: 300 accrued Oct 18; 100 paid (entered Oct 21).
     expect([d19.payrollPayable, d20.payrollPayable, d21.payrollPayable]).toEqual([300, 300, 200]);
 
-    // Rent: |100 due - 60 posted|, the payment known from Oct 20.
+    // Rent: expected 100 exceeds posted tenant payments (0, then 60).
+    // The unpaid balance is a liability, not prepaid rent (an asset).
     expect([
-      row(d19, "forUs", "PREPAID_RENT"),
-      row(d20, "forUs", "PREPAID_RENT"),
-      row(d21, "forUs", "PREPAID_RENT"),
+      row(d19, "onUs", "RENT_PAYABLE"),
+      row(d20, "onUs", "RENT_PAYABLE"),
+      row(d21, "onUs", "RENT_PAYABLE"),
     ]).toEqual([100, 40, 40]);
+    expect([d19, d20, d21].map((r) => row(r, "forUs", "PREPAID_RENT"))).toEqual([0, 0, 0]);
 
     // Worker advance 100 - 20 (Oct 20) - 30 (Oct 21).
     expect([
