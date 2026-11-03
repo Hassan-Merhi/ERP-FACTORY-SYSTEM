@@ -19,10 +19,10 @@ The recorder **requires the existing Phase 7 disposable Postgres fixture** on 12
 
 ### Run recordings
 
-After merging the implementation, GitHub Actions > **Record Real ERP Training Videos (Disposable Data)** > Run workflow > select a topic or all. The workflow installs Chrome/ffmpeg, builds the app, prepares disposable ERP and Factory companies, records real UI clips, and produces a review artifact. The generated artifact expires after 30 days and is **not** a publishing destination.
+After merging the implementation, GitHub Actions > **Record Real ERP Training Videos (Disposable Data)** > Run workflow > select a topic or all. The workflow installs Chrome/ffmpeg, builds the app, prepares disposable ERP and Factory companies, records approximately 45-second, five-step real UI clips as Windows-friendly H.264 MP4 files, validates their full decode and 60-second maximum, and produces a review artifact. The videos include on-screen guided explanations and timed captions, not synthetic spoken narration. The generated artifact expires after 30 days and is **not** a publishing destination.
 
 Each completed topic output includes:
-- `screen.webm`: actual rendered UI video with instructional on-screen captions.
+- `screen.mp4`: validated H.264/yuv420p video (35–60 seconds) with five on-screen instructional steps, playable in standard Windows players.
 - `screenshot.png`: screenshot from the training session.
 - `captions.vtt`: captions and timing.
 - `guide.md`: workflow documentation.
