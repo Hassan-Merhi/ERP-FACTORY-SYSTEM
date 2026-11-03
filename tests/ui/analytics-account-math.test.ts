@@ -7,6 +7,7 @@ import {
   formatCurrency,
   formatSmartCurrency,
   groupAccountsByParent,
+  isVisibleAnalyticsAssetAccount,
   parseBalance,
   signedBalance,
 } from "@/pages/analyticslegacy/accountMath";
@@ -74,6 +75,35 @@ describe("analytics account math", () => {
 
     expect(calculateTotal(accounts)).toBe(60);
     expect(calculateAbsoluteTotal(accounts)).toBe(140);
+  });
+
+  it("hides only Inventory and SP profit correction suspense from the Assets view and total", () => {
+    const candidates = [
+      account({ accountId: 10, type: "ledger", code: "INVENTORY", name: "Inventory", accountType: "Asset", balance: 40.36 }),
+      account({
+        accountId: 11, type: "ledger", code: "SP-PROFIT-ADJ-SUSPENSE", name: "SP Profit Correction Suspense",
+        accountType: "Asset", subType: "sp_profit_correction_suspense", balance: 9026.41,
+      }),
+      account({ accountId: 12, type: "ledger", code: "STOCK-OTW", name: "Stock OTW", accountType: "Asset", balance: 34498.20 }),
+      account({ accountId: 13, type: "ledger", code: "INVENTORY-ADJUSTMENT", name: "Inventory Adjustment", accountType: "Asset", balance: 5 }),
+      account({ accountId: 14, type: "bank", code: "B-1", name: "Bank", balance: 100 }),
+      account({ accountId: 15, type: "fixedAsset", code: "F-1", name: "Vehicle", balance: 200 }),
+      account({ accountId: 16, type: "ledger", code: "LIABILITY", name: "Liability", accountType: "Liability", balance: 500 }),
+    ];
+    const visible = candidates.filter(isVisibleAnalyticsAssetAccount);
+    expect(visible.map((acc) => acc.accountId)).toEqual([12, 13, 14, 15]);
+    expect(calculateAbsoluteTotal(visible)).toBeCloseTo(34803.20, 2);
+    expect(calculateAbsoluteTotal(visible.filter((acc) => acc.type === "ledger"))).toBeCloseTo(34503.20, 2);
+
+    // Legacy records without the expected code still match their exact label/subtype.
+    expect(isVisibleAnalyticsAssetAccount(account({
+      accountId: 17, type: "ledger", code: "", name: "  SP   Profit Correction Suspense ",
+      accountType: "Asset", balance: 1,
+    }))).toBe(false);
+    expect(isVisibleAnalyticsAssetAccount(account({
+      accountId: 18, type: "ledger", code: "", name: "Another control ledger",
+      subType: "sp_profit_correction_suspense", accountType: "Asset", balance: 1,
+    }))).toBe(false);
   });
 
   it("sums P&L sections flat, without deduplication", () => {
