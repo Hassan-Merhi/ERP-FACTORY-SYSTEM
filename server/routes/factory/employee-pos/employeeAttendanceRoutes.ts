@@ -11,7 +11,11 @@ import { factoryWorkers, employees } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { sqlArray } from "../../../lib/sqlArray";
 import { resultRows } from "../../../lib/queryResult";
-import { MoneyDecimal, sumMoney, toMoney } from "../../../lib/money";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
+import {
+  reconcileAttendanceReportSalary,
+  type AttendanceReportPayrollRecord,
+} from "../../../services/payroll/attendanceReportSalary";
 
 export function registerEmployeeAttendanceRoutes(app: Express) {
   app.get("/api/factory/net-position/payroll-breakdown", requireAuth, async (req: Request, res: Response) => {
@@ -159,26 +163,43 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
         else if (r.status === "Absent") dailySummary[r.date].absent++;
       }
 
-      // Fetch paid payrolls overlapping the date range for these workers
-      const paidPayrollRows = await db.execute(
-        sql`SELECT worker_id AS "workerId", net_salary AS "netSalary"
+      // Reconcile against stored payroll entitlements and settlements instead of
+      // comparing today's attendance estimate to only cash net_salary. Only
+      // payroll periods wholly within the selected range are eligible; the
+      // reconciliation helper removes overlapping partial payrolls per worker.
+      const payrollRows = await db.execute(
+        sql`SELECT id, worker_id AS "workerId",
+                   period_start::text AS "periodStart",
+                   period_end::text AS "periodEnd",
+                   status, net_salary AS "netSalary", advances
             FROM factory_payrolls
             WHERE company_id = ${companyId}
-              AND status = 'PAID'
-              AND period_start <= ${endDate}::date
-              AND period_end   >= ${startDate}::date
+              AND period_start >= ${startDate}::date
+              AND period_end <= ${endDate}::date
               AND worker_id = ANY(${sqlArray(workerIds)})`
       );
-      const paidPayrollList: { workerId: number; netSalary: string }[] = resultRows<{
+      const payrollByWorker = new Map<number, AttendanceReportPayrollRecord[]>();
+      for (const row of resultRows<{
+        id: number;
         workerId: number;
+        periodStart: string;
+        periodEnd: string;
+        status: string;
         netSalary: string | null;
-      }>(paidPayrollRows).map((r) => ({
-        workerId: Number(r.workerId),
-        netSalary: r.netSalary ?? "0",
-      }));
-      const paidSalaryMap = new Map<number, string[]>();
-      for (const r of paidPayrollList) {
-        paidSalaryMap.set(r.workerId, [...(paidSalaryMap.get(r.workerId) || []), r.netSalary]);
+        advances: string | null;
+      }>(payrollRows)) {
+        const workerId = Number(row.workerId);
+        const matching = payrollByWorker.get(workerId) ?? [];
+        matching.push({
+          id: Number(row.id),
+          workerId,
+          periodStart: row.periodStart,
+          periodEnd: row.periodEnd,
+          status: row.status,
+          netSalary: row.netSalary ?? "0",
+          advances: row.advances ?? "0",
+        });
+        payrollByWorker.set(workerId, matching);
       }
 
       let totalPresent = 0;
@@ -200,6 +221,15 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
 
         const recordedCount = presentCount + absentCount;
         const attendancePct = recordedCount > 0 ? Math.round((presentCount / recordedCount) * 100) : null;
+        const salary = reconcileAttendanceReportSalary({
+          startDate,
+          endDate,
+          salaryType: w.salaryType ?? "Monthly",
+          baseSalary: w.baseSalary ?? "0",
+          transportAllowance: w.transportAllowance ?? "0",
+          attendance,
+          payrolls: payrollByWorker.get(w.id) ?? [],
+        });
 
         return {
           id: w.id,
@@ -213,7 +243,7 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
           baseSalary: w.baseSalary ?? "0",
           salaryType: w.salaryType ?? "Monthly",
           transportAllowance: w.transportAllowance ?? "0",
-          paidSalary: sumMoney(paidSalaryMap.get(w.id) || []).toFixed(2),
+          ...salary,
         };
       });
 
