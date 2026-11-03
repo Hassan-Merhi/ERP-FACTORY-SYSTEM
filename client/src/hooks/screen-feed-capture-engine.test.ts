@@ -240,6 +240,7 @@ describe("screen feed capture engine", () => {
     await captureOnce(fetchMock);
     expect(strippedSrc).toBeNull();
   });
+
   it("recovers an unsupported oklab color instead of uploading a text-only fallback", async () => {
     let retryRanColorNormalization = false;
     html2canvas
@@ -263,5 +264,4 @@ describe("screen feed capture engine", () => {
     expect(body.capture.failureReason).toContain("oklab");
     expect(retryRanColorNormalization).toBe(true);
   });
-
 });
