@@ -86,6 +86,8 @@ export function RemoteMouseControllerOverlay() {
   const sessionTargetUserId = session?.targetUserId ?? null;
   const authorized = authorizationIsFresh(session?.mouseAuthorization?.expiresAt);
   const controlEnabled = !!sessionId && !!session?.capabilities.mouse && authorized;
+  const keyboardActive = !!session?.capabilities.keyboard && authorizationIsFresh(session.keyboardAuthorization?.expiresAt);
+  const combinedEnabled = controlEnabled && keyboardActive;
 
   useEffect(() => {
     activeSessionIdRef.current = sessionId;
@@ -170,6 +172,127 @@ export function RemoteMouseControllerOverlay() {
       setBusy(false);
     }
   }, [busy, refreshSession, sessionId, t]);
+
+  // A single explicit action enables both guarded capabilities. Each separate
+  // permission, password, audit, tenant and exact-tab check stays on the server.
+  const authorizeCombined = useCallback(async () => {
+    if (!sessionId || busy) return;
+    setBusy(true);
+    setError(null);
+    let mouseGrantedHere = false;
+    try {
+      if (!controlEnabled) {
+        await remoteControllerRequestJson(
+          `/api/screen-feed/control/sessions/${encodeURIComponent(sessionId)}/mouse-authorization`,
+          { method: "POST", body: JSON.stringify({}) }
+        );
+        mouseGrantedHere = true;
+      }
+      if (!keyboardActive) {
+        await remoteControllerRequestJson(
+          `/api/screen-feed/control/sessions/${encodeURIComponent(sessionId)}/keyboard-authorization`,
+          { method: "POST", body: JSON.stringify({}) }
+        );
+      }
+      await refreshSession();
+      setPasswordOpen(false);
+      setPassword("");
+    } catch (requestError) {
+      // Do not leave a newly activated mouse session on when keyboard is blocked.
+      if (mouseGrantedHere) {
+        await remoteControllerRequestJson(
+          `/api/screen-feed/control/sessions/${encodeURIComponent(sessionId)}/mouse-authorization/revoke`,
+          { method: "POST", body: JSON.stringify({}) }
+        ).catch(() => undefined);
+      }
+      await refreshSession().catch(() => undefined);
+      if (
+        requestError instanceof RemoteControllerRequestError &&
+        (requestError.status === 428 || requestError.code === "PASSWORD_CONFIRMATION_REQUIRED")
+      ) {
+        setPasswordOpen(true);
+      } else {
+        setError(requestError instanceof Error ? t(requestError.message) : t("Unable to enable mouse control."));
+      }
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, controlEnabled, keyboardActive, refreshSession, sessionId, t]);
+
+  const confirmPasswordAndAuthorizeCombined = useCallback(async () => {
+    if (!password || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await remoteControllerRequestJson("/api/auth/confirm-password", {
+        method: "POST",
+        body: JSON.stringify({ password }),
+      });
+      // Authorization is deliberately a separate action after password confirmation.
+      // Release busy first via the callback below rather than bypassing the server.
+      setPasswordOpen(false);
+      setPassword("");
+      if (sessionId) {
+        let grantedMouse = false;
+        try {
+          if (!controlEnabled) {
+            await remoteControllerRequestJson(
+              `/api/screen-feed/control/sessions/${encodeURIComponent(sessionId)}/mouse-authorization`,
+              { method: "POST", body: JSON.stringify({}) }
+            );
+            grantedMouse = true;
+          }
+          if (!keyboardActive) {
+            await remoteControllerRequestJson(
+              `/api/screen-feed/control/sessions/${encodeURIComponent(sessionId)}/keyboard-authorization`,
+              { method: "POST", body: JSON.stringify({}) }
+            );
+          }
+          await refreshSession();
+        } catch (error) {
+          if (grantedMouse) {
+            await remoteControllerRequestJson(
+              `/api/screen-feed/control/sessions/${encodeURIComponent(sessionId)}/mouse-authorization/revoke`,
+              { method: "POST", body: JSON.stringify({}) }
+            ).catch(() => undefined);
+          }
+          await refreshSession().catch(() => undefined);
+          throw error;
+        }
+      }
+    } catch (requestError) {
+      setError(requestError instanceof Error ? t(requestError.message) : t("Password confirmation failed."));
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, controlEnabled, keyboardActive, password, refreshSession, sessionId, t]);
+
+  const stopCombined = useCallback(async () => {
+    if (!sessionId || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (keyboardActive) {
+        await remoteControllerRequestJson(
+          `/api/screen-feed/control/sessions/${encodeURIComponent(sessionId)}/keyboard-authorization/revoke`,
+          { method: "POST", body: JSON.stringify({}) }
+        );
+      }
+      if (controlEnabled) {
+        await remoteControllerRequestJson(
+          `/api/screen-feed/control/sessions/${encodeURIComponent(sessionId)}/mouse-authorization/revoke`,
+          { method: "POST", body: JSON.stringify({}) }
+        );
+      }
+      setLastResult(null);
+      await refreshSession();
+    } catch (requestError) {
+      await refreshSession().catch(() => undefined);
+      setError(requestError instanceof Error ? t(requestError.message) : t("Mouse command failed."));
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, controlEnabled, keyboardActive, refreshSession, sessionId, t]);
 
   const sendCommandNow = useCallback(
     async (payload: MouseCommandPayload, expectedSessionId: string) => {
@@ -421,6 +544,54 @@ export function RemoteMouseControllerOverlay() {
   const statusLabel = lastResult
     ? t(lastResult.status === "executed" ? "Executed" : lastResult.status === "blocked" ? "Blocked" : "Ignored")
     : null;
+
+  if (portalHost.dataset.remoteControlPanelMode === "unified") {
+    return createPortal(
+      <section className="space-y-2 text-sm" data-screenfeed-ignore="true" data-testid="remote-mouse-controller-overlay" data-remote-control-panel-section="mouse">
+        <div className="flex items-center justify-between gap-2">
+          <p className="min-w-0 text-xs text-slate-300">{combinedEnabled ? t("Mouse and keyboard active") : t("Read-only until explicitly enabled")}</p>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={combinedEnabled}
+            aria-label={t("Mouse & keyboard control")}
+            disabled={busy}
+            data-testid="button-toggle-remote-control"
+            onClick={() => void (combinedEnabled ? stopCombined() : authorizeCombined())}
+            className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-300 disabled:cursor-wait disabled:opacity-50 ${combinedEnabled ? "border-blue-400 bg-blue-600" : "border-slate-600 bg-slate-700"}`}
+          >
+            <span className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${combinedEnabled ? "translate-x-6" : "translate-x-1"}`} />
+          </button>
+        </div>
+        <p className="text-[11px] leading-relaxed text-slate-400">
+          {t("ERP tab only")} · {t("Only safe search, filter and explicitly approved fields can be edited.")}
+        </p>
+        {passwordOpen && !combinedEnabled && (
+          <form className="space-y-2 border-t border-slate-700 pt-3" onSubmit={(event) => { event.preventDefault(); void confirmPasswordAndAuthorizeCombined(); }}>
+            <p className="text-xs text-slate-200">{t("Confirm your password to enable mouse control for up to 5 minutes.")}</p>
+            <div className="flex gap-2">
+              <Input
+                autoFocus
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder={t("Password")}
+                className="h-9 border-slate-600 bg-slate-900 text-white"
+                data-testid="input-remote-mouse-password"
+              />
+              <Button type="submit" size="sm" className="h-9" disabled={!password || busy}>
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : t("Confirm")}
+              </Button>
+            </div>
+          </form>
+        )}
+        {statusLabel ? <p className="text-[11px] text-slate-400">{statusLabel}</p> : null}
+        {error ? <p className="text-xs text-red-300" role="alert">{error}</p> : null}
+      </section>,
+      portalHost
+    );
+  }
 
   return createPortal(
     <section

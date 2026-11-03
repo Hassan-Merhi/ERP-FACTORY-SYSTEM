@@ -27,16 +27,25 @@ function createHost(dialog: HTMLElement): HTMLElement {
   host.setAttribute("data-remote-control-panel-host", "true");
   host.setAttribute("data-screenfeed-ignore", "true");
   host.setAttribute("aria-label", "Remote controls");
-  host.className =
-    "absolute inset-x-0 bottom-0 z-2147483645 flex h-[46vh] flex-col gap-2 overflow-y-auto border-t bg-background/95 p-3 shadow-2xl backdrop-blur-sm lg:inset-x-auto lg:bottom-0 lg:right-0 lg:top-14 lg:h-auto lg:w-[376px] lg:border-l lg:border-t-0";
+  // The modern Watch User layout provides a dedicated sidebar slot.
+  // Legacy viewers still use the existing floating control panel.
+  const slot = dialog.querySelector<HTMLElement>("[data-screen-feed-control-slot]");
+  if (slot) {
+    host.dataset.remoteControlPanelMode = "unified";
+    host.className = "flex w-full flex-col gap-2";
+    slot.appendChild(host);
+  } else {
+    host.className =
+      "absolute inset-x-0 bottom-0 z-2147483645 flex h-[46vh] flex-col gap-2 overflow-y-auto border-t bg-background/95 p-3 shadow-2xl backdrop-blur-sm lg:inset-x-auto lg:bottom-0 lg:right-0 lg:top-14 lg:h-auto lg:w-[376px] lg:border-l lg:border-t-0";
+    dialog.appendChild(host);
+  }
   host.style.setProperty("pointer-events", "auto", "important");
   host.style.setProperty("touch-action", "auto", "important");
-  dialog.appendChild(host);
   return host;
 }
 
 export function acquireRemoteControlPanelHost(dialog: HTMLElement): HTMLElement {
-  configureDialog(dialog);
+  if (!dialog.querySelector("[data-screen-feed-control-slot]")) configureDialog(dialog);
   const existing = dialog.querySelector<HTMLElement>(HOST_SELECTOR);
   const host = existing ?? createHost(dialog);
   const lease = hostLeases.get(host);
