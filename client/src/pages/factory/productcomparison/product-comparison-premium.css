@@ -304,3 +304,16 @@
     box-shadow: 0 10px 30px rgba(65, 82, 185, .16);
   }
 }
+
+
+/* Touch-class mobile viewports need at least 44px targets. Keep desktop
+   density unchanged; this is purely a sizing change to the controls. */
+@media (max-width: 640px) {
+  .product-comparison-premium .pc-control-button,
+  .product-comparison-premium .pc-date-input,
+  .product-comparison-premium .pc-filters [data-testid^="product-comparison-"],
+  .product-comparison-premium button[data-testid^="product-comparison-"],
+  .product-comparison-premium input[data-testid^="product-comparison-"] {
+    min-height: 44px;
+  }
+}
