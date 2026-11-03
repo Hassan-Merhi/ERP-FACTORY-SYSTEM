@@ -80,7 +80,9 @@ import { runApprovedHmdEurogulfFreightRepair } from "./startup/runApprovedHmdEur
 import { runApprovedFactoryDestinationNormalization } from "./startup/runApprovedFactoryDestinationNormalization";
 import { runApprovedMali53DestinationNormalization } from "./startup/runApprovedMali53DestinationNormalization";
 import { runApprovedFactoryWorkerAdvanceLedgerRepair } from "./startup/runApprovedFactoryWorkerAdvanceLedgerRepair";
+import { runApprovedNoCashAdvanceSourceRepair } from "./startup/runApprovedNoCashAdvanceSourceRepair";
 import { inspectOctoberPayrollJournalIntegrity20261103 } from "./startup/inspectOctoberPayrollJournalIntegrity20261103";
+import { applyApprovedOctoberPayrollOverlapReclass20261103 } from "./startup/applyApprovedOctoberPayrollOverlapReclass20261103";
 import { ensureFactorySheetsSacksSchema } from "./startup/factorySheetsSacksSchema";
 import { ensureSpGitTracking } from "./lib/spGitTracking";
 import { ensureRecurringJournalSchema } from "./services/accounting/ensureRecurringJournalSchema";
@@ -463,6 +465,14 @@ let migrationsDone = false;
             error: getErrorMessage(advanceRepairError),
           });
         }
+        // Company 12 source repair only; never writes Cash or ledger journals.
+        try {
+          await runApprovedNoCashAdvanceSourceRepair();
+        } catch (noCashAdvanceError: unknown) {
+          logger.error("[startup] No-cash worker advance source repair blocked", {
+            error: getErrorMessage(noCashAdvanceError),
+          });
+        }
         // Explicitly opted-in, tenant-scoped READ-ONLY inspection. It only
         // logs posted October payroll accrual/payment evidence and closed books;
         // never changes cash, advances, payroll rows or journal entries.
@@ -471,6 +481,16 @@ let migrationsDone = false;
         } catch (payrollInspectionError: unknown) {
           logger.error("[startup] October payroll journal inspection unavailable", {
             error: getErrorMessage(payrollInspectionError),
+          });
+        }
+        // Audited, opt-in October paid-overlap reclassification. Never touches
+        // cash, Daybook, historical payrolls or existing worker advances.
+        // All source/payments/attendance snapshots must match before posting.
+        try {
+          await applyApprovedOctoberPayrollOverlapReclass20261103();
+        } catch (overlapRepairError: unknown) {
+          logger.error("[startup] October payroll overlap reclassification blocked", {
+            error: getErrorMessage(overlapRepairError),
           });
         }
       }
