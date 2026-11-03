@@ -640,14 +640,25 @@ export function CommandPalette({
   );
 
   const isRetailCompany = selectedCompany?.companyType === "retail";
+  const {
+    sections: erpSections,
+    visiblePinnedItems: erpPinnedItems,
+    visibleUtilityItems: erpUtilityItems,
+    isItemVisible: erpIsItemVisible,
+  } = erpVis;
+  const {
+    sections: factorySections,
+    isPinnedVisible: factoryIsPinnedVisible,
+    isHubTabVisible: factoryIsHubTabVisible,
+  } = factoryVis;
   const erpPages = useMemo(
     () =>
       buildEntries(
-        erpVis.sections,
+        erpSections,
         [
           ...ERP_EXTRAS.filter((entry) => {
             if (entry.path === "/") return canSeeAdminCommands;
-            return erpVis.isItemVisible({ title: entry.label, url: entry.path, icon: LayoutDashboard });
+            return erpIsItemVisible({ title: entry.label, url: entry.path, icon: LayoutDashboard });
           }),
           // A link to one part of a composite hub must not disclose another
           // part that this user's actual ERP feature grants don't permit.
@@ -659,39 +670,32 @@ export function CommandPalette({
                 : tab.path === "/parties?tab=customers"
                   ? "/customers"
                   : tab.path;
-            return erpVis.isItemVisible({ title: tab.label, url: accessPath, icon: LayoutDashboard });
+            return erpIsItemVisible({ title: tab.label, url: accessPath, icon: LayoutDashboard });
           }),
         ],
         [
-          ...erpVis.visiblePinnedItems,
-          ...erpVis.visibleUtilityItems,
-          ...ERP_CONTEXT_ITEMS.filter(erpVis.isItemVisible),
-          ...ERP_ACCOUNTING_CONTEXT_ITEMS.filter(erpVis.isItemVisible),
+          ...erpPinnedItems,
+          ...erpUtilityItems,
+          ...ERP_CONTEXT_ITEMS.filter((item) => erpIsItemVisible(item)),
+          ...ERP_ACCOUNTING_CONTEXT_ITEMS.filter((item) => erpIsItemVisible(item)),
         ]
       ).map((page) =>
         isRetailCompany && page.path === "/vouchers"
           ? { ...page, description: "Payment and receipt vouchers; automatic journals are read-only" }
           : page
       ),
-    [
-      erpVis.sections,
-      erpVis.visiblePinnedItems,
-      erpVis.visibleUtilityItems,
-      erpVis.isItemVisible,
-      isRetailCompany,
-      canSeeAdminCommands,
-    ]
+    [erpSections, erpPinnedItems, erpUtilityItems, erpIsItemVisible, isRetailCompany, canSeeAdminCommands]
   );
 
   const factoryPages = useMemo(() => {
     const accessibleExtras = [...FACTORY_EXTRAS_ALWAYS, ...FACTORY_CONTEXT_SEARCH, ...FACTORY_HUB_TABS].filter(
-      (entry) => factoryVis.isPinnedVisible({ url: entry.path }) && factoryVis.isHubTabVisible(entry.path)
+      (entry) => factoryIsPinnedVisible({ url: entry.path }) && factoryIsHubTabVisible(entry.path)
     );
-    return buildEntries(factoryVis.sections, [
+    return buildEntries(factorySections, [
       ...accessibleExtras,
       ...(shellRole === "Developer" ? [...FACTORY_ACCOUNTING_CONTEXT, ...FACTORY_MAINTENANCE_CONTEXT] : []),
     ]);
-  }, [factoryVis.sections, factoryVis.isPinnedVisible, factoryVis.isHubTabVisible, shellRole]);
+  }, [factorySections, factoryIsPinnedVisible, factoryIsHubTabVisible, shellRole]);
 
   const propertiesPages = useMemo(
     () =>

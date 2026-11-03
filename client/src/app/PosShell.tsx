@@ -87,9 +87,10 @@ export function PosShell({
   const primaryNavItems = posNavItems.filter((item) => item.group === "primary");
   const toolNavItems = posNavItems.filter((item) => item.group === "tools");
   const [toolsExpanded, setToolsExpanded] = useState(false);
+  const toolsActive = toolNavItems.some((item) => item.active);
   useEffect(() => {
-    if (toolNavItems.some((item) => item.active)) setToolsExpanded(true);
-  }, [currentLocation, selectedCompany?.id]);
+    if (toolsActive) setToolsExpanded(true);
+  }, [toolsActive, currentLocation, selectedCompany?.id]);
 
   const posStyle = { "--sidebar-width": "14rem", "--sidebar-width-icon": "3.5rem" };
   const isFullHeightRoute =

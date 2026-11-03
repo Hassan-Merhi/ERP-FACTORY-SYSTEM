@@ -55,7 +55,7 @@ describe("Mobile repair Phase 1 critical flows", () => {
     expect(list).toContain("flex h-full w-80 shrink-0 flex-col overflow-hidden");
     expect(list).toContain("max-md:max-h-[min(42dvh,22rem)] max-md:w-full max-md:flex-none");
     expect(list).toContain("max-md:max-h-[min(42dvh,22rem)]");
-    expect(statement).toContain("p-6 space-y-5 max-w-5xl max-md:p-3");
+    expect(statement).toContain("lg:p-6 max-md:rounded-none max-md:border-0 max-md:p-3");
     expect(list).toContain('data-testid="button-add-agent"');
     expect(statement).toContain('data-testid="text-agent-account-name"');
   });
