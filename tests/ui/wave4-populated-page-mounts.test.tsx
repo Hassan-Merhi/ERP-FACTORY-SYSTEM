@@ -53,7 +53,24 @@ const PAGES: PageCase[] = [
     landmark: "input-update-stock-names-file",
   },
   { name: "AccountGroups", load: () => import("@/pages/AccountGroups"), landmark: "button-mode-display-groups" },
-  { name: "AccountMigration", load: () => import("@/pages/AccountMigration"), landmark: "select-source-company" },
+  {
+    name: "AccountMigration",
+    load: () => import("@/pages/AccountMigration"),
+    landmark: "select-source-company",
+    // Saved moves are listed with the accounts they moved.
+    fetchOverrides: {
+      "/api/admin/account-migration/pending": () => [
+        {
+          migrationId: "mig-1",
+          srcCompanyId: 1,
+          destCompanyId: 2,
+          accountIds: [11],
+          movedVoucherIds: [21],
+          accounts: [{ accountId: 11, originalCode: "1100", finalCode: "1100-M" }],
+        },
+      ],
+    },
+  },
   {
     name: "AiValidationPage",
     load: () => import("@/pages/AiValidationPage"),

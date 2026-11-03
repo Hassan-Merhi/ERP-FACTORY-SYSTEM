@@ -278,27 +278,8 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
         if (!isPinnedVisible({ url: item.url })) return false;
         if (item.hideKey && myAccess?.hiddenCostFields?.includes(item.hideKey)) return false;
 
-        // Relocate lower-traffic specialty pages into their owning workflow.
-        // Keep the standalone link if the user cannot open any parent page.
-        const relatedParentVisible = (url: string) => isPinnedVisible({ url });
-        // Contacts must remain directly reachable when the Parties hub has no
-        // visible tabs; otherwise the hub returns before rendering related links.
-        const partiesHasVisibleTab =
-          !myAccess?.hiddenCostFields?.includes("hide_tab_parties_customers") ||
-          !myAccess?.hiddenCostFields?.includes("hide_tab_parties_suppliers");
-        if (item.accessKey === "factory/contacts" && partiesHasVisibleTab && relatedParentVisible("/factory/parties")) {
-          return false;
-        }
-        if (item.accessKey === "factory/cost-centers" && relatedParentVisible("/factory/accounts")) return false;
-        if (item.accessKey === "factory/sheets-sacks" && relatedParentVisible("/factory/location-inventory")) {
-          return false;
-        }
-        if (
-          item.accessKey === "factory/stock-allocation-v5" &&
-          (relatedParentVisible("/factory/location-inventory") || relatedParentVisible("/factory/containers-hub"))
-        ) {
-          return false;
-        }
+        // Preserve all authorized pages in the sidebar, including those accessible
+        // from a parent hub. Visibility remains controlled by the access registry.
         return true;
       }),
     }))

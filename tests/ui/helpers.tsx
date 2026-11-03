@@ -48,7 +48,11 @@ export function renderWithProviders(ui: React.ReactElement, options: RenderWithP
   );
 }
 
-/** Stub fetch so any useQuery that actually fires returns an empty payload. */
+/**
+ * Stub fetch so any useQuery that actually fires returns an empty payload.
+ * Prefer installFakeApi() from ./fakeApi in new tests: it serves per-route data
+ * and errors, so loaded and failure states get exercised too.
+ */
 export function stubFetch(): void {
   (global as any).fetch = vi.fn().mockResolvedValue({
     ok: true,

@@ -121,6 +121,7 @@ export const OPERATIONAL_ROUTE_PERMISSIONS: Readonly<Record<OperationalPermissio
     "POST /api/factory/import/bales",
     "POST /api/factory/import/opening-raw-stock",
     "POST /api/factory/customer-orders/:id/bales/bulk-import",
+    "POST /api/factory/customer-orders/:id/container-extra-items/import",
     "POST /api/factory/import-company-data",
     "POST /api/suppliers/:supplierId/proformas/:proformaId/import-lines",
     "POST /api/containers/:containerId/import-loaded-items",

@@ -29,13 +29,15 @@ function page(items: Array<{ id: number }>, pageNumber: number, totalPages: numb
 
 describe("factory daybook pagination client", () => {
   let fetchAllDaybookEntries: typeof import("../../client/src/lib/daybookPaginationClient").fetchAllDaybookEntries;
+  let getDaybookPaginationProgress: typeof import("../../client/src/lib/daybookPaginationClient").getDaybookPaginationProgress;
 
   beforeAll(async () => {
     vi.useFakeTimers();
     history.replaceState({}, "", "/factory/daybook");
     window.__erpDaybookPaginationInstalled = undefined;
     window.fetch = harness.previousFetch;
-    ({ fetchAllDaybookEntries } = await import("../../client/src/lib/daybookPaginationClient"));
+    ({ fetchAllDaybookEntries, getDaybookPaginationProgress } =
+      await import("../../client/src/lib/daybookPaginationClient"));
   });
 
   beforeEach(() => {
@@ -43,6 +45,19 @@ describe("factory daybook pagination client", () => {
     harness.previousFetch.mockReset();
     harness.invalidateQueries.mockReset();
     history.replaceState({}, "", "/factory/daybook");
+  });
+
+  it("reports the rows loaded so far through the progress snapshot", async () => {
+    harness.previousFetch
+      .mockResolvedValueOnce(page([{ id: 1 }], 1, 2, 2))
+      .mockResolvedValueOnce(page([{ id: 2 }], 2, 2, 2));
+
+    await window.fetch("/api/factory/daybook?txType=PROGRESS");
+    expect(getDaybookPaginationProgress()).toEqual({ loaded: 1, total: 2 });
+
+    await vi.advanceTimersByTimeAsync(0);
+    await window.fetch("/api/factory/daybook?txType=PROGRESS");
+    expect(getDaybookPaginationProgress()).toEqual({ loaded: 2, total: 2 });
   });
 
   it("loads every server-filtered page only for an explicit full-data action", async () => {
@@ -64,14 +79,16 @@ describe("factory daybook pagination client", () => {
 
   it("does not resolve a full Daybook read until every matching row has arrived", async () => {
     let resolveLastPage!: (response: Response) => void;
-    const lastPage = new Promise<Response>((resolve) => { resolveLastPage = resolve; });
-    harness.previousFetch
-      .mockResolvedValueOnce(page([{ id: 1 }], 1, 2, 2, 250))
-      .mockReturnValueOnce(lastPage);
+    const lastPage = new Promise<Response>((resolve) => {
+      resolveLastPage = resolve;
+    });
+    harness.previousFetch.mockResolvedValueOnce(page([{ id: 1 }], 1, 2, 2, 250)).mockReturnValueOnce(lastPage);
 
     let settled = false;
-    const complete = fetchAllDaybookEntries(new URLSearchParams({ startDate: "2026-10-31" }))
-      .then((rows) => { settled = true; return rows; });
+    const complete = fetchAllDaybookEntries(new URLSearchParams({ startDate: "2026-10-31" })).then((rows) => {
+      settled = true;
+      return rows;
+    });
 
     // First page data never escapes to the consumer as a partial result.
     await Promise.resolve();
@@ -212,6 +229,117 @@ describe("factory daybook pagination client", () => {
     await window.fetch("/api/factory/daybook");
 
     expect(harness.previousFetch.mock.calls.every(([url]) => !String(url).includes("pagination=1"))).toBe(true);
+  });
+
+  it("reports why a full export failed, on the first page or a later one", async () => {
+    const params = new URLSearchParams();
+    const failed = (body: string, status = 500) => new Response(body, { status });
+
+    harness.previousFetch.mockResolvedValueOnce(failed(JSON.stringify({ message: "Too many rows" })));
+    await expect(fetchAllDaybookEntries(params)).rejects.toThrow("Too many rows");
+
+    harness.previousFetch.mockResolvedValueOnce(failed("gateway down"));
+    await expect(fetchAllDaybookEntries(params)).rejects.toThrow("Failed to load complete daybook data");
+
+    harness.previousFetch
+      .mockResolvedValueOnce(page([{ id: 1 }], 1, 3, 3, 250))
+      .mockResolvedValueOnce(page([{ id: 2 }], 2, 3, 3, 250))
+      .mockResolvedValueOnce(failed("{}"));
+    await expect(fetchAllDaybookEntries(params)).rejects.toThrow("Failed to load daybook page 3");
+
+    harness.previousFetch
+      .mockResolvedValueOnce(page([{ id: 1 }], 1, 2, 2, 250))
+      .mockResolvedValueOnce(failed(JSON.stringify({ message: "Page gone" }), 404));
+    await expect(fetchAllDaybookEntries(params)).rejects.toThrow("Page gone");
+  });
+
+  it("refuses pages without rows and treats a missing page count as one page", async () => {
+    // Since #2784 an export never renders an incomplete list: a page without
+    // rows is an error, not an empty page.
+    harness.previousFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ items: null }), { status: 200, headers: { "Content-Type": "application/json" } })
+    );
+    await expect(fetchAllDaybookEntries(new URLSearchParams())).rejects.toThrow(
+      "Incomplete daybook response: first page is missing"
+    );
+
+    harness.previousFetch
+      .mockResolvedValueOnce(page([{ id: 1 }], 1, 2, 2, 250))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ page: 2 }), { status: 200 }));
+    await expect(fetchAllDaybookEntries(new URLSearchParams())).rejects.toThrow(
+      "Incomplete daybook response on page 2"
+    );
+    expect(harness.previousFetch).toHaveBeenCalledTimes(3);
+
+    harness.previousFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ items: [{ id: 1 }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+    await expect(fetchAllDaybookEntries(new URLSearchParams())).resolves.toEqual([{ id: 1 }]);
+    expect(harness.previousFetch).toHaveBeenCalledTimes(4);
+  });
+
+  it("recovers from a network error, a refused page or an unreadable one", async () => {
+    const requestedPage = (call: number) =>
+      new URL(String(harness.previousFetch.mock.calls[call][0]), "http://x").searchParams.get("page");
+    harness.previousFetch.mockResolvedValueOnce(page([{ id: 41 }], 1, 3, 205));
+    await window.fetch("/api/factory/daybook?txType=RETRY");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(harness.invalidateQueries).toHaveBeenCalledOnce();
+
+    harness.previousFetch.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    await expect(window.fetch("/api/factory/daybook?txType=RETRY")).rejects.toThrow("Failed to fetch");
+    expect(requestedPage(1)).toBe("2");
+
+    // After a failure the next request starts again from page 1.
+    harness.previousFetch.mockResolvedValueOnce(new Response("{}", { status: 503 }));
+    const refused = await window.fetch("/api/factory/daybook?txType=RETRY");
+    expect(refused.status).toBe(503);
+    expect(requestedPage(2)).toBe("1");
+
+    harness.previousFetch.mockResolvedValueOnce(new Response("not json", { status: 200 }));
+    const unreadable = await window.fetch("/api/factory/daybook?txType=RETRY");
+    expect(await unreadable.text()).toBe("not json");
+
+    harness.previousFetch.mockResolvedValueOnce(new Response(JSON.stringify({ rows: [] }), { status: 200 }));
+    const unpaged = await window.fetch("/api/factory/daybook?txType=RETRY");
+    expect(await unpaged.json()).toEqual({ rows: [] });
+
+    harness.previousFetch.mockResolvedValueOnce(page([{ id: 41 }], 1, 3, 205));
+    await window.fetch("/api/factory/daybook?txType=RETRY");
+    harness.invalidateQueries.mockReset();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(harness.invalidateQueries).toHaveBeenCalledOnce();
+  });
+
+  it("keeps each entry once when pages overlap", async () => {
+    harness.previousFetch
+      .mockResolvedValueOnce(page([{ id: 51 }, { id: 52 }], 1, 2, 3))
+      .mockResolvedValueOnce(page([{ id: 52 }, { id: 53 }], 2, 2, 3));
+
+    await window.fetch("/api/factory/daybook?txType=OVERLAP");
+    await vi.advanceTimersByTimeAsync(0);
+    const merged = await window.fetch("/api/factory/daybook?txType=OVERLAP");
+
+    expect((await merged.json()).map((entry: { id: number }) => entry.id)).toEqual([51, 52, 53]);
+  });
+
+  it("drops a pending background page after leaving the daybook", async () => {
+    harness.previousFetch.mockResolvedValueOnce(page([{ id: 61 }], 1, 3, 205));
+    await window.fetch("/api/factory/daybook?txType=LEAVE");
+
+    history.pushState({}, "", "/dashboard");
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(harness.invalidateQueries).not.toHaveBeenCalled();
+
+    // Coming back starts from page 1; the abandoned progress is not resumed.
+    history.pushState({}, "", "/factory/daybook");
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(harness.invalidateQueries).not.toHaveBeenCalled();
   });
 });
 

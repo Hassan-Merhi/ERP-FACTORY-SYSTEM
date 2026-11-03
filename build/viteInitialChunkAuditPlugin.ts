@@ -27,6 +27,7 @@ const HEAVY_STARTUP_MODULE_MARKERS = [
   "/node_modules/pdfkit/",
   "/node_modules/pdf-parse/",
   "/node_modules/html2canvas/",
+  "/node_modules/html2canvas-pro/",
   "/node_modules/recharts/",
   "/node_modules/d3-",
   "/node_modules/victory-vendor/",

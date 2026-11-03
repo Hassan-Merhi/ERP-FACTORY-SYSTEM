@@ -13,6 +13,66 @@
       "status": 200,
       "shape": "{fixable:[],unknown:[]}"
     },
+    "/api/accounting/cash-bank/accounts": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/accounting/cash-bank/statements": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/accounting/consolidation/companies": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/accounting/consolidation/report": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/accounting/consolidation/transfers": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/accounting/erp-inventory/audit": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/accounting/erp-inventory/readiness": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/accounting/factory-production/audit": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/accounting/fiscal-review/audit": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/accounting/fiscal-review/equity-accounts": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/accounting/fiscal-review/history": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/accounting/fiscal-review/policy": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/accounting/fiscal-review/readiness": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/accounting/history/erp-stock": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/accounting/history/report": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
     "/api/accounting/integrity": {
       "status": 200,
       "shape": "{checks:[{amount:scalar,count:scalar,explanation:scalar,key:scalar,samples:[],status:scalar}],companyId:scalar,generatedAt:scalar,status:scalar,trialBalance:{balanced:scalar,differenceComponents:{openingBalances:scalar,otherUnbalancedVouchers:scalar,singleSidedStockVouchers:scalar},unexplainedDifference:scalar}}"
@@ -20,6 +80,30 @@
     "/api/accounting/legacy-equity-plug/plan": {
       "status": 200,
       "shape": "{blockers:[scalar],companyId:scalar,liveImportCycleDifference:scalar,planHash:scalar,settingKey:scalar,stored:scalar,storedValue:scalar}"
+    },
+    "/api/accounting/monetary-fx/cash-bank": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/accounting/monetary-fx/rate": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/accounting/monetary-fx/rates": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/accounting/monetary-fx/realized": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/accounting/open-items": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/accounting/open-items/rentals": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
     },
     "/api/accounting/perpetual-inventory/opening-plan": {
       "status": 200,
@@ -45,6 +129,22 @@
       "status": 403,
       "shape": "{message:scalar}"
     },
+    "/api/accounting/rentals/contracts": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/accounting/rollout/policy": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/accounting/rollout/readiness": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/accounting/statements/professional": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
     "/api/accounting/stock-adjustment-inventory-mirror-reversal/plan": {
       "status": 200,
       "shape": "{alreadyReversed:[],blockers:[scalar],companyId:scalar,offsetAccount:{action:scalar,code:scalar,id:scalar},override:{allowNonSupplierPartner:scalar,reason:scalar},planHash:scalar,skipped:[],supplierPartner:scalar,total:{inventoryCredit:scalar,inventoryDebit:scalar,lines:scalar,vouchers:scalar},voucherDate:scalar,vouchers:[]}"
@@ -61,17 +161,33 @@
       "status": 200,
       "shape": "{asOf:scalar,balanced:scalar,companyId:scalar,differenceComponents:{openingBalances:scalar,otherUnbalancedVouchers:scalar,singleSidedStockVouchers:scalar},openingSidesAssumed:scalar,rows:[],totals:{closingCredit:scalar,closingDebit:scalar,openingCredit:scalar,openingDebit:scalar,periodCredit:scalar,periodDebit:scalar},unexplainedDifference:scalar}"
     },
+    "/api/accounting/unified-dashboard": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
     "/api/accounts/all": {
       "status": 200,
-      "shape": "{accounts:[{accountId:scalar,accountType:scalar,active:scalar,balance:scalar,balanceSide:scalar,code:scalar,id:scalar,name:scalar,openingBalance:scalar,openingBalanceSide:scalar,parentId:scalar,subType:scalar,type:scalar}],allPosted:scalar,asOfDate:scalar}"
+      "shape": "{accounts:[{accountId:scalar,accountType:scalar,active:scalar,balance:scalar,balanceSide:scalar,code:scalar,currencyRevalued:scalar,currentTranslatedUsd:scalar,historicalBalanceUsd:scalar,id:scalar,name:scalar,nativeBalancesByCurrency:{…},openingBalance:scalar,openingBalanceSide:scalar,parentId:scalar,subType:scalar,type:scalar}],allPosted:scalar,asOfDate:scalar}"
     },
     "/api/accounts/all-ledger": {
       "status": 200,
       "shape": "[{accountId:scalar,balance:scalar,code:scalar,id:scalar,name:scalar}]"
     },
+    "/api/accounts/display-layout": {
+      "status": 200,
+      "shape": "{nodes:[{key:scalar,name:scalar,order:scalar,parentKey:scalar,type:scalar}]}"
+    },
     "/api/accounts/multi-currency/cash-bank-revaluation": {
       "status": 200,
       "shape": "{accounts:[{accountKind:scalar,accountType:scalar,code:scalar,currentCfaPerUsd:scalar,currentRateMissing:scalar,currentTranslatedBaseBalance:scalar,currentZmwPerUsd:scalar,historicalBaseBalance:scalar,id:scalar,linkedLedgerId:scalar,name:scalar,nativeBalancesByCurrency:{…},openingBalanceCurrencyUnresolved:scalar,totalsProvisional:scalar,translationDifference:scalar,unresolvedLegacyEntryCount:scalar,unresolvedLegacyNetRaw:scalar,unresolvedOpeningBalanceRaw:scalar,unresolvedTranslationCurrencies:[]}],currentCfaPerUsd:scalar,currentZmwPerUsd:scalar,unresolvedAccountCount:scalar}"
+    },
+    "/api/accounts/multi-currency/monetary-valuation": {
+      "status": 200,
+      "shape": "{accounts:[{accountKey:scalar,accountKind:scalar,bookClosingUsd:scalar,category:scalar,code:scalar,currentTranslatedUsd:scalar,deleted:scalar,eligibility:scalar,historicalBaseUsd:scalar,id:scalar,linkedLedgerId:scalar,name:scalar,nativeBalancesByCurrency:{…},openingBookMismatch:scalar,provisional:scalar,translationDifferenceUsd:scalar,unresolvedCurrencies:[],unresolvedEntryCount:scalar,unresolvedOpening:scalar}],baseCurrency:scalar,bookBalancesModified:scalar,businessDate:scalar,companyId:scalar,eligibleAccountCount:scalar,excludedLedgerAndPartyCounts:{customerLinkedLedgerMasters:scalar,excludedMasters:scalar},fxVouchersPosted:scalar,needsReviewCount:scalar,rateErrorsByCurrency:{},rates:[],unresolvedAccountCount:scalar,valuationMode:scalar}"
+    },
+    "/api/accounts/multi-currency/rates-as-of": {
+      "status": 400,
+      "shape": "{code:scalar,message:scalar}"
     },
     "/api/accounts/multi-currency/readiness": {
       "status": 200,
@@ -277,6 +393,54 @@
       "status": 200,
       "shape": "[]"
     },
+    "/api/cost-centers": {
+      "status": 200,
+      "shape": "{costCenters:[]}"
+    },
+    "/api/cost-centers/automation/accounts": {
+      "status": 200,
+      "shape": "{accounts:[]}"
+    },
+    "/api/cost-centers/automation/failures": {
+      "status": 200,
+      "shape": "{failures:[]}"
+    },
+    "/api/cost-centers/automation/rules": {
+      "status": 200,
+      "shape": "{rules:[]}"
+    },
+    "/api/cost-centers/budgets": {
+      "status": 200,
+      "shape": "{budgets:[]}"
+    },
+    "/api/cost-centers/historical/batches": {
+      "status": 200,
+      "shape": "{batches:[]}"
+    },
+    "/api/cost-centers/historical/reconciliation": {
+      "status": 400,
+      "shape": "{message:scalar}"
+    },
+    "/api/cost-centers/release-readiness": {
+      "status": 200,
+      "shape": "{companyId:scalar,migrationTagsInRequiredOrder:[scalar],missingFunctions:[],missingTriggers:[],structuralReady:scalar,tables:[{exists:scalar,forceRls:scalar,name:scalar,rlsEnabled:scalar}],warning:scalar}"
+    },
+    "/api/cost-centers/reports/activity": {
+      "status": 200,
+      "shape": "{activity:[],limit:scalar,offset:scalar}"
+    },
+    "/api/cost-centers/reports/consolidated": {
+      "status": 200,
+      "shape": "{accounts:[],centers:[],companyIds:[scalar],currency:scalar,departments:[],months:[],period:{budgetBasis:scalar,from:scalar,to:scalar},scope:scalar,totals:{budget:scalar,entries:scalar,expense:scalar,inventoryCost:scalar,recognizedExpense:scalar,unallocated:scalar,unallocatedApplicable:scalar,variance:scalar}}"
+    },
+    "/api/cost-centers/reports/consolidated/activity": {
+      "status": 200,
+      "shape": "{activity:[],limit:scalar,offset:scalar}"
+    },
+    "/api/cost-centers/reports/summary": {
+      "status": 200,
+      "shape": "{accounts:[],centers:[],companyIds:[scalar],currency:scalar,departments:[],months:[],period:{budgetBasis:scalar,from:scalar,to:scalar},scope:scalar,totals:{budget:scalar,entries:scalar,expense:scalar,inventoryCost:scalar,recognizedExpense:scalar,unallocated:scalar,unallocatedApplicable:scalar,variance:scalar}}"
+    },
     "/api/customers": {
       "status": 200,
       "shape": "[]"
@@ -369,6 +533,14 @@
       "status": 400,
       "shape": "{message:scalar}"
     },
+    "/api/factory/account-display-layout": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/accounts/list": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
     "/api/factory/admin/other-charges-currency-preview": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
@@ -425,6 +597,14 @@
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
+    "/api/factory/analytics/direct-expenses": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/analytics/indirect-expenses": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
     "/api/factory/analytics/pos-summary": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
@@ -450,6 +630,10 @@
       "shape": "{code:scalar,message:scalar}"
     },
     "/api/factory/automatic-priority-mode": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/bale-cost/historical-sold-audit": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
@@ -549,6 +733,10 @@
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
+    "/api/factory/container-import-credit-preview": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
     "/api/factory/containers": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
@@ -562,6 +750,54 @@
       "shape": "{code:scalar,message:scalar}"
     },
     "/api/factory/containers/freight-status": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/cost-centers": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/cost-centers/automation/accounts": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/cost-centers/automation/failures": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/cost-centers/automation/rules": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/cost-centers/budgets": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/cost-centers/historical/batches": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/cost-centers/historical/reconciliation": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/cost-centers/release-readiness": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/cost-centers/reports/activity": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/cost-centers/reports/consolidated": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/cost-centers/reports/consolidated/activity": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/cost-centers/reports/summary": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
@@ -629,6 +865,10 @@
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
+    "/api/factory/daybook/loading-amounts": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
     "/api/factory/dispatch-batches": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
@@ -666,6 +906,10 @@
       "shape": "{code:scalar,message:scalar}"
     },
     "/api/factory/french-catalog": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/fx-agent-wallets": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
@@ -709,6 +953,10 @@
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
+    "/api/factory/mix-batches/cost-sources": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
     "/api/factory/monthly-salary-summary": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
@@ -722,6 +970,10 @@
       "shape": "{code:scalar,message:scalar}"
     },
     "/api/factory/net-position/payroll-breakdown": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/non-bale-priority-items": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
@@ -745,23 +997,7 @@
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
-    "/api/factory/pressing-machines": {
-      "status": 403,
-      "shape": "{code:scalar,message:scalar}"
-    },
-    "/api/factory/pressing-machines/analytics": {
-      "status": 403,
-      "shape": "{code:scalar,message:scalar}"
-    },
     "/api/factory/pressing-machines/corrections": {
-      "status": 403,
-      "shape": "{code:scalar,message:scalar}"
-    },
-    "/api/factory/pressing-machines/downtime": {
-      "status": 403,
-      "shape": "{code:scalar,message:scalar}"
-    },
-    "/api/factory/pressing-machines/history": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
@@ -773,6 +1009,10 @@
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
+    "/api/factory/pressing-machines/report/hourly-targets": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
     "/api/factory/pressing-machines/report/options": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
@@ -781,11 +1021,7 @@
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
-    "/api/factory/pressing-machines/shifts": {
-      "status": 403,
-      "shape": "{code:scalar,message:scalar}"
-    },
-    "/api/factory/pressing-machines/shifts/current": {
+    "/api/factory/pressing-machines/report/worker-totals": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
@@ -794,6 +1030,62 @@
       "shape": "{code:scalar,message:scalar}"
     },
     "/api/factory/production-summary": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/production-target-bonuses/category-evidence": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/production-target-bonuses/category-preview": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/production-target-bonuses/category-rates": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/production-target-bonuses/category-reviews": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/production-target-bonuses/checkout": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/production-target-bonuses/checkout/manual-payments": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/production-target-bonuses/preview": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/production-target-bonuses/report": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/production-target-bonuses/settings": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/production-target-bonuses/weekly-method": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/production-target-bonuses/weekly-payments": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/production-target-bonuses/weekly-preview": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/production-target-bonuses/weekly-reconciliation": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/production-target-bonuses/weekly-reviews": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
@@ -833,6 +1125,10 @@
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
+    "/api/factory/raw-stock/fixed-production-planner": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
     "/api/factory/raw-stock/post-offload/readiness": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
@@ -869,6 +1165,10 @@
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
+    "/api/factory/scheduled-containers": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
     "/api/factory/settings": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
@@ -898,6 +1198,18 @@
       "shape": "{code:scalar,message:scalar}"
     },
     "/api/factory/staff-tracking": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/staff-tracking/production-bonuses": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/staff-tracking/production-bonuses/payment-accounts": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/staff-tracking/production-bonuses/payments": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
@@ -934,6 +1246,10 @@
       "shape": "{code:scalar,message:scalar}"
     },
     "/api/factory/stock-entry/production-session": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/factory/stock-query-report": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
@@ -1161,10 +1477,6 @@
       "status": 200,
       "shape": "{ok:scalar,ts:scalar}"
     },
-    "/api/health/db": {
-      "status": 200,
-      "shape": "{message:scalar,status:scalar}"
-    },
     "/api/insurance/admin/journal-direction/plan": {
       "status": 403,
       "shape": "{message:scalar}"
@@ -1341,6 +1653,10 @@
       "status": 200,
       "shape": "[]"
     },
+    "/api/pos-transfer-approval/queue": {
+      "status": 403,
+      "shape": "{message:scalar}"
+    },
     "/api/pos-transfer-detail": {
       "status": 400,
       "shape": "{message:scalar}"
@@ -1389,6 +1705,10 @@
       "status": 409,
       "shape": "{message:scalar}"
     },
+    "/api/pos/retail/payment-accounts": {
+      "status": 409,
+      "shape": "{message:scalar}"
+    },
     "/api/pos/retail/promotions/active": {
       "status": 409,
       "shape": "{message:scalar}"
@@ -1405,11 +1725,19 @@
       "status": 409,
       "shape": "{message:scalar}"
     },
+    "/api/pos/retail/shift-ledger-balance": {
+      "status": 409,
+      "shape": "{message:scalar}"
+    },
     "/api/pos/retail/stock-counts": {
       "status": 409,
       "shape": "{message:scalar}"
     },
     "/api/pos/retail/stock-counts/report": {
+      "status": 409,
+      "shape": "{message:scalar}"
+    },
+    "/api/pos/retail/transfers/workflow": {
       "status": 409,
       "shape": "{message:scalar}"
     },
@@ -1569,6 +1897,10 @@
       "status": 403,
       "shape": "{message:scalar}"
     },
+    "/api/retail/catalog-navigation": {
+      "status": 403,
+      "shape": "{message:scalar}"
+    },
     "/api/retail/financial/accounts": {
       "status": 409,
       "shape": "{message:scalar}"
@@ -1631,6 +1963,10 @@
     },
     "/api/retail/styles": {
       "status": 409,
+      "shape": "{message:scalar}"
+    },
+    "/api/retail/supplier-import/history": {
+      "status": 403,
       "shape": "{message:scalar}"
     },
     "/api/salary-advance-deductions": {
@@ -1701,6 +2037,14 @@
       "status": 200,
       "shape": "[]"
     },
+    "/api/settings/pos-transfer-approval": {
+      "status": 200,
+      "shape": "{groupId:scalar,groups:[],userId:scalar,users:[]}"
+    },
+    "/api/settings/pos-transfer-approval/delivery-health": {
+      "status": 200,
+      "shape": "{delegateConfigured:scalar,groupConfigured:scalar,groupName:scalar,groupVisible:scalar,note:scalar,ready:scalar,whatsappState:scalar}"
+    },
     "/api/settings/role-permissions": {
       "status": 200,
       "shape": "[]"
@@ -1758,6 +2102,10 @@
       "shape": "{message:scalar}"
     },
     "/api/sp/golden-coast/phase9/hassan-savings-withdrawal/readiness": {
+      "status": 403,
+      "shape": "{message:scalar}"
+    },
+    "/api/sp/golden-coast/profit-correction": {
       "status": 403,
       "shape": "{message:scalar}"
     },
@@ -1859,7 +2207,7 @@
     },
     "/api/stats/monthly-data": {
       "status": 200,
-      "shape": "[{month:scalar,profit:scalar,sales:scalar}]"
+      "shape": "[{month:scalar,profit:scalar,sales:scalar,yearMonth:scalar}]"
     },
     "/api/stats/net-profit": {
       "status": 200,
@@ -1921,6 +2269,10 @@
       "status": 200,
       "shape": "[{active:scalar,code:scalar,currentQty:scalar,currentValue:scalar,id:scalar,name:scalar,openingQty:scalar,openingRate:scalar,openingValue:scalar,sellingPrice:scalar,stockGroupCode:scalar,stockGroupId:scalar,stockGroupName:scalar,uom:scalar}]"
     },
+    "/api/stock-transfer-order/whatsapp-groups": {
+      "status": 200,
+      "shape": "{connected:scalar,groups:[]}"
+    },
     "/api/stock-transfers": {
       "status": 400,
       "shape": "{message:scalar}"
@@ -1942,6 +2294,14 @@
       "shape": "{message:scalar}"
     },
     "/api/supplier-profit-check/po-overrides": {
+      "status": 400,
+      "shape": "{message:scalar}"
+    },
+    "/api/supplier-profit-reconciliation/options": {
+      "status": 200,
+      "shape": "{groups:[{id:scalar,name:scalar}],suppliers:[]}"
+    },
+    "/api/supplier-profit-reconciliation/report": {
       "status": 400,
       "shape": "{message:scalar}"
     },
@@ -2020,6 +2380,14 @@
     "/api/whatsapp/instance-state/pos": {
       "status": 200,
       "shape": "{state:scalar}"
+    },
+    "/api/whatsapp/message-schedules": {
+      "status": 200,
+      "shape": "[]"
+    },
+    "/api/whatsapp/message-schedules/history": {
+      "status": 200,
+      "shape": "[]"
     },
     "/api/whatsapp/np-settings": {
       "status": 200,

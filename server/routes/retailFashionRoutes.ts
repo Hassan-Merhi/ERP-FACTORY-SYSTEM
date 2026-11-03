@@ -106,7 +106,7 @@ const labelRequestSchema = z.object({
 });
 
 async function loadLabelRows(companyId: number, variantIds: number[]) {
-  return db
+  const rows = await db
     .select({
       variantId: retailProductVariants.id,
       productId: retailProducts.id,
@@ -124,6 +124,10 @@ async function loadLabelRows(companyId: number, variantIds: number[]) {
     .innerJoin(retailProducts, eq(retailProducts.id, retailProductVariants.productId))
     .leftJoin(retailBrands, eq(retailBrands.id, retailProducts.brandId))
     .where(and(eq(retailProductVariants.companyId, companyId), inArray(retailProductVariants.id, variantIds)));
+  // Labels print in the order the caller listed the variants, not in whatever
+  // order the database returns them.
+  const position = new Map(variantIds.map((id, index) => [id, index]));
+  return rows.sort((a, b) => (position.get(a.variantId) ?? 0) - (position.get(b.variantId) ?? 0));
 }
 
 export function registerRetailFashionRoutes(app: Express): void {

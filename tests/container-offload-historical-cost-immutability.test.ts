@@ -17,12 +17,11 @@ describe("container offload historical cost immutability", () => {
     }
   });
 
-  it("blocks manual current-average repricing and keeps the compatibility sync read-only for sales", () => {
+  it("blocks manual current-average repricing of posted sales", () => {
+    // The no-op syncSalesItemCosts.ts compatibility shim had no callers and was removed.
     const statsRoute = source("server/routes/stats/statsSalesRoutes.ts");
-    const syncService = source("server/services/syncSalesItemCosts.ts");
 
     expect(statsRoute).toContain("HISTORICAL_SALE_COST_IMMUTABLE");
     expect(statsRoute).not.toContain(".update(salesItems)");
-    expect(syncService).not.toContain(".update(salesItems)");
   });
 });

@@ -76,19 +76,47 @@ async function login(page) {
 }
 
 async function selectFixtureCompany(page, code) {
-  await page.evaluate(async (companyCode) => {
+  const selectedId = await page.evaluate(async (companyCode) => {
     const r = await fetch("/api/user/companies", { credentials: "include", cache: "no-store" });
     if (!r.ok) throw new Error("Could not read fixture company assignments.");
     const companies = await r.json();
     const company = companies.find((row) => row.companyCode === companyCode);
-    if (!company?.companyId) throw new Error("Fixture company unavailable: " + companyCode);
-    const change = await fetch("/api/auth/set-company", {
-      method: "POST", credentials: "include", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ companyId: company.companyId })
-    });
-    if (!change.ok) throw new Error("Unable to switch fixture company.");
-    localStorage.setItem("selectedCompanyId", String(company.companyId));
+    const companyId = Number(company?.companyId);
+    if (!Number.isInteger(companyId) || companyId <= 0) {
+      throw new Error("Fixture company unavailable: " + companyCode);
+    }
+    const session = await fetch("/api/auth/session-company", { credentials: "include", cache: "no-store" });
+    const active = session.ok ? await session.json().catch(() => ({})) : {};
+    if (Number(active.companyId) !== companyId) {
+      const change = await fetch("/api/auth/set-company", {
+        method: "POST", credentials: "include", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ companyId }),
+      });
+      if (!change.ok) throw new Error("Unable to switch fixture company (" + change.status + ").");
+    }
+    localStorage.setItem("selectedCompanyId", String(companyId));
+    return companyId;
   }, code);
+  // A direct session switch does not update React's mounted CompanyProvider.
+  // Reload on an ERP/Factory-neutral page before recording the target route.
+  // Otherwise the old company route guard redirects valid test pages away.
+  const bootstrap = await page.goto(base + "/my-settings", { waitUntil: "domcontentloaded", timeout });
+  if (bootstrap && !bootstrap.ok()) {
+    throw new Error("Company bootstrap failed (" + bootstrap.status() + ")");
+  }
+  await page.waitForSelector("#main-content", { visible: true, timeout });
+  await page.waitForFunction(
+    (expected) => localStorage.getItem("selectedCompanyId") === String(expected),
+    { timeout },
+    selectedId,
+  );
+  const sessionCompany = await page.evaluate(async () => {
+    const result = await fetch("/api/auth/session-company", { credentials: "include", cache: "no-store" });
+    if (!result.ok) throw new Error("Session company verification failed");
+    return Number((await result.json()).companyId);
+  });
+  if (sessionCompany !== selectedId) throw new Error("Fixture session company changed during bootstrap");
+  await delay(500);
 }
 
 async function recordOne(page, id, tour) {
@@ -109,11 +137,28 @@ async function recordOne(page, id, tour) {
   page.on("request", onRequest);
   try {
     const response = await page.goto(base + tour.route, { waitUntil: "domcontentloaded", timeout });
-    if (!response?.ok()) throw new Error("Page failed to load (" + response?.status() + ")");
+    // Puppeteer returns null for same-document navigations. The ERP uses client-side
+    // routing, so a null navigation response is not evidence that the page failed.
+    // Still reject real HTTP failures and verify the returned HTML, authenticated
+    // application shell, expected route, and meaningful visible page content.
+    if (response && !response.ok()) {
+      throw new Error("Page HTTP navigation failed (" + response.status() + ") at " + tour.route);
+    }
+    const http = await page.evaluate(async (route) => {
+      const result = await fetch(route, { credentials: "include", cache: "no-store", redirect: "manual" });
+      return { status: result.status, type: result.headers.get("content-type") || "" };
+    }, tour.route);
+    if (http.status !== 200 || !http.type.includes("text/html")) {
+      throw new Error("Training page GET failed (" + http.status + ", " + http.type + ") at " + tour.route);
+    }
     await page.waitForSelector("#main-content", { visible: true, timeout });
-    await delay(1600);
+    await page.waitForFunction(() => {
+      const main = document.querySelector("#main-content");
+      return Boolean(main && main.textContent && main.textContent.trim().length > 20);
+    }, { timeout });
     const actualPath = new URL(page.url()).pathname;
     if (actualPath !== tour.route) throw new Error("Unexpected redirect to " + actualPath + " for " + tour.route);
+    await delay(1600);
     const pageDetails = await page.evaluate(() => {
       const heading = document.querySelector("h1, h2");
       const tabs = Array.from(document.querySelectorAll("[role=tab]"))
@@ -143,10 +188,8 @@ async function recordOne(page, id, tour) {
         // Approved navigation-only interaction: inspect a different visible tab.
         // Never click Save, Finalize, Approve, Delete, Pay or other write controls.
         if (i === 1) {
-          const tabs = await page.$("[role=tab]:not([aria-selected=true]):not([disabled])");
-          if (tabs.length > 0) {
-            await tabs[0].click().catch(() => undefined);
-          }
+          const tab = await page.$("[role=tab]:not([aria-selected=true]):not([disabled])");
+          if (tab) await tab.click().catch(() => undefined);
         }
         await delay(2600);
         const end = Date.now() - started;

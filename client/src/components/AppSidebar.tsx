@@ -262,30 +262,11 @@ export function useErpVisibleSections(user?: SidebarUser): {
 
   const isDeveloper = (user?.currentRole ?? user?.role) === "Developer";
 
-  // Only suppress a standalone link when the user can actually open its parent hub.
-  // Users with narrowly granted permissions must retain their direct navigation fallback.
-  const isStandaloneNavVisible = (item: NavItem): boolean => {
-    if (!isItemVisible(item)) return false;
-    switch (item.url) {
-      case "/stock":
-        return !isItemVisible({ title: "Inventory", url: "/inventory", icon: Layers });
-      case "/optional-vouchers":
-        return !isItemVisible({ title: "Vouchers", url: "/vouchers", icon: Receipt });
-      case "/supplier-profit-check":
-        return !isItemVisible({ title: "Parties", url: "/parties", icon: Handshake });
-      case "/pos-item-replacement":
-        return !isItemVisible({ title: "Sales Tools", url: "/sales-tools", icon: LayoutGrid });
-      case "/stock-in-sales-report":
-      case "/item-market-analysis":
-        return !isItemVisible({ title: "Sales Report", url: "/sales-report", icon: PieChart });
-      default:
-        return true;
-    }
-  };
-
+  // Keep authorized standalone pages visible even when they also exist inside a hub.
+  // A hub must be an additional navigation path, not a replacement for existing tabs.
   const sections = ERP_NAV_SECTIONS.map((s) => ({
     ...s,
-    items: s.items.filter(isStandaloneNavVisible),
+    items: s.items.filter(isItemVisible),
   })).filter((s) => s.items.length > 0 && (!s.devOnly || isDeveloper));
 
   return {
