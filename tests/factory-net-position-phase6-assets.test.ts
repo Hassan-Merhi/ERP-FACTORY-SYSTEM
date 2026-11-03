@@ -29,22 +29,22 @@ describe("Factory Net Position Phase 6 historical worker advances", () => {
 });
 
 describe("Factory Net Position Phase 6 historical rent", () => {
-  it("preserves the existing per-contract absolute receivable/credit formula", () => {
+  it("separates prepaid rent from rent payable rather than summing absolute balances", () => {
     expect(
       sumRentalContractPositions([
         { expected: "200", paid: "150" },
         { expected: "100", paid: "120" },
       ])
-    ).toBe(70);
+    ).toEqual({ prepaidRent: 20, rentPayable: 50 });
   });
 
-  it("does not offset balances of different tenants before summing", () => {
+  it("does not offset prepaid rent and liabilities across contracts", () => {
     expect(
       sumRentalContractPositions([
         { expected: "100.00", paid: "0" },
         { expected: "0", paid: "100.00" },
       ])
-    ).toBe(200);
+    ).toEqual({ prepaidRent: 100, rentPayable: 100 });
   });
 
   it("uses decimal cents for full and partial rent payments", () => {
@@ -52,8 +52,22 @@ describe("Factory Net Position Phase 6 historical rent", () => {
       sumRentalContractPositions([
         { expected: "0.30", paid: "0.10" },
         { expected: "0.20", paid: "0.10" },
+        { expected: "0.10", paid: "0.50" },
       ])
-    ).toBe(0.3);
+    ).toEqual({ prepaidRent: 0.4, rentPayable: 0.3 });
+  });
+
+  it("matches the November 2026 Factory rent credit without adding the unpaid factory lease", () => {
+    expect(
+      sumRentalContractPositions([
+        { expected: "1800", paid: "1800" },
+        { expected: "10000", paid: "15000" },
+        { expected: "12000", paid: "18000" },
+        { expected: "2200", paid: "6600" },
+        { expected: "200000", paid: "180000" },
+        { expected: "2833.34", paid: "17000" },
+      ])
+    ).toEqual({ prepaidRent: 29566.66, rentPayable: 20000 });
   });
 });
 
