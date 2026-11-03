@@ -313,27 +313,41 @@ export default function useFactoryPayroll() {
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      const res = await fetch(`/api/factory/payroll/${id}`, { method: "DELETE", credentials: "include" });
+  // A paid record must first reverse its payment posting and then remove the
+  // generated draft. The undo API intentionally performs these as separate steps.
+  const deletePayrollCompletely = async (id: number) => {
+    const undo = async () => {
+      const res = await apiRequest("POST", `/api/factory/payroll/${id}/undo`);
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.message || "Failed to delete");
+        throw new Error(err.message || "Failed to reverse payroll");
       }
-      return res.json();
-    },
+      return res.json() as Promise<{ previousStatus: string }>;
+    };
+    const result = await undo();
+    if (result.previousStatus === "PAID") {
+      await undo();
+    }
+  };
+
+  const deleteMutation = useMutation({
+    mutationFn: deletePayrollCompletely,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/payrolls"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/daybook"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/advances"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/advances/unvouchered"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
-      toast({ title: "Draft payroll deleted" });
+      queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
+      toast({ title: "Payroll deleted", description: "Payment postings reversed, payroll removed, and advances restored." });
       setDeleteTargetId(null);
     },
     onError: (err: Error) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/payrolls"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/daybook"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
       if (err?._handledGlobally) return;
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Payroll deletion incomplete", description: err.message + ". Reload the payroll to see its current status before retrying.", variant: "destructive" });
     },
   });
 
@@ -368,11 +382,7 @@ export default function useFactoryPayroll() {
   const batchDeleteMutation = useMutation({
     mutationFn: async (group: PayrollGroup) => {
       for (const p of group.records) {
-        const res = await apiRequest("POST", `/api/factory/payroll/${p.id}/undo`);
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.message || "Failed to undo");
-        }
+        await deletePayrollCompletely(p.id);
       }
     },
     onSuccess: () => {
@@ -387,7 +397,10 @@ export default function useFactoryPayroll() {
     },
     onError: (err: Error) => {
       if (err?._handledGlobally) return;
-      toast({ title: "Batch delete failed", description: err.message, variant: "destructive" });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/payrolls"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/daybook"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
+      toast({ title: "Batch delete incomplete", description: err.message + ". Some records may already have been reversed; refresh before retrying.", variant: "destructive" });
     },
   });
 

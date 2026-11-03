@@ -95,6 +95,7 @@ export interface BatchRowProps {
   setFixAcctCashId: (v: string) => void;
   setFixAcctOpen: (v: boolean) => void;
   setUndoTargetId: (id: number) => void;
+  setDeleteTargetId: (id: number) => void;
   setDeleteBatchGroup: (g: PayrollGroup) => void;
   formatDisplayDate: (d: string | Date) => string;
   condensed?: boolean;
