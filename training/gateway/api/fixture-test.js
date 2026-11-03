@@ -40,7 +40,7 @@ export default {
         throw Error("untrusted signed Blob PUT destination");
       }
       const putResult = await fetch(putUrl, {
-        method: "PUT", body: fixture, headers: { "Content-Type": "video/webm", "x-content-type": "video/webm", "x-vercel-blob-access": "private", "x-add-random-suffix": "0", "x-allow-overwrite": "0" }, redirect: "error",
+        method: "PUT", body: fixture, headers: { "Content-Type": "video/webm", "x-content-type": "video/webm", "x-vercel-blob-access": "private", "x-vercel-blob-store-id": "TXyFGTsySrCeQhOj", "x-api-version": "12", "x-add-random-suffix": "0", "x-allow-overwrite": "0" }, redirect: "error",
       });
       report.uploadStatus = putResult.status;
       if (!putResult.ok) throw Error("signed upload rejected: HTTP " + putResult.status);

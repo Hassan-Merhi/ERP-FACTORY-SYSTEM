@@ -56,7 +56,7 @@ for (const [filename, ext, contentType, limit] of files) {
     throw new Error("Gateway returned an untrusted upload destination");
   }
   const upload = await fetch(url, {
-    method: "PUT", body: bytes, headers: { "Content-Type": contentType, "x-content-type": contentType, "x-vercel-blob-access": "private", "x-add-random-suffix": "0", "x-allow-overwrite": "0" }, redirect: "error",
+    method: "PUT", body: bytes, headers: { "Content-Type": contentType, "x-content-type": contentType, "x-vercel-blob-access": "private", "x-vercel-blob-store-id": "TXyFGTsySrCeQhOj", "x-api-version": "12", "x-add-random-suffix": "0", "x-allow-overwrite": "0" }, redirect: "error",
   });
   if (!upload.ok) throw new Error("Private storage rejected " + filename + ": HTTP " + upload.status);
   receipts.push({ key, bytes: bytes.length });
