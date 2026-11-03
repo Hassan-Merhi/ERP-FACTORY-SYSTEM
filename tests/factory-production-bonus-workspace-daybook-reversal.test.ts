@@ -21,7 +21,8 @@ describe("Production Bonuses dedicated page and audited Daybook deletion", () =>
     const targets = source("client/src/pages/factory/FactoryProductionTargets.tsx");
     const routes = source("client/src/components/FactoryRoutes.tsx");
     const workspace = source("client/src/pages/factory/FactoryProductionBonuses.tsx");
-    expectCode(targets, 'data-testid="button-open-production-bonuses"');
+    const launcher = source("client/src/pages/factory/productiontargets/ProductionBonusesLauncher.tsx");
+    expectCode(launcher, 'data-testid="button-open-production-bonuses"');
     expectCode(targets, 'navigate("/factory/production-bonuses?date=" + referenceDate)');
     expectNoCode(targets, "<ProductionTargetBonusPaymentsPanel");
     expectCode(routes, 'path="/factory/production-bonuses"');
