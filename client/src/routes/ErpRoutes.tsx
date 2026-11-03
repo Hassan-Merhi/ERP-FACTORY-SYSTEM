@@ -155,7 +155,14 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       <Route path="/">{() => (isAdminOrDev ? <ContainersOTW /> : <Redirect replace to="/tracking" />)}</Route>
       <Route path="/tracking" component={TrackingHub} />
       <Route path="/help-training">
-        {() => <HelpTraining mode="erp" role={effectiveRole} accessKeys={erpAccess?.pageKeys} fullAccess={erpAccess?.fullAccess} />}
+        {() => (
+          <HelpTraining
+            mode="erp"
+            role={effectiveRole}
+            accessKeys={erpAccess?.pageKeys}
+            fullAccess={erpAccess?.fullAccess}
+          />
+        )}
       </Route>
       {R("/financial-overview", effectiveRole !== "View Only" && canAccess("dashboard"), Dashboard)}
 

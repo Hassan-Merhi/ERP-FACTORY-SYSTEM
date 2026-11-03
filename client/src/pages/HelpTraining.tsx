@@ -2,7 +2,12 @@ import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { BookOpen, ChevronRight, CirclePlay, Clapperboard, FileText, Search, ShieldCheck, Video } from "lucide-react";
 import { visibleTrainingTopics, type TrainingMode } from "@/training/trainingCatalog";
-import { publishedTrainingVideos, publishedTrainingCaptions, publishedTrainingGuides, publishedTrainingScreenshots } from "@/training/publishedVideos";
+import {
+  publishedTrainingVideos,
+  publishedTrainingCaptions,
+  publishedTrainingGuides,
+  publishedTrainingScreenshots,
+} from "@/training/publishedVideos";
 
 interface Props {
   mode: TrainingMode;
@@ -39,42 +44,82 @@ export default function HelpTraining({ mode, role, accessKeys, fullAccess = fals
           <p className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] text-primary">System knowledge base</p>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Help & Training</h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Step-by-step guides for the real {mode === "factory" ? "Factory" : "ERP"} system.
-            Reviewed recordings will appear alongside each guide when published.
+            Step-by-step guides for the real {mode === "factory" ? "Factory" : "ERP"} system. Reviewed recordings will
+            appear alongside each guide when published.
           </p>
         </div>
-        <Link href={home} className="rounded-lg border px-3 py-2 text-sm hover:bg-muted">Return to {mode === "factory" ? "Factory" : "ERP"}</Link>
+        <Link href={home} className="rounded-lg border px-3 py-2 text-sm hover:bg-muted">
+          Return to {mode === "factory" ? "Factory" : "ERP"}
+        </Link>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border bg-card p-4"><BookOpen className="mb-2 h-5 w-5 text-primary" /><div className="text-2xl font-bold">{visible.length}</div><p className="text-xs text-muted-foreground">Available guides</p></div>
-        <div className="rounded-xl border bg-card p-4"><Video className="mb-2 h-5 w-5 text-primary" /><div className="text-2xl font-bold">{visible.filter((t) => Boolean(publishedTrainingVideos[t.id])).length}</div><p className="text-xs text-muted-foreground">Published real-screen videos</p></div>
-        <div className="rounded-xl border bg-card p-4"><ShieldCheck className="mb-2 h-5 w-5 text-primary" /><div className="text-sm font-semibold">Safe demonstrations</div><p className="mt-1 text-xs text-muted-foreground">Recordings use disposable training data, not live transactions.</p></div>
+        <div className="rounded-xl border bg-card p-4">
+          <BookOpen className="mb-2 h-5 w-5 text-primary" />
+          <div className="text-2xl font-bold">{visible.length}</div>
+          <p className="text-xs text-muted-foreground">Available guides</p>
+        </div>
+        <div className="rounded-xl border bg-card p-4">
+          <Video className="mb-2 h-5 w-5 text-primary" />
+          <div className="text-2xl font-bold">
+            {visible.filter((t) => Boolean(publishedTrainingVideos[t.id])).length}
+          </div>
+          <p className="text-xs text-muted-foreground">Published real-screen videos</p>
+        </div>
+        <div className="rounded-xl border bg-card p-4">
+          <ShieldCheck className="mb-2 h-5 w-5 text-primary" />
+          <div className="text-sm font-semibold">Safe demonstrations</div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Recordings use disposable training data, not live transactions.
+          </p>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
         {categories.map((value) => (
-          <button key={value} type="button" onClick={() => setCategory(value)}
-            className={"rounded-full border px-3 py-1.5 text-xs font-medium transition " +
-              (category === value ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-muted")}
-            aria-pressed={category === value}>{value}</button>
+          <button
+            key={value}
+            type="button"
+            onClick={() => setCategory(value)}
+            className={
+              "rounded-full border px-3 py-1.5 text-xs font-medium transition " +
+              (category === value ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-muted")
+            }
+            aria-pressed={category === value}
+          >
+            {value}
+          </button>
         ))}
       </div>
       <div className="relative">
         <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-        <input aria-label="Search training guides" data-testid="training-search" value={search}
-          onChange={(event) => setSearch(event.target.value)} placeholder="Search pages, workflows, stock, payroll, vouchers..."
-          className="h-10 w-full rounded-lg border bg-background pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-primary" />
+        <input
+          aria-label="Search training guides"
+          data-testid="training-search"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search pages, workflows, stock, payroll, vouchers..."
+          className="h-10 w-full rounded-lg border bg-background pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-primary"
+        />
       </div>
 
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(240px,320px)_minmax(0,1fr)]">
-        <nav aria-label="Training topics" className="max-h-[620px] space-y-2 overflow-y-auto rounded-xl border bg-card p-3">
+        <nav
+          aria-label="Training topics"
+          className="max-h-[620px] space-y-2 overflow-y-auto rounded-xl border bg-card p-3"
+        >
           {filtered.length === 0 && <p className="p-4 text-sm text-muted-foreground">No guides match this search.</p>}
           {filtered.map((topic) => (
-            <button type="button" key={topic.id} onClick={() => setSelectedId(topic.id)}
+            <button
+              type="button"
+              key={topic.id}
+              onClick={() => setSelectedId(topic.id)}
               data-testid={"training-topic-" + topic.id}
-              className={"w-full rounded-lg border p-3 text-left transition hover:bg-muted " +
-                (active?.id === topic.id ? "border-primary bg-primary/5" : "border-transparent")}>
+              className={
+                "w-full rounded-lg border p-3 text-left transition hover:bg-muted " +
+                (active?.id === topic.id ? "border-primary bg-primary/5" : "border-transparent")
+              }
+            >
               <div className="flex items-start gap-2">
                 <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
@@ -96,45 +141,81 @@ export default function HelpTraining({ mode, role, accessKeys, fullAccess = fals
             </div>
             <div className="overflow-hidden rounded-xl border bg-muted/30">
               {supportedVideo ? (
-                <video className="aspect-video w-full bg-black" controls preload="metadata"
-                  src={videoUrl} aria-label={"Training video: " + active.title}>
+                <video
+                  className="aspect-video w-full bg-black"
+                  controls
+                  preload="metadata"
+                  src={videoUrl}
+                  aria-label={"Training video: " + active.title}
+                >
                   {publishedTrainingCaptions[active.id] && (
-                    <track kind="captions" src={publishedTrainingCaptions[active.id]} srcLang="en" label="English" default />
+                    <track
+                      kind="captions"
+                      src={publishedTrainingCaptions[active.id]}
+                      srcLang="en"
+                      label="English"
+                      default
+                    />
                   )}
                 </video>
               ) : (
                 <div className="flex aspect-video flex-col items-center justify-center gap-3 p-6 text-center">
                   <Clapperboard className="h-10 w-10 text-muted-foreground" />
                   <p className="font-semibold">Real-system video not yet published</p>
-                  <p className="max-w-sm text-xs text-muted-foreground">The written guide is available now. A reviewed recording from the safe training environment can be added here.</p>
+                  <p className="max-w-sm text-xs text-muted-foreground">
+                    The written guide is available now. A reviewed recording from the safe training environment can be
+                    added here.
+                  </p>
                 </div>
               )}
             </div>
             <div>
-              <h3 className="flex items-center gap-2 text-base font-semibold"><CirclePlay className="h-4 w-4 text-primary" />Step-by-step instructions</h3>
+              <h3 className="flex items-center gap-2 text-base font-semibold">
+                <CirclePlay className="h-4 w-4 text-primary" />
+                Step-by-step instructions
+              </h3>
               <ol className="mt-3 space-y-3">
                 {(publishedTrainingGuides[active.id] ?? active.steps).map((step, i) => (
                   <li className="flex items-start gap-3 text-sm" key={i}>
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">{i + 1}</span>
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                      {i + 1}
+                    </span>
                     <span className="pt-0.5">{step}</span>
                   </li>
                 ))}
               </ol>
             </div>
             {publishedTrainingScreenshots[active.id] && (
-              <div className="space-y-2"><h3 className="text-base font-semibold">Actual training-system screenshot</h3>
-                <img src={publishedTrainingScreenshots[active.id]} alt={"Verified training screenshot: " + active.title}
-                  loading="lazy" className="max-h-[480px] w-full rounded-lg border object-contain" />
+              <div className="space-y-2">
+                <h3 className="text-base font-semibold">Actual training-system screenshot</h3>
+                <img
+                  src={publishedTrainingScreenshots[active.id]}
+                  alt={"Verified training screenshot: " + active.title}
+                  loading="lazy"
+                  className="max-h-[480px] w-full rounded-lg border object-contain"
+                />
               </div>
             )}
-            {active.route && <Link href={active.route} className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold hover:bg-muted">
-              Open this page <ChevronRight className="h-4 w-4" />
-            </Link>}
-            <p className="text-xs text-muted-foreground">Guides describe current navigation; verify your permissions and actual screen before entering data.</p>
+            {active.route && (
+              <Link
+                href={active.route}
+                className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold hover:bg-muted"
+              >
+                Open this page <ChevronRight className="h-4 w-4" />
+              </Link>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Guides describe current navigation; verify your permissions and actual screen before entering data.
+            </p>
           </article>
-        ) : <div className="rounded-xl border p-8 text-sm text-muted-foreground">Select a guide to begin.</div>}
+        ) : (
+          <div className="rounded-xl border p-8 text-sm text-muted-foreground">Select a guide to begin.</div>
+        )}
       </div>
-      <p className="text-xs text-muted-foreground">Training media must be captured from a disposable company and approved before being published. No screen recording is currently running from this page.</p>
+      <p className="text-xs text-muted-foreground">
+        Training media must be captured from a disposable company and approved before being published. No screen
+        recording is currently running from this page.
+      </p>
     </main>
   );
 }

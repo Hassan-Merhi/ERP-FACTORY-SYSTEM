@@ -123,7 +123,9 @@ const AccountGroups = lazy(() => import("@/pages/AccountGroups"));
 const FactoryInvoiceDetailBilingual = lazy(() => import("@/pages/factory/FactoryInvoiceDetailBilingual"));
 const FactoryProductionBonuses = lazy(() => import("@/pages/factory/FactoryProductionBonuses"));
 const WasteDispatchPage = lazy(() => import("@/pages/factory/WasteDispatchOptimized"));
-const FactoryStockAllocationV5CreateProforma = lazy(() => import("@/pages/factory/FactoryStockAllocationV5CreateProforma"));
+const FactoryStockAllocationV5CreateProforma = lazy(
+  () => import("@/pages/factory/FactoryStockAllocationV5CreateProforma")
+);
 const FactoryStockAllocationV5EditProforma = lazy(() => import("@/pages/factory/FactoryStockAllocationV5EditProforma"));
 
 interface FactoryRoutesProps {
@@ -146,7 +148,14 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
   return (
     <Switch>
       <Route path="/factory/help-training">
-        {() => <HelpTraining mode="factory" role={user?.role} accessKeys={myAccess?.pageKeys} fullAccess={myAccess?.fullAccess} />}
+        {() => (
+          <HelpTraining
+            mode="factory"
+            role={user?.role}
+            accessKeys={myAccess?.pageKeys}
+            fullAccess={myAccess?.fullAccess}
+          />
+        )}
       </Route>
       <Route path="/factory/daybook">
         {() => (isAdminOwnerOrDev ? <FactoryDaybook /> : <Redirect replace to={factoryDefaultPage} />)}

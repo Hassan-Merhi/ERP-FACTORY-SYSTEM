@@ -15,7 +15,13 @@ import { companies } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { db } from "../db";
 
-type PublishedMedia = { videoKey: string; captionsKey?: string; screenshotKey?: string; sourceSha?: string; publishedAt?: string };
+type PublishedMedia = {
+  videoKey: string;
+  captionsKey?: string;
+  screenshotKey?: string;
+  sourceSha?: string;
+  publishedAt?: string;
+};
 const registry: Record<string, PublishedMedia> = published as Record<string, PublishedMedia>;
 const OBJECT_KEY = /^training\/videos\/[a-z0-9-]+\/[a-f0-9]{40}\.(?:webm|vtt|png)$/;
 const TOPIC_ID = /^[a-z0-9-]{1,80}$/;
@@ -45,8 +51,11 @@ async function canStreamTopic(req: Request, topic: string): Promise<boolean> {
   const destination = PAGE_FOR_TOPIC[topic];
   if (!destination) return false;
   const context = await getActiveCompanyPermissionContext(req);
-  const [company] = await db.select({ companyType: companies.companyType }).from(companies)
-    .where(eq(companies.id, context.companyId)).limit(1);
+  const [company] = await db
+    .select({ companyType: companies.companyType })
+    .from(companies)
+    .where(eq(companies.id, context.companyId))
+    .limit(1);
   const isFactory = company?.companyType === "factory" || company?.companyType === "factory_v2";
   if (destination.mode === "factory" && !isFactory) return false;
   if (destination.mode === "erp" && isFactory) return false;
@@ -74,7 +83,9 @@ export async function authenticatedVercelTrainingObjectRequest(
   const approvedGateway = "https://erp-training-storage-access.vercel.app";
   if (gatewayUrl !== approvedGateway || secret.length < 40 || !OBJECT_KEY.test(key)) return null;
   const time = Date.now().toString();
-  const signature = createHmac("sha256", secret).update("GET\n" + key + "\n" + time).digest("hex");
+  const signature = createHmac("sha256", secret)
+    .update("GET\n" + key + "\n" + time)
+    .digest("hex");
   try {
     const requestUrl = approvedGateway + "/api/sign?key=" + encodeURIComponent(key);
     const grant = await fetch(requestUrl, {
@@ -83,12 +94,17 @@ export async function authenticatedVercelTrainingObjectRequest(
       signal: AbortSignal.timeout(8000),
     });
     if (!grant.ok) return null;
-    const body = await grant.json() as { url?: unknown };
+    const body = (await grant.json()) as { url?: unknown };
     if (typeof body.url !== "string" || body.url.length > 8000) return null;
     const url = new URL(body.url);
-    if (url.protocol !== "https:" || url.host !== "txyfgtsysrceqhoj.private.blob.vercel-storage.com" ||
-        url.pathname !== "/" + key || !url.searchParams.has("vercel-blob-delegation") ||
-        !url.searchParams.has("vercel-blob-signature")) return null;
+    if (
+      url.protocol !== "https:" ||
+      url.host !== "txyfgtsysrceqhoj.private.blob.vercel-storage.com" ||
+      url.pathname !== "/" + key ||
+      !url.searchParams.has("vercel-blob-delegation") ||
+      !url.searchParams.has("vercel-blob-signature")
+    )
+      return null;
     return { url: url.toString(), headers: range ? { range } : {} };
   } catch {
     return null;
@@ -111,18 +127,34 @@ function storageConfig() {
   const urlStyle = process.env.TRAINING_MEDIA_S3_URL_STYLE || "path";
   if (!endpoint || !bucket || !accessKey || !secretKey) return null;
   let url: URL;
-  try { url = new URL(endpoint); } catch { return null; }
-  if (url.protocol !== "https:" || url.username || url.password || url.pathname !== "/" ||
-      url.search || url.hash || !/^[a-z0-9.-]+$/i.test(url.hostname) ||
-      !/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket) ||
-      !/^[a-z0-9-]+$/i.test(region) || !["path", "virtual-host"].includes(urlStyle)) return null;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return null;
+  }
+  if (
+    url.protocol !== "https:" ||
+    url.username ||
+    url.password ||
+    url.pathname !== "/" ||
+    url.search ||
+    url.hash ||
+    !/^[a-z0-9.-]+$/i.test(url.hostname) ||
+    !/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket) ||
+    !/^[a-z0-9-]+$/i.test(region) ||
+    !["path", "virtual-host"].includes(urlStyle)
+  )
+    return null;
   // Railway Buckets use virtual-hosted-style S3 URLs; legacy S3 endpoints may use path style.
   // Block bucket names with periods for virtual-host style to avoid TLS wildcard mismatches.
   if (urlStyle === "virtual-host" && bucket.includes(".")) return null;
   return { url, bucket, accessKey, secretKey, region, urlStyle };
 }
 
-export function signedTrainingObjectRequest(key: string, range?: string): { url: string; headers: Record<string, string> } | null {
+export function signedTrainingObjectRequest(
+  key: string,
+  range?: string
+): { url: string; headers: Record<string, string> } | null {
   const cfg = storageConfig();
   if (!cfg || !OBJECT_KEY.test(key)) return null;
   const date = new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");
@@ -140,8 +172,15 @@ export function signedTrainingObjectRequest(key: string, range?: string): { url:
   const headers: Record<string, string> = {
     "x-amz-date": date,
     "x-amz-content-sha256": EMPTY_HASH,
-    "authorization": "AWS4-HMAC-SHA256 Credential=" + cfg.accessKey + "/" + scope +
-      ", SignedHeaders=" + signedHeaders + ", Signature=" + signature,
+    authorization:
+      "AWS4-HMAC-SHA256 Credential=" +
+      cfg.accessKey +
+      "/" +
+      scope +
+      ", SignedHeaders=" +
+      signedHeaders +
+      ", Signature=" +
+      signature,
   };
   if (range) headers.range = range;
   return { url: cfg.url.protocol + "//" + host + canonicalPath, headers };
@@ -164,7 +203,11 @@ async function streamMedia(req: Request, res: Response, kind: "video" | "caption
   }
   const entry = registry[topic];
   const key = kind === "video" ? entry.videoKey : kind === "captions" ? entry.captionsKey : entry.screenshotKey;
-  if (!key || !OBJECT_KEY.test(key) || !key.endsWith(kind === "video" ? ".webm" : kind === "captions" ? ".vtt" : ".png")) {
+  if (
+    !key ||
+    !OBJECT_KEY.test(key) ||
+    !key.endsWith(kind === "video" ? ".webm" : kind === "captions" ? ".vtt" : ".png")
+  ) {
     res.status(404).json({ message: "Training media not published" });
     return;
   }
@@ -173,21 +216,29 @@ async function streamMedia(req: Request, res: Response, kind: "video" | "caption
     res.status(416).end();
     return;
   }
-  const request = process.env.TRAINING_MEDIA_PROVIDER === "vercel"
-    ? await authenticatedVercelTrainingObjectRequest(key, range)
-    : signedTrainingObjectRequest(key, range);
+  const request =
+    process.env.TRAINING_MEDIA_PROVIDER === "vercel"
+      ? await authenticatedVercelTrainingObjectRequest(key, range)
+      : signedTrainingObjectRequest(key, range);
   if (!request) {
     res.status(503).json({ message: "Training media storage is not configured" });
     return;
   }
   try {
-    const upstream = await fetch(request.url, { headers: request.headers, redirect: "error", signal: AbortSignal.timeout(300_000) });
+    const upstream = await fetch(request.url, {
+      headers: request.headers,
+      redirect: "error",
+      signal: AbortSignal.timeout(300_000),
+    });
     if (![200, 206].includes(upstream.status) || !upstream.body) {
       res.status(upstream.status === 404 ? 404 : 502).json({ message: "Training media temporarily unavailable" });
       return;
     }
     res.status(upstream.status);
-    res.setHeader("Content-Type", kind === "video" ? "video/webm" : kind === "captions" ? "text/vtt; charset=utf-8" : "image/png");
+    res.setHeader(
+      "Content-Type",
+      kind === "video" ? "video/webm" : kind === "captions" ? "text/vtt; charset=utf-8" : "image/png"
+    );
     res.setHeader("Cache-Control", "private, max-age=300");
     res.setHeader("X-Content-Type-Options", "nosniff");
     for (const name of ["content-length", "content-range", "accept-ranges"]) {
@@ -195,7 +246,10 @@ async function streamMedia(req: Request, res: Response, kind: "video" | "caption
       if (value) res.setHeader(name, value);
     }
     const source = Readable.fromWeb(upstream.body as unknown as import("node:stream/web").ReadableStream);
-    source.on("error", () => { if (!res.headersSent) res.status(502); res.destroy(); });
+    source.on("error", () => {
+      if (!res.headersSent) res.status(502);
+      res.destroy();
+    });
     res.on("close", () => source.destroy());
     source.pipe(res);
   } catch {
@@ -205,7 +259,13 @@ async function streamMedia(req: Request, res: Response, kind: "video" | "caption
 }
 
 export function registerTrainingMediaRoutes(app: Express): void {
-  app.get("/api/training/media/:topic", requireAuth, (req, res) => { void streamMedia(req, res, "video"); });
-  app.get("/api/training/media/:topic/captions", requireAuth, (req, res) => { void streamMedia(req, res, "captions"); });
-  app.get("/api/training/media/:topic/screenshot", requireAuth, (req, res) => { void streamMedia(req, res, "screenshot"); });
+  app.get("/api/training/media/:topic", requireAuth, (req, res) => {
+    void streamMedia(req, res, "video");
+  });
+  app.get("/api/training/media/:topic/captions", requireAuth, (req, res) => {
+    void streamMedia(req, res, "captions");
+  });
+  app.get("/api/training/media/:topic/screenshot", requireAuth, (req, res) => {
+    void streamMedia(req, res, "screenshot");
+  });
 }

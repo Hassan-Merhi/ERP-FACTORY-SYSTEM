@@ -10,17 +10,29 @@ const restricted: MyAccess = {
 
 describe("Factory Help & Training access", () => {
   it("lets an authenticated restricted user read safe Help content", () => {
-    expect(computeFactoryGuardRedirect({
-      isFactoryRoute: true, isAdminOwner: false, userRole: "Worker", myAccess: restricted,
-      factorySettings: {}, factoryDefaultPage: "/factory/stock-entry",
-      currentLocation: "/factory/help-training",
-    })).toBeNull();
+    expect(
+      computeFactoryGuardRedirect({
+        isFactoryRoute: true,
+        isAdminOwner: false,
+        userRole: "Worker",
+        myAccess: restricted,
+        factorySettings: {},
+        factoryDefaultPage: "/factory/stock-entry",
+        currentLocation: "/factory/help-training",
+      })
+    ).toBeNull();
   });
   it("keeps hidden transactional pages blocked", () => {
-    expect(computeFactoryGuardRedirect({
-      isFactoryRoute: true, isAdminOwner: false, userRole: "Worker", myAccess: restricted,
-      factorySettings: {}, factoryDefaultPage: "/factory/stock-entry",
-      currentLocation: "/factory/accounts",
-    })).toBe("/factory/stock-entry");
+    expect(
+      computeFactoryGuardRedirect({
+        isFactoryRoute: true,
+        isAdminOwner: false,
+        userRole: "Worker",
+        myAccess: restricted,
+        factorySettings: {},
+        factoryDefaultPage: "/factory/stock-entry",
+        currentLocation: "/factory/accounts",
+      })
+    ).toBe("/factory/stock-entry");
   });
 });
