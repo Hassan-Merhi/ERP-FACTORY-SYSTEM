@@ -47,6 +47,9 @@ describe("Phase 33E active-company permission policy", () => {
     expect(isPinnedCompanyRoute("/api/factory")).toBe(true);
     expect(isPinnedCompanyRoute("/api/factory/stock/location/3")).toBe(true);
     expect(isPinnedCompanyRoute("/api/properties/leases")).toBe(true);
+    expect(isPinnedCompanyRoute("/api/training/media/factory-payroll/captions")).toBe(true);
+    expect(isPinnedCompanyRoute("/api/training/media/factory-stock-entry")).toBe(true);
+    expect(isPinnedCompanyRoute("/api/training/media/erp-daybook")).toBe(false);
     expect(isPinnedCompanyRoute("/api/vouchers")).toBe(false);
     expect(isPinnedCompanyRoute("/api/factory/containers/123/documents")).toBe(false);
     expect(isPinnedCompanyRoute("/api/factory/containers/123/freight?mode=all")).toBe(false);

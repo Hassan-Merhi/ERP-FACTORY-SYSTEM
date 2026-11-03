@@ -27,6 +27,12 @@ describe("ERP View Only company-role page access", () => {
     expect(effectiveErpPageKeys("View Only", ["accounts"])).toContain("vouchers");
   });
 
+  it("keeps Daybook visible to Owners with old or empty ERP page assignments", () => {
+    expect(effectiveErpPageKeys("Owner", [])).toEqual(["daybook"]);
+    expect(effectiveErpPageKeys("Owner", ["analytics", "daybook"])).toEqual(["analytics", "daybook"]);
+    expect(effectiveErpPageKeys("Owner", ["accounts"])).toEqual(["accounts", "daybook"]);
+  });
+
   it("does not change page access defaults for other roles", () => {
     expect(effectiveErpPageKeys("Manager", [])).toEqual([]);
     expect(effectiveErpPageKeys("Normal User", ["vouchers"])).toEqual(["vouchers"]);

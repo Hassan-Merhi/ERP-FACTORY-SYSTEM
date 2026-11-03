@@ -22,7 +22,7 @@ import {
 import { toMoney } from "../../lib/money";
 import { withStockTransferNarrations } from "../../services/inventory/stockTransferNarration";
 import { keepRoutineVoucher } from "../../services/accounting/operationalCorrectionVisibility";
-import { isInternalHistoricalSupplierCatchup } from "../../services/accounting/internalHistoricalSupplierRoutineVisibility";
+import { isInternalFactoryAdvanceReconciliation, isInternalHistoricalSupplierCatchup } from "../../services/accounting/internalHistoricalSupplierRoutineVisibility";
 
 /**
  * After saving a journal voucher, if it has a customer entry + a ledger account entry,
@@ -63,6 +63,15 @@ export function registerVoucherQueryRoutes(app: Express) {
           voucherNumber: voucher.voucherNumber,
           description: voucher.description,
           createdAt: voucher.createdAt,
+        }) &&
+        // Internal, already-posted historical GL backfills are not routine
+        // operator journals. Keep all official accounting and audit effects.
+        !isInternalFactoryAdvanceReconciliation({
+          companyId: access.activeCompanyId,
+          id: voucher.id,
+          voucherNumber: voucher.voucherNumber,
+          voucherDate: voucher.voucherDate,
+          description: voucher.description,
         })
       );
 

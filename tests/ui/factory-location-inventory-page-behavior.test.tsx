@@ -96,6 +96,9 @@ vi.mock("wouter", () => ({ useLocation: () => ["/factory/location-inventory", ha
 vi.mock("@/contexts/CurrencyContext", () => ({
   useCurrencyContext: () => ({ formatAmount: (value: unknown) => `$${Number(value).toFixed(2)}` }),
 }));
+vi.mock("@/contexts/CompanyContext", () => ({
+  useCompany: () => ({ selectedCompany: { id: 1, companyType: "factory" } }),
+}));
 vi.mock("@/contexts/AppModeContext", () => ({ useAppMode: () => "factory" }));
 vi.mock("@/lib/factoryApi", () => ({ getApiRequest: () => harness.modeApiRequest }));
 vi.mock("@/lib/queryClient", () => ({

@@ -298,8 +298,10 @@ describe("1: the fiscal closing journal is not period profit", () => {
       username: "w17",
     });
     // REV 1000 + the aging sales 150 + the sideless INC2 opening 50 on its Cr
-    // side (it was read as Dr, which gave 1100).
-    expect(closure.totalIncome).toBe("1200.00");
+    // side (it was read as Dr, which gave 1100). The 5-day aging sale is dated
+    // relative to today, so early in a month it lands in the closed period too.
+    const recentSaleClosed = daysAgo(5) <= closeTo ? 20 : 0;
+    expect(closure.totalIncome).toBe((1200 + recentSaleClosed).toFixed(2));
     expect(closure.totalExpense).toBe("330.00");
     const lines = await pool.query<{ ledger_account_id: number }>(
       "SELECT ledger_account_id FROM voucher_entries WHERE voucher_id = $1",
@@ -316,12 +318,15 @@ describe("1: the fiscal closing journal is not period profit", () => {
     const after = await getProfitLoss(ctx.companyId, closeFrom, closeTo);
     expect(after.totalIncome).toBe(before.totalIncome);
     expect(after.totalExpenses).toBe(before.totalExpenses);
-    expect(after.netProfit).toBe(820);
+    expect(after.netProfit).toBe(820 + recentSaleClosed);
 
     // The closing month is the month's own activity, not a loss of the year's profit.
     // The 45-day aging sale is dated relative to today, so on some days it lands
-    // in that month (e.g. 16 Oct -> 1 Sep); count it only when it does.
-    const agingSaleInMonth = daysAgo(45) >= monthStart(-1) && daysAgo(45) <= closeTo ? 50 : 0;
+    // in that month (e.g. 16 Oct -> 1 Sep); count it only when it does. The same
+    // holds for the 5-day sale in a month's first days.
+    const agingSaleInMonth =
+      (daysAgo(45) >= monthStart(-1) && daysAgo(45) <= closeTo ? 50 : 0) +
+      (daysAgo(5) >= monthStart(-1) && daysAgo(5) <= closeTo ? 20 : 0);
     const month = await calculateIncomeStatementForPeriod(ctx.companyId, monthStart(-1), closeTo);
     expect(month.totalRevenue).toBe(agingSaleInMonth);
     expect(month.netProfit).toBe(-290 + agingSaleInMonth);
@@ -340,7 +345,7 @@ describe("1: the fiscal closing journal is not period profit", () => {
     expect(closingOf(ids.REV)).toBe("0.00");
     expect(closingOf(ids.EXP)).toBe("0.00");
     expect(closingOf(ids.INC2)).toBe("0.00");
-    expect(closingOf(ids.RE)).toBe("-870.00");
+    expect(closingOf(ids.RE)).toBe((-870 - recentSaleClosed).toFixed(2));
   });
 
   it("the expense breakdown nets the refund, counts the hidden account and leaves the closing journal out", async () => {

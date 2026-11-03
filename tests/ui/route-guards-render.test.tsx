@@ -194,14 +194,14 @@ describe("FactoryRoutes with mocked user/access props", () => {
     expect(await screen.findByTestId("page-FactoryPayrollHub")).toBeInTheDocument();
   });
 
-  it("opens Factory Daybook for Admin and Developer but Cost Centers only for Developer", async () => {
+  it("opens Factory Daybook for Admin, Owner and Developer but Cost Centers only for Developer", async () => {
     const { FactoryRoutes } = await import("@/components/FactoryRoutes");
     for (const { path, pageName, allowedRoles, deniedRoles } of [
       {
         path: "/factory/daybook",
         pageName: "FactoryDaybook",
-        allowedRoles: ["Admin", "Developer"],
-        deniedRoles: ["Owner", "Manager"],
+        allowedRoles: ["Admin", "Owner", "Developer"],
+        deniedRoles: ["Manager"],
       },
       {
         path: "/factory/cost-centers",

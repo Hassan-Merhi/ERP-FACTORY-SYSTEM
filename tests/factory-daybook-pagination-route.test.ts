@@ -130,7 +130,12 @@ describe("factory Daybook pagination route", () => {
     expect(query).toContain("LEFT JOIN factory_suppliers offload_supplier");
     expect(query).toContain("' - ' || BTRIM(offload_supplier.name)");
     expect(query).toContain("optional = false");
-    expect(query).toContain("ORDER BY sort_date ASC");
+    // Index-friendly predicates prevent real rows from scanning the full
+    // factory_daybook_entries table before source-integrity checks.
+    expect(query).toMatch(/f\.tx_date >= \$\d+::date/);
+    expect(query).toMatch(/f\.tx_date <= \$\d+::date/);
+    expect(query).not.toContain("COALESCE(live_voucher.effective_date, f.effective_date, f.tx_date)");
+    expect(query).toContain("ORDER BY sort_date ASC, ABS(id) ASC, id ASC");
     expect(values).toEqual(
       expect.arrayContaining([
         4,

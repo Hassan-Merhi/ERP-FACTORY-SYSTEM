@@ -13,6 +13,12 @@ import { upload, logAudit } from "../../_helpers";
 import { stockItems, stockItemCodeAliases, insertStockItemSchema, stockGrades, stockCategories } from "@shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { readExcel, sheetToJson } from "../../../excelHelper";
+import {
+  addStockItemAliasTx,
+  finishStockItemEditCaptureTx,
+  stockItemEditRecorder,
+  updateStockItemFieldsTx,
+} from "../../../services/inventory/stockItemEditCapture";
 
 export function registerStockItemImportRoutes(app: Express) {
   // Bulk import stock items
@@ -116,6 +122,34 @@ export function registerStockItemImportRoutes(app: Express) {
       let skipped = 0;
       const notFoundCodes: string[] = [];
 
+      const recorder = stockItemEditRecorder("POST /api/stock-items/import-barcodes");
+      if (recorder.active) {
+        // Factory LAN server: one transaction, every added barcode recorded for the cloud.
+        await db.transaction(async (tx) => {
+          for (const row of rows) {
+            const itemCodeKey = (row.itemCode || "").trim().toLowerCase();
+            const barcodeKey = (row.barcode || "").trim().toLowerCase();
+            const stockItemId = itemCodeKey ? itemByCode.get(itemCodeKey) : undefined;
+            if (!itemCodeKey || !barcodeKey) {
+              skipped++;
+            } else if (!stockItemId) {
+              notFoundCodes.push(row.itemCode);
+            } else if (itemCodeKey === barcodeKey || aliasByCode.has(barcodeKey)) {
+              skipped++;
+            } else if (
+              await addStockItemAliasTx(tx, recorder, { companyId, stockItemId, aliasCode: (row.barcode || "").trim() })
+            ) {
+              aliasByCode.set(barcodeKey, stockItemId);
+              imported++;
+            } else {
+              skipped++;
+            }
+          }
+          await finishStockItemEditCaptureTx(tx, req, recorder);
+        });
+        return res.json({ imported, skipped, notFound: notFoundCodes.length, notFoundCodes });
+      }
+
       for (const row of rows) {
         const itemCodeKey = (row.itemCode || "").trim().toLowerCase();
         const barcodeKey = (row.barcode || "").trim().toLowerCase();
@@ -195,28 +229,33 @@ export function registerStockItemImportRoutes(app: Express) {
       const notFoundCodes: string[] = [];
       const categoryNotFoundNames: string[] = [];
 
-      for (const row of rows) {
-        const code = String(row.itemCode || "").trim();
-        const catName = String(row.categoryName || "").trim();
-        if (!code || !catName) continue;
+      const recorder = stockItemEditRecorder("POST /api/stock-items/update-categories");
+      await db.transaction(async (tx) => {
+        for (const row of rows) {
+          const code = String(row.itemCode || "").trim();
+          const catName = String(row.categoryName || "").trim();
+          if (!code || !catName) continue;
 
-        const itemId = itemByCode.get(code.toLowerCase());
-        if (!itemId) {
-          notFound++;
-          notFoundCodes.push(code);
-          continue;
+          const itemId = itemByCode.get(code.toLowerCase());
+          if (!itemId) {
+            notFound++;
+            notFoundCodes.push(code);
+            continue;
+          }
+
+          const catId = catByName.get(catName.toLowerCase());
+          if (!catId) {
+            categoryNotFound++;
+            if (!categoryNotFoundNames.includes(catName)) categoryNotFoundNames.push(catName);
+            continue;
+          }
+
+          await updateStockItemFieldsTx(tx, recorder, itemId, { categoryId: catId });
+          updated++;
         }
-
-        const catId = catByName.get(catName.toLowerCase());
-        if (!catId) {
-          categoryNotFound++;
-          if (!categoryNotFoundNames.includes(catName)) categoryNotFoundNames.push(catName);
-          continue;
-        }
-
-        await db.update(stockItems).set({ categoryId: catId }).where(eq(stockItems.id, itemId));
-        updated++;
-      }
+        // Factory LAN server: the category changes are recorded for the cloud.
+        await finishStockItemEditCaptureTx(tx, req, recorder);
+      });
 
       res.json({ updated, notFound, categoryNotFound, notFoundCodes, categoryNotFoundNames });
     } catch (error: unknown) {

@@ -74,6 +74,16 @@ const exactMarkers = [
   "exportFactoryDaybookDetailed(filteredEntries, formatDisplayDate)",
 ];
 const sourceWithModel = `${source}\n${await read("client/src/pages/factory/daybook/useFactoryDaybookModel.ts")}`;
+assert.match(
+  sourceWithModel,
+  /return fetchAllDaybookEntries\(new URLSearchParams\(queryParams\), signal\);/,
+  "Daybook must await the complete filtered result before rendering and support cancellation"
+);
+assert.doesNotMatch(
+  sourceWithModel,
+  /Loading remaining transactions:/,
+  "Daybook must not display partial loaded counts or partial accounting totals"
+);
 for (const marker of exactMarkers) {
   const first = sourceWithModel.indexOf(marker);
   assert.ok(first >= 0, `Missing exact Daybook source marker: ${marker}`);
@@ -90,8 +100,8 @@ console.log(
       ok: true,
       checks: [
         "Daybook startup wiring",
-        "100-row initial payload",
-        "automatic background page loading",
+        "complete filtered Daybook before first render",
+        "internal pagination remains hidden from Daybook users",
         "client-side cumulative page merge",
         "All Time empty-date preservation",
         "legacy array compatibility",

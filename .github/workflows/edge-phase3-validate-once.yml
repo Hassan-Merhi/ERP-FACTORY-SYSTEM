@@ -1,0 +1,109 @@
+name: Factory edge one-time validation and formatting
+on:
+  push:
+    branches: [feat/offline-phase1-durable-foundation-20261029]
+    paths: [.github/workflows/edge-phase3-validate-once.yml]
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.1"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --bin-links=true
+      - name: Format changed source
+        shell: bash
+        run: |
+          git fetch origin main
+          mapfile -d '' -t files < <(git diff --name-only -z origin/main...HEAD -- '*.ts' '*.tsx' '*.mjs' '*.css')
+          if (( ${#files[@]} )); then
+            node node_modules/prettier/bin/prettier.cjs --write "${files[@]}"
+          fi
+      - name: Phase 3 unit, middleware, TLS and deployment contracts
+        run: >-
+          node node_modules/vitest/vitest.mjs run
+          tests/factory-edge-policy.test.ts
+          tests/factory-edge-boundary.test.ts
+          tests/factory-edge-installation.test.ts
+          tests/factory-edge-provisioning.test.ts
+          tests/factory-edge-deployment.test.ts
+      - name: Validate backup shell and Docker compose config
+        run: |
+          bash -n deploy/lan/backup-encrypted.sh
+          docker compose --env-file deploy/lan/factory-edge.env.sample -f deploy/lan/compose.yaml config -q
+      - name: Build application
+        run: npm run build
+      - name: Build and smoke-test full factory LAN Docker stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          lan_ip="$(ip -4 route get 1.1.1.1 | sed -n 's/.* src \([0-9.]*\).*/\1/p' | head -n1)"
+          if [[ -z "$lan_ip" ]]; then echo "No LAN IPv4 found"; exit 1; fi
+          mkdir -p deploy/lan/certs
+          openssl req -newkey rsa:2048 -nodes -x509 -sha256 -days 14 \
+            -subj "/CN=erp.factory.internal" \
+            -addext "subjectAltName=DNS:erp.factory.internal" \
+            -keyout deploy/lan/certs/server-key.pem -out deploy/lan/certs/server.pem
+          chmod 600 deploy/lan/certs/server-key.pem
+          {
+            printf 'EDGE_SITE_ID=027d7472-4a29-4bb3-a4aa-5b30e4ad631f\n'
+            printf 'EDGE_HOSTNAME=erp.factory.internal\n'
+            printf 'EDGE_BIND_IP=%s\n' "$lan_ip"
+            printf 'EDGE_DB_PASSWORD=%s\n' "$(openssl rand -hex 32)"
+            printf 'EDGE_SESSION_SECRET=%s\n' "$(openssl rand -hex 48)"
+            printf 'EDGE_WRITE_MODE=read-only\nEDGE_PRIMARY_ACK=\n'
+          } > deploy/lan/.env
+          chmod 600 deploy/lan/.env
+          node scripts/edge/verify-edge-configuration.mjs deploy/lan/.env
+          docker compose --env-file deploy/lan/.env -f deploy/lan/compose.yaml config -q
+          docker compose --env-file deploy/lan/.env -f deploy/lan/compose.yaml build app
+          docker compose --env-file deploy/lan/.env -f deploy/lan/compose.yaml up -d
+          url="https://erp.factory.internal"
+          ready=0
+          for ((attempt = 1; attempt <= 60; attempt++)); do
+            echo "Edge status probe attempt ${attempt}/60"
+            if curl --silent --show-error --max-time 4 \
+              --noproxy '*' --cacert deploy/lan/certs/server.pem \
+              --resolve "erp.factory.internal:443:$lan_ip" \
+              "$url/api/edge/status" -o /tmp/edge-status.json; then
+              ready=1
+              break
+            fi
+            sleep 5
+          done
+          if [[ "$ready" != 1 ]]; then
+            docker compose --env-file deploy/lan/.env -f deploy/lan/compose.yaml logs --tail=100 app https postgres
+            echo 'Edge application did not boot from a fresh database' >&2
+            exit 1
+          fi
+          cat /tmp/edge-status.json
+          node -e "let j=require('/tmp/edge-status.json');if(j.mode!=='lan'||j.writeMode!=='read-only'||j.cloudReplication!=='not-configured')process.exit(1)"
+          code="$(curl --silent --output /tmp/edge-write.json --write-out '%{http_code}' \
+            --cacert deploy/lan/certs/server.pem \
+            --resolve "erp.factory.internal:443:$lan_ip" \
+            -H "Origin: $url" -X POST "$url/api/vouchers/with-entries")"
+          if [[ "$code" != 423 ]]; then cat /tmp/edge-write.json; echo "Expected 423, got $code"; exit 1; fi
+          echo "HTTPS factory edge identity and read-only write guard PASSED"
+          docker compose --env-file deploy/lan/.env -f deploy/lan/compose.yaml down
+      - name: Commit verified formatting changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -- client/src server tests scripts
+          if ! git diff --cached --quiet; then
+            git -c user.name="ERP Edge Validator" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "style(edge): format Phase 3 implementation and tests"
+            git push origin "HEAD:feat/offline-phase1-durable-foundation-20261029"
+          fi
+
+# Re-run after Dockerfile npm prepare-layer fix.
+
+# Repeat after adding the background-job policy export to the test import.

@@ -1,6 +1,9 @@
 import React from "react";
 import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
 
+vi.mock("@/contexts/CompanyContext", () => ({
+  useCompany: () => ({ selectedCompany: { id: 1, companyType: "erp" } }),
+}));
 vi.mock("@/pages/StockItems", () => ({ default: () => <div>Stock items content</div> }));
 vi.mock("@/pages/StockQuery", () => ({ default: () => <div>Stock query content</div> }));
 vi.mock("@/pages/OffloadItemSearch", () => ({ default: () => <div>Offload content</div> }));

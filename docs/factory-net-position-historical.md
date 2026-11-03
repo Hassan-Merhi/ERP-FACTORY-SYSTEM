@@ -108,3 +108,44 @@ These have no surviving original values. The report keeps them flagged and inven
 **Deferred verification for Claude:** `tests/factory-net-position-fx-wallet-cutoff.test.ts` contains nonexecuted, read-only SQL compilation/contract tests. Add a real isolated PostgreSQL fixture for operations created on October 21 with October 19 effective date, an event at 21:30 UTC October 19 (00:30 on October 20 in Beirut), both Cost/Selling Net Position views, supplier mix ownership and today's invariant. Execute CI/tests only when the owner delegates that responsibility to Claude. Do not merge, rebase, deploy or touch production accounting without explicit approval.
 
 **Production reconciliation status:** A fresh October 19–21 SELECT-only Render query was refused by tenant isolation (`app.current_company_id is required for tenant data access`). No rows were read by that attempt and no records were changed. Run any future source reconciliation in an explicitly authorized company-scoped session or approved replica. The older missing scan times, voucher edit history, receipt increments and mutable prices remain irrecoverable without their original evidence; `historyCompleteness` must continue to say `partial`. Internal header/subtotal agreement alone cannot certify full historical accounting accuracy.
+
+
+## October 24, 2026 — Baseline-backed history reconstruction (#2468)
+
+This work is committed **only** to the existing `claude/dreamy-gauss-26kk4e` PR branch. No merge, deploy, CI, tests, production accounting writes, migration or trigger installation was initiated by this continuation.
+
+### Recorder and security
+
+- History now tracks **20 tables** (the original 19 and `property_units`). Three child tables with no `company_id` are attributed to their order or mix-batch parent, with a last-known-owner fallback on cascaded deletion. Rows whose ownership still cannot be evidenced remain unreadable to tenants.
+- The history log has ENABLE/FORCE RLS and a tenant-scoped SELECT policy. Reads fail closed if the policy is disabled; the history write trigger temporarily enters the internal maintenance capability only while inserting its audit record, then restores the caller's previous scope.
+- History event and baseline timestamps are explicitly **UTC-naive**; as-of queries compare them against the end of the selected day in the company's IANA timezone.
+- The log has an index for company-scoped ordered replay. The installer remains retryable per table and does not overwrite a preexisting baseline.
+- The API exposes `rowHistoryCoverage`: how many required tables have a baseline and three active triggers at that date. This is **not** certification of the financial report.
+- A table's recorded past can be reconstructed only when its baseline was taken **before the selected day's ending cutoff**. Before that, the report must use its existing provisional legacy reconstruction and show `historyCompleteness: "partial"`.
+
+### Historical read integration
+
+`server/services/factory/netPositionRowHistoryReader.ts` rebuilds one company's row images from `S` baseline, `I` insert, `U` changed-column patch and `D` delete events, excluding events after the company-local cutoff. Missing baseline, absent source rows, broken event chains, oversized result sets and disabled tenant policies fail closed or return explicit unavailability; values are never silently invented.
+
+The following projections now prefer recorded row versions **once their required baselines are ready**:
+
+1. Stock In Hand **catalogue cost/selling unit prices** by historical product and counted bale quantities (bale lifecycle/scan evidence still follows the legacy dated event engine).
+2. Raw Material **supplier locked USD rate**; raw receipt/mix replay still follows its existing dated events.
+3. Container **OTW status and amounts**, using recorded container, receipt and raw-stock images, including rows subsequently deleted.
+4. Verified/Loading/Pending **order statuses, grand totals and bale quantities**, including subsequently deleted orders, using the recorded order master.
+5. **Worker advances**, individual repayments and payroll deductions as of cutoff.
+6. **Factory Rent**: active units, contracts, monthly expected rent and posted payments as of cutoff.
+
+Earlier historical dates and uninstalled baseline tables retain the old documented limitations. Original scan timestamps, voucher-line versions, raw/material lifecycle before baseline, untracked event chains and post-baseline business-date corrections outside these projections are **not** fully certified. The recorder's timestamp is a statement write instant, not a guaranteed transaction commit instant. Customer display names remain current, not historically versioned.
+
+### Claude release checklist (NOT executed here)
+
+- Run `npm run check`, formatting/lint, backend database tests, the full certification suite, and nonproduction builds. Source additions include `tests/factory-net-position-row-history-replay.test.ts` and tenant-scoped additions to `tests/factory-row-history.database.test.ts`.
+- Validate PostgreSQL row-history RLS on all 20 sources, including child-table company attribution; direct/history reads by a different company must return no financial rows.
+- Test startup idempotence and lock timeouts in a **production-sized database copy** before deploying automatic baseline installation; verify all 20 trigger sets are active and table baselines are complete.
+- Use controlled fixtures where a product price, container stage, order total, supplier raw rate, worker advance and rent payment changes **after** the requested day. A prior report must remain unchanged, and the current-day report must retain existing behavior.
+- Independently reconcile Cost and Selling for October 19–21 and later dates from authorized tenant-scoped data. For dates before the new baseline, do **not** claim that overwritten original history was recovered.
+- Specifically review historian performance (large bale/scan tables), accounting-voucher revisions not covered by this 20-table history, and cross-midnight commits. Do not weaken RLS or turn on accounting write features to make certification pass.
+- Resolve current `main` drift on the same PR without regressing #2427, #2429, #2436 and the FX-wallet recorded-at fixes. Owner approval is still required for merge, database installation and production deployment.
+
+**Verification status:** Source updates committed but TypeScript, tests, CI and production financial reconciliation are deliberately **not executed** by this contributor (delegated to Claude). Any test or migration claim in the earlier #2468 text applies to its earlier commits, not necessarily these additional changes.

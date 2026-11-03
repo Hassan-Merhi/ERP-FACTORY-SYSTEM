@@ -29,6 +29,7 @@ vi.mock("@/components/AppSidebar", async () => {
   return {
     ...actual,
     useErpVisibleSections: () => ({
+      sections: actual.ERP_NAV_SECTIONS.filter((section) => !section.devOnly),
       isItemVisible: (item: { url: string }) => !hiddenUrls.has(item.url),
     }),
   };

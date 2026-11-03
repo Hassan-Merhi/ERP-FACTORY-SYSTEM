@@ -262,6 +262,29 @@ describe("POST /api/factory/advances/:id/reverse", () => {
 });
 
 describe("DELETE /api/factory/advances/:id", () => {
+  it("refuses deleting a settled advance if paid payroll already deducted it", async () => {
+    const advance = await giveAdvance("48.39");
+    const payroll = await pool.query<{ id: number }>(
+      `INSERT INTO factory_payrolls (company_id, worker_id, period_start, period_end,
+                                      advances, net_salary, status)
+       VALUES ($1, $2, '2026-05-01', '2026-05-16', '48.39', '0', 'PAID') RETURNING id`,
+      [ctx.companyId, workerId]
+    );
+    try {
+      await pool.query(
+        "UPDATE factory_worker_advances SET remaining_balance = '0.00', fully_paid = true WHERE id = $1",
+        [advance.id]
+      );
+      const response = await agent.delete(`/api/factory/advances/${advance.id}`);
+      expect(response.status).toBe(409);
+      expect(response.body.code).toBe("ADVANCE_HAS_PAYROLL_RECOVERY");
+      expect(await advanceRow(advance.id)).not.toBeNull();
+      expect(await advanceLegs(advance.id)).toHaveLength(2);
+    } finally {
+      await pool.query("DELETE FROM factory_payrolls WHERE id = $1", [payroll.rows[0].id]);
+    }
+  });
+
   it("refuses an advance that still has a repayment and leaves it whole (wave 7)", async () => {
     const advance = await giveAdvance("300.00");
     await pool.query(

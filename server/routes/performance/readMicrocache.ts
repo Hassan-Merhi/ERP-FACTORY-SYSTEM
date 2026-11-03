@@ -436,11 +436,22 @@ function buildWriteInvalidation(req: Request): ReadMicrocacheInvalidation {
   if (!classified.topics?.length) return {};
 
   const companyIds = requestCompanyIds(req);
+  // A proforma transfer is published to browsers with the "reference" topic so
+  // their customer lists refresh, but here the cached customer list is already
+  // a "factory" entry: evicting every reference cache (stock items, groups...)
+  // for it would only cost warm unrelated reads.
+  const path = (req.originalUrl || req.url).split("?")[0];
+  const topics = PROFORMA_TRANSFER_PATH.test(path)
+    ? classified.topics.filter((topic) => topic !== "reference")
+    : classified.topics;
   return {
     ...(companyIds.length > 0 ? { companyIds } : {}),
     ...classified,
+    topics,
   };
 }
+
+const PROFORMA_TRANSFER_PATH = /^\/api\/factory\/customer-proformas\/\d+\/transfer\/?$/;
 
 function idsIntersect(left: readonly number[], right: readonly number[]): boolean {
   const rightSet = new Set(right);

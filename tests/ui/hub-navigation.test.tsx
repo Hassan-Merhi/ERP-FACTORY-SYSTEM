@@ -2,6 +2,9 @@ import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+vi.mock("@/contexts/CompanyContext", () => ({
+  useCompany: () => ({ selectedCompany: { id: 1, companyType: "erp" } }),
+}));
 vi.mock("@/pages/StockItems", () => ({ default: () => <div>Stock items content</div> }));
 vi.mock("@/pages/StockQuery", () => ({ default: () => <div>Stock query content</div> }));
 vi.mock("@/pages/OffloadItemSearch", () => ({ default: () => <div>Offload content</div> }));

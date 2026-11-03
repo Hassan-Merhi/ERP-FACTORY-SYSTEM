@@ -597,6 +597,8 @@ export function useAccountsLegacyModel() {
   const vouchersWithBalance = useMemo(() => allVouchersWithBalance.filter((row) =>
     !isInternalHistoricalSupplierRoutineRow({
       companyId: row.companyId ?? selectedCompany?.id,
+      voucherId: row.voucherId,
+      voucherDate: row.voucherDate,
       voucherNumber: row.voucherNumber,
       voucherDescription: row.voucherDescription,
       createdAt: row.createdAt,

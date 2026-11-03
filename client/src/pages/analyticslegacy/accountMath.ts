@@ -10,6 +10,28 @@ import type { Account } from "./types";
  * rendering the page.
  */
 
+/**
+ * Only the Assets panel of legacy Analytics hides these internal control rows.
+ * Keep them in the account API and general ledger so vouchers, stock costing,
+ * statements and other reports can still reconcile against the posted books.
+ */
+export function isVisibleAnalyticsAssetAccount(account: Account): boolean {
+  if (account.type === "bank" || account.type === "fixedAsset") return true;
+  if (account.type !== "ledger" || account.accountType !== "Asset") return false;
+
+  const code = (account.code || "").trim().toUpperCase();
+  const subType = (account.subType || "").trim().toLowerCase();
+  const name = (account.name || "").trim().replace(/\s+/g, " ").toLowerCase();
+
+  return (
+    code !== "INVENTORY" &&
+    code !== "SP-PROFIT-ADJ-SUSPENSE" &&
+    subType !== "sp_profit_correction_suspense" &&
+    name !== "inventory" &&
+    name !== "sp profit correction suspense"
+  );
+}
+
 /** Balances arrive as either a number or a numeric string, depending on the endpoint. */
 export function parseBalance(balance: number | string): number {
   if (typeof balance === "string") {

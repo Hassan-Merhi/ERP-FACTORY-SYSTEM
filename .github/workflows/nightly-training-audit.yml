@@ -1,0 +1,97 @@
+name: Nightly ERP Training Audit
+
+on:
+  schedule:
+    # 02:15 UTC: 04:15 in Beirut winter / 05:15 summer. Cron runs in UTC.
+    - cron: "15 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: nightly-erp-training-main
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 7
+    outputs:
+      record: ${{ steps.classify.outputs.record }}
+      topics: ${{ steps.classify.outputs.topics }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.1"
+      - name: Find last successful nightly source SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Nightly must compare against the most recent successful NIGHTLY run,
+          # never against an unrelated manual recording or a failed capture.
+          prior=$(gh run list --workflow nightly-training-audit.yml --branch main \
+            --status success --limit 30 --json headSha,event,databaseId \
+            --jq '[.[] | select(.event == "schedule" or .event == "workflow_dispatch")][0].headSha // ""')
+          echo "TRAINING_BASELINE_SHA=$prior" >> "$GITHUB_ENV"
+      - id: classify
+        name: Identify new or outdated tutorials
+        run: |
+          node --test scripts/plan-nightly-training.test.mjs
+          node scripts/plan-nightly-training.mjs
+      - name: Keep reviewable change-detection report
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: nightly-training-plan
+          path: artifacts/training-plan/plan.json
+          if-no-files-found: error
+          retention-days: 30
+
+  record:
+    needs: plan
+    if: needs.plan.outputs.record == 'true'
+    uses: ./.github/workflows/training-videos.yml
+    with:
+      topic: ${{ needs.plan.outputs.topics }}
+    permissions:
+      contents: read
+
+  notify:
+    needs: [plan, record]
+    if: always() && needs.plan.result == 'success' && needs.plan.outputs.record == 'true'
+    permissions:
+      issues: write
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - name: Create human review task
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TOPICS: ${{ needs.plan.outputs.topics }}
+          RESULT: ${{ needs.record.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "Nightly training capture result: **$RESULT**."
+            echo
+            echo "Affected modules: \`$TOPICS\`"
+            echo
+            echo "Review real-screen videos, screenshots, VTT captions and written guides:"
+            echo "$RUN_URL"
+            echo
+            echo "Recordings are automatically prepared but **never published** until reviewed."
+            echo "After inspecting the artifact, use the separate 'Approve & Publish Training Video' action."
+            echo "That action is disabled until the protected training-publication environment"
+            echo "and private storage credentials have been configured."
+          } > "$RUNNER_TEMP/training-review-body.md"
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "Review ERP training recordings – run $GITHUB_RUN_ID ($RESULT)" \
+            --body-file "$RUNNER_TEMP/training-review-body.md"

@@ -360,7 +360,13 @@ export default function AccountMigration() {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.message || `Failed to load active migrations (${res.status})`);
       }
-      return res.json() as Promise<PendingMigration[]>;
+      // Keep only well-formed rows: a malformed payload must not crash the page.
+      const data: unknown = await res.json();
+      return Array.isArray(data)
+        ? (data.filter(
+            (row) => row && typeof row === "object" && Array.isArray((row as PendingMigration).accounts)
+          ) as PendingMigration[])
+        : [];
     },
     staleTime: 0,
   });
@@ -664,7 +670,7 @@ export default function AccountMigration() {
                         {destination?.name ?? `Company ${migration.destCompanyId}`}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {migration.accounts.map((account) => account.originalCode).join(", ")}
+                        {(migration.accounts ?? []).map((account) => account.originalCode).join(", ")}
                       </p>
                     </div>
                     <Button variant="outline" onClick={() => setUndoTarget(migration)}>

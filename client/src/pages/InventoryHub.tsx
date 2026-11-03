@@ -1,4 +1,6 @@
-import { MapPin, Ship, Package } from "lucide-react";
+import { MapPin, Ship, Package, ArrowUpRight } from "lucide-react";
+import { Link } from "wouter";
+import { useCompany } from "@/contexts/CompanyContext";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import LocationInventory from "@/pages/LocationInventory";
@@ -16,7 +18,12 @@ const TABS = [
 const TAB_VALUES = TABS.map((tab) => tab.value);
 
 export default function InventoryHub({ access }: { access?: ErpFeatureAccess }) {
+  const { selectedCompany } = useCompany();
   const visibleTabs = TABS.filter((tab) => canAccessErpFeature(access, tab.featureKey));
+  const showStockShortcut =
+    selectedCompany?.companyType !== "retail" &&
+    (canAccessErpFeature(access, "stock_items") || canAccessErpFeature(access, "stock_query"));
+  const stockHref = canAccessErpFeature(access, "stock_items") ? "/stock?tab=items" : "/stock?tab=query";
   const visibleValues = visibleTabs.map((tab) => tab.value);
 
   const [activeTab, setTab] = useHubQueryState({
@@ -42,6 +49,17 @@ export default function InventoryHub({ access }: { access?: ErpFeatureAccess }) 
           ))}
         </TabsList>
       </div>
+      {showStockShortcut && (
+        <nav aria-label="Related inventory tools" className="mb-3 flex justify-end">
+          <Link
+            href={stockHref}
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border bg-card px-3 text-sm font-medium hover:bg-muted"
+            data-testid="link-inventory-stock-hub"
+          >
+            Stock items &amp; search <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        </nav>
+      )}
       <TabsContent value="by-location" className="m-0">
         {visibleValues.includes("by-location") && <LocationInventory />}
       </TabsContent>

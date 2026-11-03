@@ -56,6 +56,7 @@ export interface FactoryCustomerOrderInvoiceRow {
   orderId: number;
   invoiceNumber: string | null;
   containerNumber: string | null;
+  destination: string | null;
   status: string;
   orderDate: string;
   totalBales: number;
@@ -76,6 +77,7 @@ export interface FactoryCustomerOrderCustomerRow {
 
 export interface FactoryCustomerOrderAnalytics {
   includeCharges: boolean;
+  destinations: string[];
   summary: {
     totalOrders: number;
     uniqueCustomers: number;

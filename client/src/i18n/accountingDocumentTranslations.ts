@@ -153,6 +153,27 @@ const entries: Entry[] = [
     ar: "ترحيل الحساب من {0}: {1}",
     fr: "Migration du compte depuis {0} : {1}",
   },
+  // POS optional sale / stock-aware reactivation
+  { en: "Could not make this POS sale optional", ar: "تعذر جعل عملية بيع نقطة البيع اختيارية", fr: "Impossible de rendre cette vente PDV facultative" },
+  { en: "POS sale made optional", ar: "أصبحت عملية بيع نقطة البيع اختيارية", fr: "Vente PDV rendue facultative" },
+  { en: "POS optional change failed", ar: "فشل تغيير حالة بيع نقطة البيع", fr: "Échec de la modification du statut de la vente PDV" },
+  { en: "Make Optional", ar: "جعل العملية اختيارية", fr: "Rendre facultatif" },
+  { en: "Make POS Optional", ar: "جعل بيع نقطة البيع اختياريًا", fr: "Rendre la vente PDV facultative" },
+  {
+    en: "This suspends the sale from ERP accounting and POS totals and restores its sold items to the original stock location at their recorded cost. Only make a posted sale optional when it is genuinely canceled or being corrected. You can reactivate it from Optional Vouchers, subject to stock and accounting-period checks.",
+    ar: "يوقف هذا البيع عن حسابات النظام وإجماليات نقطة البيع ويعيد الأصناف إلى موقع المخزون الأصلي بتكلفتها المسجلة. استخدم هذا الخيار فقط لإلغاء بيع فعليًا أو تصحيحه. يمكن إعادة تنشيطه من السندات الاختيارية بعد التحقق من المخزون والفترة المحاسبية.",
+    fr: "Cette action suspend la vente des comptes ERP et des totaux PDV, puis restitue les articles au stock d'origine à leur coût enregistré. Utilisez-la uniquement pour une annulation ou une correction réelle. Vous pourrez réactiver la vente depuis les pièces facultatives, sous réserve des contrôles de stock et de période comptable.",
+  },
+  {
+    en: "Sale ${voucher.voucherNumber} is now optional. Its inventory has been restored; restore the sale from Optional Vouchers when needed.",
+    ar: "أصبحت عملية البيع {0} اختيارية. أُعيد مخزونها؛ ويمكن استعادة البيع من السندات الاختيارية عند الحاجة.",
+    fr: "La vente {0} est maintenant facultative. Son stock a été rétabli ; vous pourrez réactiver la vente depuis les pièces facultatives.",
+  },
+  {
+    en: "Make POS ${optionalVoucher?.voucherNumber ?? \"\"} optional?",
+    ar: "هل تريد جعل عملية البيع {0} اختيارية؟",
+    fr: "Rendre la vente PDV {0} facultative ?",
+  },
 ];
 
 const lookup = new Map<string, Entry>();

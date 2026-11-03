@@ -166,6 +166,7 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
         item,
         customer,
         destination,
+        destinationExact,
         location,
         status = "all",
         includeCharges = "false",
@@ -262,8 +263,24 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
         )`);
       }
 
+      // Populate the dropdown from the current company, period and status even
+      // when a particular destination is selected. Existing fuzzy destination
+      // search semantics are preserved for other API consumers.
+      const availableDestinationFilters = [...orderFilters];
+      if (destinationExact?.trim()) {
+        orderFilters.push(sql`LOWER(BTRIM(COALESCE(co.destination, ''))) = ${destinationExact.trim().toLowerCase().slice(0, 100)}`);
+      }
+
       const queryResult = await db.execute(sql`
-        WITH filtered_orders AS MATERIALIZED (
+        WITH available_destinations AS MATERIALIZED (
+          SELECT DISTINCT BTRIM(co.destination) AS destination
+          FROM customer_orders co
+          LEFT JOIN customers c ON c.id = co.customer_id AND c.company_id = co.company_id
+          LEFT JOIN locations l ON l.id = co.location_id
+          WHERE ${sql.join(availableDestinationFilters, sql` AND `)}
+            AND NULLIF(BTRIM(co.destination), '') IS NOT NULL
+        ),
+        filtered_orders AS MATERIALIZED (
           SELECT
             co.id AS order_id,
             ${officialOrderDate} AS order_date,
@@ -271,6 +288,7 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
             COALESCE(c.legal_name, 'Unknown customer') AS customer_name,
             co.invoice_number,
             co.container_number,
+            co.destination,
             co.status,
             COALESCE(SUM(col.qty), 0)::int AS total_bales,
             COALESCE(SUM(col.total_weight::numeric), 0) AS total_weight_kg,
@@ -295,6 +313,7 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
             c.legal_name,
             co.invoice_number,
             co.container_number,
+            co.destination,
             co.status
         ),
         customer_rows AS MATERIALIZED (
@@ -317,6 +336,10 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
           OFFSET ${offset}
         )
         SELECT
+          COALESCE((
+            SELECT jsonb_agg(destination ORDER BY LOWER(destination), destination)
+            FROM available_destinations
+          ), '[]'::jsonb) AS destinations,
           jsonb_build_object(
             'totalOrders', (SELECT COUNT(*)::int FROM filtered_orders),
             'uniqueCustomers', (SELECT COUNT(*)::int FROM customer_rows),
@@ -340,6 +363,7 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
                       'orderId', fo.order_id,
                       'invoiceNumber', fo.invoice_number,
                       'containerNumber', fo.container_number,
+                      'destination', fo.destination,
                       'status', fo.status,
                       'orderDate', fo.order_date,
                       'totalBales', fo.total_bales,
@@ -370,6 +394,7 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
         orderId: number | string;
         invoiceNumber: string | null;
         containerNumber: string | null;
+        destination: string | null;
         status: string;
         orderDate: string;
         totalBales: number | string;
@@ -388,6 +413,7 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
       };
       type CustomerOrderAggregate = {
         summary: CustomerOrderSummary | null;
+        destinations: string[] | null;
         rows: CustomerOrderCustomer[] | null;
         total_rows: number | string;
       };
@@ -407,6 +433,7 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
           orderId: Number(order.orderId),
           invoiceNumber: order.invoiceNumber,
           containerNumber: order.containerNumber,
+          destination: order.destination,
           status: order.status,
           orderDate: order.orderDate,
           totalBales: Number(order.totalBales || 0),
@@ -417,6 +444,7 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
 
       res.json({
         includeCharges: includeOrderCharges,
+        destinations: aggregate?.destinations ?? [],
         summary: {
           totalOrders: Number(rawSummary.totalOrders ?? 0),
           uniqueCustomers: Number(rawSummary.uniqueCustomers ?? 0),

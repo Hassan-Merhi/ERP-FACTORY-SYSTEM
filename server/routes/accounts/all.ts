@@ -1,3 +1,4 @@
+import { isExcludedFromCompany12ManagementReports } from "../../lib/payrollOverpaymentReporting";
 /**
  * accountRoutes: AccountList endpoints.
  *
@@ -47,7 +48,8 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
       analyticsProfile ? Promise.resolve([]) : storage.getAllSuppliers(),
     ]);
     const ledgers = ledgersAll.filter(
-      (a) => !["sp_stock", "sp_opnbal"].includes(a.subType ?? "") && !isSystemOnlyLedgerAccount(a)
+      (a) => !["sp_stock", "sp_opnbal"].includes(a.subType ?? "") && !isSystemOnlyLedgerAccount(a) &&
+        !isExcludedFromCompany12ManagementReports(companyId, a)
     );
     const isFactoryCompany = currentCompany?.companyType === "factory";
     const isPropertiesCompany = currentCompany?.companyType === "properties";

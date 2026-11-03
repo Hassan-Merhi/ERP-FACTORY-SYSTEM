@@ -1,0 +1,121 @@
+name: Record Real ERP Training Videos (Disposable Data)
+
+on:
+  workflow_call:
+    inputs:
+      topic:
+        description: "Comma-separated tour IDs selected by the nightly audit"
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: "Approved UI tour to record"
+        required: true
+        default: factory-overview
+        type: choice
+        options:
+          - factory-overview
+          - factory-stock-entry
+          - factory-raw-materials
+          - factory-bale-explorer
+          - factory-containers
+          - factory-stock-allocation
+          - factory-invoicing
+          - factory-payroll
+          - factory-accounts
+          - factory-analytics
+          - erp-tracking
+          - erp-inventory
+          - erp-pos
+          - erp-vouchers
+          - erp-daybook
+          - erp-reports
+          - all
+
+permissions:
+  contents: read
+
+jobs:
+  record-training:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: heliumdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres@localhost:5432/heliumdb
+      PGSSLMODE: disable
+      NODE_ENV: test
+      ERP_E2E_DISPOSABLE_DB: "1"
+      TRAINING_SANDBOX_VERIFIED: "1"
+      TRAINING_BASE_URL: http://127.0.0.1:5000
+      TRAINING_TOPIC: ${{ inputs.topic }}
+      CSRF_ENFORCE: "0"
+      ENABLE_SCHEDULERS: "false"
+      PORT: "5000"
+      API_RATE_LIMIT_MAX: "100000"
+      API_RATE_LIMIT_ANON_MAX: "100000"
+      ERP_E2E_USERNAME: training_ci_${{ github.run_id }}
+      ERP_E2E_POS_USERNAME: training_pos_${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.1"
+          cache: npm
+      - name: Generate disposable user and session secrets
+        shell: bash
+        run: |
+          node <<'NODE'
+          const crypto = require("node:crypto");
+          const fs = require("node:fs");
+          const lines = ["SESSION_SECRET", "ERP_E2E_PASSWORD", "ERP_E2E_POS_PASSWORD"].map((key) => key + "=" + crypto.randomBytes(48).toString("hex"));
+          fs.appendFileSync(process.env.GITHUB_ENV, lines.join("\n") + "\n");
+          NODE
+      - run: npm ci --ignore-scripts
+      - name: Install browser and encoder
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          node node_modules/puppeteer/lib/puppeteer/node/cli.js browsers install chrome
+      - name: Build actual ERP / Factory application
+        run: |
+          npm run prebuild
+          node --max-old-space-size=4096 node_modules/vite/bin/vite.js build
+          node scripts/build-server.mjs
+          node scripts/verify-server-bundle.mjs
+          node scripts/verify-runtime-dependencies.mjs
+      - name: Prepare isolated sample companies
+        run: |
+          node node_modules/drizzle-kit/bin.cjs push --force
+          node scripts/prepare-phase7-browser-e2e-fixture.mjs
+      - name: Capture actual working screens with read-only browser automation
+        run: |
+          mkdir -p artifacts/training-videos
+          npm start > artifacts/training-videos/server.log 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 180); do
+            if curl -fsS http://127.0.0.1:5000/api/health/db >/dev/null 2>&1; then break; fi
+            if ! kill -0 "$app_pid" 2>/dev/null; then cat artifacts/training-videos/server.log; exit 1; fi
+            if [ "$attempt" = 180 ]; then cat artifacts/training-videos/server.log; exit 1; fi
+            sleep 1
+          done
+          node scripts/record-training-guides.mjs
+      - name: Upload review-only video and guide artifacts
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: real-erp-training-${{ github.run_id }}
+          path: artifacts/training-videos
+          if-no-files-found: warn
+          retention-days: 30

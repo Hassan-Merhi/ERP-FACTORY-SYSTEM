@@ -16,7 +16,12 @@ export interface ProductionBonusCategoryRateVersion {
 export function normalizeBonusCategory(value: unknown): { key: string; label: string } | null {
   if (typeof value !== "string") return null;
   const label = value.normalize("NFC").trim().replace(/\s+/gu, " ");
-  if (!label || label.length > 100 || /[\u0000-\u001F\u007F]/u.test(label)) return null;
+  if (
+    !label ||
+    label.length > 100 ||
+    Array.from(label).some((char) => (char.codePointAt(0) ?? 0) < 0x20 || char === "\u007F")
+  )
+    return null;
   return { key: label.toLocaleLowerCase("en-US"), label };
 }
 
@@ -27,8 +32,11 @@ export function isBonusCategoryDate(value: unknown): value is string {
 }
 
 export function parseBonusCategoryRate(value: unknown): string | null {
-  if ((typeof value !== "string" && typeof value !== "number") ||
-      !/^(?:0|[1-9]\d{0,4})(?:\.\d{1,4})?$/.test(String(value))) return null;
+  if (
+    (typeof value !== "string" && typeof value !== "number") ||
+    !/^(?:0|[1-9]\d{0,4})(?:\.\d{1,4})?$/.test(String(value))
+  )
+    return null;
   const amount = new Decimal(String(value));
   if (!amount.isFinite() || amount.isNegative() || amount.greaterThan(10000)) return null;
   return amount.toFixed(4);
@@ -38,12 +46,13 @@ export function parseBonusCategoryRate(value: unknown): string | null {
 export function resolveBonusCategoryRate(
   category: string,
   productionDate: string,
-  versions: ProductionBonusCategoryRateVersion[],
+  versions: ProductionBonusCategoryRateVersion[]
 ): ProductionBonusCategoryRateVersion | null {
   const normalized = normalizeBonusCategory(category);
   if (!normalized || !isBonusCategoryDate(productionDate)) return null;
-  return versions
-    .filter((version) => version.categoryKey === normalized.key &&
-      version.effectiveFrom <= productionDate)
-    .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom) || b.id - a.id)[0] ?? null;
+  return (
+    versions
+      .filter((version) => version.categoryKey === normalized.key && version.effectiveFrom <= productionDate)
+      .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom) || b.id - a.id)[0] ?? null
+  );
 }

@@ -1,0 +1,14 @@
+# Edge secrets are relative to this directory; never add them to Git.
+.env
+certs/
+backups/
+*.dump
+*.backup
+*.age
+*.key
+*.pem
+
+# Private Phase 6 acceptance data; never commit evidence or reports
+evidence/
+phase6-evidence.json
+phase6-report.json

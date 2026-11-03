@@ -1,0 +1,399 @@
+/**
+ * Phase 9: generic factory LAN -> cloud business EVENT transport.
+ *
+ * The Phase 4/8 voucher stream stays separate. Every non-voucher business
+ * workflow is a named stream with its own gapless LAN sequence, its own cloud
+ * staging cursor and its own exactly-once apply cursor, so a blocked or
+ * conflicting pressing scan can never create a gap in financial replay.
+ *
+ * A stream only accepts the event kinds registered here, and every payload
+ * must be byte-for-byte the canonical envelope that the LAN capture produced.
+ * Registering a kind is the review gate for a new offline write workflow.
+ */
+import {
+  PHASE9_STOCK_ITEM_CHANGED_CONFLICT,
+  PHASE9_STOCK_ITEM_EDIT_KIND,
+  phase9StockItemEditEnvelope,
+} from "./phase9StockItemEditEnvelope.mjs";
+import { canonicalEvidence, hashEvidence } from "./edgeSyncStageProtocol.mjs";
+import { phase9PressingEnvelope } from "./phase9PressingEnvelope.mjs";
+import {
+  PHASE9_STOCK_ADJUST_KIND,
+  PHASE9_STOCK_NEGATIVE_CONFLICT,
+  PHASE9_STOCK_TRANSFER_KIND,
+  phase9StockAdjustEnvelope,
+  phase9StockTransferEnvelope,
+} from "./phase9StockEnvelope.mjs";
+import {
+  PHASE9_POS_CASH_ACCOUNT_CONFLICT,
+  PHASE9_POS_NEGATIVE_CONFLICT,
+  PHASE9_POS_SALE_CANCEL_KIND,
+  PHASE9_POS_SALE_EDIT_KIND,
+  PHASE9_POS_SALE_KIND,
+  phase9PosSaleCancelEnvelope,
+  phase9PosSaleEditEnvelope,
+  phase9PosSaleEnvelope,
+} from "./phase9PosSaleEnvelope.mjs";
+import {
+  PHASE9_RECEIVING_KIND,
+  PHASE9_RECEIVING_ORDER_CHANGED,
+  phase9ReceivingEnvelope,
+} from "./phase9ReceivingEnvelope.mjs";
+import {
+  PHASE9_ATTACHMENT_FOLDER_MISSING,
+  PHASE9_ATTACHMENT_KIND,
+  phase9AttachmentEnvelope,
+} from "./phase9AttachmentEnvelope.mjs";
+import { PHASE9_PAYMENT_KIND, phase9PaymentEnvelope } from "./phase9PaymentEnvelope.mjs";
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const HASH = /^[0-9a-f]{64}$/;
+const SEQUENCE = /^[1-9][0-9]{0,18}$/;
+const MAX_SEQUENCE = 9223372036854775807n;
+
+export const EDGE_EVENT_STAGE_PATH = "/api/edge/sync/events/stage";
+export const EDGE_EVENT_STAGE_PROTOCOL = "factory-lan-event-stage/v1";
+export const EDGE_EVENT_STAGE_RECEIPT_PROTOCOL = "factory-lan-event-stage-receipt/v1";
+export const EDGE_EVENT_RECEIPT_QUERY_PATH = "/api/edge/sync/events/applied-receipts";
+export const EDGE_EVENT_RECEIPT_QUERY_PROTOCOL = "factory-lan-event-applied-query/v1";
+export const EDGE_EVENT_RECEIPT_PROTOCOL = "factory-lan-event-applied-receipts/v1";
+export const EDGE_EVENT_STAGE_LIMIT = 25;
+/** Attachment bytes (application/octet-stream), authenticated over their SHA-256. */
+export const EDGE_FILE_STAGE_PATH = "/api/edge/sync/files/stage";
+
+/** Outcomes a cloud apply receipt may carry. Never "staged". */
+export const EVENT_APPLY_OUTCOMES = Object.freeze(["cloud-applied", "already-present", "rejected-conflict"]);
+
+// Key order is not significant (JSONB reorders keys); values and the exact
+// set of keys are.
+function stableEqual(left, right) {
+  return JSON.stringify(canonicalEvidence(left)) === JSON.stringify(canonicalEvidence(right));
+}
+
+/**
+ * Rebuild the envelope from the received payload. Any extra, missing or
+ * altered field (for example inventoryFinalized: true) fails closed.
+ */
+function pressingPayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (payload.kind !== "pressing.confirmation.v1" || payload.inventoryFinalized !== false) return null;
+  const { kind: _kind, inventoryFinalized: _final, ...evidence } = payload;
+  let rebuilt;
+  try {
+    rebuilt = phase9PressingEnvelope(evidence);
+  } catch {
+    return null;
+  }
+  return stableEqual(rebuilt, payload) ? rebuilt : null;
+}
+
+function stockAdjustPayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (payload.kind !== PHASE9_STOCK_ADJUST_KIND) return null;
+  const { kind: _kind, ...evidence } = payload;
+  let rebuilt;
+  try {
+    rebuilt = phase9StockAdjustEnvelope(evidence);
+  } catch {
+    return null;
+  }
+  return stableEqual(rebuilt, payload) ? rebuilt : null;
+}
+
+function stockTransferPayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (payload.kind !== PHASE9_STOCK_TRANSFER_KIND) return null;
+  const { kind: _kind, ...evidence } = payload;
+  let rebuilt;
+  try {
+    rebuilt = phase9StockTransferEnvelope(evidence);
+  } catch {
+    return null;
+  }
+  return stableEqual(rebuilt, payload) ? rebuilt : null;
+}
+
+function stockItemEditPayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (payload.kind !== PHASE9_STOCK_ITEM_EDIT_KIND) return null;
+  const { kind: _kind, ...evidence } = payload;
+  let rebuilt;
+  try {
+    rebuilt = phase9StockItemEditEnvelope(evidence);
+  } catch {
+    return null;
+  }
+  return stableEqual(rebuilt, payload) ? rebuilt : null;
+}
+
+function posSalePayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (payload.kind !== PHASE9_POS_SALE_KIND) return null;
+  const { kind: _kind, ...evidence } = payload;
+  let rebuilt;
+  try {
+    rebuilt = phase9PosSaleEnvelope(evidence);
+  } catch {
+    return null;
+  }
+  return stableEqual(rebuilt, payload) ? rebuilt : null;
+}
+
+function posSaleEditPayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (payload.kind !== PHASE9_POS_SALE_EDIT_KIND) return null;
+  const { kind: _kind, ...evidence } = payload;
+  let rebuilt;
+  try {
+    rebuilt = phase9PosSaleEditEnvelope(evidence);
+  } catch {
+    return null;
+  }
+  return stableEqual(rebuilt, payload) ? rebuilt : null;
+}
+
+function posSaleCancelPayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (payload.kind !== PHASE9_POS_SALE_CANCEL_KIND) return null;
+  const { kind: _kind, ...evidence } = payload;
+  let rebuilt;
+  try {
+    rebuilt = phase9PosSaleCancelEnvelope(evidence);
+  } catch {
+    return null;
+  }
+  return stableEqual(rebuilt, payload) ? rebuilt : null;
+}
+
+function receivingPayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (payload.kind !== PHASE9_RECEIVING_KIND) return null;
+  const { kind: _kind, ...evidence } = payload;
+  let rebuilt;
+  try {
+    rebuilt = phase9ReceivingEnvelope(evidence);
+  } catch {
+    return null;
+  }
+  return stableEqual(rebuilt, payload) ? rebuilt : null;
+}
+
+function attachmentPayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (payload.kind !== PHASE9_ATTACHMENT_KIND) return null;
+  const { kind: _kind, ...evidence } = payload;
+  let rebuilt;
+  try {
+    rebuilt = phase9AttachmentEnvelope(evidence);
+  } catch {
+    return null;
+  }
+  return stableEqual(rebuilt, payload) ? rebuilt : null;
+}
+
+function paymentPayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (payload.kind !== PHASE9_PAYMENT_KIND) return null;
+  const { kind: _kind, ...evidence } = payload;
+  let rebuilt;
+  try {
+    rebuilt = phase9PaymentEnvelope(evidence);
+  } catch {
+    return null;
+  }
+  return stableEqual(rebuilt, payload) ? rebuilt : null;
+}
+
+/**
+ * `overridable` lists the conflict codes an Admin/Developer may resolve with
+ * an "approve-override" decision (apply anyway). Every other conflict can
+ * only be rejected: the cloud keeps its state and the event is not applied.
+ */
+const STREAMS = Object.freeze({
+  pressing: Object.freeze({
+    kinds: Object.freeze({
+      "pressing.confirmation.v1": Object.freeze({
+        parse: pressingPayload,
+        localRef: (payload) => payload.localConfirmationId,
+        overridable: Object.freeze([]),
+      }),
+    }),
+  }),
+  stock: Object.freeze({
+    kinds: Object.freeze({
+      [PHASE9_STOCK_ADJUST_KIND]: Object.freeze({
+        parse: stockAdjustPayload,
+        localRef: (payload) => payload.localMovementId,
+        overridable: Object.freeze([PHASE9_STOCK_NEGATIVE_CONFLICT]),
+      }),
+      [PHASE9_STOCK_TRANSFER_KIND]: Object.freeze({
+        parse: stockTransferPayload,
+        localRef: (payload) => payload.localTransferId,
+        overridable: Object.freeze([PHASE9_STOCK_NEGATIVE_CONFLICT]),
+      }),
+      [PHASE9_STOCK_ITEM_EDIT_KIND]: Object.freeze({
+        parse: stockItemEditPayload,
+        localRef: (payload) => payload.localEditId,
+        overridable: Object.freeze([PHASE9_STOCK_ITEM_CHANGED_CONFLICT]),
+      }),
+    }),
+  }),
+  pos: Object.freeze({
+    kinds: Object.freeze({
+      [PHASE9_POS_SALE_KIND]: Object.freeze({
+        parse: posSalePayload,
+        localRef: (payload) => payload.localVoucherId,
+        overridable: Object.freeze([PHASE9_POS_NEGATIVE_CONFLICT, PHASE9_POS_CASH_ACCOUNT_CONFLICT]),
+      }),
+      // Same stream as the sale, so an edit can never be applied before it.
+      [PHASE9_POS_SALE_EDIT_KIND]: Object.freeze({
+        parse: posSaleEditPayload,
+        localRef: (payload) => payload.localVoucherId,
+        overridable: Object.freeze([PHASE9_POS_NEGATIVE_CONFLICT]),
+      }),
+      [PHASE9_POS_SALE_CANCEL_KIND]: Object.freeze({
+        parse: posSaleCancelPayload,
+        localRef: (payload) => payload.localVoucherId,
+        overridable: Object.freeze([]),
+      }),
+    }),
+  }),
+  receiving: Object.freeze({
+    kinds: Object.freeze({
+      [PHASE9_RECEIVING_KIND]: Object.freeze({
+        parse: receivingPayload,
+        localRef: (payload) => payload.localOffloadId,
+        overridable: Object.freeze([PHASE9_RECEIVING_ORDER_CHANGED]),
+      }),
+    }),
+  }),
+  attachments: Object.freeze({
+    kinds: Object.freeze({
+      [PHASE9_ATTACHMENT_KIND]: Object.freeze({
+        parse: attachmentPayload,
+        localRef: (payload) => payload.localFileId,
+        overridable: Object.freeze([PHASE9_ATTACHMENT_FOLDER_MISSING]),
+      }),
+    }),
+  }),
+  payments: Object.freeze({
+    kinds: Object.freeze({
+      [PHASE9_PAYMENT_KIND]: Object.freeze({
+        parse: paymentPayload,
+        localRef: (payload) => payload.localVoucherId,
+        overridable: Object.freeze([]),
+      }),
+    }),
+  }),
+});
+
+/** Conflict codes that may be approved (applied anyway) for an event kind. */
+export function phase9OverridableConflicts(stream, kind) {
+  if (!isPhase9EventStream(stream)) return [];
+  const kinds = STREAMS[stream].kinds;
+  return Object.prototype.hasOwnProperty.call(kinds, kind) ? [...kinds[kind].overridable] : [];
+}
+
+export function phase9EventStreams() {
+  return Object.keys(STREAMS);
+}
+
+export function isPhase9EventStream(stream) {
+  return typeof stream === "string" && Object.prototype.hasOwnProperty.call(STREAMS, stream);
+}
+
+/**
+ * Validate one event against its stream's registry. Identity fields on the
+ * envelope must equal the same fields inside the hashed payload, so a relay
+ * can never re-label the company, actor or operation of signed evidence.
+ */
+export function validatePhase9Event(stream, event) {
+  if (!isPhase9EventStream(stream)) throw new Error("EDGE_EVENT_STREAM_INVALID");
+  if (
+    !event ||
+    typeof event !== "object" ||
+    Array.isArray(event) ||
+    Object.keys(event).sort().join(",") !==
+      "actorUserId,companyId,kind,localRef,operationId,payload,payloadSha256,sequence" ||
+    typeof event.sequence !== "string" ||
+    !SEQUENCE.test(event.sequence) ||
+    BigInt(event.sequence) > MAX_SEQUENCE ||
+    typeof event.operationId !== "string" ||
+    !UUID.test(event.operationId) ||
+    !Number.isSafeInteger(event.companyId) ||
+    event.companyId < 1 ||
+    !Number.isSafeInteger(event.localRef) ||
+    event.localRef < 1 ||
+    typeof event.actorUserId !== "string" ||
+    event.actorUserId.length < 1 ||
+    event.actorUserId.length > 255 ||
+    typeof event.payloadSha256 !== "string" ||
+    !HASH.test(event.payloadSha256)
+  ) {
+    throw new Error("EDGE_EVENT_INVALID");
+  }
+  const kinds = STREAMS[stream].kinds;
+  if (typeof event.kind !== "string" || !Object.prototype.hasOwnProperty.call(kinds, event.kind)) {
+    throw new Error("EDGE_EVENT_KIND_NOT_ALLOWED");
+  }
+  const kind = kinds[event.kind];
+  const payload = kind.parse(event.payload);
+  if (
+    !payload ||
+    payload.requestId !== event.operationId ||
+    payload.companyId !== event.companyId ||
+    payload.actorUserId !== event.actorUserId ||
+    kind.localRef(payload) !== event.localRef
+  ) {
+    throw new Error("EDGE_EVENT_PAYLOAD_INVALID");
+  }
+  if (hashEvidence(event.payload) !== event.payloadSha256) throw new Error("EDGE_EVENT_HASH_MISMATCH");
+  return event;
+}
+
+export function validatePhase9EventStageEnvelope(body, expectedSiteId) {
+  if (
+    !body ||
+    typeof body !== "object" ||
+    Array.isArray(body) ||
+    Object.keys(body).sort().join(",") !== "events,protocol,siteId,stream" ||
+    body.protocol !== EDGE_EVENT_STAGE_PROTOCOL ||
+    typeof body.siteId !== "string" ||
+    !UUID.test(body.siteId) ||
+    body.siteId !== expectedSiteId ||
+    !isPhase9EventStream(body.stream) ||
+    !Array.isArray(body.events) ||
+    body.events.length < 1 ||
+    body.events.length > EDGE_EVENT_STAGE_LIMIT
+  ) {
+    throw new Error("EDGE_EVENT_ENVELOPE_INVALID");
+  }
+  let last = 0n;
+  return body.events.map((event) => {
+    validatePhase9Event(body.stream, event);
+    const sequence = BigInt(event.sequence);
+    if (sequence <= last) throw new Error("EDGE_EVENT_ORDER_INVALID");
+    last = sequence;
+    return event;
+  });
+}
+
+export function validatePhase9ReceiptQuery(body, expectedSiteId) {
+  if (
+    !body ||
+    typeof body !== "object" ||
+    Array.isArray(body) ||
+    Object.keys(body).sort().join(",") !== "fromSequence,protocol,siteId,stream" ||
+    body.protocol !== EDGE_EVENT_RECEIPT_QUERY_PROTOCOL ||
+    typeof body.siteId !== "string" ||
+    !UUID.test(body.siteId) ||
+    body.siteId !== expectedSiteId ||
+    !isPhase9EventStream(body.stream) ||
+    typeof body.fromSequence !== "string" ||
+    !SEQUENCE.test(body.fromSequence) ||
+    BigInt(body.fromSequence) > MAX_SEQUENCE
+  ) {
+    throw new Error("PHASE9_RECEIPT_QUERY_INVALID");
+  }
+  return body;
+}
