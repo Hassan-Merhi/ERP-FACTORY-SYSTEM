@@ -14,6 +14,8 @@ import {
   ApplicationLanguageProvider,
   useApplicationDirection,
   useApplicationLanguage,
+  useApplicationLanguageCode,
+  useOptionalApplicationLanguage,
 } from "@/contexts/ApplicationLanguageContext";
 import { translateApplicationText } from "@/i18n/applicationTranslations";
 import { installFakeApi, respond, type FakeApi } from "./fakeApi";
@@ -193,6 +195,15 @@ describe("language hooks outside the provider", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     expect(() => renderHook(() => useApplicationLanguage())).toThrow(/inside ApplicationLanguageProvider/);
     vi.restoreAllMocks();
+  });
+
+  it("the optional hooks report no provider and fall back to the stored browser preference", () => {
+    expect(renderHook(() => useOptionalApplicationLanguage()).result.current).toBeNull();
+    window.localStorage.removeItem(APPLICATION_LANGUAGE_STORAGE_KEY);
+    expect(renderHook(() => useApplicationLanguageCode()).result.current).toBe("en");
+    window.localStorage.setItem(APPLICATION_LANGUAGE_STORAGE_KEY, "ar");
+    expect(renderHook(() => useApplicationLanguageCode()).result.current).toBe("ar");
+    window.localStorage.removeItem(APPLICATION_LANGUAGE_STORAGE_KEY);
   });
 
   it("useApplicationDirection falls back to the document direction", () => {

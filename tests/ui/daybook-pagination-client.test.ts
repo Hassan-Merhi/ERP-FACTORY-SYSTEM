@@ -29,13 +29,15 @@ function page(items: Array<{ id: number }>, pageNumber: number, totalPages: numb
 
 describe("factory daybook pagination client", () => {
   let fetchAllDaybookEntries: typeof import("../../client/src/lib/daybookPaginationClient").fetchAllDaybookEntries;
+  let getDaybookPaginationProgress: typeof import("../../client/src/lib/daybookPaginationClient").getDaybookPaginationProgress;
 
   beforeAll(async () => {
     vi.useFakeTimers();
     history.replaceState({}, "", "/factory/daybook");
     window.__erpDaybookPaginationInstalled = undefined;
     window.fetch = harness.previousFetch;
-    ({ fetchAllDaybookEntries } = await import("../../client/src/lib/daybookPaginationClient"));
+    ({ fetchAllDaybookEntries, getDaybookPaginationProgress } =
+      await import("../../client/src/lib/daybookPaginationClient"));
   });
 
   beforeEach(() => {
@@ -43,6 +45,19 @@ describe("factory daybook pagination client", () => {
     harness.previousFetch.mockReset();
     harness.invalidateQueries.mockReset();
     history.replaceState({}, "", "/factory/daybook");
+  });
+
+  it("reports the rows loaded so far through the progress snapshot", async () => {
+    harness.previousFetch
+      .mockResolvedValueOnce(page([{ id: 1 }], 1, 2, 2))
+      .mockResolvedValueOnce(page([{ id: 2 }], 2, 2, 2));
+
+    await window.fetch("/api/factory/daybook?txType=PROGRESS");
+    expect(getDaybookPaginationProgress()).toEqual({ loaded: 1, total: 2 });
+
+    await vi.advanceTimersByTimeAsync(0);
+    await window.fetch("/api/factory/daybook?txType=PROGRESS");
+    expect(getDaybookPaginationProgress()).toEqual({ loaded: 2, total: 2 });
   });
 
   it("loads every server-filtered page only for an explicit full-data action", async () => {
