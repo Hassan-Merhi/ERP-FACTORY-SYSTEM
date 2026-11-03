@@ -121,5 +121,4 @@ describe("Mobile repair Phase 1 critical flows", () => {
     expect(rawStock).toContain("data-testid={`button-deduct-${row.supplierId}`}");
     expect(rawStock).toContain("data-testid={`button-batch-${row.supplierId}`}");
   });
-
 });
