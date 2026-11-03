@@ -4,7 +4,7 @@
  * Never available in production or without the explicit preview opt-in.
  */
 import { randomBytes, createHash, createHmac } from "node:crypto";
-import { issueSignedToken, presignUrl, del } from "@vercel/blob";
+import { issueSignedToken, presignUrl, del, get } from "@vercel/blob";
 import signer from "./sign.js";
 const store = "store_TXyFGTsySrCeQhOj";
 const fixture = Buffer.from("GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAAIIEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHWTbuMU6uEElTDZ1OsggEjTbuMU6uEHFO7a1OsggHy7AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsCrXsYMPQkBNgIxMYXZmNjEuNy4xMDNXQYxMYXZmNjEuNy4xMDNEiYhAj0AAAAAAABZUrmvIrgEAAAAAAAA/14EBc8WIk0t5u340ITycgQAitZyDdW5kiIEAhoVWX1ZQOYOBASPjg4QdzWUA4JCwgRC6gRCagQJVsIRVuYEBElTDZ0B/c3OfY8CAZ8iZRaOHRU5DT0RFUkSHjExhdmY2MS43LjEwM3Nz2mPAi2PFiJNLebt+NCE8Z8ilRaOHRU5DT0RFUkSHmExhdmM2MS4xOS4xMDEgbGlidnB4LXZwOWfIoUWjiERVUkFUSU9ORIeTMDA6MDA6MDEuMDAwMDAwMDAwAB9DtnXF54EAo6uBAACAgkmDQgAA8AD2ADgkHBhCAAAwYAAAEL///DrE/////5+sf///bZAAo5OBAfQAhgBAkpwASUAAAyAAAEJAHFO7a5G7j7OBALeK94EB8YIBqPCBAw==", "base64");
@@ -43,6 +43,28 @@ export default {
       report.uploadStatus = putResult.status;
       if (!putResult.ok) throw Error("signed upload rejected: HTTP " + putResult.status);
       uploaded = true;
+      report.uploadContentType = putResult.headers.get("content-type");
+      const receiptText = await putResult.text();
+      if ((report.uploadContentType || "").includes("json")) {
+        try {
+          const receipt = JSON.parse(receiptText);
+          report.uploadReceiptKeys = Object.keys(receipt).slice(0, 10);
+          report.uploadReceiptPath = typeof receipt.pathname === "string" ? receipt.pathname : null;
+          report.uploadReceiptHost = typeof receipt.url === "string" ? new URL(receipt.url).hostname : null;
+        } catch { report.uploadReceiptJsonValid = false; }
+      } else {
+        report.uploadReceiptKind = receiptText.trim().slice(0, 60);
+      }
+      try {
+        const stored = await get(key, { access: "private" });
+        report.sdkReadStatus = stored?.statusCode ?? null;
+        if (stored?.stream) {
+          const actualBytes = Buffer.from(await new Response(stored.stream).arrayBuffer());
+          report.sdkReadSha256 = createHash("sha256").update(actualBytes).digest("hex");
+        }
+      } catch (storageError) {
+        report.sdkReadError = storageError instanceof Error ? storageError.name : "Unknown storage error";
+      }
 
       const raw = await fetch("https://" + host + "/" + key, { redirect: "error" });
       report.unauthenticatedReadStatus = raw.status;
