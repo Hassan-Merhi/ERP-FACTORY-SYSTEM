@@ -73,7 +73,7 @@ export function selectAttendanceReportPayrolls(
   return selected;
 }
 
-function estimateUnpostedSalary(input: AttendanceReportSalaryInput): MoneyDecimal {
+function estimateUnpostedSalary(input: AttendanceReportSalaryInput) {
   // Factory payroll generation supports these two attendance-based salary
   // types. Bale/KG earnings require production records, not just attendance.
   if (input.salaryType !== "Monthly" && input.salaryType !== "Daily") return zero();
