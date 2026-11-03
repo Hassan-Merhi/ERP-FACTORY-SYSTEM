@@ -53,6 +53,17 @@ export function registerAdminRepairMiscRoutes(app: Express) {
         }
         if (!voucher.optional) return res.status(400).json({ message: "Voucher is already finalized" });
 
+        // A POS sale cannot be finalized by flipping the header flag: this
+        // bypasses the stock reversal ledger, would leave returned inventory
+        // in stock and would overstate assets. The dedicated PATCH route locks
+        // the sale and reissues its items, value, and COGS together.
+        if (voucher.voucherType === "Sales") {
+          return res.status(409).json({
+            code: "POS_SALE_ACTIVATION_REQUIRES_STOCK_TOGGLE",
+            message: "Reactivate POS sales using PATCH /api/vouchers/:id/optional with optional=false so stock and accounting are restored together.",
+          });
+        }
+
         // Refused before any side effect when the lines do not satisfy the
         // active-voucher rules for the type (a balanced type must balance exactly).
         try {

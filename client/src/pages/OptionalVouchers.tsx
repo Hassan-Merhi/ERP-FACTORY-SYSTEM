@@ -55,7 +55,15 @@ export default function OptionalVouchers() {
 
   const finalizeMutation = useMutation({
     mutationFn: async (id: number) => {
-      await apiRequest("POST", `/api/vouchers/${id}/finalize`);
+      // Sales are stock documents: the legacy finalize endpoint flips only
+      // the header and never reissues the POS inventory/COGS. Use the atomic
+      // optional toggle to restore the original stock and accounting instead.
+      const voucher = vouchers.find((row) => row.id === id);
+      if (voucher?.voucherType === "Sales") {
+        await apiRequest("PATCH", `/api/vouchers/${id}/optional`, { optional: false });
+      } else {
+        await apiRequest("POST", `/api/vouchers/${id}/finalize`);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/vouchers/optional"] });

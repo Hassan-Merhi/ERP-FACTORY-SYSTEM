@@ -73,6 +73,12 @@ describe("ERP POS optional stock and accounting lifecycle", () => {
     expect(repeatOptional.status).toBe(200);
     expect(await getInventoryQty(ctx.locationId, stockItemId)).toBe(beforeQty);
 
+    // Legacy finalize must not silently turn stock-bearing sales back on.
+    const oldFinalize = await agent.post(`/api/vouchers/${voucherId}/finalize`).send({});
+    expect(oldFinalize.status).toBe(409);
+    expect(oldFinalize.body.code).toBe("POS_SALE_ACTIVATION_REQUIRES_STOCK_TOGGLE");
+    expect(await getInventoryQty(ctx.locationId, stockItemId)).toBe(beforeQty);
+
     const restore = await agent.patch(`/api/vouchers/${voucherId}/optional`).send({ optional: false });
     expect(restore.status, JSON.stringify(restore.body)).toBe(200);
     expect(await getInventoryQty(ctx.locationId, stockItemId)).toBe(beforeQty - 3);
