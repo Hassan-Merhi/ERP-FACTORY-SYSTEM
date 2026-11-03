@@ -16,6 +16,10 @@ import {
   reconcileAttendanceReportSalary,
   type AttendanceReportPayrollRecord,
 } from "../../../services/payroll/attendanceReportSalary";
+import {
+  reconcilePeriodPayrolls,
+  type PayrollReconciliationRecord,
+} from "../../../services/payroll/periodPayrollReconciliation";
 
 export function registerEmployeeAttendanceRoutes(app: Express) {
   app.get("/api/factory/net-position/payroll-breakdown", requireAuth, async (req: Request, res: Response) => {
@@ -168,17 +172,28 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
       // payroll periods wholly within the selected range are eligible; the
       // reconciliation helper removes overlapping partial payrolls per worker.
       const payrollRows = await db.execute(
-        sql`SELECT id, worker_id AS "workerId",
-                   period_start::text AS "periodStart",
-                   period_end::text AS "periodEnd",
-                   status, net_salary AS "netSalary", advances
-            FROM factory_payrolls
-            WHERE company_id = ${companyId}
-              AND period_start >= ${startDate}::date
-              AND period_end <= ${endDate}::date
-              AND worker_id = ANY(${sqlArray(workerIds)})`
+        sql`SELECT p.id, p.worker_id AS "workerId",
+                   p.period_start::text AS "periodStart",
+                   p.period_end::text AS "periodEnd",
+                   p.status, p.net_salary AS "netSalary", p.advances,
+                   COALESCE(w.active, false) AS "workerActive",
+                   EXISTS (
+                     SELECT 1
+                     FROM factory_daybook_entries d
+                     WHERE d.company_id = p.company_id
+                       AND d.reference_id = p.id
+                       AND d.reference_table = 'factory_payrolls'
+                       AND d.tx_type = 'PAYROLL_PAYMENT'
+                   ) AS "hasDaybookPayment"
+            FROM factory_payrolls p
+            LEFT JOIN factory_workers w
+              ON w.id = p.worker_id AND w.company_id = p.company_id
+            WHERE p.company_id = ${companyId}
+              AND p.period_start >= ${startDate}::date
+              AND p.period_end <= ${endDate}::date`
       );
       const payrollByWorker = new Map<number, AttendanceReportPayrollRecord[]>();
+      const reconciliationRecords: PayrollReconciliationRecord[] = [];
       for (const row of resultRows<{
         id: number;
         workerId: number;
@@ -187,8 +202,24 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
         status: string;
         netSalary: string | null;
         advances: string | null;
+        workerActive: boolean;
+        hasDaybookPayment: boolean;
       }>(payrollRows)) {
         const workerId = Number(row.workerId);
+        reconciliationRecords.push({
+          id: Number(row.id),
+          workerId,
+          workerActive: row.workerActive,
+          status: row.status,
+          periodStart: row.periodStart,
+          periodEnd: row.periodEnd,
+          netSalary: row.netSalary ?? "0",
+          advances: row.advances ?? "0",
+          hasDaybookPayment: row.hasDaybookPayment,
+        });
+        // Keep active workers' attendance KPI separate from historical or
+        // terminated employees' genuine payroll payments.
+        if (!workerIds.includes(workerId)) continue;
         const matching = payrollByWorker.get(workerId) ?? [];
         matching.push({
           id: Number(row.id),
@@ -252,6 +283,7 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
         endDate,
         dates,
         workers: workerResults,
+        payrollReconciliation: reconcilePeriodPayrolls(reconciliationRecords, startDate, endDate),
         dailySummary,
         totals: {
           workers: workers.length,
