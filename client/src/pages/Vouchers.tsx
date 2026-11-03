@@ -28,9 +28,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient, invalidateContainerLandedCostQueries } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { useAppMode, useModePrefix } from "@/contexts/AppModeContext";
-import { resolveWhatsAppPrompt } from "@/lib/whatsapp-prompt";
 import type { WhatsAppPromptState } from "@/lib/whatsapp-prompt";
 import { getApiRequest } from "@/lib/factoryApi";
 import type { AuthMe, FactoryMyAccess } from "@shared/apiTypes";
@@ -44,6 +43,7 @@ import { VoucherMobileTabs, VoucherDesktopNav } from "@/pages/vouchers/VoucherTa
 import { useVoucherQueries } from "@/pages/vouchers/useVoucherQueries";
 import { useVoucherFxWalletPayment } from "@/pages/vouchers/useVoucherFxWalletPayment";
 import { useVoucherHandlers } from "@/pages/vouchers/useVoucherHandlers";
+import { useVoucherSaveMutation } from "@/pages/vouchers/useVoucherSaveMutation";
 import { useSidebarSync } from "@/pages/vouchers/useSidebarSync";
 import { useAccountBalance } from "@/pages/vouchers/useAccountBalance";
 import { useVoucherHydration } from "@/pages/vouchers/useVoucherHydration";
@@ -399,117 +399,26 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
     payFromAccounts,
   });
 
-  const saveMutation = useMutation({
-    mutationFn: async (formData: VoucherFormData) => {
-      if (isWalletPayment) {
-        return postWalletPayment(formData, { selectedCurrency, voucherEffectiveDate, modeApiRequest });
-      }
-      const voucherType = activeTab === "payment" ? "Payment" : "Receipt";
-      const isEditMode = !!voucherIdToEdit;
-      const autoDesc = formData.notes?.trim()
-        ? formData.notes.trim()
-        : `${voucherType} (${formData.paymentAccountName || "—"})`;
-      const payload = {
-        voucherType,
-        voucherDate: format(formData.voucherDate, "yyyy-MM-dd"),
-        paymentAccountType: formData.paymentAccountType,
-        paymentAccountId: formData.paymentAccountId,
-        paymentAccountName: formData.paymentAccountName,
-        paymentAccountNarration: formData.paymentAccountNarration,
-        entries: formData.entries,
-        notes: autoDesc,
-        optional: formData.optional,
-        currency: paymentPostingCurrency,
-        exchangeRate: paymentPostingRate ? paymentPostingRate.toString() : undefined,
-        effectiveDate: voucherEffectiveDate || null,
-      };
-      if (isEditMode) {
-        const res = await modeApiRequest("PATCH", `/api/vouchers/${voucherIdToEdit}/payment-receipt`, payload);
-        return await res.json();
-      } else {
-        const res = await modeApiRequest("POST", "/api/vouchers/payment-receipt", payload);
-        return await res.json();
-      }
-    },
-    onSuccess: async (data) => {
-      const isEditMode = !!voucherIdToEdit;
-      toast({
-        title: "Success",
-        description: `${activeTab === "payment" ? "Payment" : "Receipt"} voucher ${isEditMode ? "updated" : "created"} successfully`,
-      });
-      const waPrompt = resolveWhatsAppPrompt(data);
-      if (waPrompt) setWaPendingPrompt(waPrompt);
-      discardPaymentDraft();
-      resetWalletPayment();
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/fx-agent-wallets"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/net-position"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/accounts/all"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/daybook"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/daybook"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/accounts/voucher-sidebar"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/accounts", paymentAccountType, paymentAccountId, "balance"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/bank-accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/customers/stats", selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/customers", selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stats/net-profit"] });
-      if (isEditMode) {
-        invalidateContainerLandedCostQueries();
-        setLocation(`${modePrefix}/daybook`);
-      } else {
-        form.reset({
-          paymentAccountType: "ledger",
-          paymentAccountId: 0,
-          paymentAccountName: "",
-          voucherDate: new Date(),
-          entries: [{ accountType: "ledger", accountId: 0, accountName: "", amount: "" }],
-          paymentAccountNarration: "",
-          notes: "",
-          optional: false,
-        });
-      }
-    },
-    onError: (error: ClientErrorLike, formData: VoucherFormData) => {
-      if (error.name === "OfflineQueued") {
-        const voucherType = activeTab === "payment" ? "Payment" : "Receipt";
-        const syntheticVoucher = {
-          id: -Date.now(),
-          voucherNumber: "PENDING",
-          voucherType,
-          voucherDate: format(formData.voucherDate, "yyyy-MM-dd"),
-          description: formData.notes || `${voucherType} (pending sync)`,
-          totalAmount: formData.entries
-            .filter((e) => parseFloat(e.amount || "0") > 0)
-            .reduce((sum: number, e) => sum + parseFloat(e.amount || "0"), 0)
-            .toFixed(2),
-          optional: formData.optional || false,
-          createdAt: new Date().toISOString(),
-        };
-        queryClient.setQueriesData({ queryKey: ["/api/vouchers"] }, (old) =>
-          Array.isArray(old) ? [syntheticVoucher, ...old] : old
-        );
-        discardPaymentDraft();
-        form.reset({
-          paymentAccountType: "ledger",
-          paymentAccountId: 0,
-          paymentAccountName: "",
-          voucherDate: new Date(),
-          entries: [{ accountType: "ledger", accountId: 0, accountName: "", amount: "" }],
-          paymentAccountNarration: "",
-          notes: "",
-          optional: false,
-        });
-        return;
-      }
-      if ((error as { _handledGlobally?: boolean })._handledGlobally) return;
-      toast({
-        title: "Error",
-        description: error.message || `Failed to ${voucherIdToEdit ? "update" : "create"} voucher`,
-        variant: "destructive",
-      });
-    },
+  const saveMutation = useVoucherSaveMutation({
+    activeTab,
+    voucherIdToEdit,
+    isWalletPayment,
+    postWalletPayment,
+    resetWalletPayment,
+    selectedCurrency,
+    voucherEffectiveDate,
+    modeApiRequest,
+    paymentPostingCurrency,
+    paymentPostingRate,
+    paymentAccountType,
+    paymentAccountId,
+    selectedCompany,
+    modePrefix,
+    setLocation,
+    form,
+    toast,
+    setWaPendingPrompt,
+    discardPaymentDraft,
   });
 
   const sendWaStatementMutation = useMutation({

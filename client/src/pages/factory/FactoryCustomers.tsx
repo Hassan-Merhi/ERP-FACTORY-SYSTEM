@@ -1,27 +1,22 @@
 import { searchAny } from "@shared/searchNormalization";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { drCrClass } from "@/lib/formatNumber";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useId, useState } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Plus,
   Pencil,
-  User,
   Trash2,
   FileText,
   RotateCcw,
   History,
-  Clock,
   Eye,
   EyeOff,
   Users,
@@ -43,9 +38,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { useSingleFlightAction } from "@/hooks/use-single-flight-action";
-import { MoneyInput } from "@/components/ui/decimal-input";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState } from "@/components/ui/page-state";
@@ -54,25 +47,10 @@ import { PaginationBar } from "@/components/PaginationBar";
 import { useTablePrefs } from "@/hooks/use-table-prefs";
 import { useClientTablePagination } from "@/hooks/use-client-table-pagination";
 import { useCompany } from "@/contexts/CompanyContext";
-import type { LedgerSplitFields } from "./factorycustomerstatement/NotInLedgerParts";
-
-interface Customer extends LedgerSplitFields {
-  id: number;
-  code: string;
-  legalName: string;
-  phone: string | null;
-  openingBalance: string | null;
-  openingBalanceSide: string | null;
-  active: boolean;
-  paymentTermsDays: number | null;
-  /** Combined: ledger balance + amounts not yet in the ledger (see LedgerSplitFields). */
-  balance?: number;
-  balanceSide?: string;
-}
+import { FactoryCustomerFormDialogs } from "./factorycustomers/FactoryCustomerFormDialogs";
+import type { Customer } from "./factorycustomers/types";
 
 export default function FactoryCustomers() {
-  const createFormId = useId();
-  const editFormId = useId();
   const { toast } = useToast();
   const { execute: executeSave, pending: saving } = useSingleFlightAction();
   const { formatCashAmount } = useCurrencyContext();
@@ -739,263 +717,25 @@ export default function FactoryCustomers() {
         </div>
       )}
 
-      <Dialog
-        open={isCreateOpen}
-        onOpenChange={(open) => {
-          if (createMutation.isPending || saving) return;
-          if (!open) {
-            setIsCreateOpen(false);
-            resetForm();
-          }
+      <FactoryCustomerFormDialogs
+        isCreateOpen={isCreateOpen}
+        editingCustomer={editingCustomer}
+        formData={formData}
+        setFormData={setFormData}
+        saving={saving}
+        createPending={createMutation.isPending}
+        updatePending={updateMutation.isPending}
+        onCloseCreate={() => {
+          setIsCreateOpen(false);
+          resetForm();
         }}
-      >
-        <DialogContent aria-busy={createMutation.isPending || saving}>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <User className="h-5 w-5" />
-              Add Customer
-            </DialogTitle>
-            <DialogDescription>A unique customer code will be generated automatically.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor={`${createFormId}-name`} className="text-sm font-medium mb-1 block">
-                Name
-              </label>
-              <Input
-                value={formData.legalName}
-                onChange={(e) => setFormData({ ...formData, legalName: e.target.value })}
-                placeholder="Customer name"
-                id={`${createFormId}-name`}
-                data-testid="input-customer-name"
-              />
-            </div>
-            <div>
-              <label htmlFor={`${createFormId}-phone`} className="text-sm font-medium mb-1 block">
-                Phone
-              </label>
-              <Input
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="Phone number"
-                id={`${createFormId}-phone`}
-                data-testid="input-customer-phone"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor={`${createFormId}-balance`} className="text-sm font-medium mb-1 block">
-                  Opening Balance
-                </label>
-                <MoneyInput
-                  step="0.01"
-                  value={formData.openingBalance}
-                  onChange={(e) => setFormData({ ...formData, openingBalance: e.target.value })}
-                  placeholder="0.00"
-                  id={`${createFormId}-balance`}
-                  data-testid="input-customer-opening-balance"
-                />
-              </div>
-              <div>
-                <label htmlFor={`${createFormId}-side`} className="text-sm font-medium mb-1 block">
-                  Side
-                </label>
-                <Select
-                  value={formData.openingBalanceSide}
-                  onValueChange={(v) => setFormData({ ...formData, openingBalanceSide: v })}
-                >
-                  <SelectTrigger id={`${createFormId}-side`} data-testid="select-balance-side">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Dr">Debit</SelectItem>
-                    <SelectItem value="Cr">Credit</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div>
-              <label
-                htmlFor={`${createFormId}-terms`}
-                className="text-sm font-medium mb-1 block flex items-center gap-1"
-              >
-                <Clock className="h-3.5 w-3.5" />
-                Payment Terms
-              </label>
-              <Select
-                value={formData.paymentTermsDays || "none"}
-                onValueChange={(v) =>
-                  setFormData({ ...formData, paymentTermsDays: v === "none" ? "" : v === "custom" ? "" : v })
-                }
-              >
-                <SelectTrigger id={`${createFormId}-terms`} data-testid="select-payment-terms">
-                  <SelectValue placeholder="No payment terms" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No payment terms</SelectItem>
-                  <SelectItem value="30">Net 30 days</SelectItem>
-                  <SelectItem value="45">Net 45 days</SelectItem>
-                  <SelectItem value="60">Net 60 days</SelectItem>
-                  <SelectItem value="90">Net 90 days</SelectItem>
-                </SelectContent>
-              </Select>
-              {formData.paymentTermsDays && !["30", "45", "60", "90"].includes(formData.paymentTermsDays) && (
-                <Input
-                  type="number"
-                  min={1}
-                  value={formData.paymentTermsDays}
-                  onChange={(e) => setFormData({ ...formData, paymentTermsDays: e.target.value })}
-                  placeholder="Days"
-                  className="mt-2"
-                  aria-label="Custom payment terms in days"
-                  data-testid="input-custom-payment-terms"
-                />
-              )}
-              <p className="text-xs text-muted-foreground mt-1">
-                A WhatsApp reminder will be sent when this customer has an outstanding balance past their due date.
-              </p>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setIsCreateOpen(false);
-                  resetForm();
-                }}
-                data-testid="button-cancel-create"
-              >
-                Cancel
-              </Button>
-              <FormSubmitButton
-                type="button"
-                onClick={handleCreate}
-                pending={createMutation.isPending || saving}
-                pendingLabel="Creating…"
-                disabled={!formData.legalName.trim()}
-                data-testid="button-submit-customer"
-              >
-                Create Customer
-              </FormSubmitButton>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={!!editingCustomer}
-        onOpenChange={(open) => {
-          if (updateMutation.isPending || saving) return;
-          if (!open) {
-            setEditingCustomer(null);
-            resetForm();
-          }
+        onCloseEdit={() => {
+          setEditingCustomer(null);
+          resetForm();
         }}
-      >
-        <DialogContent className="max-h-[85vh] overflow-y-auto" aria-busy={updateMutation.isPending || saving}>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Pencil className="h-5 w-5" />
-              Edit Customer
-            </DialogTitle>
-            <DialogDescription>{editingCustomer ? `Editing ${editingCustomer.legalName}` : ""}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor={`${editFormId}-name`} className="text-sm font-medium mb-1 block">
-                Name
-              </label>
-              <Input
-                value={formData.legalName}
-                onChange={(e) => setFormData({ ...formData, legalName: e.target.value })}
-                placeholder="Customer name"
-                id={`${editFormId}-name`}
-                data-testid="input-edit-customer-name"
-              />
-            </div>
-            <div>
-              <label htmlFor={`${editFormId}-phone`} className="text-sm font-medium mb-1 block">
-                Phone
-              </label>
-              <Input
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="Phone number"
-                id={`${editFormId}-phone`}
-                data-testid="input-edit-customer-phone"
-              />
-            </div>
-            <div>
-              <label htmlFor={`${editFormId}-terms`} className="text-sm font-medium mb-1 block flex items-center gap-1">
-                <Clock className="h-3.5 w-3.5" />
-                Payment Terms
-              </label>
-              <Select
-                value={
-                  formData.paymentTermsDays && ["30", "45", "60", "90"].includes(formData.paymentTermsDays)
-                    ? formData.paymentTermsDays
-                    : formData.paymentTermsDays
-                      ? "custom"
-                      : "none"
-                }
-                onValueChange={(v) => {
-                  if (v === "none") setFormData({ ...formData, paymentTermsDays: "" });
-                  else if (v === "custom") setFormData({ ...formData, paymentTermsDays: "" });
-                  else setFormData({ ...formData, paymentTermsDays: v });
-                }}
-              >
-                <SelectTrigger id={`${editFormId}-terms`} data-testid="select-edit-payment-terms">
-                  <SelectValue placeholder="No payment terms" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No payment terms</SelectItem>
-                  <SelectItem value="30">Net 30 days</SelectItem>
-                  <SelectItem value="45">Net 45 days</SelectItem>
-                  <SelectItem value="60">Net 60 days</SelectItem>
-                  <SelectItem value="90">Net 90 days</SelectItem>
-                  <SelectItem value="custom">Custom...</SelectItem>
-                </SelectContent>
-              </Select>
-              {formData.paymentTermsDays && !["30", "45", "60", "90"].includes(formData.paymentTermsDays) && (
-                <Input
-                  type="number"
-                  min={1}
-                  value={formData.paymentTermsDays}
-                  onChange={(e) => setFormData({ ...formData, paymentTermsDays: e.target.value })}
-                  placeholder="Number of days"
-                  className="mt-2"
-                  aria-label="Custom payment terms in days"
-                  data-testid="input-edit-custom-payment-terms"
-                />
-              )}
-              <p className="text-xs text-muted-foreground mt-1">
-                A WhatsApp reminder is sent at 9 AM when this customer has an outstanding balance past their due date.
-              </p>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setEditingCustomer(null);
-                  resetForm();
-                }}
-                data-testid="button-cancel-edit"
-              >
-                Cancel
-              </Button>
-              <FormSubmitButton
-                type="button"
-                onClick={handleUpdate}
-                pending={updateMutation.isPending || saving}
-                pendingLabel="Saving…"
-                disabled={!formData.legalName.trim()}
-                data-testid="button-submit-edit-customer"
-              >
-                Save Changes
-              </FormSubmitButton>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+        onCreate={handleCreate}
+        onUpdate={handleUpdate}
+      />
 
       <ConfirmDialog
         open={!!deletingCustomer}
