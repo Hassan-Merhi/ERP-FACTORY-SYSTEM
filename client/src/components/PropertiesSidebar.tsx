@@ -4,9 +4,7 @@ import {
   BookOpen,
   Settings,
   Building2,
-  Store,
   ClipboardList,
-  ArrowLeftRight,
   KeyRound,
   BarChart2,
   UserRound,
@@ -36,10 +34,9 @@ export const PROPERTIES_NAV_SECTIONS: NavSection[] = [
     label: "Rentals",
     color: NAV_COLOR.finance,
     items: [
-      { title: "Properties (Warehouses)", url: "/properties/rentals", icon: Building2 },
-      { title: "Shops Rented", url: "/properties/rentals?tab=shops", icon: Store },
-      { title: "Payments Log", url: "/properties/rentals?tab=payments", icon: ClipboardList },
-      { title: "Cash Transfer", url: "/properties/transfer", icon: ArrowLeftRight },
+      // The Rentals hub already has Warehouses, Shops and Payments tabs.
+      // Keep those views reachable inside the hub, without 3 sidebar copies.
+      { title: "Rentals", url: "/properties/rentals", icon: Building2 },
     ],
   },
   {
@@ -52,22 +49,24 @@ export const PROPERTIES_NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    label: "Accounting Reconciliation",
+    label: "Accounting Tools",
     color: NAV_COLOR.accounting,
-    items: [
-      { title: "Open Items", url: "/properties/accounting/open-items", icon: ClipboardList },
-      { title: "Bank & Cash Reconciliation", url: "/properties/accounting/cash-bank", icon: Landmark },
-      { title: "Multi-Currency Accounting", url: "/properties/accounting/monetary-fx", icon: Landmark },
-      { title: "Rental Accounting", url: "/properties/accounting/rentals", icon: ClipboardList },
-      { title: "Intercompany & Consolidation", url: "/properties/accounting/consolidation", icon: Landmark },
-      { title: "Historical Accounting", url: "/properties/accounting/history", icon: Clock },
-      { title: "Financial Statements", url: "/properties/accounting/statements", icon: FileText },
-      { title: "Fiscal Closing & Audit", url: "/properties/accounting/fiscal-review", icon: Landmark },
-      { title: "Unified Accounting Dashboard", url: "/properties/accounting/dashboard", icon: Landmark },
-      { title: "Unified Accounting Rollout", url: "/properties/accounting/rollout", icon: Landmark },
-    ],
+    items: [{ title: "Accounting Toolbox", url: "/properties/accounting/toolbox", icon: ClipboardList }],
   },
 ];
+
+/** One visibility policy for Properties sidebar and command search.
+ * These routes are only registered for Developer in PropertiesRoutes.
+ */
+export function getPropertiesVisibleNavSections(isDeveloper: boolean): NavSection[] {
+  return PROPERTIES_NAV_SECTIONS.map((section) => ({
+    ...section,
+    items: section.items.filter(
+      (item) =>
+        isDeveloper || !item.url.startsWith("/properties/accounting/")
+    ),
+  })).filter((section) => section.items.length > 0);
+}
 
 const PROPERTIES_PINNED_DEFAULTS: NavItem[] = [
   { title: "Daybook", url: "/properties/daybook", icon: BookOpen },
@@ -77,27 +76,7 @@ const PROPERTIES_PINNED_DEFAULTS: NavItem[] = [
 export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogout: () => void | Promise<void> }) {
   const isAdmin = user?.role === "Admin" || user?.role === "Developer";
   const isDeveloper = user?.role === "Developer";
-  const visibleSections = useMemo(
-    () =>
-      PROPERTIES_NAV_SECTIONS.map((section) => ({
-        ...section,
-        items: section.items.filter(
-          (item) =>
-            (isDeveloper ||
-              (item.url !== "/properties/accounting/open-items" &&
-                item.url !== "/properties/accounting/cash-bank" &&
-                item.url !== "/properties/accounting/monetary-fx" &&
-                item.url !== "/properties/accounting/rentals" &&
-                item.url !== "/properties/accounting/consolidation" &&
-                item.url !== "/properties/accounting/history" &&
-                item.url !== "/properties/accounting/statements" &&
-                item.url !== "/properties/accounting/fiscal-review" &&
-                item.url !== "/properties/accounting/dashboard" &&
-                item.url !== "/properties/accounting/rollout"))
-        ),
-      })).filter((section) => section.items.length > 0),
-    [isDeveloper]
-  );
+  const visibleSections = useMemo(() => getPropertiesVisibleNavSections(isDeveloper), [isDeveloper]);
 
   const { items: pinnedItems, reorder: reorderPinned } = usePinnedOrder(
     "properties-pinned-order",

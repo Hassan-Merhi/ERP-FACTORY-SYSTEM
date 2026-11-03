@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Link } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
 import SalesReportLegacy from "./SalesReportLegacy";
 
@@ -22,5 +23,29 @@ export default function SalesReport() {
     [selectedCompany],
   );
 
-  return <SalesReportLegacy />;
+  return (
+    <div className="min-w-0">
+      {selectedCompany?.companyType !== "retail" && (
+        <nav aria-label="Related sales reports" className="mb-3 flex flex-wrap items-center gap-2">
+          <Link
+            href="/stock-in-sales-report"
+            className="inline-flex min-h-10 items-center rounded-lg border bg-card px-3 text-sm font-medium hover:bg-muted"
+            data-testid="link-sales-report-stock-in-sales"
+          >
+            Stock In &amp; Sales
+          </Link>
+          {selectedCompany?.companyType === "erp" && (
+            <Link
+              href="/item-market-analysis"
+              className="inline-flex min-h-10 items-center rounded-lg border bg-card px-3 text-sm font-medium hover:bg-muted"
+              data-testid="link-sales-report-market-analysis"
+            >
+              Item Market Analysis
+            </Link>
+          )}
+        </nav>
+      )}
+      <SalesReportLegacy />
+    </div>
+  );
 }
