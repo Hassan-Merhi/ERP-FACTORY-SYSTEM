@@ -121,6 +121,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [shared-ui-phase-8-claude-handoff.md](shared-ui-phase-8-claude-handoff.md) | Phase 8 review scope and verification mandate |
 | [api-quickstart.md](api-quickstart.md) | Calling the API |
 | [compatibility.md](compatibility.md) | Supported browsers and platforms |
+| [coverage-program.md](coverage-program.md) | Coverage targets and phases, the UI test harness, measured coverage and removal candidates |
 
 ## Security and permissions
 

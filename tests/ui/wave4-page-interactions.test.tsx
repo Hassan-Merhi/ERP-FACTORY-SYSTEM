@@ -40,7 +40,22 @@ const PAGES: Array<{
   { name: "NotificationsCenter", load: () => import("@/components/NotificationsCenter") },
   { name: "StockNameUpdateImport", load: () => import("@/components/StockNameUpdateImport") },
   { name: "AccountGroups", load: () => import("@/pages/AccountGroups") },
-  { name: "AccountMigration", load: () => import("@/pages/AccountMigration") },
+  {
+    name: "AccountMigration",
+    load: () => import("@/pages/AccountMigration"),
+    seedRoutes: {
+      "/api/admin/account-migration/pending": () => [
+        {
+          migrationId: "mig-1",
+          srcCompanyId: 1,
+          destCompanyId: 2,
+          accountIds: [11],
+          movedVoucherIds: [21],
+          accounts: [{ accountId: 11, originalCode: "1100", finalCode: "1100-M" }],
+        },
+      ],
+    },
+  },
   { name: "AiValidationPage", load: () => import("@/pages/AiValidationPage") },
   { name: "BaleProductsBilingual", load: () => import("@/pages/BaleProductsBilingual") },
   { name: "BarcodeManager", load: () => import("@/pages/BarcodeManager") },
