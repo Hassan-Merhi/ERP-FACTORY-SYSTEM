@@ -95,6 +95,24 @@ describe("screen feed capture engine", () => {
     vi.unstubAllGlobals();
   });
 
+  it("renders fast frames at the final JPEG width instead of downscaling a larger capture", async () => {
+    vi.stubGlobal("innerWidth", 1920);
+    html2canvas.mockResolvedValue(makeCanvas(1120, 630, false));
+    await captureOnce(fetchMock, true);
+
+    const options = html2canvas.mock.calls[0]?.[1] as { scale: number };
+    expect(options.scale).toBeCloseTo(1120 / 1920, 4);
+  });
+
+  it("retains a larger image for standard-quality viewing", async () => {
+    vi.stubGlobal("innerWidth", 1920);
+    html2canvas.mockResolvedValue(makeCanvas(1440, 810, false));
+    await captureOnce(fetchMock, false);
+
+    const options = html2canvas.mock.calls[0]?.[1] as { scale: number };
+    expect(options.scale).toBeCloseTo(1440 / 1920, 4);
+  });
+
   it("never renders through foreignObject, whose output cannot be encoded", async () => {
     html2canvas.mockResolvedValue(makeCanvas(1200, 800, false));
     await captureOnce(fetchMock);
