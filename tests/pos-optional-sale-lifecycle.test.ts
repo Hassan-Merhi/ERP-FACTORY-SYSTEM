@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "../server/db";
@@ -46,7 +47,7 @@ describe("ERP POS optional stock and accounting lifecycle", () => {
       paymentAccountType: "ledger",
       paymentAccountId: ctx.cashAccountId,
       voucherDate: new Date().toISOString().slice(0, 10),
-      clientSaleId: `pos-optional-${Date.now()}-${Math.random()}`,
+      clientSaleId: randomUUID(),
     });
     expect(response.status, JSON.stringify(response.body)).toBe(200);
     return Number(response.body.voucher.id);
@@ -102,7 +103,7 @@ describe("ERP POS optional stock and accounting lifecycle", () => {
         paymentAccountType: "ledger",
         paymentAccountId: ctx.cashAccountId,
         voucherDate: new Date().toISOString().slice(0, 10),
-        clientSaleId: `pos-optional-shortage-${Date.now()}`,
+        clientSaleId: randomUUID(),
       });
       expect(response.status, JSON.stringify(response.body)).toBe(200);
       return Number(response.body.voucher.id);
