@@ -499,6 +499,12 @@ export default function FactoryWorkerAttendanceReport() {
                   <p className="text-2xl font-bold tabular-nums tracking-tight" data-testid="stat-total-workers">
                     {filteredWorkers.length}
                   </p>
+                  {filteredWorkers.some((worker) => worker.active === false) && (
+                    <p className="mt-1 text-[10px] text-muted-foreground" data-testid="stat-worker-status-breakdown">
+                      {filteredWorkers.filter((worker) => worker.active !== false).length} active ·{" "}
+                      {filteredWorkers.filter((worker) => worker.active === false).length} inactive
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
