@@ -29,6 +29,7 @@ import {
 
 import type { DbTransaction } from "../../../db";
 import { adjustInventory } from "../../../inventoryHelper";
+import { restorePosSaleInventoryForReversal } from "../../../services/pos/edit/reverseOriginalSaleInventory";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { assertNoBaleMirrorMovementTx } from "../../../services/accounting/perpetualInventory/cutoverRefusal";
 import {
@@ -283,16 +284,19 @@ export async function toggleVoucherStockTx(tx: DbTransaction, context: ToggleCon
         if (values) {
           const entry = values.get(item.id);
           value = entry?.value ?? new MoneyDecimal(0);
-          deltas.push(
-            await restoreIssuedValueTx(tx, {
-              companyId,
-              locationId: voucher.locationId,
-              stockItemId: item.stockItemId,
-              quantity,
-              value,
-              exact: entry?.exact,
-            })
-          );
+          // Use the POS reversal path to release only negative-stock shortage
+          // layers actually resolved by this sale. A generic stock receipt
+          // would consume unrelated historical layers and corrupt valuation.
+          const restored = await restorePosSaleInventoryForReversal(tx, {
+            companyId,
+            locationId: voucher.locationId,
+            stockItemId: item.stockItemId,
+            quantity: quantity.toNumber(),
+            voucherId: voucher.id,
+            value,
+            exact: entry?.exact,
+          });
+          deltas.push(toMoney(restored.newTotalValue).minus(toMoney(restored.previousTotalValue)));
         } else {
           const issued = await adjustInventory(
             tx,

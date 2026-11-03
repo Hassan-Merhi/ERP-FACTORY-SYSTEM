@@ -23,6 +23,7 @@ import { vouchers } from "@shared/schema";
 import type { DbTransaction } from "../../../db";
 import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/perpetualInventory/stockAdjustments";
 import { nextCanonicalSourceRevision } from "../../../services/inventory/canonicalSourceRevision";
+import { assertPosOptionalSettlementSafeTx } from "../../../services/pos/posOptionalSafety";
 import { postOptionalToggleResidualTx, toggleVoucherStockTx, voucherInventoryLedgerTx } from "./optionalStockToggle";
 
 type VoucherRow = typeof vouchers.$inferSelect;
@@ -34,6 +35,7 @@ export async function applyVoucherOptionalInventoryChange(
   actor?: { userId?: string | null; username?: string | null; reason?: string | null }
 ): Promise<void> {
   if (voucher.optional === willBeOptional) return;
+  await assertPosOptionalSettlementSafeTx(tx, voucher);
 
   const evidenceRevision = await nextCanonicalSourceRevision(
     tx,
