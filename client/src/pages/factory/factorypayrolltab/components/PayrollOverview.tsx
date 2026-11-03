@@ -27,6 +27,7 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
     setSelectedIds,
     setBulkPayOpen,
     setUndoTargetId,
+    setDeleteTargetId,
     setDeleteBatchGroup,
     showCompletedBatches,
     setShowCompletedBatches,
@@ -212,6 +213,7 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
                   setFixAcctCashId={setFixAcctCashId}
                   setFixAcctOpen={setFixAcctOpen}
                   setUndoTargetId={setUndoTargetId}
+                  setDeleteTargetId={setDeleteTargetId}
                   setDeleteBatchGroup={setDeleteBatchGroup}
                   formatDisplayDate={formatDisplayDate}
                   isDeveloper={isDeveloper}
@@ -252,6 +254,7 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
                         setFixAcctCashId={setFixAcctCashId}
                         setFixAcctOpen={setFixAcctOpen}
                         setUndoTargetId={setUndoTargetId}
+                  setDeleteTargetId={setDeleteTargetId}
                         setDeleteBatchGroup={setDeleteBatchGroup}
                         formatDisplayDate={formatDisplayDate}
                         condensed
