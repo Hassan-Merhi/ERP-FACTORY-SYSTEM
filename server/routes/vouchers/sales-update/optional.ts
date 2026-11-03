@@ -28,7 +28,10 @@ import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/per
 import { syncFactoryInvoiceForChargeVoucherTx } from "../../../services/accounting/perpetualInventory/factoryInvoice";
 import { sendBaleMirrorMovementRefusal } from "../../../services/accounting/perpetualInventory/cutoverRefusal";
 import { assertVoucherEditableTx, sendVoucherCorrectionRefusal } from "../../../services/accounting/voucherCorrection";
-import { assertStoredVoucherLinesValidTx } from "../../../services/accounting/voucherEntryReplacement";
+import {
+  assertStoredVoucherLinesValidTx,
+  replacementErrorStatus,
+} from "../../../services/accounting/voucherEntryReplacement";
 
 export function registerVoucherOptionalUpdateRoutes(app: Express) {
   // Toggle optional status for a voucher
@@ -194,6 +197,13 @@ export function registerVoucherOptionalUpdateRoutes(app: Express) {
     } catch (error: unknown) {
       if (sendBaleMirrorMovementRefusal(res, error)) return;
       if (sendVoucherCorrectionRefusal(res, error)) return;
+      // The in-transaction line check (assertStoredVoucherLinesValidTx) throws a
+      // PostingValidationError; the rolled-back transaction changed nothing, so
+      // it is the caller's 400, not a 500.
+      const replacementStatus = replacementErrorStatus(error);
+      if (replacementStatus) {
+        return res.status(replacementStatus).json({ message: getErrorMessage(error) });
+      }
       if ((error as { name?: string }).name === "ValidationError") {
         return res.status(400).json({ message: getErrorMessage(error) });
       }
