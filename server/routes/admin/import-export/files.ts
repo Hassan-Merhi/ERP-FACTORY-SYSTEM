@@ -4,6 +4,7 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
+import { offlineEdgeText } from "../../../i18n/offlineEdgeMessages";
 import type { Express, Request, Response } from "express";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { getErrorMessage } from "../../../lib/httpHandlers";
@@ -131,9 +132,10 @@ export function registerFileRoutes(app: Express) {
       // Owner policy: offline uploads on the factory LAN server are capped at 10 MB.
       const lanCapture = isPhase9LanPrimary();
       if (lanCapture && file.size > PHASE9_ATTACHMENT_MAX_BYTES) {
-        return res
-          .status(413)
-          .json({ code: "EDGE_ATTACHMENT_TOO_LARGE", message: "Offline uploads are limited to 10 MB." });
+        return res.status(413).json({
+          code: "EDGE_ATTACHMENT_TOO_LARGE",
+          message: offlineEdgeText("attachmentTooLarge", req.headers["accept-language"]),
+        });
       }
       const fileData = file.buffer.toString("base64");
       const folderIdNum = folderId ? parseInt(folderId) : null;

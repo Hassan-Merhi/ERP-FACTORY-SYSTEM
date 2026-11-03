@@ -8,6 +8,7 @@
  * sales-item reads under one transaction lock. Concurrent edits therefore use
  * the latest committed sale state instead of stale pre-transaction snapshots.
  */
+import { offlineEdgeText } from "../../../i18n/offlineEdgeMessages";
 import { db, type DbTransaction } from "../../../db";
 import { logger } from "../../../lib/logger";
 import { storage } from "../../../storage";
@@ -413,7 +414,7 @@ export async function updatePosSale(
   if (lanCapture && spContextResult.context.isSpCompanyEdit) {
     return err({
       status: 409,
-      body: { code: "EDGE_POS_OFFLINE_COMPANY_UNSUPPORTED", message: "This company's sales stay online-only." },
+      body: { code: "EDGE_POS_OFFLINE_COMPANY_UNSUPPORTED", message: offlineEdgeText("posCompanyOnlineOnly") },
     });
   }
 

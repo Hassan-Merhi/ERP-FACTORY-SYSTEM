@@ -1,4 +1,5 @@
 import { cancelFxAgentSettlementVoucherTx } from "../../services/factory/fxAgentSettlementCancellation";
+import { offlineEdgeText } from "../../i18n/offlineEdgeMessages";
 import { sessionRetirementActor, type VoucherRetirementActor } from "../../services/accounting/voucherRetirement";
 import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
 import { capturePosSaleCancelOfflineTx } from "../../services/pos/posSaleCancelOfflineCapture";
@@ -248,7 +249,7 @@ export function registerVoucherDeleteRoutes(app: Express) {
       if (lanCapture && voucher.voucherType !== "Sales") {
         return res.status(409).json({
           code: "EDGE_VOUCHER_DELETE_OFFLINE_SALES_ONLY",
-          message: "Only POS sales can be cancelled while the factory is offline.",
+          message: offlineEdgeText("voucherDeleteSalesOnly", req.headers["accept-language"]),
         });
       }
       await db.transaction(async (tx) => {

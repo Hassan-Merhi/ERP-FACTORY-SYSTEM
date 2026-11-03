@@ -8,6 +8,7 @@
  * replay keeps the LAN number on the cloud voucher for cross-reference.
  * Schema: reviewed DBA install only (server/edge/offlineSchemaInstall.ts).
  */
+import { EdgeRefusal } from "./edgeRefusal";
 import { sql } from "drizzle-orm";
 import type { Pool } from "pg";
 import type { DbTransaction } from "../db";
@@ -85,7 +86,7 @@ export async function ensurePhase9PosOutboxSchema(queryable: Pick<Pool, "query">
 export async function allocatePhase9PosInvoiceTx(tx: DbTransaction): Promise<Phase9PosInvoice> {
   const config = readFactoryEdgeConfiguration();
   if (config.mode !== "lan" || !config.primary || !config.siteId) {
-    throw new Error("PHASE9_POS_LAN_PRIMARY_REQUIRED");
+    throw new EdgeRefusal("PHASE9_POS_LAN_PRIMARY_REQUIRED");
   }
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('factory-edge-pos-outbox-order'))`);
   const result = await tx.execute(sql`
@@ -95,7 +96,7 @@ export async function allocatePhase9PosInvoiceTx(tx: DbTransaction): Promise<Pha
     RETURNING last_sequence::text AS sequence
   `);
   const sequence = resultRows<{ sequence: string }>(result)[0]?.sequence;
-  if (!sequence) throw new Error("PHASE9_POS_SEQUENCE_UNAVAILABLE");
+  if (!sequence) throw new EdgeRefusal("PHASE9_POS_SEQUENCE_UNAVAILABLE");
   return { siteId: config.siteId, sequence, number: phase9PosInvoiceNumber(config.siteId, sequence) };
 }
 
@@ -105,7 +106,7 @@ export async function capturePhase9PosSaleTx(
   invoice: Phase9PosInvoice,
   evidence: Phase9PosSaleEvidence
 ): Promise<void> {
-  if (evidence.lanInvoiceNumber !== invoice.number) throw new Error("PHASE9_POS_INVOICE_MISMATCH");
+  if (evidence.lanInvoiceNumber !== invoice.number) throw new EdgeRefusal("PHASE9_POS_INVOICE_MISMATCH");
   const event = phase9PosSaleEnvelope(evidence);
   const hash = hashEvidence(event);
   await tx.execute(sql`

@@ -41,6 +41,14 @@ export interface QuickAdjustmentCoreResult {
 }
 
 /** Thrown when a subtraction would take this location's stock below zero. */
+/** An internal invariant broke (a machine code, never shown to users verbatim). */
+export class QuickAdjustmentInvariantError extends Error {
+  constructor(readonly code: string) {
+    super(code);
+    this.name = "QuickAdjustmentInvariantError";
+  }
+}
+
 export class QuickAdjustmentNegativeStockError extends InventoryRouteError {
   constructor(
     readonly requested: number,
@@ -146,7 +154,7 @@ export async function applyQuickAdjustmentCoreTx(
   );
   const movementId = movement.movements[0]?.id;
   if (!Number.isSafeInteger(movementId) || movementId < 1) {
-    throw new Error("Quick adjustment did not record a stock movement");
+    throw new QuickAdjustmentInvariantError("QUICK_ADJUST_MOVEMENT_NOT_RECORDED");
   }
   return {
     previousQuantity: adjustment.previousQuantity,

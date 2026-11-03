@@ -64,6 +64,12 @@ function saleTotal(p: Phase9PosSaleEvent["payload"]) {
   );
 }
 
+/** The sale service's refusal text, kept with the conflict for the reviewer. */
+function refusalMessage(body: unknown): string | undefined {
+  const value = (body as { message?: unknown } | null)?.message;
+  return value === undefined ? undefined : String(value);
+}
+
 async function authorize(client: Queryable, event: Phase9PosSaleEvent): Promise<void> {
   const access = await client.query(
     `SELECT u.active, r.role, r.pos_view_only
@@ -217,7 +223,7 @@ async function apply(
   if (result.status !== 200 || !("voucher" in result.body) || !result.body.voucher) {
     throw new Phase9EventConflict("PHASE9_POS_SALE_REFUSED", {
       status: result.status,
-      message: "message" in result.body ? String(result.body.message) : undefined,
+      message: refusalMessage(result.body),
     });
   }
   const voucher = result.body.voucher as { id: number; voucherDate: string | Date };

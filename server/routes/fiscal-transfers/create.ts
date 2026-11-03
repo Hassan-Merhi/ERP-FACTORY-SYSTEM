@@ -4,6 +4,7 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
+import { offlineEdgeText } from "../../i18n/offlineEdgeMessages";
 import type { Express, Request } from "express";
 import { getErrorMessage, getErrorStack } from "../../lib/httpHandlers";
 import { db } from "../../db";
@@ -254,7 +255,7 @@ export function registerStockTransferCreateRoutes(app: Express) {
       if (isPhase9LanPrimary()) {
         return res.status(409).json({
           code: "EDGE_PHASE9_STOCK_TRANSFER_FORM_CLOUD_ONLY",
-          message: "Only new stock transfers can be made on the factory server during an outage.",
+          message: offlineEdgeText("stockTransferFormCloudOnly", req.headers["accept-language"]),
         });
       }
       if (!companyId) {
