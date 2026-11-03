@@ -13,7 +13,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { useToast } from "@/hooks/use-toast";
-import { useAuthenticatedUser } from "@/app/useAuthenticatedUser";
 import { CalendarDays, Save, Printer, FileDown, Loader2, MessageCircle, Search } from "lucide-react";
 
 import type {
@@ -58,8 +57,6 @@ interface AttendanceWhatsappSettings {
 
 export default function FactoryAttendance() {
   const { toast } = useToast();
-  const { user } = useAuthenticatedUser();
-  const isOwner = (user?.currentRole ?? user?.role) === "Owner";
   const [mode, setMode] = useState<ViewMode>(getInitialMode);
 
   const showDailyAttendance = () => {
@@ -184,14 +181,14 @@ export default function FactoryAttendance() {
       notes: notesMap[w.id] || undefined,
     }));
     const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
-    if (priorDates.length && !isOwner) {
+    if (priorDates.length) {
       setApprovalDates(priorDates);
       setPendingApprovalRecords(records);
       setApprovalOpen(true);
     } else {
       saveMutation.mutate({ records });
     }
-  }, [data, selectedDate, shift, attendanceMap, notesMap, saveMutation, isOwner]);
+  }, [data, selectedDate, shift, attendanceMap, notesMap, saveMutation]);
 
   const approveAttendanceSave = (credentials: AttendanceAdminCredentials) => {
     if (pendingApprovalRecords) saveMutation.mutate({ records: pendingApprovalRecords, credentials });
@@ -361,7 +358,7 @@ export default function FactoryAttendance() {
               <Badge variant="outline" className="rounded-full bg-background/50 px-2.5 py-1 text-[11px] font-medium">
                 {formatDate(selectedDate)}
               </Badge>
-              {selectedDate < attendanceToday() && !isOwner && (
+              {selectedDate < attendanceToday() && (
                 <Badge variant="secondary" className="rounded-full">
                   Earlier date — Admin approval required to save
                 </Badge>
