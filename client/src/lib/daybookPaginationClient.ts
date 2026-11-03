@@ -18,6 +18,24 @@ const ROUTES = new Set(["/factory/daybook", "/properties/daybook"]);
 const DEFAULT_LIMIT = 100;
 const MAX_ACTION_LIMIT = 250;
 
+export const DAYBOOK_PROGRESS_EVENT = "factory-daybook-pagination-progress";
+
+export interface DaybookPaginationProgress {
+  loaded: number;
+  total: number | null;
+}
+
+let currentProgress: DaybookPaginationProgress = { loaded: 0, total: null };
+
+export function getDaybookPaginationProgress(): DaybookPaginationProgress {
+  return currentProgress;
+}
+
+function publishDaybookProgress(progress: DaybookPaginationProgress): void {
+  currentProgress = progress;
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(DAYBOOK_PROGRESS_EVENT));
+}
+
 export interface PaginatedDaybookEntry {
   id: number;
   companyId: number;
@@ -76,26 +94,44 @@ function actionUrl(baseParams: URLSearchParams, page: number): string {
   return `${ENDPOINT}?${params.toString()}`;
 }
 
-/** Loads the complete server-filtered daybook only for explicit export actions. */
-export async function fetchAllDaybookEntries(baseParams: URLSearchParams): Promise<PaginatedDaybookEntry[]> {
-  const firstResponse = await fetch(actionUrl(baseParams, 1), { credentials: "include" });
+/** Loads every server-filtered row before returning it to Daybook or an export. */
+export async function fetchAllDaybookEntries(
+  baseParams: URLSearchParams,
+  signal?: AbortSignal
+): Promise<PaginatedDaybookEntry[]> {
+  const fetchOptions: RequestInit = signal ? { credentials: "include", signal } : { credentials: "include" };
+  const firstResponse = await fetch(actionUrl(baseParams, 1), fetchOptions);
   if (!firstResponse.ok) {
     const body = await firstResponse.json().catch(() => ({}));
     throw new Error(body?.message || "Failed to load complete daybook data");
   }
 
   const first = (await firstResponse.json()) as DaybookPage;
-  const entries = Array.isArray(first.items) ? [...first.items] : [];
+  if (!Array.isArray(first.items)) throw new Error("Incomplete daybook response: first page is missing");
+  const entries = [...first.items];
   const totalPages = Math.max(1, Number(first.totalPages || 1));
+  const expectedTotal = typeof first.total === "number" && Number.isFinite(first.total) ? first.total : null;
 
   for (let page = 2; page <= totalPages; page += 1) {
-    const response = await fetch(actionUrl(baseParams, page), { credentials: "include" });
+    const response = await fetch(actionUrl(baseParams, page), fetchOptions);
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
       throw new Error(body?.message || `Failed to load daybook page ${page}`);
     }
     const data = (await response.json()) as DaybookPage;
-    if (Array.isArray(data.items)) entries.push(...data.items);
+    if (!Array.isArray(data.items) || (data.page != null && data.page !== page)) {
+      throw new Error(`Incomplete daybook response on page ${page}`);
+    }
+    if (expectedTotal !== null && data.total !== expectedTotal) {
+      throw new Error("Daybook changed while loading; refresh to get a consistent list");
+    }
+    entries.push(...data.items);
+  }
+
+  // Never render an incomplete list or duplicate rows as if all entries were present.
+  if (expectedTotal !== null &&
+      (entries.length !== expectedTotal || new Set(entries.map((entry) => entry.id)).size !== expectedTotal)) {
+    throw new Error("Daybook changed while loading; refresh to get a consistent list");
   }
 
   return entries;
@@ -156,6 +192,7 @@ if (typeof window !== "undefined" && !window.__erpDaybookPaginationInstalled) {
     pendingPage = null;
     loadingMore = false;
     pageCache.clear();
+    publishDaybookProgress({ loaded: 0, total: null });
   }
 
   function highestLoadedPage(): number {
@@ -242,7 +279,10 @@ if (typeof window !== "undefined" && !window.__erpDaybookPaginationInstalled) {
     }
 
     const requestedPage = pendingPage ?? 1;
-    if (requestedPage === 1) pageCache.clear();
+    if (requestedPage === 1) {
+      pageCache.clear();
+      publishDaybookProgress({ loaded: 0, total: null });
+    }
 
     match.url.searchParams.set("pagination", "1");
     match.url.searchParams.set("page", String(requestedPage));
@@ -297,6 +337,7 @@ if (typeof window !== "undefined" && !window.__erpDaybookPaginationInstalled) {
         totalPages: pageMeta.totalPages,
         loadedCount: entries.length,
       };
+      publishDaybookProgress({ loaded: entries.length, total: pageMeta.total });
       scheduleNextPage(match.key);
 
       return entriesResponse(response, entries);

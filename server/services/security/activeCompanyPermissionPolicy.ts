@@ -13,7 +13,9 @@ function positiveId(value: unknown): number | null {
 export function isPinnedCompanyRoute(path: string): boolean {
   const normalized = (path.split("?", 1)[0] || "/").toLowerCase();
   if (isErpContainerFactoryAlias(normalized)) return false;
-  // Private Factory training media must use the pinned Factory company, not an ERP tab.\n  return normalized.startsWith("/api/training/media/factory-") ||\n    normalized === "/api/factory" ||
+  // Private Factory training media must use the pinned Factory company, not an ERP tab.
+  return normalized.startsWith("/api/training/media/factory-") ||
+    normalized === "/api/factory" ||
     normalized.startsWith("/api/factory/") ||
     normalized === "/api/properties" ||
     normalized.startsWith("/api/properties/");

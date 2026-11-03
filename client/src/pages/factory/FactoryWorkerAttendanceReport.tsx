@@ -499,6 +499,12 @@ export default function FactoryWorkerAttendanceReport() {
                   <p className="text-2xl font-bold tabular-nums tracking-tight" data-testid="stat-total-workers">
                     {filteredWorkers.length}
                   </p>
+                  {filteredWorkers.some((worker) => worker.active === false) && (
+                    <p className="mt-1 text-[10px] text-muted-foreground" data-testid="stat-worker-status-breakdown">
+                      {filteredWorkers.filter((worker) => worker.active !== false).length} active ·{" "}
+                      {filteredWorkers.filter((worker) => worker.active === false).length} inactive
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -610,7 +616,7 @@ export default function FactoryWorkerAttendanceReport() {
           {data.workers.length === 0 ? (
             <Card>
               <CardContent className="p-10 text-center text-muted-foreground">
-                No active workers found. Add workers first from the Workers tab.
+                No workers or payroll records found for this period.
               </CardContent>
             </Card>
           ) : filteredWorkers.length === 0 ? (
@@ -686,6 +692,11 @@ export default function FactoryWorkerAttendanceReport() {
                         <span className="truncate block max-w-[180px]" title={worker.fullName}>
                           {worker.fullName}
                         </span>
+                        {worker.active === false && (
+                          <span className="mt-0.5 inline-block rounded border border-amber-400/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                            Inactive
+                          </span>
+                        )}
                       </td>
 
                       {data.dates.map(({ date, isWeekend }) => {
@@ -703,10 +714,14 @@ export default function FactoryWorkerAttendanceReport() {
                               <StatusPill
                                 status={status}
                                 absentsOnly={filter === "absent"}
-                                editable={editMode}
-                                onClick={editMode ? () => cycleCell(worker.id, date, status) : undefined}
+                                editable={editMode && worker.active !== false}
+                                onClick={
+                                  editMode && worker.active !== false
+                                    ? () => cycleCell(worker.id, date, status)
+                                    : undefined
+                                }
                                 onKeyDown={
-                                  editMode
+                                  editMode && worker.active !== false
                                     ? (e) => {
                                         const setStatus = (val: string) => {
                                           e.preventDefault();
@@ -718,7 +733,7 @@ export default function FactoryWorkerAttendanceReport() {
                                         if (e.key === "p" || e.key === "P") setStatus("Present");
                                         else if (e.key === "a" || e.key === "A") setStatus("Absent");
                                         else if (e.key === "l" || e.key === "L") setStatus("Leave");
-                                        else if (e.key === "h" || e.key === "H") setStatus("HalfDay");
+                                        else if (e.key === "h" || e.key === "H") setStatus("Half Day");
                                         else if (e.key === "Delete" || e.key === "Backspace") setStatus("");
                                         else if (e.key === " " || e.key === "Enter") {
                                           e.preventDefault();

@@ -8,7 +8,7 @@ import { resolveFactoryNetPositionAsOf } from "../../../services/factory/netPosi
 import { loadFactoryNetPositionEmployees } from "../../../services/factory/netPositionEmployees";
 
 import { factoryWorkers, employees } from "@shared/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, or, sql } from "drizzle-orm";
 import { sqlArray } from "../../../lib/sqlArray";
 import { resultRows } from "../../../lib/queryResult";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
@@ -16,6 +16,10 @@ import {
   reconcileAttendanceReportSalary,
   type AttendanceReportPayrollRecord,
 } from "../../../services/payroll/attendanceReportSalary";
+import {
+  reconcilePeriodPayrolls,
+  type PayrollReconciliationRecord,
+} from "../../../services/payroll/periodPayrollReconciliation";
 
 export function registerEmployeeAttendanceRoutes(app: Express) {
   app.get("/api/factory/net-position/payroll-breakdown", requireAuth, async (req: Request, res: Response) => {
@@ -51,7 +55,7 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
   // ─── Monthly Attendance Report ───────────────────────────────────────────────
   // GET /api/factory/workers/attendance-report?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
   // Also supports legacy ?year=YYYY&month=M params.
-  // Returns all active workers + attendance matrix for the given date range.
+  // Returns active workers plus inactive workers with payroll records for the selected period.
   app.get("/api/factory/workers/attendance-report", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -97,7 +101,9 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
         dates.push({ date: iso, label, abbr: DAY_ABBR[dow], isWeekend: dow === 0 || dow === 6 });
       }
 
-      // All active workers for this company
+      // Include currently inactive workers ONLY when they have a payroll for
+      // the requested period. This retains genuine former-worker wages while
+      // avoiding phantom salary estimates for terminated workers with no pay.
       const workers = await db
         .select({
           id: factoryWorkers.id,
@@ -109,7 +115,21 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
           transportAllowance: factoryWorkers.transportAllowance,
         })
         .from(factoryWorkers)
-        .where(and(eq(factoryWorkers.companyId, companyId), eq(factoryWorkers.active, true)))
+        .where(
+          and(
+            eq(factoryWorkers.companyId, companyId),
+            or(
+              eq(factoryWorkers.active, true),
+              sql`EXISTS (
+                SELECT 1 FROM factory_payrolls historical_payroll
+                WHERE historical_payroll.company_id = ${companyId}
+                  AND historical_payroll.worker_id = ${factoryWorkers.id}
+                  AND historical_payroll.period_start >= ${startDate}::date
+                  AND historical_payroll.period_end <= ${endDate}::date
+              )`
+            )
+          )
+        )
         .orderBy(factoryWorkers.fullName);
 
       if (workers.length === 0) {
@@ -124,6 +144,7 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
       }
 
       const workerIds = workers.map((w) => w.id);
+      const reportWorkerIds = new Set(workerIds);
 
       // Attendance rows for this date range
       const attRows = await db.execute(
@@ -168,17 +189,28 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
       // payroll periods wholly within the selected range are eligible; the
       // reconciliation helper removes overlapping partial payrolls per worker.
       const payrollRows = await db.execute(
-        sql`SELECT id, worker_id AS "workerId",
-                   period_start::text AS "periodStart",
-                   period_end::text AS "periodEnd",
-                   status, net_salary AS "netSalary", advances
-            FROM factory_payrolls
-            WHERE company_id = ${companyId}
-              AND period_start >= ${startDate}::date
-              AND period_end <= ${endDate}::date
-              AND worker_id = ANY(${sqlArray(workerIds)})`
+        sql`SELECT p.id, p.worker_id AS "workerId",
+                   p.period_start::text AS "periodStart",
+                   p.period_end::text AS "periodEnd",
+                   p.status, p.net_salary AS "netSalary", p.advances,
+                   COALESCE(w.active, false) AS "workerActive",
+                   EXISTS (
+                     SELECT 1
+                     FROM factory_daybook_entries d
+                     WHERE d.company_id = p.company_id
+                       AND d.reference_id = p.id
+                       AND d.reference_table = 'factory_payrolls'
+                       AND d.tx_type = 'PAYROLL_PAYMENT'
+                   ) AS "hasDaybookPayment"
+            FROM factory_payrolls p
+            LEFT JOIN factory_workers w
+              ON w.id = p.worker_id AND w.company_id = p.company_id
+            WHERE p.company_id = ${companyId}
+              AND p.period_start >= ${startDate}::date
+              AND p.period_end <= ${endDate}::date`
       );
       const payrollByWorker = new Map<number, AttendanceReportPayrollRecord[]>();
+      const reconciliationRecords: PayrollReconciliationRecord[] = [];
       for (const row of resultRows<{
         id: number;
         workerId: number;
@@ -187,8 +219,24 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
         status: string;
         netSalary: string | null;
         advances: string | null;
+        workerActive: boolean;
+        hasDaybookPayment: boolean;
       }>(payrollRows)) {
         const workerId = Number(row.workerId);
+        reconciliationRecords.push({
+          id: Number(row.id),
+          workerId,
+          workerActive: row.workerActive,
+          status: row.status,
+          periodStart: row.periodStart,
+          periodEnd: row.periodEnd,
+          netSalary: row.netSalary ?? "0",
+          advances: row.advances ?? "0",
+          hasDaybookPayment: row.hasDaybookPayment,
+        });
+        // The report includes inactive workers with payroll activity in this
+        // period, but never workers outside the selected company/pay window.
+        if (!reportWorkerIds.has(workerId)) continue;
         const matching = payrollByWorker.get(workerId) ?? [];
         matching.push({
           id: Number(row.id),
@@ -235,6 +283,7 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
           id: w.id,
           employeeCode: w.employeeCode,
           fullName: w.fullName,
+          active: w.active,
           attendance,
           presentCount,
           absentCount,
@@ -252,9 +301,12 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
         endDate,
         dates,
         workers: workerResults,
+        payrollReconciliation: reconcilePeriodPayrolls(reconciliationRecords, startDate, endDate),
         dailySummary,
         totals: {
           workers: workers.length,
+          activeWorkers: workers.filter((w) => w.active).length,
+          inactiveWorkers: workers.filter((w) => !w.active).length,
           presentDays: totalPresent,
           absentDays: totalAbsent,
           totalPossibleDays: workers.length * dates.length,
