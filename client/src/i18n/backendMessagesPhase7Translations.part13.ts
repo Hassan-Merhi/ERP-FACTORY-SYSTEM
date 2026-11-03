@@ -327,4 +327,30 @@ export const backendMessagesPhase7TranslationsPart13: readonly Phase7BackendMess
     ar: "انتهى الإنتاج. لم يتم إرسال أي رسالة عبر واتساب.",
     fr: "La production est terminée. Aucun message WhatsApp n'a été envoyé.",
   },
+  // POS optional status: stock, linked settlements and activation guards
+  {
+    en: "Reactivate POS sales using PATCH /api/vouchers/:id/optional with optional=false so stock and accounting are restored together.",
+    ar: "أعد تنشيط مبيعات نقطة البيع باستخدام المسار المخصص كي يُعاد المخزون والقيد المحاسبي معًا.",
+    fr: "Réactivez les ventes PDV par l'opération dédiée afin de rétablir ensemble le stock et la comptabilité.",
+  },
+  {
+    en: "Cannot change a stocked POS sale without its original stock location",
+    ar: "لا يمكن تغيير بيع نقطة بيع مرتبط بالمخزون دون تحديد موقع المخزون الأصلي",
+    fr: "Impossible de modifier une vente PDV stockée sans son emplacement de stock d'origine",
+  },
+  {
+    en: "Cannot reactivate POS ${voucher.voucherNumber}: insufficient stock at the original location for item ${stockItemId} (required ${required.toString()}, available ${current?.quantity ?? \"0\"}).",
+    ar: "تعذرت إعادة تنشيط البيع {0}: لا توجد كمية كافية من الصنف {1} في الموقع الأصلي (المطلوب {2}، المتاح {3}).",
+    fr: "Impossible de réactiver la vente {0} : stock insuffisant à l'emplacement d'origine pour l'article {1} (requis : {2}, disponible : {3}).",
+  },
+  {
+    en: "This POS sale has a supplier-partner or intercompany accounting arrangement. ",
+    ar: "ترتبط عملية بيع نقطة البيع هذه بتسوية محاسبية مع شريك مورد أو بين شركات. ",
+    fr: "Cette vente PDV comporte un règlement comptable avec un partenaire fournisseur ou intersociétés. ",
+  },
+  {
+    en: "It cannot be made optional until its linked settlements can be reversed together with the sale.",
+    ar: "لا يمكن جعلها اختيارية قبل التمكن من عكس التسويات المرتبطة مع البيع معًا.",
+    fr: "Elle ne peut pas devenir facultative tant que les règlements liés ne peuvent pas être contrepassés avec la vente.",
+  },
 ];

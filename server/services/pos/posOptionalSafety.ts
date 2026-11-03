@@ -33,7 +33,7 @@ export async function assertPosOptionalSettlementSafeTx(
   tx: DbTransaction,
   voucher: { id: number; companyId: number; voucherType: string }
 ): Promise<void> {
-  if (voucher.voucherType !== "Sales") return;
+  if (!["Sales", "Receipt", "POS"].includes(voucher.voucherType)) return;
   const [saleLine] = await tx.select({ id: salesItems.id })
     .from(salesItems).where(eq(salesItems.voucherId, voucher.id)).limit(1);
   if (!saleLine) return;
