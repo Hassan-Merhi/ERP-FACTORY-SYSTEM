@@ -76,19 +76,47 @@ async function login(page) {
 }
 
 async function selectFixtureCompany(page, code) {
-  await page.evaluate(async (companyCode) => {
+  const selectedId = await page.evaluate(async (companyCode) => {
     const r = await fetch("/api/user/companies", { credentials: "include", cache: "no-store" });
     if (!r.ok) throw new Error("Could not read fixture company assignments.");
     const companies = await r.json();
     const company = companies.find((row) => row.companyCode === companyCode);
-    if (!company?.companyId) throw new Error("Fixture company unavailable: " + companyCode);
-    const change = await fetch("/api/auth/set-company", {
-      method: "POST", credentials: "include", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ companyId: company.companyId })
-    });
-    if (!change.ok) throw new Error("Unable to switch fixture company.");
-    localStorage.setItem("selectedCompanyId", String(company.companyId));
+    const companyId = Number(company?.companyId);
+    if (!Number.isInteger(companyId) || companyId <= 0) {
+      throw new Error("Fixture company unavailable: " + companyCode);
+    }
+    const session = await fetch("/api/auth/session-company", { credentials: "include", cache: "no-store" });
+    const active = session.ok ? await session.json().catch(() => ({})) : {};
+    if (Number(active.companyId) !== companyId) {
+      const change = await fetch("/api/auth/set-company", {
+        method: "POST", credentials: "include", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ companyId }),
+      });
+      if (!change.ok) throw new Error("Unable to switch fixture company (" + change.status + ").");
+    }
+    localStorage.setItem("selectedCompanyId", String(companyId));
+    return companyId;
   }, code);
+  // A direct session switch does not update React's mounted CompanyProvider.
+  // Reload on an ERP/Factory-neutral page before recording the target route.
+  // Otherwise the old company route guard redirects valid test pages away.
+  const bootstrap = await page.goto(base + "/my-settings", { waitUntil: "domcontentloaded", timeout });
+  if (bootstrap && !bootstrap.ok()) {
+    throw new Error("Company bootstrap failed (" + bootstrap.status() + ")");
+  }
+  await page.waitForSelector("#main-content", { visible: true, timeout });
+  await page.waitForFunction(
+    (expected) => localStorage.getItem("selectedCompanyId") === String(expected),
+    { timeout },
+    selectedId,
+  );
+  const sessionCompany = await page.evaluate(async () => {
+    const result = await fetch("/api/auth/session-company", { credentials: "include", cache: "no-store" });
+    if (!result.ok) throw new Error("Session company verification failed");
+    return Number((await result.json()).companyId);
+  });
+  if (sessionCompany !== selectedId) throw new Error("Fixture session company changed during bootstrap");
+  await delay(500);
 }
 
 async function recordOne(page, id, tour) {
