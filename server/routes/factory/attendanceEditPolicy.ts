@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import rateLimit from "express-rate-limit";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../../db";
 import { users, userCompanyRoles } from "@shared/schema";
 import { verifyPasswordBcryptOnly } from "../helpers/passwordHelpers";
