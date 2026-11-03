@@ -31,6 +31,7 @@ export function BatchRow({
   setFixAcctCashId,
   setFixAcctOpen,
   setUndoTargetId,
+  setDeleteTargetId,
   setDeleteBatchGroup,
   formatDisplayDate,
   condensed,
