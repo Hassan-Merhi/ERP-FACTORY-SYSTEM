@@ -44,6 +44,7 @@ import {
   type SalaryAdvance,
 } from "./payrollSchemas";
 import { calculateAdvanceStats } from "./advanceStats";
+import { AdvanceReassignDialog } from "./AdvanceReassignDialog";
 import { AddWorkerDeductionDialog, type WorkerDeductionFormData } from "./AddWorkerDeductionDialog";
 
 interface AdvancesTabProps {
@@ -64,7 +65,6 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
   const [deductionDialogOpen, setDeductionDialogOpen] = useState(false);
   const [selectedAdvance, setSelectedAdvance] = useState<SalaryAdvance | null>(null);
   const [reassignTarget, setReassignTarget] = useState<SalaryAdvance | null>(null);
-  const [reassignWorkerId, setReassignWorkerId] = useState("");
   const [showPaid, setShowPaid] = useState(false);
   const [workerFilter, setWorkerFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -167,25 +167,6 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const reassignAdvanceMutation = useMutation({
-    mutationFn: async ({ advanceId, employeeId }: { advanceId: number; employeeId: number }) => {
-      return await modeApiRequest("PATCH", `/api/salary-advances/${advanceId}/worker`, { employeeId });
-    },
-    onSuccess: () => {
-      toast({ title: "Advance updated", description: "The advance is now assigned to the selected worker." });
-      queryClient.invalidateQueries({ queryKey: ["/api/salary-advances", selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/salary-advance-deductions", selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/payroll/employees-with-balances", selectedCompany?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stats/net-profit"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
-      setReassignTarget(null);
-      setReassignWorkerId("");
-    },
-    onError: (error: Error) => {
-      toast({ title: "Unable to change worker", description: error.message, variant: "destructive" });
     },
   });
 
@@ -326,7 +307,6 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
                 variant="ghost"
                 onClick={() => {
                   setReassignTarget(advance);
-                  setReassignWorkerId(String(advance.employeeId));
                 }}
                 title="Change worker for this advance"
                 aria-label={`Change worker for advance #${advance.id}`}
@@ -656,77 +636,13 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
         </TabsContent>
       </Tabs>
 
-      {/* ── Change advance worker ── */}
-      <Dialog
-        open={!!reassignTarget}
-        onOpenChange={(open) => {
-          if (!open && !reassignAdvanceMutation.isPending) {
-            setReassignTarget(null);
-            setReassignWorkerId("");
-          }
-        }}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Change Advance Worker</DialogTitle>
-            <DialogDescription>
-              Reassign {reassignTarget ? formatAmount(parseFloat(reassignTarget.amount)) : "this advance"} from{" "}
-              {reassignTarget?.employeeName}. The amount, date and remaining balance stay unchanged.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="reassign-advance-worker">Correct Worker</label>
-            <Select value={reassignWorkerId} onValueChange={setReassignWorkerId}>
-              <SelectTrigger id="reassign-advance-worker" data-testid="select-reassign-advance-worker">
-                <SelectValue placeholder="Select worker" />
-              </SelectTrigger>
-              <SelectContent>
-                {workerStaff.map((worker) => (
-                  <SelectItem key={worker.id} value={String(worker.id)}>
-                    {worker.code ? `${worker.code} - ` : ""}{worker.firstName} {worker.lastName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              The linked accounting entry will move to the corrected worker. An advance with applied repayments
-              or in a closed accounting period cannot be reassigned.
-            </p>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setReassignTarget(null);
-                setReassignWorkerId("");
-              }}
-              disabled={reassignAdvanceMutation.isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              data-testid="button-confirm-reassign-advance"
-              disabled={
-                reassignAdvanceMutation.isPending ||
-                !reassignTarget ||
-                !reassignWorkerId ||
-                Number(reassignWorkerId) === reassignTarget?.employeeId
-              }
-              onClick={() => {
-                if (reassignTarget && reassignWorkerId) {
-                  reassignAdvanceMutation.mutate({
-                    advanceId: reassignTarget.id,
-                    employeeId: Number(reassignWorkerId),
-                  });
-                }
-              }}
-            >
-              {reassignAdvanceMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Worker
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <AdvanceReassignDialog
+        target={reassignTarget}
+        workers={workerStaff}
+        companyId={selectedCompany?.id}
+        apiRequest={modeApiRequest}
+        onClose={() => setReassignTarget(null)}
+      />
 
       {/* ── Add Advance Dialog ── */}
       <Dialog open={advanceDialogOpen} onOpenChange={setAdvanceDialogOpen}>

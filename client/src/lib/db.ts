@@ -1,4 +1,7 @@
 import Dexie, { type Table } from "dexie";
+import { OFFLINE_MODE_ENABLED } from "./featureFlags";
+import type { OfflineOperation } from "./offline/operationContract";
+import { offlineError } from "@/lib/offline/offlineError";
 
 // ─── Schema Types ─────────────────────────────────────────────────────────────
 
@@ -86,6 +89,33 @@ export interface CachedEntity {
   fetchedAt: number;
 }
 
+export interface OfflineReadSnapshot {
+  key: string;
+  userId: string;
+  companyId: number;
+  url: string;
+  body: string;
+  cachedAt: number;
+  expiresAt: number;
+}
+
+export interface OfflineReadGrant {
+  key: string;
+  userId: string;
+  companyId: number;
+  status: "ready" | "partial" | "not_ready";
+  preparedAt: number;
+  expiresAt: number;
+  completed: number;
+  total: number;
+  errors: string;
+  packSummary?: string;
+  /** Phase 5 opt-in encryption. Absent on legacy Phase 2 snapshots. */
+  protection?: "erp-offline-aes-gcm-v1";
+  vaultSalt?: string;
+  vaultCheck?: string;
+}
+
 export interface OfflineMeta {
   id?: number;
   key: string;
@@ -124,6 +154,9 @@ export interface BulkFxCacheEntry {
 
 class ERPDatabase extends Dexie {
   syncQueue!: Table<SyncQueueItem, number>;
+  offlineOperations!: Table<OfflineOperation, string>;
+  offlineReadSnapshots!: Table<OfflineReadSnapshot, string>;
+  offlineReadGrants!: Table<OfflineReadGrant, string>;
   syncState!: Table<SyncState, number>;
   syncLogs!: Table<SyncLog, number>;
   conflicts!: Table<Conflict, number>;
@@ -230,6 +263,17 @@ class ERPDatabase extends Dexie {
     this.version(6).stores({
       bulkFxCache: "[brokerId+currency], cachedAt",
     });
+
+    // v7 — durable operation outbox. Legacy queues are preserved, never auto-migrated.
+    this.version(7).stores({
+      offlineOperations: "&id, companyId, state, [companyId+userId+state], [state+nextAttemptAt], createdAt",
+    });
+
+    // v8 — independently scoped offline GET response snapshots and readiness.
+    this.version(8).stores({
+      offlineReadSnapshots: "&key, [companyId+userId], url, expiresAt",
+      offlineReadGrants: "&key, [companyId+userId], expiresAt",
+    });
   }
 }
 
@@ -240,6 +284,9 @@ export const db = new ERPDatabase();
 export async function addToSyncQueue(
   item: Omit<SyncQueueItem, "id" | "createdAt" | "retryCount" | "nextRetryAt" | "status" | "lastError">
 ): Promise<number> {
+  // Legacy rows have no verified per-user identity or universal exactly-once
+  // handling. Never create additional legacy rows under the new offline mode.
+  if (OFFLINE_MODE_ENABLED) throw offlineError("OFFLINE_LEGACY_IDB_QUEUE_BLOCKED");
   const id = await db.syncQueue.add({
     ...item,
     createdAt: Date.now(),

@@ -10,9 +10,15 @@ import { db } from "../../../db";
 import { storage } from "../../../storage";
 import { requireAuth, requireNonPOS } from "../../../auth";
 import { logAudit } from "../../_helpers";
-import { inventory, stockItems, stockItemLocationPrices } from "@shared/schema";
+import { inventory, stockItems } from "@shared/schema";
 import { eq, and, or, inArray } from "drizzle-orm";
 import { toMoney } from "../../../lib/money";
+import {
+  finishStockItemEditCaptureTx,
+  stockItemEditRecorder,
+  updateStockItemFieldsTx,
+  upsertLocationPriceTx,
+} from "../../../services/inventory/stockItemEditCapture";
 
 export function registerStockItemBulkRoutes(app: Express) {
   // Bulk delete stock items
@@ -118,10 +124,20 @@ export function registerStockItemBulkRoutes(app: Express) {
         return res.status(404).json({ message: "No valid stock items found" });
       }
 
-      await db
-        .update(stockItems)
-        .set({ categoryId: isNaN(categoryId as number) ? null : categoryId })
-        .where(and(inArray(stockItems.id, validIds), eq(stockItems.companyId, companyId)));
+      const nextCategoryId = isNaN(categoryId as number) ? null : categoryId;
+      const recorder = stockItemEditRecorder("POST /api/stock-items/bulk-assign-category");
+      if (recorder.active) {
+        // Factory LAN server: per item, recorded for the cloud (owner decision 2026-11-02).
+        await db.transaction(async (tx) => {
+          for (const id of validIds) await updateStockItemFieldsTx(tx, recorder, id, { categoryId: nextCategoryId });
+          await finishStockItemEditCaptureTx(tx, req, recorder);
+        });
+      } else {
+        await db
+          .update(stockItems)
+          .set({ categoryId: nextCategoryId })
+          .where(and(inArray(stockItems.id, validIds), eq(stockItems.companyId, companyId)));
+      }
 
       res.json({ message: `Category updated for ${validIds.length} item(s)`, updated: validIds.length });
     } catch (error: unknown) {
@@ -182,23 +198,20 @@ export function registerStockItemBulkRoutes(app: Express) {
       }
 
       if (globalUpdates.length > 0 || locationUpdates.length > 0) {
+        const recorder = stockItemEditRecorder("POST /api/stock-items/bulk-update-prices");
         await db.transaction(async (tx) => {
           for (const u of globalUpdates) {
-            await tx.update(stockItems).set({ sellingPrice: u.sellingPrice }).where(eq(stockItems.id, u.id));
+            await updateStockItemFieldsTx(tx, recorder, u.id, { sellingPrice: u.sellingPrice });
           }
           for (const u of locationUpdates) {
-            await tx
-              .insert(stockItemLocationPrices)
-              .values({
-                stockItemId: u.stockItemId,
-                locationId: u.locationId,
-                sellingPrice: u.sellingPrice,
-              })
-              .onConflictDoUpdate({
-                target: [stockItemLocationPrices.stockItemId, stockItemLocationPrices.locationId],
-                set: { sellingPrice: u.sellingPrice, updatedAt: new Date() },
-              });
+            await upsertLocationPriceTx(tx, recorder, {
+              stockItemId: u.stockItemId,
+              locationId: u.locationId,
+              sellingPrice: u.sellingPrice,
+            });
           }
+          // Factory LAN server: the price changes are recorded for the cloud.
+          await finishStockItemEditCaptureTx(tx, req, recorder);
           // Phase 21 (B): the bulk price audit commits with the prices.
           await logAudit(
             {
@@ -266,36 +279,41 @@ export function registerStockItemBulkRoutes(app: Express) {
         }
       }
 
-      for (const entry of openingBalances) {
-        const { barcode, openingQty, openingRate, openingValue } = entry;
-        if (!barcode || typeof barcode !== "string") continue;
+      const recorder = stockItemEditRecorder("POST /api/stock-items/import-opening-balances");
+      await db.transaction(async (tx) => {
+        for (const entry of openingBalances) {
+          const { barcode, openingQty, openingRate, openingValue } = entry;
+          if (!barcode || typeof barcode !== "string") continue;
 
-        // Find item by primary code first, then by alias (case-insensitive)
-        const barcodeLC = (barcode || "").toLowerCase();
-        const item = itemsByCode.get(barcodeLC) || itemsByAlias.get(barcodeLC);
+          // Find item by primary code first, then by alias (case-insensitive)
+          const barcodeLC = (barcode || "").toLowerCase();
+          const item = itemsByCode.get(barcodeLC) || itemsByAlias.get(barcodeLC);
 
-        if (item) {
-          // Calculate total value if not provided: qty * rate
-          const qty = toMoney(openingQty).toNumber();
-          const rate = toMoney(openingRate).toNumber();
-          let totalValue = toMoney(openingValue).toNumber();
+          if (item) {
+            // Calculate total value if not provided: qty * rate
+            const qty = toMoney(openingQty).toNumber();
+            const rate = toMoney(openingRate).toNumber();
+            let totalValue = toMoney(openingValue).toNumber();
 
-          // If total value not provided, calculate from qty * rate
-          if (totalValue === 0 && qty > 0 && rate > 0) {
-            totalValue = qty * rate;
+            // If total value not provided, calculate from qty * rate
+            if (totalValue === 0 && qty > 0 && rate > 0) {
+              totalValue = qty * rate;
+            }
+
+            await updateStockItemFieldsTx(tx, recorder, item.id, {
+              openingQty: String(qty),
+              openingRate: String(rate),
+              openingValue: String(totalValue),
+            });
+            updated++;
+          } else {
+            notFound++;
+            notFoundBarcodes.push(barcode);
           }
-
-          await storage.updateStockItem(item.id, {
-            openingQty: String(qty),
-            openingRate: String(rate),
-            openingValue: String(totalValue),
-          });
-          updated++;
-        } else {
-          notFound++;
-          notFoundBarcodes.push(barcode);
         }
-      }
+        // Factory LAN server: the opening balances are recorded for the cloud.
+        await finishStockItemEditCaptureTx(tx, req, recorder);
+      });
 
       const message = `Updated opening balances for ${updated} item(s)${notFound > 0 ? `. ${notFound} barcode(s) not found: ${notFoundBarcodes.slice(0, 5).join(", ")}${notFoundBarcodes.length > 5 ? "..." : ""}` : "."}`;
       res.json({ message, updated, notFound, notFoundBarcodes });
@@ -325,10 +343,14 @@ export function registerStockItemBulkRoutes(app: Express) {
 
       // Update all bale items to BL
       let updated = 0;
-      for (const item of baleItems) {
-        await storage.updateStockItem(item.id, { uom: "BL" });
-        updated++;
-      }
+      const recorder = stockItemEditRecorder("POST /api/stock-items/bulk-update-uom");
+      await db.transaction(async (tx) => {
+        for (const item of baleItems) {
+          await updateStockItemFieldsTx(tx, recorder, item.id, { uom: "BL" });
+          updated++;
+        }
+        await finishStockItemEditCaptureTx(tx, req, recorder);
+      });
 
       res.json({ message: `Successfully updated ${updated} stock item(s) from 'bale' to 'BL'`, updated });
     } catch (error: unknown) {
@@ -368,22 +390,30 @@ export function registerStockItemBulkRoutes(app: Express) {
         req.session.currentCompanyId
       );
 
-      for (const item of validItems) {
-        const newName = item.name.replace(regex, replaceWith);
-        if (newName === item.name) {
-          continue;
+      const recorder = stockItemEditRecorder("POST /api/stock-items/bulk-rename");
+      await db.transaction(async (tx) => {
+        for (const item of validItems) {
+          const newName = item.name.replace(regex, replaceWith);
+          if (newName === item.name) {
+            continue;
+          }
+          if (!newName || newName.trim() === "") {
+            failures.push({ id: item.id, name: item.name, reason: "Resulting name would be empty" });
+            continue;
+          }
+          try {
+            // A savepoint per item: one refused rename leaves the others.
+            await tx.transaction(async (itemTx) => {
+              await updateStockItemFieldsTx(itemTx, recorder, item.id, { name: newName });
+            });
+            results.push({ id: item.id, oldName: item.name, newName });
+          } catch (err: unknown) {
+            failures.push({ id: item.id, name: item.name, reason: getErrorMessage(err) });
+          }
         }
-        if (!newName || newName.trim() === "") {
-          failures.push({ id: item.id, name: item.name, reason: "Resulting name would be empty" });
-          continue;
-        }
-        try {
-          await storage.updateStockItem(item.id, { name: newName });
-          results.push({ id: item.id, oldName: item.name, newName });
-        } catch (err: unknown) {
-          failures.push({ id: item.id, name: item.name, reason: getErrorMessage(err) });
-        }
-      }
+        // Factory LAN server: the renames are recorded for the cloud.
+        await finishStockItemEditCaptureTx(tx, req, recorder);
+      });
 
       res.json({
         message: `Renamed ${results.length} item(s)`,

@@ -3,7 +3,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   CalendarClock,
   CalendarDays,
-  ClipboardCheck,
   FileDown,
   Loader2,
   LockKeyhole,
@@ -11,8 +10,6 @@ import {
   Search,
   SlidersHorizontal,
   Target,
-  Users,
-  UserX,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,44 +44,19 @@ import {
 import { ProductionTargetDefaultsDialog } from "./productiontargets/ProductionTargetDefaultsDialog";
 import { ProductionTargetsEditorDialog } from "./productiontargets/ProductionTargetsEditorDialog";
 import { ProductionExcelRangeDialog, type ProductionExportDates } from "./productiontargets/ProductionExcelRangeDialog";
-import { ProductionTargetsDateRangeDialog, type ProductionTargetsDateRange } from "./productiontargets/ProductionTargetsDateRangeDialog";
-import { ChevronDown, Coins } from "lucide-react";
+import {
+  ProductionTargetsDateRangeDialog,
+  type ProductionTargetsDateRange,
+} from "./productiontargets/ProductionTargetsDateRangeDialog";
+import { ChevronDown } from "lucide-react";
 import "./productiontargets/productionTargetsPremium.css";
 import { useLocation } from "wouter";
 import type { AuthMe } from "@shared/apiTypes";
 
-
 import { exportWeeklyProductionExcel, ProductionDateRangeError } from "./productiontargets/productionWeeklyExcel";
-
-function PremiumKpiCard({
-  label,
-  value,
-  icon,
-  tone,
-  subline,
-}: {
-  label: string;
-  value: string | number;
-  icon: React.ReactNode;
-  tone: "violet" | "green" | "blue" | "amber" | "red";
-  subline: React.ReactNode;
-}) {
-  return (
-    <div className={`pt-kpi pt-kpi--${tone}`}>
-      <div className="pt-kpi-top">
-        <span className="pt-kpi-icon" aria-hidden="true">{icon}</span>
-        <div className="min-w-0">
-          <div className="pt-kpi-label">{label}</div>
-          <div className="pt-kpi-value" title={String(value)}>{value}</div>
-        </div>
-      </div>
-      <div>
-        <div className="pt-kpi-rule" aria-hidden="true" />
-        <div className="pt-kpi-foot">{subline}</div>
-      </div>
-    </div>
-  );
-}
+import { ProductionTargetKpiGrid } from "./productiontargets/ProductionTargetKpiGrid";
+import { ProductionBonusesLauncher } from "./productiontargets/ProductionBonusesLauncher";
+import { ProductionTargetNotices } from "./productiontargets/ProductionTargetNotices";
 
 export default function FactoryProductionTargets() {
   const { toast } = useToast();
@@ -107,9 +79,13 @@ export default function FactoryProductionTargets() {
   const [defaultsEditorOpen, setDefaultsEditorOpen] = useState(false);
   const [excelRangeOpen, setExcelRangeOpen] = useState(false);
   const productionReportRef = useRef<HTMLDivElement>(null);
-  const period = useMemo(() =>
-    periodType === "daily" ? periodFor("daily", referenceDate) : (customRange ?? periodFor(periodType, referenceDate)),
-  [periodType, referenceDate, customRange]);
+  const period = useMemo(
+    () =>
+      periodType === "daily"
+        ? periodFor("daily", referenceDate)
+        : (customRange ?? periodFor(periodType, referenceDate)),
+    [periodType, referenceDate, customRange]
+  );
 
   const { data, isLoading } = useQuery<ProductionResponse>({
     queryKey: ["/api/factory/staff-tracking", "production", periodType, period.start, period.end],
@@ -250,9 +226,10 @@ export default function FactoryProductionTargets() {
     const needle = search.trim().toLowerCase();
     const visibleRows = collapsedRows.filter((row) => {
       if (categoryFilter !== "all" && (row.category || "—") !== categoryFilter) return false;
-      const absent = periodType === "daily"
-        ? (row.displayMembers ?? [row]).some((member) => member.status === FACTORY_TRACKING_STATUSES.absent)
-        : (row.absentDays ?? 0) > 0;
+      const absent =
+        periodType === "daily"
+          ? (row.displayMembers ?? [row]).some((member) => member.status === FACTORY_TRACKING_STATUSES.absent)
+          : (row.absentDays ?? 0) > 0;
       if (statusFilter === "absent" && !absent) return false;
       if (statusFilter === "present" && absent) return false;
       const memberMatch = (row.displayMembers ?? []).some(
@@ -274,20 +251,18 @@ export default function FactoryProductionTargets() {
 
   const totals = useMemo(() => summarizeProductionRows(rows), [rows]);
   const missingTargetDays = useMemo(
-    () => periodType === "daily"
-      ? 0
-      : rows.reduce((sum, row) => sum + (row.missingTargetDays ?? 0), 0),
-    [rows, periodType],
+    () => (periodType === "daily" ? 0 : rows.reduce((sum, row) => sum + (row.missingTargetDays ?? 0), 0)),
+    [rows, periodType]
   );
   const workerTotals = useMemo(
     () => ({
       total: rows.length,
-      present: rows.filter((row) => periodType === "daily"
-        ? row.status === FACTORY_TRACKING_STATUSES.present
-        : (row.absentDays ?? 0) === 0).length,
-      absent: rows.filter((row) => periodType === "daily"
-        ? row.status === FACTORY_TRACKING_STATUSES.absent
-        : (row.absentDays ?? 0) > 0).length,
+      present: rows.filter((row) =>
+        periodType === "daily" ? row.status === FACTORY_TRACKING_STATUSES.present : (row.absentDays ?? 0) === 0
+      ).length,
+      absent: rows.filter((row) =>
+        periodType === "daily" ? row.status === FACTORY_TRACKING_STATUSES.absent : (row.absentDays ?? 0) > 0
+      ).length,
     }),
     [rows, periodType]
   );
@@ -298,7 +273,9 @@ export default function FactoryProductionTargets() {
     <div className="production-targets-modern space-y-4">
       <div className="pt-hero">
         <div className="pt-hero-intro">
-          <div className="pt-hero-icon" aria-hidden="true"><Target className="h-8 w-8" /></div>
+          <div className="pt-hero-icon" aria-hidden="true">
+            <Target className="h-8 w-8" />
+          </div>
           <div>
             <h2>{tr("productionTargets")}</h2>
             <p className="pt-hero-description">{tr("productionSubtitle")}</p>
@@ -308,10 +285,14 @@ export default function FactoryProductionTargets() {
         <div className="pt-hero-controls">
           <div className="space-y-1">
             <p className="pt-control-label">{tr("period")}</p>
-            <Select value={periodType} onValueChange={(value) => {
-              setPeriodType(value as PeriodType);
-              setCustomRange(null);
-            }} disabled={busy}>
+            <Select
+              value={periodType}
+              onValueChange={(value) => {
+                setPeriodType(value as PeriodType);
+                setCustomRange(null);
+              }}
+              disabled={busy}
+            >
               <SelectTrigger className="w-[130px]" data-testid="select-production-period-type">
                 <SelectValue />
               </SelectTrigger>
@@ -400,7 +381,9 @@ export default function FactoryProductionTargets() {
               setEditorOpen(true);
             }}
             disabled={finalized || rows.length === 0 || busy}
-            title={periodType === "daily" ? undefined : "Period targets are a sum of daily targets. Switch to Daily to edit."}
+            title={
+              periodType === "daily" ? undefined : "Period targets are a sum of daily targets. Switch to Daily to edit."
+            }
             data-testid="button-edit-production-targets"
           >
             <SlidersHorizontal className="mr-2 h-4 w-4" />
@@ -447,82 +430,66 @@ export default function FactoryProductionTargets() {
         <CalendarDays className="mr-1.5 inline h-3.5 w-3.5" />
         {period.start}
         {period.end !== period.start ? ` — ${period.end}` : ""}
-        <span className="ml-3">{periodType === "daily" ? tr("useEditorToManageTargets")
-          : "Targets and attendance are summed from each date in this period; edit individual days in Daily view."}</span>
+        <span className="ml-3">
+          {periodType === "daily"
+            ? tr("useEditorToManageTargets")
+            : "Targets and attendance are summed from each date in this period; edit individual days in Daily view."}
+        </span>
       </div>
 
-      {periodType !== "daily" && missingTargetDays > 0 && !isLoading && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300" role="status">
-          {missingTargetDays} worker-day targets are not configured in this range.
-          The target and expected totals include only recorded daily targets;
-          differences are withheld until the missing targets are set.
-        </div>
-      )}
+      <ProductionTargetNotices
+        tr={tr}
+        showMissingTargets={periodType !== "daily" && missingTargetDays > 0 && !isLoading}
+        missingTargetDays={missingTargetDays}
+        finalized={Boolean(finalized)}
+      />
 
-      {finalized && (
-        <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-          <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-          <div>
-            <div className="text-sm font-semibold">{tr("productionLocked")}</div>
-            <div className="mt-0.5 text-xs text-muted-foreground">{tr("productionLockedDetail")}</div>
-          </div>
-        </div>
-      )}
-
-      <div className="pt-kpi-grid">
-        <PremiumKpiCard tone="violet" label={tr("totalTarget")} value={totals.target}
-          icon={<Target className="h-6 w-6" />}
-          subline={<span>{tr("absent")}: {totals.absentTarget}</span>} />
-        <PremiumKpiCard tone="green" label={tr("totalWorkers")} value={workerTotals.total}
-          icon={<Users className="h-6 w-6" />}
-          subline={<><span>{tr("present")}: {workerTotals.present}</span><span>·</span><span>{tr("absent")}: {workerTotals.absent}</span></>} />
-        <PremiumKpiCard tone="blue" label={tr("totalExpected")} value={totals.expected}
-          icon={<ClipboardCheck className="h-6 w-6" />}
-          subline={<span>{tr("expected")}</span>} />
-        <PremiumKpiCard tone="amber" label={tr("totalProduced")} value={totals.produced}
-          icon={<ClipboardCheck className="h-6 w-6" />}
-          subline={<span>{tr("produced")}</span>} />
-        <PremiumKpiCard tone={missingTargetDays > 0 ? "amber" : totals.difference < 0 ? "red" : "green"}
-          label={tr("diff")}
-          value={missingTargetDays > 0 ? "—" : totals.difference > 0 ? `+${totals.difference}` : totals.difference}
-          icon={<UserX className="h-6 w-6" />}
-          subline={<span>{missingTargetDays > 0 ? "Missing targets in selected period" : "Produced versus expected"}</span>} />
-      </div>
+      <ProductionTargetKpiGrid
+        tr={tr}
+        totals={totals}
+        workerTotals={workerTotals}
+        missingTargetDays={missingTargetDays}
+      />
 
       {periodType === "daily" && canManageBonuses && (
-        <div className="pt-bonus-banner" data-testid="production-bonuses-launcher">
-          <div className="flex items-center gap-3">
-            <div className="pt-bonus-icon"><Coins className="h-6 w-6" /></div>
-            <div>
-              <p className="font-semibold">Production Bonuses</p>
-              <p className="text-xs text-muted-foreground">
-                Set rates, review calculations, approve worker bonuses and pay from Cash / Bank.
-              </p>
-            </div>
-          </div>
-          <Button type="button" className="pt-btn-violet" onClick={() => navigate("/factory/production-bonuses?date=" + referenceDate)}
-            data-testid="button-open-production-bonuses">Open Production Bonuses</Button>
-        </div>
+        <ProductionBonusesLauncher onOpen={() => navigate("/factory/production-bonuses?date=" + referenceDate)} />
       )}
 
       <div className="pt-filters">
         <div className="pt-filter-search relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={search} onChange={(event) => setSearch(event.target.value)}
-            placeholder={tr("searchPlaceholder")} className="pl-9" aria-label={tr("searchPlaceholder")} />
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={tr("searchPlaceholder")}
+            className="pl-9"
+            aria-label={tr("searchPlaceholder")}
+          />
         </div>
         <div className="flex flex-wrap gap-2">
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-[180px]" aria-label="Filter category" data-testid="select-production-category-filter">
+            <SelectTrigger
+              className="w-[180px]"
+              aria-label="Filter category"
+              data-testid="select-production-category-filter"
+            >
               <SelectValue placeholder="All categories" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All categories</SelectItem>
-              {categoryOptions.map((category) => <SelectItem key={category} value={category}>{category}</SelectItem>)}
+              {categoryOptions.map((category) => (
+                <SelectItem key={category} value={category}>
+                  {category}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[160px]" aria-label="Filter attendance" data-testid="select-production-attendance-filter">
+            <SelectTrigger
+              className="w-[160px]"
+              aria-label="Filter attendance"
+              data-testid="select-production-attendance-filter"
+            >
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
             <SelectContent>
@@ -574,103 +541,118 @@ export default function FactoryProductionTargets() {
                 <Fragment key={group.label.toLocaleLowerCase() || "__blank-group__"}>
                   <TableRow className={`pt-category-row pt-category-row--${groupIndex % 4}`}>
                     <TableCell colSpan={6} className="py-2">
-                      <button type="button" className="pt-category-toggle"
+                      <button
+                        type="button"
+                        className="pt-category-toggle"
                         aria-expanded={!collapsedGroups.has(group.label)}
                         aria-label={`${collapsedGroups.has(group.label) ? "Expand" : "Collapse"} ${group.label || "Uncategorized"}`}
-                        onClick={() => setCollapsedGroups((previous) => {
-                          const next = new Set(previous);
-                          if (next.has(group.label)) next.delete(group.label);
-                          else next.add(group.label);
-                          return next;
-                        })}>
+                        onClick={() =>
+                          setCollapsedGroups((previous) => {
+                            const next = new Set(previous);
+                            if (next.has(group.label)) next.delete(group.label);
+                            else next.add(group.label);
+                            return next;
+                          })
+                        }
+                      >
                         <span className="flex items-center gap-2.5">
-                          <ChevronDown className={`h-4 w-4 transition-transform ${collapsedGroups.has(group.label) ? "-rotate-90" : ""}`} />
+                          <ChevronDown
+                            className={`h-4 w-4 transition-transform ${collapsedGroups.has(group.label) ? "-rotate-90" : ""}`}
+                          />
                           <span className="text-sm font-bold">{group.label || "—"}</span>
                         </span>
                         <span className="pt-category-count">{group.rows.length}</span>
                       </button>
                     </TableCell>
                   </TableRow>
-                  {!collapsedGroups.has(group.label) && group.rows.map((row) => {
-                    const members = row.displayMembers ?? [
-                      {
-                        personId: row.personId,
-                        name: row.name,
-                        code: row.code,
-                        status: row.status,
-                        active: row.active,
-                      },
-                    ];
-                    const isAbsent = periodType !== "daily"
-                      ? (row.absentDays ?? 0) > 0
-                      : members.some((member) => member.status === FACTORY_TRACKING_STATUSES.absent);
-                    const comparisonTarget = periodType === "daily"
-                      ? row.targetBales
-                      : (row.missingTargetDays ?? 0) > 0 || row.targetBales == null
-                        ? null
-                        : row.targetBales - (row.absentTargetBales ?? 0);
-                    return (
-                      <TableRow
-                        key={row.linkGroupId != null ? `link-${row.linkGroupId}` : `worker-${row.personId}`}
-                        className={`pt-worker-row border-b ${
-                          isAbsent ? "bg-red-500/5 hover:bg-red-500/10" : ""
-                        } ${!row.active ? "opacity-60" : ""}`}
-                      >
-                        <TableCell className="border-r border-border/70 py-3">
-                          <div className="space-y-1" dir="auto">
-                            {members.map((member) => (
-                              <div
-                                key={member.personId}
-                                className={`text-base font-semibold leading-6 ${!member.active ? "opacity-60" : ""}`}
-                              >
-                                {member.name}
-                              </div>
-                            ))}
-                          </div>
-                        </TableCell>
-                        <TableCell className="w-[170px] min-w-[170px] max-w-[170px] border-r border-border/70">
-                          <span className="pt-category-pill">{row.category || "—"}</span>
-                        </TableCell>
-                        <TableCell className="border-r border-border/70 text-right text-base font-semibold tabular-nums">
-                          {row.targetBales ?? "—"}
-                        </TableCell>
-                        <TableCell className="border-r border-border/70 text-right text-base font-semibold tabular-nums">
-                          {row.producedBales ?? 0}
-                        </TableCell>
-                        <TableCell
-                          className={`border-r border-border/70 text-right text-base font-semibold tabular-nums ${differenceClass(comparisonTarget, row.producedBales)}`}
+                  {!collapsedGroups.has(group.label) &&
+                    group.rows.map((row) => {
+                      const members = row.displayMembers ?? [
+                        {
+                          personId: row.personId,
+                          name: row.name,
+                          code: row.code,
+                          status: row.status,
+                          active: row.active,
+                        },
+                      ];
+                      const isAbsent =
+                        periodType !== "daily"
+                          ? (row.absentDays ?? 0) > 0
+                          : members.some((member) => member.status === FACTORY_TRACKING_STATUSES.absent);
+                      const comparisonTarget =
+                        periodType === "daily"
+                          ? row.targetBales
+                          : (row.missingTargetDays ?? 0) > 0 || row.targetBales == null
+                            ? null
+                            : row.targetBales - (row.absentTargetBales ?? 0);
+                      return (
+                        <TableRow
+                          key={row.linkGroupId != null ? `link-${row.linkGroupId}` : `worker-${row.personId}`}
+                          className={`pt-worker-row border-b ${
+                            isAbsent ? "bg-red-500/5 hover:bg-red-500/10" : ""
+                          } ${!row.active ? "opacity-60" : ""}`}
                         >
-                          {differenceText(comparisonTarget, row.producedBales)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1.5">
-                            {members.map((member) => {
-                              const memberAbsent = periodType !== "daily"
-                                ? (row.absentDays ?? 0) > 0
-                                : member.status === FACTORY_TRACKING_STATUSES.absent;
-                              return (
+                          <TableCell className="border-r border-border/70 py-3">
+                            <div className="space-y-1" dir="auto">
+                              {members.map((member) => (
                                 <div
                                   key={member.personId}
-                                  className={`pt-status-pill ${memberAbsent ? "pt-status-pill--absent" : ""}`}
-                                  aria-disabled="true"
-                                  title={periodType === "daily"
-                                    ? `${member.name}: ${tr("statusControlledFromAttendance")}`
-                                    : `${member.name}: ${row.absentDays ?? 0} absent out of ${row.periodDays ?? 0} roster days`}
+                                  className={`text-base font-semibold leading-6 ${!member.active ? "opacity-60" : ""}`}
                                 >
-                                  <LockKeyhole className="h-3.5 w-3.5 shrink-0" />
-                                  <span>{periodType === "daily"
-                                    ? tr(statusTranslationKey(member.status))
-                                    : (row.absentDays ?? 0) > 0
-                                      ? `${tr("absent")} ${row.absentDays}/${row.periodDays ?? 0}`
-                                      : tr("present")}</span>
+                                  {member.name}
                                 </div>
-                              );
-                            })}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell className="w-[170px] min-w-[170px] max-w-[170px] border-r border-border/70">
+                            <span className="pt-category-pill">{row.category || "—"}</span>
+                          </TableCell>
+                          <TableCell className="border-r border-border/70 text-right text-base font-semibold tabular-nums">
+                            {row.targetBales ?? "—"}
+                          </TableCell>
+                          <TableCell className="border-r border-border/70 text-right text-base font-semibold tabular-nums">
+                            {row.producedBales ?? 0}
+                          </TableCell>
+                          <TableCell
+                            className={`border-r border-border/70 text-right text-base font-semibold tabular-nums ${differenceClass(comparisonTarget, row.producedBales)}`}
+                          >
+                            {differenceText(comparisonTarget, row.producedBales)}
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1.5">
+                              {members.map((member) => {
+                                const memberAbsent =
+                                  periodType !== "daily"
+                                    ? (row.absentDays ?? 0) > 0
+                                    : member.status === FACTORY_TRACKING_STATUSES.absent;
+                                return (
+                                  <div
+                                    key={member.personId}
+                                    className={`pt-status-pill ${memberAbsent ? "pt-status-pill--absent" : ""}`}
+                                    aria-disabled="true"
+                                    title={
+                                      periodType === "daily"
+                                        ? `${member.name}: ${tr("statusControlledFromAttendance")}`
+                                        : `${member.name}: ${row.absentDays ?? 0} absent out of ${row.periodDays ?? 0} roster days`
+                                    }
+                                  >
+                                    <LockKeyhole className="h-3.5 w-3.5 shrink-0" />
+                                    <span>
+                                      {periodType === "daily"
+                                        ? tr(statusTranslationKey(member.status))
+                                        : (row.absentDays ?? 0) > 0
+                                          ? `${tr("absent")} ${row.absentDays}/${row.periodDays ?? 0}`
+                                          : tr("present")}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                 </Fragment>
               ))
             )}

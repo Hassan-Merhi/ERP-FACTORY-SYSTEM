@@ -1,0 +1,19 @@
+# Ignore every local secret, backup, certificate, and runtime data file.
+.git
+node_modules
+dist
+coverage
+artifacts
+.env
+.env.*
+**/.env
+**/.env.*
+deploy/lan/certs
+deploy/lan/certs/**
+deploy/lan/*.sql
+deploy/lan/*.dump
+deploy/lan/*.backup
+deploy/lan/*.pem
+deploy/lan/*.key
+*.log
+uploads

@@ -1,6 +1,18 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
+// Formatting-insensitive source check: compares code tokens, not layout, so a
+// Prettier reflow of the source cannot break the contract.
+const normalizeCode = (code: string) =>
+  code
+    .replace(/\s+/g, "")
+    .replace(/'/g, '"')
+    .replace(/\((\w+)\)=>/g, "$1=>")
+    .replace(/,([}\])])/g, "$1");
+const expectCode = (code: string, expected: string) => expect(normalizeCode(code)).toContain(normalizeCode(expected));
+const expectNoCode = (code: string, unexpected: string) =>
+  expect(normalizeCode(code)).not.toContain(normalizeCode(unexpected));
+
 const read = (path: string) => readFileSync(path, "utf8");
 const route = read("server/routes/factory/factoryPressingConfirmationRoutes.ts");
 const hub = read("server/routes/factoryRoutes.ts");
@@ -11,71 +23,74 @@ const ddl = read("migrations/20261027_001_factory_pressing_machine_tracking.sql"
 
 describe("Pressing machine Phase 4 transaction safety", () => {
   it("wires server confirmation after the shared tenant and Factory access boundaries", () => {
-    expect(route).toContain('app.post("/api/factory/pressing-machines/confirm", requireAuth');
-    expect(route).toContain("getActiveCompanyPermissionContext(req)");
-    expect(hub).toContain("registerFactoryPressingConfirmRoutes(app);");
-    expect(hub.indexOf('app.use("/api/factory", enforceFactoryBackendAccess)'))
-      .toBeLessThan(hub.indexOf("registerFactoryPressingConfirmRoutes(app);"));
+    expectCode(route, 'app.post("/api/factory/pressing-machines/confirm", requireAuth');
+    expectCode(route, "getActiveCompanyPermissionContext(req)");
+    expectCode(hub, "registerFactoryPressingConfirmRoutes(app);");
+    expect(hub.indexOf('app.use("/api/factory", enforceFactoryBackendAccess)')).toBeLessThan(
+      hub.indexOf("registerFactoryPressingConfirmRoutes(app);")
+    );
   });
 
   it("uses a locked active machine and the caller's own unended assignment", () => {
-    expect(route).toContain('pg_advisory_xact_lock');
-    expect(route).toContain('eq(factoryPressingMachines.companyId, companyId)');
-    expect(route).toContain('eq(factoryPressingAssignments.userId, userId)');
-    expect(route).toContain('eq(factoryPressingAssignments.machineId, machine.id)');
-    expect(route).toContain('isNull(factoryPressingAssignments.unassignedAt)');
-    expect(route).toContain('.for("update")');
-    expect(route).toContain("PRESSING_ASSIGNMENT_CHANGED");
+    expectCode(route, "pg_advisory_xact_lock");
+    expectCode(route, "eq(factoryPressingMachines.companyId, companyId)");
+    expectCode(route, "eq(factoryPressingAssignments.userId, userId)");
+    expectCode(route, "eq(factoryPressingAssignments.machineId, machine.id)");
+    expectCode(route, "isNull(factoryPressingAssignments.unassignedAt)");
+    expectCode(route, '.for("update")');
+    expectCode(route, "PRESSING_ASSIGNMENT_CHANGED");
   });
 
   it("resolves company-owned bales, allowing all non-deleted inventory statuses", () => {
-    expect(route).toContain("eq(factoryBales.companyId, companyId)");
-    expect(route).toContain("eq(factoryBales.referenceNumber, reference)");
-    expect(route).toContain("isNull(factoryBales.deletedAt)");
-    expect(route).toContain('bale.status === "DELETED"');
-    expect(route).not.toContain("PRESSING_BALE_NOT_PENDING");
-    expect(route).toContain("PRESSING_BALE_NOT_FOUND");
-    expect(route).not.toContain("PRESSING_NON_BALE_ITEM");
-    expect(route).not.toContain("isNonBalePriorityProduct");
-    expect(route).toContain("Non-bale Priority products");
+    expectCode(route, "eq(factoryBales.companyId, companyId)");
+    expectCode(route, "eq(factoryBales.referenceNumber, reference)");
+    expectCode(route, "isNull(factoryBales.deletedAt)");
+    expectCode(route, 'bale.status === "DELETED"');
+    expectNoCode(route, "PRESSING_BALE_NOT_PENDING");
+    expectCode(route, "PRESSING_BALE_NOT_FOUND");
+    expectNoCode(route, "PRESSING_NON_BALE_ITEM");
+    expectNoCode(route, "isNonBalePriorityProduct");
+    expectCode(route, "Non-bale Priority products");
   });
 
   it("enforces one active confirmation across all machines and a unique request ID", () => {
-    expect(route).toContain("PRESSING_ALREADY_CONFIRMED");
-    expect(route).toContain('operatorName: priorProfile?.displayName?.trim()');
-    expect(route).toContain('operatorName: otherProfile?.displayName?.trim()');
-    expect(scanner).toContain('data-testid="pressing-duplicate-user"');
-    expect(scanner).toContain("ALREADY SCANNED");
-    expect(route).toContain("userNameSnapshot: operator.displayName?.trim()");
-    expect(route).toContain("PRESSING_REQUEST_ID_REUSED");
-    expect(route).toContain("PRESSING_CONFIRMATION_VOIDED");
-    expect(route).toContain('.onConflictDoNothing().returning()');
-    expect(ddl).toContain("ON factory_pressing_confirmations (company_id, bale_id) WHERE voided_at IS NULL");
-    expect(ddl).toContain("ON factory_pressing_confirmations (company_id, request_id)");
-    expect(route).toContain("requestId: parsed.requestId");
-    expect(route).toContain("return res.status(result.replayed ? 200 : 201)");
+    expectCode(route, "PRESSING_ALREADY_CONFIRMED");
+    expectCode(route, "operatorName: priorProfile?.displayName?.trim()");
+    expectCode(route, "operatorName: otherProfile?.displayName?.trim()");
+    expectCode(scanner, 'data-testid="pressing-duplicate-user"');
+    expectCode(scanner, "ALREADY SCANNED");
+    expectCode(route, "userNameSnapshot: operator.displayName?.trim()");
+    expectCode(route, "PRESSING_REQUEST_ID_REUSED");
+    expectCode(route, "PRESSING_CONFIRMATION_VOIDED");
+    expect(route).toMatch(/\.onConflictDoNothing\(\)\s*\.returning\(\)/);
+    expectCode(ddl, "ON factory_pressing_confirmations (company_id, bale_id) WHERE voided_at IS NULL");
+    expectCode(ddl, "ON factory_pressing_confirmations (company_id, request_id)");
+    expectCode(route, "requestId: parsed.requestId");
+    expectCode(route, "return res.status(result.replayed ? 200 : 201)");
   });
 
   it("saves exact server timestamp and audit in the transaction without stock writes", () => {
-    expect(route).toContain("confirmedAt: now");
-    expect(route).toContain("deviceCapturedAt");
-    expect(route).toContain("productionDate");
-    expect(route).toContain("logAudit({");
-    expect(route).toContain("}, tx)");
-    expect(route).not.toMatch(/tx\.(?:update|insert|delete)\((?:factoryBales|factoryMixBatches|stockMovements|voucherEntries)\)/);
-    expect(route).not.toContain("adjustInventory");
-    expect(route).not.toContain("writeDaybookEntry");
-    expect(route).toContain("inventoryFinalized: false");
+    expectCode(route, "confirmedAt: now");
+    expectCode(route, "deviceCapturedAt");
+    expectCode(route, "productionDate");
+    expect(route).toMatch(/logAudit\(\s*\{/);
+    expectCode(route, "}, tx)");
+    expect(route).not.toMatch(
+      /tx\.(?:update|insert|delete)\((?:factoryBales|factoryMixBatches|stockMovements|voucherEntries)\)/
+    );
+    expectNoCode(route, "adjustInventory");
+    expectNoCode(route, "writeDaybookEntry");
+    expectCode(route, "inventoryFinalized: false");
   });
 
   it("never marks a scan as confirmed until the server's receipt arrives", () => {
-    expect(manager).toContain("onBarcode={cameraRead}");
-    expect(manager).toContain("scanner.submit({");
-    expect(client).toContain("const receipt: unknown = await response.json()");
-    expect(client).toContain('item.status === "PRESSING_COMPLETED"');
-    expect(client).toContain('kind: "confirmed"');
-    expect(client).toContain("isPressingDuplicate(code)");
-    expect(scanner).toContain("last.confirmedAt");
-    expect(scanner).toContain("Server confirmed:");
+    expectCode(manager, "onBarcode={cameraRead}");
+    expectCode(manager, "scanner.submit({");
+    expectCode(client, "const receipt: unknown = await response.json()");
+    expectCode(client, 'item.status === "PRESSING_COMPLETED"');
+    expectCode(client, 'kind: "confirmed"');
+    expectCode(client, "isPressingDuplicate(code)");
+    expectCode(scanner, "last.confirmedAt");
+    expectCode(scanner, "Server confirmed:");
   });
 });

@@ -32,7 +32,8 @@ beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
   agent = request.agent(ctx.app);
   const login = await agent.post("/api/auth/login").send({
-    username: `${PREFIX}_testuser`, password: "testpassword123",
+    username: `${PREFIX}_testuser`,
+    password: "testpassword123",
   });
   if (login.status !== 200) throw new Error(`Login failed: ${login.status}`);
   await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId });
@@ -47,21 +48,30 @@ afterAll(async () => {
     [ctx.companyId]
   );
   await pool.query("DELETE FROM salary_advances WHERE company_id = $1", [ctx.companyId]);
+  // The posted advance voucher still references the workers; cleanupTestData
+  // removes the vouchers themselves, but the entries must go before the workers.
+  await pool.query("DELETE FROM voucher_entries WHERE voucher_id IN (SELECT id FROM vouchers WHERE company_id = $1)", [
+    ctx.companyId,
+  ]);
   await pool.query("DELETE FROM employees WHERE id IN ($1, $2)", [fromWorkerId, toWorkerId]);
   await cleanupTestData(PREFIX);
   closeTestServer();
 }, 60000);
 
-describe("ERP salary advance worker correction", () => {
+describe("ERP salary advance worker correction (PATCH /api/salary-advances/:id/worker)", () => {
   it("reassigns an untouched opening advance without changing its amounts", async () => {
     const id = await addOpeningAdvance("140.00");
     const response = await agent.patch(`/api/salary-advances/${id}/worker`).send({ employeeId: toWorkerId });
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({
-      id, employeeId: toWorkerId, amount: "140.00", remainingBalance: "140.00",
+      id,
+      employeeId: toWorkerId,
+      amount: "140.00",
+      remainingBalance: "140.00",
     });
     const { rows } = await pool.query(
-      "SELECT employee_id, amount, remaining_balance FROM salary_advances WHERE id = $1", [id]
+      "SELECT employee_id, amount, remaining_balance FROM salary_advances WHERE id = $1",
+      [id]
     );
     expect(Number(rows[0].employee_id)).toBe(toWorkerId);
     expect(rows[0].amount).toBe("140.00");
@@ -95,24 +105,25 @@ describe("ERP salary advance worker correction", () => {
       [voucherId]
     );
     expect(after.rows).toHaveLength(before.rows.length);
-    expect(after.rows.map((row) => [row.id, row.ledger_account_id, row.debit_amount, row.credit_amount]))
-      .toEqual(before.rows.map((row) => [row.id, row.ledger_account_id, row.debit_amount, row.credit_amount]));
+    expect(after.rows.map((row) => [row.id, row.ledger_account_id, row.debit_amount, row.credit_amount])).toEqual(
+      before.rows.map((row) => [row.id, row.ledger_account_id, row.debit_amount, row.credit_amount])
+    );
     expect(after.rows.filter((row) => Number(row.employee_id) === fromWorkerId)).toHaveLength(0);
-    expect(after.rows.filter((row) => Number(row.employee_id) === toWorkerId && Number(row.debit_amount) === 60))
-      .toHaveLength(1);
+    expect(
+      after.rows.filter((row) => Number(row.employee_id) === toWorkerId && Number(row.debit_amount) === 60)
+    ).toHaveLength(1);
   });
 
   it("refuses reassignment once a repayment exists", async () => {
     const id = await addOpeningAdvance("35.00");
     const repaid = await agent.post(`/api/salary-advances/${id}/deduction`).send({
-      payrollMonth: "2026-10", deductionAmount: "10.00",
+      payrollMonth: "2026-10",
+      deductionAmount: "10.00",
     });
     expect(repaid.status).toBe(200);
     const response = await agent.patch(`/api/salary-advances/${id}/worker`).send({ employeeId: toWorkerId });
     expect(response.status).toBe(409);
-    const row = await pool.query(
-      "SELECT employee_id, remaining_balance FROM salary_advances WHERE id = $1", [id]
-    );
+    const row = await pool.query("SELECT employee_id, remaining_balance FROM salary_advances WHERE id = $1", [id]);
     expect(Number(row.rows[0].employee_id)).toBe(fromWorkerId);
     expect(row.rows[0].remaining_balance).toBe("25.00");
   });

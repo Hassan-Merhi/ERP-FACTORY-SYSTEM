@@ -240,7 +240,59 @@ export const applicationFrenchTranslations = {
   "pos.paymentTotals": "Totaux des paiements",
   "analytics.expenses.periodActivity": "Écritures comptabilisées pour la période sélectionnée",
   "analytics.expenses.netExpense": "Dépense nette",
-  "analytics.expenses.loadFailed": "Impossible de charger les dépenses pour cette période. Veuillez réessayer le filtre de dates.",
+  "analytics.expenses.loadFailed":
+    "Impossible de charger les dépenses pour cette période. Veuillez réessayer le filtre de dates.",
   "analytics.expenses.loadFailedShort": "Impossible de charger les dépenses pour la période sélectionnée",
+  "edge.lanServer": "Serveur local de l'usine",
+  "edge.readOnly": "Lecture seule",
+  "edge.lanPrimary": "Serveur local principal",
+  "edge.replicationNotConfigured": "La synchronisation cloud n'est pas configurée.",
+  "edge.operator.title": "État de synchronisation du serveur d'usine",
+  "edge.operator.handoverReady": "Retour au cloud possible en toute sécurité",
+  "edge.operator.handoverBlocked": "Pas prêt pour le retour au cloud",
+  "edge.operator.relayPaused": "L'envoi vers le cloud est en pause",
+  "edge.operator.relayRunning": "L'envoi vers le cloud est actif",
+  "edge.operator.pendingTotal": "En attente d'envoi vers le cloud",
+  "edge.operator.stream": "Flux",
+  "edge.operator.pending": "En attente",
+  "edge.operator.stagedNotApplied": "Préparés",
+  "edge.operator.applied": "Appliqués",
+  "edge.operator.rejected": "Rejetés",
+  "edge.operator.notInstalled": "Non installé sur ce serveur",
+  "edge.operator.changesViaTools":
+    "La pause, la reprise et les décisions de conflit se font avec les outils opérateur audités.",
+  "offlineReads.writeLimitTitle": "Limites des écritures hors ligne",
+  "offlineVault.passphraseRequiredTitle": "Phrase secrète de chiffrement requise",
+  "offlineVault.passphraseRequiredDetail":
+    "Utilisez une phrase secrète unique d'au moins 12 caractères avant de préparer cet appareil.",
+  "offlineVault.passphraseLabel": "Phrase secrète de chiffrement de l'instantané de l'appareil",
+  "offlineVault.passphrasePlaceholder": "Au moins 12 caractères",
+  "offlineVault.passphraseHelp":
+    "Requise pour chiffrer chaque nouvelle préparation et déverrouiller les données enregistrées. La phrase secrète n'est jamais enregistrée. Si elle est perdue, il faut préparer à nouveau en ligne. Cela n'active pas la connexion hors ligne.",
+  "offlineVault.lock": "Verrouiller les données préparées",
+  "offlineVault.unlock": "Déverrouiller les données préparées",
+  "offlineDelivery.evidenceTitle": "Preuves de livraison hors ligne",
+  "offlineDelivery.evidenceDetail":
+    "Une demande enregistrée n'est pas une confirmation du serveur. Un accusé de réception du réseau local ne prouve pas la comptabilisation dans le cloud.",
+  "offlineDelivery.verifyScope":
+    "Vérifiez votre compte et votre société actuels avant de consulter ou de livrer les pièces enregistrées.",
+  "offlineDelivery.noRequests": "Aucune demande de pièce enregistrée pour ce compte.",
+  "offlineDelivery.panelLabel": "Livraison des écritures hors ligne",
+  "offlineDelivery.panelTitle": "Livraison des pièces hors ligne",
+  "offlineDelivery.panelDetail":
+    "Une demande enregistrée sur l'appareil ou un accusé du réseau local n'est pas une comptabilisation dans le cloud. « Transmis » signifie une preuve dans le cloud uniquement ; « appliqué dans le cloud » exige un reçu vérifié. Le stock, le point de vente, les paiements et les pièces jointes restent bloqués.",
+  "offlineReads.writeLimitDetail":
+    "Seules les opérations explicitement prises en charge peuvent être enregistrées pour synchronisation ultérieure. Les mouvements de stock, les paiements et les autres formulaires nécessitent encore le serveur.",
+  "offlineReads.exactCoverageDetail":
+    "Seules les données préalablement préparées et non expirées sont accessibles hors ligne. Les pages et requêtes non enregistrées nécessitent une connexion.",
+  "offlineReads.preparedTitle": "Données hors ligne préparées",
+  "offlineReads.preparedDetail":
+    "Les données en lecture seule ont été enregistrées pour votre compte et votre société.",
+  "offlineReads.incompleteTitle": "Préparation hors ligne incomplète",
+  "offlineReads.incompleteDetail":
+    "Certaines données n'ont pas pu être téléchargées. L'ancien instantané complet a été préservé.",
+  "offlineReads.readyLabel": "Données de lecture prêtes",
+  "offlineReads.intro":
+    "Enregistrez des données en lecture seule vérifiées pour ce compte et cette société. La connexion hors ligne et les pages non mises en cache ne sont pas encore prises en charge.",
   "supplierPartner.postOpeningStock": "Enregistrer le stock d'ouverture",
 } as const satisfies ApplicationTranslationCatalog;

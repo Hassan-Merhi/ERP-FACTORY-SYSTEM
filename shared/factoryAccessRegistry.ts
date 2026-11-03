@@ -102,7 +102,9 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     label: "Stock Entry",
     group: "Production",
     route: "/factory/stock-entry",
-    aliases: ["/factory/pressing", "/factory/finalize"],
+    // Production Bonuses is the Production Targets tab's payment workspace;
+    // FactoryRoutes additionally limits it to Admin/Owner.
+    aliases: ["/factory/pressing", "/factory/finalize", "/factory/production-bonuses"],
     sidebar: true,
     landing: true,
   },
@@ -596,7 +598,11 @@ export function factoryPageAllowsRole(page: FactoryPageDefinition, role?: string
   // Account Groups and Daybook are also accessible to Owners in FactoryRoutes;
   // keep the exceptions local instead of widening other admin-only pages.
   if (level === "admin") {
-    return role === "Admin" || role === "Developer" || ((page.key === "factory/account-groups" || page.key === "factory/daybook") && role === "Owner");
+    return (
+      role === "Admin" ||
+      role === "Developer" ||
+      ((page.key === "factory/account-groups" || page.key === "factory/daybook") && role === "Owner")
+    );
   }
   return true;
 }

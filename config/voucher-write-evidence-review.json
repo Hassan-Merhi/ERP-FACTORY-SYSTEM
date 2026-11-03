@@ -128,9 +128,9 @@
     },
     "phase-7-post-review-safe-writers": {
       "verdict": "post-review creator already protected by durable stock-document request identity",
-      "reason": "This stock-transfer creator entered the live tree after the original 81-file voucher review. Its create-from-scratch branch already consumes clientRequestId, uses the stock-document idempotency key/marker inside the transfer transaction, replays the existing transfer on retry, and is protected by the global accounting request identity client path. Phase 7 records it explicitly so the direct-creation audit can distinguish reviewed growth from an unprotected escape hatch.",
+      "reason": "This stock-transfer creator entered the live tree after the original 81-file voucher review. Its create-from-scratch branch already consumes clientRequestId, uses the stock-document idempotency key/marker inside the transfer transaction, replays the existing transfer on retry, and is protected by the global accounting request identity client path. Phase 7 records it explicitly so the direct-creation audit can distinguish reviewed growth from an unprotected escape hatch. (The offline-mode work moved the create-from-scratch transaction body, unchanged, into services/inventory/createStockTransfer.ts so the Phase 9 cloud replay of a factory LAN transfer runs the same code under the same stock-document idempotency key; the route still owns the clientRequestId.)",
       "files": [
-        "server/routes/fiscal-transfers/create.ts"
+        "server/services/inventory/createStockTransfer.ts"
       ]
     },
     "phase-8-request-identity-writers": {
