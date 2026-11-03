@@ -1,0 +1,29 @@
+name: Format Hadi backend correction (temporary)
+on:
+  push:
+    branches: [fix/factory-hadi-prepaid-backend-20261103]
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          ref: fix/factory-hadi-prepaid-backend-20261103
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node node_modules/prettier/bin/prettier.cjs --write server/startup/runApprovedHadiPrepaidRepair.ts server/startup/postStartupJobs.ts
+      - name: Commit formatted source
+        shell: bash
+        run: |
+          if [[ -n "$(git status --porcelain -- server/startup/runApprovedHadiPrepaidRepair.ts server/startup/postStartupJobs.ts)" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add server/startup/runApprovedHadiPrepaidRepair.ts server/startup/postStartupJobs.ts
+            git commit -m "Format guarded Factory prepaid rent backend correction"
+            git push origin HEAD:fix/factory-hadi-prepaid-backend-20261103
+          fi
