@@ -85,4 +85,8 @@ export const phase3SharedUiTranslationsPart7: readonly Phase3SharedUiEntry[] = [
   { en: "Training access could not be verified", ar: "تعذر التحقق من إذن الوصول إلى التدريب", fr: "Impossible de vérifier l’accès à la formation" },
   { en: "Training media storage is not configured", ar: "لم يتم إعداد تخزين مواد التدريب", fr: "Le stockage des médias de formation n’est pas configuré" },
   { en: "Training media temporarily unavailable", ar: "مواد التدريب غير متاحة مؤقتاً", fr: "Média de formation temporairement indisponible" },
+  { en: "Incomplete daybook response: first page is missing", ar: "استجابة دفتر اليومية غير مكتملة: الصفحة الأولى مفقودة", fr: "Réponse du journal incomplète : première page manquante" },
+  { en: "Incomplete daybook response on page ${page}", ar: "استجابة دفتر اليومية غير مكتملة في الصفحة ${page}", fr: "Réponse du journal incomplète à la page ${page}" },
+  { en: "Daybook changed while loading; refresh to get a consistent list", ar: "تغيّر دفتر اليومية أثناء التحميل؛ حدّث الصفحة للحصول على قائمة متسقة", fr: "Le journal a changé pendant le chargement ; actualisez pour obtenir une liste cohérente" },
+  { en: "No workers or payroll records found for this period.", ar: "لم يتم العثور على عمال أو سجلات رواتب لهذه الفترة.", fr: "Aucun employé ni dossier de paie trouvé pour cette période." },
 ];

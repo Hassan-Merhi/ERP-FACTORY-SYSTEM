@@ -1,0 +1,48 @@
+name: One-time Training PR Prettier Repair
+on:
+  push:
+    branches:
+      - feature/embedded-training-library-recorder
+    paths:
+      - .github/workflows/training-format-once.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: training-pr-format-once
+  cancel-in-progress: false
+
+jobs:
+  format:
+    if: github.repository == 'Hassan-Merhi/ERP-FACTORY-SYSTEM' && github.ref == 'refs/heads/feature/embedded-training-library-recorder'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.1"
+      - name: Install pinned formatter
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Format only files changed against main; remove this one-time workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          mapfile -d '' changed_files < <(
+            git diff --name-only -z origin/main...HEAD |
+              grep -zE '^(client/src|server|shared|tests|scripts)/.*\.(ts|tsx|css|mjs)$' || true
+          )
+          if [ "${#changed_files[@]}" -gt 0 ]; then
+            node node_modules/prettier/bin/prettier.cjs --write "${changed_files[@]}"
+            git add -- "${changed_files[@]}"
+          fi
+          git rm -- .github/workflows/training-format-once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Format training PR source and remove one-time CI repair job"
+          git push origin HEAD:feature/embedded-training-library-recorder
