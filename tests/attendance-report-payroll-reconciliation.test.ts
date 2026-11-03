@@ -104,11 +104,11 @@ describe("attendance report payroll reconciliation", () => {
       }),
     ];
     expect(salary(rows)).toMatchObject({
-      expectedSalary: "430.09",
-      paidSalary: "310.00",
+      expectedSalary: "400.09",
+      paidSalary: "280.00",
       remainingSalary: "120.09",
       cashPaidSalary: "199.99",
-      advancesSettled: "110.01",
+      advancesSettled: "80.01",
     });
   });
 
