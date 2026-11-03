@@ -130,6 +130,12 @@ operator tools.
      locks the live route also takes);
    - **no** privilege on `factory_edge_event_conflict_decisions` beyond
      `SELECT` — conflict decisions are a DBA action.
+   - Re-running `deploy/lan/phase7-prepare-restricted-role.sql` after the
+     evidence schema is installed keeps this boundary: its broad business-table
+     grant is followed by read-only access to `factory_edge_apply_approvals`,
+     `factory_edge_event_conflict_decisions` and
+     `factory_edge_sync_control_log` (approvals, conflict decisions and relay
+     pause/resume are DBA operator actions).
 4. The LAN write guard admits pressing scans only when the capture tables and
    their immutability triggers exist; otherwise scans get HTTP 503
    `EDGE_PHASE9_PRESSING_CAPTURE_NOT_INSTALLED` instead of failing mid-scan.

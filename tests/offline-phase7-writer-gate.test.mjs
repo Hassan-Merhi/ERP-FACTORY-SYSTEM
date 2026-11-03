@@ -116,6 +116,19 @@ test("restricted app role setup is DBA-only, NOLOGIN and denies DDL/state privil
   assert.match(sql, /GRANT SELECT ON phase7_writer\.state TO erp_edge_runtime/);
   assert.match(sql, /PHASE7_ROLE_SETUP_REQUIRES_FENCED_STATE/);
   assert.doesNotMatch(sql, /GRANT ALL PRIVILEGES|GRANT CREATE|GRANT TRIGGER|GRANT TRUNCATE/);
+  // The broad grant must be followed by read-only access to the DBA control tables.
+  const broad = sql.indexOf("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public");
+  const revoke = sql.indexOf(
+    "REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON public.%I FROM erp_edge_runtime"
+  );
+  assert.ok(broad >= 0 && revoke > broad);
+  for (const table of [
+    "factory_edge_apply_approvals",
+    "factory_edge_event_conflict_decisions",
+    "factory_edge_sync_control_log",
+  ]) {
+    assert.ok(sql.indexOf(`'${table}'`) > broad, table);
+  }
 });
 
 test("DBA SQL locks writer-state rows per transaction and fences every current public table", () => {

@@ -53,9 +53,36 @@ $phase7$;
 GRANT USAGE ON SCHEMA public TO erp_edge_runtime;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO erp_edge_runtime;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO erp_edge_runtime;
+-- The broad table grant above also reaches the offline control tables when
+-- the evidence schema is already installed. Apply approvals, conflict
+-- decisions and relay pause/resume records are DBA operator actions: the
+-- runtime role may read them (the cloud apply and the relays do) but never
+-- write them, or it could approve its own apply or override its own conflict.
+-- The Phase 8 apply gate refuses a role that can write apply approvals.
+DO $phase7$
+DECLARE
+  control_table text;
+BEGIN
+  FOREACH control_table IN ARRAY ARRAY[
+    'factory_edge_apply_approvals',
+    'factory_edge_event_conflict_decisions',
+    'factory_edge_sync_control_log'
+  ] LOOP
+    IF to_regclass(format('public.%I', control_table)) IS NOT NULL THEN
+      EXECUTE format(
+        'REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON public.%I FROM erp_edge_runtime',
+        control_table
+      );
+      EXECUTE format('GRANT SELECT ON public.%I TO erp_edge_runtime', control_table);
+    END IF;
+  END LOOP;
+END
+$phase7$;
 GRANT USAGE ON SCHEMA phase7_writer TO erp_edge_runtime;
 GRANT SELECT ON phase7_writer.state TO erp_edge_runtime;
 -- Deliberately NO TRUNCATE, REFERENCES, TRIGGER, CREATE, ownership, schema
 -- modification, future-table default privileges or state UPDATE grant.
--- Re-audit after every DDL migration before making a role LOGIN.
+-- Re-audit after every DDL migration before making a role LOGIN, and re-run
+-- this script after installing the offline evidence schema so the control
+-- tables above are read-only for the runtime role.
 COMMIT;
