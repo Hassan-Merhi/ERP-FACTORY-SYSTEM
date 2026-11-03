@@ -130,7 +130,11 @@ jobs:
           npm run audit:write-routes
           npm run audit:write-evidence
           npm run audit:company-scope
-          npm run audit:inventory-contracts:validate
+          # The classification validator requires a human-reviewed JSON document.
+          # Generate real audit evidence and a pending review worksheet; do not
+          # falsely treat an unreviewed template as validated classifications.
+          node scripts/run-program6c-inventory-review.mjs --report=artifacts/nightly-system-coverage/program6c-inventory-report.json
+          node scripts/generate-program6c-inventory-classifications.mjs --report=artifacts/nightly-system-coverage/program6c-inventory-report.json --output=artifacts/nightly-system-coverage/program6c-review-worksheet.json
           npm run verify:migrations
       - name: Preserve test coverage inventory even on failures
         if: always()
