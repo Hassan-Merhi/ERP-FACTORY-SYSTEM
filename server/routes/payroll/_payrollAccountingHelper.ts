@@ -22,9 +22,10 @@ export async function findOrCreateLedger(
   companyId: number,
   name: string,
   accountType: string,
-  opts?: { parentId?: number; subType?: string }
+  opts?: { parentId?: number; subType?: string },
+  executor: DatabaseOrTransaction = globalDb
 ): Promise<{ id: number }> {
-  const [existing] = await globalDb
+  const [existing] = await executor
     .select({ id: ledgerAccounts.id })
     .from(ledgerAccounts)
     .where(
@@ -33,7 +34,7 @@ export async function findOrCreateLedger(
   if (existing) return existing;
 
   for (let attempt = 0; attempt < 5; attempt++) {
-    const [maxCodeRow] = await globalDb
+    const [maxCodeRow] = await executor
       .select({ maxCode: sql<number | null>`MAX(CAST(code AS INTEGER))` })
       .from(ledgerAccounts)
       .where(and(eq(ledgerAccounts.companyId, companyId), sql`code ~ '^\\d+$'`));
@@ -50,11 +51,11 @@ export async function findOrCreateLedger(
       if (opts?.parentId) insertVals.parentId = opts.parentId;
       if (opts?.subType) insertVals.subType = opts.subType;
 
-      const [created] = await globalDb.insert(ledgerAccounts).values(insertVals).returning({ id: ledgerAccounts.id });
+      const [created] = await executor.insert(ledgerAccounts).values(insertVals).returning({ id: ledgerAccounts.id });
       return created;
     } catch (err: unknown) {
       if ((err as { code?: string }).code === "23505" || getErrorMessage(err)?.includes("unique")) {
-        const [nowFound] = await globalDb
+        const [nowFound] = await executor
           .select({ id: ledgerAccounts.id })
           .from(ledgerAccounts)
           .where(
@@ -176,12 +177,12 @@ async function rebuildPayrollGenVoucherTx(
   const totalGrossCents = totalNetCents + totalAdvancesCents;
   if (totalGrossCents <= 0) return;
 
-  const payableAcc = await findOrCreateLedger(companyId, "Payroll Payable", "Liability");
-  const advancesAcc = await findOrCreateLedger(companyId, "Factory Worker Advances", "Asset");
-  const salaryGroup = await findOrCreateLedger(companyId, "Salary Expense - Workers", "Expense", { subType: "Group" });
-  const bonusGroup = await findOrCreateLedger(companyId, "Bonus Expense - Workers", "Expense", { subType: "Group" });
+  const payableAcc = await findOrCreateLedger(companyId, "Payroll Payable", "Liability", undefined, tx);
+  const advancesAcc = await findOrCreateLedger(companyId, "Factory Worker Advances", "Asset", undefined, tx);
+  const salaryGroup = await findOrCreateLedger(companyId, "Salary Expense - Workers", "Expense", { subType: "Group" }, tx);
+  const bonusGroup = await findOrCreateLedger(companyId, "Bonus Expense - Workers", "Expense", { subType: "Group" }, tx);
 
-  await globalDb.execute(
+  await tx.execute(
     sql`UPDATE ledger_accounts SET sub_type='Group' WHERE id IN (${salaryGroup.id}, ${bonusGroup.id}) AND (sub_type IS NULL OR sub_type <> 'Group')`
   );
 
@@ -190,14 +191,14 @@ async function rebuildPayrollGenVoucherTx(
     if (workerAccCache.has(workerId)) continue;
     const sa = await findOrCreateLedger(companyId, `Salary Expense - ${workerName}`, "Expense", {
       parentId: salaryGroup.id,
-    });
+    }, tx);
     const ba = await findOrCreateLedger(companyId, `Bonus Expense - ${workerName}`, "Expense", {
       parentId: bonusGroup.id,
-    });
-    await globalDb.execute(
+    }, tx);
+    await tx.execute(
       sql`UPDATE ledger_accounts SET parent_id = ${salaryGroup.id} WHERE id = ${sa.id} AND (parent_id IS NULL OR parent_id <> ${salaryGroup.id})`
     );
-    await globalDb.execute(
+    await tx.execute(
       sql`UPDATE ledger_accounts SET parent_id = ${bonusGroup.id} WHERE id = ${ba.id} AND (parent_id IS NULL OR parent_id <> ${bonusGroup.id})`
     );
     workerAccCache.set(workerId, { salaryId: sa.id, bonusId: ba.id });
