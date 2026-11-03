@@ -199,11 +199,13 @@ async function runCorrection(tx: DbTransaction): Promise<{ applied: boolean; vou
     before === "24566.66" && toMoney(rental.credit).minus(before).eq(REPAIR_AMOUNT),
     "CURRENT_RECONCILIATION_CHANGED");
 
+  // Accounting-only audit narration, not UI copy or an API message.
+  const correctionDescription = "Factory Hadi Dakik Family Apartment: reclassify two future months of 2026-07-13 $15,000 rent payment (original voucher 10550) from early expense to Prepaid Rent. Nov and Dec recognition remains due on the 15th. No cash, rent payment or guarantee changed.";
   const posted = await postErpVoucherTx(tx, {
     companyId: COMPANY, voucherType: "Journal",
     voucherNumber: VOUCHER_NUMBER, voucherDate: asOf, currency: "USD",
     sourceModule: "FACTORY",
-    description: "Factory Hadi Dakik Family Apartment: reclassify two future months of 2026-07-13 $15,000 rent payment (original voucher 10550) from early expense to Prepaid Rent. Nov and Dec recognition remains due on the 15th. No cash, rent payment or guarantee changed.",
+    description: correctionDescription,
     source: { type: "factory-legacy-rent-prepaid-reclass", id: "12:34:10550:2026-11-03" },
     lines: [
       { ledgerAccountId: PREPAID_ACCOUNT, debit: REPAIR_AMOUNT, narration: "Nov/Dec 2026 prepaid rental $2,500 each; original payment 10550" },
