@@ -8,6 +8,6 @@
   },
   "dependencies": {
     "@vercel/blob": "2.4.0",
-    "jose": "6.1.0"
+    "jose": "6.2.14"
   }
 }
