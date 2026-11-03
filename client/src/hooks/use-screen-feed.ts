@@ -1,10 +1,21 @@
 import { useEffect, useRef } from "react";
 import type { ScreenFeedClickEvent, ScreenFeedCursorEvent, ScreenFeedFailureStage } from "./screen-feed-capture-engine";
+import { reportScreenFeedModuleLoadFailure } from "./screen-feed-asset-recovery";
 
 let captureEnginePromise: Promise<typeof import("./screen-feed-capture-engine")> | null = null;
 
 function loadScreenFeedCaptureEngine() {
-  captureEnginePromise ??= import("./screen-feed-capture-engine");
+  captureEnginePromise ??= import("./screen-feed-capture-engine")
+    .then((module) => {
+      window.dispatchEvent(new Event("erp:screen-feed-module-loaded"));
+      return module;
+    })
+    .catch((error: unknown) => {
+      // Do not cache a rejected promise and repeatedly fail every frame.
+      captureEnginePromise = null;
+      reportScreenFeedModuleLoadFailure(error);
+      throw error;
+    });
   return captureEnginePromise;
 }
 import { getRemoteSupportTabId } from "./use-remote-control-session";
