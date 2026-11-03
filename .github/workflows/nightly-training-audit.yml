@@ -193,3 +193,30 @@ jobs:
           gh issue create --repo "$GITHUB_REPOSITORY" \
             --title "Review ERP training recordings – run $GITHUB_RUN_ID ($RESULT)" \
             --body-file "$RUNNER_TEMP/training-review-body.md"
+
+  notify-transaction-failure:
+    needs: transactions
+    if: always() && needs.transactions.result == 'failure'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open human investigation task for failed fake transactions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "The nightly disposable ERP/Factory transaction suite or its reconciliation failed."
+            echo
+            echo "Inspect browser screenshots, the reconciliation JSON report and server logs:"
+            echo "$RUN_URL"
+            echo
+            echo "No real-company accounting or inventory was touched. Do not publish affected tutorials until the discrepancy is investigated."
+          } > "$RUNNER_TEMP/nightly-reconciliation-failure.md"
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "Nightly fake-company transaction audit failed – run $GITHUB_RUN_ID" \
+            --body-file "$RUNNER_TEMP/nightly-reconciliation-failure.md"
