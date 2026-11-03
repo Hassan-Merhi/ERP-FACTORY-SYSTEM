@@ -9,15 +9,15 @@ This implementation records the REAL UI in a disposable, local test company, det
 - Store ID: `store_TXyFGTsySrCeQhOj` (not a credential).
 - Region: `pdx1` (Oregon, close to the ERP Render service).
 - At creation: status `available`, access `private`, 0 objects.
-- The Vercel connector requested one-time team authorization after bucket creation. The owner must open the Vercel team consent link shown in the conversation before its connection settings can be read/managed.
+- Vercel team access was approved in the conversation. Created an empty Vercel project **`erp-training-storage-access`** (`prj_Ev2ficF3T5o43OciPNkIRmyg10lN`) solely to manage the store connection. This project has NO deployment and does not host the ERP. The Blob store currently has **zero connected projects**, so an owner must connect the existing private store to this project in the Vercel dashboard before retrieving its token.
 
 A private store **does not have publicly accessible media URLs**. Only the server-side token can fetch the files. The application exposes a permission-checked, authenticated streaming route at `/api/training/media/:topic`, plus `/captions` and `/screenshot`.
 
 ### One-time credential setup — still required
 
-Vercel's storage connection and token cannot be completed from an unapproved team connection. After approving the one-time Vercel team access request:
+Vercel team access has been approved. The remaining manual step is connecting the existing private Blob store to the empty `erp-training-storage-access` project in Vercel (this operation is not exposed by the connected management actions). After it is connected:
 
-1. Open the Vercel team's Storage area and the `erp-factory-training-media` Blob store. Connect it to a Vercel project if required to generate a `BLOB_READ_WRITE_TOKEN`, or create the store token through its dashboard settings. **Do not paste it into chat, an issue, a commit, or documentation.**
+1. Open the Vercel team's **Storage** area, select the existing `erp-factory-training-media` store, choose **Connect Project**, and select `erp-training-storage-access` (production environment). It will provision a `BLOB_READ_WRITE_TOKEN` in that project's environment. Copy that value securely or retrieve a token through the store settings. **Do not paste it into chat, an issue, a commit, or documentation.**
 2. In GitHub repository Settings → Environments, create `training-publication` with **required human reviewers** and allow deployments only from `main`. Protect the approval environment.
 3. Only after required reviewers are configured, add environment variables:
    - `TRAINING_PUBLICATION_APPROVAL_ENABLED=true`
