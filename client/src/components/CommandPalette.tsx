@@ -598,7 +598,7 @@ export function CommandPalette({
           ? { ...page, description: "Payment and receipt vouchers; automatic journals are read-only" }
           : page
       ),
-    [erpVis.sections, erpVis.visiblePinnedItems, erpVis.visibleUtilityItems, erpVis.isItemVisible, isRetailCompany, canSeeAdminCommands]
+    [erpVis, isRetailCompany, canSeeAdminCommands]
   );
 
   const factoryPages = useMemo(() => {
@@ -609,7 +609,7 @@ export function CommandPalette({
       ...accessibleExtras,
       ...(shellRole === "Developer" ? [...FACTORY_ACCOUNTING_CONTEXT, ...FACTORY_MAINTENANCE_CONTEXT] : []),
     ]);
-  }, [factoryVis.sections, factoryVis.isPinnedVisible, factoryVis.isHubTabVisible, shellRole]);
+  }, [factoryVis, shellRole]);
 
   const propertiesPages = useMemo(
     () =>
