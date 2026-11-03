@@ -598,7 +598,11 @@ export function factoryPageAllowsRole(page: FactoryPageDefinition, role?: string
   // Account Groups and Daybook are also accessible to Owners in FactoryRoutes;
   // keep the exceptions local instead of widening other admin-only pages.
   if (level === "admin") {
-    return role === "Admin" || role === "Developer" || ((page.key === "factory/account-groups" || page.key === "factory/daybook") && role === "Owner");
+    return (
+      role === "Admin" ||
+      role === "Developer" ||
+      ((page.key === "factory/account-groups" || page.key === "factory/daybook") && role === "Owner")
+    );
   }
   return true;
 }
