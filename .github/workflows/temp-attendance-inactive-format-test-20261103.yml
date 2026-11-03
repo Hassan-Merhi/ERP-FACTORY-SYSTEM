@@ -1,0 +1,56 @@
+name: Temporary attendance inactive-worker regression
+
+on:
+  push:
+    branches:
+      - fix/attendance-report-include-inactive-payroll-workers-20261103
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout feature
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: fix/attendance-report-include-inactive-payroll-workers-20261103
+          persist-credentials: true
+
+      - name: Setup node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.1"
+
+      - name: Install pinned dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Format changed files with repo Prettier
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write \
+            server/routes/factory/employee-pos/employeeAttendanceRoutes.ts \
+            client/src/pages/factory/FactoryWorkerAttendanceReport.tsx \
+            client/src/pages/factory/factoryworkerattendancereport/types.ts \
+            tests/attendance-report-inactive-workers.test.ts
+
+      - name: Run focused payroll report tests
+        run: |
+          node node_modules/vitest/vitest.mjs run \
+            tests/attendance-report-inactive-workers.test.ts \
+            tests/attendance-report-payroll-reconciliation.test.ts
+
+      - name: Commit formatting only
+        run: |
+          set -euo pipefail
+          git add \
+            server/routes/factory/employee-pos/employeeAttendanceRoutes.ts \
+            client/src/pages/factory/FactoryWorkerAttendanceReport.tsx \
+            client/src/pages/factory/factoryworkerattendancereport/types.ts \
+            tests/attendance-report-inactive-workers.test.ts
+          if git diff --cached --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "style(attendance): format historical inactive worker report"
+          git push origin HEAD:refs/heads/fix/attendance-report-include-inactive-payroll-workers-20261103
