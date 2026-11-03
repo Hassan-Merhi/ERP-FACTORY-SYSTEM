@@ -5,8 +5,10 @@ import { logger } from "../../lib/logger";
 import { checkFactoryAdmin } from "../factory/_helpers";
 import { logAudit } from "../helpers/auditHelpers";
 import { generateFactoryPayrollBatch } from "../../services/payroll/factoryPayrollGenerationService";
+import { PayrollPeriodOverlapError } from "../../services/payroll/payrollPeriodOverlapPolicy";
 
 function statusForGenerationError(error: unknown): number {
+  if (error instanceof PayrollPeriodOverlapError) return error.status;
   const message = getErrorMessage(error);
   if (/required|invalid|YYYY-MM-DD|cannot be after|No active workers/i.test(message)) {
     return 400;
