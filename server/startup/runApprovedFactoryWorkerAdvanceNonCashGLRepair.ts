@@ -195,7 +195,7 @@ async function requireOriginalEvidence(tx:DbTransaction):Promise<void> {
       COUNT(*) FILTER (WHERE deleted_at IS NULL AND
         (voucher_number LIKE 'PAYMENT-ADV-3-%' OR
          voucher_number LIKE 'PAYMENT-ADV-103-%' OR
-         voucher_number='PAYROLL-GEN-${COMPANY}-2026-05-17-2026-05-17'))::int AS unexpected
+         voucher_number='PAYROLL-GEN-12-2026-05-17-2026-05-17'))::int AS unexpected
     FROM vouchers WHERE company_id=${COMPANY}
   `)).rows as Row[];
   must(Number(vouchers?.retired_may)===1 &&
