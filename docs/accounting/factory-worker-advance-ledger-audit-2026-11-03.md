@@ -92,3 +92,39 @@ Investigations identified:
 **Current status:** Back-end repair is coded and opt-in, but no production
 database write occurred during this investigation. Do not claim that the
 figures match until a live post-apply check confirms every accounting source.
+
+## User constraint superseding original dated voucher proposal
+
+Owner instruction (November 3): **Cash is correct; do not change it.** Previous PR
+#2785 was closed, unmerged, and never enabled because its proposed historical
+payment vouchers would have credited Cash $248.39.
+
+The replacement backend-only `runApprovedNoCashAdvanceSourceRepair` performs
+**source-record correction only**, not financial posting:
+
+- **2026-05-16:** restore advance #103 ($48.39, fully recovered by PAID May
+  payroll #686). The original PAYMENT voucher #7838 remains retired;
+  no replacement voucher and no Cash movement.
+- **2026-06-15:** void duplicated/unvouchered advance #267 ($100); preserve
+  advance #272 with its original cash voucher #9849 and payroll #783 deduction.
+  Void the June 15 daybook row with a zero amount on its existing date.
+- **2026-07-16:** reopen the existing $160 receivable on advance #277.
+  The original July 16 voucher #10739 remains unchanged, and July payroll
+  #931 has zero recovery. No Cash movement.
+
+Before exact reconciliation: original advances $91,589.90, operational
+outstanding $2,515.00, ledger $2,726.61. Source-only after-image must be
+original advances $91,538.29, operational outstanding $2,675.00, with the
+**Cash debit, credit, and opening balance exactly unchanged**, the whole
+ledger unchanged at $2,726.61, and payroll deductions/manual repayments
+unchanged. A **$51.61 residual** is deliberately left for a separately
+documented accounting determination. Posting it against Cash, Payroll Payable,
+a supplier, or a generic adjustments account without evidence is forbidden.
+No financial voucher is dated today or created by this source repair.
+
+The code runs within one transaction with original voucher checks, original
+worker/date/amount checks, closed-period protection, original-date daybook
+annotation, audit history, a one-time marker and before/after assertions.
+The only activation switch is
+`FACTORY_ADVANCE_SOURCE_REPAIR_NO_CASH_20261103=approved-company12-historical-source-only-v1`.
+It must not be enabled unless the merge checks and live preconditions pass.

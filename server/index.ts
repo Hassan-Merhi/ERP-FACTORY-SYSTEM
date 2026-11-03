@@ -80,6 +80,7 @@ import { runApprovedHmdEurogulfFreightRepair } from "./startup/runApprovedHmdEur
 import { runApprovedFactoryDestinationNormalization } from "./startup/runApprovedFactoryDestinationNormalization";
 import { runApprovedMali53DestinationNormalization } from "./startup/runApprovedMali53DestinationNormalization";
 import { runApprovedFactoryWorkerAdvanceLedgerRepair } from "./startup/runApprovedFactoryWorkerAdvanceLedgerRepair";
+import { runApprovedNoCashAdvanceSourceRepair } from "./startup/runApprovedNoCashAdvanceSourceRepair";
 import { inspectOctoberPayrollJournalIntegrity20261103 } from "./startup/inspectOctoberPayrollJournalIntegrity20261103";
 import { ensureFactorySheetsSacksSchema } from "./startup/factorySheetsSacksSchema";
 import { ensureSpGitTracking } from "./lib/spGitTracking";
@@ -461,6 +462,14 @@ let migrationsDone = false;
         } catch (advanceRepairError: unknown) {
           logger.error("[startup] Factory worker advance accrual correction blocked", {
             error: getErrorMessage(advanceRepairError),
+          });
+        }
+        // Company 12 source repair only; never writes Cash or ledger journals.
+        try {
+          await runApprovedNoCashAdvanceSourceRepair();
+        } catch (noCashAdvanceError: unknown) {
+          logger.error("[startup] No-cash worker advance source repair blocked", {
+            error: getErrorMessage(noCashAdvanceError),
           });
         }
         // Explicitly opted-in, tenant-scoped READ-ONLY inspection. It only
