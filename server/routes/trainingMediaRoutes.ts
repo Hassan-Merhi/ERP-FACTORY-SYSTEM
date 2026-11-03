@@ -1,6 +1,6 @@
 /**
  * Authenticated private training-media playback. Only an exact, code-reviewed
- * published object key can be requested. No S3 credentials are returned.
+ * published object key can be requested. No storage credentials are returned.
  */
 import type { Express, Request, Response } from "express";
 import { createHash, createHmac } from "node:crypto";
@@ -58,6 +58,26 @@ async function canStreamTopic(req: Request, topic: string): Promise<boolean> {
   if (["Admin", "Owner", "Developer"].includes(context.role)) return true;
   const saved = await getErpUserPageAccess(context.companyId, context.userId);
   return effectiveErpPageKeys(context.role, saved).includes(destination.key);
+}
+
+/**
+ * Vercel Blob private stores require a server-side token. The expected store
+ * is pinned by env ID, and both the host and object key are strictly checked,
+ * preventing an unreviewed manifest from redirecting a token elsewhere.
+ */
+export function authenticatedVercelTrainingObjectRequest(
+  key: string,
+  range?: string
+): { url: string; headers: Record<string, string> } | null {
+  const token = process.env.TRAINING_MEDIA_VERCEL_TOKEN;
+  const store = process.env.TRAINING_MEDIA_VERCEL_STORE_ID;
+  if (!token || !store || !/^store_[A-Za-z0-9]{8,80}$/.test(store) || !OBJECT_KEY.test(key)) return null;
+  const id = store.slice("store_".length);
+  const host = id + ".private.blob.vercel-storage.com";
+  const url = new URL("https://" + host + "/" + key.split("/").map(encodeURIComponent).join("/"));
+  const headers: Record<string, string> = { authorization: "Bearer " + token };
+  if (range) headers.range = range;
+  return { url: url.toString(), headers };
 }
 
 function sha256(value: string): string {
@@ -138,13 +158,15 @@ async function streamMedia(req: Request, res: Response, kind: "video" | "caption
     res.status(416).end();
     return;
   }
-  const request = signedTrainingObjectRequest(key, range);
+  const request = process.env.TRAINING_MEDIA_PROVIDER === "vercel"
+    ? authenticatedVercelTrainingObjectRequest(key, range)
+    : signedTrainingObjectRequest(key, range);
   if (!request) {
     res.status(503).json({ message: "Training media storage is not configured" });
     return;
   }
   try {
-    const upstream = await fetch(request.url, { headers: request.headers, signal: AbortSignal.timeout(30_000) });
+    const upstream = await fetch(request.url, { headers: request.headers, redirect: "error", signal: AbortSignal.timeout(30_000) });
     if (![200, 206].includes(upstream.status) || !upstream.body) {
       res.status(upstream.status === 404 ? 404 : 502).json({ message: "Training media temporarily unavailable" });
       return;

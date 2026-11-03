@@ -1,44 +1,57 @@
-# Automated nightly ERP & Factory training
+# Automated ERP & Factory training — private Vercel Blob storage
 
-**Status:** A guarded implementation on the `feature/embedded-training-library-recorder` branch. It cannot run nightly until merged into `main`; it cannot publish privately until storage and approval settings are provisioned. No laptop or user-side agent is required.
+This implementation records the REAL UI in a disposable, local test company, detects changed screens nightly, prepares review artifacts and publishes only after a human approval and a reviewed PR merge. Live ERP accounting, inventory, payroll and company data are never used by the recorder.
 
-## Design and operation
+## Provisioned storage — 2026-11-03
 
-1. GitHub Actions workflow `.github/workflows/nightly-training-audit.yml` runs every night at **02:15 UTC** (04:15 Beirut winter / 05:15 summer) and can also be manually dispatched.
-2. `scripts/plan-nightly-training.mjs` compares `main` against the previous **successful nightly run**, not against an arbitrary failed or one-topic manual run. On the first successful run, it records all 16 configured real-UI tours. Subsequent runs classify changed ERP / Factory source files and choose the affected tours; shared code changes conservatively trigger all tours. Unrecognized module files are flagged for human review.
-3. If no relevant source changed, the recorder is skipped. A JSON plan remains attached to the run.
-4. Otherwise GitHub reuses the `training-videos.yml` workflow. It builds the **actual application**, boots an isolated localhost Postgres test database, seeds disposable ERP and Factory companies, and launches a headless browser with disposable users. The browser records real rendered UI into WebM, captures PNG, VTT captions and a Markdown guide. Only same-origin read requests are allowed during recording; approved UI tab navigation is permitted. **No production company, secrets, balances, stock, payroll, invoices or vouchers are touched.**
-5. The workflow uploads a **30-day GitHub Actions artifact** and creates a GitHub issue linking to the review run. A failed recording is reported as a failure, not silently treated as an approved tutorial.
-6. A human watches the clip, checks for sensitive information, checks the guide against the current real UI and verifies the functionality shown. Review is explicit; the AI cannot self-approve.
-7. The separate manual `publish-training-video.yml` workflow is gated behind the `training-publication` GitHub Environment. Once an approved run ID and individual topic ID are supplied, it validates that the recording came from a successful main-branch training run, uploads WebM, captions and an approved screenshot to **private S3-compatible object storage**, and opens a PR updating `shared/publishedTrainingMedia.json` with the reviewed guide steps. **A maintainer must review and merge that PR and deploy** before the app serves the video, captions, screenshot and approved guide.
-8. Inside the ERP and Factory Help & Training pages, authenticated users see only their authorized topics. The video stream resolves through `/api/training/media/:topic`, checks active-company page access server-side, signs a private S3 GET request on the server, supports byte-range seeking, and does not expose object store credentials or public video URLs.
+- Provider: **Vercel Blob**, private store.
+- Name: `erp-factory-training-media`.
+- Store ID: `store_TXyFGTsySrCeQhOj` (not a credential).
+- Region: `pdx1` (Oregon, close to the ERP Render service).
+- At creation: status `available`, access `private`, 0 objects.
+- The Vercel connector requested one-time team authorization after bucket creation. The owner must open the Vercel team consent link shown in the conversation before its connection settings can be read/managed.
 
-## Mandatory one-time setup (not performed by code)
+A private store **does not have publicly accessible media URLs**. Only the server-side token can fetch the files. The application exposes a permission-checked, authenticated streaming route at `/api/training/media/:topic`, plus `/captions` and `/screenshot`.
 
-- Merge the reviewed training-center PR and make sure the Actions workflows are enabled on `main`.
-- Provision private S3-compatible durable media storage (Railway Buckets, Cloudflare R2, AWS S3 or another SigV4-compatible bucket). Keep the bucket **private**, with public access disabled. Use a bucket dedicated to tutorial media, not business data. If the provider supports per-credential IAM policies, restrict upload and runtime identities to their minimum permissions.
-- **Railway account status observed 2026-11-03:** the connected Railway account's trial had expired, and its API refused to create the proposed `erp-training-media` project (`Your trial has expired. Please select a plan to continue using Railway.`). No new project or bucket was created. Activate a suitable Railway plan before provisioning, or choose another provider.
-- **Railway-specific setup:** create a private project `erp-training-media` and a Bucket named `erp-training-videos` (for example in `sjc`, near the Render Oregon region). In its Credentials tab copy the exact **API bucket name** (with generated suffix), endpoint, region and credentials. Set `TRAINING_MEDIA_S3_URL_STYLE=virtual-host` in the protected GitHub environment variables **and** Render production environment; otherwise the default `path` signing will not work on new Railway buckets. Railway Bucket credentials are currently bucket-level and may not support separate read-only vs writer IAM identities. Do not claim least-privilege read-only keys if the provider has not issued such a capability; protect and rotate the shared pair and restrict unrelated service access.
-- In GitHub Settings > Environments, create **`training-publication`**. Add required reviewers and restrict deployment branches to `main`; the workflow will not run successfully without the deliberate environment variable described next. Reviewers must verify the actual video in the recording run **before** approving.
-- In that protected environment set **`TRAINING_PUBLICATION_APPROVAL_ENABLED=true`** only after required reviewer rules are configured.
-- In protected environment secrets set **`TRAINING_MEDIA_S3_ENDPOINT`**, **`TRAINING_MEDIA_S3_BUCKET`**, **`TRAINING_MEDIA_S3_ACCESS_KEY`**, **`TRAINING_MEDIA_S3_SECRET_KEY`**. Set environment variables `TRAINING_MEDIA_S3_REGION` (use the bucket's **actual region**) and `TRAINING_MEDIA_S3_URL_STYLE` (`virtual-host` for new Railway Buckets, `path` for legacy path-based S3 endpoints).
-- On **Render** (for runtime playback), configure `TRAINING_MEDIA_S3_ENDPOINT`, `TRAINING_MEDIA_S3_BUCKET`, `TRAINING_MEDIA_S3_ACCESS_KEY`, `TRAINING_MEDIA_S3_SECRET_KEY`, `TRAINING_MEDIA_S3_REGION`, and `TRAINING_MEDIA_S3_URL_STYLE` in protected environment settings. Where supported (such as IAM-scoped AWS/R2 keys), give Render a **separate read-only identity** from the uploader. Railway Bucket key pairs may be shared full-bucket credentials; when unavoidable, treat them as high-value secrets and keep this storage bucket dedicated to training assets. No keys should be committed to GitHub or passed to the browser.
-- Confirm the published media route can stream a reviewed WebM and VTT with normal employee permissions. Then check unauthorized topic and unauthenticated requests return 403/401.
-- Retain the original Markdown guides and reviewed media files in private permanent storage; a GitHub Actions artifact expires and cannot be the permanent library.
-- Optionally set GitHub Issues notifications or subscriptions for administrators responsible for training reviews.
+### One-time credential setup — still required
 
-## Scope boundaries
+Vercel's storage connection and token cannot be completed from an unapproved team connection. After approving the one-time Vercel team access request:
 
-- The current recorder is deterministic browser automation, **not** unrestricted generative-AI exploration. It navigates genuine pages and can click an approved read-only tab but it does not autonomously fill complex production forms.
-- Only the 16 registered modules have recording tours. Newly added routes that do not match a known tour are flagged for review rather than hallucinating instructions.
-- No AI voiceover, speech generation, durable in-app admin approval console, automatic production writes, or publishing without human approval exists yet.
-- If GitHub Actions, the test fixture, or private storage are misconfigured, the correct behavior is to stop and report the error rather than touch a real company.
-- Site updates require a new deployment; published manifest changes are merged through the normal protected PR process. Video objects are content-addressed by their source SHA.
+1. Open the Vercel team's Storage area and the `erp-factory-training-media` Blob store. Connect it to a Vercel project if required to generate a `BLOB_READ_WRITE_TOKEN`, or create the store token through its dashboard settings. **Do not paste it into chat, an issue, a commit, or documentation.**
+2. In GitHub repository Settings → Environments, create `training-publication` with **required human reviewers** and allow deployments only from `main`. Protect the approval environment.
+3. Only after required reviewers are configured, add environment variables:
+   - `TRAINING_PUBLICATION_APPROVAL_ENABLED=true`
+   - `TRAINING_MEDIA_VERCEL_STORE_ID=store_TXyFGTsySrCeQhOj`
+   And add the environment **secret** `TRAINING_MEDIA_VERCEL_TOKEN` containing that store's `BLOB_READ_WRITE_TOKEN`.
+4. In the **ERP production service on Render**, set (merge, never replace unrelated variables):
+   - `TRAINING_MEDIA_PROVIDER=vercel`
+   - `TRAINING_MEDIA_VERCEL_STORE_ID=store_TXyFGTsySrCeQhOj`
+   - `TRAINING_MEDIA_VERCEL_TOKEN=<token stored as a private environment variable>`.
+   The Render service must not expose that token to the browser or build output. Configure only once the training PR and integration are ready to deploy.
+5. Record a disposable test tour successfully after Actions runners are working. Review the WebM, VTT, screenshot and Markdown, especially any unexpected data, login dialogs or blocked requests.
+6. Trigger **Approve & Publish ERP Training Video** with one reviewed topic and successful run ID. The protected workflow checks the source run, verifies artifacts, installs a pinned `@vercel/blob` client in an isolated temporary folder, and uploads to the private store with immutable `training/videos/{topic}/{sourceSha}.*` pathnames. It opens a PR updating `shared/publishedTrainingMedia.json`. Only a reviewed merge and ERP deployment enable playback.
+7. Verify with a properly authorized user that the WebM, screenshot and captions stream via the authenticated ERP API; verify an unauthenticated user is rejected and a user denied access to the training topic cannot read it.
 
-## Manual operations
+**Security trade-off:** Vercel Blob's `BLOB_READ_WRITE_TOKEN` can write as well as read within the dedicated store. The token must remain protected on both Render and GitHub; there is no claim that a separate read-only token exists. Restrict this store to training media, revoke/rotate credentials if exposed, and never expose its token from a frontend response.
 
-Run `Nightly ERP Training Audit` manually for a complete source-based audit, or run `Record Real ERP Training Videos (Disposable Data)` to capture a single approved topic (or `all`). After reviewing the resulting artifact, run `Approve & Publish ERP Training Video` with the completed run ID and individual topic ID. Only the publication workflow should have object storage write privileges **when the provider supports scoped identities**; Railway's shared bucket credentials may also permit writes from the Render playback backend.
+## Nightly recording and review
 
-## Tests
+1. `.github/workflows/nightly-training-audit.yml` runs at 02:15 UTC (04:15 Beirut winter / 05:15 summer). The first run covers all 16 predefined tours.
+2. Subsequent runs compare `main` against the last successful nightly commit, choose affected known modules and record in a disposable PostgreSQL-backed local instance. Shared-code changes conservatively recapture all registered topics. Unknown modules are flagged for review, not automatically described as functional tutorials.
+3. A GitHub issue links to review artifacts, retained 30 days, including screen capture, screenshot, captions and instructions.
+4. A **person** approves each topic before it is uploaded. Recording never self-publishes or runs arbitrary production-account mutations.
+5. The approved publication PR carries immutable keys and the reviewed written guide. Only users allowed to access the corresponding page can stream that material after merge/deployment.
 
-The change detector includes `node --test scripts/plan-nightly-training.test.mjs`. The Help & Training catalog includes role filtering tests; the Factory guard has a restricted-user direct-route test. Run the repository type-check, frontend tests and disposable browser recording job before merging. If GitHub CI fails before jobs execute, do **not** treat recording or runtime deployment as verified.
+## Blockers and limitations
+
+- **GitHub Actions:** jobs for this repository were failing before runner assignment, preventing a successful end-to-end CI recording as of 2026-11-02. See issue #2764.
+- **Vercel Blob store:** created successfully, but token and Vercel team connection approval not yet completed. No tutorial videos have been uploaded.
+- **GitHub protected environment:** must have a human reviewer and publication opt-in enabled in GitHub settings. The connector here does not manage GitHub environment secrets directly.
+- **Render:** the training-specific token and provider settings have not been added to production; no live deployment has been made.
+- **Recording scope:** deterministic real-page read-only browser tours, not free-form AI software exploration; no generated voiceover or full real transaction simulations.
+- **Costs:** Vercel Blob storage, requests and private media bandwidth are metered according to the account's plan and usage; do not assume free unlimited video playback. Keep recordings small and review usage.
+- The existing S3-compatible signing utility remains in the server as an alternative, but **Vercel Blob is now the selected and configured publishing workflow**. No other storage provider is required.
+
+## Developer verification
+
+Check the type-check and client tests, `node --test scripts/plan-nightly-training.test.mjs`, and disposable browser recordings in CI. To inspect publisher code see `scripts/upload-reviewed-training-vercel.mjs`; private routing is in `server/routes/trainingMediaRoutes.ts`. All recording and publishing functionality remains on draft PR #2763 until verified.

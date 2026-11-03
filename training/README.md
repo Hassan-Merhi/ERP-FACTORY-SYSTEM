@@ -11,13 +11,15 @@
 
 ## Recording real software, not a generated mock-up
 
-For the scheduled change detector, review gates and private media setup, see [automation.md](automation.md).\n\nThe supported recording runner is `scripts/record-training-guides.mjs`. It signs into **the actual application built from the repository** and opens registered read-only UI tours, records the browser with Puppeteer, captures a screenshot, and creates a Markdown guide plus WebVTT captions.
+For the scheduled change detector, review gates and private media setup, see [automation.md](automation.md).
+
+The supported recording runner is `scripts/record-training-guides.mjs`. It signs into **the actual application built from the repository** and opens registered read-only UI tours, records the browser with Puppeteer, captures a screenshot, and creates a Markdown guide plus WebVTT captions.
 
 The recorder **requires the existing Phase 7 disposable Postgres fixture** on 127.0.0.1:5000, `NODE_ENV=test`, `ERP_E2E_DISPOSABLE_DB=1`, `TRAINING_SANDBOX_VERIFIED=1`, and ephemeral fixture credentials. It refuses public or production URLs. It restricts network traffic during each tour to same-origin GET/HEAD/OPTIONS. No AI agent may click arbitrary controls or perform writes.
 
 ### Run recordings
 
-After merging the implementation, GitHub Actions > **Record Real ERP Training Videos (Disposable Data)** > Run workflow > select a topic or all. The workflow installs Chrome/ffmpeg, builds the app, prepares disposable ERP and Factory companies, records real UI clips, and produces a review artifact. The generated artifact expires after 14 days and is **not** a publishing destination.
+After merging the implementation, GitHub Actions > **Record Real ERP Training Videos (Disposable Data)** > Run workflow > select a topic or all. The workflow installs Chrome/ffmpeg, builds the app, prepares disposable ERP and Factory companies, records real UI clips, and produces a review artifact. The generated artifact expires after 30 days and is **not** a publishing destination.
 
 Each completed topic output includes:
 - `screen.webm`: actual rendered UI video with instructional on-screen captions.
@@ -30,9 +32,9 @@ Each completed topic output includes:
 
 1. Check recording success and confirm the video contains only disposable sample data, no private business details, login screens or credentials.
 2. Check the instructions against the actual current UI and confirm the recorded page is correct.
-3. Upload approved WebM files to authenticated durable training-media storage. Do not serve them from temporary GitHub Action artifacts or an ephemeral Render filesystem.
-4. Use the protected **Approve & Publish ERP Training Video** workflow to upload approved video, captions and screenshot to private S3-compatible storage and open a PR updating `shared/publishedTrainingMedia.json` with reviewed guide steps. The app resolves video and caption streams through its authenticated backend, so no direct storage URL is exposed.
-5. Verify streaming playback and role access before publishing the change. Add transcripts/captions alongside the media via your storage integration.
+3. Approve the selected topic through the protected GitHub `training-publication` environment after reviewing all evidence.
+4. Use **Approve & Publish ERP Training Video** to upload approved WebM, captions and screenshot to the dedicated **private Vercel Blob store** and create a PR updating `shared/publishedTrainingMedia.json` with approved guide steps. GitHub Actions temporary artifacts and ephemeral Render filesystems are not used as permanent storage.
+5. Review/merge that PR, deploy the change, and verify playback and active-company role access; the app routes video, captions and screenshots through its authenticated backend.
 6. Rerecord videos when relevant workflows or screenshots change.
 
 This is the **initial foundation**. Nightly detection and automated recording have now been added, while private streaming is available only after storage credentials and an approved published manifest are configured. AI-discovered multi-step write simulations, voice narration and an in-app admin approval console are **not implemented**. Until a reviewed publication PR is merged and deployed, the library marks videos as unpublished.
