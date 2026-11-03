@@ -5,7 +5,7 @@ const store = "store_TXyFGTsySrCeQhOj";
 const allowed = /^training\/videos\/[a-z0-9-]{1,80}\/[0-9a-f]{40}\.(?:webm|vtt|png)$/;
 const host = "txyfgtsysrceqhoj.private.blob.vercel-storage.com";
 
-export default async function handler(request) {
+export default { async fetch(request) {
   if (request.method !== "GET") return Response.json({ error: "method" }, { status: 405 });
   const key = new URL(request.url, "https://gateway.invalid").searchParams.get("key") || "";
   if (!allowed.test(key)) return Response.json({ error: "invalid key" }, { status: 400 });
@@ -30,4 +30,4 @@ export default async function handler(request) {
   } catch {
     return Response.json({ error: "signing unavailable" }, { status: 502 });
   }
-}
+}};

@@ -6,7 +6,7 @@ const allowed = /^training\/videos\/[a-z0-9-]{1,80}\/[0-9a-f]{40}\.(webm|vtt|png
 const jwks = createRemoteJWKSet(new URL("https://token.actions.githubusercontent.com/.well-known/jwks"));
 const workflow = "Hassan-Merhi/ERP-FACTORY-SYSTEM/.github/workflows/publish-training-video.yml@refs/heads/main";
 
-export default async function handler(request) {
+export default { async fetch(request) {
   if (request.method !== "POST") return Response.json({ error: "method" }, { status: 405 });
   if (process.env.BLOB_STORE_ID !== store) return Response.json({ error: "store unavailable" }, { status: 503 });
   const authorization = request.headers.get("authorization") || "";
@@ -52,4 +52,4 @@ export default async function handler(request) {
   } catch {
     return Response.json({ error: "publisher authorization failed" }, { status: 403 });
   }
-}
+}};
