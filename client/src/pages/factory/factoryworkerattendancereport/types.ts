@@ -24,7 +24,12 @@ export interface WorkerReportRow {
   baseSalary: string;
   salaryType: string;
   transportAllowance: string;
+  expectedSalary: string;
   paidSalary: string;
+  remainingSalary: string;
+  cashPaidSalary: string;
+  advancesSettled: string;
+  salarySource: "payroll" | "attendance_estimate";
 }
 
 export interface AttendanceReportData {
