@@ -4,8 +4,6 @@
  * Extracted from FactoryWorkerAttendanceReport.tsx during the Phase 4 god-file split.
  */
 
-import type {DateEntry, WorkerReportRow} from "./types";
-
 function formatLocalIsoDate(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
@@ -41,41 +39,11 @@ export function workerCodeNum(code: string | null): number {
 export const CYCLE: Record<string, string> = {
   Present: "Absent",
   Absent: "Leave",
-  Leave: "HalfDay",
-  HalfDay: "",
+  Leave: "Half Day",
+  "Half Day": "",
+  HalfDay: "", // backward-compatible display/edit of legacy values
   "": "Present",
 };
-
-/* ── Salary helpers ─────────────────────────────────────────────────────────── */
-
-export /* ── Salary helpers ─────────────────────────────────────────────────────────── */
-function daysInCalendarMonth(isoDate: string): number {
-  const [yr, mo] = isoDate.substring(0, 7).split("-").map(Number);
-  return new Date(yr, mo, 0).getDate();
-}
-
-export function computeWorkerExpectedSalary(worker: WorkerReportRow, dates: DateEntry[]): number {
-  if (worker.salaryType !== "Monthly") return 0;
-  const monthly = parseFloat(worker.baseSalary || "0");
-  const transport = parseFloat(worker.transportAllowance || "0");
-  const total = monthly + transport;
-  if (!total || !dates.length) return 0;
-  let earned = 0;
-  for (const d of dates) {
-    const dailyRate = monthly / daysInCalendarMonth(d.date);
-    if (d.isWeekend) {
-      earned += dailyRate;
-    } else {
-      const status = worker.attendance[d.date];
-      if (status === "Present") earned += dailyRate;
-      else if (status === "HalfDay") earned += dailyRate * 0.5;
-      else if (status === "Leave") earned += dailyRate;
-    }
-  }
-  // Add full monthly transport allowance (not prorated — it's a flat monthly benefit)
-  earned += transport;
-  return earned;
-}
 
 export function fmtCurrency(n: number | null | undefined): string {
   if (n == null || isNaN(n)) return "0.00";
