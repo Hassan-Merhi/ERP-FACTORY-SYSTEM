@@ -16,6 +16,7 @@ permissions:
   actions: read
   contents: write
   pull-requests: write
+  id-token: write
 
 concurrency:
   group: training-publisher
@@ -30,8 +31,6 @@ jobs:
     environment: training-publication
     env:
       GH_TOKEN: ${{ github.token }}
-      TRAINING_MEDIA_VERCEL_TOKEN: ${{ secrets.TRAINING_MEDIA_VERCEL_TOKEN }}
-      TRAINING_MEDIA_VERCEL_STORE_ID: ${{ vars.TRAINING_MEDIA_VERCEL_STORE_ID }}
       TRAINING_PUBLICATION_APPROVAL_ENABLED: ${{ vars.TRAINING_PUBLICATION_APPROVAL_ENABLED }}
       SOURCE_RUN: ${{ inputs.source_run_id }}
       TOPIC: ${{ inputs.topic }}
@@ -43,7 +42,6 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24.22.1"
-      # Private object upload uses an isolated pinned Vercel Blob client below.
       - name: Fail closed unless protected approval and storage are configured
         shell: bash
         run: |
@@ -53,9 +51,8 @@ jobs:
           }
           [[ "$SOURCE_RUN" =~ ^[0-9]{1,15}$ ]] || exit 1
           [[ "$TOPIC" =~ ^[a-z0-9-]{1,80}$ ]] || exit 1
-          [[ "$TRAINING_MEDIA_VERCEL_STORE_ID" =~ ^store_[[:alnum:]]{8,80}$ ]] || exit 1
-          [[ "$TRAINING_MEDIA_VERCEL_TOKEN" == vercel_blob_rw_* ]] || {
-            echo "::error::Private Vercel Blob store token not configured"; exit 1;
+          [[ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" && -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]] || {
+            echo "::error::Protected GitHub OIDC identity is unavailable"; exit 1;
           }
       - name: Fetch vetted successful training run
         shell: bash
@@ -107,12 +104,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/vercel-publisher"
-          cp scripts/upload-reviewed-training-vercel.mjs "$RUNNER_TEMP/vercel-publisher/upload.mjs"
-          npm install --prefix "$RUNNER_TEMP/vercel-publisher" \
-            --no-save --no-package-lock --ignore-scripts --no-audit --no-fund \
-            @vercel/blob@2.3.1
-          node "$RUNNER_TEMP/vercel-publisher/upload.mjs"
+          node scripts/upload-reviewed-training-vercel.mjs
       - name: Propose publication for code review and deployment
         env:
           TRAINING_PUBLISH_TOPIC: ${{ inputs.topic }}

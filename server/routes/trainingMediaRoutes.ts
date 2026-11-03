@@ -61,23 +61,38 @@ async function canStreamTopic(req: Request, topic: string): Promise<boolean> {
 }
 
 /**
- * Vercel Blob private stores require a server-side token. The expected store
- * is pinned by env ID, and both the host and object key are strictly checked,
- * preventing an unreviewed manifest from redirecting a token elsewhere.
+ * The authenticated ERP server never holds Vercel Blob credentials. It grants
+ * one signed read per approved immutable media key through the OIDC gateway.
+ * Vercel's short-lived object URL is consumed on the server (not sent to users).
  */
-export function authenticatedVercelTrainingObjectRequest(
+export async function authenticatedVercelTrainingObjectRequest(
   key: string,
   range?: string
-): { url: string; headers: Record<string, string> } | null {
-  const token = process.env.TRAINING_MEDIA_VERCEL_TOKEN;
-  const store = process.env.TRAINING_MEDIA_VERCEL_STORE_ID;
-  if (!token || !store || !/^store_[A-Za-z0-9]{8,80}$/.test(store) || !OBJECT_KEY.test(key)) return null;
-  const id = store.slice("store_".length);
-  const host = id + ".private.blob.vercel-storage.com";
-  const url = new URL("https://" + host + "/" + key.split("/").map(encodeURIComponent).join("/"));
-  const headers: Record<string, string> = { authorization: "Bearer " + token };
-  if (range) headers.range = range;
-  return { url: url.toString(), headers };
+): Promise<{ url: string; headers: Record<string, string> } | null> {
+  const gatewayUrl = process.env.TRAINING_MEDIA_GATEWAY_URL || "";
+  const secret = process.env.TRAINING_GATEWAY_READ_SECRET || "";
+  const approvedGateway = "https://erp-training-storage-access.vercel.app";
+  if (gatewayUrl !== approvedGateway || secret.length < 40 || !OBJECT_KEY.test(key)) return null;
+  const time = Date.now().toString();
+  const signature = createHmac("sha256", secret).update("GET\n" + key + "\n" + time).digest("hex");
+  try {
+    const requestUrl = approvedGateway + "/api/sign?key=" + encodeURIComponent(key);
+    const grant = await fetch(requestUrl, {
+      headers: { "x-training-time": time, "x-training-signature": signature },
+      redirect: "error",
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!grant.ok) return null;
+    const body = await grant.json() as { url?: unknown };
+    if (typeof body.url !== "string" || body.url.length > 8000) return null;
+    const url = new URL(body.url);
+    if (url.protocol !== "https:" || url.host !== "txyfgtsysrceqhoj.private.blob.vercel-storage.com" ||
+        url.pathname !== "/" + key || !url.searchParams.has("vercel-blob-delegation") ||
+        !url.searchParams.has("vercel-blob-signature")) return null;
+    return { url: url.toString(), headers: range ? { range } : {} };
+  } catch {
+    return null;
+  }
 }
 
 function sha256(value: string): string {
@@ -159,7 +174,7 @@ async function streamMedia(req: Request, res: Response, kind: "video" | "caption
     return;
   }
   const request = process.env.TRAINING_MEDIA_PROVIDER === "vercel"
-    ? authenticatedVercelTrainingObjectRequest(key, range)
+    ? await authenticatedVercelTrainingObjectRequest(key, range)
     : signedTrainingObjectRequest(key, range);
   if (!request) {
     res.status(503).json({ message: "Training media storage is not configured" });
