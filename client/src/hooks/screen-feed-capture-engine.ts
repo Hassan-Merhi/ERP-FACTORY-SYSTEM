@@ -239,7 +239,10 @@ function sanitizeClone(doc: Document, snapshot: Map<string, { top: number; left:
   });
 }
 
-function buildHtml2CanvasOptions(snapshot: Map<string, { top: number; left: number }>, recoverColors: boolean) {
+function buildHtml2CanvasOptions(
+  snapshot: Map<string, { top: number; left: number }>,
+  recoverColors: boolean
+) {
   const nativeScale = getScreenFeedCaptureScale(window.devicePixelRatio);
   const viewportScale = Math.min(1, MAX_CAPTURE_WIDTH / Math.max(1, window.innerWidth));
   const captureScale = Math.max(MIN_CAPTURE_SCALE, Math.min(nativeScale, viewportScale));
