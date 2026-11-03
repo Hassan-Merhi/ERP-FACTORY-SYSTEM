@@ -136,7 +136,10 @@ export function reconcileAttendanceReportSalary(input: AttendanceReportSalaryInp
   );
   const paidRows = selected.filter(isPaid);
   const cashPaid = paidRows.reduce((total, row) => total.plus(money(row.netSalary)), zero());
-  const advancesSettled = paidRows.reduce((total, row) => total.plus(money(row.advances)), zero());
+  // Advances were disbursed before this payroll. Their deduction already
+  // settles part of salary even while the remaining net cash is only DRAFT
+  // or APPROVED. Never present an advance as salary still to be paid.
+  const advancesSettled = selected.reduce((total, row) => total.plus(money(row.advances)), zero());
   const paid = cashPaid.plus(advancesSettled);
   return {
     expectedSalary: expected.toFixed(2),
