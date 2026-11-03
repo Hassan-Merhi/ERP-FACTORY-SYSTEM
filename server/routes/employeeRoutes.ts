@@ -1,11 +1,9 @@
 import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
-import { db } from "../db";
 import { storage } from "../storage";
 import { masterDataDbErrorResponse } from "../lib/masterDataDbError";
 import { requireAuth, requireNonPOS } from "../auth";
-import { employees, insertEmployeeSchema } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { insertEmployeeSchema } from "@shared/schema";
 import { registerEmployeeGroupRoutes } from "./employeeGroupRoutes";
 import { registerPayrollRoutes } from "./erp-payroll";
 import { parseMoneyInput, toMoney } from "../lib/money";
