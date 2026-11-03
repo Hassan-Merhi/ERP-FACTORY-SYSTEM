@@ -10,6 +10,7 @@ export interface Voucher {
   voucherType: string;
   voucherDate: string;
   description: string | null;
+  optional?: boolean;
   totalAmount: string;
   locationId: number;
   locationName?: string;

@@ -23,6 +23,8 @@ import { vouchers } from "@shared/schema";
 import type { DbTransaction } from "../../../db";
 import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/perpetualInventory/stockAdjustments";
 import { nextCanonicalSourceRevision } from "../../../services/inventory/canonicalSourceRevision";
+import { assertPosOptionalSettlementSafeTx } from "../../../services/pos/posOptionalSafety";
+import { recalculateClosedPosShiftForOptionalToggleTx } from "../../../services/pos/posOptionalShift";
 import { postOptionalToggleResidualTx, toggleVoucherStockTx, voucherInventoryLedgerTx } from "./optionalStockToggle";
 
 type VoucherRow = typeof vouchers.$inferSelect;
@@ -34,6 +36,7 @@ export async function applyVoucherOptionalInventoryChange(
   actor?: { userId?: string | null; username?: string | null; reason?: string | null }
 ): Promise<void> {
   if (voucher.optional === willBeOptional) return;
+  await assertPosOptionalSettlementSafeTx(tx, voucher);
 
   const evidenceRevision = await nextCanonicalSourceRevision(
     tx,
@@ -63,6 +66,11 @@ export async function applyVoucherOptionalInventoryChange(
   });
 
   await tx.update(vouchers).set({ optional: willBeOptional }).where(eq(vouchers.id, voucher.id));
+  await recalculateClosedPosShiftForOptionalToggleTx(tx, {
+    companyId: voucher.companyId,
+    shiftId: voucher.shiftId,
+    voucherType: voucher.voucherType,
+  });
   await syncStockAdjustmentInventoryTx(tx, voucher.companyId, voucher.id);
   await postOptionalToggleResidualTx(tx, {
     voucher: toggleVoucher,

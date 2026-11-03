@@ -16,10 +16,13 @@ import {
   Package,
   Pencil,
   Printer,
+  Undo2,
   X,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -55,6 +58,7 @@ export default function POSDaybook() {
   const [, navigate] = useLocation();
 
   const [selectedVoucher, setSelectedVoucher] = useState<Voucher | null>(null);
+  const [optionalVoucher, setOptionalVoucher] = useState<Voucher | null>(null);
   const [printVoucherId, setPrintVoucherId] = useState<number | null>(null);
   const [hiddenRowIds, setHiddenRowIds] = useState<Set<number>>(new Set());
   const printRef = useRef<HTMLDivElement>(null);
@@ -120,7 +124,7 @@ export default function POSDaybook() {
       vouchers
         .filter((voucher) => {
           const isSupportedType = ["Sales", "Stock Transfer", "StockTransfer"].includes(voucher.voucherType);
-          if (!isSupportedType) return false;
+          if (!isSupportedType || voucher.optional) return false;
           if (!isPOS) return true;
           return assignedLocationIds.has(voucher.locationId);
         })
@@ -219,7 +223,35 @@ export default function POSDaybook() {
     },
   });
 
-  const salesOnly = filteredVouchers.filter((voucher) => voucher.voucherType === "Sales");
+  const optionalMutation = useMutation({
+    mutationFn: async (voucher: Voucher) => {
+      const response = await apiRequest("PATCH", `/api/vouchers/${voucher.id}/optional`, { optional: true });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.message || "Could not make this POS sale optional");
+      }
+      return voucher;
+    },
+    onSuccess: (voucher) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vouchers/optional"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/daybook"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/inventory-by-location"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/location-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pos"] });
+      setOptionalVoucher(null);
+      setSelectedVoucher(null);
+      toast({
+        title: "POS sale made optional",
+        description: `Sale ${voucher.voucherNumber} is now optional. Its inventory has been restored; restore the sale from Optional Vouchers when needed.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "POS optional change failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const salesOnly = filteredVouchers.filter((voucher) => voucher.voucherType === "Sales" && !voucher.optional);
   const transfersOnly = filteredVouchers.filter((voucher) => voucher.voucherType !== "Sales");
   const totalSales = salesOnly.reduce((sum, voucher) => sum + Number(voucher.totalAmount || 0), 0);
 
@@ -576,6 +608,17 @@ export default function POSDaybook() {
               <MessageCircle className="mr-2 h-4 w-4" />
               Resend WhatsApp
             </Button>
+            {isAdminOrOwner && selectedVoucher?.voucherType === "Sales" && !selectedVoucher.optional && (
+              <Button
+                variant="outline"
+                disabled={optionalMutation.isPending}
+                onClick={() => setOptionalVoucher(selectedVoucher)}
+                data-testid="pos-daybook-make-optional"
+              >
+                <Undo2 className="mr-2 h-4 w-4" />
+                Make Optional
+              </Button>
+            )}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -595,6 +638,21 @@ export default function POSDaybook() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(optionalVoucher)}
+        onOpenChange={(open) => !open && setOptionalVoucher(null)}
+        title={`Make POS ${optionalVoucher?.voucherNumber ?? ""} optional?`}
+        description="This suspends the sale from ERP accounting and POS totals and restores its sold items to the original stock location at their recorded cost. Only make a posted sale optional when it is genuinely canceled or being corrected. You can reactivate it from Optional Vouchers, subject to stock and accounting-period checks."
+        tone="warning"
+        confirmText="Make POS Optional"
+        loading={optionalMutation.isPending}
+        confirmDisabled={!optionalVoucher}
+        onConfirm={async () => {
+          if (!optionalVoucher) return;
+          await optionalMutation.mutateAsync(optionalVoucher);
+        }}
+      />
     </div>
   );
 }
