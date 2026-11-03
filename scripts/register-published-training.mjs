@@ -22,7 +22,7 @@ const guideSteps = guideText.split("\n").filter((line) => /^\d+\. /.test(line)).
 if (!guideSteps.length || guideSteps.length > 20) throw new Error("Guide must contain reviewed steps");
 const current = JSON.parse(fs.readFileSync(path, "utf8"));
 current[topic] = {
-  videoKey: "training/videos/" + topic + "/" + sha + ".webm",
+  videoKey: "training/videos/" + topic + "/" + sha + ".mp4",
   captionsKey: "training/videos/" + topic + "/" + sha + ".vtt",
   screenshotKey: "training/videos/" + topic + "/" + sha + ".png",
   guideSteps,
