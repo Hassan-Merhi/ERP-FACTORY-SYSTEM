@@ -1,6 +1,12 @@
 name: Nightly ERP Training Audit
 
 on:
+  # Also bootstrap the first run and verify changes to this workflow.
+  # Regular ERP commits do not trigger this heavyweight audit.
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/nightly-training-audit.yml"
   schedule:
     # 02:15 UTC: 04:15 in Beirut winter / 05:15 summer. Cron runs in UTC.
     - cron: "15 2 * * *"
