@@ -4,7 +4,7 @@
  * Never available in production or without the explicit preview opt-in.
  */
 import { randomBytes, createHash, createHmac } from "node:crypto";
-import { issueSignedToken, presignUrl, del, get } from "@vercel/blob";
+import { issueSignedToken, presignUrl, del, get, put, head, list } from "@vercel/blob";
 import signer from "./sign.js";
 const store = "store_TXyFGTsySrCeQhOj";
 const fixture = Buffer.from("GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAAIIEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHWTbuMU6uEElTDZ1OsggEjTbuMU6uEHFO7a1OsggHy7AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsCrXsYMPQkBNgIxMYXZmNjEuNy4xMDNXQYxMYXZmNjEuNy4xMDNEiYhAj0AAAAAAABZUrmvIrgEAAAAAAAA/14EBc8WIk0t5u340ITycgQAitZyDdW5kiIEAhoVWX1ZQOYOBASPjg4QdzWUA4JCwgRC6gRCagQJVsIRVuYEBElTDZ0B/c3OfY8CAZ8iZRaOHRU5DT0RFUkSHjExhdmY2MS43LjEwM3Nz2mPAi2PFiJNLebt+NCE8Z8ilRaOHRU5DT0RFUkSHmExhdmM2MS4xOS4xMDEgbGlidnB4LXZwOWfIoUWjiERVUkFUSU9ORIeTMDA6MDA6MDEuMDAwMDAwMDAwAB9DtnXF54EAo6uBAACAgkmDQgAA8AD2ADgkHBhCAAAwYAAAEL///DrE/////5+sf///bZAAo5OBAfQAhgBAkpwASUAAAyAAAEJAHFO7a5G7j7OBALeK94EB8YIBqPCBAw==", "base64");
@@ -21,6 +21,8 @@ export default {
     const host = "txyfgtsysrceqhoj.private.blob.vercel-storage.com";
     const report = { bytes: fixture.length, expectedSha256: createHash("sha256").update(fixture).digest("hex") };
     let uploaded = false;
+    let directUploaded = false;
+    const directKey = "training/videos/gateway-fixture/" + randomBytes(20).toString("hex") + ".webm";
     try {
       const putToken = await issueSignedToken({
         pathname: key, operations: ["put"], validUntil: Date.now() + 120000,
@@ -57,6 +59,41 @@ export default {
       }
       report.uploadReceiptSize = typeof receiptText === "string" && receiptText.startsWith("{")
         ? (JSON.parse(receiptText).size ?? null) : null;
+      try {
+        const direct = await put(directKey, fixture, {
+          access: "private", contentType: "video/webm", addRandomSuffix: false,
+        });
+        directUploaded = true;
+        report.directPutHost = new URL(direct.url).hostname;
+        report.directPutPathValid = direct.pathname === directKey;
+        const directFromKey = await get(directKey, { access: "private", useCache: false });
+        report.directSdkKeyStatus = directFromKey?.statusCode ?? null;
+        if (directFromKey?.stream) {
+          report.directSdkKeyHash = createHash("sha256")
+            .update(Buffer.from(await new Response(directFromKey.stream).arrayBuffer())).digest("hex");
+        }
+        const directFromUrl = await get(direct.url, { access: "private", useCache: false });
+        report.directSdkUrlStatus = directFromUrl?.statusCode ?? null;
+        if (directFromUrl?.stream) {
+          report.directSdkUrlHash = createHash("sha256")
+            .update(Buffer.from(await new Response(directFromUrl.stream).arrayBuffer())).digest("hex");
+        }
+      } catch (directError) {
+        report.directSdkError = directError instanceof Error ? directError.name : "Unknown storage error";
+      }
+      try {
+        const listing = await list({ prefix: "training/videos/gateway-fixture/", limit: 100 });
+        report.listHasSignedObject = listing.blobs.some((item) => item.pathname === key);
+        report.listHasDirectObject = listing.blobs.some((item) => item.pathname === directKey);
+      } catch (listingError) {
+        report.listError = listingError instanceof Error ? listingError.name : "Unknown storage error";
+      }
+      try {
+        const h = await head(key);
+        report.headMatchesSignedKey = h?.pathname === key;
+      } catch (headingError) {
+        report.headError = headingError instanceof Error ? headingError.name : "Unknown storage error";
+      }
       for (let attempt = 1; attempt <= 5; attempt++) {
         try {
           const stored = await get(key, { access: "private", useCache: false });
@@ -125,6 +162,9 @@ export default {
       report.result = "FAIL";
       report.reason = error instanceof Error ? error.message.slice(0, 180) : "Unknown storage error";
     } finally {
+      if (directUploaded) {
+        try { await del(directKey); report.directCleanup = "deleted"; } catch { report.directCleanup = "failed"; }
+      }
       if (uploaded) {
         try { await del(key); report.cleanup = "deleted"; } catch { report.cleanup = "failed"; }
       } else {
