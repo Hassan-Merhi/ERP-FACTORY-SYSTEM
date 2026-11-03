@@ -57,7 +57,23 @@ export default {
         headers: { "x-training-time": time, "x-training-signature": signature },
       }));
       report.gatewayAuthorizedStatus = signedResponse.status;
-      if (signedResponse.status !== 200) throw Error("valid gateway authorization was refused");
+      if (signedResponse.status !== 200) {
+        try {
+          const diagnosticToken = await issueSignedToken({
+            pathname: key, operations: ["get"], validUntil: Date.now() + 120000,
+          });
+          const grant = await presignUrl(diagnosticToken, {
+            pathname: key, operation: "get", validUntil: Date.now() + 60000,
+          });
+          const u = new URL(grant.presignedUrl);
+          report.getHost = u.hostname;
+          report.getPathPrefix = u.pathname.slice(0, 100);
+          report.getQueryKeys = Array.from(u.searchParams.keys()).join(",");
+        } catch (diagnosticError) {
+          report.getDiagnostic = diagnosticError instanceof Error ? diagnosticError.name : "unknown error";
+        }
+        throw Error("valid gateway authorization was refused");
+      }
       const signedResult = await signedResponse.json();
       const readUrl = new URL(signedResult.url);
       if (readUrl.hostname !== host || readUrl.pathname !== "/" + key) throw Error("untrusted GET destination");
