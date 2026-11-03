@@ -231,13 +231,19 @@ export function FactoryDaybookTable({ model }: { model: FactoryDaybookModel }) {
         )}
       </CardHeader>
       <CardContent className="p-0">
+        {isError && filteredEntries.length > 0 && (
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm">
+            <span>Some Daybook entries could not finish loading. The totals below may be incomplete.</span>
+            <Button variant="outline" size="sm" onClick={() => void refetch()}>Retry loading</Button>
+          </div>
+        )}
         {isLoading ? (
           <div className="space-y-2 p-6">
             {[1, 2, 3].map((i) => (
               <Skeleton key={i} className="h-12 w-full" />
             ))}
           </div>
-        ) : isError ? (
+        ) : isError && filteredEntries.length === 0 ? (
           <ErrorState
             title="Could not load factory transactions"
             description={error instanceof Error ? error.message : "The factory daybook could not be loaded."}
