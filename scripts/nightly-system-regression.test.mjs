@@ -30,3 +30,27 @@ test("disposable fixture is mandatory for synthetic financial reconciliation", (
   assert.ok(script.includes("heliumdb"));
   assert.ok(script.includes("localhost"));
 });
+
+test("nightly accounting distinguishes POS revenue from explicit journal credits", () => {
+  const verifier = read("scripts/verify-nightly-transaction-reconciliation.mjs");
+  assert.ok(verifier.includes("posSalesGrossUsd"));
+  assert.ok(verifier.includes("journalCreditNetUsd"));
+  assert.ok(verifier.includes("cashNetCents, posGrossCents + journalCreditCents"));
+});
+
+test("recording verifies real HTML, the active route and content after client-side navigation", () => {
+  const recorder = read("scripts/record-training-guides.mjs");
+  assert.ok(recorder.includes("if (response && !response.ok())"));
+  assert.ok(recorder.includes('http.type.includes("text/html")'));
+  assert.ok(recorder.includes('page.waitForSelector("#main-content"'));
+  assert.ok(recorder.includes("main.textContent.trim().length > 20"));
+  assert.ok(recorder.includes("if (actualPath !== tour.route)"));
+  assert.ok(recorder.includes('["GET", "HEAD", "OPTIONS"]'));
+});
+
+test("nightly inventory audit captures real data and a clearly unreviewed classification worksheet", () => {
+  const workflow = read(".github/workflows/nightly-system-regression.yml");
+  assert.ok(workflow.includes("run-program6c-inventory-review.mjs --report="));
+  assert.ok(workflow.includes("generate-program6c-inventory-classifications.mjs --report="));
+  assert.ok(!workflow.includes("npm run audit:inventory-contracts:validate"));
+});

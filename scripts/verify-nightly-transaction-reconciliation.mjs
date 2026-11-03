@@ -137,11 +137,25 @@ try {
       [fixture.companies.erp, id],
     );
     const cash = await account(fixture.erp.cashAccountId);
-    const sales = await account(fixture.erp.salesAccountId);
-    // POS $100 + mobile POS $75 + API journal $125 + UI journal $60 = $360.
-    assert.equal(money(cash.debit) - money(cash.credit), 36000, "ERP fake cash account discrepancy");
-    assert.equal(money(sales.credit) - money(sales.debit), 36000, "ERP fake sales account discrepancy");
-    return { cashNetUsd: 360, salesNetCreditUsd: 360 };
+    const journalCreditAccount = await account(fixture.erp.salesAccountId);
+    const posVouchers = await rows(
+      "SELECT id, total_amount FROM vouchers " +
+        "WHERE company_id = $1 AND voucher_type = 'Sales' AND deleted_at IS NULL ORDER BY id",
+      [fixture.companies.erp],
+    );
+    // These two POS sales post $100 + $75 through the application's configured
+    // POS revenue ledger, NOT through the fixture's journal-credit test account.
+    // The API journal and the UI journal each credit that fixture account:
+    // $125 + $60 = $185. All four transactions debit the fake cash account.
+    assert.equal(posVouchers.length, 2, "Expected two real posted ERP POS sales");
+    const posGrossCents = posVouchers.reduce((total, v) => total + money(v.total_amount), 0);
+    const journalCreditCents = money(journalCreditAccount.credit) - money(journalCreditAccount.debit);
+    const cashNetCents = money(cash.debit) - money(cash.credit);
+    assert.equal(posGrossCents, 17500, "ERP posted POS sales total discrepancy");
+    assert.equal(journalCreditCents, 18500, "ERP fake journal-credit ledger discrepancy");
+    assert.equal(cashNetCents, 36000, "ERP fake cash account discrepancy");
+    assert.equal(cashNetCents, posGrossCents + journalCreditCents, "ERP cash must reconcile to both POS sales and journal credits");
+    return { cashNetUsd: 360, posSalesGrossUsd: 175, journalCreditNetUsd: 185, postedSales: posVouchers.length };
   });
 
   await check("Supplier Partner sale reconciles stock and payable", async () => {
