@@ -294,11 +294,12 @@ databaseDescribe("Factory Net Position historical date filter (database)", () =>
     ids.contract =
       await one(sql`INSERT INTO property_contracts (company_id, module, unit_id, tenant_name, rental_amount, start_date, status, created_at)
       VALUES (${companyId}, 'FACTORY', ${ids.unit}, 'Tenant One', 100, '2026-10-01', 'ACTIVE', '2026-10-01 00:00') RETURNING id`);
-    await db.execute(sql`INSERT INTO property_monthly_ledger (company_id, module, contract_id, unit_id, year, month, expected_amount, created_at)
-      VALUES (${companyId}, 'FACTORY', ${ids.contract}, ${ids.unit}, 2026, 10, 100, '2026-10-01 00:00')`);
-    await db.execute(sql`INSERT INTO property_payments (company_id, module, contract_id, unit_id, amount, payment_date, for_year, for_month,
+    const rentLedgerId = await one(sql`INSERT INTO property_monthly_ledger (company_id, module, contract_id, unit_id, year, month, expected_amount, created_at)
+      VALUES (${companyId}, 'FACTORY', ${ids.contract}, ${ids.unit}, 2026, 10, 100, '2026-10-01 00:00') RETURNING id`);
+    // Link payment to its rental-month obligation, not a refundable unallocated deposit.
+    await db.execute(sql`INSERT INTO property_payments (company_id, module, contract_id, unit_id, ledger_row_id, amount, payment_date, for_year, for_month,
         posting_status, posted_at, created_at)
-      VALUES (${companyId}, 'FACTORY', ${ids.contract}, ${ids.unit}, 60, '2026-10-15', 2026, 10, 'POSTED', '2026-10-20 08:00', '2026-10-20 08:00')`);
+      VALUES (${companyId}, 'FACTORY', ${ids.contract}, ${ids.unit}, ${rentLedgerId}, 60, '2026-10-15', 2026, 10, 'POSTED', '2026-10-20 08:00', '2026-10-20 08:00')`);
 
     ids.location = await one(
       sql`INSERT INTO locations (company_id, code, name) VALUES (${companyId}, ${"L" + suffix}, 'Warehouse') RETURNING id`
