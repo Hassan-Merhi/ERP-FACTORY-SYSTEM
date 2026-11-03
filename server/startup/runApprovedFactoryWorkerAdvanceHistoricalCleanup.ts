@@ -106,13 +106,6 @@ export function validateHistoricalAdvanceTotals(before: Totals, after: Totals): 
 }
 
 async function assertHistoricalEvidence(tx: DbTransaction): Promise<void> {
-  const [locked] = (await tx.execute(sql`
-    SELECT COUNT(*)::int AS n FROM factory_worker_advances
-    WHERE company_id=${COMPANY} AND id IN (3,267,272,274,277)
-    FOR UPDATE
-  `)).rows as Row[];
-  must(num(locked?.n) === 5, "ADVANCE_ROWS_CHANGED");
-
   const evidence = (await tx.execute(sql`
     SELECT id,worker_id,advance_date::text AS date,amount::text,
            remaining_balance::text AS remaining,fully_paid,cash_account_id,
@@ -121,6 +114,7 @@ async function assertHistoricalEvidence(tx: DbTransaction): Promise<void> {
      WHERE company_id=${COMPANY} AND id IN (3,267,272,274,277)
      ORDER BY id FOR UPDATE
   `)).rows as Row[];
+  must(evidence.length === 5, "ADVANCE_ROWS_CHANGED");
   const byId = new Map(evidence.map((x) => [num(x.id), x]));
   const expected = [
     [3,45,"2026-03-12","200.00","115.00",false,CASH,"manual_repayment"],
