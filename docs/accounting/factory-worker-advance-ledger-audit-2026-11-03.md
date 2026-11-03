@@ -92,3 +92,40 @@ Investigations identified:
 **Current status:** Back-end repair is coded and opt-in, but no production
 database write occurred during this investigation. Do not claim that the
 figures match until a live post-apply check confirms every accounting source.
+
+
+## Original-date residual reconciliation (owner approval 2026-11-03)
+
+A separate, precisely guarded backend-only cleanup corrects the $211.61
+remaining mismatch **at the original payment and payroll dates**. All
+corrections run in one transaction against the recorded company 12 source
+snapshot; if a record, date, voucher, or total has changed, the transaction
+rolls back.
+
+| Historical date | Evidence and correction | Accounting impact |
+| --- | --- | --- |
+| 2026-03-12 | Backfill cash disbursement for advance #3 ($200) based on the original advance and daybook | DR Advances $200 / CR Cash $200 |
+| 2026-05-16 | Restore paid advance #103 and its original $48.39 disbursement after the November 3 deletion; keep old voucher #7838 retired | DR Advances $48.39 / CR Cash $48.39 |
+| 2026-05-17 | Recover the recorded $0.01 from PAID payroll #672 with negative net salary | DR Payroll Payable $0.01 / CR Advances $0.01 |
+| 2026-06-15 | Void the duplicate cashless $100 advance #267; preserve the actual cash-funded advance #272 and its $100 payroll recovery | No voucher (no payment ever posted for #267) |
+| 2026-07-10 | Backfill advance #274 ($88) and repayment #69 ($88), both marked *test*, on their original same day | DR Advances / CR Cash and DR Cash / CR Advances, net $0 |
+| 2026-07-16 | Correct advance #277 ($160) incorrectly marked fully paid, with no payroll recovery | Worker receivable restored to $160; original disbursement remains |
+| Opening (manual July 10 audit) | Clear unsupported $299.99 asset opening previously changed from $0 in two manual edits | Opening resets to its prior $0; no journal dated today |
+
+The original-voucher account net effect is **$51.61 less** than the current
+balance: $2,726.61 becomes $2,675.00. Stored worker balances rise by
+$160.00 from $2,515.00 to **$2,675.00**. Original advances total $91,538.29,
+voucher debits total $91,538.29, credits total $88,863.29, and opening $0.
+
+Cash's recorded balance decreases by exactly **$248.39**, representing the
+original $200 March and $48.39 May disbursements that were absent from active
+vouchers. The paired $88 test transactions net to zero cash. Payroll Payable
+decreases by $0.01 due to the negative-net May 17 payroll record. No supplier,
+customer, unrelated payroll, or production records are changed.
+
+**Execution gate:** `FACTORY_ADVANCE_HISTORICAL_RECONCILE_20261103=approved-company12-original-voucher-dates-v1`
+on Render service `srv-d6kibgtactks739u7vl0`, database
+`erp_db_qscj_64lv_e7rz_8744_2lm3`. The repair is disabled without this
+exact opt-in. On successful completion an audited marker makes subsequent
+startups read-only. Original business dates are preserved on every voucher;
+audit rows retain the actual time the correction was run.
