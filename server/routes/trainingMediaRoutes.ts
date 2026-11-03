@@ -73,13 +73,18 @@ function storageConfig() {
   const accessKey = process.env.TRAINING_MEDIA_S3_ACCESS_KEY || "";
   const secretKey = process.env.TRAINING_MEDIA_S3_SECRET_KEY || "";
   const region = process.env.TRAINING_MEDIA_S3_REGION || "auto";
+  const urlStyle = process.env.TRAINING_MEDIA_S3_URL_STYLE || "path";
   if (!endpoint || !bucket || !accessKey || !secretKey) return null;
   let url: URL;
   try { url = new URL(endpoint); } catch { return null; }
   if (url.protocol !== "https:" || url.username || url.password || url.pathname !== "/" ||
       url.search || url.hash || !/^[a-z0-9.-]+$/i.test(url.hostname) ||
-      !/^[a-z0-9.-]+$/i.test(bucket) || !/^[a-z0-9-]+$/i.test(region)) return null;
-  return { url, bucket, accessKey, secretKey, region };
+      !/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket) ||
+      !/^[a-z0-9-]+$/i.test(region) || !["path", "virtual-host"].includes(urlStyle)) return null;
+  // Railway Buckets use virtual-hosted-style S3 URLs; legacy S3 endpoints may use path style.
+  // Block bucket names with periods for virtual-host style to avoid TLS wildcard mismatches.
+  if (urlStyle === "virtual-host" && bucket.includes(".")) return null;
+  return { url, bucket, accessKey, secretKey, region, urlStyle };
 }
 
 export function signedTrainingObjectRequest(key: string, range?: string): { url: string; headers: Record<string, string> } | null {
@@ -88,8 +93,10 @@ export function signedTrainingObjectRequest(key: string, range?: string): { url:
   const date = new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");
   const day = date.slice(0, 8);
   const scope = day + "/" + cfg.region + "/s3/aws4_request";
-  const canonicalPath = "/" + cfg.bucket + "/" + key.split("/").map(encodeURIComponent).join("/");
-  const canonicalHeaders = "host:" + cfg.url.host + "\nx-amz-content-sha256:" + EMPTY_HASH + "\nx-amz-date:" + date + "\n";
+  const encodedKey = key.split("/").map(encodeURIComponent).join("/");
+  const canonicalPath = cfg.urlStyle === "virtual-host" ? "/" + encodedKey : "/" + cfg.bucket + "/" + encodedKey;
+  const host = cfg.urlStyle === "virtual-host" ? cfg.bucket + "." + cfg.url.host : cfg.url.host;
+  const canonicalHeaders = "host:" + host + "\nx-amz-content-sha256:" + EMPTY_HASH + "\nx-amz-date:" + date + "\n";
   const signedHeaders = "host;x-amz-content-sha256;x-amz-date";
   const canonicalRequest = ["GET", canonicalPath, "", canonicalHeaders, signedHeaders, EMPTY_HASH].join("\n");
   const stringToSign = ["AWS4-HMAC-SHA256", date, scope, sha256(canonicalRequest)].join("\n");
@@ -102,7 +109,7 @@ export function signedTrainingObjectRequest(key: string, range?: string): { url:
       ", SignedHeaders=" + signedHeaders + ", Signature=" + signature,
   };
   if (range) headers.range = range;
-  return { url: cfg.url.origin + canonicalPath, headers };
+  return { url: cfg.url.protocol + "//" + host + canonicalPath, headers };
 }
 
 async function streamMedia(req: Request, res: Response, kind: "video" | "captions" | "screenshot") {
