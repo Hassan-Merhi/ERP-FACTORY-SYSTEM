@@ -208,7 +208,7 @@ export default function BalesHistory() {
           type="date"
           value={summaryDate}
           onChange={(e) => setDateFilter(e.target.value || todayStr)}
-          className="h-8 w-36 text-xs"
+          className="h-11 w-36 text-xs"
           data-testid="input-summary-date"
           aria-label="Bale summary date"
         />
