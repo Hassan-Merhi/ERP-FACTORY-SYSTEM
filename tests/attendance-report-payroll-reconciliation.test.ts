@@ -103,12 +103,14 @@ describe("attendance report payroll reconciliation", () => {
         status: "APPROVED",
       }),
     ];
+    // The APPROVED week is still owed in full: its 30.00 advance deduction is
+    // neither settled nor part of the expected salary until that payroll is paid.
     expect(salary(rows)).toMatchObject({
-      expectedSalary: "430.09",
-      paidSalary: "310.00",
+      expectedSalary: "400.09",
+      paidSalary: "280.00",
       remainingSalary: "120.09",
       cashPaidSalary: "199.99",
-      advancesSettled: "110.01",
+      advancesSettled: "80.01",
     });
   });
 

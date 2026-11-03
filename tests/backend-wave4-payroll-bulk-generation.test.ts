@@ -224,7 +224,7 @@ describe("bulk payroll generation", () => {
     }
   });
 
-  it("replaces the period's expense journal instead of duplicating it when regenerated for chosen workers", async () => {
+  it("refuses to generate a second payroll for a worker whose period is already covered", async () => {
     const response = await agent.post("/api/factory/payrolls/generate-bulk").send({
       companyId: ctx.companyId,
       periodStart: PERIOD_START,
@@ -233,13 +233,35 @@ describe("bulk payroll generation", () => {
       daysCount: "10",
       transportOverrides: { [String(dailyId)]: "0" },
     });
+    expect(response.status, response.text).toBe(409);
+    expect(response.body.message).toContain(`Overlapping payroll exists for worker(s) ${dailyId}`);
+
+    expect(await payrollFor(dailyId)).toHaveLength(1);
+    expect(await genVouchers()).toHaveLength(1);
+  });
+
+  it("replaces the period's expense journal instead of duplicating it when regenerated for chosen workers", async () => {
+    const lateDailyId = await insertWorker({
+      full_name: `${PREFIX} Late Daily`,
+      salary_type: "Daily",
+      base_salary: "50.00",
+      active: true,
+    });
+    const response = await agent.post("/api/factory/payrolls/generate-bulk").send({
+      companyId: ctx.companyId,
+      periodStart: PERIOD_START,
+      periodEnd: PERIOD_END,
+      workerIds: [lateDailyId],
+      daysCount: "10",
+      transportOverrides: { [String(lateDailyId)]: "0" },
+    });
     expect(response.status, response.text).toBe(200);
     expect(response.body.created).toBe(1);
 
-    const rows = await payrollFor(dailyId);
-    expect(rows).toHaveLength(2);
-    expect(Number(rows[1].base_salary)).toBeCloseTo(500, 2);
-    expect(Number(rows[1].deductions)).toBeCloseTo(0, 2);
+    const rows = await payrollFor(lateDailyId);
+    expect(rows).toHaveLength(1);
+    expect(Number(rows[0].base_salary)).toBeCloseTo(500, 2);
+    expect(Number(rows[0].deductions)).toBeCloseTo(0, 2);
 
     const vouchers = await genVouchers();
     expect(vouchers).toHaveLength(1);
