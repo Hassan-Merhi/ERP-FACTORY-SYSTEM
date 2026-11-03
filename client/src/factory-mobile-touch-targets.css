@@ -1,0 +1,18 @@
+/*
+ * Mobile touch-target sizing for Factory reports.
+ * Keep existing desktop density, data queries, controls, and accounting logic.
+ */
+@media (max-width: 640px) {
+  .bales-modern-date-strip [data-testid="input-summary-date"] {
+    min-height: 44px !important;
+    font-size: 16px;
+  }
+
+  .product-comparison-premium .pc-control-button,
+  .product-comparison-premium .pc-date-input,
+  .product-comparison-premium .pc-filters [data-testid^="product-comparison-"],
+  .product-comparison-premium button[data-testid^="product-comparison-"],
+  .product-comparison-premium input[data-testid^="product-comparison-"] {
+    min-height: 44px !important;
+  }
+}
