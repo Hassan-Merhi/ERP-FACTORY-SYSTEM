@@ -80,7 +80,7 @@ function StatusPill({
       </span>
     );
   }
-  if (status === "HalfDay") {
+  if (status === "Half Day" || status === "HalfDay") {
     return (
       <span
         tabIndex={editable ? 0 : -1}
