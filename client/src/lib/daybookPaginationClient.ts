@@ -85,8 +85,10 @@ export async function fetchAllDaybookEntries(baseParams: URLSearchParams): Promi
   }
 
   const first = (await firstResponse.json()) as DaybookPage;
-  const entries = Array.isArray(first.items) ? [...first.items] : [];
+  if (!Array.isArray(first.items)) throw new Error("Incomplete daybook response: first page is missing");
+  const entries = [...first.items];
   const totalPages = Math.max(1, Number(first.totalPages || 1));
+  const expectedTotal = typeof first.total === "number" && Number.isFinite(first.total) ? first.total : null;
 
   for (let page = 2; page <= totalPages; page += 1) {
     const response = await fetch(actionUrl(baseParams, page), { credentials: "include" });
@@ -95,7 +97,19 @@ export async function fetchAllDaybookEntries(baseParams: URLSearchParams): Promi
       throw new Error(body?.message || `Failed to load daybook page ${page}`);
     }
     const data = (await response.json()) as DaybookPage;
-    if (Array.isArray(data.items)) entries.push(...data.items);
+    if (!Array.isArray(data.items) || (data.page != null && data.page !== page)) {
+      throw new Error(`Incomplete daybook response on page ${page}`);
+    }
+    if (expectedTotal !== null && data.total !== expectedTotal) {
+      throw new Error("Daybook changed while loading; refresh to get a consistent list");
+    }
+    entries.push(...data.items);
+  }
+
+  // Never render an incomplete list or duplicate rows as if all entries were present.
+  if (expectedTotal !== null &&
+      (entries.length !== expectedTotal || new Set(entries.map((entry) => entry.id)).size !== expectedTotal)) {
+    throw new Error("Daybook changed while loading; refresh to get a consistent list");
   }
 
   return entries;

@@ -168,9 +168,11 @@ export function useFactoryDaybookModel() {
   } = useQuery<DaybookEntry[]>({
     queryKey: ["/api/factory/daybook", startDate, endDate, txTypeFilter, currencyFilter],
     queryFn: async () => {
-      const res = await fetch(`/api/factory/daybook?${queryParams.toString()}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch daybook");
-      return res.json();
+      // Fetch all pages before exposing the result. The progressive interceptor
+      // previously rendered the first 100 rows as a complete daybook while the
+      // remaining pages were still loading or could be interrupted.
+      const { fetchAllDaybookEntries } = await import("@/lib/daybookPaginationClient");
+      return fetchAllDaybookEntries(new URLSearchParams(queryParams));
     },
     // Avoid the bandwidth spike from constant refetching: the daybook list doesn't
     // need to be second-by-second live, and refocusing/reconnecting shouldn't
@@ -179,7 +181,7 @@ export function useFactoryDaybookModel() {
     refetchOnMount: "always",
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    placeholderData: (prev) => prev,
+    // Never show a previous date/company/filter's transactions while fetching.
   });
 
   const { data: myErpPages } = useQuery<{ hiddenErpCostFields?: string[] }>({ queryKey: ["/api/my-erp-pages"] });

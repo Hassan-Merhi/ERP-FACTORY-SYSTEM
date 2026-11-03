@@ -218,12 +218,12 @@ export function registerFactoryDaybookPaginationRoutes(app: Express): void {
 
       if (startDate) {
         const param = bind(startDate);
-        realConditions.push(`f.tx_date >= ${param}::date`);
+        realConditions.push(`COALESCE(live_voucher.effective_date, f.effective_date, f.tx_date) >= ${param}::date`);
         voucherConditions.push(`COALESCE(v.effective_date, v.voucher_date) >= ${param}::date`);
       }
       if (endDate) {
         const param = bind(endDate);
-        realConditions.push(`f.tx_date <= ${param}::date`);
+        realConditions.push(`COALESCE(live_voucher.effective_date, f.effective_date, f.tx_date) <= ${param}::date`);
         voucherConditions.push(`COALESCE(v.effective_date, v.voucher_date) <= ${param}::date`);
       }
       if (txType) {
@@ -400,7 +400,7 @@ export function registerFactoryDaybookPaginationRoutes(app: Express): void {
               "metaJson", "currencyCode", "amountCurrency", "fxRateToUsd", "amountUsd", "effectiveDate",
               "createdAt", "createdBy", optional, "voucherNumber", sort_date
             FROM filtered
-            ORDER BY sort_date ${sortDirection}, ABS(id) ${sortDirection}
+            ORDER BY sort_date ${sortDirection}, ABS(id) ${sortDirection}, id ${sortDirection}
             LIMIT ${limitParam} OFFSET ${offsetParam}
           )
           ${filterOptionsOnly
@@ -409,7 +409,7 @@ export function registerFactoryDaybookPaginationRoutes(app: Express): void {
             (SELECT COUNT(*)::int FROM filtered) AS total,
             COALESCE(
               (
-                SELECT jsonb_agg(to_jsonb(page_rows) - 'sort_date' ORDER BY sort_date ${sortDirection}, ABS(id) ${sortDirection})
+                SELECT jsonb_agg(to_jsonb(page_rows) - 'sort_date' ORDER BY sort_date ${sortDirection}, ABS(id) ${sortDirection}, id ${sortDirection})
                 FROM page_rows
               ),
               '[]'::jsonb
