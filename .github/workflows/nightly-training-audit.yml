@@ -1,12 +1,17 @@
 name: Nightly ERP Training Audit
 
 on:
-  # Also bootstrap the first run and verify changes to this workflow.
-  # Regular ERP commits do not trigger this heavyweight audit.
+  # Rerun the disposable audit when its implementation or CI harness changes.
+  # Ordinary ERP application commits still do not trigger this heavyweight audit.
   push:
     branches: [main]
     paths:
       - ".github/workflows/nightly-training-audit.yml"
+      - ".github/workflows/nightly-system-regression.yml"
+      - ".github/workflows/training-videos.yml"
+      - "scripts/record-training-guides.mjs"
+      - "scripts/verify-nightly-transaction-reconciliation.mjs"
+      - "scripts/nightly-system-regression.test.mjs"
   schedule:
     # 02:15 UTC: 04:15 in Beirut winter / 05:15 summer. Cron runs in UTC.
     - cron: "15 2 * * *"
