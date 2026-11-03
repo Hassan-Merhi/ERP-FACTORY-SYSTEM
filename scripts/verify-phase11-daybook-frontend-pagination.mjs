@@ -76,13 +76,13 @@ const exactMarkers = [
 const sourceWithModel = `${source}\n${await read("client/src/pages/factory/daybook/useFactoryDaybookModel.ts")}`;
 assert.match(
   sourceWithModel,
-  /return res\.json\(\);/,
-  "Daybook must return the first page immediately instead of blocking on a full export-style fetch"
+  /return fetchAllDaybookEntries\(new URLSearchParams\(queryParams\), signal\);/,
+  "Daybook must await the complete filtered result before rendering and support cancellation"
 );
 assert.doesNotMatch(
   sourceWithModel,
-  /return fetchAllDaybookEntries\(new URLSearchParams\(queryParams\)\)/,
-  "Full-history fetch must never block the interactive Daybook query"
+  /Loading remaining transactions:/,
+  "Daybook must not display partial loaded counts or partial accounting totals"
 );
 for (const marker of exactMarkers) {
   const first = sourceWithModel.indexOf(marker);
@@ -100,8 +100,8 @@ console.log(
       ok: true,
       checks: [
         "Daybook startup wiring",
-        "100-row initial payload",
-        "automatic background page loading",
+        "complete filtered Daybook before first render",
+        "internal pagination remains hidden from Daybook users",
         "client-side cumulative page merge",
         "All Time empty-date preservation",
         "legacy array compatibility",

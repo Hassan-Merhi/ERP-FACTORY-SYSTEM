@@ -6,7 +6,6 @@
  * Split out of FactoryDaybook.tsx unchanged; the "Total" column disappears
  * entirely when ERP cost permissions hide daybook amounts.
  */
-import { useEffect, useState } from "react";
 import { BookOpen, CalendarDays, ChevronDown, ChevronRight, Eye } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,7 +13,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/page-state";
 import { formatNumber } from "@/lib/formatNumber";
-import { DAYBOOK_PROGRESS_EVENT, getDaybookPaginationProgress } from "@/lib/daybookPaginationClient";
 import { cn } from "@/lib/utils";
 import { currencySymbol, formatTxType, getFactoryTxTypeBadge, mergeBaleEntries } from "./daybookUtils";
 import type { DaybookEntry, DisplayEntry } from "./types";
@@ -200,13 +198,6 @@ function CondensedRows({ model }: { model: FactoryDaybookModel }) {
 
 export function FactoryDaybookTable({ model }: { model: FactoryDaybookModel }) {
   const { isLoading, isError, error, refetch, filteredEntries, condensedRows, hasActiveFilters, showAmounts } = model;
-  const [progress, setProgress] = useState(getDaybookPaginationProgress);
-  useEffect(() => {
-    const onProgress = () => setProgress(getDaybookPaginationProgress());
-    window.addEventListener(DAYBOOK_PROGRESS_EVENT, onProgress);
-    return () => window.removeEventListener(DAYBOOK_PROGRESS_EVENT, onProgress);
-  }, []);
-  const stillLoading = progress.total !== null && progress.loaded < progress.total && filteredEntries.length > 0;
   return (
     <Card className="overflow-hidden rounded-2xl border border-sky-200/60 bg-card shadow-sm dark:border-blue-500/20 dark:bg-slate-950/70">
       <CardHeader className="border-b border-border/60 bg-gradient-to-r from-slate-50 to-white px-4 py-4 dark:from-slate-900 dark:to-slate-950 sm:px-6">
@@ -224,26 +215,15 @@ export function FactoryDaybookTable({ model }: { model: FactoryDaybookModel }) {
           </CardTitle>
         </div>
         <CardDescription className="pl-[3.25rem]">All factory transactions in one view</CardDescription>
-        {stillLoading && !isLoading && !isError && (
-          <div className="pl-[3.25rem] text-xs text-amber-600 dark:text-amber-400" data-testid="factory-daybook-progress">
-            Loading remaining transactions: {progress.loaded} of {progress.total}. Group totals may change until loading finishes.
-          </div>
-        )}
       </CardHeader>
       <CardContent className="p-0">
-        {isError && filteredEntries.length > 0 && (
-          <div role="alert" className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm">
-            <span>Some Daybook entries could not finish loading. The totals below may be incomplete.</span>
-            <Button variant="outline" size="sm" onClick={() => void refetch()}>Retry loading</Button>
-          </div>
-        )}
         {isLoading ? (
           <div className="space-y-2 p-6">
             {[1, 2, 3].map((i) => (
               <Skeleton key={i} className="h-12 w-full" />
             ))}
           </div>
-        ) : isError && filteredEntries.length === 0 ? (
+        ) : isError ? (
           <ErrorState
             title="Could not load factory transactions"
             description={error instanceof Error ? error.message : "The factory daybook could not be loaded."}

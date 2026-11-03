@@ -94,9 +94,13 @@ function actionUrl(baseParams: URLSearchParams, page: number): string {
   return `${ENDPOINT}?${params.toString()}`;
 }
 
-/** Loads the complete server-filtered daybook only for explicit export actions. */
-export async function fetchAllDaybookEntries(baseParams: URLSearchParams): Promise<PaginatedDaybookEntry[]> {
-  const firstResponse = await fetch(actionUrl(baseParams, 1), { credentials: "include" });
+/** Loads every server-filtered row before returning it to Daybook or an export. */
+export async function fetchAllDaybookEntries(
+  baseParams: URLSearchParams,
+  signal?: AbortSignal
+): Promise<PaginatedDaybookEntry[]> {
+  const fetchOptions: RequestInit = signal ? { credentials: "include", signal } : { credentials: "include" };
+  const firstResponse = await fetch(actionUrl(baseParams, 1), fetchOptions);
   if (!firstResponse.ok) {
     const body = await firstResponse.json().catch(() => ({}));
     throw new Error(body?.message || "Failed to load complete daybook data");
@@ -109,7 +113,7 @@ export async function fetchAllDaybookEntries(baseParams: URLSearchParams): Promi
   const expectedTotal = typeof first.total === "number" && Number.isFinite(first.total) ? first.total : null;
 
   for (let page = 2; page <= totalPages; page += 1) {
-    const response = await fetch(actionUrl(baseParams, page), { credentials: "include" });
+    const response = await fetch(actionUrl(baseParams, page), fetchOptions);
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
       throw new Error(body?.message || `Failed to load daybook page ${page}`);
