@@ -30,7 +30,13 @@ export default {
         pathname: key, operation: "put", validUntil: Date.now() + 90000,
       });
       const putUrl = new URL(putGrant.presignedUrl);
-      if (putUrl.hostname !== host || putUrl.pathname !== "/" + key) throw Error("unexpected signed PUT host=" + putUrl.hostname + " pathPrefix=" + putUrl.pathname.slice(0,95) + " queryKeys=" + Array.from(putUrl.searchParams.keys()).join(","));
+      if (putUrl.protocol !== "https:" || putUrl.origin !== "https://vercel.com" ||
+          putUrl.pathname !== "/api/blob/" || putUrl.searchParams.get("pathname") !== key ||
+          !putUrl.searchParams.has("vercel-blob-delegation") ||
+          !putUrl.searchParams.has("vercel-blob-signature") ||
+          !putUrl.searchParams.has("vercel-blob-valid-until")) {
+        throw Error("untrusted signed Blob PUT destination");
+      }
       const putResult = await fetch(putUrl, {
         method: "PUT", body: fixture, headers: { "Content-Type": "video/webm" }, redirect: "error",
       });

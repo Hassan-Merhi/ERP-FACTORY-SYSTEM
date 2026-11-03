@@ -43,7 +43,13 @@ export default { async fetch(request) {
       pathname: key, operation: "put", validUntil: Date.now() + 10 * 60000,
     });
     const url = new URL(result.presignedUrl);
-    if (url.hostname !== "txyfgtsysrceqhoj.private.blob.vercel-storage.com" || url.pathname !== "/" + key) {
+    // Signed PUT uses Vercel's control-plane /api/blob/ endpoint rather than
+    // the private content hostname used by signed GET.
+    if (url.protocol !== "https:" || url.origin !== "https://vercel.com" ||
+        url.pathname !== "/api/blob/" || url.searchParams.get("pathname") !== key ||
+        !url.searchParams.has("vercel-blob-delegation") ||
+        !url.searchParams.has("vercel-blob-signature") ||
+        !url.searchParams.has("vercel-blob-valid-until")) {
       throw Error("invalid upload destination");
     }
     return Response.json({ uploadUrl: result.presignedUrl, contentType: type }, {

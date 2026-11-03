@@ -48,8 +48,11 @@ for (const [filename, ext, contentType, limit] of files) {
     throw new Error("Gateway returned unexpected upload requirements");
   }
   const url = new URL(grant.uploadUrl);
-  if (url.protocol !== "https:" || url.hostname !== "txyfgtsysrceqhoj.private.blob.vercel-storage.com" ||
-      url.pathname !== "/" + key || !url.searchParams.has("vercel-blob-delegation")) {
+  if (url.protocol !== "https:" || url.origin !== "https://vercel.com" ||
+      url.pathname !== "/api/blob/" || url.searchParams.get("pathname") !== key ||
+      !url.searchParams.has("vercel-blob-delegation") ||
+      !url.searchParams.has("vercel-blob-signature") ||
+      !url.searchParams.has("vercel-blob-valid-until")) {
     throw new Error("Gateway returned an untrusted upload destination");
   }
   const upload = await fetch(url, {
