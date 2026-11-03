@@ -73,3 +73,19 @@ GitHub Actions uploads `nightly-fake-company-reconciliation`, containing the bro
 GitHub → Actions → **Nightly ERP Training Audit** → **Run workflow**, choose the implementation branch for an initial test or `main` after merging the PR. The schedule runs from `main` at 02:15 UTC (04:15 Beirut standard time / 05:15 daylight time).
 
 Safety conditions enforced by the reconciler: `NODE_ENV=test`, `ERP_E2E_DISPOSABLE_DB=1`, `TRAINING_SANDBOX_VERIFIED=1`, a loopback PostgreSQL host and the exact dedicated `/heliumdb` fixture database. Never connect this job to live databases, real company data or user credentials.
+
+## Expanded nightly ERP / Factory system regression (PR #2811)
+
+The nightly audit also invokes `.github/workflows/nightly-system-regression.yml` with **four independent test areas** plus a separate coverage comparison:
+
+1. **Backend and database:** runs every test file selected by the repository's backend Vitest configuration, including real PostgreSQL integration scenarios for ERP, Factory and connected business modules, with existing coverage thresholds.
+2. **Frontend:** runs all registered frontend Vitest suites and browser offline/IndexedDB isolation checks, including UI and mobile component tests.
+3. **Rendered pages:** logs in to separate synthetic ERP and Factory companies and visits registered ERP and Factory pages on phone and desktop; runs language smoke checks, seeded Factory detail routes, and layout checks. These are view/navigation checks, not automatic page writes.
+4. **Security and data-contract audits:** runs company-scope, write-route, write-evidence, inventory-contract and migration audits. It saves a module-by-module test file inventory at `artifacts/nightly-system-coverage/inventory.json`.
+5. **Measured coverage comparison:** fetches both Vitest coverage summaries and runs the existing coverage ratchet. Missing, failed or unregistered tests are not treated as passing.
+
+The scheduled parent workflow also retains the **separate synthetic transaction and reconciliation job** described above. Any failed transaction or whole-system job opens a GitHub issue with links to the test artifacts. All records remain in temporary PostgreSQL services; no real customer, supplier, employee, stock or financial data is imported.
+
+**Limits / further implementation needed:** A full existing test-suite run is not equivalent to having automated create/edit/delete/reversal scenarios for every individual action. The disposable transaction scenarios explicitly verified today cover POS, stock transfers, journal vouchers, Supplier Partner sales, and raw-container offload/reversal. Payroll, production bonuses, invoicing, rentals, scanner workflows, deposits and other specialized write paths depend on whatever regression tests already exist; adding new cross-module posted-transaction tests for each of them remains separate engineering work. The inventory calls these gaps out instead of asserting 100% coverage.
+
+The existing `trainingCatalog` and 16 readonly capture tours are not automatically extended to every new application page. Recordings continue to require human approval before publication; the nightly system regression job **never publishes**, edits production, or changes business balances.
