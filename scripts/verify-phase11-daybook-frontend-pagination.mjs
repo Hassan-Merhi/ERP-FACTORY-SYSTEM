@@ -74,6 +74,16 @@ const exactMarkers = [
   "exportFactoryDaybookDetailed(filteredEntries, formatDisplayDate)",
 ];
 const sourceWithModel = `${source}\n${await read("client/src/pages/factory/daybook/useFactoryDaybookModel.ts")}`;
+assert.match(
+  sourceWithModel,
+  /return res\.json\(\);/,
+  "Daybook must return the first page immediately instead of blocking on a full export-style fetch"
+);
+assert.doesNotMatch(
+  sourceWithModel,
+  /return fetchAllDaybookEntries\(new URLSearchParams\(queryParams\)\)/,
+  "Full-history fetch must never block the interactive Daybook query"
+);
 for (const marker of exactMarkers) {
   const first = sourceWithModel.indexOf(marker);
   assert.ok(first >= 0, `Missing exact Daybook source marker: ${marker}`);
