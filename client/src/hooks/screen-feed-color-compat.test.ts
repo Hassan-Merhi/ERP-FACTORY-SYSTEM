@@ -22,7 +22,9 @@ describe("screen-feed unsupported CSS colors", () => {
         clearRect: () => undefined,
         fillRect: () => undefined,
         getImageData: () => ({ data: new Uint8ClampedArray([14, 100, 192, 255]) }),
-        set fillStyle(color: string) { seen.push(color); },
+        set fillStyle(color: string) {
+          seen.push(color);
+        },
       } as unknown as CanvasRenderingContext2D;
     } as HTMLCanvasElement["getContext"];
 
@@ -58,7 +60,9 @@ describe("screen-feed unsupported CSS colors", () => {
         clearRect: () => undefined,
         fillRect: () => undefined,
         getImageData: () => ({ data: new Uint8ClampedArray([10, 20, 30, 255]) }),
-        set fillStyle(_color: string) { throw new Error("should not convert a normal color"); },
+        set fillStyle(_color: string) {
+          throw new Error("should not convert a normal color");
+        },
       } as unknown as CanvasRenderingContext2D;
     } as HTMLCanvasElement["getContext"];
     element.style.color = "rgb(1, 2, 3)";
