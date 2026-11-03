@@ -130,7 +130,6 @@ jobs:
           npm run audit:company-scope
           npm run audit:inventory-contracts:validate
           npm run verify:migrations
-          npm run audit:coverage-ratchet
       - name: Preserve test coverage inventory even on failures
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -139,3 +138,34 @@ jobs:
           path: artifacts/nightly-system-coverage
           if-no-files-found: warn
           retention-days: 30
+
+  coverage-ratchet:
+    name: Compare measured backend and frontend coverage
+    needs: [backend, frontend]
+    if: needs.backend.result == 'success' && needs.frontend.result == 'success'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.1"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Download full backend coverage evidence
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: nightly-backend-regression
+          path: artifacts/combined-backend
+      - name: Download full frontend coverage evidence
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: nightly-frontend-regression
+          path: artifacts/combined-frontend
+      - name: Place measured coverage summaries at canonical paths
+        run: |
+          mkdir -p coverage/backend coverage/frontend
+          cp artifacts/combined-backend/coverage/backend/coverage-summary.json coverage/backend/coverage-summary.json
+          cp artifacts/combined-frontend/coverage/frontend/coverage-summary.json coverage/frontend/coverage-summary.json
+      - name: Enforce shared coverage ratchet
+        run: npm run audit:coverage-ratchet
