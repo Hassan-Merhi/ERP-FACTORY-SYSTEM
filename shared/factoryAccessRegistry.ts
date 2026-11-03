@@ -23,6 +23,14 @@ export interface FactoryPageDefinition {
 }
 
 export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
+  {
+    key: "factory/help-training",
+    label: "Help & Training",
+    group: "Support",
+    route: "/factory/help-training",
+    settingsVisible: false,
+    landing: false,
+  },
   // Pinned / primary
   {
     key: "factory/production-report",

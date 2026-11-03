@@ -406,6 +406,7 @@ export function AppSidebar({ user, onLogout }: { user?: SidebarUser; onLogout: (
         )}
 
         <div className="mt-4 pt-3 border-t border-sidebar-border/60 space-y-0.5">
+          <SidebarFlatLink href="/help-training" icon={Book} label="Help & Training" testId="link-help-training" />
           {isItemVisible({ title: "Chat", url: "/chat", icon: MessageCircle }) && (
             <SidebarFlatLink
               href="/chat"

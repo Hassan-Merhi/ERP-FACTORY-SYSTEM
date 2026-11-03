@@ -74,6 +74,11 @@ export function computeFactoryGuardRedirect(params: {
 
   const page = resolveFactoryPage(currentLocation);
 
+  // Every authenticated Factory user with Factory access can read the generic
+  // training library. Guides contain no business data; topic links still follow
+  // existing page access, while destination pages retain their guards.
+  if (currentLocation.split("?")[0] === "/factory/help-training") return null;
+
   // Protected system routes are classified in the same registry used by the
   // sidebar. When role context is supplied, direct URLs cannot bypass it.
   if (page && userRole && !factoryPageAllowsRole(page, userRole)) {
