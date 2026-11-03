@@ -203,16 +203,16 @@ describe("Wave 5 Factory user-profile certification", () => {
     expect(guardedRedirect(unrestricted, "/factory/spreadsheet", "Developer", true)).toBeNull();
   });
 
-  it("restores Factory Daybook for Admin and Developer without opening it to other roles", () => {
+  it("restores Factory Daybook for Admin, Owner and Developer without opening it to other roles", () => {
     const route = "/factory/daybook";
     const page = resolveFactoryPage(route)!;
     expect(page.accessLevel).toBe("admin");
     expect(FACTORY_SETTINGS_PAGES).not.toContain(page);
-    for (const role of ["User", "Manager", "Owner"]) {
+    for (const role of ["User", "Manager"]) {
       expect(factoryPageAllowsRole(page, role)).toBe(false);
-      expect(guardedRedirect(unrestricted, route, role, role === "Owner")).toBe("/factory/production-report");
+      expect(guardedRedirect(unrestricted, route, role, false)).toBe("/factory/production-report");
     }
-    for (const role of ["Admin", "Developer"]) {
+    for (const role of ["Admin", "Owner", "Developer"]) {
       expect(factoryPageAllowsRole(page, role)).toBe(true);
       expect(guardedRedirect(unrestricted, route, role, true)).toBeNull();
     }

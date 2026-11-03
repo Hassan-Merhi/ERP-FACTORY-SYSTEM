@@ -145,7 +145,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
   return (
     <Switch>
       <Route path="/factory/daybook">
-        {() => (isAdminOrDev ? <FactoryDaybook /> : <Redirect replace to={factoryDefaultPage} />)}
+        {() => (isAdminOwnerOrDev ? <FactoryDaybook /> : <Redirect replace to={factoryDefaultPage} />)}
       </Route>
       <Route path="/factory/transporters" component={FactoryTransporters} />
       <Route path="/factory/finance">
