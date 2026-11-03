@@ -67,11 +67,13 @@ describe("attendance report payroll reconciliation", () => {
     });
   });
 
-  it("treats approved and draft payroll as due, not already paid", () => {
+  it("counts prior salary advances as settled even before the net cash payroll is paid", () => {
     expect(salary([payroll({ status: "APPROVED", netSalary: "600.00" })])).toMatchObject({
       expectedSalary: "1000.00",
-      paidSalary: "0.00",
-      remainingSalary: "1000.00",
+      paidSalary: "400.00",
+      cashPaidSalary: "0.00",
+      advancesSettled: "400.00",
+      remainingSalary: "600.00",
     });
     expect(salary([payroll({ status: "DRAFT", advances: "0.00" })])).toMatchObject({
       expectedSalary: "600.00",
@@ -87,10 +89,10 @@ describe("attendance report payroll reconciliation", () => {
     ];
     expect(salary(rows)).toMatchObject({
       expectedSalary: "430.09",
-      paidSalary: "280.00",
-      remainingSalary: "150.09",
+      paidSalary: "310.00",
+      remainingSalary: "120.09",
       cashPaidSalary: "199.99",
-      advancesSettled: "80.01",
+      advancesSettled: "110.01",
     });
   });
 
