@@ -106,6 +106,16 @@ export function validateHistoricalAdvanceTotals(before: Totals, after: Totals): 
 }
 
 async function assertHistoricalEvidence(tx: DbTransaction): Promise<void> {
+  const accounts = (await tx.execute(sql`
+    SELECT id, name, active, deleted_at FROM ledger_accounts
+    WHERE company_id=${COMPANY} AND id IN (${CASH},${ADVANCES},${PAYABLE})
+    ORDER BY id FOR SHARE
+  `)).rows as Row[];
+  must(accounts.length === 3 && accounts.every((r) => r.active === true && r.deleted_at == null) &&
+       accounts.some((r) => num(r.id) === CASH && r.name === "Cash") &&
+       accounts.some((r) => num(r.id) === ADVANCES && r.name === "Factory Worker Advances") &&
+       accounts.some((r) => num(r.id) === PAYABLE && r.name === "Payroll Payable"),
+       "ACCOUNT_MAPPING_CHANGED");
   const evidence = (await tx.execute(sql`
     SELECT id,worker_id,advance_date::text AS date,amount::text,
            remaining_balance::text AS remaining,fully_paid,cash_account_id,
