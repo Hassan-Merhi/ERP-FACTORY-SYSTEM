@@ -18,6 +18,24 @@ const ROUTES = new Set(["/factory/daybook", "/properties/daybook"]);
 const DEFAULT_LIMIT = 100;
 const MAX_ACTION_LIMIT = 250;
 
+export const DAYBOOK_PROGRESS_EVENT = "factory-daybook-pagination-progress";
+
+export interface DaybookPaginationProgress {
+  loaded: number;
+  total: number | null;
+}
+
+let currentProgress: DaybookPaginationProgress = { loaded: 0, total: null };
+
+export function getDaybookPaginationProgress(): DaybookPaginationProgress {
+  return currentProgress;
+}
+
+function publishDaybookProgress(progress: DaybookPaginationProgress): void {
+  currentProgress = progress;
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(DAYBOOK_PROGRESS_EVENT));
+}
+
 export interface PaginatedDaybookEntry {
   id: number;
   companyId: number;
@@ -170,6 +188,7 @@ if (typeof window !== "undefined" && !window.__erpDaybookPaginationInstalled) {
     pendingPage = null;
     loadingMore = false;
     pageCache.clear();
+    publishDaybookProgress({ loaded: 0, total: null });
   }
 
   function highestLoadedPage(): number {
@@ -256,7 +275,10 @@ if (typeof window !== "undefined" && !window.__erpDaybookPaginationInstalled) {
     }
 
     const requestedPage = pendingPage ?? 1;
-    if (requestedPage === 1) pageCache.clear();
+    if (requestedPage === 1) {
+      pageCache.clear();
+      publishDaybookProgress({ loaded: 0, total: null });
+    }
 
     match.url.searchParams.set("pagination", "1");
     match.url.searchParams.set("page", String(requestedPage));
@@ -311,6 +333,7 @@ if (typeof window !== "undefined" && !window.__erpDaybookPaginationInstalled) {
         totalPages: pageMeta.totalPages,
         loadedCount: entries.length,
       };
+      publishDaybookProgress({ loaded: entries.length, total: pageMeta.total });
       scheduleNextPage(match.key);
 
       return entriesResponse(response, entries);
