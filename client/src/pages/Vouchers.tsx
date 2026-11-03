@@ -56,20 +56,9 @@ import type { VoucherFormData } from "@/pages/vouchers/voucherTypes";
 import { ErrorState } from "@/components/ui/page-state";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { isRetailManualVoucherTabHidden, isRetailManualVoucherTypeHidden } from "@/lib/retailVoucherPolicy";
-import { shouldShowFactoryVoucherTab } from "@/pages/vouchers/factoryVoucherPolicy";
+import { FACTORY_VOUCHER_HIDDEN_KEYS, shouldShowFactoryVoucherTab, type VoucherTab } from "@/pages/vouchers/factoryVoucherPolicy";
 import type { ErpFeatureAccess } from "@/app/erpAccess";
 
-type VoucherTab = "payment" | "receipt" | "journal" | "transfer" | "transferorder" | "adjustment" | "creditnote";
-
-const FACTORY_VOUCHER_HIDDEN_KEYS: Record<VoucherTab, string> = {
-  payment: "hide_tab_vouchers_payment",
-  receipt: "hide_tab_vouchers_receipt",
-  journal: "hide_tab_vouchers_journal",
-  transfer: "hide_tab_vouchers_transfer",
-  transferorder: "hide_tab_vouchers_transferorder",
-  adjustment: "hide_tab_vouchers_adjustment",
-  creditnote: "hide_tab_vouchers_creditnote",
-};
 const ALL_VOUCHER_TABS: readonly VoucherTab[] = [
   "payment",
   "receipt",
