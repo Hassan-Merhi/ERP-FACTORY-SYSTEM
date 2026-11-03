@@ -12,7 +12,7 @@ export const publishedTrainingVideos: Readonly<Record<string, string>> = Object.
 export const publishedTrainingGuides: Readonly<Record<string, readonly string[]>> = Object.fromEntries(
   Object.entries(media as Record<string, MediaEntry>)
     .filter(([, item]) => Array.isArray(item.guideSteps) && item.guideSteps.length > 0)
-    .map(([topic, item]) => [topic, item.guideSteps])
+    .map(([topic, item]) => [topic, item.guideSteps!])
 );
 export const publishedTrainingScreenshots: Readonly<Record<string, string>> = Object.fromEntries(
   Object.entries(media as Record<string, MediaEntry>)

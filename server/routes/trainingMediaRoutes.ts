@@ -181,7 +181,7 @@ async function streamMedia(req: Request, res: Response, kind: "video" | "caption
     return;
   }
   try {
-    const upstream = await fetch(request.url, { headers: request.headers, redirect: "error", signal: AbortSignal.timeout(30_000) });
+    const upstream = await fetch(request.url, { headers: request.headers, redirect: "error", signal: AbortSignal.timeout(300_000) });
     if (![200, 206].includes(upstream.status) || !upstream.body) {
       res.status(upstream.status === 404 ? 404 : 502).json({ message: "Training media temporarily unavailable" });
       return;
