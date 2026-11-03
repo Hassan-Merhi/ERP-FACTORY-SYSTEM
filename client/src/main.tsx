@@ -15,6 +15,8 @@ import { installClientObservability } from "./lib/clientObservability";
 import { ObservabilityErrorBoundary } from "./components/ObservabilityErrorBoundary";
 
 const ASSET_RECOVERY_PREFIX = "assetRecovery:";
+const SCREEN_FEED_RECOVERY_PREFIX = "screenFeedAssetRecovery:";
+const SCREEN_FEED_RECOVERY_COOLDOWN_MS = 5 * 60_000;
 const LEGACY_RECOVERY_PREFIXES = ["swReload:", "chunkReload:", "chunkRetry:"];
 const RECOVERY_STABLE_MS = 10_000;
 let assetRecoveryInFlight = false;
@@ -177,6 +179,33 @@ async function recoverFromStaleAssets() {
   currentUrl.searchParams.set("_asset_recovery", String(Date.now()));
   window.location.replace(currentUrl.toString());
 }
+
+// Unlike an unhandled promise rejection, a failed screen-feed import is
+// caught by the capture scheduler. Recover that particular stale chunk once,
+// and keep a cooldown through reload so a missing asset cannot loop forever.
+window.addEventListener("erp:screen-feed-module-load-failed", () => {
+  if (import.meta.env.DEV || !navigator.onLine) return;
+  const key = pathScopedKey(SCREEN_FEED_RECOVERY_PREFIX);
+  try {
+    const previous = Number(sessionStorage.getItem(key));
+    if (previous > 0 && Date.now() - previous < SCREEN_FEED_RECOVERY_COOLDOWN_MS) {
+      showStaleAssetRecoveryMessage();
+      return;
+    }
+    sessionStorage.setItem(key, String(Date.now()));
+  } catch {
+    // The existing recovery URL marker still bounds the first reload.
+  }
+  void recoverFromStaleAssets();
+});
+
+window.addEventListener("erp:screen-feed-module-loaded", () => {
+  try {
+    sessionStorage.removeItem(pathScopedKey(SCREEN_FEED_RECOVERY_PREFIX));
+  } catch {
+    /* sessionStorage may be blocked */
+  }
+});
 
 window.addEventListener("unhandledrejection", (event) => {
   const reason = event.reason;
