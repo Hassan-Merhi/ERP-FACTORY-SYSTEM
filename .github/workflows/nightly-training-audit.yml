@@ -12,6 +12,10 @@ on:
       - "scripts/record-training-guides.mjs"
       - "scripts/verify-nightly-transaction-reconciliation.mjs"
       - "scripts/nightly-system-regression.test.mjs"
+      - "scripts/generate-program6c-inventory-classifications.mjs"
+      - "scripts/generate-program6c-inventory-classifications.test.mjs"
+      - "client/src/factory-mobile-touch-targets.css"
+      - "client/src/main.tsx"
   schedule:
     # 02:15 UTC: 04:15 in Beirut winter / 05:15 summer. Cron runs in UTC.
     - cron: "15 2 * * *"
