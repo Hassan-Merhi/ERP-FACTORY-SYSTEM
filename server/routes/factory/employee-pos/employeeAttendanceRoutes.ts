@@ -10,6 +10,7 @@ import { loadFactoryNetPositionEmployees } from "../../../services/factory/netPo
 import { factoryWorkers, employees } from "@shared/schema";
 import { eq, and, or, sql } from "drizzle-orm";
 import { sqlArray } from "../../../lib/sqlArray";
+import { validateAttendanceReportDateRange } from "@shared/attendanceReportDateRange";
 import { resultRows } from "../../../lib/queryResult";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import {
@@ -83,21 +84,29 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
         endDate = `${year}-${String(month).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
       }
 
-      // Build dates array
-      const dates: { date: string; label: string; abbr: string; isWeekend: boolean }[] = [];
-      const startMs = new Date(startDate + "T00:00:00").getTime();
-      const endMs = new Date(endDate + "T00:00:00").getTime();
-      if (isNaN(startMs) || isNaN(endMs) || startMs > endMs) {
-        return res.status(400).json({ message: "Invalid date range" });
+      // Validate before allocating date columns or running any report queries.
+      // Editing a native date input can temporarily emit years like 0002,
+      // which used to produce multi-decade/century reports over 70 MB.
+      const dateRangeError = validateAttendanceReportDateRange(startDate, endDate);
+      if (dateRangeError) {
+        return res.status(400).json({
+          code: "ATTENDANCE_REPORT_INVALID_RANGE",
+          message: dateRangeError,
+        });
       }
+
+      // Use UTC days consistently even across daylight-saving transitions.
+      const dates: { date: string; label: string; abbr: string; isWeekend: boolean }[] = [];
+      const startMs = Date.parse(`${startDate}T00:00:00Z`);
+      const endMs = Date.parse(`${endDate}T00:00:00Z`);
       const multiMonth = startDate.substring(0, 7) !== endDate.substring(0, 7);
       const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       for (let ms = startMs; ms <= endMs; ms += 86400000) {
         const d = new Date(ms);
         const iso = d.toISOString().substring(0, 10);
-        const dow = d.getDay();
-        const dayNum = d.getDate();
-        const label = multiMonth ? `${MONTH_ABBR[d.getMonth()]} ${dayNum}` : String(dayNum);
+        const dow = d.getUTCDay();
+        const dayNum = d.getUTCDate();
+        const label = multiMonth ? `${MONTH_ABBR[d.getUTCMonth()]} ${dayNum}` : String(dayNum);
         dates.push({ date: iso, label, abbr: DAY_ABBR[dow], isWeekend: dow === 0 || dow === 6 });
       }
 
