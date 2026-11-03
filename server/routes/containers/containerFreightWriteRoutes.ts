@@ -25,8 +25,7 @@ import {
 } from "./containerHelpers";
 import { moneyString, sumMoney, toMoney } from "../../lib/money";
 import type Decimal from "decimal.js";
-import { retireVouchersForRequestTx } from "../../services/accounting/voucherRetirement";
-import { postFactoryVoucherTx, usdLineAmounts } from "../../services/factory/factoryVoucherPosting";
+import { usdLineAmounts } from "../../services/factory/factoryVoucherPosting";
 import {
   editPostedFactoryVoucherTx,
   sendVoucherCorrectionRefusal,
@@ -36,6 +35,7 @@ import { applyPurchaseOrderItemsUpdate } from "./purchaseOrderItemsUpdate";
 import { assertOffloadedPurchaseOrderChargesUnchanged } from "./offloadedPurchaseOrderCostBasisGuard";
 import { assertZmwPurchaseEditAllowed, convertNativeChargeEdits } from "./purchaseOrderZmwEdit";
 import { storedCents, syncContainerCharges } from "./containerChargeSync";
+import { syncPurchaseOrderOwnFreightVoucherTx } from "./purchaseOrderOwnFreightVoucher";
 import { registerPurchaseOrderDeleteRoute } from "./purchaseOrderDeleteRoute";
 import { registerPoImportBackfillRoute } from "./poImportBackfillRoute";
 import { syncPurchaseOrderGitTx } from "../../services/accounting/perpetualInventory/stockReceipts";
@@ -698,103 +698,17 @@ export function registerContainerFreightWriteRoutes(app: Express) {
               }
 
               // ── Freight own-account voucher ───────────────────────────────────
-              // When the user pays freight themselves, we create/update a separate
-              // Payment voucher (Debit Purchases / Credit own account) so the
-              // freight cost never touches the supplier's balance.
-              const freightVoucherNum = `FREIGHT-${container?.containerNumber ?? existingPO.containerId}-${existingPO.poNumber}`;
-              if (freightVoucherNeedsUpdate && newFreight.gt(0) && newFreightOwnAccountId) {
-                // Find the Purchases account used as debit in the supplier voucher
-                let purchasesAcctId: number | null = null;
-                if (existingPO.voucherId) {
-                  const svEntries = await tx
-                    .select()
-                    .from(voucherEntries)
-                    .where(eq(voucherEntries.voucherId, existingPO.voucherId));
-                  purchasesAcctId = svEntries.find((e) => toMoney(e.debitAmount).gt(0))?.ledgerAccountId ?? null;
-                }
-                const [existingFV] = await tx
-                  .select()
-                  .from(vouchers)
-                  .where(
-                    and(eq(vouchers.companyId, existingPO.companyId), eq(vouchers.voucherNumber, freightVoucherNum))
-                  )
-                  .limit(1);
-                if (existingFV) {
-                  // Update existing freight voucher (audited open-period edit; 409 when closed)
-                  await editPostedFactoryVoucherTx(
-                    tx,
-                    {
-                      companyId: existingPO.companyId,
-                      voucherIds: [existingFV.id],
-                      reason: "purchase-order-own-freight-resync",
-                      actor: { userId: req.session.userId, username: req.session.username },
-                    },
-                    async () => {
-                      await tx
-                        .update(vouchers)
-                        .set({ totalAmount: moneyString(newFreight) })
-                        .where(eq(vouchers.id, existingFV.id));
-                      const fEntries = await tx
-                        .select()
-                        .from(voucherEntries)
-                        .where(eq(voucherEntries.voucherId, existingFV.id));
-                      for (const fe of fEntries) {
-                        if (toMoney(fe.debitAmount).gt(0)) {
-                          await tx
-                            .update(voucherEntries)
-                            .set(usdLineAmounts(moneyString(newFreight), 0))
-                            .where(eq(voucherEntries.id, fe.id));
-                        } else {
-                          await tx
-                            .update(voucherEntries)
-                            .set({
-                              ...usdLineAmounts(0, moneyString(newFreight)),
-                              ledgerAccountId: newFreightOwnAccountId,
-                            })
-                            .where(eq(voucherEntries.id, fe.id));
-                        }
-                      }
-                    }
-                  );
-                } else if (purchasesAcctId) {
-                  // Create new freight payment voucher — through the engine with the
-                  // PO's posting identity; the FREIGHT-{container}-{po} number is read
-                  // back by number above, so it is kept.
-                  const today = new Date().toISOString().split("T")[0];
-                  await postFactoryVoucherTx(tx, {
-                    companyId: existingPO.companyId,
-                    voucherNumber: freightVoucherNum,
-                    voucherType: "Payment",
-                    voucherDate: today,
-                    description: `Freight (own account) - ${container?.containerNumber} / ${existingPO.poNumber}`,
-                    source: { sourceType: "purchase-order-own-freight", sourceId: existingPO.id, phase: "voucher" },
-                    lines: [
-                      {
-                        ledgerAccountId: purchasesAcctId,
-                        debit: newFreight,
-                        narration: `Freight - ${container?.containerNumber}`,
-                      },
-                      {
-                        ledgerAccountId: newFreightOwnAccountId,
-                        credit: newFreight,
-                        narration: `Freight - ${container?.containerNumber}`,
-                      },
-                    ],
-                  });
-                }
-              } else if (oldFreightPaidBy === "own" && newFreightPaidBy === "supplier") {
-                // Switched back to supplier — remove the standalone freight voucher
-                const [existingFV] = await tx
-                  .select()
-                  .from(vouchers)
-                  .where(
-                    and(eq(vouchers.companyId, existingPO.companyId), eq(vouchers.voucherNumber, freightVoucherNum))
-                  )
-                  .limit(1);
-                // Wave 16 (A): retired (soft delete with its lines, audited), not hard-deleted.
-                const fvIds = existingFV ? [existingFV.id] : [];
-                await retireVouchersForRequestTx(tx, req, existingPO.companyId, fvIds, "po-freight-voucher-removed");
-              }
+              // Create/update/retire the standalone own-account freight Payment
+              // voucher (see ./purchaseOrderOwnFreightVoucher.ts).
+              await syncPurchaseOrderOwnFreightVoucherTx(tx, req, {
+                existingPO,
+                container,
+                newFreight,
+                newFreightOwnAccountId,
+                newFreightPaidBy,
+                oldFreightPaidBy,
+                freightVoucherNeedsUpdate,
+              });
             }
           } else if (chargesWereEdited && existingPO.containerId) {
             // If charges were edited but grand total didn't change (or no voucher), still sync container_charges
