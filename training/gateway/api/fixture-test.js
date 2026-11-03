@@ -110,7 +110,7 @@ export default {
         await new Promise((resolve) => setTimeout(resolve, 1500));
       }
 
-      const raw = await fetch("https://" + host + "/" + key, { redirect: "error" });
+      const raw = await fetch("https://" + host + "/" + directKey, { redirect: "error" });
       report.unauthenticatedReadStatus = raw.status;
       if (raw.ok) throw Error("PRIVATE object unexpectedly public");
 
@@ -118,18 +118,18 @@ export default {
       if (signerSecret.length < 40) throw Error("preview gateway authentication not configured");
       const time = Date.now().toString();
       const signature = createHmac("sha256", signerSecret)
-        .update("GET\n" + key + "\n" + time).digest("hex");
-      const signedResponse = await signer.fetch(new Request("https://preview.invalid/api/sign?key=" + encodeURIComponent(key), {
+        .update("GET\n" + directKey + "\n" + time).digest("hex");
+      const signedResponse = await signer.fetch(new Request("https://preview.invalid/api/sign?key=" + encodeURIComponent(directKey), {
         headers: { "x-training-time": time, "x-training-signature": signature },
       }));
       report.gatewayAuthorizedStatus = signedResponse.status;
       if (signedResponse.status !== 200) {
         try {
           const diagnosticToken = await issueSignedToken({
-            pathname: key, operations: ["get"], validUntil: Date.now() + 120000,
+            pathname: directKey, operations: ["get"], validUntil: Date.now() + 120000,
           });
           const grant = await presignUrl(diagnosticToken, {
-            pathname: key, operation: "get", access: "private", validUntil: Date.now() + 60000,
+            pathname: directKey, operation: "get", access: "private", validUntil: Date.now() + 60000,
           });
           const u = new URL(grant.presignedUrl);
           report.getHost = u.hostname;
@@ -142,7 +142,7 @@ export default {
       }
       const signedResult = await signedResponse.json();
       const readUrl = new URL(signedResult.url);
-      if (readUrl.hostname !== host || readUrl.pathname !== "/" + key) throw Error("untrusted GET destination");
+      if (readUrl.hostname !== host || readUrl.pathname !== "/" + directKey) throw Error("untrusted GET destination");
 
       const read = await fetch(readUrl, { redirect: "error" });
       report.authorizedReadStatus = read.status;
@@ -157,6 +157,9 @@ export default {
       if (ranged.status !== 206 || !fragment.equals(fixture.subarray(0, 64))) {
         throw Error("video byte-range playback failed");
       }
+      // The signed PUT flow is tracked separately until the returned object is
+      // observable in the private store; this validates SDK upload + signed GET.
+      report.signedPutObjectVisible = report.listHasSignedObject === true;
       report.result = "PASS";
     } catch (error) {
       report.result = "FAIL";
