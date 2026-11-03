@@ -142,6 +142,7 @@ describe("factory payroll batch generation", () => {
     harness.selectResults.push(
       workers,
       [existing],
+      [], // No overlapping payrolls for the missing workers (additional safety query).
       [
         { finalizedBy: 2, weightKg: "80" },
         { finalizedBy: 2, weightKg: "90" },
