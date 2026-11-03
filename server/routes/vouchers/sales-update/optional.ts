@@ -28,9 +28,7 @@ import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/per
 import { syncFactoryInvoiceForChargeVoucherTx } from "../../../services/accounting/perpetualInventory/factoryInvoice";
 import { sendBaleMirrorMovementRefusal } from "../../../services/accounting/perpetualInventory/cutoverRefusal";
 import { assertVoucherEditableTx, sendVoucherCorrectionRefusal } from "../../../services/accounting/voucherCorrection";
-import {
-  assertStoredVoucherLinesValidTx,
-} from "../../../services/accounting/voucherEntryReplacement";
+import { assertStoredVoucherLinesValidTx } from "../../../services/accounting/voucherEntryReplacement";
 
 export function registerVoucherOptionalUpdateRoutes(app: Express) {
   // Toggle optional status for a voucher
@@ -89,8 +87,9 @@ export function registerVoucherOptionalUpdateRoutes(app: Express) {
       // A second simultaneous click must never restore or deduct the same
       // inventory a second time based on an earlier, stale HTTP read.
       await db.transaction(async (tx) => {
-        const { voucher: lockedVoucher, before: auditBefore } =
-          await assertVoucherEditableTx(tx, id, { companyId: existingVoucher.companyId });
+        const { voucher: lockedVoucher, before: auditBefore } = await assertVoucherEditableTx(tx, id, {
+          companyId: existingVoucher.companyId,
+        });
         const wasOptional = lockedVoucher.optional;
         if (wasOptional === willBeOptional) return;
         await assertPosOptionalSettlementSafeTx(tx, lockedVoucher);
