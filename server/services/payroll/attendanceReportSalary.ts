@@ -127,15 +127,17 @@ export function reconcileAttendanceReportSalary(input: AttendanceReportSalaryInp
     };
   }
 
-  // net_salary = cash due after advances; an advance has already been paid
-  // and must count as settled salary, not as money still owed to the worker.
-  const expected = selected.reduce((total, row) => total.plus(money(row.netSalary)).plus(money(row.advances)), zero());
+  // A draft or approved payroll is NOT a paid payroll. Its prior cash
+  // advances may exist in the advances ledger, but must not inflate the
+  // report's Paid Salary KPI. Until payroll is paid, only its net cash due
+  // belongs in the expected/remaining settlement calculation.
   const paidRows = selected.filter(isPaid);
+  const expected = selected.reduce(
+    (total, row) => total.plus(money(row.netSalary)).plus(isPaid(row) ? money(row.advances) : 0),
+    zero()
+  );
   const cashPaid = paidRows.reduce((total, row) => total.plus(money(row.netSalary)), zero());
-  // Advances were disbursed before this payroll. Their deduction already
-  // settles part of salary even while the remaining net cash is only DRAFT
-  // or APPROVED. Never present an advance as salary still to be paid.
-  const advancesSettled = selected.reduce((total, row) => total.plus(money(row.advances)), zero());
+  const advancesSettled = paidRows.reduce((total, row) => total.plus(money(row.advances)), zero());
   const paid = cashPaid.plus(advancesSettled);
   return {
     expectedSalary: expected.toFixed(2),
