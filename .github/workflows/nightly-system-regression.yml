@@ -121,6 +121,8 @@ jobs:
           node-version: "24.22.1"
           cache: npm
       - run: npm ci --ignore-scripts
+      - name: Enforce nightly workflow and production-isolation contracts
+        run: node --test scripts/nightly-system-regression.test.mjs
       - name: Generate a test inventory showing coverage and known gaps
         run: node scripts/report-nightly-system-coverage.mjs
       - name: Validate write routes and tenant/company isolation inventory
