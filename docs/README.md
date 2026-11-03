@@ -264,3 +264,5 @@ These current-reference documents are indexed here for audit coverage. Their beh
 
 | [October 2026 salary reconciliation](accounting/october-2026-salary-reconciliation-20261103.md) | Read-only October payroll, paid cash and salary advances reconciliation (no journal edits) |
 | [Factory worker-advance ledger audit](accounting/factory-worker-advance-ledger-audit-2026-11-03.md) | Current worker-advance ledger investigation, safeguards and payment evidence |
+
+| [October 2026 payroll overlap reconciliation](accounting/october-2026-paid-payroll-overlap-reclassification-20261103.md) | Current safeguards and backdated accounting evidence for approved paid-payroll overlap reclassification |

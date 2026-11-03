@@ -38,7 +38,7 @@ import type {
   StockMovementData,
   Supplier,
 } from "./types";
-import { calculatePLTotal } from "./accountMath";
+import { calculatePLTotal, isVisibleAnalyticsAssetAccount } from "./accountMath";
 
 import { useAccountRenderers } from "./useAccountRenderers";
 
@@ -625,9 +625,9 @@ export function useAnalyticsLegacy() {
   // These are separate from bank-entity accounts (acc.type === "bank")
   const bankTypeLedgerAccounts = accounts.filter((acc) => acc.type === "ledger" && acc.accountType === "Bank");
 
-  const assetAccounts = accounts.filter(
-    (acc) => acc.type === "fixedAsset" || (acc.type === "ledger" && acc.accountType === "Asset") || acc.type === "bank"
-  );
+  // Analytics Assets is a management display: don't present inventory control
+  // or SP profit correction suspense as usable assets. Ledger/API stay intact.
+  const assetAccounts = accounts.filter(isVisibleAnalyticsAssetAccount);
 
   // Include all expense accounts in P&L calculations (no exclusions)
   const expenseAccounts = accounts.filter((acc) => {
