@@ -81,6 +81,7 @@ import { runApprovedFactoryDestinationNormalization } from "./startup/runApprove
 import { runApprovedMali53DestinationNormalization } from "./startup/runApprovedMali53DestinationNormalization";
 import { runApprovedFactoryWorkerAdvanceLedgerRepair } from "./startup/runApprovedFactoryWorkerAdvanceLedgerRepair";
 import { runApprovedNoCashAdvanceSourceRepair } from "./startup/runApprovedNoCashAdvanceSourceRepair";
+import { runApprovedFactoryWorkerAdvanceNonCashGLRepair } from "./startup/runApprovedFactoryWorkerAdvanceNonCashGLRepair";
 import { inspectOctoberPayrollJournalIntegrity20261103 } from "./startup/inspectOctoberPayrollJournalIntegrity20261103";
 import { applyApprovedOctoberPayrollOverlapReclass20261103 } from "./startup/applyApprovedOctoberPayrollOverlapReclass20261103";
 import { ensureFactorySheetsSacksSchema } from "./startup/factorySheetsSacksSchema";
@@ -471,6 +472,15 @@ let migrationsDone = false;
         } catch (noCashAdvanceError: unknown) {
           logger.error("[startup] No-cash worker advance source repair blocked", {
             error: getErrorMessage(noCashAdvanceError),
+          });
+        }
+        // Original-date accounting correction for the remaining $51.61.
+        // Exact Render opt-in, guarded against any Cash or source mutation.
+        try {
+          await runApprovedFactoryWorkerAdvanceNonCashGLRepair();
+        } catch (advanceGLRepairError: unknown) {
+          logger.error("[startup] Factory advance historical noncash GL repair blocked", {
+            error: getErrorMessage(advanceGLRepairError),
           });
         }
         // Explicitly opted-in, tenant-scoped READ-ONLY inspection. It only

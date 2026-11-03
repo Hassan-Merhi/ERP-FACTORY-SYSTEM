@@ -128,3 +128,59 @@ annotation, audit history, a one-time marker and before/after assertions.
 The only activation switch is
 `FACTORY_ADVANCE_SOURCE_REPAIR_NO_CASH_20261103=approved-company12-historical-source-only-v1`.
 It must not be enabled unless the merge checks and live preconditions pass.
+
+
+## Dated $51.61 ledger correction — verified source analysis (November 3)
+
+After the source-only no-Cash repair (audit #82191, #2786), original worker
+advances total **$91,538.29**, repayments **$173.00**, payroll deductions
+**$88,690.29**, and worker outstanding receivables **$2,675.00**. The posted
+worker-advance ledger still has a $299.99 debit opening, $91,201.90
+in active voucher debits and $88,775.28 credits, net **$2,726.61**.
+
+The $51.61 overstatement is supported by *two different causes*, and is
+NOT resolved by new cash receipts or payments:
+
+1. **May 17, 2026 — $0.01 payroll recovery:** worker advance #131
+   was issued for $239.36 on May 16. PAID payroll #669 recovered
+   $239.35 for May 1–16, and PAID payroll #672 recovered the remaining
+   $0.01 for May 17 (with net salary -$0.01). Accrual voucher #7904
+   on May 1 covered the May 16 payroll. No May 17 recovery voucher
+   exists. Post May 17 **DR Payroll Payable $0.01 / CR Worker Advances
+   $0.01** to record the exact existing paid payroll recovery.
+2. **July 10, 2026 — $51.60 unsupported prior opening:** developer
+   audit #3659 changed Worker Advances opening from zero to $180.01,
+   and #3660 changed it to $299.99 approximately 43 seconds later.
+   Original advance #3 ($200 dated March 12) has no surviving active
+   disbursement voucher, and the original May 16 $48.39 voucher for
+   advance #103 was retired after deletion, leaving total missing
+   active debits **$248.39**. The opening balance exceeds those source
+   debits by **$299.99 − $248.39 = $51.60**. This is an overstatement
+   of opening worker receivables after source reconciliation, not a
+   new expense or payment. Post a backdated July 10 **DR Opening
+   Balance Equity $51.60 / CR Worker Advances $51.60**; account
+   #3746 is a dedicated, active Equity ledger with no current postings.
+
+The original $299.99 ledger master opening is *preserved*, rather than
+rewriting history. The dated July 10 journal explicitly neutralizes
+the unsupported excess with its true opening equity counterpart.
+The March/May historical source records and the archived May voucher
+remain unchanged. Cash #707, suppliers, customer balances, payroll
+records, worker advances, manual repayments, and all other vouchers
+are unchanged. The corrections have their actual processing time in
+the audit log and their historical effective dates in the GL.
+
+Expected postcheck: Worker Advances $2,675.00 = worker receivables
+$2,675.00, difference $0.00; no change to Cash (as verified by
+opening, total posted debits and total posted credits), source
+advances, and payroll source totals. Payroll Payable debit +$0.01,
+Opening Balance Equity debit +$51.60. The two vouchers together
+are balanced: total DR $51.61, total CR $51.61. A single atomic
+transaction blocks a partial repair; every required historical
+source and before-image is rechecked. Exactly-once protection uses
+a stable posting source and an audit marker.
+
+Explicit one-time production switch:
+`FACTORY_ADVANCE_GL_NONCASH_RECONCILE_20261103=approved-company12-may17-july10-original-dates-v1`.
+This opt-in is **distinct** from the now-complete source-record
+correction and is disabled except for its authorized one-time run.
