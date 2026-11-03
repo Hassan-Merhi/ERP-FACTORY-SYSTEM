@@ -90,7 +90,7 @@ jobs:
           if (!entry || entry.sourceSha !== process.env.TRAINING_SOURCE_SHA || entry.status !== "captured" || entry.requiresReview !== true) {
             throw new Error("The selected video has no successful reviewed-candidate recording");
           }
-          for (const file of ["screen.webm", "captions.vtt", "guide.md", "screenshot.png"]) {
+          for (const file of ["screen.mp4", "captions.vtt", "guide.md", "screenshot.png"]) {
             const full = path.join(root, topic, file);
             if (!fs.statSync(full).isFile() || fs.statSync(full).size < 16) {
               throw new Error("Missing or empty recording: " + file);
@@ -100,6 +100,25 @@ jobs:
             throw new Error("Invalid captions");
           }
           NODE
+      - name: Verify H.264 video, browser playback and 35-60 second duration
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          video="$RUNNER_TEMP/review/$TOPIC/screen.mp4"
+          ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,pix_fmt:format=duration -of json "$video" > "$RUNNER_TEMP/training-probe.json"
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const result = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/training-probe.json", "utf8"));
+          const video = result.streams?.[0];
+          const duration = Number(result.format?.duration);
+          if (video?.codec_name !== "h264" || video?.pix_fmt !== "yuv420p" ||
+              !Number.isFinite(duration) || duration < 35 || duration > 60) {
+            throw new Error("Training recording must decode as a 35-60 second Windows H.264/yuv420p MP4");
+          }
+          NODE
+          ffmpeg -hide_banner -v error -xerror -i "$video" -f null -
       - name: Upload reviewed videos, captions and screenshots to PRIVATE Vercel Blob
         shell: bash
         run: |

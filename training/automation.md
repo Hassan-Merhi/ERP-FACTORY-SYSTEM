@@ -14,9 +14,9 @@ Updated: 2026-11-03. Implementation is on draft PR #2763, not merged into the li
 ## Design and security
 
 1. Nightly workflow `.github/workflows/nightly-training-audit.yml` compares repository changes and records up to 16 predefined read-only browser tours against a **throwaway local** ERP/Factory database. It never connects to live production data.
-2. A person reviews the WebM, screenshots, VTT captions and Markdown instructions.
+2. A person reviews the H.264 MP4 (five guided on-screen steps, under 60 seconds), screenshots, VTT captions and Markdown instructions. The recording worker validates full MP4 decoding before uploading the review artifact.
 3. The protected `training-publication` GitHub workflow validates the source recording; only a manually approved job from the intended repository, `main`, and the protected environment can acquire a short-lived PUT grant from `/api/upload-url` using GitHub Actions OIDC. No permanent Blob token is needed on GitHub.
-4. The gateway limits object paths to `training/videos/{topic}/{40-char-source-sha}.{webm|vtt|png}`, validates identity and constrains media types/sizes. It uses `@vercel/blob@2.4.0` signed URLs for immutable objects.
+4. The gateway limits object paths to `training/videos/{topic}/{40-char-source-sha}.{mp4|webm|vtt|png}` (MP4 preferred for new videos; legacy WebM remains readable), validates identity and constrains media types/sizes. It uses `@vercel/blob@2.4.0` signed URLs for immutable objects.
 5. For reads, ERP `/api/training/media/:topic` first verifies logged-in user, selected company and role/page access. The Render server then HMAC-signs a request to `/api/sign`. The gateway returns a short-lived single-key signed GET URL, consumed by Render; employees never see the Blob credential or gateway HMAC secret. Video range requests and captions stream through the authenticated ERP route.
 6. Manifest entries become visible only after a separate publication PR is reviewed, merged and deployed.
 

@@ -26,7 +26,7 @@ const jwt = (await jwtResp.json()).value;
 if (typeof jwt !== "string" || jwt.length < 200) throw new Error("Invalid GitHub OIDC identity");
 
 const files = [
-  ["screen.webm", ".webm", "video/webm", 100 * 1024 * 1024],
+  ["screen.mp4", ".mp4", "video/mp4", 100 * 1024 * 1024],
   ["captions.vtt", ".vtt", "text/vtt", 512 * 1024],
   ["screenshot.png", ".png", "image/png", 10 * 1024 * 1024],
 ];

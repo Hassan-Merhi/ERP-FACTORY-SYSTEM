@@ -23,7 +23,7 @@ type PublishedMedia = {
   publishedAt?: string;
 };
 const registry: Record<string, PublishedMedia> = published as Record<string, PublishedMedia>;
-const OBJECT_KEY = /^training\/videos\/[a-z0-9-]+\/[a-f0-9]{40}\.(?:webm|vtt|png)$/;
+const OBJECT_KEY = /^training\/videos\/[a-z0-9-]+\/[a-f0-9]{40}\.(?:webm|mp4|vtt|png)$/;
 const TOPIC_ID = /^[a-z0-9-]{1,80}$/;
 const EMPTY_HASH = createHash("sha256").update("").digest("hex");
 
@@ -206,7 +206,7 @@ async function streamMedia(req: Request, res: Response, kind: "video" | "caption
   if (
     !key ||
     !OBJECT_KEY.test(key) ||
-    !key.endsWith(kind === "video" ? ".webm" : kind === "captions" ? ".vtt" : ".png")
+    !(kind === "video" ? (key.endsWith(".mp4") || key.endsWith(".webm")) : key.endsWith(kind === "captions" ? ".vtt" : ".png"))
   ) {
     res.status(404).json({ message: "Training media not published" });
     return;
@@ -237,7 +237,7 @@ async function streamMedia(req: Request, res: Response, kind: "video" | "caption
     res.status(upstream.status);
     res.setHeader(
       "Content-Type",
-      kind === "video" ? "video/webm" : kind === "captions" ? "text/vtt; charset=utf-8" : "image/png"
+      kind === "video" ? (key.endsWith(".mp4") ? "video/mp4" : "video/webm") : kind === "captions" ? "text/vtt; charset=utf-8" : "image/png"
     );
     res.setHeader("Cache-Control", "private, max-age=300");
     res.setHeader("X-Content-Type-Options", "nosniff");
