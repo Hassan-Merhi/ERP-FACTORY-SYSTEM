@@ -12,6 +12,3 @@ export * from "./sp";
 export * from "./whatsappSchedules";
 export * from "./edgeSync";
 export * from "./edgeSyncApply";
-export * from "./factoryOrderCorrections";
-export * from "./posTransferApprovals";
-export * from "./productionTargetBonuses";
