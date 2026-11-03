@@ -116,14 +116,16 @@ describe("Mobile repair Phase 1 critical flows", () => {
     // A custom variant with a doubled selector, so it out-ranks width variants on the same element.
     expect(css).toContain("@custom-variant touch {");
     expect(css).toContain("@media (hover: none) and (pointer: coarse) {\n    &:is(&) {");
-    expect(rawStock).toContain("opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 touch:opacity-100");
+    expect(rawStock).toContain(
+      "opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 touch:opacity-100"
+    );
     expect(rawStock).toContain("data-testid={`button-adjust-${row.supplierId}`}");
     expect(rawStock).toContain("data-testid={`button-deduct-${row.supplierId}`}");
     expect(rawStock).toContain("data-testid={`button-batch-${row.supplierId}`}");
   });
+
   it("keeps voucher type buttons at least 44px tall in phone landscape", () => {
     const css = source("client/src/pages/vouchers/voucher-premium.css");
     expect(css).toMatch(/\.voucher-workspace \.voucher-type-nav \[data-testid\^="tab-"\] \{[^}]*min-height: 44px;/);
   });
-
 });
