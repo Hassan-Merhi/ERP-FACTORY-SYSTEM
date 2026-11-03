@@ -15,7 +15,8 @@ const MAX_JPEG_BYTES = 900_000;
 const FAST_MAX_JPEG_BYTES = 420_000;
 const SIGNATURE_WIDTH = 32;
 const SIGNATURE_HEIGHT = 18;
-const MAX_CAPTURE_WIDTH = 1536;
+const FAST_CAPTURE_WIDTH = 1120;
+const STANDARD_CAPTURE_WIDTH = 1440;
 const MIN_CAPTURE_SCALE = 0.4;
 const SCROLL_KEY_ATTRIBUTE = "data-screenfeed-scroll-key";
 
@@ -241,10 +242,14 @@ function sanitizeClone(doc: Document, snapshot: Map<string, { top: number; left:
 
 function buildHtml2CanvasOptions(
   snapshot: Map<string, { top: number; left: number }>,
-  recoverColors: boolean
+  recoverColors: boolean,
+  fast: boolean
 ) {
   const nativeScale = getScreenFeedCaptureScale(window.devicePixelRatio);
-  const viewportScale = Math.min(1, MAX_CAPTURE_WIDTH / Math.max(1, window.innerWidth));
+  // Render directly at the final JPEG size instead of rendering extra pixels
+  // and resizing a second canvas on every live frame.
+  const targetWidth = fast ? FAST_CAPTURE_WIDTH : STANDARD_CAPTURE_WIDTH;
+  const viewportScale = Math.min(1, targetWidth / Math.max(1, window.innerWidth));
   const captureScale = Math.max(MIN_CAPTURE_SCALE, Math.min(nativeScale, viewportScale));
 
   return {
@@ -379,7 +384,7 @@ function canvasToJpegBlob(canvas: HTMLCanvasElement, quality: number): Promise<B
 }
 
 async function encodeFrame(canvas: HTMLCanvasElement, fast: boolean): Promise<EncodedFrame | null> {
-  const maxWidth = fast ? 1120 : 1440;
+  const maxWidth = fast ? FAST_CAPTURE_WIDTH : STANDARD_CAPTURE_WIDTH;
   const quality = fast ? 0.56 : 0.7;
   const limit = fast ? FAST_MAX_JPEG_BYTES : MAX_JPEG_BYTES;
   const candidate = resizeCanvas(canvas, maxWidth);
@@ -422,11 +427,12 @@ async function encodeWithFallback(
 async function runCaptureAttempt(
   scrollElements: Iterable<HTMLElement>,
   retry: boolean,
-  recoverColors: boolean
+  recoverColors: boolean,
+  fast: boolean
 ): Promise<HTMLCanvasElement> {
   const lease = prepareScrollableSnapshot(scrollElements);
   try {
-    const options = buildHtml2CanvasOptions(lease.snapshot, recoverColors);
+    const options = buildHtml2CanvasOptions(lease.snapshot, recoverColors, fast);
     if (!retry) return await withSafeCreatePattern(() => tryCapture(options, CAPTURE_TIMEOUT_MS));
     return await withSafeCreatePattern(() =>
       tryCapture(
@@ -444,11 +450,11 @@ async function runCaptureAttempt(
   }
 }
 
-async function captureCanvas(scrollElements: Iterable<HTMLElement>): Promise<CaptureCanvasResult> {
+async function captureCanvas(scrollElements: Iterable<HTMLElement>, fast: boolean): Promise<CaptureCanvasResult> {
   trace("capture-start");
   await waitForCaptureReady();
   try {
-    const canvas = await runCaptureAttempt(scrollElements, false, captureNeedsColorCompatibility);
+    const canvas = await runCaptureAttempt(scrollElements, false, captureNeedsColorCompatibility, fast);
     trace("capture-ok");
     return { canvas, source: "dom" };
   } catch (error) {
@@ -462,7 +468,7 @@ async function captureCanvas(scrollElements: Iterable<HTMLElement>): Promise<Cap
     }
 
     try {
-      const canvas = await runCaptureAttempt(scrollElements, true, captureNeedsColorCompatibility);
+      const canvas = await runCaptureAttempt(scrollElements, true, captureNeedsColorCompatibility, fast);
       trace("capture-ok-retry");
       return { canvas, source: "retry", failureReason: firstReason };
     } catch (retryError) {
@@ -515,7 +521,7 @@ export async function captureAndUploadScreenFrame(input: {
   }
 
   const startedAt = Date.now();
-  const captured = await captureCanvas(input.scrollElements);
+  const captured = await captureCanvas(input.scrollElements, input.fast);
   if (
     !input.shouldContinue() ||
     document.visibilityState !== "visible" ||
