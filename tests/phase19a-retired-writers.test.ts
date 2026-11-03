@@ -318,6 +318,11 @@ describe("factory daybook void (G3)", () => {
       [factory.companyId, voucherId]
     );
 
+    // The Factory Daybook is Admin/Developer only (#2691, 2988705); Owners no longer reach it.
+    await pool.query(`UPDATE user_company_roles SET role = 'Admin' WHERE user_id = $1 AND company_id = $2`, [
+      factory.userId,
+      factory.companyId,
+    ]);
     const response = await factoryAgent.delete(`/api/factory/daybook/entry/${entry.rows[0].id}/void`);
     expect(response.status, JSON.stringify(response.body)).toBe(200);
 

@@ -45,7 +45,10 @@ describe("Stock Entry staff tracking tabs", () => {
   });
 
   it("enforces the same per-user restrictions on staff-tracking APIs", () => {
-    const route = src("server/routes/factory/factoryStaffTrackingRoutes.ts");
+    // The page-access helper lives beside the routes since the 900-line split.
+    const route =
+      src("server/routes/factory/factoryStaffTrackingRoutes.ts") +
+      src("server/routes/factory/factoryStaffTrackingQueries.ts");
     expect(route).toContain("hide_tab_stockentry_production_targets");
     expect(route).toContain("hide_tab_workers_attendance");
     expect(route).toContain("canAccessTrackingPage");
@@ -164,21 +167,22 @@ describe("Stock Entry staff tracking tabs", () => {
   });
 
   it("shows target, absent target, expected target, and produced-minus-expected KPIs", () => {
-    const production = src("client/src/pages/factory/FactoryProductionTargets.tsx");
+    // The approved dashboard redesign (#2659) shows five KPI cards; the absent
+    // target and the present/absent split are each card's footnote. The cards
+    // live in their own module, rendered by the page.
+    expect(src("client/src/pages/factory/FactoryProductionTargets.tsx")).toContain("<ProductionTargetKpiGrid");
+    const production = src("client/src/pages/factory/productiontargets/ProductionTargetKpiGrid.tsx");
     const model = src("client/src/pages/factory/factoryProductionTargetsModel.ts");
-    expect(production).toContain('tr("totalTarget")');
-    expect(production).toContain('tr("totalAbsentTarget")');
-    expect(production).toContain('tr("totalExpected")');
-    expect(production).toContain('tr("totalWorkers")');
-    expect(production).toContain('tr("totalAbsent")');
-    expect(production).toContain('tr("totalPresent")');
-    expect(production).toContain('tr("diff")');
-    // Summary tile layout lives in its own module since the page was split.
-    expect(
-      readFileSync("client/src/pages/factory/productiontargets/ProductionTargetSummaryTiles.tsx", "utf8")
-    ).toContain("grid-cols-3");
-    expect(production).toContain("<SummaryGroupTile");
-    expect(production).toContain("sm:grid-cols-2 xl:grid-cols-6");
+    expect(production).toContain('label={tr("totalTarget")}');
+    expect(production).toContain("{totals.absentTarget}");
+    expect(production).toContain('label={tr("totalExpected")}');
+    expect(production).toContain('label={tr("totalWorkers")}');
+    expect(production).toContain("{workerTotals.absent}");
+    expect(production).toContain("{workerTotals.present}");
+    expect(production).toContain('label={tr("diff")}');
+    expect(production).toContain('label={tr("totalProduced")}');
+    expect(production).toContain("<PremiumKpiCard");
+    expect(production).toContain('className="pt-kpi-grid"');
     expect(model).toContain("absentTarget");
     expect(model).toContain("const expected = target - absentTarget");
     // Same sign as the row difference (produced - target), per #1697.

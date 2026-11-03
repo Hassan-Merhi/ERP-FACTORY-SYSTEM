@@ -3,7 +3,7 @@
  * - a ledger debited 1.015 shows "1.02" (the float path printed "1.01");
  * - a bank with opening 0.1 Dr plus 0.2 and 0.005 debits shows "0.31";
  * - an employee credited 1.005 shows "1.01" (the float path printed "1.00") when a date
- *   range reads the engine; without one the overview shows Payroll's current balance (#2178).
+ *   range reads the engine, and since #2683 so does the all-time overview.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -83,9 +83,10 @@ describe("account list balances", () => {
     expect(accounts.find((a) => a.type === "employee")).toMatchObject({ balance: "1.01", balanceSide: "Cr" });
   });
 
-  it("shows Payroll's current employee balance in the all-time overview", async () => {
+  it("shows the posted ledger employee balance in the all-time overview, not the payroll cache", async () => {
+    // #2683: the cached currentBalance (2.50) can carry the wrong sign; All Time reads the ledger.
     const accounts = await accountList({});
     expect(accounts.find((a) => a.type === "ledger")).toMatchObject({ balance: "1.02", balanceSide: "Dr" });
-    expect(accounts.find((a) => a.type === "employee")).toMatchObject({ balance: "2.50", balanceSide: "Cr" });
+    expect(accounts.find((a) => a.type === "employee")).toMatchObject({ balance: "1.01", balanceSide: "Cr" });
   });
 });
