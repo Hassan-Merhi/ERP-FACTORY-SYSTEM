@@ -17,11 +17,21 @@ vi.mock("@/components/AppSidebar", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/components/AppSidebar")>();
   return {
     isRetailHiddenErpPath: actual.isRetailHiddenErpPath,
-    useErpVisibleSections: () => ({ sections: [], visiblePinnedItems: [], visibleUtilityItems: [] }),
+    useErpVisibleSections: () => ({
+      sections: [],
+      visiblePinnedItems: [],
+      visibleUtilityItems: [],
+      isItemVisible: () => true,
+    }),
   };
 });
-vi.mock("@/components/FactorySidebar", () => ({ useFactoryVisibleSections: () => ({ sections: [] }) }));
-vi.mock("@/components/PropertiesSidebar", () => ({ PROPERTIES_NAV_SECTIONS: [] }));
+vi.mock("@/components/FactorySidebar", () => ({
+  useFactoryVisibleSections: () => ({ sections: [], isPinnedVisible: () => true, isHubTabVisible: () => true }),
+}));
+vi.mock("@/components/PropertiesSidebar", () => ({
+  PROPERTIES_NAV_SECTIONS: [],
+  getPropertiesVisibleNavSections: () => [],
+}));
 vi.mock("@/contexts/CompanyContext", () => ({
   useCompany: () => ({ selectedCompany: { id: 1, companyType: companyState.companyType } }),
 }));

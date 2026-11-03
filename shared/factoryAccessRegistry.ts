@@ -23,6 +23,14 @@ export interface FactoryPageDefinition {
 }
 
 export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
+  {
+    key: "factory/help-training",
+    label: "Help & Training",
+    group: "Support",
+    route: "/factory/help-training",
+    settingsVisible: false,
+    landing: false,
+  },
   // Pinned / primary
   {
     key: "factory/production-report",
@@ -107,6 +115,17 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     aliases: ["/factory/pressing", "/factory/finalize", "/factory/production-bonuses"],
     sidebar: true,
     landing: true,
+  },
+  {
+    // The Production Targets workspace links here; keep it out of standalone menus.
+    // FactoryRoutes permits Admin/Owner only and applies the same hidden-tab flag.
+    key: "factory/production-bonuses",
+    label: "Production Bonuses",
+    group: "Production",
+    route: "/factory/production-bonuses",
+    settingsVisible: false,
+    accessLevel: "admin",
+    hideKey: "hide_tab_stockentry_production_targets",
   },
   {
     key: "factory/raw-materials",
@@ -443,6 +462,26 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
   },
 
   // System / utility pages
+  // Registered separately from Accounts: the Toolbox route is Developer-only
+  // and must be classified before the generic Factory route guard runs.
+  {
+    key: "factory/accounting/toolbox",
+    label: "Accounting Toolbox",
+    group: "Finance",
+    route: "/factory/accounting/toolbox",
+    settingsVisible: false,
+    accessLevel: "developer",
+  },
+  // Developer-only canonical destination for the legacy Balance Repair screen.
+  // Factory companies redirect unprefixed routes away; use a scoped route here.
+  {
+    key: "factory/balance-repair",
+    label: "Balance Repair",
+    group: "Finance",
+    route: "/factory/balance-repair",
+    settingsVisible: false,
+    accessLevel: "developer",
+  },
   {
     key: "factory/net-position-details",
     label: "Net Position Details",
@@ -593,6 +632,9 @@ export function resolveFactoryPageKey(path: string): string | null {
 }
 
 export function factoryPageAllowsRole(page: FactoryPageDefinition, role?: string | null): boolean {
+  // The bonus checkout route is Admin/Owner-only (not Developer); do not widen it
+  // through the general "admin" registry classification.
+  if (page.key === "factory/production-bonuses") return role === "Admin" || role === "Owner";
   const level = page.accessLevel ?? "user";
   if (level === "developer") return role === "Developer";
   // Account Groups and Daybook are also accessible to Owners in FactoryRoutes;

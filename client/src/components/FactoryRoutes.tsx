@@ -13,6 +13,7 @@ import { Switch, Route, Redirect } from "wouter";
 import type { ShellUser } from "@/app/shellUser";
 import {
   AccountingCreate,
+  AccountingToolbox,
   AccountingOpenItems,
   CashBankReconciliation,
   MonetaryFxAccounting,
@@ -118,11 +119,14 @@ import {
 } from "@/lazyPages";
 
 const FactoryStockQueryWorkspace = lazy(() => import("@/pages/factory/FactoryStockQueryWorkspace"));
+const HelpTraining = lazy(() => import("@/pages/HelpTraining"));
 const AccountGroups = lazy(() => import("@/pages/AccountGroups"));
 const FactoryInvoiceDetailBilingual = lazy(() => import("@/pages/factory/FactoryInvoiceDetailBilingual"));
 const FactoryProductionBonuses = lazy(() => import("@/pages/factory/FactoryProductionBonuses"));
 const WasteDispatchPage = lazy(() => import("@/pages/factory/WasteDispatchOptimized"));
-const FactoryStockAllocationV5CreateProforma = lazy(() => import("@/pages/factory/FactoryStockAllocationV5CreateProforma"));
+const FactoryStockAllocationV5CreateProforma = lazy(
+  () => import("@/pages/factory/FactoryStockAllocationV5CreateProforma")
+);
 const FactoryStockAllocationV5EditProforma = lazy(() => import("@/pages/factory/FactoryStockAllocationV5EditProforma"));
 
 interface FactoryRoutesProps {
@@ -144,6 +148,16 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
 
   return (
     <Switch>
+      <Route path="/factory/help-training">
+        {() => (
+          <HelpTraining
+            mode="factory"
+            role={user?.role}
+            accessKeys={myAccess?.pageKeys}
+            fullAccess={myAccess?.fullAccess}
+          />
+        )}
+      </Route>
       <Route path="/factory/daybook">
         {() => (isAdminOwnerOrDev ? <FactoryDaybook /> : <Redirect replace to={factoryDefaultPage} />)}
       </Route>
@@ -197,6 +211,8 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       <Route path="/factory/stock-query" component={FactoryStockQueryWorkspace} />
       <Route path="/factory/contacts" component={FactoryContacts} />
       <Route path="/factory/accounts" component={FactoryAccounts} />
+      {isDeveloper && <Route path="/factory/accounting/toolbox" component={AccountingToolbox} />}
+      {isDeveloper && <Route path="/factory/balance-repair" component={BalanceRepair} />}
       {isDeveloper && <Route path="/factory/accounting/open-items" component={AccountingOpenItems} />}
       {isDeveloper && <Route path="/factory/accounting/cash-bank" component={CashBankReconciliation} />}
       {isDeveloper && <Route path="/factory/accounting/monetary-fx" component={MonetaryFxAccounting} />}

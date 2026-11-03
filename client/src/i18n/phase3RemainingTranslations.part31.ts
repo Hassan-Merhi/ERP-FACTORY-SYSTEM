@@ -578,6 +578,106 @@ export const phase3RemainingTranslationsPart31: readonly Phase3SharedUiEntry[] =
     fr: "La vérification de la couverture historique n'a renvoyé aucun résultat",
   },
   {
+    en: "HISTORICAL_WORKER_ADVANCE_ROW_INVALID",
+    ar: "سجل سلفة العامل التاريخي غير صالح",
+    fr: "Ligne d'avance d'ouvrier historique non valide",
+  },
+  {
+    en: "HISTORICAL_RENT_CONTRACT_ID_INVALID",
+    ar: "معرّف عقد الإيجار التاريخي غير صالح",
+    fr: "Identifiant de contrat de loyer historique non valide",
+  },
+  {
+    en: "HISTORICAL_RENT_PERIOD_INVALID",
+    ar: "فترة الإيجار التاريخية غير صالحة",
+    fr: "Période de loyer historique non valide",
+  },
+  {
+    en: "HISTORICAL_RAW_SUPPLIER_STATE_MISSING",
+    ar: "حالة المورّد التاريخية للمواد الخام غير موجودة",
+    fr: "État historique du fournisseur de matière première manquant",
+  },
+  {
+    en: "HISTORICAL_STOCK_PRODUCT_GROUPS_INVALID",
+    ar: "مجموعات منتجات المخزون التاريخية غير صالحة",
+    fr: "Groupes de produits du stock historique non valides",
+  },
+  {
+    en: "HISTORICAL_STOCK_QUANTITY_INVALID",
+    ar: "كمية المخزون التاريخية غير صالحة",
+    fr: "Quantité de stock historique non valide",
+  },
+  {
+    en: "HISTORICAL_STOCK_PRODUCT_HISTORY_MISSING",
+    ar: "سجل المنتج التاريخي للمخزون غير موجود",
+    fr: "Historique du produit en stock manquant",
+  },
+  {
+    en: "HISTORICAL_RAW_OFFLOAD_TIMESTAMP_INVALID",
+    ar: "وقت تفريغ المواد الخام التاريخي غير صالح",
+    fr: "Horodatage historique de déchargement de matière première non valide",
+  },
+  {
+    en: "HISTORICAL_ORDER_ROW_HISTORY_INVALID",
+    ar: "السجل التاريخي للطلب غير صالح",
+    fr: "Historique de la commande non valide",
+  },
+  {
+    en: "HISTORICAL_ORDER_ROW_HISTORY_QUANTITY_INVALID",
+    ar: "الكمية في السجل التاريخي للطلب غير صالحة",
+    fr: "Quantité non valide dans l'historique de la commande",
+  },
+  {
+    en: "HISTORICAL_ROW_HISTORY_INVALID_ID",
+    ar: "معرّف غير صالح في سجل التغييرات التاريخي",
+    fr: "Identifiant non valide dans l'historique des modifications",
+  },
+  {
+    en: "HISTORICAL_ROW_HISTORY_FULL_RECORD_MISSING",
+    ar: "السجل الكامل غير موجود في سجل التغييرات التاريخي",
+    fr: "Enregistrement complet manquant dans l'historique des modifications",
+  },
+  {
+    en: "HISTORICAL_ROW_HISTORY_DUPLICATE_CREATION",
+    ar: "إنشاء مكرر في سجل التغييرات التاريخي",
+    fr: "Création en double dans l'historique des modifications",
+  },
+  {
+    en: "HISTORICAL_ROW_HISTORY_UPDATE_WITHOUT_BASE",
+    ar: "تعديل بدون سجل أساسي في سجل التغييرات التاريخي",
+    fr: "Modification sans état de base dans l'historique des modifications",
+  },
+  {
+    en: "HISTORICAL_ROW_HISTORY_DELETE_WITHOUT_BASE",
+    ar: "حذف بدون سجل أساسي في سجل التغييرات التاريخي",
+    fr: "Suppression sans état de base dans l'historique des modifications",
+  },
+  {
+    en: "HISTORICAL_ROW_HISTORY_UNKNOWN_OPERATION",
+    ar: "عملية غير معروفة في سجل التغييرات التاريخي",
+    fr: "Opération inconnue dans l'historique des modifications",
+  },
+  {
+    en: "HISTORICAL_ROW_HISTORY_SCOPE_INVALID",
+    ar: "نطاق سجل التغييرات التاريخي غير صالح",
+    fr: "Portée de l'historique des modifications non valide",
+  },
+  {
+    en: "HISTORICAL_ROW_HISTORY_TABLE_NOT_ALLOWED",
+    ar: "الجدول غير مسموح به في سجل التغييرات التاريخي",
+    fr: "Table non autorisée dans l'historique des modifications",
+  },
+  {
+    en: "HISTORICAL_ROW_HISTORY_RLS_MISSING",
+    ar: "حماية الوصول حسب الشركة لسجل التغييرات التاريخي غير مفعّلة",
+    fr: "Protection d'accès par société de l'historique des modifications non active",
+  },
+  {
+    en: "HISTORICAL_ROW_HISTORY_RESULT_TOO_LARGE",
+    ar: "نتيجة سجل التغييرات التاريخي كبيرة جدًا",
+    fr: "Résultat de l'historique des modifications trop volumineux",
+  },
+  {
     en: "HISTORICAL_NET_POSITION_NONFINITE_AMOUNT",
     ar: "مبلغ غير صالح في صافي المركز التاريخي",
     fr: "Montant non valide dans la position nette historique",

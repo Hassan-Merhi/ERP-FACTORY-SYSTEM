@@ -19,6 +19,7 @@ import { getFactoryBalanceOnTableSnapshot } from "./productionBalanceOnTable";
 import { netPositionLegacyScanKnown, netPositionRecordedThrough } from "./netPositionAsOf";
 import { getLockedSupplierRatesReadOnlyBulk } from "./rawStockLockedRateBulk";
 import { sqlArray } from "../../lib/sqlArray";
+import { loadFactoryRowsKnownAt } from "./netPositionRowHistoryReader";
 
 type Event = {
   key: string;
@@ -314,7 +315,26 @@ async function rawMaterialAt(companyId: number, scope: FactoryNetPositionAsOf) {
     : [];
   const lockedRates = new Map<number, number>();
   for (const r of persisted) if (r.rate != null) lockedRates.set(Number(r.id), toMoney(r.rate).toNumber());
-  const legacyIds = supplierIds.filter((id) => !lockedRates.has(id));
+  // Before a table's atomic baseline, the original supplier rate is unknown:
+  // preserve the existing replay and uncertainty warning. At/after baseline,
+  // use recorded supplier row versions rather than today's mutable rate.
+  const supplierHistory = supplierIds.length
+    ? await loadFactoryRowsKnownAt("factory_suppliers", companyId, scope, supplierIds)
+    : null;
+  let supplierRatesReconstructed = false;
+  if (supplierHistory?.ready) {
+    supplierRatesReconstructed = true;
+    lockedRates.clear();
+    for (const id of supplierIds) {
+      const record = supplierHistory.rows.get(id);
+      if (!record) throw new Error("HISTORICAL_RAW_SUPPLIER_STATE_MISSING");
+      const rate = record.current_raw_material_cost_per_kg_usd;
+      if (rate !== null && rate !== undefined && toMoney(rate as string | number).gt(0)) {
+        lockedRates.set(id, toMoney(rate as string | number).toNumber());
+      }
+    }
+  }
+  const legacyIds = supplierRatesReconstructed ? [] : supplierIds.filter((id) => !lockedRates.has(id));
   if (legacyIds.length) {
     for (const [id, rate] of await getLockedSupplierRatesReadOnlyBulk(db, companyId, legacyIds))
       lockedRates.set(id, rate);
@@ -334,8 +354,14 @@ async function rawMaterialAt(companyId: number, scope: FactoryNetPositionAsOf) {
   `)
       )
     : [];
-  const valued = valueHistoricalRawStates(replay.states, lockedRates, new Set(later.map((r) => Number(r.supplier_id))));
-  if (valued.rateUnversioned) warnings.add("HISTORICAL_RAW_LOCKED_RATE_UNVERSIONED");
+  const valued = valueHistoricalRawStates(
+    replay.states,
+    lockedRates,
+    supplierRatesReconstructed ? new Set<number>() : new Set(later.map((r) => Number(r.supplier_id)))
+  );
+  if (valued.rateUnversioned || (supplierHistory && !supplierHistory.ready)) {
+    warnings.add("HISTORICAL_RAW_LOCKED_RATE_UNVERSIONED");
+  }
   if (receipts.some((r) => r.fallback)) warnings.add("HISTORICAL_RAW_LEGACY_RECEIPT_FALLBACK");
   if (sources.some((r) => r.key == null)) warnings.add("HISTORICAL_RAW_SOURCE_OWNER_UNKNOWN");
   if (sources.some((r) => r.owner_conflict)) warnings.add("HISTORICAL_RAW_SOURCE_OWNER_CONFLICT");
@@ -374,6 +400,7 @@ async function finishedStockAt(companyId: number, scope: FactoryNetPositionAsOf,
     missing_scan_time: string;
     uncertain_removals: string;
     priced: string;
+    product_counts: Array<{ id: number | null; qty: number | string }> | null;
   }>(
     await db.execute(sql`
     WITH allocated AS MATERIALIZED (
@@ -428,7 +455,7 @@ async function finishedStockAt(companyId: number, scope: FactoryNetPositionAsOf,
        WHERE coh.scanned_at IS NULL
          AND NOT ${netPositionRecordedThrough(sql`coh.cancelled_at`, scope, "timestamptz")}
     ), candidate AS MATERIALIZED (
-      SELECT b.id, b.status,
+      SELECT b.id, b.product_id, b.status,
              COALESCE(p.production_price::numeric, 0) AS catalog_cost,
              COALESCE(p.selling_price::numeric, 0) AS catalog_selling,
              ${nextCutoff(scope, "b.updated_at")} AS unchanged,
@@ -469,7 +496,10 @@ async function finishedStockAt(companyId: number, scope: FactoryNetPositionAsOf,
            COUNT(*) FILTER (WHERE counted AND NOT unchanged AND legacy_entry)::text AS legacy_entry,
            COUNT(*) FILTER (WHERE missing_scan_time)::text AS missing_scan_time,
            COUNT(*) FILTER (WHERE counted AND untimed_exit)::text AS uncertain_removals,
-           COUNT(*) FILTER (WHERE counted AND (catalog_cost > 0 OR catalog_selling > 0))::text AS priced
+           COUNT(*) FILTER (WHERE counted AND (catalog_cost > 0 OR catalog_selling > 0))::text AS priced,
+           (SELECT COALESCE(jsonb_agg(jsonb_build_object('id', grp.product_id, 'qty', grp.qty)), '[]'::jsonb)
+              FROM (SELECT product_id, COUNT(*)::integer AS qty FROM in_stock
+                     WHERE counted GROUP BY product_id) grp) AS product_counts
       FROM in_stock
   `)
   );
@@ -478,18 +508,34 @@ async function finishedStockAt(companyId: number, scope: FactoryNetPositionAsOf,
   if (Number(row.legacy_entry || 0) > 0) warnings.push("HISTORICAL_STOCK_FINALIZATION_TIME_MISSING");
   if (Number(row.missing_scan_time || 0) > 0) warnings.push("HISTORICAL_STOCK_SCAN_TIME_MISSING");
   if (Number(row.uncertain_removals || 0) > 0) warnings.push("HISTORICAL_STOCK_REMOVAL_TIME_UNKNOWN");
-  if (Number(row.priced || 0) > 0) {
-    // Same catalogue prices as today's figure; the catalogue is not versioned.
+  const productCounts = row.product_counts ?? [];
+  if (!Array.isArray(productCounts)) throw new Error("HISTORICAL_STOCK_PRODUCT_GROUPS_INVALID");
+  const productIds = productCounts.filter((item) => item.id != null).map((item) => Number(item.id));
+  const productHistory = productIds.length
+    ? await loadFactoryRowsKnownAt("factory_bale_products", companyId, scope, productIds)
+    : null;
+  let stockValue = cents(money(valuationMode === "selling" ? row.total_selling : row.total_cost));
+  if (productHistory?.ready) {
+    let historicalTotal: Decimal = ZERO;
+    for (const group of productCounts) {
+      if (group.id == null) continue; // As in today's LEFT JOIN, an unassigned product is zero-valued.
+      const amount = Number(group.qty);
+      if (!Number.isSafeInteger(amount) || amount < 0) throw new Error("HISTORICAL_STOCK_QUANTITY_INVALID");
+      const product = productHistory.rows.get(Number(group.id));
+      if (!product) throw new Error("HISTORICAL_STOCK_PRODUCT_HISTORY_MISSING");
+      const rawPrice = valuationMode === "selling" ? product.selling_price : product.production_price;
+      historicalTotal = historicalTotal.plus(money(rawPrice as string | number | null | undefined).times(amount));
+    }
+    stockValue = cents(historicalTotal);
+  } else if (Number(row.priced || 0) > 0) {
+    // A row's price was never recorded before the atomic history baseline.
     warnings.push(
       valuationMode === "selling"
         ? "HISTORICAL_STOCK_SELLING_PRICE_UNVERSIONED"
         : "HISTORICAL_STOCK_COST_EDITS_NOT_VERSIONED"
     );
   }
-  return {
-    value: cents(money(valuationMode === "selling" ? row.total_selling : row.total_cost)),
-    warnings,
-  };
+  return { value: stockValue, warnings };
 }
 
 export async function computeHistoricalFactoryInventory(

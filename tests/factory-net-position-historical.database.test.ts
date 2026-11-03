@@ -86,6 +86,7 @@ const METADATA = [
   "timeZone",
   "historyBasis",
   "historyCoverage",
+  "rowHistoryCoverage",
   "historyCompleteness",
   "historyWarnings",
   "inventoryHistoryWarnings",
@@ -294,13 +295,13 @@ databaseDescribe("Factory Net Position historical date filter (database)", () =>
     ids.contract =
       await one(sql`INSERT INTO property_contracts (company_id, module, unit_id, tenant_name, rental_amount, start_date, status, created_at)
       VALUES (${companyId}, 'FACTORY', ${ids.unit}, 'Tenant One', 100, '2026-10-01', 'ACTIVE', '2026-10-01 00:00') RETURNING id`);
-    const rentLedgerId =
+    const octoberRent =
       await one(sql`INSERT INTO property_monthly_ledger (company_id, module, contract_id, unit_id, year, month, expected_amount, created_at)
       VALUES (${companyId}, 'FACTORY', ${ids.contract}, ${ids.unit}, 2026, 10, 100, '2026-10-01 00:00') RETURNING id`);
-    // Link payment to its rental-month obligation, not a refundable unallocated deposit.
+    // A rental-month payment carries its ledger row; a payment without one is a guarantee deposit.
     await db.execute(sql`INSERT INTO property_payments (company_id, module, contract_id, unit_id, ledger_row_id, amount, payment_date, for_year, for_month,
         posting_status, posted_at, created_at)
-      VALUES (${companyId}, 'FACTORY', ${ids.contract}, ${ids.unit}, ${rentLedgerId}, 60, '2026-10-15', 2026, 10, 'POSTED', '2026-10-20 08:00', '2026-10-20 08:00')`);
+      VALUES (${companyId}, 'FACTORY', ${ids.contract}, ${ids.unit}, ${octoberRent}, 60, '2026-10-15', 2026, 10, 'POSTED', '2026-10-20 08:00', '2026-10-20 08:00')`);
 
     ids.location = await one(
       sql`INSERT INTO locations (company_id, code, name) VALUES (${companyId}, ${"L" + suffix}, 'Warehouse') RETURNING id`
@@ -452,14 +453,18 @@ databaseDescribe("Factory Net Position historical date filter (database)", () =>
     // Payroll payable: 300 accrued Oct 18; 100 paid (entered Oct 21).
     expect([d19.payrollPayable, d20.payrollPayable, d21.payrollPayable]).toEqual([300, 300, 200]);
 
-    // Rent: expected 100 exceeds posted tenant payments (0, then 60).
-    // The unpaid balance is a liability, not prepaid rent (an asset).
+    // Rent: 100 due, 60 posted (the payment known from Oct 20). Rent owed is
+    // Rent Payable on the liability side; nothing was overpaid, so no Prepaid Rent.
     expect([
       row(d19, "onUs", "RENT_PAYABLE"),
       row(d20, "onUs", "RENT_PAYABLE"),
       row(d21, "onUs", "RENT_PAYABLE"),
     ]).toEqual([100, 40, 40]);
-    expect([d19, d20, d21].map((r) => row(r, "forUs", "PREPAID_RENT"))).toEqual([0, 0, 0]);
+    expect([
+      row(d19, "forUs", "PREPAID_RENT"),
+      row(d20, "forUs", "PREPAID_RENT"),
+      row(d21, "forUs", "PREPAID_RENT"),
+    ]).toEqual([0, 0, 0]);
 
     // Worker advance 100 - 20 (Oct 20) - 30 (Oct 21).
     expect([

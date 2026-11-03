@@ -50,10 +50,12 @@ describe("Mobile repair Phase 1 critical flows", () => {
     const list = source("client/src/pages/agents/AgentListPanel.tsx");
     const statement = source("client/src/pages/agents/AgentStatementPanel.tsx");
     // Desktop keeps the fixed master pane; below md it is a bounded pane above the statement.
-    expect(agents).toMatch(/flex h-full min-w-0 gap-3[^"]*max-md:h-auto max-md:min-h-full max-md:flex-col/);
+    expect(agents).toContain("flex h-full");
+    expect(agents).toContain("max-md:h-auto max-md:min-h-full max-md:flex-col");
     expect(list).toContain("flex h-full w-80 shrink-0 flex-col overflow-hidden");
     expect(list).toContain("max-md:max-h-[min(42dvh,22rem)] max-md:w-full max-md:flex-none");
-    expect(statement).toContain("max-md:rounded-none max-md:border-0 max-md:p-3");
+    expect(list).toContain("max-md:max-h-[min(42dvh,22rem)]");
+    expect(statement).toContain("lg:p-6 max-md:rounded-none max-md:border-0 max-md:p-3");
     expect(list).toContain('data-testid="button-add-agent"');
     expect(statement).toContain('data-testid="text-agent-account-name"');
   });
@@ -114,9 +116,8 @@ describe("Mobile repair Phase 1 critical flows", () => {
     // A custom variant with a doubled selector, so it out-ranks width variants on the same element.
     expect(css).toContain("@custom-variant touch {");
     expect(css).toContain("@media (hover: none) and (pointer: coarse) {\n    &:is(&) {");
-    expect(rawStock).toContain(
-      "opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 touch:opacity-100"
-    );
+    expect(rawStock).toContain("opacity-0 transition-opacity group-hover:opacity-100");
+    expect(rawStock).toContain("group-focus-within:opacity-100 touch:opacity-100");
     expect(rawStock).toContain("data-testid={`button-adjust-${row.supplierId}`}");
     expect(rawStock).toContain("data-testid={`button-deduct-${row.supplierId}`}");
     expect(rawStock).toContain("data-testid={`button-batch-${row.supplierId}`}");

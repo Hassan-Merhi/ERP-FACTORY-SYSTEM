@@ -34,6 +34,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [accounting/october-2026-salary-reconciliation-20261103.md](accounting/october-2026-salary-reconciliation-20261103.md) | October payroll reconciliation, outstanding verification and audit rules |
 | [accounting/october-2026-paid-payroll-overlap-reclassification-20261103.md](accounting/october-2026-paid-payroll-overlap-reclassification-20261103.md) | Audited October 2026 payroll overlap correction, voucher evidence and remaining safeguards |
 | [accounting/company12-october-payroll-overpayment-reporting-exclusion-20261103.md](accounting/company12-october-payroll-overpayment-reporting-exclusion-20261103.md) | Audited management Net Position reporting exclusion; no GL write-off |
+| [accounting/factory-worker-advance-ledger-audit-2026-11-03.md](accounting/factory-worker-advance-ledger-audit-2026-11-03.md) | Factory Worker Advances production reconciliation, verified accrual repair, and residual historical exceptions |
 | [unified-accounting-phase1.md](unified-accounting-phase1.md) | Unified accounting (ERP, Factory, Rentals): Phase 1: Foundation |
 | [unified-accounting-phase2.md](unified-accounting-phase2.md) | Unified accounting (ERP, Factory, Rentals): Phase 2: Posting and Voucher Lifecycle |
 | [unified-accounting-phase3.md](unified-accounting-phase3.md) | Unified accounting (ERP, Factory, Rentals): Phase 3: Customer, Supplier and Tenant Open-Item Reconciliation |
@@ -68,6 +69,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [pressing-machine-tracking-phase6.md](pressing-machine-tracking-phase6.md) | Pressing Machines Phase 6: permanent history, filters, saved views, Excel export limits |
 | [pressing-machine-tracking-phase7.md](pressing-machine-tracking-phase7.md) | Pressing Machines Phase 7: configured shifts, overnight rollover, recorded downtime, observed analytics |
 | [pressing-machine-tracking-phase8.md](pressing-machine-tracking-phase8.md) | Pressing Machines Phase 8: supervisor voids, append-only corrections, audited rescans and the executed verification record |
+| [pressing-scan-simple-mode.md](pressing-scan-simple-mode.md) | Pressing Scan simplified Ground Scan mode: the current user-based worker scan workflow |
 | [erp-test-company.md](erp-test-company.md) | Provisioning an isolated ERP test company and its limited tester account |
 | [automatic-priority-print-loading.md](automatic-priority-print-loading.md) | Automatic Priority Printing & Loading: company switch, automatic loading allocation, priority-colored labels, physical bale deletion and Priority #1 recovery |
 | [priority-scan-fixed-palette-color-block.md](priority-scan-fixed-palette-color-block.md) | Priority Scan fixed 11-color palette, solid color-box priority labels, legacy-color moves and saved-color print/reprint checks |
@@ -263,6 +265,12 @@ These current-reference documents are indexed here for audit coverage. Their beh
 | [historical-charge-64-duplicate-correction-lifecycle-20261102.md](historical-charge-64-duplicate-correction-lifecycle-20261102.md) | Company 12 charge #64 duplicate posting: correction lifecycle and replay safety |
 | [historical-supplier-analytics-balance-routine-visibility-20261102.md](historical-supplier-analytics-balance-routine-visibility-20261102.md) | Company 12: completed reconciliation rows hidden in Analytics and Balances (ledger totals unchanged) |
 | [company12-worker-advance-internal-reconciliation-routine-visibility-20261103.md](company12-worker-advance-internal-reconciliation-routine-visibility-20261103.md) | Company 12: dated worker-advance GL backfill journals classified as internal in routine Accounts, Analytics and Daybook lists, with totals preserved |
+| [accounting/company12-october-payroll-overpayment-reporting-exclusion-20261103.md](accounting/company12-october-payroll-overpayment-reporting-exclusion-20261103.md) | Company 12: the October 2026 payroll overpayment receivable is excluded from Accounts, Analytics and management Net Position views without changing ledger totals |
 | [historical-supplier-done-voucher-global-daybook-and-transfer-hide-20261102.md](historical-supplier-done-voucher-global-daybook-and-transfer-hide-20261102.md) | Company 12: completed historical supplier catchup entries on the remaining routine screens |
 | [historical-supplier-named-creditor-balance-freeze-20261102.md](historical-supplier-named-creditor-balance-freeze-20261102.md) | Company 12: historical supplier and named-creditor balance freeze |
 | [net-profit-future-dated-historical-imports-live-pnl-cutoff-20261102.md](net-profit-future-dated-historical-imports-live-pnl-cutoff-20261102.md) | Net profit live as-of report: future-dated historical imports cut off |
+
+| [October 2026 salary reconciliation](accounting/october-2026-salary-reconciliation-20261103.md) | Read-only October payroll, paid cash and salary advances reconciliation (no journal edits) |
+| [Factory worker-advance ledger audit](accounting/factory-worker-advance-ledger-audit-2026-11-03.md) | Current worker-advance ledger investigation, safeguards and payment evidence |
+
+| [October 2026 payroll overlap reconciliation](accounting/october-2026-paid-payroll-overlap-reclassification-20261103.md) | Current safeguards and backdated accounting evidence for approved paid-payroll overlap reclassification |

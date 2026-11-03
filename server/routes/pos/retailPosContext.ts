@@ -42,3 +42,9 @@ export async function ensureCompanyLocation(companyId: number, locationId: numbe
     .limit(1);
   if (!location) throw new Error("Location is not active or does not belong to the selected company");
 }
+
+/** A numeric database value as a finite number (0 when missing or not finite). */
+export function toNumber(value: string | number | null | undefined): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
