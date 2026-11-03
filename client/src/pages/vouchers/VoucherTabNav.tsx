@@ -153,7 +153,10 @@ export function VoucherDesktopNav({ visibleSidebarGroups, activeTab, setActiveTa
                       ? "font-medium"
                       : "text-muted-foreground hover:bg-muted/60 hover:text-foreground font-normal"
                   )}
-                  style={isActive ? { backgroundColor: `${group.color}18`, color: group.color } : undefined}
+                  style={{
+                    minHeight: 44,
+                    ...(isActive ? { backgroundColor: `${group.color}18`, color: group.color } : {}),
+                  }}
                 >
                   {isActive && (
                     <span
