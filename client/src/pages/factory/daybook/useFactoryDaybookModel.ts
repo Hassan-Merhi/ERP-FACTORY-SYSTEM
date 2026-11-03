@@ -167,13 +167,12 @@ export function useFactoryDaybookModel() {
     refetch,
   } = useQuery<DaybookEntry[]>({
     queryKey: ["/api/factory/daybook", startDate, endDate, txTypeFilter, currencyFilter],
-    queryFn: async () => {
-      // Return the first page immediately. The pagination client progressively
-      // fetches and merges remaining pages without blocking the entire screen.
-      // Complete-history loading is reserved for explicit Excel exports.
-      const res = await fetch(`/api/factory/daybook?${queryParams.toString()}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch daybook");
-      return res.json();
+    queryFn: async ({ signal }) => {
+      // Keep the table and totals hidden until every matching transaction is
+      // available. The loader uses small server-side batches (not UI pagination)
+      // and rejects incomplete results rather than showing misleading totals.
+      const { fetchAllDaybookEntries } = await import("@/lib/daybookPaginationClient");
+      return fetchAllDaybookEntries(new URLSearchParams(queryParams), signal);
     },
     // Avoid the bandwidth spike from constant refetching: the daybook list doesn't
     // need to be second-by-second live, and refocusing/reconnecting shouldn't
