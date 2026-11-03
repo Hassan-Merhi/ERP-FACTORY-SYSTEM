@@ -1,3 +1,4 @@
+import { isExcludedFromCompany12ManagementReports } from "../../../lib/payrollOverpaymentReporting";
 import { FactoryNetPositionDateError } from "@shared/factoryNetPositionAsOf";
 import {
   resolveFactoryNetPositionAsOf,
@@ -363,7 +364,10 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
           });
         }
       }
-      const classified = classifyNetPositionAccounts(factoryAccounts as AccountLike[], projectedAccountBalances, {
+      const classified = classifyNetPositionAccounts(
+        factoryAccounts.filter((account) => !isExcludedFromCompany12ManagementReports(companyId, account)) as AccountLike[],
+        projectedAccountBalances,
+        {
         ledgerStockAccounts: ledgerStock,
         additionalExcludedCodes: factoryExcludedCodes,
         // Supplier-type ledger accounts are independently calculated.

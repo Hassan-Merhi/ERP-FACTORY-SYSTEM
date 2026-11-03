@@ -11,6 +11,7 @@
 
 import { toMoney } from "./lib/money";
 import { isAccountMigrationClearingAccount } from "./lib/systemOnlyLedgerAccounts";
+import { isExcludedFromCompany12ManagementReports } from "./lib/payrollOverpaymentReporting";
 import {
   canonicalAccountType,
   classifyAccountType,
@@ -19,6 +20,8 @@ import {
 
 export interface AccountLike {
   id: number;
+  /** Scopes management-only presentation exceptions; persisted GL rows include this. */
+  companyId?: number | null;
   name: string;
   code: string | null;
   accountType: string | null;
@@ -260,6 +263,9 @@ export function classifyNetPositionAccounts(
   }
 
   const isExcludedFromNetPosition = (acc: AccountLike): boolean => {
+    // Management Net Position only: exclude the specific company-12 October
+    // payroll-overpayment receivable. The underlying posted GL remains intact.
+    if (acc.companyId != null && isExcludedFromCompany12ManagementReports(acc.companyId, acc)) return true;
     if (isAccountMigrationClearingAccount(acc)) return true;
     if (classifyAccountType(acc.accountType, acc.subType) === "equity") return true;
     const type = (acc.accountType || "").trim().toLowerCase();
