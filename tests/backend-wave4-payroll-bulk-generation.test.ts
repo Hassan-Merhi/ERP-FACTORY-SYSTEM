@@ -224,7 +224,9 @@ describe("bulk payroll generation", () => {
     }
   });
 
-  it("replaces the period's expense journal instead of duplicating it when regenerated for chosen workers", async () => {
+  it("refuses overlapping regeneration without duplicating payrolls or expense journals", async () => {
+    const payrollsBefore = await payrollFor(dailyId);
+    const vouchersBefore = await genVouchers();
     const response = await agent.post("/api/factory/payrolls/generate-bulk").send({
       companyId: ctx.companyId,
       periodStart: PERIOD_START,
@@ -233,17 +235,10 @@ describe("bulk payroll generation", () => {
       daysCount: "10",
       transportOverrides: { [String(dailyId)]: "0" },
     });
-    expect(response.status, response.text).toBe(200);
-    expect(response.body.created).toBe(1);
-
-    const rows = await payrollFor(dailyId);
-    expect(rows).toHaveLength(2);
-    expect(Number(rows[1].base_salary)).toBeCloseTo(500, 2);
-    expect(Number(rows[1].deductions)).toBeCloseTo(0, 2);
-
-    const vouchers = await genVouchers();
-    expect(vouchers).toHaveLength(1);
-    expect(vouchers[0].description).toContain("1 worker");
+    expect(response.status, response.text).toBe(409);
+    expect(response.body.message).toMatch(/Overlapping payroll exists/);
+    expect(await payrollFor(dailyId)).toEqual(payrollsBefore);
+    expect(await genVouchers()).toEqual(vouchersBefore);
   });
 
   it("caps an approved advance override at the worker's gross pay and balance", async () => {
