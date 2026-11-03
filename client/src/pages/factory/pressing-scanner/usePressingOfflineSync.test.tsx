@@ -90,7 +90,7 @@ beforeEach(() => {
   transport.send.mockReset();
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => ({ ok: true, json: async () => ({ ...actor }) }))
+    vi.fn(async () => ({ ok: true, json: async () => ({ ...actor, canScan: true }) }))
   );
   Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
   vi.stubGlobal("crypto", { randomUUID: () => `uuid-${store.size + 1}-${Math.random().toString(16).slice(2)}` });
