@@ -248,7 +248,10 @@ function buildHtml2CanvasOptions(
   const nativeScale = getScreenFeedCaptureScale(window.devicePixelRatio);
   // Render directly at the final JPEG size instead of rendering extra pixels
   // and resizing a second canvas on every live frame.
-  const viewportScale = Math.min(1, (fast ? FAST_CAPTURE_WIDTH : STANDARD_CAPTURE_WIDTH) / Math.max(1, window.innerWidth));
+  const viewportScale = Math.min(
+    1,
+    (fast ? FAST_CAPTURE_WIDTH : STANDARD_CAPTURE_WIDTH) / Math.max(1, window.innerWidth)
+  );
   const captureScale = Math.max(MIN_CAPTURE_SCALE, Math.min(nativeScale, viewportScale));
 
   return {
