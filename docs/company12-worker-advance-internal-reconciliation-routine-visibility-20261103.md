@@ -26,7 +26,15 @@ The common exclusion is applied at the database predicate level to paginated
 and unpaginated operational Voucher and Daybook lists, Factory Daybook synthetic
 voucher entries, the cross-company All Daybook feed, and the selectable
 Account Transfer voucher-entry picker. The unpaginated /api/vouchers reader
-uses the same identity in JavaScript. No underlying accounting data is changed.
+uses the same identity in JavaScript.
+
+Routine **Accounts account statements and Analytics account drill-downs** use the
+shared row classifier; the **monthly Ledger Vouchers** account browser does the
+same. Those surfaces calculate all posted running/closing balances **before**
+filtering the two internal rows. Displayed account totals are therefore exact.
+No payroll computation or official accounting report is filtered.
+
+No underlying accounting data is changed.
 
 **Never suppress these journals from formal accounting or audit.** They must
 remain in the posted General Ledger, account balances, trial balance, balance
