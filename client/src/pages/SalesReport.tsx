@@ -20,7 +20,7 @@ export default function SalesReport() {
         globalThis.selectedCompany = undefined;
       }
     },
-    [selectedCompany],
+    [selectedCompany]
   );
 
   return (

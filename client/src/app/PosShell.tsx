@@ -78,7 +78,12 @@ export function PosShell({
   const [currentLocation] = useLocation();
   const { selectedCompany } = useCompany();
   const { t } = useApplicationLanguage();
-  const posNavItems = usePosNavigationItems({ user, posImportEnabled, chatUnread, companyType: selectedCompany?.companyType });
+  const posNavItems = usePosNavigationItems({
+    user,
+    posImportEnabled,
+    chatUnread,
+    companyType: selectedCompany?.companyType,
+  });
   const primaryNavItems = posNavItems.filter((item) => item.group === "primary");
   const toolNavItems = posNavItems.filter((item) => item.group === "tools");
   const [toolsExpanded, setToolsExpanded] = useState(false);
@@ -182,31 +187,31 @@ export function PosShell({
                   {toolsExpanded && (
                     <SidebarGroupContent id="pos-secondary-tools">
                       <SidebarMenu aria-label="Additional point of sale tools">
-                    {toolNavItems.map((item) => (
-                      <SidebarMenuItem key={item.label}>
-                        <SidebarMenuButton
-                          isActive={item.active}
-                          onClick={item.onClick}
-                          aria-current={item.active ? "page" : undefined}
-                          data-testid={item.testId}
-                        >
-                          <span data-pos-nav-icon>
-                            <item.icon className="h-4 w-4" aria-hidden="true" />
-                          </span>
-                          <span className="flex-1 truncate">{item.label}</span>
-                          {item.badge !== undefined && item.badge > 0 && (
-                            <Badge
-                              variant={item.active ? "secondary" : "default"}
-                              className="min-w-5 justify-center rounded-full px-1.5 text-[11px]"
-                              aria-label={`${item.badge} unread`}
-                              data-testid="badge-chat-unread-pos"
+                        {toolNavItems.map((item) => (
+                          <SidebarMenuItem key={item.label}>
+                            <SidebarMenuButton
+                              isActive={item.active}
+                              onClick={item.onClick}
+                              aria-current={item.active ? "page" : undefined}
+                              data-testid={item.testId}
                             >
-                              {item.badge}
-                            </Badge>
-                          )}
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
+                              <span data-pos-nav-icon>
+                                <item.icon className="h-4 w-4" aria-hidden="true" />
+                              </span>
+                              <span className="flex-1 truncate">{item.label}</span>
+                              {item.badge !== undefined && item.badge > 0 && (
+                                <Badge
+                                  variant={item.active ? "secondary" : "default"}
+                                  className="min-w-5 justify-center rounded-full px-1.5 text-[11px]"
+                                  aria-label={`${item.badge} unread`}
+                                  data-testid="badge-chat-unread-pos"
+                                >
+                                  {item.badge}
+                                </Badge>
+                              )}
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        ))}
                       </SidebarMenu>
                     </SidebarGroupContent>
                   )}

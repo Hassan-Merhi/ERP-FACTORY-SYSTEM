@@ -61,10 +61,7 @@ export const PROPERTIES_NAV_SECTIONS: NavSection[] = [
 export function getPropertiesVisibleNavSections(isDeveloper: boolean): NavSection[] {
   return PROPERTIES_NAV_SECTIONS.map((section) => ({
     ...section,
-    items: section.items.filter(
-      (item) =>
-        isDeveloper || !item.url.startsWith("/properties/accounting/")
-    ),
+    items: section.items.filter((item) => isDeveloper || !item.url.startsWith("/properties/accounting/")),
   })).filter((section) => section.items.length > 0);
 }
 

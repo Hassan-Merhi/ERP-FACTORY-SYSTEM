@@ -113,7 +113,14 @@ const FACTORY_NAV_ICONS: Record<string, typeof Package> = {
 };
 
 // UI grouping only: do not change the canonical registry's permission keys or Settings grouping.
-const FACTORY_SIDEBAR_GROUP_ORDER = ["Production", "Inventory", "Sales & Loading", "Finance", "Rentals", "Intelligence"] as const;
+const FACTORY_SIDEBAR_GROUP_ORDER = [
+  "Production",
+  "Inventory",
+  "Sales & Loading",
+  "Finance",
+  "Rentals",
+  "Intelligence",
+] as const;
 function visibleFactoryGroup(page: (typeof FACTORY_SIDEBAR_PAGES)[number]): string {
   if (page.key === "factory/bales-hub") return "Inventory";
   return page.group === "Sales" ? "Sales & Loading" : page.group;
@@ -245,12 +252,20 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
     const value = tab ?? section;
     const hideKey = value ? hiddenKeyByTab[pathname]?.[value] : undefined;
     if (hideKey && hidden.includes(hideKey)) return false;
-    if (pathname === "/factory/invoicing" && ["pending", "priority"].includes(tab ?? "") &&
-        (hidden.includes("hide_invoicing_loadings_tab") || settings?.loadingsTabPendingEnabled === false)) return false;
-    if (pathname === "/factory/sales/loadings" && ["pending", "priority"].includes(tab ?? "") &&
-        settings?.loadingsTabPendingEnabled === false) return false;
-    if (pathname === "/factory/bales-hub" && tab === "barcode" &&
-        settings?.balesTabBarcodeEnabled === false) return false;
+    if (
+      pathname === "/factory/invoicing" &&
+      ["pending", "priority"].includes(tab ?? "") &&
+      (hidden.includes("hide_invoicing_loadings_tab") || settings?.loadingsTabPendingEnabled === false)
+    )
+      return false;
+    if (
+      pathname === "/factory/sales/loadings" &&
+      ["pending", "priority"].includes(tab ?? "") &&
+      settings?.loadingsTabPendingEnabled === false
+    )
+      return false;
+    if (pathname === "/factory/bales-hub" && tab === "barcode" && settings?.balesTabBarcodeEnabled === false)
+      return false;
     return true;
   };
 
@@ -271,11 +286,7 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
         const partiesHasVisibleTab =
           !myAccess?.hiddenCostFields?.includes("hide_tab_parties_customers") ||
           !myAccess?.hiddenCostFields?.includes("hide_tab_parties_suppliers");
-        if (
-          item.accessKey === "factory/contacts" &&
-          partiesHasVisibleTab &&
-          relatedParentVisible("/factory/parties")
-        ) {
+        if (item.accessKey === "factory/contacts" && partiesHasVisibleTab && relatedParentVisible("/factory/parties")) {
           return false;
         }
         if (item.accessKey === "factory/cost-centers" && relatedParentVisible("/factory/accounts")) return false;

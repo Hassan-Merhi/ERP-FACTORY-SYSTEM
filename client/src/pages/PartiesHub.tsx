@@ -22,7 +22,8 @@ const TAB_KEYS = TABS.map((tab) => tab.key);
 export default function PartiesHub({ access }: { access?: ErpFeatureAccess }) {
   const { selectedCompany } = useCompany();
   const visibleTabs = TABS.filter(
-    (tab) => canAccessErpFeature(access, tab.featureKey) &&
+    (tab) =>
+      canAccessErpFeature(access, tab.featureKey) &&
       (tab.key !== "profit-check" || selectedCompany?.companyType !== "retail")
   );
   const visibleKeys = visibleTabs.map((tab) => tab.key);

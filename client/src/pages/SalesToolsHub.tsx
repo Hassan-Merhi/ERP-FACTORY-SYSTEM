@@ -37,8 +37,8 @@ export default function SalesToolsHub({ access }: { access?: ErpFeatureAccess })
   const tabs = isPOS
     ? POS_TABS.filter((tab) => tab.key !== "daybook" || canAccessErpFeature(access, "pos_daybook"))
     : ERP_TABS.filter(
-        (tab) => tab.key !== "replacement" ||
-          (canAccessErpFeature(access, "pos") && selectedCompany?.companyType !== "retail")
+        (tab) =>
+          tab.key !== "replacement" || (canAccessErpFeature(access, "pos") && selectedCompany?.companyType !== "retail")
       );
   const knownTabKeys = isPOS ? POS_TAB_KEYS : ERP_TAB_KEYS;
   const tabKeys = tabs.map((tab) => tab.key);

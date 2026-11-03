@@ -109,7 +109,9 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
     enabled: !isPOS && appMode === "erp",
   });
   const showOptionalDrafts =
-    !isPOS && appMode === "erp" && !isRetailCompany &&
+    !isPOS &&
+    appMode === "erp" &&
+    !isRetailCompany &&
     (erpPageAccess?.fullAccess === true || erpPageAccess?.pageKeys.includes("optional_vouchers") === true);
   const posLocationId = posUser?.assignedLocationId;
 
@@ -138,7 +140,12 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
       ...group,
       items: group.items.filter(
         (item) =>
-          (!isFactoryMode || shouldShowFactoryVoucherTab(item.key, factoryHiddenTabs, FACTORY_VOUCHER_HIDDEN_KEYS[item.key as VoucherTab])) &&
+          (!isFactoryMode ||
+            shouldShowFactoryVoucherTab(
+              item.key,
+              factoryHiddenTabs,
+              FACTORY_VOUCHER_HIDDEN_KEYS[item.key as VoucherTab]
+            )) &&
           (!isRetailCompany || !isRetailManualVoucherTabHidden(item.key))
       ),
     }))
@@ -610,7 +617,9 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   };
 
   return (
-    <div className={`space-y-4 md:space-y-5 ${!isPOS && (activeTab === "payment" || activeTab === "receipt" || activeTab === "journal") ? `voucher-workspace voucher-workspace--${activeTab}` : ""}`}>
+    <div
+      className={`space-y-4 md:space-y-5 ${!isPOS && (activeTab === "payment" || activeTab === "receipt" || activeTab === "journal") ? `voucher-workspace voucher-workspace--${activeTab}` : ""}`}
+    >
       {isPOS ? (
         <PageHeader title="Stock Transfer" subtitle="Transfer stock between locations" />
       ) : !isFactoryMode ? (

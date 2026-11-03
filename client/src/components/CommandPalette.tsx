@@ -165,22 +165,41 @@ const ERP_CONTEXT_ITEMS: NavItem[] = [
 
 // Keep every original developer accounting destination searchable after collapsing the sidebar.
 const ERP_ACCOUNTING_CONTEXT_ITEMS: NavItem[] = getAccountingToolLinks("erp").map((item) => ({
-  title: item.label, url: item.path, icon: ShieldCheck,
+  title: item.label,
+  url: item.path,
+  icon: ShieldCheck,
 }));
 const FACTORY_ACCOUNTING_CONTEXT: PageEntry[] = [
-  { label: "Factory Accounting Toolbox", description: "Accounting, audit and maintenance tools", path: "/factory/accounting/toolbox", icon: ShieldCheck },
+  {
+    label: "Factory Accounting Toolbox",
+    description: "Accounting, audit and maintenance tools",
+    path: "/factory/accounting/toolbox",
+    icon: ShieldCheck,
+  },
   ...getAccountingToolLinks("factory").map((item) => ({
-    label: item.label, description: item.description, path: item.path, icon: ShieldCheck,
+    label: item.label,
+    description: item.description,
+    path: item.path,
+    icon: ShieldCheck,
   })),
 ];
 const PROPERTIES_ACCOUNTING_CONTEXT: PageEntry[] = getAccountingToolLinks("properties").map((item) => ({
-  label: item.label, description: item.description, path: item.path, icon: ShieldCheck,
+  label: item.label,
+  description: item.description,
+  path: item.path,
+  icon: ShieldCheck,
 }));
 const FACTORY_MAINTENANCE_CONTEXT: PageEntry[] = getDeveloperMaintenanceLinks("factory").map((item) => ({
-  label: item.label, description: item.description, path: item.path, icon: ShieldCheck,
+  label: item.label,
+  description: item.description,
+  path: item.path,
+  icon: ShieldCheck,
 }));
 const PROPERTIES_MAINTENANCE_CONTEXT: PageEntry[] = getDeveloperMaintenanceLinks("properties").map((item) => ({
-  label: item.label, description: item.description, path: item.path, icon: ShieldCheck,
+  label: item.label,
+  description: item.description,
+  path: item.path,
+  icon: ShieldCheck,
 }));
 
 /** Factory routes that aren't in FACTORY_NAV_SECTIONS but were historically in the palette. */
@@ -352,12 +371,22 @@ const PROPERTIES_EXTRAS: PageEntry[] = [
   },
   { label: "Properties Analytics", description: "Properties analytics", path: "/properties/analytics", icon: PieChart },
   { label: "Rental Shops", description: "Shops rented out", path: "/properties/rentals?tab=shops", icon: Users },
-  { label: "Rental Payments", description: "Rentals payment log", path: "/properties/rentals?tab=payments", icon: FileText },
+  {
+    label: "Rental Payments",
+    description: "Rentals payment log",
+    path: "/properties/rentals?tab=payments",
+    icon: FileText,
+  },
   { label: "My Settings", description: "Personal preferences", path: "/properties/my-settings", icon: Settings },
 ];
 
 const PROPERTIES_DEVELOPER_EXTRAS: PageEntry[] = [
-  { label: "Cash Transfer", description: "Transfer funds between properties", path: "/properties/transfer", icon: ArrowLeftRight },
+  {
+    label: "Cash Transfer",
+    description: "Transfer funds between properties",
+    path: "/properties/transfer",
+    icon: ArrowLeftRight,
+  },
 ];
 
 const PROPERTIES_ADMIN_EXTRAS: PageEntry[] = [
@@ -429,13 +458,48 @@ const adminPages: PageEntry[] = [
 // redirect to the Factory default page before their component can render.
 const factoryAdminPages: PageEntry[] = [
   { label: "Factory Settings", description: "Factory configuration", path: "/factory/settings", icon: Settings },
-  { label: "Factory Chatbot Settings", description: "Factory chatbot configuration", path: "/factory/chatbot-settings", icon: Bot },
-  { label: "Deleted Items", description: "Restore or review deleted Factory records", path: "/factory/deleted-items", icon: Trash2 },
-  { label: "Orphaned Records", description: "Factory records missing references", path: "/factory/orphaned-records", icon: LinkIcon },
-  { label: "Inventory Repair", description: "Investigate Factory inventory discrepancies", path: "/factory/inventory-repair", icon: Wrench },
-  { label: "Import Cycle Diagnostics", description: "Inspect Factory import issues", path: "/factory/import-cycle-diagnostics", icon: AlertTriangle },
-  { label: "Account Groups", description: "Factory account group settings", path: "/factory/account-groups", icon: PieChart },
-  { label: "Company Data Reset", description: "Restricted Factory maintenance", path: "/factory/company-data-reset", icon: Wrench },
+  {
+    label: "Factory Chatbot Settings",
+    description: "Factory chatbot configuration",
+    path: "/factory/chatbot-settings",
+    icon: Bot,
+  },
+  {
+    label: "Deleted Items",
+    description: "Restore or review deleted Factory records",
+    path: "/factory/deleted-items",
+    icon: Trash2,
+  },
+  {
+    label: "Orphaned Records",
+    description: "Factory records missing references",
+    path: "/factory/orphaned-records",
+    icon: LinkIcon,
+  },
+  {
+    label: "Inventory Repair",
+    description: "Investigate Factory inventory discrepancies",
+    path: "/factory/inventory-repair",
+    icon: Wrench,
+  },
+  {
+    label: "Import Cycle Diagnostics",
+    description: "Inspect Factory import issues",
+    path: "/factory/import-cycle-diagnostics",
+    icon: AlertTriangle,
+  },
+  {
+    label: "Account Groups",
+    description: "Factory account group settings",
+    path: "/factory/account-groups",
+    icon: PieChart,
+  },
+  {
+    label: "Company Data Reset",
+    description: "Restricted Factory maintenance",
+    path: "/factory/company-data-reset",
+    icon: Wrench,
+  },
 ];
 
 const intercompanyPages: PageEntry[] = [
@@ -453,7 +517,12 @@ const posPages: PageEntry[] = [
   { label: "Location Inventory", description: "Stock levels by location", path: "/location-inventory", icon: MapPin },
   { label: "Transfer Orders", description: "POS stock transfer orders", path: "/pos-transfer-orders", icon: Truck },
   { label: "Price List", description: "Location pricing", path: "/pos-price-list", icon: Tag },
-  { label: "Stock Transfer", description: "Transfer stock between locations", path: "/vouchers?tab=transfer", icon: ArrowLeftRight },
+  {
+    label: "Stock Transfer",
+    description: "Transfer stock between locations",
+    path: "/vouchers?tab=transfer",
+    icon: ArrowLeftRight,
+  },
   { label: "Containers OTW", description: "On-the-way containers", path: "/pos-containers", icon: Ship },
   { label: "My Settings", description: "Personal settings", path: "/pos-settings", icon: Settings },
 ];
@@ -584,26 +653,39 @@ export function CommandPalette({
           // part that this user's actual ERP feature grants don't permit.
           ...ERP_HUB_TABS.filter((tab) => {
             if (isRetailCompany && isRetailHiddenErpPath(tab.path)) return false;
-            const accessPath = tab.path === "/parties?tab=suppliers"
-              ? "/suppliers"
-              : tab.path === "/parties?tab=customers"
-                ? "/customers"
-                : tab.path;
+            const accessPath =
+              tab.path === "/parties?tab=suppliers"
+                ? "/suppliers"
+                : tab.path === "/parties?tab=customers"
+                  ? "/customers"
+                  : tab.path;
             return erpVis.isItemVisible({ title: tab.label, url: accessPath, icon: LayoutDashboard });
           }),
         ],
-        [...erpVis.visiblePinnedItems, ...erpVis.visibleUtilityItems, ...ERP_CONTEXT_ITEMS.filter(erpVis.isItemVisible), ...ERP_ACCOUNTING_CONTEXT_ITEMS.filter(erpVis.isItemVisible)]
+        [
+          ...erpVis.visiblePinnedItems,
+          ...erpVis.visibleUtilityItems,
+          ...ERP_CONTEXT_ITEMS.filter(erpVis.isItemVisible),
+          ...ERP_ACCOUNTING_CONTEXT_ITEMS.filter(erpVis.isItemVisible),
+        ]
       ).map((page) =>
         isRetailCompany && page.path === "/vouchers"
           ? { ...page, description: "Payment and receipt vouchers; automatic journals are read-only" }
           : page
       ),
-    [erpVis.sections, erpVis.visiblePinnedItems, erpVis.visibleUtilityItems, erpVis.isItemVisible, isRetailCompany, canSeeAdminCommands]
+    [
+      erpVis.sections,
+      erpVis.visiblePinnedItems,
+      erpVis.visibleUtilityItems,
+      erpVis.isItemVisible,
+      isRetailCompany,
+      canSeeAdminCommands,
+    ]
   );
 
   const factoryPages = useMemo(() => {
-    const accessibleExtras = [...FACTORY_EXTRAS_ALWAYS, ...FACTORY_CONTEXT_SEARCH, ...FACTORY_HUB_TABS].filter((entry) =>
-      factoryVis.isPinnedVisible({ url: entry.path }) && factoryVis.isHubTabVisible(entry.path)
+    const accessibleExtras = [...FACTORY_EXTRAS_ALWAYS, ...FACTORY_CONTEXT_SEARCH, ...FACTORY_HUB_TABS].filter(
+      (entry) => factoryVis.isPinnedVisible({ url: entry.path }) && factoryVis.isHubTabVisible(entry.path)
     );
     return buildEntries(factoryVis.sections, [
       ...accessibleExtras,
@@ -615,7 +697,9 @@ export function CommandPalette({
     () =>
       buildEntries(getPropertiesVisibleNavSections(shellRole === "Developer"), [
         ...PROPERTIES_EXTRAS.filter((entry) => shellRole !== "ERP Tester" || entry.path !== "/properties/my-settings"),
-        ...(shellRole === "Developer" ? [...PROPERTIES_DEVELOPER_EXTRAS, ...PROPERTIES_ACCOUNTING_CONTEXT, ...PROPERTIES_MAINTENANCE_CONTEXT] : []),
+        ...(shellRole === "Developer"
+          ? [...PROPERTIES_DEVELOPER_EXTRAS, ...PROPERTIES_ACCOUNTING_CONTEXT, ...PROPERTIES_MAINTENANCE_CONTEXT]
+          : []),
         ...(canSeeAdminCommands ? PROPERTIES_ADMIN_EXTRAS : []),
       ]),
     [canSeeAdminCommands, shellRole]
@@ -631,9 +715,8 @@ export function CommandPalette({
   // shell: under a factory company the guard redirects the unprefixed path away,
   // so offering them means offering a command that goes somewhere else.
   const visibleAdminPages = useMemo(
-    () => appMode === "factory"
-      ? factoryAdminPages
-      : adminPages.filter((page) => !page.erpShellOnly || appMode === "erp"),
+    () =>
+      appMode === "factory" ? factoryAdminPages : adminPages.filter((page) => !page.erpShellOnly || appMode === "erp"),
     [appMode]
   );
   const showIntercompany = !isPOS && (showErp || showFactory);
