@@ -290,7 +290,7 @@ export async function runApprovedFactoryWorkerAdvanceNonCashGLRepair():Promise<v
           }
         },tx);
         return {posted:true,ledger:advanceLedgerBalance(after),workerOutstanding:after.outstanding,
-          cashUnchanged:true,mayVoucherId:may.voucherId,julyVoucherId:july.voucherId};
+          cashUnchanged:true,mayVoucherId:may.voucher.id,julyVoucherId:july.voucher.id};
       })
     ),
     "owner-approved-factory-advance-51-61-gl-repair"
