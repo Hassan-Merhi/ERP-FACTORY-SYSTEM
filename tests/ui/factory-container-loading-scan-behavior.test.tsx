@@ -59,12 +59,18 @@ const capacitySnapshot = {
 vi.mock("@tanstack/react-query", () => ({
   useQuery: ({ queryKey, enabled }: any) => {
     const root = queryKey?.[0];
-    if (root === "/api/auth/me") return { data: { id: "user-1", currentCompanyId: 1, role: harness.currentRole, currentRole: harness.currentRole } };
-    if (root === "/api/factory/my-access") return { data: {
-      hasFactoryAccess: true,
-      pageKeys: harness.allowedPageKeys,
-      hiddenCostFields: harness.allowEmptyContainer ? ["grant_loading_empty_container"] : [],
-    } };
+    if (root === "/api/auth/me")
+      return {
+        data: { id: "user-1", currentCompanyId: 1, role: harness.currentRole, currentRole: harness.currentRole },
+      };
+    if (root === "/api/factory/my-access")
+      return {
+        data: {
+          hasFactoryAccess: true,
+          pageKeys: harness.allowedPageKeys,
+          hiddenCostFields: harness.allowEmptyContainer ? ["grant_loading_empty_container"] : [],
+        },
+      };
     if (root === "/api/factory/customers") return { data: [{ id: 1, legalName: "Buyer One" }] };
     if (root === "/api/locations") return { data: [{ id: 11, name: "Dock" }] };
     if (root === "/api/factory/customer-proformas/capacity") {
@@ -134,6 +140,7 @@ vi.mock("wouter", () => ({
 vi.mock("@/contexts/AppModeContext", () => ({ useAppMode: () => "factory" }));
 vi.mock("@/contexts/ApplicationLanguageContext", () => ({
   useApplicationLanguage: () => ({ language: "en" }),
+  useOptionalApplicationLanguage: () => ({ language: "en" }),
 }));
 vi.mock("@/lib/factoryApi", () => ({ getApiRequest: () => harness.apiRequest }));
 vi.mock("@/lib/queryClient", () => ({
@@ -182,6 +189,8 @@ vi.mock("@/components/ui/dialog", () => ({
   DialogFooter: ({ children }: any) => <div>{children}</div>,
   DialogHeader: ({ children }: any) => <div>{children}</div>,
   DialogTitle: ({ children }: any) => <div>{children}</div>,
+  DialogDescription: ({ children }: any) => <div>{children}</div>,
+  DialogTrigger: ({ children }: any) => <>{children}</>,
 }));
 vi.mock("@/components/ui/alert-dialog", () => ({
   AlertDialog: ({ children, open }: any) => (

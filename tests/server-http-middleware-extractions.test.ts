@@ -12,6 +12,7 @@ import { capacitorCors } from "../server/middleware/capacitorCors";
 import { buildVersionHeader, apiNoCache } from "../server/middleware/httpConventions";
 import { registerCsrfProtection } from "../server/security/csrfProtection";
 import { registerErrorHandler } from "../server/middleware/errorHandler";
+import { registerMissingApiJsonHandler } from "../server/startup/staticServing";
 
 describe("capacitorCors", () => {
   const buildApp = () => {
@@ -165,5 +166,30 @@ describe("registerErrorHandler", () => {
 
     expect(res.status).toBe(503);
     expect(res.body).toEqual({ message: "Service temporarily unavailable — please retry." });
+  });
+});
+
+describe("production API fallback", () => {
+  it("returns JSON 404 for unknown API requests without intercepting registered routes", async () => {
+    const app = express();
+    app.get("/api/known", (_req, res) => res.json({ ok: true }));
+    registerMissingApiJsonHandler(app);
+    app.get("/factory/payroll-hub", (_req, res) => res.send("<html>App</html>"));
+
+    const known = await request(app).get("/api/known");
+    expect(known.status).toBe(200);
+    expect(known.body).toEqual({ ok: true });
+
+    const missing = await request(app).get("/api/factory/workers/not-a-route");
+    expect(missing.status).toBe(404);
+    expect(missing.headers["content-type"]).toMatch(/application\/json/);
+    expect(missing.body).toEqual({
+      code: "API_ROUTE_NOT_FOUND",
+      message: "API endpoint not found",
+    });
+
+    const page = await request(app).get("/factory/payroll-hub");
+    expect(page.status).toBe(200);
+    expect(page.text).toContain("App");
   });
 });

@@ -329,10 +329,10 @@ describe("1: /api/accounts/all on the balance engine", () => {
     // 70 + 5 + 7: the line also naming the bank ledger and company B's line are not the bank's.
     expect(byId("bank", ids.BANK)).toMatchObject({ balance: "82.00", balanceSide: "Dr" });
     expect(byId("ledger", ids.BANKLEDGER)).toMatchObject({ balance: "25.00", balanceSide: "Dr" });
-    // Employee, Cr positive. Without a date range the all-time overview shows the payroll
-    // current balance (52), as Payroll does (#2178); the engine's opening side still applies.
-    // A dated range keeps the engine figure (see the next test).
-    expect(byId("employee", ids.EMP)).toMatchObject({ balance: "52.00", balanceSide: "Cr", openingBalanceSide: "Cr" });
+    // Employee, Cr positive. Since #2683 the all-time overview shows the posted ledger
+    // closing too (40 sideless Cr − 10 + 4), not the payroll cache, whose sign could be
+    // wrong for a debit opening; the engine's opening side still applies.
+    expect(byId("employee", ids.EMP)).toMatchObject({ balance: "34.00", balanceSide: "Cr", openingBalanceSide: "Cr" });
   });
 
   it("carries the engine's opening into a period", async () => {

@@ -160,7 +160,7 @@ export default function LedgerVouchers() {
                   <div className="text-right">
                     <p className="text-sm text-muted-foreground">
                       {Array.isArray(data.vouchers)
-                        ? data.vouchers.filter((v) => !isInternalHistoricalSupplierRoutineRow(v)).length
+                        ? data.vouchers.filter((v) => !isInternalHistoricalSupplierRoutineRow({ ...v, voucherDate: v.date })).length
                         : 0} voucher(s)
                     </p>
                   </div>
@@ -174,7 +174,7 @@ export default function LedgerVouchers() {
                   const vouchersWithBal = (Array.isArray(data.vouchers) ? data.vouchers : []).map((v) => {
                     runningBal = runningBal + v.credit - v.debit;
                     return { ...v, runningBalance: runningBal };
-                  }).filter((v) => !isInternalHistoricalSupplierRoutineRow(v));
+                  }).filter((v) => !isInternalHistoricalSupplierRoutineRow({ ...v, voucherDate: v.date }));
                   const formatBal = (bal: number) =>
                     bal === 0 ? "—" : `${formatAmount(Math.abs(bal))} ${bal >= 0 ? "Cr" : "Dr"}`;
                   return (

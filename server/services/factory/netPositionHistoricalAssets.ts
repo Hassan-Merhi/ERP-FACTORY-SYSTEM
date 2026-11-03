@@ -35,11 +35,21 @@ export type HistoricalAssetLiabilityOperations = {
   warnings: string[];
 };
 
-/** Preserve the live Factory report's per-contract absolute-balance rule. */
-export function sumRentalContractPositions(positions: readonly { expected: string; paid: string }[]): number {
-  return cents(
-    positions.reduce((sum, p) => sum.plus(value(p.expected).minus(value(p.paid)).abs()), new MoneyDecimal(0))
-  );
+/**
+ * Split the balance-sheet positions per contract without offsetting tenants.
+ * Overpayments are prepaid assets; unpaid rent is a separate liability.
+ */
+export function sumRentalContractPositions(
+  positions: readonly { expected: string; paid: string }[]
+): { prepaidRent: number; rentPayable: number } {
+  let prepaidRent = new MoneyDecimal(0);
+  let rentPayable = new MoneyDecimal(0);
+  for (const position of positions) {
+    const netPaid = value(position.paid).minus(value(position.expected));
+    if (netPaid.gt(0)) prepaidRent = prepaidRent.plus(netPaid);
+    else if (netPaid.lt(0)) rentPayable = rentPayable.plus(netPaid.abs());
+  }
+  return { prepaidRent: cents(prepaidRent), rentPayable: cents(rentPayable) };
 }
 
 /** A repayment cannot make the advance an asset with a negative balance. */
@@ -331,10 +341,11 @@ async function factoryRentalAsOf(companyId: number, scope: FactoryNetPositionAsO
       and(
         eq(propertyUnits.companyId, companyId),
         eq(propertyUnits.module, "FACTORY"),
+        eq(propertyUnits.unitType, "SHOP"),
         recorded(sql`${propertyUnits.createdAt}`, scope)
       )
     );
-  if (!units.length) return { value: 0, warnings: [] as string[] };
+  if (!units.length) return { prepaidRent: 0, rentPayable: 0, warnings: [] as string[] };
 
   // Today's report counts ACTIVE contracts on active units. Neither flag has
   // a dated history, so a contract that is no longer ACTIVE is counted only
@@ -365,7 +376,7 @@ async function factoryRentalAsOf(companyId: number, scope: FactoryNetPositionAsO
   const contracts = allContracts.filter((c) =>
     c.status === "ACTIVE" ? activeUnitIds.has(c.unitId) : c.endDate != null && String(c.endDate) >= scope.asOf
   );
-  if (!contracts.length) return { value: 0, warnings: [] as string[] };
+  if (!contracts.length) return { prepaidRent: 0, rentPayable: 0, warnings: [] as string[] };
   const ids = contracts.map((c) => c.id);
   const [ledger, payments] = await Promise.all([
     db
@@ -398,6 +409,8 @@ async function factoryRentalAsOf(companyId: number, scope: FactoryNetPositionAsO
           eq(propertyPayments.companyId, companyId),
           eq(propertyPayments.module, "FACTORY"),
           inArray(propertyPayments.contractId, ids),
+          // Guarantee payments are deposits, not rental-month payments.
+          sql`${propertyPayments.ledgerRowId} IS NOT NULL`,
           lte(propertyPayments.paymentDate, scope.asOf),
           recorded(sql`${propertyPayments.createdAt}`, scope),
           // For scheduled rows that were posted later, created_at is not enough.
@@ -431,15 +444,13 @@ async function factoryRentalAsOf(companyId: number, scope: FactoryNetPositionAsO
     const sumsRow = sums.get(payment.contractId);
     if (sumsRow) sumsRow.paid = sumsRow.paid.plus(value(payment.amount));
   }
-  const prepaidRent = sumRentalContractPositions(
+  const positions = sumRentalContractPositions(
     [...sums.values()].map((row) => ({
       expected: row.expected.toFixed(),
       paid: row.paid.toFixed(),
     }))
   );
-  // Today's Factory report labels outstanding + tenant credits as a single
-  // "Prepaid Rent" asset, with no extra Rent Payable liability.
-  return { value: prepaidRent, warnings: [...warnings] };
+  return { ...positions, warnings: [...warnings] };
 }
 
 export async function computeHistoricalFactoryAssetLiabilityOperations(
@@ -453,8 +464,8 @@ export async function computeHistoricalFactoryAssetLiabilityOperations(
     ]);
     return {
       workerAdvancesValue: workerAdvances.value,
-      prepaidRent: rental.value,
-      rentPayable: 0,
+      prepaidRent: rental.prepaidRent,
+      rentPayable: rental.rentPayable,
       warnings: [...new Set([...workerAdvances.warnings, ...rental.warnings])],
     };
   } catch (cause) {

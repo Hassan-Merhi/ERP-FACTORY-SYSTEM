@@ -114,10 +114,7 @@ export function buildPosReplacementSaleItems(
         segmentTotal = originalRoundedTotal.minus(allocated);
       } else {
         const qty = toInventoryDecimal(segment.quantity);
-        segmentTotal = originalRoundedTotal
-          .times(qty)
-          .dividedBy(originalQty)
-          .toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+        segmentTotal = originalRoundedTotal.times(qty).dividedBy(originalQty).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
         allocated = allocated.plus(segmentTotal);
       }
       editedItems.push(markTrustedTotal({ ...segment, totalSales: segmentTotal.toFixed(2) }));

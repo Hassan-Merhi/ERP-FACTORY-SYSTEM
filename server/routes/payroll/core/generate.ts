@@ -25,6 +25,7 @@ import {
 } from "@shared/schema";
 import { findOrCreateLedger, getFactoryCompanyId, settleAdvancesForPayroll, writeDaybookEntry } from "./_helpers";
 import { computeWorkerPayAmounts } from "./workerPayAmounts";
+import { assertNoOverlappingPayroll, PayrollPeriodOverlapError } from "../../../services/payroll/payrollPeriodOverlapPolicy";
 import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 import {
   postErpVoucherTx,
@@ -80,8 +81,32 @@ export function registerPayrollGenerateRoutes(app: Express) {
           .where(and(eq(factoryWorkers.companyId, companyId), eq(factoryWorkers.active, true)));
       }
 
-      // Fetch all attendance records for the period (for monthly attendance-based calculation)
+      // Refuse to create a second draft/accrual for days already covered by
+      // another payroll. It is not safe to pay a full month again after an
+      // overlapping partial period has already been paid.
       const workerIdList = targetWorkers.map((w) => w.id);
+      if (workerIdList.length > 0) {
+        const existing = await db
+          .select({
+            id: factoryPayrolls.id,
+            workerId: factoryPayrolls.workerId,
+            periodStart: factoryPayrolls.periodStart,
+            periodEnd: factoryPayrolls.periodEnd,
+            status: factoryPayrolls.status,
+          })
+          .from(factoryPayrolls)
+          .where(
+            and(
+              eq(factoryPayrolls.companyId, companyId),
+              inArray(factoryPayrolls.workerId, workerIdList),
+              lte(factoryPayrolls.periodStart, periodEnd),
+              gte(factoryPayrolls.periodEnd, periodStart)
+            )
+          );
+        assertNoOverlappingPayroll(existing, workerIdList, periodStart, periodEnd);
+      }
+
+      // Fetch all attendance records for the period (for monthly attendance-based calculation)
       const attendanceRecords = workerIdList.length
         ? await db
             .select()
@@ -161,6 +186,32 @@ export function registerPayrollGenerateRoutes(app: Express) {
       }
 
       const created = await db.transaction(async (tx) => {
+        // Guard a concurrent overlapping run while the company-wide advisory
+        // lock is held; no advances or ledger entries have been written yet.
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${`factory-payroll-company:${companyId}`})::bigint)`
+        );
+        if (workerIdList.length > 0) {
+          const lockedExisting = await tx
+            .select({
+              id: factoryPayrolls.id,
+              workerId: factoryPayrolls.workerId,
+              periodStart: factoryPayrolls.periodStart,
+              periodEnd: factoryPayrolls.periodEnd,
+              status: factoryPayrolls.status,
+            })
+            .from(factoryPayrolls)
+            .where(
+              and(
+                eq(factoryPayrolls.companyId, companyId),
+                inArray(factoryPayrolls.workerId, workerIdList),
+                lte(factoryPayrolls.periodStart, periodEnd),
+                gte(factoryPayrolls.periodEnd, periodStart)
+              )
+            )
+            .for("update");
+          assertNoOverlappingPayroll(lockedExisting, workerIdList, periodStart, periodEnd);
+        }
         let count = 0;
         let totalNetCents = 0;
         let totalAdvanceDeductionsCents = 0;
@@ -322,7 +373,8 @@ export function registerPayrollGenerateRoutes(app: Express) {
       });
       res.json({ created });
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      const status = error instanceof PayrollPeriodOverlapError ? error.status : 500;
+      res.status(status).json({ message: getErrorMessage(error) });
     }
   });
 }

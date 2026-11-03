@@ -14,12 +14,33 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Plus, Pencil, User, Trash2, FileText, RotateCcw, History, Clock, Eye, EyeOff,
-  Users, Wallet, Scale, SlidersHorizontal, Columns3, Download, RefreshCw, ChevronDown,
+  Plus,
+  Pencil,
+  User,
+  Trash2,
+  FileText,
+  RotateCcw,
+  History,
+  Clock,
+  Eye,
+  EyeOff,
+  Users,
+  Wallet,
+  Scale,
+  SlidersHorizontal,
+  Columns3,
+  Download,
+  RefreshCw,
+  ChevronDown,
 } from "lucide-react";
 import {
-  DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
-  DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { FormSubmitButton } from "@/components/FormSubmitButton";
@@ -231,10 +252,11 @@ export default function FactoryCustomers() {
     return searchAny(search, c.legalName, c.code, c.phone);
   });
   const zeroBalanceCount = filtered.filter((customer) => Math.abs(customer.balance ?? 0) <= 0.001).length;
-  const visibleCustomers = (showZeroBalance
-    ? filtered
-    : filtered.filter((customer) => Math.abs(customer.balance ?? 0) > 0.001)
-  ).filter((customer) => balanceFilter === "all" || customer.balanceSide?.toUpperCase() === balanceFilter.toUpperCase());
+  const visibleCustomers = (
+    showZeroBalance ? filtered : filtered.filter((customer) => Math.abs(customer.balance ?? 0) > 0.001)
+  ).filter(
+    (customer) => balanceFilter === "all" || customer.balanceSide?.toUpperCase() === balanceFilter.toUpperCase()
+  );
   const { page: safePage, setPage, totalPages, paginate } = useClientTablePagination(visibleCustomers.length, pageSize);
   const pagedCustomers = paginate(visibleCustomers);
 
@@ -268,7 +290,11 @@ export default function FactoryCustomers() {
         customer.code,
         customer.phone ?? "",
         customer.balance == null ? "" : String(customer.balance),
-        customer.balanceSide?.toUpperCase() === "CR" ? "Credit" : customer.balanceSide?.toUpperCase() === "DR" ? "Debit" : "",
+        customer.balanceSide?.toUpperCase() === "CR"
+          ? "Credit"
+          : customer.balanceSide?.toUpperCase() === "DR"
+            ? "Debit"
+            : "",
       ]),
     ];
     const csv = rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
@@ -313,38 +339,62 @@ export default function FactoryCustomers() {
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4" data-testid="customer-balance-summary">
         <div className="rounded-2xl border border-blue-500/25 bg-blue-500/5 p-3 shadow-sm sm:p-4 dark:border-blue-400/30 dark:bg-blue-500/10">
           <div className="flex items-center gap-3">
-            <span className="rounded-xl bg-blue-500/15 p-2.5 text-blue-600 dark:text-blue-400"><Users className="h-5 w-5" /></span>
+            <span className="rounded-xl bg-blue-500/15 p-2.5 text-blue-600 dark:text-blue-400">
+              <Users className="h-5 w-5" />
+            </span>
             <div className="min-w-0">
               <p className="text-xs text-muted-foreground">Total Customers</p>
-              <p className="mt-1 text-xl font-bold tabular-nums sm:text-2xl" data-testid="metric-customers-total">{customers.length}</p>
+              <p className="mt-1 text-xl font-bold tabular-nums sm:text-2xl" data-testid="metric-customers-total">
+                {customers.length}
+              </p>
             </div>
           </div>
         </div>
         <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-3 shadow-sm sm:p-4 dark:border-emerald-400/30 dark:bg-emerald-500/10">
           <div className="flex items-center gap-3">
-            <span className="rounded-xl bg-emerald-500/15 p-2.5 text-emerald-600 dark:text-emerald-400"><Wallet className="h-5 w-5" /></span>
+            <span className="rounded-xl bg-emerald-500/15 p-2.5 text-emerald-600 dark:text-emerald-400">
+              <Wallet className="h-5 w-5" />
+            </span>
             <div className="min-w-0">
               <p className="text-xs text-muted-foreground">Total Debit</p>
-              <p className="mt-1 break-all text-base font-bold tabular-nums text-emerald-600 sm:text-xl dark:text-emerald-400" data-testid="metric-customers-debit">{formatCashAmount(totalDebit)}</p>
+              <p
+                className="mt-1 break-all text-base font-bold tabular-nums text-emerald-600 sm:text-xl dark:text-emerald-400"
+                data-testid="metric-customers-debit"
+              >
+                {formatCashAmount(totalDebit)}
+              </p>
             </div>
           </div>
         </div>
         <div className="rounded-2xl border border-rose-500/25 bg-rose-500/5 p-3 shadow-sm sm:p-4 dark:border-rose-400/30 dark:bg-rose-500/10">
           <div className="flex items-center gap-3">
-            <span className="rounded-xl bg-rose-500/15 p-2.5 text-rose-600 dark:text-rose-400"><Wallet className="h-5 w-5" /></span>
+            <span className="rounded-xl bg-rose-500/15 p-2.5 text-rose-600 dark:text-rose-400">
+              <Wallet className="h-5 w-5" />
+            </span>
             <div className="min-w-0">
               <p className="text-xs text-muted-foreground">Total Credit</p>
-              <p className="mt-1 break-all text-base font-bold tabular-nums text-rose-600 sm:text-xl dark:text-rose-400" data-testid="metric-customers-credit">{formatCashAmount(totalCredit)}</p>
+              <p
+                className="mt-1 break-all text-base font-bold tabular-nums text-rose-600 sm:text-xl dark:text-rose-400"
+                data-testid="metric-customers-credit"
+              >
+                {formatCashAmount(totalCredit)}
+              </p>
             </div>
           </div>
         </div>
         <div className="rounded-2xl border border-violet-500/25 bg-violet-500/5 p-3 shadow-sm sm:p-4 dark:border-violet-400/30 dark:bg-violet-500/10">
           <div className="flex items-center gap-3">
-            <span className="rounded-xl bg-violet-500/15 p-2.5 text-violet-600 dark:text-violet-400"><Scale className="h-5 w-5" /></span>
+            <span className="rounded-xl bg-violet-500/15 p-2.5 text-violet-600 dark:text-violet-400">
+              <Scale className="h-5 w-5" />
+            </span>
             <div className="min-w-0">
               <p className="text-xs text-muted-foreground">Net Balance</p>
-              <p className={`mt-1 break-all text-base font-bold tabular-nums sm:text-xl ${netBalance < -0.001 ? "text-rose-600 dark:text-rose-400" : netBalance > 0.001 ? "text-emerald-600 dark:text-emerald-400" : "text-foreground"}`} data-testid="metric-customers-net">
-                {netBalance < -0.001 ? "−" : ""}{formatCashAmount(Math.abs(netBalance))}
+              <p
+                className={`mt-1 break-all text-base font-bold tabular-nums sm:text-xl ${netBalance < -0.001 ? "text-rose-600 dark:text-rose-400" : netBalance > 0.001 ? "text-emerald-600 dark:text-emerald-400" : "text-foreground"}`}
+                data-testid="metric-customers-net"
+              >
+                {netBalance < -0.001 ? "−" : ""}
+                {formatCashAmount(Math.abs(netBalance))}
               </p>
             </div>
           </div>
@@ -353,9 +403,13 @@ export default function FactoryCustomers() {
 
       <div className="flex flex-col gap-3 border-b border-border/60 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <span className="rounded-xl bg-blue-500/10 p-2.5 text-blue-600 dark:text-sky-400"><Users className="h-6 w-6" /></span>
+          <span className="rounded-xl bg-blue-500/10 p-2.5 text-blue-600 dark:text-sky-400">
+            <Users className="h-6 w-6" />
+          </span>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-page-title">Customers</h1>
+            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-page-title">
+              Customers
+            </h1>
             <p className="text-sm text-muted-foreground">{customers.length} total customers</p>
           </div>
         </div>
@@ -401,35 +455,92 @@ export default function FactoryCustomers() {
           <div className="flex flex-wrap items-center gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-9 gap-2 rounded-xl" data-testid="button-customer-balance-filter">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 gap-2 rounded-xl"
+                  data-testid="button-customer-balance-filter"
+                >
                   <SlidersHorizontal className="h-4 w-4" /> Filters <ChevronDown className="h-3.5 w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Balance side</DropdownMenuLabel>
-                <DropdownMenuItem onSelect={() => { setBalanceFilter("all"); setPage(1); }}>All balances {balanceFilter === "all" ? "✓" : ""}</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => { setBalanceFilter("Dr"); setPage(1); }}>Debit balances {balanceFilter === "Dr" ? "✓" : ""}</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => { setBalanceFilter("Cr"); setPage(1); }}>Credit balances {balanceFilter === "Cr" ? "✓" : ""}</DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setBalanceFilter("all");
+                    setPage(1);
+                  }}
+                >
+                  All balances {balanceFilter === "all" ? "✓" : ""}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setBalanceFilter("Dr");
+                    setPage(1);
+                  }}
+                >
+                  Debit balances {balanceFilter === "Dr" ? "✓" : ""}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setBalanceFilter("Cr");
+                    setPage(1);
+                  }}
+                >
+                  Credit balances {balanceFilter === "Cr" ? "✓" : ""}
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-9 gap-2 rounded-xl" data-testid="button-customer-columns">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 gap-2 rounded-xl"
+                  data-testid="button-customer-columns"
+                >
                   <Columns3 className="h-4 w-4" /> Columns <ChevronDown className="h-3.5 w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Visible columns (saved)</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuCheckboxItem checked disabled>Name</DropdownMenuCheckboxItem>
-                <DropdownMenuCheckboxItem checked={showBalanceColumn} onCheckedChange={(checked) => setColumnVisible("balance", checked)}>Balance</DropdownMenuCheckboxItem>
-                <DropdownMenuCheckboxItem checked={showActionsColumn} onCheckedChange={(checked) => setColumnVisible("actions", checked)}>Actions</DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked disabled>
+                  Name
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem
+                  checked={showBalanceColumn}
+                  onCheckedChange={(checked) => setColumnVisible("balance", checked)}
+                >
+                  Balance
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem
+                  checked={showActionsColumn}
+                  onCheckedChange={(checked) => setColumnVisible("actions", checked)}
+                >
+                  Actions
+                </DropdownMenuCheckboxItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button variant="outline" size="sm" className="h-9 gap-2 rounded-xl" onClick={exportVisibleCustomers} data-testid="button-export-customers">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-2 rounded-xl"
+              onClick={exportVisibleCustomers}
+              data-testid="button-export-customers"
+            >
               <Download className="h-4 w-4" /> Export
             </Button>
-            <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl" onClick={() => void refetchCustomers()} title="Refresh customers" aria-label="Refresh customers" data-testid="button-refresh-customers">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 rounded-xl"
+              onClick={() => void refetchCustomers()}
+              title="Refresh customers"
+              aria-label="Refresh customers"
+              data-testid="button-refresh-customers"
+            >
               <RefreshCw className="h-4 w-4" />
             </Button>
           </div>
@@ -441,15 +552,28 @@ export default function FactoryCustomers() {
           <Table mobileLayout="cards" density={prefs.density} wrapperClassName="border-0 rounded-none dark:border-0">
             <TableHeader className="sticky top-0 z-30">
               <TableRow className="bg-muted/65 hover:bg-muted/65 dark:bg-blue-900/25 dark:hover:bg-blue-900/25">
-                <TableHead className="py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Name</TableHead>
-                {showBalanceColumn && <TableHead className="py-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Balance</TableHead>}
-                {showActionsColumn && <TableHead className="w-[144px] py-3 text-right"><span className="sr-only">Actions</span></TableHead>}
+                <TableHead className="py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Name
+                </TableHead>
+                {showBalanceColumn && (
+                  <TableHead className="py-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Balance
+                  </TableHead>
+                )}
+                {showActionsColumn && (
+                  <TableHead className="w-[144px] py-3 text-right">
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
               {visibleCustomers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={1 + Number(showBalanceColumn) + Number(showActionsColumn)} className="text-center py-8 text-muted-foreground">
+                  <TableCell
+                    colSpan={1 + Number(showBalanceColumn) + Number(showActionsColumn)}
+                    className="text-center py-8 text-muted-foreground"
+                  >
                     {search
                       ? "No customers match your search"
                       : zeroBalanceCount > 0
@@ -459,11 +583,24 @@ export default function FactoryCustomers() {
                 </TableRow>
               ) : (
                 pagedCustomers.map((customer) => (
-                  <TableRow key={customer.id} className="hover:bg-blue-500/5 dark:hover:bg-blue-500/10" data-testid={`row-customer-${customer.id}`}>
+                  <TableRow
+                    key={customer.id}
+                    className="hover:bg-blue-500/5 dark:hover:bg-blue-500/10"
+                    data-testid={`row-customer-${customer.id}`}
+                  >
                     <TableCell className="py-3 font-medium sm:py-3" data-testid={`text-customer-name-${customer.id}`}>
                       <div className="flex items-center gap-3">
-                        <div aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600/10 text-xs font-bold text-blue-600 dark:bg-blue-400/15 dark:text-blue-300">
-                          {customer.legalName.trim().split(/\s+/).slice(0, 2).map((part) => part.charAt(0)).join("").toUpperCase()}
+                        <div
+                          aria-hidden="true"
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600/10 text-xs font-bold text-blue-600 dark:bg-blue-400/15 dark:text-blue-300"
+                        >
+                          {(customer.legalName ?? "")
+                            .trim()
+                            .split(/\s+/)
+                            .slice(0, 2)
+                            .map((part) => part.charAt(0))
+                            .join("")
+                            .toUpperCase()}
                         </div>
                         <div className="min-w-0">
                           <button
@@ -494,44 +631,44 @@ export default function FactoryCustomers() {
                       </TableCell>
                     )}
                     {showActionsColumn && (
-                    <TableCell className="py-3 sm:py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => navigate(`/factory/invoicing?tab=proformas&customerId=${customer.id}`)}
-                          title="View Proformas"
-                          aria-label={`View proformas for ${customer.legalName}`}
-                          className="h-9 w-9 rounded-xl border border-border/60 hover:border-blue-400/60 hover:text-blue-500"
-                          data-testid={`button-proformas-customer-${customer.id}`}
-                        >
-                          <FileText className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => openEdit(customer)}
-                          title="Edit Customer"
-                          aria-label={`Edit ${customer.legalName}`}
-                          className="h-9 w-9 rounded-xl border border-border/60 hover:border-blue-400/60 hover:text-blue-500"
-                          data-testid={`button-edit-customer-${customer.id}`}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <div className="w-px h-5 bg-border mx-0.5" />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setDeletingCustomer(customer)}
-                          title="Delete Customer"
-                          aria-label={`Delete ${customer.legalName}`}
-                          className="h-9 w-9 rounded-xl border border-destructive/20 text-destructive hover:border-destructive/50 hover:bg-destructive/10"
-                          data-testid={`button-delete-customer-${customer.id}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
+                      <TableCell className="py-3 sm:py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => navigate(`/factory/invoicing?tab=proformas&customerId=${customer.id}`)}
+                            title="View Proformas"
+                            aria-label={`View proformas for ${customer.legalName}`}
+                            className="h-9 w-9 rounded-xl border border-border/60 hover:border-blue-400/60 hover:text-blue-500"
+                            data-testid={`button-proformas-customer-${customer.id}`}
+                          >
+                            <FileText className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openEdit(customer)}
+                            title="Edit Customer"
+                            aria-label={`Edit ${customer.legalName}`}
+                            className="h-9 w-9 rounded-xl border border-border/60 hover:border-blue-400/60 hover:text-blue-500"
+                            data-testid={`button-edit-customer-${customer.id}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <div className="w-px h-5 bg-border mx-0.5" />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setDeletingCustomer(customer)}
+                            title="Delete Customer"
+                            aria-label={`Delete ${customer.legalName}`}
+                            className="h-9 w-9 rounded-xl border border-destructive/20 text-destructive hover:border-destructive/50 hover:bg-destructive/10"
+                            data-testid={`button-delete-customer-${customer.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
                     )}
                   </TableRow>
                 ))

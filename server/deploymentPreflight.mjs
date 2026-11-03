@@ -1,4 +1,6 @@
+import { readFactoryEdgeConfiguration } from "./edge/edgeRuntimePolicy.mjs";
 const isProduction = process.env.NODE_ENV === "production";
+export const factoryEdgeRuntimeConfig = readFactoryEdgeConfiguration(process.env);
 
 function parseBoundedInteger(name, fallback, min, max) {
   const raw = process.env[name];
@@ -56,6 +58,7 @@ export const deploymentRuntimeConfig = Object.freeze({
   shutdownGraceMs,
   databaseSource,
   buildVersion,
+  factoryEdgeMode: factoryEdgeRuntimeConfig.mode,
 });
 
 console.log("[DeploymentPreflight] configuration accepted", {

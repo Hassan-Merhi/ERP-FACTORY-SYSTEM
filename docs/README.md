@@ -30,6 +30,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 |---|---|
 | [accounting-flow.md](accounting-flow.md) | Voucher types, posting, the ledger |
 | [accounting-audit-2026-10.md](accounting-audit-2026-10.md) | Accounting audit findings, production evidence and remediation waves |
+| [accounting/factory-worker-advance-ledger-audit-2026-11-03.md](accounting/factory-worker-advance-ledger-audit-2026-11-03.md) | Factory Worker Advances production reconciliation, verified accrual repair, and residual historical exceptions |
 | [unified-accounting-phase1.md](unified-accounting-phase1.md) | Unified accounting (ERP, Factory, Rentals): Phase 1: Foundation |
 | [unified-accounting-phase2.md](unified-accounting-phase2.md) | Unified accounting (ERP, Factory, Rentals): Phase 2: Posting and Voucher Lifecycle |
 | [unified-accounting-phase3.md](unified-accounting-phase3.md) | Unified accounting (ERP, Factory, Rentals): Phase 3: Customer, Supplier and Tenant Open-Item Reconciliation |
@@ -217,6 +218,24 @@ describes lasting behaviour gets promoted out, and promoting one means
 reclassifying it in `config/doc-index.json` — which is the moment to check that
 it is actually still true.
 
+## Offline mode and factory LAN (development only)
+
+The following references document **unmerged, production-disabled** work.
+Encrypted checkpoint transfer is not automatic database reconciliation.
+
+| Doc | What it covers |
+|---|---|
+| [offline-phase2-read-coverage.md](offline-phase2-read-coverage.md) | Exact offline GET allowlist and release limits |
+| [operations/factory-lan-edge.md](operations/factory-lan-edge.md) | Phase 3 LAN server setup, trusted TLS, database cutover controls |
+| [operations/factory-lan-phase4-checkpoint-transfer.md](operations/factory-lan-phase4-checkpoint-transfer.md) | Phase 4 cloud write fence and encrypted staging; remaining sync blockers |
+| [operations/factory-lan-phase6-certification.md](operations/factory-lan-phase6-certification.md) | Phase 6 independent release gate; not yet certified |
+| [operations/factory-offline-operations-runbook.md](operations/factory-offline-operations-runbook.md) | Phases 9–11 offline workflows, authority handover, conflicts, backup/restore, monitoring and verification evidence |
+| [superpowers/plans/2026-10-30-offline-phase5.md](superpowers/plans/2026-10-30-offline-phase5.md) | Phase 5 browser snapshot encryption and limitations |
+| [superpowers/plans/2026-10-30-offline-integrated-roadmap.md](superpowers/plans/2026-10-30-offline-integrated-roadmap.md) | Remaining offline work planned for Phases 7–11 |
+| [superpowers/plans/2026-10-29-offline-phase1.md](superpowers/plans/2026-10-29-offline-phase1.md) | Phase 1 outbox scope and acceptance |
+| [superpowers/plans/2026-10-29-offline-phase2.md](superpowers/plans/2026-10-29-offline-phase2.md) | Phase 2 prepared reads and identity requirements |
+| [superpowers/plans/2026-10-29-offline-phase3.md](superpowers/plans/2026-10-29-offline-phase3.md) | Phase 3 factory server safety and acceptance |
+
 ## Current reference index additions
 
 These current-reference documents are indexed here for audit coverage. Their behavior is described in each linked file.
@@ -238,3 +257,15 @@ These current-reference documents are indexed here for audit coverage. Their beh
 | [production-target-bonus-phases-1-2.md](production-target-bonus-phases-1-2.md) | Current production target bonus phases 1 2 reference |
 | [production-target-bonuses-phase7-reporting.md](production-target-bonuses-phase7-reporting.md) | Current production target bonuses phase7 reporting reference |
 | [production-target-bonuses-unified-integration.md](production-target-bonuses-unified-integration.md) | Current production target bonuses unified integration reference |
+| [company12-internal-historical-supplier-voucher-operational-visibility-20261102.md](company12-internal-historical-supplier-voucher-operational-visibility-20261102.md) | Company 12 historical supplier catchup: shown as internal posted reconciliation, not routine Journal vouchers |
+| [historical-charge-64-duplicate-correction-lifecycle-20261102.md](historical-charge-64-duplicate-correction-lifecycle-20261102.md) | Company 12 charge #64 duplicate posting: correction lifecycle and replay safety |
+| [historical-supplier-analytics-balance-routine-visibility-20261102.md](historical-supplier-analytics-balance-routine-visibility-20261102.md) | Company 12: completed reconciliation rows hidden in Analytics and Balances (ledger totals unchanged) |
+| [company12-worker-advance-internal-reconciliation-routine-visibility-20261103.md](company12-worker-advance-internal-reconciliation-routine-visibility-20261103.md) | Company 12: dated worker-advance GL backfill journals classified as internal in routine Accounts, Analytics and Daybook lists, with totals preserved |
+| [historical-supplier-done-voucher-global-daybook-and-transfer-hide-20261102.md](historical-supplier-done-voucher-global-daybook-and-transfer-hide-20261102.md) | Company 12: completed historical supplier catchup entries on the remaining routine screens |
+| [historical-supplier-named-creditor-balance-freeze-20261102.md](historical-supplier-named-creditor-balance-freeze-20261102.md) | Company 12: historical supplier and named-creditor balance freeze |
+| [net-profit-future-dated-historical-imports-live-pnl-cutoff-20261102.md](net-profit-future-dated-historical-imports-live-pnl-cutoff-20261102.md) | Net profit live as-of report: future-dated historical imports cut off |
+
+| [October 2026 salary reconciliation](accounting/october-2026-salary-reconciliation-20261103.md) | Read-only October payroll, paid cash and salary advances reconciliation (no journal edits) |
+| [Factory worker-advance ledger audit](accounting/factory-worker-advance-ledger-audit-2026-11-03.md) | Current worker-advance ledger investigation, safeguards and payment evidence |
+
+| [October 2026 payroll overlap reconciliation](accounting/october-2026-paid-payroll-overlap-reclassification-20261103.md) | Current safeguards and backdated accounting evidence for approved paid-payroll overlap reclassification |

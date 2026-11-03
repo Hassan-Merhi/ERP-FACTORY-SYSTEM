@@ -1,4 +1,5 @@
 import { getErrorDetails } from "@shared/errorUtils";
+import { OFFLINE_MODE_ENABLED } from "./featureFlags";
 import { db, appendSyncLog, upsertGlobalSyncState, addConflict, type SyncQueueItem } from "./db";
 import { getQueue, removeFromQueue, updateItemStatus as updateLegacyStatus, setLastSynced } from "./offlineQueue";
 
@@ -200,6 +201,34 @@ export async function deduplicateQueue(): Promise<void> {
 // ─── Main Sync Entry Point ────────────────────────────────────────────────────
 
 export async function runSync(): Promise<void> {
+  if (OFFLINE_MODE_ENABLED) {
+    if (syncInProgress) return;
+    syncInProgress = true;
+    emitSyncEvent({ syncing: true });
+    try {
+      // The legacy localStorage/IDB replay engines are intentionally excluded
+      // from the new offline mode: they do not have universal exactly-once
+      // protection and may have no trustworthy actor identity.
+      const { deliverOfflineOperations } = await import("./offline/durableOutbox");
+      const result = await deliverOfflineOperations();
+      // The device's HTTP 2xx only confirms an approved LAN/cloud server
+      // accepted the voucher request. It does NOT prove Phase 8 cloud apply.
+      // Never stamp the global "last synced" field until a separately
+      // verified, scoped cloud-applied receipt establishes that fact.
+      emitSyncEvent({
+        syncing: false,
+        conflictDetected: result.conflicts > 0,
+      });
+    } catch (error) {
+      emitSyncEvent({
+        syncing: false,
+        error: getErrorDetails(error).optionalMessage || "OFFLINE_DELIVERY_FAILED",
+      });
+    } finally {
+      syncInProgress = false;
+    }
+    return;
+  }
   if (syncInProgress) return;
   syncInProgress = true;
   emitSyncEvent({ syncing: true });

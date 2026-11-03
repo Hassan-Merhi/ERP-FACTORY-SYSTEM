@@ -269,41 +269,55 @@ export default function FactoryEmployees() {
 
   return (
     <div className="space-y-5 pb-6">
-
       {/* Visual summary only: all payroll amounts still come from the existing calculations. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="employees-summary">
         {isLoading ? (
           <>
-            {[0, 1, 2, 3].map((index) => <Skeleton key={index} className="h-[88px] rounded-2xl" />)}
+            {[0, 1, 2, 3].map((index) => (
+              <Skeleton key={index} className="h-[88px] rounded-2xl" />
+            ))}
           </>
         ) : (
           <>
             <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-border/70 bg-gradient-to-br from-card to-muted/30 p-3.5 shadow-sm sm:p-4 dark:from-slate-900 dark:to-slate-800/70">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-muted/70 text-foreground shadow-inner"><Users className="h-5 w-5" /></span>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-muted/70 text-foreground shadow-inner">
+                <Users className="h-5 w-5" />
+              </span>
               <div className="min-w-0">
                 <p className="text-xs font-medium text-muted-foreground sm:text-sm">Total</p>
                 <p className="mt-0.5 text-xl font-bold tracking-tight tabular-nums sm:text-2xl">{employees.length}</p>
               </div>
             </div>
             <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-emerald-500/25 bg-gradient-to-br from-emerald-50 to-card p-3.5 shadow-sm sm:p-4 dark:from-emerald-950/65 dark:to-slate-900">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"><UserCheck2 className="h-5 w-5" /></span>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                <UserCheck2 className="h-5 w-5" />
+              </span>
               <div className="min-w-0">
                 <p className="text-xs font-medium text-muted-foreground sm:text-sm">Active</p>
                 <p className="mt-0.5 text-xl font-bold tracking-tight tabular-nums sm:text-2xl">{totalActive}</p>
               </div>
             </div>
             <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-border/70 bg-gradient-to-br from-card to-muted/30 p-3.5 shadow-sm sm:p-4 dark:from-slate-900 dark:to-slate-800/70">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-muted/70 text-muted-foreground"><UserMinus className="h-5 w-5" /></span>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-muted/70 text-muted-foreground">
+                <UserMinus className="h-5 w-5" />
+              </span>
               <div className="min-w-0">
                 <p className="text-xs font-medium text-muted-foreground sm:text-sm">Inactive</p>
                 <p className="mt-0.5 text-xl font-bold tracking-tight tabular-nums sm:text-2xl">{totalInactive}</p>
               </div>
             </div>
             <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-50 to-card p-3.5 shadow-sm sm:p-4 dark:from-violet-950/65 dark:to-slate-900">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-500/15 text-violet-600 dark:text-violet-300"><DollarSign className="h-5 w-5" /></span>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-500/15 text-violet-600 dark:text-violet-300">
+                <DollarSign className="h-5 w-5" />
+              </span>
               <div className="min-w-0">
                 <p className="text-xs font-medium text-muted-foreground sm:text-sm">Monthly Payroll</p>
-                <p className="mt-0.5 truncate text-lg font-bold tracking-tight tabular-nums sm:text-2xl" title={fmt(totalMonthlySalary)}>{fmt(totalMonthlySalary)}</p>
+                <p
+                  className="mt-0.5 truncate text-lg font-bold tracking-tight tabular-nums sm:text-2xl"
+                  title={fmt(totalMonthlySalary)}
+                >
+                  {fmt(totalMonthlySalary)}
+                </p>
               </div>
             </div>
           </>
@@ -323,7 +337,10 @@ export default function FactoryEmployees() {
           />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="h-11 w-full rounded-xl border-border/70 bg-card/80 shadow-sm sm:w-36" data-testid="select-employee-status">
+          <SelectTrigger
+            className="h-11 w-full rounded-xl border-border/70 bg-card/80 shadow-sm sm:w-36"
+            data-testid="select-employee-status"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -332,7 +349,11 @@ export default function FactoryEmployees() {
             <SelectItem value="All">All</SelectItem>
           </SelectContent>
         </Select>
-        <Button onClick={openCreate} className="h-11 rounded-xl bg-emerald-600 px-5 font-semibold text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500" data-testid="button-create-employee">
+        <Button
+          onClick={openCreate}
+          className="h-11 rounded-xl bg-emerald-600 px-5 font-semibold text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+          data-testid="button-create-employee"
+        >
           <Plus className="mr-2 h-4 w-4" />
           New Employee
         </Button>
@@ -355,7 +376,9 @@ export default function FactoryEmployees() {
               <TableHead className="py-3.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Status
               </TableHead>
-              <TableHead className="w-[104px] py-3.5"><span className="sr-only">Employee actions</span></TableHead>
+              <TableHead className="w-[104px] py-3.5">
+                <span className="sr-only">Employee actions</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -442,7 +465,7 @@ export default function FactoryEmployees() {
                     </TableCell>
                     <TableCell className="py-3">
                       <div
-                        className="flex items-center justify-end gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+                        className="flex items-center justify-end gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 touch:opacity-100"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <Button

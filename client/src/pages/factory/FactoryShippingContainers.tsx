@@ -23,15 +23,16 @@ import {
   Filter,
   ChevronDown,
   ChevronRight,
-  CheckCircle2,
-  XCircle,
   MessageCircle,
   Eye,
   Trash2,
   RotateCcw,
   Check,
+  CheckCircle2,
   Loader2,
   SlidersHorizontal,
+  ArrowLeft,
+  ArrowRight,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -58,6 +59,16 @@ import { ShippingAvailabilityTable } from "./factoryshippingcontainers/component
 import { ScheduledContainersTable } from "./factoryshippingcontainers/components/ScheduledContainersTable";
 import { useShippingColumnVisibility } from "./factoryshippingcontainers/hooks/useShippingColumnVisibility";
 import { FilterPanel, type DocsFilter } from "./factoryshippingcontainers/components/FilterPanel";
+import {
+  ShippingDashboardOverview,
+  isShippingEtaOverdue,
+} from "./factoryshippingcontainers/components/ShippingDashboardOverview";
+import {
+  ShippingStatusChips,
+  type ShippingQuickMode,
+  type ShippingQuickSelection,
+} from "./factoryshippingcontainers/components/ShippingStatusChips";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function FactoryShippingContainers() {
   const { toast } = useToast();
@@ -65,6 +76,13 @@ export default function FactoryShippingContainers() {
   const [search, setSearch] = useState("");
   const [filterDocs, setFilterDocs] = useState<DocsFilter>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [destinationFilter, setDestinationFilter] = useState("all");
+  const [shippingCompanyFilter, setShippingCompanyFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [quickMode, setQuickMode] = useState<ShippingQuickMode>("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [showFilters, setShowFilters] = useState(false);
   const [docsRowId, setDocsRowId] = useState<number | null>(null);
   const [waRowId, setWaRowId] = useState<number | null>(null);
@@ -77,6 +95,7 @@ export default function FactoryShippingContainers() {
 
   interface AuthMe {
     id: number;
+    role?: string;
     currentCompanyId?: number | null;
     companyId?: number | null;
   }
@@ -249,54 +268,177 @@ export default function FactoryShippingContainers() {
     return display;
   }, [activeRows, trackingMap]);
 
-  // ── Filtering ─────────────────────────────────────────────────────────────────
-  const filtered = useMemo(
+  // ── Shipping filters and local pagination (backing rows are unchanged). ──
+  const today = (() => {
+    const date = new Date();
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0"),
+    ].join("-");
+  })();
+
+  const destinations = useMemo(
+    () => [...new Set(allDisplayRows.map((r) => r.destination?.trim()).filter((v): v is string => Boolean(v)))].sort(),
+    [allDisplayRows]
+  );
+  const shippingCompanies = useMemo(
+    () =>
+      [...new Set(allDisplayRows.map((r) => r.shippingCompany?.trim()).filter((v): v is string => Boolean(v)))].sort(),
+    [allDisplayRows]
+  );
+
+  // Date controls compare ISO calendar dates rather than timestamps. Blank = no restriction.
+  const scopedRows = useMemo(
     () =>
       allDisplayRows.filter((r) => {
-        if (search) {
-          const q = search.toLowerCase();
-          if (
-            !(r.invoiceNumber || "").toLowerCase().includes(q) &&
-            !(r.clientName || "").toLowerCase().includes(q) &&
-            !(r.containerNumber || "").toLowerCase().includes(q) &&
-            !(r.destination || "").toLowerCase().includes(q) &&
-            !(r.shippingCompany || "").toLowerCase().includes(q) &&
-            !(r.anything || "").toLowerCase().includes(q)
+        const q = search.toLowerCase().trim();
+        if (
+          q &&
+          ![r.invoiceNumber, r.clientName, r.containerNumber, r.destination, r.shippingCompany, r.anything].some(
+            (value) => (value || "").toLowerCase().includes(q)
           )
-            return false;
-        }
+        )
+          return false;
+        if (destinationFilter !== "all" && r.destination?.trim() !== destinationFilter) return false;
+        if (shippingCompanyFilter !== "all" && r.shippingCompany?.trim() !== shippingCompanyFilter) return false;
+        const orderDay = (r.orderDate || "").slice(0, 10);
+        if (dateFrom && (!orderDay || orderDay < dateFrom)) return false;
+        if (dateTo && (!orderDay || orderDay > dateTo)) return false;
+        return true;
+      }),
+    [allDisplayRows, search, destinationFilter, shippingCompanyFilter, dateFrom, dateTo]
+  );
+
+  const filtered = useMemo(
+    () =>
+      scopedRows.filter((r) => {
         if (filterDocs === "has" && r.documentCount === 0) return false;
         if (filterDocs === "missing" && r.documentCount > 0) return false;
         if (filterStatus !== "all") {
-          const effectiveStatus = r.status === "PENDING_VERIFICATION" ? "VERIFIED" : r.status;
-          if (effectiveStatus !== filterStatus) return false;
+          const effective = r.status === "PENDING_VERIFICATION" ? "VERIFIED" : r.status;
+          if (effective !== filterStatus) return false;
         }
+        if (quickMode === "overdue" && !isShippingEtaOverdue(r, today)) return false;
+        if (quickMode === "arrived" && !r.containerArrivedDate) return false;
         return true;
       }),
-    [allDisplayRows, search, filterDocs, filterStatus]
+    [scopedRows, filterDocs, filterStatus, quickMode, today]
   );
 
-  const hasActiveFilters = filterDocs !== "all" || filterStatus !== "all";
+  // Reset the paginator when the selected record set changes.
+  useEffect(
+    () => setPage(1),
+    [search, destinationFilter, shippingCompanyFilter, dateFrom, dateTo, filterStatus, filterDocs, quickMode, pageSize]
+  );
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const visibleRows = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const hasActiveFilters = filterDocs !== "all" || filterStatus !== "all" || quickMode !== "all";
+
+  function applyQuickSelection(value: ShippingQuickSelection) {
+    if (value === "all") {
+      setFilterStatus("all");
+      setFilterDocs("all");
+      setQuickMode("all");
+    } else if (value === "LOADING" || value === "VERIFIED" || value === "FINALIZED") {
+      setFilterStatus(value);
+      setFilterDocs("all");
+      setQuickMode("all");
+    } else if (value === "missing" || value === "has") {
+      setFilterStatus("all");
+      setFilterDocs(value);
+      setQuickMode("all");
+    } else {
+      setFilterStatus("all");
+      setFilterDocs("all");
+      setQuickMode(value);
+    }
+  }
 
   return (
     <>
-      <div className="shipping-modern space-y-5">
-        <div className="shipping-workspace space-y-4">
-        {/* ── Top Controls ── */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative flex-1 min-w-48">
+      <div className="space-y-3" data-testid="shipping-compact-dashboard">
+        <ShippingDashboardOverview
+          rows={scopedRows}
+          today={today}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onDateFrom={setDateFrom}
+          onDateTo={setDateTo}
+          onOpenInvoicing={() => navigate("/factory/sales/new")}
+          allowNewOrder={Boolean(me?.role && me.role !== "View Only")}
+          showOrderValue={colVis.containerCost}
+        />
+        {/* ── Compact search + controls ── */}
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-card p-2.5 shadow-sm dark:bg-[#101c30]">
+          <div className="relative min-w-[200px] flex-[2_1_260px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search invoice, client, container, destination…"
-              className="shipping-search pl-9"
+              className="h-9 rounded-lg bg-background/80 pl-8 text-xs"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               data-testid="input-search"
             />
           </div>
+          <Select
+            value={filterStatus}
+            onValueChange={(value) => {
+              setFilterStatus(value);
+              setQuickMode("all");
+            }}
+          >
+            <SelectTrigger
+              className="h-9 min-w-[110px] flex-[1_1_110px] rounded-lg text-xs"
+              data-testid="shipping-select-status"
+            >
+              <SelectValue placeholder="All statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="LOADING">Loading</SelectItem>
+              <SelectItem value="VERIFIED">Verified</SelectItem>
+              <SelectItem value="FINALIZED">Finalized</SelectItem>
+              <SelectItem value="DRAFT">Draft</SelectItem>
+              <SelectItem value="CANCELLED">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={destinationFilter} onValueChange={setDestinationFilter}>
+            <SelectTrigger
+              className="h-9 min-w-[125px] flex-[1_1_125px] rounded-lg text-xs"
+              data-testid="shipping-select-destination"
+            >
+              <SelectValue placeholder="All destinations" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All destinations</SelectItem>
+              {destinations.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {value}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={shippingCompanyFilter} onValueChange={setShippingCompanyFilter}>
+            <SelectTrigger
+              className="h-9 min-w-[130px] flex-[1_1_130px] rounded-lg text-xs"
+              data-testid="shipping-select-company"
+            >
+              <SelectValue placeholder="All shipping companies" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All shipping companies</SelectItem>
+              {shippingCompanies.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {value}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button
             variant={showFilters ? "secondary" : "outline"}
-            className="shipping-action"
+            className="h-9 rounded-lg text-xs"
             onClick={() => setShowFilters((v) => !v)}
             data-testid="button-toggle-filters"
           >
@@ -306,7 +448,7 @@ export default function FactoryShippingContainers() {
           </Button>
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="shipping-action" data-testid="button-toggle-columns">
+              <Button variant="outline" className="h-9 rounded-lg text-xs" data-testid="button-toggle-columns">
                 <SlidersHorizontal className="h-4 w-4 mr-1" />
                 Columns
                 {hiddenCount > 0 && (
@@ -321,7 +463,13 @@ export default function FactoryShippingContainers() {
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   Show / Hide Columns
                 </p>
-                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={showAllCols} data-testid="button-show-all-columns">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  onClick={showAllCols}
+                  data-testid="button-show-all-columns"
+                >
                   Show all
                 </Button>
               </div>
@@ -345,44 +493,63 @@ export default function FactoryShippingContainers() {
         {showFilters && (
           <FilterPanel
             filterDocs={filterDocs}
-            setFilterDocs={setFilterDocs}
+            setFilterDocs={(value) => {
+              setFilterDocs(value);
+              setQuickMode("all");
+            }}
             filterStatus={filterStatus}
-            setFilterStatus={setFilterStatus}
+            setFilterStatus={(value) => {
+              setFilterStatus(value);
+              setQuickMode("all");
+            }}
           />
         )}
 
-        {/* ── Legend ── */}
-        <div className="shipping-legend flex items-center gap-4 flex-wrap text-xs">
-          <span className="flex items-center gap-1">
-            <CheckCircle2 className="h-3.5 w-3.5 text-green-600" /> Has documents
-          </span>
-          <span className="flex items-center gap-1">
-            <XCircle className="h-3.5 w-3.5 text-red-500" /> No documents
-          </span>
-          <span>
-            Click editable cells (Container #, Destination, ETA, Shipping Co., Note, Anything, Arrived) to edit inline.
-          </span>
-        </div>
+        <ShippingStatusChips
+          rows={scopedRows}
+          today={today}
+          filterStatus={filterStatus}
+          filterDocs={filterDocs}
+          quickMode={quickMode}
+          onSelect={applyQuickSelection}
+        />
+        <p className="px-1 text-[11px] text-muted-foreground">
+          Select Container #, Destination, ETA, Shipping Co., Note, Anything or Arrived to edit inline.
+        </p>
 
         {/* ── Main Table ── */}
-        <div className="shipping-grid">
-          <Table mobileLayout="cards" className="text-xs" scrollLabel="Shipping containers table">
-            <TableHeader>
-              <TableRow>
+        <div className="overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm dark:bg-[#0e1b2e]">
+          <Table
+            mobileLayout="cards"
+            className="text-xs [&_td]:px-2.5 [&_td]:py-1.5 [&_th]:h-9 [&_th]:px-2.5 [&_th]:py-1.5"
+            wrapperClassName="overflow-x-auto"
+            style={{ minWidth: "1100px" }}
+          >
+            <TableHeader className="sticky top-0 z-20">
+              <TableRow className="bg-slate-100/90 hover:bg-slate-100/90 dark:bg-[#182a43] dark:hover:bg-[#182a43]">
                 {colVis.orderDate && <TableHead className="text-xs w-20 min-w-[80px]">Order Date</TableHead>}
                 {colVis.invoiceNumber && (
-                  <TableHead className={cn(stickyHeadBase, "shipping-sticky")} style={{ left: INV_LEFT, minWidth: "130px", width: "130px" }}>
+                  <TableHead
+                    className={cn(stickyHeadBase, "shipping-sticky")}
+                    style={{ left: INV_LEFT, minWidth: "130px", width: "130px" }}
+                  >
                     Invoice #
                   </TableHead>
                 )}
                 {colVis.clientName && (
-                  <TableHead className={cn(stickyHeadBase, "shipping-sticky")} style={{ left: clientLeft, minWidth: "144px", width: "144px" }}>
+                  <TableHead
+                    className={cn(stickyHeadBase, "shipping-sticky")}
+                    style={{ left: clientLeft, minWidth: "144px", width: "144px" }}
+                  >
                     Client
                   </TableHead>
                 )}
                 {colVis.status && <TableHead className="text-xs w-24 min-w-[96px]">Status</TableHead>}
                 {colVis.containerNumber && (
-                  <TableHead className={cn(stickyHeadBase, "shipping-sticky")} style={{ left: containerLeft, minWidth: "120px", width: "120px" }}>
+                  <TableHead
+                    className={cn(stickyHeadBase, "shipping-sticky")}
+                    style={{ left: containerLeft, minWidth: "120px", width: "120px" }}
+                  >
                     Container #
                   </TableHead>
                 )}
@@ -414,8 +581,12 @@ export default function FactoryShippingContainers() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((r) => (
-                  <TableRow key={r.id} data-testid={`row-record-${r.id}`}>
+                visibleRows.map((r) => (
+                  <TableRow
+                    key={r.id}
+                    className="border-border/40 hover:bg-blue-500/[0.035] dark:hover:bg-blue-400/[0.055]"
+                    data-testid={`row-record-${r.id}`}
+                  >
                     {colVis.orderDate && (
                       <TableCell className="text-xs whitespace-nowrap">{fmtDate(r.orderDate)}</TableCell>
                     )}
@@ -453,7 +624,9 @@ export default function FactoryShippingContainers() {
                           }}
                           data-testid={`button-status-${r.id}`}
                         >
-                          <Badge className={cn("shipping-status whitespace-nowrap cursor-pointer", statusColor(r.status))}>
+                          <Badge
+                            className={cn("shipping-status whitespace-nowrap cursor-pointer", statusColor(r.status))}
+                          >
                             {statusLabel(r.status)}
                           </Badge>
                         </button>
@@ -630,8 +803,54 @@ export default function FactoryShippingContainers() {
               )}
             </TableBody>
           </Table>
-        </div>
-
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 px-3 py-2 text-xs text-muted-foreground">
+            <span>
+              Showing {filtered.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}–
+              {Math.min(currentPage * pageSize, filtered.length)} of {filtered.length} orders
+            </span>
+            <div className="flex items-center gap-1.5">
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-8 w-8 rounded-lg"
+                disabled={currentPage <= 1}
+                onClick={() => setPage((value) => Math.max(1, value - 1))}
+                aria-label="Previous shipping page"
+                data-testid="shipping-prev-page"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+              </Button>
+              <span className="min-w-14 text-center tabular-nums">
+                {currentPage} / {pageCount}
+              </span>
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-8 w-8 rounded-lg"
+                disabled={currentPage >= pageCount}
+                onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
+                aria-label="Next shipping page"
+                data-testid="shipping-next-page"
+              >
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+              <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))}>
+                <SelectTrigger
+                  className="h-8 w-[98px] rounded-lg text-xs"
+                  aria-label="Shipping rows per page"
+                  data-testid="shipping-page-size"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10 / page</SelectItem>
+                  <SelectItem value="20">20 / page</SelectItem>
+                  <SelectItem value="50">50 / page</SelectItem>
+                  <SelectItem value="100">100 / page</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </div>
 
         {/* ── Scheduled Containers and Container Availability ── */}

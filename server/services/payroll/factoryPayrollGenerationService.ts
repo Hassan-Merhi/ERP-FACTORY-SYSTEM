@@ -3,6 +3,7 @@ import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { writeDaybookEntry } from "../../routes/factory/_helpers";
 import { rebuildPayrollGenVoucher } from "../../routes/payroll/_payrollAccountingHelper";
+import { assertNoOverlappingPayroll } from "./payrollPeriodOverlapPolicy";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 import {
   factoryAttendance,
@@ -46,6 +47,11 @@ export async function generateFactoryPayrollBatch(
 
   return db.transaction(async (tx) => {
     const finish = finishWithAudit(tx, auditTx);
+    // Serialize all payroll generation windows for this company, not merely
+    // identical date ranges, so two concurrent overlapping runs cannot race.
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${`factory-payroll-company:${companyId}`})::bigint)`
+    );
     const lockKey = buildFactoryPayrollGenerationLockKey(companyId, input.startDate, input.endDate);
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey})::bigint)`);
 
@@ -75,11 +81,34 @@ export async function generateFactoryPayrollBatch(
       return finish({ payrolls: existingPayrolls, createdCount: 0, replayed: true });
     }
 
+    // A full-month run must not accrue wages again for a previously generated
+    // partial period, even when the earlier payroll was paid or remains draft.
+    // The check precedes all deductions, advance settlements and journal writes.
+    const missingWorkerIds = missingWorkers.map((worker) => worker.id);
+    const overlappingPayrolls = await tx
+      .select({
+        id: factoryPayrolls.id,
+        workerId: factoryPayrolls.workerId,
+        periodStart: factoryPayrolls.periodStart,
+        periodEnd: factoryPayrolls.periodEnd,
+        status: factoryPayrolls.status,
+      })
+      .from(factoryPayrolls)
+      .where(
+        and(
+          eq(factoryPayrolls.companyId, companyId),
+          inArray(factoryPayrolls.workerId, missingWorkerIds),
+          lte(factoryPayrolls.periodStart, input.endDate),
+          gte(factoryPayrolls.periodEnd, input.startDate)
+        )
+      )
+      .for("update");
+    assertNoOverlappingPayroll(overlappingPayrolls, missingWorkerIds, input.startDate, input.endDate);
+
     // Ensure saved daily plans have proposal records. attachProductionBonusesToPayroll
     // will restore any already-approved orphan allocation by delta after insert.
     await syncProductionBonusProposalsForPeriod(tx, companyId, input.startDate, input.endDate);
 
-    const missingWorkerIds = missingWorkers.map((worker) => worker.id);
     const bales = await tx
       .select({ finalizedBy: factoryBales.finalizedBy, weightKg: factoryBales.weightKg })
       .from(factoryBales)

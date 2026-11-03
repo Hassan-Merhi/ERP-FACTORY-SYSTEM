@@ -8,6 +8,7 @@
  * sales-item reads under one transaction lock. Concurrent edits therefore use
  * the latest committed sale state instead of stale pre-transaction snapshots.
  */
+import { offlineEdgeText } from "../../../i18n/offlineEdgeMessages";
 import { db, type DbTransaction } from "../../../db";
 import { logger } from "../../../lib/logger";
 import { storage } from "../../../storage";
@@ -55,6 +56,8 @@ import {
 import type { VoucherAuditState } from "../../../routes/helpers/voucherAuditTrail";
 import { rebalanceVoucherRoundingTx } from "../../accounting/engineRounding";
 import { PosZmwRateError, assertZmwImportPrices } from "../posZmwRatePolicy";
+import { isPhase9LanPrimary } from "../../../edge/phase9PosOutbox";
+import { capturePosSaleEditOfflineTx } from "./posSaleEditOfflineCapture";
 
 function err(result: HandlerErrorResult): { status: number; body: PosSaleUpdateResponseBody } {
   // HandlerErrorResult bodies are plain JSON message objects; the response
@@ -406,11 +409,21 @@ export async function updatePosSale(
   const preRestrictionResult = applyPosRoleRestrictions(userRole, newLocationId, preExistingVoucher.locationId);
   if ("error" in preRestrictionResult) return err(preRestrictionResult.error);
 
+  // Factory LAN server during an outage: supplier-partner sale edits stay online-only.
+  const lanCapture = isPhase9LanPrimary();
+  if (lanCapture && spContextResult.context.isSpCompanyEdit) {
+    return err({
+      status: 409,
+      body: { code: "EDGE_POS_OFFLINE_COMPANY_UNSUPPORTED", message: offlineEdgeText("posCompanyOnlineOnly") },
+    });
+  }
+
   // Phase 21 (B): the edit audit is written on the edit's transaction.
   const transactionResult = await db.transaction(async (tx) => {
     const result = await applyPosSaleUpdateTx(tx, params, spContextResult.context);
     if (!result.error) {
       await writePosSaleUpdateAuditTx(tx, { voucherId, companyId: currentCompanyId, userId, username }, result);
+      if (lanCapture) await capturePosSaleEditOfflineTx(tx, params);
     }
     return result;
   });

@@ -1,0 +1,48 @@
+name: Offline Phase 7 writer fence contracts
+
+on:
+  push:
+    branches:
+      - feat/offline-mode-integration
+    paths:
+      - 'server/edge/phase7WriterGate.mjs'
+      - 'server/edge/phase7WriterGate.d.mts'
+      - 'server/edge/edgeRuntimePolicy.d.mts'
+      - 'server/edge/edgeBoundary.ts'
+      - 'server/edge/edgeSyncReceiver.ts'
+      - 'server/db.ts'
+      - 'server/edge/edgeRuntimePolicy.mjs'
+      - 'deploy/lan/phase7-install-writer-fence.sql'
+      - 'deploy/lan/phase7-prepare-restricted-role.sql'
+      - 'scripts/edge/verify-edge-configuration.mjs'
+      - 'tests/factory-edge-installation.test.ts'
+      - 'deploy/lan/factory-edge.env.sample'
+      - 'tests/offline-phase7-writer-gate.test.mjs'
+      - 'tests/offline-phase7-postgres-fence.sh'
+      - 'scripts/edge/audit-phase7-baseline.mjs'
+      - 'tests/offline-phase7-baseline.test.mjs'
+      - '.github/workflows/offline-phase7-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  writer-fence-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '24.22.1'
+      - name: Verify Phase 7 fail-closed contracts
+        run: node --test tests/offline-phase7-writer-gate.test.mjs tests/offline-phase7-baseline.test.mjs
+      - name: Exercise fenced writes against isolated PostgreSQL 17
+        run: bash tests/offline-phase7-postgres-fence.sh
+      - name: Install locked dependencies for TypeScript safety
+        run: npm ci --ignore-scripts
+      - name: Verify LAN edge operator preflight
+        run: node node_modules/vitest/vitest.mjs run tests/factory-edge-installation.test.ts
+      - name: Verify TypeScript contracts
+        run: npm run check

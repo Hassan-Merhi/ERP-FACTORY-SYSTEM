@@ -138,4 +138,10 @@ export interface CreatePosSaleParams {
   sessionCashAccountId: number | null | undefined;
   voucherDateFallback: string;
   body: PosSaleRequestBody;
+  /**
+   * Phase 9 cloud replay only: the currency and rate the factory LAN sale
+   * was posted at (the cashier's entered rate), used instead of the
+   * company's effective-dated rate.
+   */
+  lockedCurrency?: { currency: string; exchangeRate: string | null };
 }

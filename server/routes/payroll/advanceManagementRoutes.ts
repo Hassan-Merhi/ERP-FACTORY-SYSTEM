@@ -5,6 +5,8 @@ import { retireVouchersForRequestTx } from "../../services/accounting/voucherRet
 
 export const ADVANCE_HAS_REPAYMENTS_MESSAGE =
   "This advance has repayments. Reverse the repayments first, then delete the advance.";
+export const ADVANCE_HAS_PAYROLL_RECOVERY_MESSAGE =
+  "This advance has been settled against historical payroll deductions. Correct the affected payroll before deleting the advance.";
 import { logger } from "../../lib/logger";
 import { getClientDate } from "../../lib/dateUtils";
 import type { Express, Request, Response } from "express";
@@ -169,7 +171,14 @@ export function registerAdvanceManagementRoutes(app: Express) {
       // its daybook rows and an audit row, in one transaction.
       await db.transaction(async (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => {
         const [locked] = await tx
-          .select({ id: factoryWorkerAdvances.id })
+          .select({
+            id: factoryWorkerAdvances.id,
+            amount: factoryWorkerAdvances.amount,
+            remainingBalance: factoryWorkerAdvances.remainingBalance,
+            fullyPaid: factoryWorkerAdvances.fullyPaid,
+            repaymentType: factoryWorkerAdvances.repaymentType,
+            workerId: factoryWorkerAdvances.workerId,
+          })
           .from(factoryWorkerAdvances)
           .where(and(eq(factoryWorkerAdvances.id, id), eq(factoryWorkerAdvances.companyId, companyId)))
           .for("update");
@@ -181,6 +190,33 @@ export function registerAdvanceManagementRoutes(app: Express) {
           .where(eq(factoryAdvanceRepayments.advanceId, id));
         if (repayments.length > 0) {
           throw new HttpError(409, ADVANCE_HAS_REPAYMENTS_MESSAGE);
+        }
+
+        // Prior to deleting a settled salary-deduction advance, check paid
+        // payrolls. Payroll recovery isn't represented by a repayment row:
+        // deleting the original payment voucher would otherwise leave behind
+        // an orphan credit to Factory Worker Advances (observed in production).
+        // Worker-level deductions are not linked to an individual advance,
+        // so conservatively block an ambiguous historical deletion.
+        if (
+          locked.repaymentType === "salary_deduction" &&
+          (locked.fullyPaid || toMoney(locked.remainingBalance).lt(toMoney(locked.amount)))
+        ) {
+          const [historicalPayroll] = await tx
+            .select({ id: factoryPayrolls.id })
+            .from(factoryPayrolls)
+            .where(
+              and(
+                eq(factoryPayrolls.companyId, companyId),
+                eq(factoryPayrolls.workerId, locked.workerId),
+                inArray(factoryPayrolls.status, ["APPROVED", "PAID"]),
+                sql`CAST(${factoryPayrolls.advances} AS NUMERIC) > 0`
+              )
+            )
+            .limit(1);
+          if (historicalPayroll) {
+            throw new HttpError(409, ADVANCE_HAS_PAYROLL_RECOVERY_MESSAGE);
+          }
         }
 
         // Delete the advance payment voucher (PAYMENT-ADV-{id}-*) and its entries.
@@ -248,6 +284,9 @@ export function registerAdvanceManagementRoutes(app: Express) {
     } catch (error: unknown) {
       if (error instanceof HttpError && error.message === ADVANCE_HAS_REPAYMENTS_MESSAGE) {
         return res.status(409).json({ message: error.message, code: "ADVANCE_HAS_REPAYMENTS" });
+      }
+      if (error instanceof HttpError && error.message === ADVANCE_HAS_PAYROLL_RECOVERY_MESSAGE) {
+        return res.status(409).json({ message: error.message, code: "ADVANCE_HAS_PAYROLL_RECOVERY" });
       }
       if (!(error instanceof HttpError)) logger.error("Error deleting advance:", { error: error });
       sendHttpError(res, error);

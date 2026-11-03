@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Camera, CheckCircle2, Flashlight, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translateCameraScanTitle } from "@/i18n/mobileCameraScanTranslations";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -31,8 +31,14 @@ interface MobileBarcodeScannerProps {
  * reads travel through exactly the same page-specific handler as manual scans.
  * The decoder is native when supported, with lazily loaded ZXing for iOS Safari.
  */
-export function MobileBarcodeScanner({ onScan, disabled = false, className, feedback = null }: MobileBarcodeScannerProps) {
-  const { language } = useApplicationLanguage();
+export function MobileBarcodeScanner({
+  onScan,
+  disabled = false,
+  className,
+  feedback = null,
+}: MobileBarcodeScannerProps) {
+  // Shared scanner: tolerate rendering outside the language provider.
+  const language = useOptionalApplicationLanguage()?.language ?? "en";
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastDetected, setLastDetected] = useState("");
@@ -63,9 +69,8 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className, feed
     let canceled = false;
     let timeout: ReturnType<typeof setTimeout> | undefined;
     let stream: MediaStream | undefined;
-    // The element the stream was attached to; cleared on cleanup even if the ref moved.
-    let attachedVideo: HTMLVideoElement | null = null;
     let decoder: CameraBarcodeDecoder | null = null;
+    const videoElement = videoRef.current;
     // Re-presenting the same retail item should count again after a brief removal;
     // suppress duplicate frames while leaving different barcodes immediately scannable.
     const gate = new ContinuousScanGate(1200, 2);
@@ -120,7 +125,6 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className, feed
         const video = videoRef.current;
         if (!video) throw new Error("Camera preview could not open.");
         video.srcObject = acquired;
-        attachedVideo = video;
         await video.play();
         if (canceled) return;
         const track = acquired.getVideoTracks?.()[0];
@@ -175,7 +179,7 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className, feed
       document.removeEventListener("visibilitychange", onVisibilityChange);
       stream?.getTracks().forEach((track) => track.stop());
       trackRef.current = null;
-      if (attachedVideo) attachedVideo.srcObject = null;
+      if (videoElement) videoElement.srcObject = null;
       decoder?.dispose();
       gate.reset();
     };
@@ -237,23 +241,36 @@ export function MobileBarcodeScanner({ onScan, disabled = false, className, feed
             />
             <div className="pointer-events-none absolute inset-[18%] rounded-md border-2 border-emerald-400/80" />
             {visibleFeedback && (
-              <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10" role="status" aria-live="polite" data-testid="camera-scan-result-popup">
-                <div className={`rounded-xl border-2 p-3 text-white shadow-2xl ${ 
-                  visibleFeedback.type === "success"
-                    ? "border-emerald-300 bg-emerald-700"
-                    : visibleFeedback.type === "duplicate"
-                      ? "border-red-300 bg-red-700"
-                      : visibleFeedback.type === "warn"
-                        ? "border-amber-200 bg-amber-500 text-amber-950"
-                        : "border-red-300 bg-red-700"
-                }`}>
+              <div
+                className="pointer-events-none absolute inset-x-2 bottom-2 z-10"
+                role="status"
+                aria-live="polite"
+                data-testid="camera-scan-result-popup"
+              >
+                <div
+                  className={`rounded-xl border-2 p-3 text-white shadow-2xl ${
+                    visibleFeedback.type === "success"
+                      ? "border-emerald-300 bg-emerald-700"
+                      : visibleFeedback.type === "duplicate"
+                        ? "border-red-300 bg-red-700"
+                        : visibleFeedback.type === "warn"
+                          ? "border-amber-200 bg-amber-500 text-amber-950"
+                          : "border-red-300 bg-red-700"
+                  }`}
+                >
                   <div className="flex items-center gap-2 text-base font-black uppercase tracking-wide">
-                    {visibleFeedback.type === "success" ? <CheckCircle2 className="h-6 w-6 shrink-0" /> :
-                      visibleFeedback.type === "warn" ? <AlertTriangle className="h-6 w-6 shrink-0" /> :
-                        <XCircle className="h-6 w-6 shrink-0" />}
+                    {visibleFeedback.type === "success" ? (
+                      <CheckCircle2 className="h-6 w-6 shrink-0" />
+                    ) : visibleFeedback.type === "warn" ? (
+                      <AlertTriangle className="h-6 w-6 shrink-0" />
+                    ) : (
+                      <XCircle className="h-6 w-6 shrink-0" />
+                    )}
                     <span>{translateCameraScanTitle(visibleFeedback.type, language)}</span>
                   </div>
-                  <div className="mt-1 break-all font-mono text-sm font-semibold">{visibleFeedback.referenceNumber}</div>
+                  <div className="mt-1 break-all font-mono text-sm font-semibold">
+                    {visibleFeedback.referenceNumber}
+                  </div>
                   <div className="mt-1 text-sm font-medium leading-snug">{visibleFeedback.message}</div>
                 </div>
               </div>
