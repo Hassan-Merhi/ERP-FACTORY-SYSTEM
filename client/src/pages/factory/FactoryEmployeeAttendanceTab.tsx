@@ -12,7 +12,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
-import { useAuthenticatedUser } from "@/app/useAuthenticatedUser";
 import { AttendanceAdminApprovalDialog } from "./factoryattendance/components/AttendanceAdminApprovalDialog";
 import { attendancePastDates, attendanceToday, type AttendanceAdminCredentials } from "./factoryattendance/attendanceEditPolicy";
 import {
@@ -144,8 +143,6 @@ function SummaryCard({
 
 export default function FactoryEmployeeAttendanceTab() {
   const { toast } = useToast();
-  const { user } = useAuthenticatedUser();
-  const isOwner = (user?.currentRole ?? user?.role) === "Owner";
   const [mode, setMode] = useState<ViewMode>("daily");
 
   const [selectedDate, setSelectedDate] = useState(attendanceToday);
@@ -204,14 +201,14 @@ export default function FactoryEmployeeAttendanceTab() {
       notes: notesMap[e.id] || undefined,
     }));
     const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
-    if (priorDates.length && !isOwner) {
+    if (priorDates.length) {
       setApprovalDates(priorDates);
       setPendingApprovalRecords(records);
       setApprovalOpen(true);
     } else {
       saveMutation.mutate({ records });
     }
-  }, [data, selectedDate, attendanceMap, notesMap, saveMutation, isOwner]);
+  }, [data, selectedDate, attendanceMap, notesMap, saveMutation]);
 
   const approveAttendanceSave = (credentials: AttendanceAdminCredentials) => {
     if (pendingApprovalRecords) saveMutation.mutate({ records: pendingApprovalRecords, credentials });
@@ -499,7 +496,7 @@ export default function FactoryEmployeeAttendanceTab() {
           </Card>
         </>
       )}
-      {selectedDate < attendanceToday() && !isOwner && (
+      {selectedDate < attendanceToday() && (
         <Badge variant="secondary">Earlier date — Admin approval required to save</Badge>
       )}
       <AttendanceAdminApprovalDialog
@@ -515,8 +512,6 @@ export default function FactoryEmployeeAttendanceTab() {
 
 function PerEmployeeView() {
   const { toast } = useToast();
-  const { user } = useAuthenticatedUser();
-  const isOwner = (user?.currentRole ?? user?.role) === "Owner";
   const [selectedEmpId, setSelectedEmpId] = useState<string>("");
   const [empComboOpen, setEmpComboOpen] = useState(false);
   const [startDate, setStartDate] = useState(attendanceToday);
@@ -597,7 +592,7 @@ function PerEmployeeView() {
       return { employeeId: empIdNum, attendanceDate: d, status: "Absent" };
     });
     const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
-    if (priorDates.length && !isOwner) {
+    if (priorDates.length) {
       setApprovalDates(priorDates);
       setPendingApprovalRecords(records);
       setApprovalOpen(true);
@@ -787,7 +782,7 @@ function PerEmployeeView() {
           </CardContent>
         </Card>
       )}
-      {!isOwner && attendancePastDates(dates).length > 0 && (
+      {attendancePastDates(dates).length > 0 && (
         <Badge variant="secondary">Earlier dates require Admin approval to save</Badge>
       )}
       <AttendanceAdminApprovalDialog
