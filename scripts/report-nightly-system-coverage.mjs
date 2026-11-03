@@ -10,7 +10,7 @@ import path from "node:path";
 
 const ROOT = path.resolve(".");
 const OUTPUT = path.join(ROOT, "artifacts/nightly-system-coverage");
-const ROOTS = ["tests", "server", "shared", "client/src"];
+const ROOTS = ["tests", "server", "shared", "client/src", "scripts"];
 const SKIP = new Set(["node_modules", "dist", ".git", "coverage", "artifacts", "build", "fixtures"]);
 const domains = [
   { key: "sales_pos", label: "ERP sales / POS / invoice / returns", regex: /pos|sales|invoice|receipt|return|credit.note|checkout/i },
@@ -49,8 +49,16 @@ async function enumerate(dir) {
 
 const files = (await Promise.all(ROOTS.map(enumerate))).flat().sort();
 if (files.length === 0) throw new Error("No tests discovered; refusing a meaningless whole-system report");
+const registeredBackend = files.filter((file) =>
+  /^(?:tests\/(?!ui\/)|server\/|shared\/).*\.test\.ts$/.test(file)
+);
+const registeredFrontend = files.filter((file) =>
+  /^(?:tests\/ui\/|client\/src\/).*\.test\.(?:ts|tsx)$/.test(file)
+);
+const registered = new Set([...registeredBackend, ...registeredFrontend]);
+const standalone = files.filter((file) => !registered.has(file));
 const categories = domains.map(({ key, label, regex }) => {
-  const matching = files.filter((file) => regex.test(file));
+  const matching = files.filter((file) => registered.has(file) && regex.test(file));
   return {
     key, label, recognizedTestFiles: matching.length,
     suiteExamples: matching.slice(0, 12),
@@ -58,17 +66,21 @@ const categories = domains.map(({ key, label, regex }) => {
     independentlyVerifiedInThisInventory: false,
   };
 });
-const unmatched = files.filter((file) => !domains.some(({ regex }) => regex.test(file)));
+const unmatched = [...registered].filter((file) => !domains.some(({ regex }) => regex.test(file)));
 const report = {
   generatedAt: new Date().toISOString(),
   sourceSha: process.env.GITHUB_SHA || null,
   reportType: "test-file-inventory-not-transaction-proof",
   totalDiscoveredTestFiles: files.length,
+  registeredBackendSuiteFiles: registeredBackend.length,
+  registeredFrontendSuiteFiles: registeredFrontend.length,
+  standaloneTestFilesNotRunByTheTwoVitestConfigs: standalone,
   categories,
   unmatchedTestFiles: unmatched,
   explanation: [
     "A matching filename is evidence that a test suite exists, not that the tests pass.",
     "The backend and frontend jobs independently execute their registered suites and enforce measured coverage thresholds.",
+    "Standalone .mjs and other test files are inventoried but NOT automatically executed by those two Vitest configurations.",
     "The disposable browser job performs actual ERP and Factory sample transactions.",
     "A domain with no matching test filenames needs explicit review, not an automatic claim of zero test coverage.",
     "All real company behavior is out of scope. Never run fake transaction jobs against production.",
@@ -82,13 +94,20 @@ const markdown = [
   "> **Not a 100% coverage certificate.** This report inventories the suites found in the repository. CI test execution and coverage metrics are separate evidence.",
   "",
   "Test files discovered: " + files.length,
+  "Registered backend Vitest files: " + registeredBackend.length,
+  "Registered frontend Vitest files: " + registeredFrontend.length,
+  "Other standalone test files NOT included in those Vitest runs: " + standalone.length,
   "",
   "| System domain | Matching suite files | Inventory status |",
   "| --- | ---: | --- |",
   ...categories.map(({ label, recognizedTestFiles, testFilenameEvidence }) =>
     "| " + label + " | " + recognizedTestFiles + " | " + testFilenameEvidence + " |"),
   "",
-  "Unclassified test files: " + unmatched.length,
+  "Unclassified registered test files: " + unmatched.length,
+  "",
+  "## Other unregistered tests",
+  "",
+  ...standalone.map((file) => "- " + file),
   "",
   "## Gaps and follow-up",
   "",
@@ -98,4 +117,4 @@ const markdown = [
 ].join("\n");
 await fs.writeFile(path.join(OUTPUT, "inventory.md"), markdown + "\n");
 if (process.env.GITHUB_STEP_SUMMARY) await fs.appendFile(process.env.GITHUB_STEP_SUMMARY, markdown + "\n");
-console.log(JSON.stringify({ totalTestFiles: files.length, categories: categories.map(({key, recognizedTestFiles}) => ({key, recognizedTestFiles})), unclassified: unmatched.length }));
+console.log(JSON.stringify({ totalTestFiles: files.length, registeredBackend: registeredBackend.length, registeredFrontend: registeredFrontend.length, standaloneNotExecuted: standalone.length, categories: categories.map(({key, recognizedTestFiles}) => ({key, recognizedTestFiles})), unclassified: unmatched.length }));
