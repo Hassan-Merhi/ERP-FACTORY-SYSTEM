@@ -463,7 +463,7 @@ export default function FactoryCustomers() {
                     <TableCell className="py-3 font-medium sm:py-3" data-testid={`text-customer-name-${customer.id}`}>
                       <div className="flex items-center gap-3">
                         <div aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600/10 text-xs font-bold text-blue-600 dark:bg-blue-400/15 dark:text-blue-300">
-                          {customer.legalName.trim().split(/\s+/).slice(0, 2).map((part) => part.charAt(0)).join("").toUpperCase()}
+                          {(customer.legalName ?? "").trim().split(/\s+/).slice(0, 2).map((part) => part.charAt(0)).join("").toUpperCase()}
                         </div>
                         <div className="min-w-0">
                           <button
