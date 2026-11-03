@@ -7,7 +7,7 @@
     "node": "22.x"
   },
   "dependencies": {
-    "@vercel/blob": "2.4.0",
+    "@vercel/blob": "2.8.2",
     "jose": "6.1.0"
   }
 }
