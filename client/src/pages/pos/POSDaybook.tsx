@@ -124,7 +124,7 @@ export default function POSDaybook() {
       vouchers
         .filter((voucher) => {
           const isSupportedType = ["Sales", "Stock Transfer", "StockTransfer"].includes(voucher.voucherType);
-          if (!isSupportedType) return false;
+          if (!isSupportedType || voucher.optional) return false;
           if (!isPOS) return true;
           return assignedLocationIds.has(voucher.locationId);
         })

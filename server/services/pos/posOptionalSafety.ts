@@ -10,7 +10,7 @@
  *
  * Use this on BOTH optional-status write paths, not only the POS Daybook UI.
  */
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { companies, intercompanyPosConfigs, salesItems } from "@shared/schema";
 import type { DbTransaction } from "../../db";
 import { HttpError } from "../../lib/httpHandlers";

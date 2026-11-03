@@ -1,7 +1,7 @@
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "../server/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import * as schema from "../shared/schema";
 import { cleanupTestData, closeTestServer, getInventoryQty, seedTestData, type TestContext } from "./setup";
 import { posOptionalLinkedSettlementBlocked } from "../server/services/pos/posOptionalSafety";
@@ -83,5 +83,34 @@ describe("ERP POS optional stock and accounting lifecycle", () => {
     const repeatRestore = await agent.patch(`/api/vouchers/${voucherId}/optional`).send({ optional: false });
     expect(repeatRestore.status).toBe(200);
     expect(await getInventoryQty(ctx.locationId, stockItemId)).toBe(beforeQty - 3);
+  }, 120_000);
+
+  it("refuses reactivation if the returned stock was subsequently used, without changing the optional status", async () => {
+    const stockItemId = ctx.stockItemIds[1];
+    const voucherId = await (async () => {
+      const response = await agent.post("/api/pos/sales").send({
+        locationId: ctx.locationId,
+        items: [{ stockItemId, quantity: 1, rate: 20 }],
+        paymentAccountType: "ledger",
+        paymentAccountId: ctx.cashAccountId,
+        voucherDate: new Date().toISOString().slice(0, 10),
+        clientSaleId: `pos-optional-shortage-${Date.now()}`,
+      });
+      expect(response.status, JSON.stringify(response.body)).toBe(200);
+      return Number(response.body.voucher.id);
+    })();
+    const suspend = await agent.patch(`/api/vouchers/${voucherId}/optional`).send({ optional: true });
+    expect(suspend.status, JSON.stringify(suspend.body)).toBe(200);
+
+    await db.update(schema.inventory).set({ quantity: "0.000", totalValue: "0.00" })
+      .where(and(eq(schema.inventory.companyId, ctx.companyId),
+        eq(schema.inventory.locationId, ctx.locationId), eq(schema.inventory.stockItemId, stockItemId)));
+
+    const attempt = await agent.patch(`/api/vouchers/${voucherId}/optional`).send({ optional: false });
+    expect(attempt.status).toBe(409);
+    expect(String(attempt.body.message)).toMatch(/insufficient stock/i);
+    const [voucher] = await db.select().from(schema.vouchers).where(eq(schema.vouchers.id, voucherId));
+    expect(voucher.optional).toBe(true);
+    expect(await getInventoryQty(ctx.locationId, stockItemId)).toBe(0);
   }, 120_000);
 });
