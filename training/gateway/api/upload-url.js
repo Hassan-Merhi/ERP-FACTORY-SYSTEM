@@ -2,7 +2,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { issueSignedToken, presignUrl } from "@vercel/blob";
 
 const store = "store_TXyFGTsySrCeQhOj";
-const allowed = /^training\/videos\/[a-z0-9-]{1,80}\/[0-9a-f]{40}\.(webm|vtt|png)$/;
+const allowed = /^training\/videos\/[a-z0-9-]{1,80}\/[0-9a-f]{40}\.(webm|mp4|vtt|png)$/;
 const jwks = createRemoteJWKSet(new URL("https://token.actions.githubusercontent.com/.well-known/jwks"));
 const workflow = "Hassan-Merhi/ERP-FACTORY-SYSTEM/.github/workflows/publish-training-video.yml@refs/heads/main";
 
@@ -32,9 +32,9 @@ export default { async fetch(request) {
       return Response.json({ error: "invalid upload" }, { status: 400 });
     }
     const ext = key.slice(key.lastIndexOf("."));
-    const limit = ext === ".webm" ? 100 * 1024 * 1024 : ext === ".png" ? 10 * 1024 * 1024 : 512 * 1024;
+    const limit = [".webm", ".mp4"].includes(ext) ? 100 * 1024 * 1024 : ext === ".png" ? 10 * 1024 * 1024 : 512 * 1024;
     if (size > limit) return Response.json({ error: "upload too large" }, { status: 413 });
-    const type = ext === ".webm" ? "video/webm" : ext === ".vtt" ? "text/vtt" : "image/png";
+    const type = ext === ".webm" ? "video/webm" : ext === ".mp4" ? "video/mp4" : ext === ".vtt" ? "text/vtt" : "image/png";
     const token = await issueSignedToken({
       pathname: key, operations: ["put"], validUntil: Date.now() + 12 * 60000,
       allowedContentTypes: [type], maximumSizeInBytes: size, allowOverwrite: false,
