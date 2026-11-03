@@ -160,6 +160,12 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+  whole-system:
+    name: All backend / frontend / security / accounting coverage
+    uses: ./.github/workflows/nightly-system-regression.yml
+    permissions:
+      contents: read
+
   notify:
     needs: [plan, record]
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.record == 'true'
@@ -195,8 +201,8 @@ jobs:
             --body-file "$RUNNER_TEMP/training-review-body.md"
 
   notify-transaction-failure:
-    needs: transactions
-    if: always() && needs.transactions.result == 'failure'
+    needs: [transactions, whole-system]
+    if: always() && (needs.transactions.result != 'success' || needs.whole-system.result != 'success')
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
@@ -210,7 +216,7 @@ jobs:
         run: |
           set -euo pipefail
           {
-            echo "The nightly disposable ERP/Factory transaction suite or its reconciliation failed."
+            echo "The nightly disposable ERP/Factory transaction suite, its reconciliation, or the full system regression suite failed."
             echo
             echo "Inspect browser screenshots, the reconciliation JSON report and server logs:"
             echo "$RUN_URL"
@@ -218,5 +224,5 @@ jobs:
             echo "No real-company accounting or inventory was touched. Do not publish affected tutorials until the discrepancy is investigated."
           } > "$RUNNER_TEMP/nightly-reconciliation-failure.md"
           gh issue create --repo "$GITHUB_REPOSITORY" \
-            --title "Nightly fake-company transaction audit failed – run $GITHUB_RUN_ID" \
+            --title "Nightly ERP/Factory system audit failed – run $GITHUB_RUN_ID" \
             --body-file "$RUNNER_TEMP/nightly-reconciliation-failure.md"
