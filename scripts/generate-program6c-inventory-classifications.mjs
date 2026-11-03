@@ -61,13 +61,27 @@ const findings = [
     ),
   );
 
-const seen = new Set();
+// The source audits report every occurrence, including repeated references in
+// the same file. Finding IDs intentionally identify a logical finding rather
+// than one individual line. Only generate one review row per logical finding;
+// reject ID reuse across different findings rather than hiding a collision.
+const seen = new Map();
+const uniqueFindings = [];
 for (const finding of findings) {
   if (!finding.id || typeof finding.id !== "string") {
     fail("Every review finding must include a stable string id");
   }
-  if (seen.has(finding.id)) fail(`Duplicate finding id in report: ${finding.id}`);
-  seen.add(finding.id);
+  const signature = JSON.stringify([
+    finding.audit, finding.file, finding.endpoint,
+    finding.classification ?? finding.category ?? null, finding.severity,
+  ]);
+  const existing = seen.get(finding.id);
+  if (existing !== undefined) {
+    if (existing !== signature) fail(`Conflicting finding id in report: ${finding.id}`);
+    continue;
+  }
+  seen.set(finding.id, signature);
+  uniqueFindings.push(finding);
 }
 
 const document = {
@@ -80,7 +94,7 @@ const document = {
     "Use verified-unbounded-read, bounded-by-design, mutation-or-cache-only, false-positive, or deferred.",
     "Document preservation of company isolation, ordering, totals, running balances, reversals, traceability, and history for behavior-affecting changes.",
   ],
-  classifications: findings.map((finding) => ({
+  classifications: uniqueFindings.map((finding) => ({
     findingId: finding.id,
     audit: finding.audit,
     severity: finding.severity,
