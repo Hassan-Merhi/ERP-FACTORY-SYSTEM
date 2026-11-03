@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
+import { AttendanceReportRequestError, readAttendanceReportResponse } from "./factoryworkerattendancereport/reportResponse";
+import { validateAttendanceReportDateRange } from "@shared/attendanceReportDateRange";
 
 import type {
   AttendanceFilter,
@@ -82,6 +84,10 @@ export default function FactoryWorkerAttendanceReport() {
     return { startDate: customStart, endDate: customEnd };
   }, [mode, customStart, customEnd]);
 
+  const dateRangeError = useMemo(
+    () => validateAttendanceReportDateRange(startDate, endDate),
+    [startDate, endDate]
+  );
   const queryKey = ["/api/factory/workers/attendance-report", startDate, endDate];
 
   const { data, isLoading, isError, error, refetch } = useQuery<AttendanceReportData>({
@@ -89,14 +95,17 @@ export default function FactoryWorkerAttendanceReport() {
     queryFn: async () => {
       const res = await fetch(`/api/factory/workers/attendance-report?startDate=${startDate}&endDate=${endDate}`, {
         credentials: "include",
+        cache: "no-store",
+        headers: { Accept: "application/json" },
       });
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.message || "Failed");
-      }
-      return res.json();
+      return readAttendanceReportResponse(res);
     },
-    retry: 1,
+    enabled: dateRangeError === null,
+    // A proxy 502/503 can be transient. Do not retry denied, missing or malformed responses.
+    retry: (failureCount, requestError) =>
+      failureCount < 2 &&
+      (!(requestError instanceof AttendanceReportRequestError) || requestError.retryable),
+    retryDelay: (failureCount) => Math.min(1000 * 2 ** failureCount, 3000),
   });
 
   /* Mutation: save single cell */
@@ -453,6 +462,14 @@ export default function FactoryWorkerAttendanceReport() {
           {saveMutation.isPending && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
         </Button>
       </div>
+
+      {dateRangeError && (
+        <Card>
+          <CardContent className="p-4 text-sm text-muted-foreground">
+            {dateRangeError}
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Loading / Error ─────────────────────────────────────────────────── */}
       {isLoading && (
