@@ -3,7 +3,7 @@ import { issueSignedToken, presignUrl } from "@vercel/blob";
 
 const store = "store_TXyFGTsySrCeQhOj";
 const allowed = /^training\/videos\/[a-z0-9-]{1,80}\/[0-9a-f]{40}\.(?:webm|vtt|png)$/;
-const host = "store_txyfgtsysrceqhoj.private.blob.vercel-storage.com";
+const host = "txyfgtsysrceqhoj.private.blob.vercel-storage.com";
 
 export default { async fetch(request) {
   if (request.method !== "GET") return Response.json({ error: "method" }, { status: 405 });
@@ -23,7 +23,7 @@ export default { async fetch(request) {
   if (process.env.BLOB_STORE_ID !== store) return Response.json({ error: "store unavailable" }, { status: 503 });
   try {
     const token = await issueSignedToken({ pathname: key, operations: ["get"], validUntil: Date.now() + 100000 });
-    const result = await presignUrl(token, { pathname: key, operation: "get", validUntil: Date.now() + 60000 });
+    const result = await presignUrl(token, { pathname: key, operation: "get", access: "private", validUntil: Date.now() + 60000 });
     const url = new URL(result.presignedUrl);
     if (url.host !== host || url.pathname !== "/" + key) throw Error("Invalid storage response");
     return Response.json({ url: result.presignedUrl }, { headers: { "cache-control": "no-store" } });

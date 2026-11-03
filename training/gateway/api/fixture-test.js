@@ -18,7 +18,7 @@ export default {
     }
     const sha = randomBytes(20).toString("hex");
     const key = "training/videos/gateway-fixture/" + sha + ".webm";
-    const host = "store_txyfgtsysrceqhoj.private.blob.vercel-storage.com";
+    const host = "txyfgtsysrceqhoj.private.blob.vercel-storage.com";
     const report = { bytes: fixture.length, expectedSha256: createHash("sha256").update(fixture).digest("hex") };
     let uploaded = false;
     try {
@@ -63,7 +63,7 @@ export default {
             pathname: key, operations: ["get"], validUntil: Date.now() + 120000,
           });
           const grant = await presignUrl(diagnosticToken, {
-            pathname: key, operation: "get", validUntil: Date.now() + 60000,
+            pathname: key, operation: "get", access: "private", validUntil: Date.now() + 60000,
           });
           const u = new URL(grant.presignedUrl);
           report.getHost = u.hostname;
