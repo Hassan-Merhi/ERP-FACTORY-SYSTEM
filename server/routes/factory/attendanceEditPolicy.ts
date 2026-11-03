@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import rateLimit from "express-rate-limit";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "../../db";
 import { users, userCompanyRoles } from "@shared/schema";
 import { verifyPasswordBcryptOnly } from "../helpers/passwordHelpers";
@@ -34,8 +34,6 @@ export const attendanceApprovalRateLimiter = rateLimit({
   legacyHeaders: false,
   skip: (req) => {
     const body = req.body ?? {};
-    // Owner edits do not perform Admin password verification.
-    if (req.session.currentRole === "Owner") return true;
     if (req.path === "/api/factory/staff-tracking/bulk" && body.page !== "attendance") return true;
     const dates: unknown[] = req.path === "/api/factory/staff-tracking/bulk"
       ? [body.periodStart, body.periodEnd]
@@ -53,12 +51,12 @@ export type AttendanceAdminCredentials = {
   adminPassword?: unknown;
 };
 
-export type AttendanceApprover = { id: string; username: string; authorizationMethod: "owner_role" | "admin_password" };
+export type AttendanceApprover = { id: string; username: string; authorizationMethod: "admin_password" };
 
 /**
  * Returns undefined after sending a rejection, null for same-day records,
- * and the company Owner or verifying Admin for older dates. Active Owners can
- * save directly; all other roles require a fresh Admin password.
+ * and a verifying company Admin for older dates. All roles, including Owners,
+ * require a fresh Admin username and password.
  */
 export async function requireAttendanceEditApproval(
   req: Request,
@@ -78,19 +76,6 @@ export async function requireAttendanceEditApproval(
   }
   const olderDates = [...new Set(dates.filter((date) => (date as string) < today) as string[])];
   if (!olderDates.length) return null;
-
-  // Verify the caller is an active Owner of the selected company. Never rely
-  // on a role or user ID supplied in an attendance save payload.
-  const requesterId = String(req.session.userId || req.user?.id || "");
-  if (requesterId) {
-    const [owner] = await db
-      .select({ id: users.id, username: users.username, active: users.active })
-      .from(users)
-      .innerJoin(userCompanyRoles, and(eq(userCompanyRoles.userId, users.id), eq(userCompanyRoles.companyId, companyId)))
-      .where(and(eq(users.id, requesterId), eq(userCompanyRoles.role, "Owner")))
-      .limit(1);
-    if (owner?.active) return { id: owner.id, username: owner.username, authorizationMethod: "owner_role" };
-  }
 
   const username = typeof credentials?.adminUsername === "string" ? credentials.adminUsername.trim() : "";
   const password = typeof credentials?.adminPassword === "string" ? credentials.adminPassword : "";
