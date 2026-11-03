@@ -1,0 +1,141 @@
+name: Nightly Whole-System Regression (Disposable Only)
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: All backend, database, accounting and factory tests
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: heliumdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d heliumdb"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/heliumdb
+      PGSSLMODE: disable
+      NODE_ENV: test
+      ERP_E2E_DISPOSABLE_DB: "1"
+      TRAINING_SANDBOX_VERIFIED: "1"
+      PORT: "5000"
+      ENABLE_SCHEDULERS: "false"
+      CSRF_ENFORCE: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.1"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Build and validate actual application
+        run: |
+          npm run prebuild
+          node --max-old-space-size=4096 node_modules/vite/bin/vite.js build
+          node scripts/build-server.mjs
+          node scripts/verify-server-bundle.mjs
+          node scripts/verify-runtime-dependencies.mjs
+      - name: Set up isolated database
+        run: node node_modules/drizzle-kit/bin.cjs push --force
+      - name: Apply the production startup-schema bridges to the throwaway database
+        shell: bash
+        run: |
+          set -euo pipefail
+          node dist/index.js > "$RUNNER_TEMP/nightly-startup.log" 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 180); do
+            if curl -fsS http://127.0.0.1:5000/api/health/db > "$RUNNER_TEMP/nightly-health.json" 2>/dev/null; then break; fi
+            if ! kill -0 "$app_pid" 2>/dev/null; then cat "$RUNNER_TEMP/nightly-startup.log"; exit 1; fi
+            if [ "$attempt" = 180 ]; then cat "$RUNNER_TEMP/nightly-startup.log"; exit 1; fi
+            sleep 1
+          done
+          node --input-type=module -e "const { ensureCustomerOrderBaleScanAudit } = await import('./server/customerOrderBaleScanAuditBridge.mjs'); await ensureCustomerOrderBaleScanAudit();"
+      - name: Run EVERY registered backend suite with actual Postgres and coverage thresholds
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/nightly-whole-system
+          npm run test:backend:coverage -- --maxWorkers=2 2>&1 | tee artifacts/nightly-whole-system/backend-tests.log
+      - name: Preserve result and coverage evidence even when a suite fails
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: nightly-backend-regression
+          path: |
+            artifacts/nightly-whole-system
+            coverage/backend/coverage-summary.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  frontend:
+    name: All frontend, mobile and role-view unit tests
+    runs-on: ubuntu-26.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.1"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Run ALL registered frontend suites with coverage thresholds
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/nightly-whole-system
+          npm run test:frontend:coverage 2>&1 | tee artifacts/nightly-whole-system/frontend-tests.log
+      - name: Verify browser offline snapshot and IndexedDB isolation
+        run: npm run test:offline:browser
+      - name: Preserve frontend evidence even on failures
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: nightly-frontend-regression
+          path: |
+            artifacts/nightly-whole-system
+            coverage/frontend/coverage-summary.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  audits:
+    name: Registry, company scope, write safety and testing gaps
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.1"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Generate a test inventory showing coverage and known gaps
+        run: node scripts/report-nightly-system-coverage.mjs
+      - name: Validate write routes and tenant/company isolation inventory
+        run: |
+          npm run audit:write-routes
+          npm run audit:write-evidence
+          npm run audit:company-scope
+          npm run audit:inventory-contracts:validate
+          npm run verify:migrations
+          npm run audit:coverage-ratchet
+      - name: Preserve test coverage inventory even on failures
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: nightly-system-coverage-inventory
+          path: artifacts/nightly-system-coverage
+          if-no-files-found: warn
+          retention-days: 30
