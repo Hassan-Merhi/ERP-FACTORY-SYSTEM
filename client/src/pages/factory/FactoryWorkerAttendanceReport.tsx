@@ -17,7 +17,6 @@ import type {
 import {
   CYCLE,
   MONTH_NAMES,
-  computeWorkerExpectedSalary,
   fmtCurrency,
   isoMonthEnd,
   isoMonthStart,
@@ -179,16 +178,21 @@ export default function FactoryWorkerAttendanceReport() {
     return ws;
   }, [sortedWorkers, filter, hideFullAbsent]);
 
-  /* Salary KPIs — computed from currently filtered workers */
+  /* Backend reconciles payroll, cash paid and advance settlements by period.
+     Sum in cents so KPI/print totals agree exactly with stored payroll values. */
   const salaryKpi = useMemo(() => {
     if (!data || !data.dates.length) return null;
-    let totalExpected = 0;
-    let totalPaid = 0;
+    let expectedCents = 0;
+    let paidCents = 0;
     for (const w of filteredWorkers) {
-      totalExpected += computeWorkerExpectedSalary(w, data.dates);
-      totalPaid += parseFloat(w.paidSalary || "0");
+      expectedCents += Math.round(Number(w.expectedSalary || "0") * 100);
+      paidCents += Math.round(Number(w.paidSalary || "0") * 100);
     }
-    return { totalExpected, totalPaid, totalRemaining: totalExpected - totalPaid };
+    return {
+      totalExpected: expectedCents / 100,
+      totalPaid: paidCents / 100,
+      totalRemaining: (expectedCents - paidCents) / 100,
+    };
   }, [filteredWorkers, data]);
 
   /* Counts for filter badges */
