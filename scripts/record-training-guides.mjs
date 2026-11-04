@@ -7,6 +7,7 @@
  */
 import fs from "node:fs/promises";
 import path from "node:path";
+import os from "node:os";
 import { execFile as execFileCallback } from "node:child_process";
 import { promisify } from "node:util";
 import { URL } from "node:url";
@@ -20,7 +21,11 @@ const output = path.resolve("artifacts/training-videos");
 const timeout = 45_000;
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const execFile = promisify(execFileCallback);
-const CAPTION_HOLD_MS = 9_000; // Five narrated-by-text sections produce about 45 seconds per topic.
+// Frame capture avoids Puppeteer's FFmpeg pipe; its VP9 screencast can crash
+// with EPIPE on long recordings. Each guide is an exact 45-second MP4.
+const STEP_DURATION_SECONDS = 9;
+const CAPTURE_FPS = 2;
+const FRAMES_PER_STEP = STEP_DURATION_SECONDS * CAPTURE_FPS;
 const MIN_DURATION_SECONDS = 35;
 const MAX_DURATION_SECONDS = 60;
 
@@ -126,33 +131,40 @@ async function selectFixtureCompany(page, code) {
 }
 
 /**
- * Puppeteer's WebM screencast can use VP9 chroma formats that Windows Media
- * Player decodes as blocks. Ship an H.264/yuv420p MP4 instead and decode every
- * frame before marking the capture as reviewable.
+ * Render locally captured, real authenticated screen frames to a 45-second
+ * H.264 MP4. We do NOT keep an open FFmpeg stdin pipe or a Puppeteer screencast
+ * process; both can produce EPIPE/zero-byte recordings on GitHub runners.
  */
-async function transcodeAndValidate(sourceWebm, outputMp4) {
+async function encodeAndValidate(framesDir, outputMp4) {
   await execFile("ffmpeg", [
-    "-hide_banner", "-loglevel", "error", "-y", "-i", sourceWebm,
-    "-map", "0:v:0", "-an", "-vf", "fps=20,format=yuv420p",
+    "-hide_banner", "-loglevel", "error", "-y",
+    "-framerate", String(CAPTURE_FPS),
+    "-start_number", "0",
+    "-i", path.join(framesDir, "frame-%04d.jpg"),
+    "-map", "0:v:0", "-an",
+    "-vf", "fps=20,scale=in_range=full:out_range=limited,format=yuv420p",
     "-c:v", "libx264", "-profile:v", "main", "-preset", "veryfast",
-    "-crf", "21", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
-    "-t", "59", outputMp4,
+    "-crf", "21", "-pix_fmt", "yuv420p", "-color_range", "tv",
+    "-movflags", "+faststart", outputMp4,
   ]);
   const { stdout } = await execFile("ffprobe", [
     "-v", "error", "-select_streams", "v:0",
-    "-show_entries", "stream=codec_name,pix_fmt,width,height:format=duration",
+    "-show_entries", "stream=codec_name,pix_fmt,width,height,nb_frames:format=duration",
     "-of", "json", outputMp4,
   ]);
   const probe = JSON.parse(stdout);
   const stream = probe.streams?.[0];
   const durationSeconds = Number(probe.format?.duration);
+  const expectedDuration = STEP_DURATION_SECONDS * 5;
   if (stream?.codec_name !== "h264" || stream?.pix_fmt !== "yuv420p" ||
       !Number.isFinite(durationSeconds) ||
-      durationSeconds < MIN_DURATION_SECONDS || durationSeconds > MAX_DURATION_SECONDS) {
-    throw new Error("Training video fails Windows H.264 playback or 35-60 second duration checks");
+      Math.abs(durationSeconds - expectedDuration) > 0.5 ||
+      durationSeconds < MIN_DURATION_SECONDS || durationSeconds > MAX_DURATION_SECONDS ||
+      Number(stream.nb_frames) < durationSeconds * 19) {
+    throw new Error("Training video failed H.264, full-frame or 35-60 second validation");
   }
+  // Actually decode every frame: ffprobe metadata alone is not a playback test.
   await execFile("ffmpeg", ["-hide_banner", "-v", "error", "-xerror", "-i", outputMp4, "-f", "null", "-"]);
-  await fs.unlink(sourceWebm); // Keep only validated, Windows-compatible review media.
   return { durationSeconds, width: stream.width, height: stream.height, codec: "h264/yuv420p" };
 }
 
@@ -203,41 +215,57 @@ async function recordOne(page, id, tour) {
       return { title: heading?.textContent?.trim().slice(0, 120) || document.title, tabs };
     });
     await page.screenshot({ path: path.join(dir, "screenshot.png"), fullPage: false });
-    const videoPath = path.join(dir, "screen.webm");
-    const recorder = await page.screencast({ path: videoPath, fps: 20, quality: 72 });
+    const framesDir = await fs.mkdtemp(path.join(os.tmpdir(), "erp-training-frames-"));
     const captions = ["WEBVTT", ""];
-    const started = Date.now();
+    let video;
     try {
+      let frameNumber = 0;
       for (let i = 0; i < tour.steps.length; i++) {
-        const start = Date.now() - started;
-        await page.evaluate(({ title, instruction, index }) => {
-          let overlay = document.getElementById("training-recording-caption");
-          if (!overlay) {
-            overlay = document.createElement("div");
-            overlay.id = "training-recording-caption";
-            overlay.setAttribute("aria-hidden", "true");
-            overlay.style.cssText = "position:fixed;bottom:24px;left:24px;right:24px;max-width:840px;background:rgba(9,20,42,.9);color:white;border-radius:14px;padding:18px 24px;font:600 19px system-ui;z-index:2147483647;box-shadow:0 8px 32px rgba(0,0,0,.35);pointer-events:none";
-            document.body.appendChild(overlay);
-          }
-          overlay.textContent = title + " — Step " + (index + 1) + " of 5: " + instruction;
-          const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-          window.scrollTo({ top: maxScroll * index / 4, behavior: "smooth" });
-        }, { title: tour.title, instruction: tour.steps[i], index: i });
-        // Approved navigation-only interaction: inspect a different visible tab.
-        // Never click Save, Finalize, Approve, Delete, Pay or other write controls.
+        // Only select an already-visible UI tab. Never submit ERP or Factory
+        // transactions, and keep all network writes blocked.
         if (i === 2) {
           const tab = await page.$("[role=tab]:not([aria-selected=true]):not([disabled])");
           if (tab) await tab.click().catch(() => undefined);
         }
-        await delay(CAPTION_HOLD_MS);
-        const end = Date.now() - started;
-        captions.push(String(i + 1), timestamp(start) + " --> " + timestamp(end), tour.steps[i], "");
+        for (let frame = 0; frame < FRAMES_PER_STEP; frame++) {
+          await page.evaluate(({ title, instruction, index, frame, framesPerStep }) => {
+            let overlay = document.getElementById("training-recording-caption");
+            if (!overlay) {
+              overlay = document.createElement("div");
+              overlay.id = "training-recording-caption";
+              overlay.setAttribute("aria-hidden", "true");
+              overlay.style.cssText = "position:fixed;bottom:24px;left:24px;right:24px;max-width:840px;background:rgba(9,20,42,.93);color:white;border-radius:14px;padding:18px 24px;font:600 19px system-ui;z-index:2147483647;box-shadow:0 8px 32px rgba(0,0,0,.35);pointer-events:none";
+              document.body.appendChild(overlay);
+            }
+            overlay.textContent = title + " — Step " + (index + 1) + " of 5: " + instruction;
+            const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+            const scrollRatio = (index + frame / framesPerStep) / 5;
+            window.scrollTo({ top: maxScroll * Math.min(1, scrollRatio), behavior: "instant" });
+          }, {
+            title: tour.title,
+            instruction: tour.steps[i],
+            index: i,
+            frame,
+            framesPerStep: FRAMES_PER_STEP,
+          });
+          await page.screenshot({
+            path: path.join(framesDir, "frame-" + String(frameNumber++).padStart(4, "0") + ".jpg"),
+            type: "jpeg",
+            quality: 74,
+            fullPage: false,
+          });
+        }
+        captions.push(
+          String(i + 1),
+          timestamp(i * STEP_DURATION_SECONDS * 1000) + " --> " + timestamp((i + 1) * STEP_DURATION_SECONDS * 1000),
+          tour.steps[i], "",
+        );
       }
+      video = await encodeAndValidate(framesDir, path.join(dir, "screen.mp4"));
     } finally {
-      await recorder.stop();
       await page.evaluate(() => document.getElementById("training-recording-caption")?.remove()).catch(() => {});
+      await fs.rm(framesDir, { recursive: true, force: true });
     }
-    const video = await transcodeAndValidate(videoPath, path.join(dir, "screen.mp4"));
     // Keep usable evidence even if an app background request was blocked.
     // The review report makes incomplete interactions visible; no write was sent.
     await fs.writeFile(path.join(dir, "captions.vtt"), captions.join("\n"));
