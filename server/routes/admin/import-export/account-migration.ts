@@ -18,6 +18,7 @@ import {
   getCompanyAccessContext,
 } from "../../../security/companyAccessBoundary";
 import { getPartyBalances } from "../../../services/accounting/balances/ledgerBalanceEngine";
+import { plusMoney } from "../../../lib/money";
 
 class AccountMigrationPreviewNotFound extends Error {}
 
@@ -158,11 +159,11 @@ export function registerAccountMigrationRoutes(app: Express) {
             const totalDebit = Number(canonicalBalance.periodDebit);
             const totalCredit = Number(canonicalBalance.periodCredit);
             const closingBalance = Number(canonicalBalance.closing);
-            grandTotalDebit += totalDebit;
-            grandTotalCredit += totalCredit;
+            grandTotalDebit = plusMoney(grandTotalDebit, totalDebit);
+            grandTotalCredit = plusMoney(grandTotalCredit, totalCredit);
             grandTotalEntries += postedEntryCount;
             grandHistoryEntries += entryRows.length;
-            grandClosing += closingBalance;
+            grandClosing = plusMoney(grandClosing, closingBalance);
 
             const touchedVoucherIds = [...new Set(entryRows.map((r) => r.voucherId))];
 
