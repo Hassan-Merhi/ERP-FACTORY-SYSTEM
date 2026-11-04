@@ -117,7 +117,10 @@ export function locateAndScroll(segment) {
     const scope = segment.region === "layer" ? LAYER.split(", ").map((s) => s + " ").join(", ") : segment.region === "sidebar" ? "[data-sidebar=sidebar] " : segment.region === "main" ? "#main-content " : "";
     const unit = segment.kind === "heading" ? segment.level : (segment.tag || "*");
     const selector = scope.includes(", ") ? scope.split(", ").map((prefix) => prefix + unit).join(", ") : scope + unit;
-    el = Array.from(document.querySelectorAll(selector)).find((candidate) => visible(candidate) && (segment.region === "layer") === inLayer(candidate) && text(candidate).startsWith(segment.label.slice(0, 40))) || null;
+    // Labels come from innerText, which applies CSS text-transform (for example
+    // uppercase section headings), so compare case-insensitively.
+    const wanted = segment.label.slice(0, 40).toLowerCase();
+    el = Array.from(document.querySelectorAll(selector)).find((candidate) => visible(candidate) && (segment.region === "layer") === inLayer(candidate) && text(candidate).toLowerCase().startsWith(wanted)) || null;
   }
   if (!el) return null;
   el.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
