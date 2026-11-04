@@ -86,3 +86,7 @@ label already merged to `main`, verifies the documentation index and
 The PR still requires an independent GitHub code-scanning rescan and a live
 ruleset-admin change to establish closure of the original alerts. Never close
 alerts by dismissal or relax the required check policy to permit merging.
+
+## Pre-merge synchronization
+
+The security branch was synchronized with the Properties cashbox implementation on `main` (commit `35e915f6678b218cf9a456801d7006fc0189392b`). The synchronized route manifest contains 2,312 registered routes, and `docs/system-quality-program.md` was updated to that count. The existing voucher minimum 48px touch target is preserved. Final GitHub checks must run against the current PR HEAD; older successful runs must not be substituted.
