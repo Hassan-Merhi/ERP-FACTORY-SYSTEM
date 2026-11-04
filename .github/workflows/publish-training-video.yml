@@ -78,7 +78,7 @@ jobs:
           fs.appendFileSync(process.env.GITHUB_ENV, "TRAINING_SOURCE_SHA=" + run.head_sha + "\n");
           fs.appendFileSync(process.env.GITHUB_OUTPUT, "source_sha=" + run.head_sha + "\n");
           NODE
-          gh run download "$SOURCE_RUN" -n "real-erp-training-$SOURCE_RUN" -D "$RUNNER_TEMP/review"
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" -n "real-erp-training-$SOURCE_RUN" -D "$RUNNER_TEMP/review"
       - name: Validate recorded evidence
         shell: bash
         run: |
