@@ -1,3 +1,4 @@
+# Retry after making the locally patched merge adapter self-contained.
 name: Phase 2 one-time lockfile remediation
 
 on:
