@@ -40,7 +40,8 @@ describe("factory LAN deployment contract", () => {
   });
   it("has exactly the existing ERP runtime entry and no unexpected cloud proxy", () => {
     const image = load("deploy/lan/Dockerfile");
-    expect(image).toContain("node:24-bookworm-slim");
+    // The base image is digest-pinned (security-supply-chain-pins.test.ts); accept any Node 24 bookworm-slim tag.
+    expect(image).toMatch(/^FROM node:24(?:\.\d+\.\d+)?-bookworm-slim(?:@sha256:[a-f0-9]{64})?(?:\s|$)/m);
     expect(image).toContain("npm run build");
     expect(image).toContain("./server/startupPreload.mjs");
     expect(image).toContain("./server/runtimeMemoryGuard.mjs");

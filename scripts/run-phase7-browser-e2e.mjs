@@ -232,6 +232,52 @@ async function typeTestId(page, id, text) {
   await waitForSettledUi(page);
 }
 
+/**
+ * Type into a journal account search box and choose the first match. The
+ * account list is fetched lazily when the box is first focused, and on a slow
+ * runner the form can re-render while the first keystrokes land, so the
+ * search text (and the open sidebar) are lost. Retry the focus + type from a
+ * clean box instead of waiting the full timeout on a list that will never
+ * appear, and report what the form looked like if every attempt fails.
+ */
+async function pickJournalAccount(page, rowIndex, text) {
+  const inputId = `input-journal-account-${rowIndex}`;
+  let lastState = null;
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    const handle = await page.waitForSelector(testId(inputId), { visible: true, timeout: timeoutMs });
+    await handle.click({ clickCount: 3 });
+    await page.keyboard.press("Backspace");
+    await page.keyboard.type(text);
+    await waitForSettledUi(page);
+    const option = await page
+      .waitForSelector(testId("journal-account-option-0"), { visible: true, timeout: 10_000 })
+      .catch(() => null);
+    if (option) {
+      const label = await option.evaluate((element) => element.textContent || "");
+      if (label.toLowerCase().includes(text.toLowerCase())) {
+        await option.click();
+        await waitForSettledUi(page);
+        return;
+      }
+      lastState = { attempt, firstOption: label.trim() };
+    } else {
+      lastState = await page.evaluate(
+        ({ id }) => ({
+          inputValue: document.querySelector(`[data-testid="${id}"]`)?.value ?? null,
+          sidebarOpen: Boolean(document.querySelector('[data-testid="input-journal-sidebar-search"]')),
+          options: document.querySelectorAll('[data-testid^="journal-account-option-"]').length,
+        }),
+        { id: inputId },
+      );
+      lastState.attempt = attempt;
+    }
+    console.warn(`journal account "${text}" not offered on attempt ${attempt}: ${JSON.stringify(lastState)}`);
+    await page.keyboard.press("Escape").catch(() => undefined);
+    await waitForSettledUi(page);
+  }
+  throw new Error(`Journal account "${text}" was never offered for row ${rowIndex}: ${JSON.stringify(lastState)}`);
+}
+
 /** Replace a field's value rather than appending to what the form prefilled. */
 async function replaceTestIdValue(page, id, text) {
   const handle = await page.waitForSelector(testId(id), { visible: true, timeout: timeoutMs });
@@ -580,14 +626,12 @@ try {
 
     await openRoute(devPage, "/vouchers");
     await tapTestId(devPage, "tab-journal");
-    await typeTestId(devPage, "input-journal-account-0", "Phase 7 Cash");
-    await tapTestId(devPage, "journal-account-option-0");
+    await pickJournalAccount(devPage, 0, "Phase 7 Cash");
     await typeTestId(devPage, "input-journal-amount-0", "60");
     await tapTestId(devPage, "button-journal-add-row");
     await tapTestId(devPage, "input-journal-type-1");
     await pickOption(devPage, "CR");
-    await typeTestId(devPage, "input-journal-account-1", "Phase 7 Sales");
-    await tapTestId(devPage, "journal-account-option-0");
+    await pickJournalAccount(devPage, 1, "Phase 7 Sales");
     // Switching to CR pre-fills the balancing amount; replace it explicitly.
     await replaceTestIdValue(devPage, "input-journal-amount-1", "60");
     await typeTestId(devPage, "input-journal-notes", "Wave 4 browser UI journal");

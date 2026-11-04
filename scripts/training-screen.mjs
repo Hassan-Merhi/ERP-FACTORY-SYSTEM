@@ -110,7 +110,7 @@ export function locateAndScroll(segment) {
   const inLayer = (el) => Boolean(el.closest(LAYER));
   let el = null;
   if (segment.testid) {
-    const matches = Array.from(document.querySelectorAll('[data-testid="' + segment.testid.replace(/"/g, '\\"') + '"]')).filter((candidate) => visible(candidate) && (segment.region === "layer") === inLayer(candidate));
+    const matches = Array.from(document.querySelectorAll('[data-testid="' + CSS.escape(segment.testid) + '"]')).filter((candidate) => visible(candidate) && (segment.region === "layer") === inLayer(candidate));
     el = matches[0] || null;
   }
   if (!el && segment.label) {
