@@ -4,6 +4,8 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
 import { logger } from "../../lib/logger";
+import { toMoney } from "../../lib/money";
+import { getPartyBalances } from "../../services/accounting/balances/ledgerBalanceEngine";
 import {
   READONLY_MIGRATED_VOUCHER_MESSAGE,
   isGoldenCoastProgrammeVoucher,
@@ -385,6 +387,25 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
             );
           }
 
+          // Snapshot the same closing balances the statement/trial balance report.
+          // Post-condition below runs before commit, so any difference rolls back
+          // the entire migration rather than silently changing the user's balance.
+          const sourcePartyBalances = await getPartyBalances(tx, {
+            companyId: srcCompanyId,
+            kind: "ledger",
+            ids: accountIds,
+          });
+          const sourceClosingById = new Map(
+            sourcePartyBalances.parties.map((party) => [party.id, party.closing])
+          );
+          for (const accountId of accountIds) {
+            if (!sourceClosingById.has(accountId)) {
+              throw new AccountMigrationConflict(
+                `Account ${accountId} is owned by another balance dimension (such as a linked customer); migrate that owner separately.`
+              );
+            }
+          }
+
           const destinationAccounts = await tx
             .select({ code: ledgerAccounts.code })
             .from(ledgerAccounts)
@@ -522,7 +543,10 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
                   description: /* data-business-value */ `Account migration from ${sourceCompany.name}: ${sourceVoucher.description || sourceVoucher.voucherNumber}`,
                   totalAmount: migrationDestinationTotal(plan),
                   currency: sourceVoucher.currency || "USD",
-                  optional: false,
+                  // Keep archived/optional history archived/optional after splitting.
+                  // Making an excluded voucher live changes the receiving balance.
+                  optional: sourceVoucher.optional ?? false,
+                  deletedAt: sourceVoucher.deletedAt,
                   exchangeRate: sourceVoucher.exchangeRate,
                   sourceModule: "ERP",
                   isCreditSale: false,
@@ -607,6 +631,24 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
               .where(and(eq(vouchers.companyId, srcCompanyId), inArray(vouchers.id, exclusiveVoucherIds)));
           }
 
+          const destinationPartyBalances = await getPartyBalances(tx, {
+            companyId: destCompanyId,
+            kind: "ledger",
+            ids: accountIds,
+          });
+          const destinationClosingById = new Map(
+            destinationPartyBalances.parties.map((party) => [party.id, party.closing])
+          );
+          for (const accountId of accountIds) {
+            const expected = sourceClosingById.get(accountId)!;
+            const actual = destinationClosingById.get(accountId);
+            if (actual === undefined || !toMoney(expected).eq(toMoney(actual))) {
+              throw new AccountMigrationConflict(
+                `Account ${accountId} closing-balance mismatch (source ${expected}, destination ${actual ?? "missing"}). No accounts or vouchers were moved.`
+              );
+            }
+          }
+
           const changes: SavedMigrationV2 = {
             version: 2,
             migrationId,
@@ -642,6 +684,11 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
             movedVoucherCount: exclusiveVoucherIds.length + splitSnapshots.length,
             sharedVoucherCount: splitSnapshots.length,
             splitVoucherCount: splitSnapshots.length,
+            balances: accountIds.map((accountId) => ({
+              accountId,
+              sourceClosing: sourceClosingById.get(accountId)!,
+              destinationClosing: destinationClosingById.get(accountId)!,
+            })),
             detachedRoleCashAccountCount: controls.roleCashAccounts.length,
             detachedLocationCashAccountCount: controls.locationCashAccounts.length,
             accounts: accountPlans.map((plan) => ({

@@ -3,6 +3,8 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
 import { logger } from "../../lib/logger";
+import { toMoney } from "../../lib/money";
+import { getPartyBalances } from "../../services/accounting/balances/ledgerBalanceEngine";
 import {
   READONLY_MIGRATED_VOUCHER_MESSAGE,
   isGoldenCoastProgrammeVoucher,
@@ -325,6 +327,20 @@ export function registerAccountMigrationRoundTripRoutes(app: Express) {
           const originalCompany = companyRows.find((company) => company.id === srcCompanyId)!;
           const temporaryCompany = companyRows.find((company) => company.id === destCompanyId)!;
 
+          const beforeReturn = await getPartyBalances(tx, {
+            companyId: destCompanyId,
+            kind: "ledger",
+            ids: accountIds,
+          });
+          const beforeClosingById = new Map(beforeReturn.parties.map((party) => [party.id, party.closing]));
+          for (const accountId of accountIds) {
+            if (!beforeClosingById.has(accountId)) {
+              throw new AccountMigrationRoundTripConflict(
+                `Account ${accountId} has no independent ledger balance in the temporary company.`
+              );
+            }
+          }
+
           await assertDestinationControlReferencesAreClear(tx, srcCompanyId, accountIds);
 
           const originalCodes = await tx
@@ -454,7 +470,8 @@ export function registerAccountMigrationRoundTripRoutes(app: Express) {
                   description: /* data-business-value */ `Account migration return from ${temporaryCompany.name}: ${sourceVoucher.description || sourceVoucher.voucherNumber}`,
                   totalAmount: migrationDestinationTotal(plan),
                   currency: sourceVoucher.currency || "USD",
-                  optional: false,
+                  optional: sourceVoucher.optional ?? false,
+                  deletedAt: sourceVoucher.deletedAt,
                   exchangeRate: sourceVoucher.exchangeRate,
                   sourceModule: "ERP",
                   isCreditSale: false,
@@ -527,6 +544,22 @@ export function registerAccountMigrationRoundTripRoutes(app: Express) {
           }
 
           await restoreAccountMigrationControlReferences(tx, srcCompanyId, saved.controls);
+
+          const afterReturn = await getPartyBalances(tx, {
+            companyId: srcCompanyId,
+            kind: "ledger",
+            ids: accountIds,
+          });
+          const afterClosingById = new Map(afterReturn.parties.map((party) => [party.id, party.closing]));
+          for (const accountId of accountIds) {
+            const expected = beforeClosingById.get(accountId)!;
+            const actual = afterClosingById.get(accountId);
+            if (actual === undefined || !toMoney(expected).eq(toMoney(actual))) {
+              throw new AccountMigrationRoundTripConflict(
+                `Account ${accountId} return would change the closing balance from ${expected} to ${actual ?? "missing"}. Return rolled back.`
+              );
+            }
+          }
 
           await tx.insert(auditLog).values({
             userId: String(req.session?.userId ?? "system"),
