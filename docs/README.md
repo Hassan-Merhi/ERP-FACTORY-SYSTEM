@@ -165,6 +165,7 @@ These describe work in progress and carry live figures bound to their sources.
 | [erp-navigation-registry.md](erp-navigation-registry.md) | Canonical ERP routes |
 | [factory-navigation-registry.md](factory-navigation-registry.md) | Factory routes |
 | [properties-navigation-registry.md](properties-navigation-registry.md) | Properties routes |
+| [properties-rent-cashbox-rollout.md](properties-rent-cashbox-rollout.md) | Properties-only cashbox changeover, tenant-balance colors and historical accounting safeguards |
 | [supplier-partner-navigation-registry.md](supplier-partner-navigation-registry.md) | Supplier Partner routes |
 | [i18n/README.md](i18n/README.md) | Interface language support |
 | [i18n/phases-1-4-global-language-foundation.md](i18n/phases-1-4-global-language-foundation.md) | Current global language foundation and rollout contract |
