@@ -75,6 +75,8 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
     items: [
       { title: "Inventory", url: "/inventory", icon: Layers },
       { title: "Stock", url: "/stock", icon: Package },
+      { title: "Optional Vouchers", url: "/optional-vouchers", icon: FileText },
+      { title: "Profit Check", url: "/supplier-profit-check", icon: Calculator },
     ],
   },
   {
@@ -93,8 +95,6 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
       { title: "Accounts", url: "/accounts", icon: Wallet },
       { title: "Cost Centers", url: "/cost-centers", icon: ListTree },
       { title: "Parties", url: "/parties", icon: Handshake },
-      { title: "Profit Check", url: "/supplier-profit-check", icon: Calculator },
-      { title: "Optional Vouchers", url: "/optional-vouchers", icon: FileText },
       { title: "Payroll", url: "/payroll", icon: UserCheck },
     ],
   },
@@ -208,8 +208,7 @@ export function useErpVisibleSections(user?: SidebarUser): {
     if (selectedCompany?.companyType === "retail" && RETAIL_HIDDEN_ERP_ROUTES.has(item.url)) return false;
     if (effectiveRole === "ERP Tester" && item.url === "/transaction-journal") return false;
     if (item.url === "/tracking") return !isPOSUser;
-    if (item.url === "/cost-centers" && !["Admin", "Owner", "Developer", "Manager"].includes(effectiveRole))
-      return false;
+    if (item.url === "/cost-centers") return isDeveloper;
     if (isPOSUser && item.url === "/pos-item-replacement") return false;
 
     if (
