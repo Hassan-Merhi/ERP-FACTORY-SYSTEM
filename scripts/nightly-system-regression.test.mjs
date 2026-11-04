@@ -66,12 +66,19 @@ test("reviewable training videos use five explained steps, H.264 MP4 and a 60-se
     assert.equal(JSON.parse(match[1]).length, 5, "every topic should explain five distinct stages");
   }
   for (const required of [
-    "CAPTION_HOLD_MS = 9_000", "MAX_DURATION_SECONDS = 60",
+    "STEP_DURATION_SECONDS = 9", "CAPTURE_FPS = 2",
+    "FRAMES_PER_STEP = STEP_DURATION_SECONDS * CAPTURE_FPS",
+    "MAX_DURATION_SECONDS = 60",
     'path.join(dir, "screen.mp4")', '"libx264"', '"yuv420p"', '"+faststart"',
-    'await execFile("ffprobe"', '"-xerror"', "await fs.unlink(sourceWebm)"
+    'await execFile("ffprobe"', '"-xerror"',
+    "page.screenshot({", 'type: "jpeg"', "encodeAndValidate(framesDir",
+    "await fs.rm(framesDir", "Number(stream.nb_frames)"
   ]) {
     assert.ok(recorder.includes(required), required);
   }
+  assert.ok(!recorder.includes("page.screencast("), "avoid unbounded CDP/FFmpeg piping and EPIPE");
+  assert.ok(!recorder.includes("screen.webm"), "do not upload incomplete WebM recordings");
+  assert.ok(recorder.includes('["GET", "HEAD", "OPTIONS"]'), "prevent writes while recording");
   const review = read(".github/workflows/publish-training-video.yml");
   const uploader = read("scripts/upload-reviewed-training-vercel.mjs");
   const manifest = read("scripts/register-published-training.mjs");
