@@ -371,15 +371,15 @@ export default function PropertyRentalPage({
               },
               {
                 label: isPropertiesRental ? "TO COLLECT" : "OUTSTANDING",
-                value: `${fmtMoney(totals.totalOwed)}`,
+                value: `$${fmtMoney(totals.totalOwed)}`,
                 valueClassName: isPropertiesRental ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400",
               },
               {
                 label: isPropertiesRental ? "OWED TO TENANTS" : "CREDIT",
-                value: `${fmtMoney(totals.totalCredit)}`,
+                value: `$${fmtMoney(totals.totalCredit)}`,
                 valueClassName: isPropertiesRental ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400",
               },
-              { label: isPropertiesRental ? "GUARANTEE HELD" : "TOTAL GUARANTEE", value: `${fmtMoney(totals.totalGuarantee)}`, valueClassName: isPropertiesRental ? "text-red-600 dark:text-red-400" : undefined },
+              { label: isPropertiesRental ? "GUARANTEE HELD" : "TOTAL GUARANTEE", value: `$${fmtMoney(totals.totalGuarantee)}`, valueClassName: isPropertiesRental ? "text-red-600 dark:text-red-400" : undefined },
               { label: paidLabel, value: paidValue },
             ]}
           />
