@@ -63,12 +63,35 @@ jobs:
             sleep 1
           done
           node --input-type=module -e "const { ensureCustomerOrderBaleScanAudit } = await import('./server/customerOrderBaleScanAuditBridge.mjs'); await ensureCustomerOrderBaleScanAudit();"
+      - name: Keep Postgres container logs readable
+        # Negative-path suites deliberately provoke constraint errors. Without
+        # this, tens of thousands of ERROR lines bury the vitest summary at the
+        # end of the job log. The statements still fail the same way.
+        shell: bash
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d heliumdb \
+            -c "ALTER SYSTEM SET log_min_messages = 'fatal'" \
+            -c "ALTER SYSTEM SET log_min_error_statement = 'panic'" \
+            -c "SELECT pg_reload_conf()" || echo "::warning::Could not quiet Postgres logging"
       - name: Run EVERY registered backend suite with actual Postgres and coverage thresholds
         shell: bash
         run: |
           set -o pipefail
           mkdir -p artifacts/nightly-whole-system
           npm run test:backend:coverage -- --maxWorkers=2 2>&1 | tee artifacts/nightly-whole-system/backend-tests.log
+      - name: Summarize failing suites and coverage gates
+        if: failure()
+        shell: bash
+        run: |
+          log=artifacts/nightly-whole-system/backend-tests.log
+          {
+            echo "## Backend suite failures"
+            echo
+            echo '```'
+            grep -E "^ (FAIL|×|✗)|^ *(×|✗) |Test Files|Tests  |ERROR: Coverage|does not meet|threshold" "$log" | head -120
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          grep -E "^ FAIL " "$log" | sort -u | head -40 | while read -r line; do echo "::error::$line"; done
       - name: Preserve result and coverage evidence even when a suite fails
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -123,6 +146,8 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Enforce nightly workflow and production-isolation contracts
         run: node --test scripts/nightly-system-regression.test.mjs
+      - name: Test deterministic training narration and audio assembly
+        run: node --test scripts/training-narration.test.mjs scripts/plan-nightly-training.test.mjs
       - name: Test Program 6C duplicate-reference handling
         run: node --test scripts/generate-program6c-inventory-classifications.test.mjs
       - name: Generate a test inventory showing coverage and known gaps
