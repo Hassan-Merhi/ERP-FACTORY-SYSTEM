@@ -25,7 +25,7 @@ function classify(files) {
   let unknownRoutes = [];
   const all = () => TOPICS.forEach((id) => chosen.add(id));
   for (const f of files) {
-    if (/^(training\/|client\/src\/training\/|scripts\/record-training-guides\.mjs|\.github\/workflows\/training-videos\.yml|\.github\/workflows\/nightly-training-audit\.yml|shared\/factoryAccessRegistry\.ts)/.test(f)) { all(); continue; }
+    if (/^(training\/|client\/src\/training\/|scripts\/record-training-guides\.mjs|scripts\/training-narration(?:-tts)?\.(?:mjs|py)|\.github\/workflows\/training-videos\.yml|\.github\/workflows\/nightly-training-audit\.yml|shared\/factoryAccessRegistry\.ts)/.test(f)) { all(); continue; }
     if (/^(client\/src\/(?:app|components|contexts|hooks|routes|lib|styles)\/|server\/|shared\/|package(?:-lock)?\.json|vite\.config)/.test(f)) { all(); continue; }
     if (f.startsWith("client/src/pages/factory/")) {
       const lower = f.toLowerCase();
