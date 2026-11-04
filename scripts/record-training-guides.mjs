@@ -87,6 +87,13 @@ async function login(page) {
 }
 
 async function selectFixtureCompany(page, code) {
+  // First leave the previous company's route. Its mounted Factory/ERP provider
+  // may otherwise write the stale company back to the shared login session
+  // during a live cross-company transition.
+  const neutral = await page.goto(base + "/my-settings", { waitUntil: "domcontentloaded", timeout });
+  if (neutral && !neutral.ok()) throw new Error("Neutral company bootstrap failed (" + neutral.status() + ")");
+  await page.waitForSelector("#main-content", { visible: true, timeout });
+
   const selectedId = await page.evaluate(async (companyCode) => {
     const r = await fetch("/api/user/companies", { credentials: "include", cache: "no-store" });
     if (!r.ok) throw new Error("Could not read fixture company assignments.");
@@ -96,38 +103,43 @@ async function selectFixtureCompany(page, code) {
     if (!Number.isInteger(companyId) || companyId <= 0) {
       throw new Error("Fixture company unavailable: " + companyCode);
     }
-    const session = await fetch("/api/auth/session-company", { credentials: "include", cache: "no-store" });
-    const active = session.ok ? await session.json().catch(() => ({})) : {};
-    if (Number(active.companyId) !== companyId) {
-      const change = await fetch("/api/auth/set-company", {
-        method: "POST", credentials: "include", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ companyId }),
-      });
-      if (!change.ok) throw new Error("Unable to switch fixture company (" + change.status + ").");
-    }
-    localStorage.setItem("selectedCompanyId", String(companyId));
     return companyId;
   }, code);
+
   // A direct session switch does not update React's mounted CompanyProvider.
-  // Reload on an ERP/Factory-neutral page before recording the target route.
-  // Otherwise the old company route guard redirects valid test pages away.
-  const bootstrap = await page.goto(base + "/my-settings", { waitUntil: "domcontentloaded", timeout });
-  if (bootstrap && !bootstrap.ok()) {
-    throw new Error("Company bootstrap failed (" + bootstrap.status() + ")");
+  // Retry only the harmless fixture-company selection on the neutral page.
+  // Never proceed to record until BOTH server session and localStorage agree.
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await page.evaluate(async (companyId) => {
+      const session = await fetch("/api/auth/session-company", { credentials: "include", cache: "no-store" });
+      if (!session.ok) throw new Error("Could not inspect fixture company session");
+      const active = await session.json();
+      if (Number(active.companyId) !== companyId) {
+        const change = await fetch("/api/auth/set-company", {
+          method: "POST", credentials: "include", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ companyId }),
+        });
+        if (!change.ok) throw new Error("Unable to switch fixture company (" + change.status + ").");
+      }
+      localStorage.setItem("selectedCompanyId", String(companyId));
+    }, selectedId);
+
+    const bootstrap = await page.goto(base + "/my-settings", { waitUntil: "domcontentloaded", timeout });
+    if (bootstrap && !bootstrap.ok()) throw new Error("Company bootstrap failed (" + bootstrap.status() + ")");
+    await page.waitForSelector("#main-content", { visible: true, timeout });
+    await delay(500); // Allow React's company provider to settle after reload.
+
+    const correct = await page.evaluate(async (companyId) => {
+      const session = await fetch("/api/auth/session-company", { credentials: "include", cache: "no-store" });
+      if (!session.ok) throw new Error("Session company verification failed");
+      const active = await session.json();
+      return Number(active.companyId) === companyId &&
+        localStorage.getItem("selectedCompanyId") === String(companyId);
+    }, selectedId);
+    if (correct) return;
+    if (attempt < 3) process.stdout.write("Retrying neutral fixture company bootstrap for " + code + " (" + attempt + "/3)\n");
   }
-  await page.waitForSelector("#main-content", { visible: true, timeout });
-  await page.waitForFunction(
-    (expected) => localStorage.getItem("selectedCompanyId") === String(expected),
-    { timeout },
-    selectedId,
-  );
-  const sessionCompany = await page.evaluate(async () => {
-    const result = await fetch("/api/auth/session-company", { credentials: "include", cache: "no-store" });
-    if (!result.ok) throw new Error("Session company verification failed");
-    return Number((await result.json()).companyId);
-  });
-  if (sessionCompany !== selectedId) throw new Error("Fixture session company changed during bootstrap");
-  await delay(500);
+  throw new Error("Fixture session company would not settle on " + code + " after 3 verified attempts");
 }
 
 /**
