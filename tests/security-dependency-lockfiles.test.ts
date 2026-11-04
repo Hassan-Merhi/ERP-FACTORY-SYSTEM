@@ -12,8 +12,8 @@ function readLock(path: string): Lockfile {
   return JSON.parse(readFileSync(new URL("../" + path, import.meta.url), "utf8")) as Lockfile;
 }
 function installed(lock: Lockfile, name: string) {
-  return Object.entries(lock.packages).filter(([path]) => path === "node_modules/" + name ||
-    path.endsWith("/node_modules/" + name));
+  const suffix = "/node_modules/" + name;
+  return Object.entries(lock.packages).filter(([path]) => path === "node_modules/" + name || path.endsWith(suffix));
 }
 function parts(version: string): number[] {
   return version.split(".").slice(0, 3).map(Number);
@@ -58,9 +58,12 @@ describe("security remediation for root and desktop lockfiles", () => {
     for (const [path, pkg] of undici) {
       expect(pkg.version, path).toBeTruthy();
       const major = parts(pkg.version!)[0];
-      const safe = major === 6 ? atLeast(pkg.version!, [6, 29, 1])
-        : major === 7 ? atLeast(pkg.version!, [7, 30, 1])
-          : atLeast(pkg.version!, [8, 12, 2]);
+      const safe =
+        major === 6
+          ? atLeast(pkg.version!, [6, 29, 1])
+          : major === 7
+            ? atLeast(pkg.version!, [7, 30, 1])
+            : atLeast(pkg.version!, [8, 12, 2]);
       expect(safe, path).toBe(true);
     }
     for (const [path, pkg] of installed(desktop, "fast-uri")) {
