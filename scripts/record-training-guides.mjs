@@ -4,9 +4,12 @@
  * agent and makes no accounting/stock writes. Editing the tour registry
  * requires code review.
  *
- * Each video walks through EVERY visible control on the page (top bar,
- * sidebar, tabs, buttons, fields) with a spoken explanation, a highlight ring
- * on the control being described and matching captions. The spoken script is
+ * Each video walks through EVERY control of the page with a spoken
+ * explanation, a highlight ring, a smoothly moving pointer and captions. Menus,
+ * dropdown lists and dialogs are opened so the controls hidden inside them are
+ * explained too, and safe demonstrations (typing into a search box, choosing an
+ * option from a list) show what each one does. The shared top bar and sidebar
+ * are explained once, in the overview video of each mode. The spoken script is
  * generated deterministically from the real controls (scripts/training-
  * narration.mjs) and voiced offline by a local Piper model.
  *
@@ -21,9 +24,10 @@ import { promisify } from "node:util";
 import { URL, fileURLToPath } from "node:url";
 import puppeteer from "puppeteer";
 import {
-  describeControl, describeHeading, introNarration, closingNarration,
-  speakable, parseWav, joinWavClips, vttTimestamp,
+  describeControl, describeHeading, introNarration, closingNarration, sharedChromeNarration,
+  layerIntro, demoNarration, speakable, parseWav, joinWavClips, vttTimestamp,
 } from "./training-narration.mjs";
+import { enumerateScreen, openLayerType, locateAndScroll, paintOverlay, CURSOR_SVG } from "./training-screen.mjs";
 
 const base = process.env.TRAINING_BASE_URL || "http://127.0.0.1:5000";
 const username = process.env.ERP_E2E_USERNAME || "";
@@ -31,7 +35,7 @@ const password = process.env.ERP_E2E_PASSWORD || "";
 const selectedTopic = process.env.TRAINING_TOPIC || "factory-overview";
 const ttsModel = process.env.TRAINING_TTS_MODEL || "";
 const ttsPython = process.env.TRAINING_TTS_PYTHON || "python3";
-const ttsLengthScale = process.env.TRAINING_TTS_LENGTH_SCALE || "1.05";
+const ttsLengthScale = process.env.TRAINING_TTS_LENGTH_SCALE || "0.95";
 const output = path.resolve("artifacts/training-videos");
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
 const timeout = 45_000;
@@ -39,18 +43,23 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const execFile = promisify(execFileCallback);
 
 // Frame capture avoids Puppeteer's FFmpeg pipe; its VP9 screencast can crash
-// with EPIPE on long recordings. Frames are captured while each sentence is
-// "spoken", then muxed with the narration track at exactly CAPTURE_FPS.
+// with EPIPE on long recordings. Screen frames are captured while each sentence
+// is "spoken" and muxed with the narration at CAPTURE_FPS; the pointer is then
+// composited by FFmpeg at OUTPUT_FPS so it glides instead of jumping.
 const CAPTURE_FPS = 2;
-const SEGMENT_PAUSE_SECONDS = 0.7;
+const OUTPUT_FPS = 20;
+const SEGMENT_PAUSE_SECONDS = 0.35;
+const CURSOR_TRAVEL_SECONDS = 0.6;
 const MIN_DURATION_SECONDS = 60;
 const MAX_DURATION_SECONDS = 1200;
-const MAX_SEGMENTS = 170;
+const MAX_SEGMENTS = 220;
 const MAX_TABS = 14;
+const MAX_LAYERS = 12;
+const MAX_LAYER_CONTROLS = 14;
 const MAX_SAME_PREFIX = 2;
 
 const TOURS = Object.freeze({
-  "factory-overview": { company: "PHASE7-FACTORY", route: "/factory/production-report", title: "Factory overview", steps: ["Check the active Factory company and date range before interpreting the production report.","Read the summary totals and compare them with the visible production breakdown.","Review the available tabs and filters; a filtered view is not a new transaction.","Scroll through the records and inspect the source rows behind each summary.","Use the menu to locate detailed Factory pages. This overview never posts or changes stock."] },
+  "factory-overview": { explainsSharedChrome: true, company: "PHASE7-FACTORY", route: "/factory/production-report", title: "Factory overview", steps: ["Check the active Factory company and date range before interpreting the production report.","Read the summary totals and compare them with the visible production breakdown.","Review the available tabs and filters; a filtered view is not a new transaction.","Scroll through the records and inspect the source rows behind each summary.","Use the menu to locate detailed Factory pages. This overview never posts or changes stock."] },
   "factory-stock-entry": { company: "PHASE7-FACTORY", route: "/factory/stock-entry", title: "Factory stock entry", steps: ["Open Stock Entry and confirm the factory and production date shown.","Identify the visible stock-entry fields, including product and quantity information.","Review production rows, units and totals before entering any actual values.","Inspect available tabs and scroll to understand how entries are organized.","A real entry requires checking details before saving. This tour does not submit production."] },
   "factory-raw-materials": { company: "PHASE7-FACTORY", route: "/factory/raw-materials", title: "Raw materials", steps: ["Start on Raw Materials and verify the company and reporting context.","Locate the raw-material inventory and any visible quantity or cost columns.","Inspect the available sections, tabs and filters for different material views.","Scroll through the material rows to understand weight, cost and status information.","Check supplier and stock details before real changes. No raw stock is edited in this tour."] },
   "factory-bale-explorer": { company: "PHASE7-FACTORY", route: "/factory/bales-hub", title: "Bale Explorer", steps: ["Open Bale Explorer to understand where factory bale information is viewed.","Locate visible searches, identifiers and filtering options for finding a bale.","Check the available tabs and the data shown for sample bales.","Scroll through records to understand traceability and status without editing them.","Use the correct bale identifier when investigating issues. This recording never rescans a bale."] },
@@ -60,13 +69,15 @@ const TOURS = Object.freeze({
   "factory-payroll": { company: "PHASE7-FACTORY", route: "/factory/payroll-hub", title: "Payroll and benefits", steps: ["Open Payroll and Benefits and confirm the active company and period.","Locate visible employee, attendance and payroll management sections.","Review tabs and available filters for understanding the pay period.","Scroll through payroll-related rows and check how balances and statuses are displayed.","Review supporting attendance before paying. No salary, bonus or voucher is posted here."] },
   "factory-accounts": { company: "PHASE7-FACTORY", route: "/factory/accounts", title: "Factory accounts", steps: ["Open Factory Accounts and confirm the company and selected statement period.","Locate the account balances, statement controls and ledger information.","Inspect the available tabs, search or date filters to narrow the account view.","Scroll through the ledger entries and compare movements with the displayed balance.","Real corrections require supporting transactions. This tour does not alter accounts."] },
   "factory-analytics": { company: "PHASE7-FACTORY", route: "/factory/analytics", title: "Factory analytics", steps: ["Open Factory Analytics and check which date range is being reported.","Review the key metrics and identify the totals represented on this page.","Try the available tabs or view filters to inspect another breakdown.","Scroll through charts or report sections and compare figures to their time periods.","Analytics is for analysis; verify source records before acting on these numbers."] },
-  "erp-tracking": { company: "PHASE7-ERP", route: "/tracking", title: "ERP tracking", steps: ["Open ERP Tracking and confirm the correct company is active.","Locate the visible shipment, item or tracking information on this page.","Inspect the tabs and available filters to narrow the results.","Scroll through the records to understand identifiers and tracking status.","Use tracking details to investigate a movement. This guided recording changes nothing."] },
+  "erp-tracking": { explainsSharedChrome: true, company: "PHASE7-ERP", route: "/tracking", title: "ERP tracking", steps: ["Open ERP Tracking and confirm the correct company is active.","Locate the visible shipment, item or tracking information on this page.","Inspect the tabs and available filters to narrow the results.","Scroll through the records to understand identifiers and tracking status.","Use tracking details to investigate a movement. This guided recording changes nothing."] },
   "erp-inventory": { company: "PHASE7-ERP", route: "/inventory", title: "ERP inventory", steps: ["Open ERP Inventory and confirm the current company and location.","Review visible items, quantities and stock availability information.","Inspect the available inventory tabs, search and filtering controls.","Scroll through the item records and compare quantities across the current view.","Verify stock before transferring or adjusting inventory. This tour performs no transfer."] },
   "erp-pos": { company: "PHASE7-ERP", route: "/pos", title: "ERP point of sale", steps: ["Open Point of Sale and verify the correct company and POS context.","Locate the product list, search and available sales controls.","Inspect tabs or other visible options used to navigate POS information.","Review the sample items and prices without adding or completing an order.","An actual sale affects stock and accounts; this tour does not create a sale."] },
   "erp-vouchers": { company: "PHASE7-ERP", route: "/vouchers", title: "ERP vouchers", steps: ["Open Vouchers and identify the current company and voucher list.","Review available voucher dates, amounts and status information.","Inspect voucher tabs or filters that separate different records.","Scroll through the entries to understand how voucher history is displayed.","Review debit and credit details before posting. This demonstration posts nothing."] },
   "erp-daybook": { company: "PHASE7-ERP", route: "/daybook", title: "ERP Daybook", steps: ["Open the ERP Daybook and check the active company and selected date.","Review the listed transactions and identify the information shown per entry.","Inspect visible filters or tabs to focus on a particular date or type.","Scroll through the records to understand how daily activity is organized.","Cross-check source vouchers when investigating differences. The tour is read-only."] },
   "erp-reports": { company: "PHASE7-ERP", route: "/sales-report", title: "ERP Sales Report", steps: ["Open Sales Report and confirm the active ERP company and reporting period.","Review the visible sales totals and their units or currency.","Inspect date, category or other available report filters.","Scroll through detailed rows and compare them to the summary values.","Use this report to investigate sales; it does not create invoices or stock movements."] },
 });
+
+
 const chosenIds = selectedTopic === "all" ? Object.keys(TOURS) : selectedTopic.split(",").map((id) => id.trim()).filter(Boolean);
 const tours = [...new Set(chosenIds)].map((id) => [id, TOURS[id]]);
 
@@ -157,20 +168,27 @@ async function selectFixtureCompany(page, code) {
   throw new Error("Fixture session company would not settle on " + code + " after 3 verified attempts");
 }
 
+
 /**
  * Render the captured, real authenticated screen frames plus the narration
  * track to an H.264 / AAC MP4. We do NOT keep an open FFmpeg stdin pipe or a
  * Puppeteer screencast process; both can produce EPIPE/zero-byte recordings on
- * GitHub runners.
+ * GitHub runners. The pointer is composited from cursor.png at OUTPUT_FPS using
+ * the per-frame positions in the sendcmd track, so it moves smoothly even
+ * though the screen itself is captured at CAPTURE_FPS.
  */
 async function encodeAndValidate(framesDir, narrationWav, expectedSeconds, outputMp4) {
   await execFile("ffmpeg", [
     "-hide_banner", "-loglevel", "error", "-y",
     "-framerate", String(CAPTURE_FPS), "-start_number", "0",
     "-i", path.join(framesDir, "frame-%05d.jpg"),
+    "-i", path.join(framesDir, "cursor.png"),
     "-i", narrationWav,
-    "-map", "0:v:0", "-map", "1:a:0",
-    "-vf", "fps=20,scale=in_range=full:out_range=limited,format=yuv420p",
+    "-filter_complex",
+    "[0:v]fps=" + OUTPUT_FPS + ",sendcmd=f=" + path.join(framesDir, "cursor.cmd").replace(/([\\':])/g, "\\$1") + "[screen];" +
+    "[screen][1:v]overlay@cur=x=-40:y=-40:eval=frame:format=auto[pointer];" +
+    "[pointer]scale=in_range=full:out_range=limited,format=yuv420p[out]",
+    "-map", "[out]", "-map", "2:a:0",
     "-c:v", "libx264", "-profile:v", "main", "-preset", "veryfast",
     "-crf", "21", "-pix_fmt", "yuv420p", "-color_range", "tv",
     "-c:a", "aac", "-b:a", "96k", "-ar", "48000", "-ac", "1",
@@ -188,7 +206,7 @@ async function encodeAndValidate(framesDir, narrationWav, expectedSeconds, outpu
   if (video?.codec_name !== "h264" || video?.pix_fmt !== "yuv420p" || audio?.codec_name !== "aac" ||
       !Number.isFinite(durationSeconds) || Math.abs(durationSeconds - expectedSeconds) > 1 ||
       durationSeconds < MIN_DURATION_SECONDS || durationSeconds > MAX_DURATION_SECONDS ||
-      Number(video.nb_frames) < durationSeconds * 19) {
+      Number(video.nb_frames) < durationSeconds * (OUTPUT_FPS - 1)) {
     throw new Error("Training video failed H.264 + AAC narration, full-frame or " + MIN_DURATION_SECONDS + "-" + MAX_DURATION_SECONDS + " second validation");
   }
   // Actually decode every frame: ffprobe metadata alone is not a playback test.
@@ -196,181 +214,114 @@ async function encodeAndValidate(framesDir, narrationWav, expectedSeconds, outpu
   return { durationSeconds, width: video.width, height: video.height, codec: "h264/yuv420p+aac" };
 }
 
-/** Enumerate the visible controls and section headings of the current screen. */
-function enumerateScreen() {
-  const CONTROLS = "button, a[href], [role=tab], [role=button], input, select, textarea, [role=combobox], [role=switch], [role=checkbox], [role=menuitem], summary";
-  const visible = (el) => {
-    const rect = el.getBoundingClientRect();
-    const style = getComputedStyle(el);
-    return rect.width > 4 && rect.height > 4 && style.visibility !== "hidden" && style.display !== "none" && style.opacity !== "0";
-  };
-  // innerText keeps the visual line breaks between child elements, so a button
-  // rendered as "Loading" + badge "0" yields "Loading" / "0" instead of "Loading0".
-  const textLines = (el) => String(el.innerText || el.textContent || "").split("\n").map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean);
-  const text = (el) => {
-    const explicit = el.getAttribute("aria-label") || el.getAttribute("title") || el.getAttribute("placeholder");
-    if (explicit) return { label: explicit.replace(/\s+/g, " ").trim().slice(0, 90), description: "", count: "" };
-    const lines = textLines(el);
-    let label = lines[0] || "";
-    let count = "";
-    const rest = lines.slice(1);
-    if (rest.length && /^\(?\d+\)?$/.test(rest[0])) count = rest.shift().replace(/[()]/g, "");
-    const glued = label.match(/^(.*\S)\s*\((\d+)\)$/) || label.match(/^([A-Za-z][A-Za-z &/-]*[A-Za-z])(\d+)$/);
-    if (glued) { label = glued[1].trim(); count = glued[2]; }
-    return { label: label.slice(0, 90), description: rest.join(" ").slice(0, 160), count };
-  };
-  const region = (el) => el.closest("[data-sidebar=sidebar]") ? "sidebar"
-    : el.closest("#main-content") ? "main"
-    : el.closest("header") ? "header" : "floating";
-  const rows = [];
-  const seen = new Set();
-  const push = (el, kind) => {
-    if (seen.has(el)) return;
-    seen.add(el);
-    const { label, description, count } = text(el);
-    if (!label && !el.getAttribute("data-testid")) return;
-    if (/^skip to main content$/i.test(label)) return;
-    const role = el.getAttribute("role") || "";
-    const siblings = kind === "control" && role !== "tab" && !/^tab-/.test(el.getAttribute("data-testid") || "") && el.parentElement
-      ? Array.from(el.parentElement.children).filter((child) => child !== el && /^(BUTTON|A)$/.test(child.tagName) && visible(child)).map((child) => text(child).label).filter(Boolean).slice(0, 6)
-      : [];
-    rows.push({
-      kind, region: region(el), tag: el.tagName.toLowerCase(), role,
-      type: el.getAttribute("type") || "",
-      label, description, count, testid: el.getAttribute("data-testid") || "",
-      disabled: Boolean(el.disabled) || el.getAttribute("aria-disabled") === "true",
-      selected: el.getAttribute("aria-selected") === "true" || el.getAttribute("aria-current") === "page" || el.getAttribute("data-active") === "true" || el.getAttribute("data-state") === "active",
-      pressed: el.getAttribute("aria-pressed") === "true" || el.getAttribute("data-state") === "on" || el.getAttribute("aria-checked") === "true",
-      expanded: el.hasAttribute("aria-expanded") ? el.getAttribute("aria-expanded") : null,
-      haspopup: el.getAttribute("aria-haspopup") || "",
-      group: siblings.length >= 2 ? siblings : [],
-      value: el.tagName === "SELECT" ? (el.selectedOptions?.[0]?.textContent || "").trim() : "",
-      placeholder: el.getAttribute("placeholder") || "",
-      href: el.getAttribute("href") || "",
-      level: kind === "heading" ? el.tagName.toLowerCase() : "",
-    });
-  };
-  const header = Array.from(document.querySelectorAll("header " + CONTROLS.split(", ").join(", header "))).filter((el) => !el.closest("#main-content") && !el.closest("[data-sidebar=sidebar]") && visible(el));
-  header.forEach((el) => push(el, "control"));
-  Array.from(document.querySelectorAll("[data-sidebar=sidebar] " + CONTROLS.split(", ").join(", [data-sidebar=sidebar] "))).filter(visible).forEach((el) => push(el, "control"));
-  Array.from(document.querySelectorAll(CONTROLS)).filter((el) => visible(el) && region(el) === "floating").forEach((el) => push(el, "control"));
-  Array.from(document.querySelectorAll("#main-content h2, #main-content h3, " + CONTROLS.split(", ").map((s) => "#main-content " + s).join(", "))).filter(visible).forEach((el) => push(el, /^H[23]$/.test(el.tagName) ? "heading" : "control"));
-  const h1 = document.querySelector("#main-content h1");
-  const subtitle = h1?.parentElement?.querySelector("p")?.textContent?.replace(/\s+/g, " ").trim() || "";
-  return { rows, heading: h1?.textContent?.replace(/\s+/g, " ").trim() || document.title, subtitle };
-}
-
-/** Find the element described by a segment and scroll it into view. */
-function locateAndScroll(segment) {
-  const visible = (el) => { const r = el.getBoundingClientRect(); return r.width > 4 && r.height > 4; };
-  const text = (el) => (el.getAttribute("aria-label") || el.getAttribute("title") || el.getAttribute("placeholder") || el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 90);
-  let el = null;
-  if (segment.testid) {
-    const matches = Array.from(document.querySelectorAll('[data-testid="' + segment.testid.replace(/"/g, '\\"') + '"]')).filter(visible);
-    el = matches[0] || null;
-  }
-  if (!el && segment.label) {
-    const scope = segment.region === "sidebar" ? "[data-sidebar=sidebar] " : segment.region === "main" ? "#main-content " : "";
-    const selector = segment.kind === "heading" ? scope + segment.level : scope + (segment.tag || "*");
-    el = Array.from(document.querySelectorAll(selector)).find((candidate) => visible(candidate) && text(candidate) === segment.label) || null;
-  }
-  if (!el) return null;
-  el.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
-  const rect = el.getBoundingClientRect();
-  return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
-}
-
-/** Draw the highlight ring, callout and caption bar for the current sentence. */
-function paintOverlay({ rect, title, text, index, total, pulse, cursor, click }) {
-  let layer = document.getElementById("training-recording-layer");
-  if (!layer) {
-    layer = document.createElement("div");
-    layer.id = "training-recording-layer";
-    layer.setAttribute("aria-hidden", "true");
-    layer.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:2147483647;font-family:system-ui,Segoe UI,sans-serif";
-    layer.innerHTML = '<div id="trl-ring"></div><div id="trl-chip"></div><div id="trl-caption"></div><div id="trl-step"></div>' +
-      '<div id="trl-click"></div><svg id="trl-cursor" width="28" height="28" viewBox="0 0 24 24" style="position:fixed;left:0;top:0;filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))">' +
-      '<path d="M5 3l14 8.5-6.2 1.3 3.6 6.4-2.6 1.4-3.6-6.4L5 18z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg>';
-    document.body.appendChild(layer);
-  }
-  const ring = layer.querySelector("#trl-ring");
-  const chip = layer.querySelector("#trl-chip");
-  const caption = layer.querySelector("#trl-caption");
-  const step = layer.querySelector("#trl-step");
-  const pointer = layer.querySelector("#trl-cursor");
-  const ripple = layer.querySelector("#trl-click");
-  if (cursor) {
-    pointer.style.left = (cursor.x - 4) + "px";
-    pointer.style.top = (cursor.y - 2) + "px";
-    pointer.style.display = "block";
-  } else {
-    pointer.style.display = "none";
-  }
-  if (click && cursor) {
-    ripple.style.cssText = "position:fixed;left:" + (cursor.x - 18) + "px;top:" + (cursor.y - 18) + "px;width:36px;height:36px;border-radius:50%;border:3px solid #ff7a00;background:rgba(255,122,0,.25)";
-  } else {
-    ripple.style.cssText = "display:none";
-  }
-  if (rect) {
-    const pad = 6;
-    const left = Math.max(0, rect.x - pad);
-    const top = Math.max(0, rect.y - pad);
-    const width = Math.min(innerWidth - left, rect.width + pad * 2);
-    const height = Math.min(innerHeight - top, rect.height + pad * 2);
-    ring.style.cssText = "position:fixed;left:" + left + "px;top:" + top + "px;width:" + width + "px;height:" + height +
-      "px;border:" + (pulse ? 4 : 3) + "px solid #ff7a00;border-radius:10px;box-shadow:0 0 0 " + (pulse ? 6 : 4) +
-      "px rgba(255,122,0,.28),0 0 24px rgba(255,122,0,.5)";
-    const chipTop = top > 44 ? top - 38 : top + height + 8;
-    chip.style.cssText = "position:fixed;left:" + left + "px;top:" + chipTop + "px;background:#ff7a00;color:#111;font:700 15px/1 system-ui;padding:8px 12px;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.3);white-space:nowrap;max-width:60vw;overflow:hidden;text-overflow:ellipsis";
-    chip.textContent = title;
-  } else {
-    ring.style.cssText = "display:none";
-    chip.style.cssText = "display:none";
-  }
-  caption.style.cssText = "position:fixed;left:24px;right:24px;bottom:20px;margin:0 auto;max-width:1100px;background:rgba(9,20,42,.94);color:#fff;border-radius:14px;padding:16px 22px;font:600 20px/1.35 system-ui;box-shadow:0 8px 32px rgba(0,0,0,.4)";
-  caption.textContent = text;
-  step.style.cssText = "position:fixed;right:24px;top:72px;background:rgba(9,20,42,.9);color:#fff;border-radius:999px;padding:6px 14px;font:600 13px system-ui";
-  step.textContent = "Explaining " + index + " of " + total;
-}
-
 const DEMO_TEXT = "P7";
+// Controls whose click would leave the page, print, download or destroy
+// something are explained but never pressed, even on the disposable fixture.
+const NEVER_CLICK = /\b(print|export|download|log ?out|sign out|delete|remove|void|reverse|cancel|save|post|submit|confirm|finali[sz]e|approve|pay|send|email|upload|close)\b/i;
+const NEVER_CLICK_TESTID = /^(export|print|button-remove|button-delete|button-save|button-submit|button-post|button-confirm|button-logout|button-sidebar-logout)/;
+const LAYER_PRIORITY = /\b(import|select|choose|account|item|product|customer|supplier|new|add|create|edit|settings|actions?|filters?|columns?|more|options?|menu|template|period|range)\b/i;
 
 /**
- * Safe, reversible demonstrations. Typing into a search box and opening a
- * dropdown, filter or column menu only change what is displayed; the capture
- * pass clears the text and presses Escape afterwards. Nothing is ever chosen,
- * submitted or saved, and every non-GET request stays blocked.
+ * Safe, reversible demonstrations. Typing into a search box, opening a menu,
+ * list or dialog, and choosing an entry from an opened list only change what
+ * is displayed on the disposable fixture; the capture pass clears the text,
+ * closes the layer or reloads the page afterwards. Nothing is ever submitted
+ * or saved, and every non-GET request stays blocked at the network layer.
  */
 function demoFor(row) {
-  if (row.region !== "main" || row.disabled) return null;
+  if (row.disabled) return null;
   const label = (row.label || row.placeholder || "").toLowerCase();
   if ((row.tag === "input" || row.tag === "textarea") && !["date", "month", "number", "checkbox", "file", "time"].includes(row.type) && /search|find|filter/.test(label)) return "type";
+  if (row.region === "layer") return null;
+  if (row.region !== "main") return null;
   if (row.tag === "button" && !/^tab-/.test(row.testid) && row.role !== "tab" &&
       (row.testid.startsWith("select-") || (row.haspopup && row.haspopup !== "false") || /^(filters?|columns?)$/.test(label))) return "open";
   return null;
 }
 
-/** Discover every control, exploring each visible tab, and build the spoken script. */
-async function planNarration(page, tour, route) {
+/** Buttons and selectors in the main area that may reveal hidden controls. */
+function explorable(row) {
+  if (row.region !== "main" || row.disabled || row.kind !== "control") return false;
+  if (row.role === "tab" || /^tab-/.test(row.testid) || row.tag === "a" || row.tag === "input" || row.tag === "textarea" || row.tag === "select") return false;
+  if (!(row.tag === "button" || row.role === "button" || row.role === "combobox")) return false;
+  const label = row.label || row.placeholder || "";
+  return !NEVER_CLICK.test(label) && !NEVER_CLICK_TESTID.test(row.testid);
+}
+
+/** The one entry inside an opened layer that is safe to choose as a demonstration. */
+function pickTarget(rows) {
+  const option = rows.find((row) => row.kind === "control" && row.role === "option" && !row.disabled && !row.selected);
+  if (option) return option;
+  return rows.find((row) => row.kind === "control" && row.tag === "button" && !row.disabled && /^(select|choose|import|use|apply|pick)\b/i.test(row.label) && !NEVER_CLICK.test(row.label.replace(/^(select|choose|import|use|apply|pick)\b/i, ""))) || null;
+}
+
+const keyOf = (row) => row.region + "|" + (row.testid || row.tag + ":" + row.label);
+/** A spoken name for a control, falling back to its test id for icon-only buttons. */
+const nameOf = (row) => row.label || row.testid.replace(/^(button|input|select|checkbox|toggle|link|card)-/, "").replace(/-\d+$/, "").replace(/-/g, " ").trim() || "this icon button";
+const locator = (row) => ({ testid: row.testid, label: row.label, region: row.region, tag: row.tag, kind: row.kind, level: row.level });
+
+async function clickTab(page, testid) {
+  // Only select an already-visible UI tab. Never submit ERP or Factory
+  // transactions, and keep all network writes blocked.
+  const tab = await page.$('[data-testid="' + testid + '"]');
+  if (tab) await tab.click().catch(() => undefined);
+  await delay(1200);
+}
+
+/** Scroll a control into view and click its centre with the real mouse. */
+async function clickControl(page, row) {
+  const rect = await page.evaluate(locateAndScroll, locator(row));
+  if (!rect) return false;
+  await delay(150);
+  await page.mouse.click(rect.x + Math.min(rect.width - 8, Math.max(8, rect.width * 0.5)), rect.y + rect.height / 2).catch(() => undefined);
+  await delay(900);
+  return true;
+}
+
+/** Close whatever layer is open without triggering the app's Escape-goes-back. */
+async function closeLayers(page) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const type = await page.evaluate(openLayerType).catch(() => "");
+    if (!type) return true;
+    if (type === "dialog") {
+      const closeButton = await page.$("[role=dialog][data-state=open] button[aria-label*='lose' i], [role=dialog][data-state=open] [data-testid*='close' i], [role=alertdialog] button[aria-label*='lose' i]");
+      if (closeButton) { await closeButton.click().catch(() => undefined); await delay(400); continue; }
+    }
+    await page.keyboard.press("Escape").catch(() => undefined);
+    await delay(400);
+  }
+  return !(await page.evaluate(openLayerType).catch(() => ""));
+}
+
+/** Discover every control, exploring each visible tab and each hidden layer, and build the spoken script. */
+async function planNarration(page, tour, route, openRoute) {
   const mode = tour.company === "PHASE7-FACTORY" ? "factory" : "erp";
-  const first = await page.evaluate(enumerateScreen);
+  const explainChrome = tour.explainsSharedChrome === true;
+  const first = await page.evaluate(enumerateScreen, {});
   const segments = [{ id: "intro", kind: "intro", text: introNarration(tour, mode, first.heading, first.subtitle), tabPath: [] }];
   for (const step of tour.steps.slice(0, 4)) segments.push({ id: "overview-" + segments.length, kind: "overview", text: step, tabPath: [] });
+  if (!explainChrome) {
+    const overview = Object.values(TOURS).find((candidate) => candidate.explainsSharedChrome && candidate.company === tour.company);
+    segments.push({ id: "chrome", kind: "note", text: sharedChromeNarration(mode, overview ? overview.title : "overview"), tabPath: [] });
+  }
   const seen = new Set();
   const prefixCount = new Map();
   const tabQueue = [];
+  const layerQueue = [];
   const tabPath = [];
   let tabLabel = "";
   let explored = 0;
   let visited = 0;
+  const nextId = () => "s" + segments.length;
   const ingest = (rows) => {
     for (const row of rows) {
       if (segments.length >= MAX_SEGMENTS - 1) return;
-      const key = row.kind + "|" + row.region + "|" + (row.testid || row.tag + ":" + row.label);
+      if (!explainChrome && row.region !== "main") continue;
+      const key = row.kind + "|" + keyOf(row);
       if (seen.has(key)) continue;
       seen.add(key);
       if (row.kind === "heading") {
-        segments.push({ ...row, id: "s" + segments.length, text: describeHeading(row.label, row.level), tabPath: [...tabPath], tabLabel });
+        segments.push({ ...row, id: nextId(), text: describeHeading(row.label, row.level), tabPath: [...tabPath], tabLabel, layer: null });
         continue;
       }
       const prefix = row.testid.replace(/-\d+$/, "");
@@ -380,16 +331,16 @@ async function planNarration(page, tour, route) {
         if (count > MAX_SAME_PREFIX) continue;
       }
       const demo = demoFor(row);
-      const text = describeControl(row) + (row.testid !== prefix && prefixCount.get(prefix) === MAX_SAME_PREFIX ? " The rows below work the same way." : "") +
-        (demo === "type" ? " Watch: typing " + DEMO_TEXT.split("").join(" ") + " narrows the list to the matching rows, and clearing the box brings everything back." :
-          demo === "open" ? " Let me open it so you can see the choices; pressing Escape closes it again without choosing anything." : "");
-      segments.push({ ...row, id: "s" + segments.length, text, demo, tabPath: [...tabPath], tabLabel });
+      const text = describeControl(row) + (row.testid !== prefix && prefixCount.get(prefix) === MAX_SAME_PREFIX ? " The rows below work the same way." : "") + demoNarration(demo, row.label, DEMO_TEXT);
+      segments.push({ ...row, id: nextId(), text, demo, tabPath: [...tabPath], tabLabel, layer: null });
       const isTab = row.role === "tab" || /^tab-/.test(row.testid);
       if (isTab && row.region === "main" && row.testid && !row.selected && !tabQueue.some((item) => item.testid === row.testid)) {
         // Remember which parent tabs were open when this tab was discovered so
         // nested tab strips (for example Workers > Payroll) can be re-opened
         // before the queued tab is visited and before its controls are replayed.
         tabQueue.push({ testid: row.testid, label: row.label, parentPath: [...tabPath] });
+      } else if (explorable(row) && !layerQueue.some((item) => keyOf(item.row) === keyOf(row))) {
+        layerQueue.push({ row, segmentId: segments[segments.length - 1].id, parentPath: [...tabPath], tabLabel, priority: LAYER_PRIORITY.test(row.label) || demo === "open" ? 1 : 0 });
       }
     }
   };
@@ -408,27 +359,64 @@ async function planNarration(page, tour, route) {
     await delay(1200);
     if (new URL(page.url()).pathname !== route) {
       // A tab-styled link left the page: never follow it, return to the tour route.
-      await page.goto(base + route, { waitUntil: "domcontentloaded", timeout });
-      await page.waitForSelector("#main-content", { visible: true, timeout });
-      await delay(1000);
+      await openRoute();
       tabPath.splice(0, tabPath.length);
       continue;
     }
     tabPath.push(next.testid);
     visited++;
     tabLabel = next.label;
-    ingest((await page.evaluate(enumerateScreen)).rows);
+    ingest((await page.evaluate(enumerateScreen, {})).rows);
   }
-  segments.push({ id: "closing", kind: "closing", text: closingNarration(tour), tabPath: [] });
-  return { segments, tabsExplored: visited };
-}
 
-async function clickTab(page, testid) {
-  // Only select an already-visible UI tab. Never submit ERP or Factory
-  // transactions, and keep all network writes blocked.
-  const tab = await page.$('[data-testid="' + testid + '"]');
-  if (tab) await tab.click().catch(() => undefined);
-  await delay(1200);
+  // Open the hidden layers: menus, dropdown lists and dialogs behind the
+  // main-area buttons, most useful ones first, and script what is inside.
+  layerQueue.sort((a, b) => b.priority - a.priority);
+  let layersExplored = 0;
+  let hiddenControls = 0;
+  for (const candidate of layerQueue.slice(0, MAX_LAYERS)) {
+    if (segments.length >= MAX_SEGMENTS - 4) break;
+    await openRoute();
+    for (const parent of candidate.parentPath) await clickTab(page, parent);
+    tabPath.splice(0, tabPath.length, ...candidate.parentPath);
+    const clicked = await clickControl(page, candidate.row);
+    if (!clicked) continue;
+    if (new URL(page.url()).pathname !== route) continue;
+    const layer = await page.evaluate(enumerateScreen, { layerOnly: true });
+    if (!layer.layerType) continue;
+    const rows = layer.rows.filter((row) => row.kind === "control" ? row.label || row.testid : row.label).slice(0, MAX_LAYER_CONTROLS);
+    const parentIndex = segments.findIndex((segment) => segment.id === candidate.segmentId);
+    const parent = segments[parentIndex];
+    parent.demo = "open";
+    parent.keepOpen = true;
+    if (!/Let me open it/.test(parent.text)) parent.text += demoNarration("open", parent.label, DEMO_TEXT);
+    const ref = { key: keyOf(candidate.row), row: locator(candidate.row), type: layer.layerType };
+    const inserted = [{ id: "layer" + layersExplored, kind: "layer-intro", text: layerIntro(nameOf(candidate.row), layer.layerType, rows.filter((row) => row.kind === "control").length, layer.heading), tabPath: [...tabPath], tabLabel, layer: ref, parentLabel: nameOf(candidate.row) }];
+    const pick = pickTarget(rows);
+    for (const row of rows) {
+      const key = row.kind + "|" + keyOf(row) + "|" + ref.key;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (row.kind === "heading") {
+        inserted.push({ ...row, id: "layer" + layersExplored + "h" + inserted.length, text: describeHeading(row.label, row.level), tabPath: [...tabPath], tabLabel, layer: ref, parentLabel: nameOf(candidate.row) });
+        continue;
+      }
+      const demo = row === pick ? "pick" : demoFor(row);
+      inserted.push({ ...row, id: "layer" + layersExplored + "c" + inserted.length, text: describeControl(row) + demoNarration(demo, row.label, DEMO_TEXT), demo, tabPath: [...tabPath], tabLabel, layer: ref, parentLabel: nameOf(candidate.row), resetAfter: demo === "pick" });
+      hiddenControls++;
+    }
+    // A chosen option usually closes the list, so it must be the last thing
+    // shown inside this layer.
+    const pickIndex = inserted.findIndex((segment) => segment.demo === "pick");
+    if (pickIndex >= 0) inserted.push(...inserted.splice(pickIndex, 1));
+    segments.splice(parentIndex + 1, 0, ...inserted);
+    layersExplored++;
+    await closeLayers(page);
+  }
+  await openRoute();
+  segments.forEach((segment, index) => { segment.id = segment.kind === "intro" || segment.kind === "closing" ? segment.id : "n" + index; });
+  segments.push({ id: "closing", kind: "closing", text: closingNarration(tour), tabPath: [], layer: null });
+  return { segments, tabsExplored: visited, layersExplored, hiddenControls, sharedChromeExplained: explainChrome };
 }
 
 async function synthesizeNarration(segments, clipsDir) {
@@ -443,8 +431,29 @@ async function synthesizeNarration(segments, clipsDir) {
   if (!Array.isArray(summary.clips) || summary.clips.length !== segments.length) throw new Error("Narration synthesis returned an incomplete clip set");
   for (const segment of segments) {
     segment.wav = parseWav(await fs.readFile(path.join(clipsDir, segment.id + ".wav")));
-    segment.frames = Math.max(3, Math.ceil((segment.wav.durationSeconds + SEGMENT_PAUSE_SECONDS) * CAPTURE_FPS));
+    segment.frames = Math.max(2, Math.ceil((segment.wav.durationSeconds + SEGMENT_PAUSE_SECONDS) * CAPTURE_FPS));
     segment.targetSeconds = segment.frames / CAPTURE_FPS;
+  }
+}
+
+/** Pointer positions for every output frame, written as an FFmpeg sendcmd track. */
+class CursorTrack {
+  constructor() { this.lines = []; this.last = null; }
+  at(seconds, x, y) {
+    const px = Math.round(x) - 5;
+    const py = Math.round(y) - 3;
+    if (this.last && this.last.x === px && this.last.y === py) return;
+    this.last = { x: px, y: py };
+    const t = seconds.toFixed(3);
+    this.lines.push(t + " overlay@cur x " + px + "; " + t + " overlay@cur y " + py + ";");
+  }
+  glide(startSeconds, from, to, durationSeconds) {
+    const ease = (t) => 1 - Math.pow(1 - t, 3);
+    const steps = Math.max(1, Math.round(durationSeconds * OUTPUT_FPS));
+    for (let step = 0; step <= steps; step++) {
+      const t = ease(step / steps);
+      this.at(startSeconds + step / OUTPUT_FPS, from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t);
+    }
   }
 }
 
@@ -493,11 +502,12 @@ async function recordOne(page, id, tour) {
     if (http.status !== 200 || !http.type.includes("text/html")) {
       throw new Error("Training page GET failed (" + http.status + ", " + http.type + ") at " + tour.route);
     }
-    const pageDetails = await page.evaluate(enumerateScreen);
+    const pageDetails = await page.evaluate(enumerateScreen, {});
     await page.screenshot({ path: path.join(dir, "screenshot.png"), fullPage: false });
 
-    // Pass 1: discover every control (exploring visible tabs) and write the script.
-    const { segments, tabsExplored } = await planNarration(page, tour, tour.route);
+    // Pass 1: discover every control (exploring tabs and hidden layers) and write the script.
+    const plan = await planNarration(page, tour, tour.route, openRoute);
+    const { segments } = plan;
     const framesDir = await fs.mkdtemp(path.join(os.tmpdir(), "erp-training-frames-"));
     const clipsDir = await fs.mkdtemp(path.join(os.tmpdir(), "erp-training-voice-"));
     let video;
@@ -510,106 +520,121 @@ async function recordOne(page, id, tour) {
         const [dropped] = segments.splice(segments.length - 2, 1);
         plannedSeconds -= dropped.targetSeconds;
       }
+      await fs.writeFile(path.join(framesDir, "cursor.png"), cursorImage);
       // Pass 2: replay on a fresh page state and capture frames while narrating.
       await openRoute();
       const captions = ["WEBVTT", ""];
+      const track = new CursorTrack();
       let frameNumber = 0;
       let appliedPath = "";
+      let openLayer = "";
       let elapsed = 0;
       let cursor = { x: 720, y: 450 };
-      const ease = (t) => 1 - Math.pow(1 - t, 3);
+      track.at(0, cursor.x, cursor.y);
+      const restore = async (segment) => {
+        await openRoute();
+        for (const testid of segment.tabPath) await clickTab(page, testid);
+        appliedPath = segment.tabPath.join("/");
+        openLayer = "";
+      };
       for (let i = 0; i < segments.length; i++) {
         const segment = segments[i];
+        const layerKey = segment.layer ? segment.layer.key : "";
+        if (openLayer && openLayer !== layerKey) {
+          // Leave the menu, list or dialog of the previous control.
+          if (!(await closeLayers(page))) await restore(segment);
+          openLayer = "";
+        }
         if (segment.tabPath.length && segment.tabPath.join("/") !== appliedPath) {
           // Tab paths can branch (Employees tab, then back to a Workers sub-tab),
           // so replay the whole path whenever it differs from the one on screen.
           for (const testid of segment.tabPath) await clickTab(page, testid);
           appliedPath = segment.tabPath.join("/");
         }
+        if (layerKey && openLayer !== layerKey) {
+          // Re-open the layer this control lives in (its parent was clicked in pass 1).
+          await clickControl(page, segment.layer.row);
+          openLayer = (await page.evaluate(openLayerType).catch(() => "")) ? layerKey : "";
+        }
         let rect = null;
         if (segment.kind === "control" || segment.kind === "heading") {
-          rect = await page.evaluate(locateAndScroll, { testid: segment.testid, label: segment.label, region: segment.region, tag: segment.tag, kind: segment.kind, level: segment.level });
+          rect = await page.evaluate(locateAndScroll, locator(segment));
           if (!rect) missingHighlights.push(segment.testid || segment.label);
-          await delay(250);
-        } else {
+          await delay(200);
+        } else if (!layerKey) {
           await page.evaluate(() => document.querySelector("#main-content")?.scrollTo({ top: 0, behavior: "instant" }));
         }
         const title = segment.kind === "heading" ? "Section: " + segment.label
-          : segment.kind === "control" ? (segment.role === "tab" || /^tab-/.test(segment.testid) ? "Tab: " : segment.tag === "input" || segment.tag === "select" || segment.tag === "textarea" ? "Field: " : segment.tag === "a" ? "Link: " : "Button: ") + (segment.label || segment.testid)
+          : segment.kind === "layer-intro" ? "Inside: " + segment.parentLabel
+          : segment.kind === "control" ? (layerKey ? "In " + segment.parentLabel + ": " : "") + (segment.role === "tab" || /^tab-/.test(segment.testid) ? "Tab: " : segment.role === "option" ? "Choice: " : segment.tag === "input" || segment.tag === "select" || segment.tag === "textarea" ? "Field: " : segment.tag === "a" ? "Link: " : "Button: ") + (segment.label || segment.testid)
           : tour.title;
-        // The cursor glides to the control over the first frames, hovers it for
+        // The pointer glides to the control at full frame rate, hovers it for
         // real (hover styles show), then performs the reversible demo if any.
         const from = { ...cursor };
         const target = rect ? { x: rect.x + Math.min(rect.width - 8, Math.max(8, rect.width * 0.5)), y: rect.y + rect.height / 2 } : from;
-        const travelFrames = rect ? Math.min(3, Math.max(1, segment.frames - 2)) : 0;
+        if (rect) { track.glide(elapsed, from, target, CURSOR_TRAVEL_SECONDS); cursor = target; }
+        const travelFrames = rect ? Math.min(Math.ceil(CURSOR_TRAVEL_SECONDS * CAPTURE_FPS), Math.max(1, segment.frames - 1)) : 0;
         let demoActive = false;
         for (let frame = 0; frame < segment.frames; frame++) {
-          if (rect && frame <= travelFrames) {
-            const t = ease(travelFrames ? frame / travelFrames : 1);
-            cursor = { x: from.x + (target.x - from.x) * t, y: from.y + (target.y - from.y) * t };
-            if (frame === travelFrames) await page.mouse.move(cursor.x, cursor.y).catch(() => undefined);
-          }
-          let click = false;
+          if (rect && frame === travelFrames) await page.mouse.move(cursor.x, cursor.y).catch(() => undefined);
+          let click = null;
           if (segment.demo && rect && frame === travelFrames + 1) {
-            click = true;
+            click = { x: cursor.x, y: cursor.y };
             demoActive = true;
-            if (segment.demo === "type") {
-              await page.mouse.click(cursor.x, cursor.y).catch(() => undefined);
-              await page.keyboard.type(DEMO_TEXT, { delay: 60 }).catch(() => undefined);
-            } else {
-              await page.mouse.click(cursor.x, cursor.y).catch(() => undefined);
-            }
+            await page.mouse.click(cursor.x, cursor.y).catch(() => undefined);
+            if (segment.demo === "type") await page.keyboard.type(DEMO_TEXT, { delay: 60 }).catch(() => undefined);
             await delay(700);
+            if (segment.keepOpen) openLayer = (await page.evaluate(openLayerType).catch(() => "")) ? keyOf(segment) : "";
+            if (segment.demo === "pick" && segment.layer) {
+              // The chosen entry closed its list: highlight the field it filled instead.
+              rect = (await page.evaluate(locateAndScroll, segment.layer.row)) || rect;
+            }
           }
-          await page.evaluate(paintOverlay, { rect, title, text: segment.text, index: i + 1, total: segments.length, pulse: frame % 2 === 0, cursor, click });
+          await page.evaluate(paintOverlay, { rect, title, text: segment.text, index: i + 1, total: segments.length, pulse: frame % 2 === 0, click });
           await page.screenshot({
             path: path.join(framesDir, "frame-" + String(frameNumber++).padStart(5, "0") + ".jpg"),
             type: "jpeg", quality: 74, fullPage: false,
           });
         }
-        if (demoActive) {
-          // Undo the demonstration: clear the typed text or close the opened menu.
-          // The app treats a bare Escape on the page body as "go back", so Escape
-          // is only sent while a popover/menu is actually open and focused.
-          if (segment.demo === "type") {
-            await page.mouse.click(cursor.x, cursor.y).catch(() => undefined);
-            const focused = await page.evaluate(() => /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || "")).catch(() => false);
-            if (focused) {
-              await page.keyboard.down("Control").catch(() => undefined);
-              await page.keyboard.press("KeyA").catch(() => undefined);
-              await page.keyboard.up("Control").catch(() => undefined);
-              await page.keyboard.press("Backspace").catch(() => undefined);
-            }
-          }
-          for (let attempt = 0; attempt < 2; attempt++) {
-            const open = await page.evaluate(() => Boolean(document.querySelector(
-              '[data-radix-popper-content-wrapper], [role=menu], [role=listbox], [role=dialog][data-state=open], [data-state=open][role=menu]'))).catch(() => false);
-            if (!open) break;
-            await page.keyboard.press("Escape").catch(() => undefined);
-            await delay(300);
+        if (demoActive && segment.demo === "type") {
+          // Undo the demonstration: clear the typed text with the field still focused.
+          await page.mouse.click(cursor.x, cursor.y).catch(() => undefined);
+          const focused = await page.evaluate(() => /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || "")).catch(() => false);
+          if (focused) {
+            await page.keyboard.down("Control").catch(() => undefined);
+            await page.keyboard.press("KeyA").catch(() => undefined);
+            await page.keyboard.up("Control").catch(() => undefined);
+            await page.keyboard.press("Backspace").catch(() => undefined);
           }
           await page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
-          await delay(300);
+          await delay(200);
+        } else if (demoActive && segment.demo === "open" && !segment.keepOpen) {
+          // The app treats a bare Escape on the page body as "go back", so the
+          // layer is only closed while it is actually open.
+          await closeLayers(page);
         }
-        if (new URL(page.url()).pathname !== tour.route) {
-          // A demo or key press left the page: come back and replay the tab path.
-          await openRoute();
-          for (const testid of segment.tabPath) await clickTab(page, testid);
-          appliedPath = segment.tabPath.join("/");
+        if (segment.resetAfter || new URL(page.url()).pathname !== tour.route) {
+          // A chosen option changed the form, or a key press left the page:
+          // reload the untouched screen and replay the tab path.
+          await restore(segment);
         }
         captions.push(String(i + 1), vttTimestamp(elapsed) + " --> " + vttTimestamp(elapsed + segment.targetSeconds), segment.text, "");
         elapsed += segment.targetSeconds;
       }
+      await fs.writeFile(path.join(framesDir, "cursor.cmd"), track.lines.join("\n") + "\n");
       const narrationWav = path.join(clipsDir, "narration.wav");
       await fs.writeFile(narrationWav, joinWavClips(segments.map((segment) => ({ wav: segment.wav, targetSeconds: segment.targetSeconds }))));
       video = await encodeAndValidate(framesDir, narrationWav, elapsed, path.join(dir, "screen.mp4"));
       await fs.writeFile(path.join(dir, "captions.vtt"), captions.join("\n"));
-      await fs.writeFile(path.join(dir, "guide.md"), buildGuide(tour, pageDetails, segments, video));
+      await fs.writeFile(path.join(dir, "guide.md"), buildGuide(tour, pageDetails, segments, video, plan));
       return {
         topic: id, route: tour.route, sourceSha: process.env.GITHUB_SHA || null,
         durationMs: Math.round(video.durationSeconds * 1000), videoFile: "screen.mp4", codec: video.codec,
         resolution: `${video.width}x${video.height}`, narration: "piper-offline", narratedSegments: segments.length,
-        explainedControls: segments.filter((segment) => segment.kind === "control").length, tabsExplored,
+        explainedControls: segments.filter((segment) => segment.kind === "control").length,
+        hiddenControlsExplained: segments.filter((segment) => segment.kind === "control" && segment.layer).length,
+        layersExplored: plan.layersExplored, tabsExplored: plan.tabsExplored, sharedChromeExplained: plan.sharedChromeExplained,
+        demonstrations: segments.filter((segment) => segment.demo).length,
         missingHighlights: missingHighlights.slice(0, 20), status: "captured", blockedRequests: blocked.slice(0, 20),
         requiresReview: true, source: "disposable Phase 7 fixture",
       };
@@ -624,14 +649,17 @@ async function recordOne(page, id, tour) {
   }
 }
 
-function buildGuide(tour, pageDetails, segments, video) {
+function buildGuide(tour, pageDetails, segments, video, plan) {
   const lines = ["# " + tour.title, "", "Recorded against the disposable Phase 7 test company.", "",
     "Page: " + tour.route, "", "Screen heading: " + pageDetails.heading, "",
-    "Narrated video: screen.mp4 (" + Math.round(video.durationSeconds) + " seconds, " + segments.filter((s) => s.kind === "control").length + " controls explained)", "",
+    "Narrated video: screen.mp4 (" + Math.round(video.durationSeconds) + " seconds, " + segments.filter((s) => s.kind === "control").length + " controls explained, " +
+    plan.layersExplored + " hidden menus, lists or dialogs opened)", "",
+    plan.sharedChromeExplained ? "This video also explains the top bar and sidebar shared by every screen." : "The shared top bar and sidebar are explained in the overview video of this mode.", "",
     "## Guided steps", "", ...tour.steps.map((step, index) => String(index + 1) + ". " + step), "", "## Full transcript", ""];
   let group = "";
   for (const segment of segments) {
-    const area = segment.kind === "control" || segment.kind === "heading" ? ({ header: "Top bar", sidebar: "Sidebar", main: "Main area", floating: "Floating controls" })[segment.region] : "";
+    const area = segment.layer ? 'Inside "' + segment.parentLabel + '"'
+      : segment.kind === "control" || segment.kind === "heading" ? ({ header: "Top bar", sidebar: "Sidebar", main: "Main area", floating: "Floating controls" })[segment.region] : "";
     const name = area === "Main area" && segment.tabLabel ? area + " (" + segment.tabLabel + " tab)" : area;
     if (name && name !== group) { group = name; lines.push("", "### " + group, ""); }
     const label = segment.kind === "control" ? "**" + (segment.label || segment.testid) + "** — " : segment.kind === "heading" ? "_" + segment.label + "_ — " : "";
@@ -645,9 +673,17 @@ await assertSafeEnvironment();
 await fs.mkdir(output, { recursive: true });
 const browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
 const report = [];
+let cursorImage;
 try {
   const page = await browser.newPage();
   await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
+  // Printing, pop-ups and downloads make no sense in a recording and could hang
+  // the headless browser, so they are neutralised before any page script runs.
+  await page.evaluateOnNewDocument(() => { window.print = () => undefined; window.open = () => null; });
+  const session = await page.createCDPSession();
+  await session.send("Browser.setDownloadBehavior", { behavior: "deny" }).catch(() => undefined);
+  await page.setContent("<html><body style='margin:0;background:transparent'>" + CURSOR_SVG + "</body></html>");
+  cursorImage = await page.screenshot({ type: "png", omitBackground: true, clip: { x: 0, y: 0, width: 28, height: 28 } });
   await login(page);
   for (const [id, tour] of tours) {
     const startedAt = Date.now();
@@ -655,7 +691,7 @@ try {
       const entry = await recordOne(page, id, tour);
       report.push(entry);
       process.stdout.write("Captured narrated training UI: " + id + " (" + Math.round(entry.durationMs / 1000) + "s video, " +
-        entry.explainedControls + " controls, " + Math.round((Date.now() - startedAt) / 1000) + "s to record)\n");
+        entry.explainedControls + " controls, " + entry.hiddenControlsExplained + " hidden, " + Math.round((Date.now() - startedAt) / 1000) + "s to record)\n");
     } catch (err) {
       report.push({ topic: id, status: "failed", reason: String(err?.message || err) });
       process.stderr.write("Training recording failed for " + id + ": " + String(err?.message || err) + "\n");

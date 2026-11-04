@@ -195,6 +195,12 @@ export function describeControl(control) {
     return `"${label}" opens ${page || `the ${label} page`}.` + (control.selected ? " It is the page you are looking at now." : "");
   }
 
+  if (role === "option") {
+    return `"${label}" is one of the choices in this list.` + (control.selected ? " It is the one currently selected." : " Choosing it fills the field with that value and closes the list.");
+  }
+  if (/^menuitem/.test(role)) {
+    return `"${label}" is an item in this menu; choosing it runs that action for the record you opened the menu from.${trailing(control)}`;
+  }
   if (isTab) {
     return `The "${label}" tab switches this screen to the ${label} view.` + (control.selected ? " It is the view currently shown." : " Tabs only change what is displayed.") + trailing(control);
   }
@@ -259,9 +265,33 @@ export function introNarration(tour, mode, heading, subtitle) {
   const parts = [
     `Welcome to the ${tour.title} training video. This page is in ${where} of the Business OS system.`,
     heading ? `The screen heading reads "${clean(heading)}"${subtitle ? `, ${clean(subtitle)}` : ""}.` : "",
-    "We will go through every control on this screen: the top bar, the sidebar, and then each tab, button and field in the main area. The recording uses a disposable training company, so nothing here is a real transaction.",
+    tour.explainsSharedChrome
+      ? "We will go through every control on this screen: the top bar, the sidebar, and then each tab, button, field and hidden menu in the main area. The recording uses a disposable training company, so nothing here is a real transaction."
+      : "We will go through every tab, button and field of this page, and open each menu, dropdown and dialog to show what is inside. The recording uses a disposable training company, so nothing here is a real transaction.",
   ];
   return parts.filter(Boolean).join(" ");
+}
+
+/** One sentence that points to the video where the shared top bar and sidebar are explained. */
+export function sharedChromeNarration(mode, overviewTitle) {
+  const where = mode === "factory" ? "Factory" : "ERP";
+  return `The top bar and the sidebar are the same on every ${where} screen, so they are not repeated here. They are explained control by control in the ${overviewTitle} video.`;
+}
+
+/** Lead-in spoken when a control is clicked to reveal its hidden contents. */
+export function layerIntro(parentLabel, layerType, count, heading) {
+  const what = layerType === "dialog" ? "a dialog" : layerType === "menu" ? "a menu" : layerType === "list" ? "a list of choices" : "a panel";
+  const named = heading && clean(heading) !== clean(parentLabel) ? ` titled "${clean(heading)}"` : "";
+  if (!count) return `Clicking "${clean(parentLabel)}" opens ${what}${named}. It has no further controls, so press Escape or click outside it to close it again.`;
+  return `Clicking "${clean(parentLabel)}" opens ${what}${named} with ${count} control${count === 1 ? "" : "s"} that are hidden until you open it. Let me go through ${count === 1 ? "it" : "each of them"}.`;
+}
+
+/** Sentence spoken while a safe demonstration is performed on the control. */
+export function demoNarration(demo, label, text) {
+  if (demo === "type") return ` Watch: typing ${text.split("").join(" ")} narrows the list to the matching rows, and clearing the box brings everything back.`;
+  if (demo === "open") return " Let me open it so you can see what is inside.";
+  if (demo === "pick") return ` Watch what happens when I choose "${clean(label)}".`;
+  return "";
 }
 
 export function closingNarration(tour) {
