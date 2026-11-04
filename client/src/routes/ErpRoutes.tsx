@@ -272,7 +272,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       {R("/accounting/fiscal-review", isDeveloper, FiscalCloseReview)}
       {R("/accounting/dashboard", isDeveloper, UnifiedAccountingDashboard)}
       {R("/accounting/rollout", isDeveloper, UnifiedAccountingRollout)}
-      {R("/cost-centers", (isAdminOwnerOrDev || effectiveRole === "Manager") && canAccess("accounts"), CostCenters)}
+      {R("/cost-centers", isDeveloper && canAccess("accounts"), CostCenters)}
       {canAccess("accounts") ? (
         <Route path="/ledger-monthly/:accountId" component={LedgerMonthlySummary} />
       ) : (
