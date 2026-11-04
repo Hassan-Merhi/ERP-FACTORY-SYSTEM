@@ -1,0 +1,55 @@
+name: Phase 2 one-time security formatting
+
+on:
+  push:
+    branches: [fix/security-quality-36-20261104]
+    paths:
+      - .github/workflows/phase2-format-verify-once.yml
+
+permissions: {}
+
+jobs:
+  format:
+    if: github.repository == 'Hassan-Merhi/ERP-FACTORY-SYSTEM' && github.ref == 'refs/heads/fix/security-quality-36-20261104'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout shared security branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: fix/security-quality-36-20261104
+          persist-credentials: true
+      - name: Node.js for repository formatter
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24.22.1'
+      - name: Preserve the latest main's invoicing changes and format only failed paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          git show FETCH_HEAD:client/src/pages/factory/FactoryInvoicing.tsx > client/src/pages/factory/FactoryInvoicing.tsx
+          npm ci --ignore-scripts --no-audit --no-fund
+          node node_modules/prettier/bin/prettier.cjs --write \
+            client/src/pages/factory/FactoryInvoicing.tsx \
+            tests/security-deepmerge-override.test.ts \
+            tests/security-dependency-lockfiles.test.ts
+          node node_modules/prettier/bin/prettier.cjs --check \
+            client/src/pages/factory/FactoryInvoicing.tsx \
+            tests/security-deepmerge-override.test.ts \
+            tests/security-dependency-lockfiles.test.ts
+      - name: Commit formatting changes and self-remove
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name security-format-bot
+          git config user.email security-format-bot@users.noreply.github.com
+          git rm .github/workflows/phase2-format-verify-once.yml
+          git add client/src/pages/factory/FactoryInvoicing.tsx \
+            tests/security-deepmerge-override.test.ts \
+            tests/security-dependency-lockfiles.test.ts
+          git diff --cached --stat
+          git commit -m "style(security): format regression tests and preserve latest invoicing layout"
+          git push origin HEAD:refs/heads/fix/security-quality-36-20261104
