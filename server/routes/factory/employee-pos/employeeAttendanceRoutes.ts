@@ -67,16 +67,31 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
       let startDate: string;
       let endDate: string;
 
-      if (req.query.startDate && req.query.endDate) {
-        startDate = req.query.startDate as string;
-        endDate = req.query.endDate as string;
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      if (req.query.startDate !== undefined || req.query.endDate !== undefined) {
+        const requestedStart = req.query.startDate;
+        const requestedEnd = req.query.endDate;
+        if (
+          typeof requestedStart !== "string" ||
+          typeof requestedEnd !== "string" ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(requestedStart) ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(requestedEnd)
+        ) {
           return res.status(400).json({ message: "Invalid date format, use YYYY-MM-DD" });
         }
+        startDate = requestedStart;
+        endDate = requestedEnd;
       } else {
-        const year = parseInt((req.query.year as string) || String(new Date().getFullYear()));
-        const month = parseInt((req.query.month as string) || String(new Date().getMonth() + 1));
-        if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+        const requestedYear = req.query.year;
+        const requestedMonth = req.query.month;
+        if (
+          (requestedYear !== undefined && (typeof requestedYear !== "string" || !/^\d{4}$/.test(requestedYear))) ||
+          (requestedMonth !== undefined && (typeof requestedMonth !== "string" || !/^\d{1,2}$/.test(requestedMonth)))
+        ) {
+          return res.status(400).json({ message: "Invalid year or month" });
+        }
+        const year = requestedYear === undefined ? new Date().getFullYear() : Number(requestedYear);
+        const month = requestedMonth === undefined ? new Date().getMonth() + 1 : Number(requestedMonth);
+        if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
           return res.status(400).json({ message: "Invalid year or month" });
         }
         const daysInMonth = new Date(year, month, 0).getDate();
