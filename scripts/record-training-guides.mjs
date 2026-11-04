@@ -362,6 +362,7 @@ async function planNarration(page, tour, route) {
   const tabPath = [];
   let tabLabel = "";
   let explored = 0;
+  let visited = 0;
   const ingest = (rows) => {
     for (const row of rows) {
       if (segments.length >= MAX_SEGMENTS - 1) return;
@@ -384,13 +385,23 @@ async function planNarration(page, tour, route) {
           demo === "open" ? " Let me open it so you can see the choices; pressing Escape closes it again without choosing anything." : "");
       segments.push({ ...row, id: "s" + segments.length, text, demo, tabPath: [...tabPath], tabLabel });
       const isTab = row.role === "tab" || /^tab-/.test(row.testid);
-      if (isTab && row.region === "main" && row.testid && !row.selected && !tabQueue.some((item) => item.testid === row.testid)) tabQueue.push({ testid: row.testid, label: row.label });
+      if (isTab && row.region === "main" && row.testid && !row.selected && !tabQueue.some((item) => item.testid === row.testid)) {
+        // Remember which parent tabs were open when this tab was discovered so
+        // nested tab strips (for example Workers > Payroll) can be re-opened
+        // before the queued tab is visited and before its controls are replayed.
+        tabQueue.push({ testid: row.testid, label: row.label, parentPath: [...tabPath] });
+      }
     }
   };
   ingest(first.rows);
   while (tabQueue.length && explored < MAX_TABS) {
     const next = tabQueue.shift();
     explored++;
+    if (tabPath.join("/") !== next.parentPath.join("/")) {
+      // Restore the parent tab context this tab was discovered under.
+      for (const parent of next.parentPath) await clickTab(page, parent);
+      tabPath.splice(0, tabPath.length, ...next.parentPath);
+    }
     const tab = await page.$('[data-testid="' + next.testid + '"]');
     if (!tab) continue;
     await tab.click().catch(() => undefined);
@@ -400,14 +411,24 @@ async function planNarration(page, tour, route) {
       await page.goto(base + route, { waitUntil: "domcontentloaded", timeout });
       await page.waitForSelector("#main-content", { visible: true, timeout });
       await delay(1000);
+      tabPath.splice(0, tabPath.length);
       continue;
     }
     tabPath.push(next.testid);
+    visited++;
     tabLabel = next.label;
     ingest((await page.evaluate(enumerateScreen)).rows);
   }
   segments.push({ id: "closing", kind: "closing", text: closingNarration(tour), tabPath: [] });
-  return { segments, tabsExplored: tabPath.length };
+  return { segments, tabsExplored: visited };
+}
+
+async function clickTab(page, testid) {
+  // Only select an already-visible UI tab. Never submit ERP or Factory
+  // transactions, and keep all network writes blocked.
+  const tab = await page.$('[data-testid="' + testid + '"]');
+  if (tab) await tab.click().catch(() => undefined);
+  await delay(1200);
 }
 
 async function synthesizeNarration(segments, clipsDir) {
@@ -493,18 +514,17 @@ async function recordOne(page, id, tour) {
       await openRoute();
       const captions = ["WEBVTT", ""];
       let frameNumber = 0;
-      let clicksDone = 0;
+      let appliedPath = "";
       let elapsed = 0;
       let cursor = { x: 720, y: 450 };
       const ease = (t) => 1 - Math.pow(1 - t, 3);
       for (let i = 0; i < segments.length; i++) {
         const segment = segments[i];
-        for (; clicksDone < segment.tabPath.length; clicksDone++) {
-          // Only select an already-visible UI tab. Never submit ERP or Factory
-          // transactions, and keep all network writes blocked.
-          const tab = await page.$('[data-testid="' + segment.tabPath[clicksDone] + '"]');
-          if (tab) await tab.click().catch(() => undefined);
-          await delay(1200);
+        if (segment.tabPath.length && segment.tabPath.join("/") !== appliedPath) {
+          // Tab paths can branch (Employees tab, then back to a Workers sub-tab),
+          // so replay the whole path whenever it differs from the one on screen.
+          for (const testid of segment.tabPath) await clickTab(page, testid);
+          appliedPath = segment.tabPath.join("/");
         }
         let rect = null;
         if (segment.kind === "control" || segment.kind === "heading") {
@@ -574,11 +594,8 @@ async function recordOne(page, id, tour) {
         if (new URL(page.url()).pathname !== tour.route) {
           // A demo or key press left the page: come back and replay the tab path.
           await openRoute();
-          for (let k = 0; k < segment.tabPath.length; k++) {
-            const tab = await page.$('[data-testid="' + segment.tabPath[k] + '"]');
-            if (tab) await tab.click().catch(() => undefined);
-            await delay(1200);
-          }
+          for (const testid of segment.tabPath) await clickTab(page, testid);
+          appliedPath = segment.tabPath.join("/");
         }
         captions.push(String(i + 1), vttTimestamp(elapsed) + " --> " + vttTimestamp(elapsed + segment.targetSeconds), segment.text, "");
         elapsed += segment.targetSeconds;
