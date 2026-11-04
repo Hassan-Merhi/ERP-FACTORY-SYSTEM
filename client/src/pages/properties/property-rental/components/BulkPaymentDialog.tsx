@@ -4,7 +4,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
  *
  * Extracted from PropertyRentalPage.tsx during the Phase 4 god-file split.
  */
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,12 @@ function BulkPaymentDialog({
   const [paymentDate, setPaymentDate] = useState(today);
   const [scheduleFuturePayment, setScheduleFuturePayment] = useState(false);
   const [cashAccountId, setCashAccountId] = useState("");
+  const defaultCashboxId = apiBase === "/api/properties/rental"
+    ? cashAccounts.find((a) => a.code === "PROP-RENT-CASH")?.id
+    : undefined;
+  useEffect(() => {
+    if (defaultCashboxId) setCashAccountId((old) => old || String(defaultCashboxId));
+  }, [defaultCashboxId]);
   const [notes, setNotes] = useState("");
   // Per-unit amounts, defaulting to their outstanding (min 0)
   const [amounts, setAmounts] = useState<Record<number, string>>(() => {
@@ -148,12 +154,12 @@ function BulkPaymentDialog({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
           <div>
-            <Label>Account</Label>
+            <Label>{apiBase === "/api/properties/rental" ? "Received into (Properties cashbox)" : "Account"}</Label>
             <AccountSearchSelect
               accounts={cashAccounts}
               value={cashAccountId}
               onChange={setCashAccountId}
-              placeholder="Choose account…"
+              placeholder="Choose cash/bank account…"
               testId={`select-${testIdPrefix}-bulk-cash`}
             />
           </div>
