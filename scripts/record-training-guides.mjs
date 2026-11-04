@@ -256,6 +256,8 @@ function pickTarget(rows) {
 }
 
 const keyOf = (row) => row.region + "|" + (row.testid || row.tag + ":" + row.label);
+/** A spoken name for a control, falling back to its test id for icon-only buttons. */
+const nameOf = (row) => row.label || row.testid.replace(/^(button|input|select|checkbox|toggle|link|card)-/, "").replace(/-\d+$/, "").replace(/-/g, " ").trim() || "this icon button";
 const locator = (row) => ({ testid: row.testid, label: row.label, region: row.region, tag: row.tag, kind: row.kind, level: row.level });
 
 async function clickTab(page, testid) {
@@ -389,18 +391,18 @@ async function planNarration(page, tour, route, openRoute) {
     parent.keepOpen = true;
     if (!/Let me open it/.test(parent.text)) parent.text += demoNarration("open", parent.label, DEMO_TEXT);
     const ref = { key: keyOf(candidate.row), row: locator(candidate.row), type: layer.layerType };
-    const inserted = [{ id: "layer" + layersExplored, kind: "layer-intro", text: layerIntro(candidate.row.label, layer.layerType, rows.filter((row) => row.kind === "control").length, layer.heading), tabPath: [...tabPath], tabLabel, layer: ref, parentLabel: candidate.row.label }];
+    const inserted = [{ id: "layer" + layersExplored, kind: "layer-intro", text: layerIntro(nameOf(candidate.row), layer.layerType, rows.filter((row) => row.kind === "control").length, layer.heading), tabPath: [...tabPath], tabLabel, layer: ref, parentLabel: nameOf(candidate.row) }];
     const pick = pickTarget(rows);
     for (const row of rows) {
       const key = row.kind + "|" + keyOf(row) + "|" + ref.key;
       if (seen.has(key)) continue;
       seen.add(key);
       if (row.kind === "heading") {
-        inserted.push({ ...row, id: "layer" + layersExplored + "h" + inserted.length, text: describeHeading(row.label, row.level), tabPath: [...tabPath], tabLabel, layer: ref, parentLabel: candidate.row.label });
+        inserted.push({ ...row, id: "layer" + layersExplored + "h" + inserted.length, text: describeHeading(row.label, row.level), tabPath: [...tabPath], tabLabel, layer: ref, parentLabel: nameOf(candidate.row) });
         continue;
       }
       const demo = row === pick ? "pick" : demoFor(row);
-      inserted.push({ ...row, id: "layer" + layersExplored + "c" + inserted.length, text: describeControl(row) + demoNarration(demo, row.label, DEMO_TEXT), demo, tabPath: [...tabPath], tabLabel, layer: ref, parentLabel: candidate.row.label, resetAfter: demo === "pick" });
+      inserted.push({ ...row, id: "layer" + layersExplored + "c" + inserted.length, text: describeControl(row) + demoNarration(demo, row.label, DEMO_TEXT), demo, tabPath: [...tabPath], tabLabel, layer: ref, parentLabel: nameOf(candidate.row), resetAfter: demo === "pick" });
       hiddenControls++;
     }
     // A chosen option usually closes the list, so it must be the last thing
