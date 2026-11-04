@@ -9,6 +9,7 @@ import { fmtMoneyCurrency } from "../utils";
 import { NoteCell } from "./NoteCell";
 
 interface RentalUnitCardsProps {
+  landlordView?: boolean;
   grouped: Array<[string, Unit[]]>;
   selectedContractIds: Set<number>;
   onToggleSelect: (contractId: number) => void;
@@ -23,6 +24,7 @@ interface RentalUnitCardsProps {
  */
 export function RentalUnitCards({
   grouped,
+  landlordView = false,
   selectedContractIds,
   onToggleSelect,
   onOpenUnit,
@@ -37,6 +39,7 @@ export function RentalUnitCards({
               <RentalUnitCard
                 key={unit.id}
                 unit={unit}
+                landlordView={landlordView}
                 selected={!!unit.contract && selectedContractIds.has(unit.contract.id)}
                 onToggleSelect={onToggleSelect}
                 onOpen={() => onOpenUnit(unit.id)}
@@ -52,12 +55,14 @@ export function RentalUnitCards({
 
 function RentalUnitCard({
   unit,
+  landlordView,
   selected,
   onToggleSelect,
   onOpen,
   onDelete,
 }: {
   unit: Unit;
+  landlordView: boolean;
   selected: boolean;
   onToggleSelect: (contractId: number) => void;
   onOpen: () => void;
@@ -76,12 +81,16 @@ function RentalUnitCard({
       ? null
       : outstanding > 0
         ? {
-            label: "Outstanding",
+            label: landlordView ? "To collect" : "Outstanding",
             text: fmtMoneyCurrency(outstanding, currency),
-            tone: "text-red-600 dark:text-red-400",
+            tone: landlordView ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400",
           }
         : credit > 0
-          ? { label: "Credit", text: fmtMoneyCurrency(credit, currency), tone: "text-green-600 dark:text-green-400" }
+          ? {
+              label: landlordView ? "Owed to tenant" : "Credit",
+              text: fmtMoneyCurrency(credit, currency),
+              tone: landlordView ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400",
+            }
           : { label: "Outstanding", text: fmtMoneyCurrency(0, currency), tone: "text-muted-foreground" };
 
   return (
@@ -124,7 +133,7 @@ function RentalUnitCard({
                 value: unit.nextBillingDate ? format(new Date(unit.nextBillingDate + "T00:00:00Z"), "dd MMM") : "—",
               },
               {
-                label: "Guarantee",
+                label: landlordView ? "Guarantee held" : "Guarantee",
                 value: guarantee != null ? fmtMoneyCurrency(guarantee, currency) : "—",
                 numeric: true,
               },

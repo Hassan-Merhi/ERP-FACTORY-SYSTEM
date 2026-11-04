@@ -146,10 +146,8 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
         }
       });
 
-      // Fire auto-transfer if configured (only for landlord receiving cash)
-      if (cashAccountId && !(module === "ERP" || module === "FACTORY")) {
-        await maybeRunAutoTransfer(companyId, module, cashAccountId, amount, dateStr, unitLabel, undefined, notes);
-      }
+      // Properties guarantee receipts stay in the company cashbox. Historical
+      // intercompany voucher links are preserved for audit and reversals.
 
       res.json({ ok: true });
     } catch (e: unknown) {
@@ -228,8 +226,8 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
           ? `Guarantee moved to cash - ${unitLabel} - ${notes}`
           : `Guarantee moved to cash - ${unitLabel}`;
         // Tenant: Dr Cash / Cr Security Deposits Paid (the guarantee comes back).
-        // Landlord: Dr Cash / Cr Tenant Deposits; the auto-transfer then debits
-        // Transfer Clearing and credits Cash, netting the cashbox to zero.
+        // Landlord: Dr Cash / Cr Tenant Deposits; Properties keeps that cash.
+        // No automatic intercompany transfer is generated for new receipts.
         const depositAccountId = tenantPays
           ? await findOrCreateLedgerAccount(tx, companyId, "Security Deposits Paid", "Asset", "SEC-DEP-PAID")
           : await findOrCreateLedgerAccount(tx, companyId, "Tenant Deposits", "Liability", "TENANT-DEP");
@@ -279,8 +277,19 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
         })
         .returning();
 
-      // Fire auto-transfer if configured — pass the payment ID so deletion can reverse both sides
-      await maybeRunAutoTransfer(companyId, module, cashAccountId, amount, dateStr, unitLabel, savedPayment?.id, notes);
+      // Only legacy ERP/Factory rent flows can use configured intercompany transfers.
+      if (module !== "PROPERTIES") {
+        await maybeRunAutoTransfer(
+          companyId,
+          module,
+          cashAccountId,
+          amount,
+          dateStr,
+          unitLabel,
+          savedPayment?.id,
+          notes
+        );
+      }
 
       res.json({ ok: true });
     } catch (e: unknown) {
