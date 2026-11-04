@@ -1,0 +1,80 @@
+name: Security PR premerge sync with current main
+
+on:
+  push:
+    branches: [fix/security-quality-36-20261104]
+    paths: [.github/workflows/security-merge-sync-once.yml]
+
+permissions: {}
+
+jobs:
+  sync:
+    name: Preserve current main and verify before PR merge
+    if: github.repository == 'Hassan-Merhi/ERP-FACTORY-SYSTEM' && github.ref == 'refs/heads/fix/security-quality-36-20261104'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout the same security branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: fix/security-quality-36-20261104
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Merge latest main and verify newest Properties and Voucher changes survive
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "security-premerge[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --no-tags origin main
+          git merge --no-ff --no-commit origin/main
+          if [[ -n "$(git diff --name-only --diff-filter=U)" ]]; then
+            echo "::error::Unresolved main sync conflicts; no commit/push allowed"
+            exit 1
+          fi
+          grep -q 'min-height: 48px;' client/src/pages/vouchers/voucher-premium.css
+          grep -q 'Invoices & Loading' client/src/components/FactorySidebar.tsx
+          if grep -q 'button-invoicing-new-invoice' client/src/pages/factory/FactoryInvoicing.tsx; then
+            echo "::error::Factory invoice header button incorrectly restored"
+            exit 1
+          fi
+          test -f server/services/rental/rentalCashboxPolicy.ts
+          test -f docs/properties-rent-cashbox-rollout.md
+          test -f vendor/secure-deepmerge/index.cjs
+          test -f docs/security/phase4-main-ruleset-hardening.md
+          grep -q '^FROM node:24.22.1-bookworm-slim@sha256:' deploy/lan/Dockerfile
+          git status --short
+
+      - name: Set up Node for fast regression checks
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24.22.1'
+      - name: Format/manifest and security pre-merge verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-fund --no-audit
+          node scripts/audit-doc-index.mjs
+          node scripts/audit-script-inventory.mjs
+          node scripts/verify-lockfile-registry.mjs
+          node node_modules/vitest/vitest.mjs run \
+            tests/security-supply-chain-pins.test.ts \
+            tests/security-workflow-token-boundaries.test.ts \
+            tests/security-dependency-lockfiles.test.ts \
+            tests/security-deepmerge-override.test.ts \
+            tests/properties-rent-cashbox-policy.test.ts
+          git diff --check
+      - name: Finalize trusted sync and self-remove
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git rm -- .github/workflows/security-merge-sync-once.yml
+          git add --all
+          git diff --cached --check
+          git commit -m "chore(security): sync latest main ahead of security closeout merge"
+          gh auth setup-git
+          git push origin HEAD:refs/heads/fix/security-quality-36-20261104
