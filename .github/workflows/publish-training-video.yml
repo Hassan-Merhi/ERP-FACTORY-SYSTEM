@@ -54,23 +54,35 @@ jobs:
           [[ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" && -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]] || {
             echo "::error::Protected GitHub OIDC identity is unavailable"; exit 1;
           }
-      - name: Fetch vetted successful training run
+      - name: Fetch vetted completed recorder job (independent of unrelated audit failures)
         shell: bash
         run: |
           set -euo pipefail
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" > "$RUNNER_TEMP/source-run.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN/jobs?per_page=100" > "$RUNNER_TEMP/source-jobs.json"
           node --input-type=module <<'NODE'
           import fs from "node:fs";
-          const run = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/source-run.json", "utf8"));
-          if (run.status !== "completed" || run.conclusion !== "success" ||
+          const root = process.env.RUNNER_TEMP;
+          const run = JSON.parse(fs.readFileSync(root + "/source-run.json", "utf8"));
+          if (run.status !== "completed" || !["success", "failure"].includes(run.conclusion) ||
               run.head_branch !== "main" || run.repository?.full_name !== process.env.GITHUB_REPOSITORY ||
-              !["schedule", "workflow_dispatch"].includes(run.event)) {
-            throw new Error("Not a successful main-branch training run");
+              !["push", "schedule", "workflow_dispatch"].includes(run.event)) {
+            throw new Error("Not an eligible completed main-branch recording run");
           }
           if (!/^[0-9a-f]{40}$/.test(run.head_sha)) throw new Error("Missing recording source commit");
           const allowed = ["nightly-training-audit.yml", "training-videos.yml"];
           if (!allowed.some((value) => String(run.path || "").includes(".github/workflows/" + value))) {
             throw new Error("Not an approved training recording workflow");
+          }
+          // A nightly audit can fail an unrelated payroll/security/backend test.
+          // Require the actual recording job to have completed successfully, and
+          // separately validate its specific artifact, codec, SHA and duration.
+          const data = JSON.parse(fs.readFileSync(root + "/source-jobs.json", "utf8"));
+          const recorder = (data.jobs || []).filter((job) =>
+            job.name === "record-training" || job.name === "record / record-training");
+          if (recorder.length !== 1 || recorder[0].status !== "completed" ||
+              recorder[0].conclusion !== "success") {
+            throw new Error("The requested run has no successful training recording job");
           }
           fs.appendFileSync(process.env.GITHUB_ENV, "TRAINING_SOURCE_SHA=" + run.head_sha + "\n");
           NODE
