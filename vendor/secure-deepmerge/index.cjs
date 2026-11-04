@@ -7,7 +7,14 @@
  * Puppeteer Extra plugins that use it.
  */
 "use strict";
-const defaultIsMergeableObject = require("is-mergeable-object");
+// Inline the upstream is-mergeable-object@1.1.0 predicate so npm file:
+// linking does not depend on an unhoisted external module at runtime.
+const REACT_ELEMENT_TYPE = typeof Symbol === "function" && Symbol.for ? Symbol.for("react.element") : 0xeac7;
+function defaultIsMergeableObject(value) {
+  if (!value || typeof value !== "object") return false;
+  const tag = Object.prototype.toString.call(value);
+  return tag !== "[object RegExp]" && tag !== "[object Date]" && value.$typeof !== REACT_ELEMENT_TYPE;
+}
 const hasOwn = Object.prototype.hasOwnProperty;
 const isEnumerable = Object.prototype.propertyIsEnumerable;
 const DENIED_KEYS = new Set(["__proto__", "constructor", "prototype"]);
