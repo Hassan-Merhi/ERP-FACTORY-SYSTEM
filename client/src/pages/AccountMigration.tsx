@@ -35,6 +35,8 @@ import type { Company, LedgerAccount } from "@shared/schema";
 interface AccountPreviewItem {
   account: LedgerAccount;
   entryCount: number;
+  postedEntryCount: number;
+  closingBalance: number;
   totalDebit: number;
   totalCredit: number;
   touchedVoucherCount: number;
@@ -48,6 +50,8 @@ interface PreviewResult {
   srcCompany: Company;
   destCompany: Company;
   grandTotalEntries: number;
+  grandHistoryEntries: number;
+  grandClosing: number;
   grandTotalDebit: number;
   grandTotalCredit: number;
 }
@@ -83,6 +87,10 @@ interface ExecuteResult {
 
 function fmt(n: number) {
   return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtSigned(n: number) {
+  return `$ ${fmt(Math.abs(n))} ${n < 0 ? "Cr" : "Dr"}`;
 }
 
 function CompanyBadge({ company }: { company?: Company }) {
@@ -244,7 +252,7 @@ function AccountPreviewRow({ item }: { item: AccountPreviewItem }) {
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <span className="text-xs text-muted-foreground">{item.entryCount} entries</span>
+          <span className="text-xs text-muted-foreground">{item.postedEntryCount} posted / {item.entryCount} historical</span>
           {expanded ? (
             <ChevronUp className="h-4 w-4 text-muted-foreground" />
           ) : (
@@ -254,7 +262,7 @@ function AccountPreviewRow({ item }: { item: AccountPreviewItem }) {
       </button>
       {expanded && (
         <div className="px-3 pb-3 space-y-2 border-t pt-3">
-          <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-4">
             <div>
               <p className="text-xs text-muted-foreground">Debits</p>
               <p className="font-mono font-medium">{fmt(item.totalDebit)}</p>
@@ -269,7 +277,17 @@ function AccountPreviewRow({ item }: { item: AccountPreviewItem }) {
                 {ob !== 0 ? `${fmt(ob)} ${item.account.openingBalanceSide}` : "—"}
               </p>
             </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Closing balance to transfer</p>
+              <p className="font-mono font-semibold">{fmtSigned(item.closingBalance)}</p>
+            </div>
           </div>
+          {item.postedEntryCount !== item.entryCount && (
+            <p className="text-xs text-muted-foreground">
+              {item.entryCount - item.postedEntryCount} excluded/non-posted historical entries are not
+              included in the closing balance.
+            </p>
+          )}
           {item.touchedVoucherCount > 0 && (
             <p className="text-xs text-muted-foreground">
               {item.exclusiveVoucherCount} voucher{item.exclusiveVoucherCount !== 1 ? "s" : ""} will move
@@ -615,13 +633,18 @@ export default function AccountMigration() {
                 <p className="text-xl font-semibold">{preview.accounts.length}</p>
               </div>
               <div className="rounded-md border p-3">
-                <p className="text-xs text-muted-foreground">Entries</p>
+                <p className="text-xs text-muted-foreground">Posted entries</p>
                 <p className="text-xl font-semibold">{preview.grandTotalEntries}</p>
+                {preview.grandHistoryEntries !== preview.grandTotalEntries && (
+                  <p className="text-xs text-muted-foreground">
+                    {preview.grandHistoryEntries} historical entries in total
+                  </p>
+                )}
               </div>
               <div className="rounded-md border p-3">
-                <p className="text-xs text-muted-foreground">Net</p>
+                <p className="text-xs text-muted-foreground">Closing balance to transfer</p>
                 <p className="text-xl font-semibold font-mono">
-                  {fmt(preview.grandTotalDebit - preview.grandTotalCredit)}
+                  {fmtSigned(preview.grandClosing)}
                 </p>
               </div>
             </div>

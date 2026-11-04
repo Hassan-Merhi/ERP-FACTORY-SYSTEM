@@ -17,6 +17,7 @@ import {
   CompanyAccessError,
   getCompanyAccessContext,
 } from "../../../security/companyAccessBoundary";
+import { getPartyBalances } from "../../../services/accounting/balances/ledgerBalanceEngine";
 import { plusMoney } from "../../../lib/money";
 
 class AccountMigrationPreviewNotFound extends Error {}
@@ -110,6 +111,16 @@ export function registerAccountMigrationRoutes(app: Express) {
           let grandTotalDebit = 0;
           let grandTotalCredit = 0;
           let grandTotalEntries = 0;
+          let grandHistoryEntries = 0;
+          let grandClosing = 0;
+          // Use the same posted-only balance engine as Accounts and the trial balance.
+          // Deleted/optional vouchers and an account's opening must never distort the preview.
+          const partyBalances = await getPartyBalances(tx, {
+            companyId: srcCompanyId,
+            kind: "ledger",
+            ids: accountIds,
+          });
+          const balanceById = new Map(partyBalances.parties.map((party) => [party.id, party]));
 
           for (const accountId of accountIds) {
             // Verify account belongs to source company
@@ -121,21 +132,38 @@ export function registerAccountMigrationRoutes(app: Express) {
               throw new AccountMigrationPreviewNotFound(`Account ${accountId} not found in source company`);
             }
 
-            // Get all voucher entries for this account
+            const canonicalBalance = balanceById.get(accountId);
+            if (!canonicalBalance) {
+              throw new AccountMigrationPreviewNotFound(
+                `Account ${accountId} has no independent ledger balance; check linked customer ownership before migrating.`
+              );
+            }
+
+            // All rows are still copied (including deleted/optional voucher history),
+            // but only live, non-optional vouchers contribute to the posted count.
             const entryRows = await tx
               .select({
                 voucherId: voucherEntries.voucherId,
-                debit: voucherEntries.debitAmount,
-                credit: voucherEntries.creditAmount,
+                voucherCompanyId: vouchers.companyId,
+                optional: vouchers.optional,
+                deletedAt: vouchers.deletedAt,
               })
               .from(voucherEntries)
+              .innerJoin(vouchers, eq(vouchers.id, voucherEntries.voucherId))
               .where(eq(voucherEntries.ledgerAccountId, accountId));
 
-            const totalDebit = entryRows.reduce((s, r) => plusMoney(s, r.debit), 0);
-            const totalCredit = entryRows.reduce((s, r) => plusMoney(s, r.credit), 0);
-            grandTotalDebit += totalDebit;
-            grandTotalCredit += totalCredit;
-            grandTotalEntries += entryRows.length;
+            const postedEntryCount = entryRows.filter(
+              (entry) =>
+                entry.voucherCompanyId === srcCompanyId && entry.deletedAt === null && entry.optional !== true
+            ).length;
+            const totalDebit = Number(canonicalBalance.periodDebit);
+            const totalCredit = Number(canonicalBalance.periodCredit);
+            const closingBalance = Number(canonicalBalance.closing);
+            grandTotalDebit = plusMoney(grandTotalDebit, totalDebit);
+            grandTotalCredit = plusMoney(grandTotalCredit, totalCredit);
+            grandTotalEntries += postedEntryCount;
+            grandHistoryEntries += entryRows.length;
+            grandClosing = plusMoney(grandClosing, closingBalance);
 
             const touchedVoucherIds = [...new Set(entryRows.map((r) => r.voucherId))];
 
@@ -171,8 +199,10 @@ export function registerAccountMigrationRoutes(app: Express) {
             accountPreviews.push({
               account,
               entryCount: entryRows.length,
+              postedEntryCount,
               totalDebit,
               totalCredit,
+              closingBalance,
               touchedVoucherCount: touchedVoucherIds.length,
               exclusiveVoucherCount,
               sharedVoucherCount,
@@ -180,7 +210,9 @@ export function registerAccountMigrationRoutes(app: Express) {
             });
           }
 
-          return { accountPreviews, grandTotalDebit, grandTotalCredit, grandTotalEntries };
+          return {
+            accountPreviews, grandTotalDebit, grandTotalCredit, grandTotalEntries, grandHistoryEntries, grandClosing,
+          };
         });
 
         const srcCompany = await storage.getCompanyById(srcCompanyId);
@@ -191,6 +223,8 @@ export function registerAccountMigrationRoutes(app: Express) {
           srcCompany,
           destCompany,
           grandTotalEntries: preview.grandTotalEntries,
+          grandHistoryEntries: preview.grandHistoryEntries,
+          grandClosing: preview.grandClosing,
           grandTotalDebit: preview.grandTotalDebit,
           grandTotalCredit: preview.grandTotalCredit,
         });

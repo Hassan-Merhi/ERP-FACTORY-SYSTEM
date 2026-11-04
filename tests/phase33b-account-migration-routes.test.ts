@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 
 import { db, pool } from "../server/db";
+import { getPartyBalances } from "../server/services/accounting/balances/ledgerBalanceEngine";
 import * as schema from "../shared/schema";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
@@ -327,4 +328,151 @@ describe("Phase 33B account migration accounting routes", () => {
     expect(sourceRows.rows.some((row) => row.company_id === ctx.companyId)).toBe(true);
     expect(sourceRows.rows.some((row) => row.voucher_id === postMigrationVoucherId)).toBe(false);
   }, 60_000);
+  it("previews and transfers the exact posted Cr balance when deleted/optional history exists", async () => {
+    const migratedAccountId = await makeAccount(ctx.companyId, "GUARANTEE");
+    await db
+      .update(schema.ledgerAccounts)
+      .set({ accountType: "Liability", openingBalanceSide: "Cr" })
+      .where(eq(schema.ledgerAccounts.id, migratedAccountId));
+
+    await makeVoucher(
+      ctx.companyId,
+      [
+        { accountId: migratedAccountId, debit: "0", credit: "23700.00" },
+        { accountId: ctx.cashAccountId, debit: "23700.00", credit: "0" },
+      ],
+      "guarantee-23700"
+    );
+    await makeVoucher(
+      ctx.companyId,
+      [
+        { accountId: migratedAccountId, debit: "0", credit: "1400.00" },
+        { accountId: ctx.cashAccountId, debit: "1400.00", credit: "0" },
+      ],
+      "guarantee-1400"
+    );
+    const deletedVoucherId = await makeVoucher(
+      ctx.companyId,
+      [
+        { accountId: migratedAccountId, debit: "19400.00", credit: "0" },
+        { accountId: ctx.cashAccountId, debit: "0", credit: "19400.00" },
+      ],
+      "historical-deleted"
+    );
+    await db
+      .update(schema.vouchers)
+      .set({ deletedAt: new Date("2026-09-19T12:00:00.000Z") })
+      .where(eq(schema.vouchers.id, deletedVoucherId));
+    const optionalVoucherId = await makeVoucher(
+      ctx.companyId,
+      [
+        { accountId: migratedAccountId, debit: "300.00", credit: "0" },
+        { accountId: ctx.cashAccountId, debit: "0", credit: "300.00" },
+      ],
+      "historical-optional"
+    );
+    await db.update(schema.vouchers).set({ optional: true }).where(eq(schema.vouchers.id, optionalVoucherId));
+
+    const source = await getPartyBalances(db, {
+      companyId: ctx.companyId,
+      kind: "ledger",
+      ids: [migratedAccountId],
+    });
+    expect(source.parties[0]?.closing).toBe("-25100.00");
+
+    const preview = await agent.post("/api/admin/account-migration/preview").send({
+      accountIds: [migratedAccountId],
+      srcCompanyId: ctx.companyId,
+      destCompanyId: destinationCompanyId,
+    });
+    expect(preview.status).toBe(200);
+    expect(preview.body).toMatchObject({
+      grandTotalEntries: 2,
+      grandHistoryEntries: 4,
+      grandClosing: -25100,
+    });
+    expect(preview.body.accounts[0]).toMatchObject({
+      entryCount: 4,
+      postedEntryCount: 2,
+      closingBalance: -25100,
+    });
+
+    const execute = await agent.post("/api/admin/account-migration/execute").send({
+      accountIds: [migratedAccountId],
+      srcCompanyId: ctx.companyId,
+      destCompanyId: destinationCompanyId,
+    });
+    expect(execute.status).toBe(200);
+    expect(execute.body.balances).toContainEqual({
+      accountId: migratedAccountId,
+      sourceClosing: "-25100.00",
+      destinationClosing: "-25100.00",
+    });
+
+    const destination = await getPartyBalances(db, {
+      companyId: destinationCompanyId,
+      kind: "ledger",
+      ids: [migratedAccountId],
+    });
+    expect(destination.parties[0]?.closing).toBe("-25100.00");
+
+    const copiedHistorical = await pool.query<{
+      deleted_at: Date | null;
+      optional: boolean;
+      debit_amount: string;
+    }>(
+      `SELECT v.deleted_at, v.optional, ve.debit_amount
+         FROM vouchers v
+         JOIN voucher_entries ve ON ve.voucher_id = v.id
+        WHERE v.company_id = $1 AND ve.ledger_account_id = $2
+          AND ve.debit_amount <> '0'`,
+      [destinationCompanyId, migratedAccountId]
+    );
+    expect(copiedHistorical.rows).toHaveLength(2);
+    expect(copiedHistorical.rows.some((row) => row.debit_amount === "19400.00" && row.deleted_at !== null)).toBe(true);
+    expect(copiedHistorical.rows.some((row) => row.debit_amount === "300.00" && row.optional)).toBe(true);
+
+    const undo = await agent.post("/api/admin/account-migration/undo").send({
+      accounts: execute.body.accounts,
+      movedVoucherIds: execute.body.movedVoucherIds,
+      srcCompanyId: ctx.companyId,
+      destCompanyId: destinationCompanyId,
+    });
+    expect(undo.status).toBe(200);
+    const restored = await getPartyBalances(db, {
+      companyId: ctx.companyId,
+      kind: "ledger",
+      ids: [migratedAccountId],
+    });
+    expect(restored.parties[0]?.closing).toBe("-25100.00");
+  }, 60_000);
+
+  it("preserves opening-only credit balances during migration", async () => {
+    const accountId = await makeAccount(ctx.companyId, "OPENING-CREDIT");
+    await db
+      .update(schema.ledgerAccounts)
+      .set({ accountType: "Liability", openingBalance: "125.50", openingBalanceSide: "Cr" })
+      .where(eq(schema.ledgerAccounts.id, accountId));
+
+    const preview = await agent.post("/api/admin/account-migration/preview").send({
+      accountIds: [accountId],
+      srcCompanyId: ctx.companyId,
+      destCompanyId: destinationCompanyId,
+    });
+    expect(preview.status).toBe(200);
+    expect(preview.body).toMatchObject({ grandTotalEntries: 0, grandClosing: -125.5 });
+
+    const execute = await agent.post("/api/admin/account-migration/execute").send({
+      accountIds: [accountId],
+      srcCompanyId: ctx.companyId,
+      destCompanyId: destinationCompanyId,
+    });
+    expect(execute.status).toBe(200);
+    expect(execute.body.balances).toContainEqual({
+      accountId,
+      sourceClosing: "-125.50",
+      destinationClosing: "-125.50",
+    });
+  }, 60_000);
+
 });
