@@ -75,6 +75,13 @@ describe("security remediation for root and desktop lockfiles", () => {
     }
   });
 
+  it("keeps the root undici test dependency above the patched 8.12.2 floor", () => {
+    for (const [path, pkg] of installed(root, "undici")) {
+      expect(pkg.version, path).toBeTruthy();
+      expect(atLeast(pkg.version!, [8, 12, 2]), path).toBe(true);
+    }
+  });
+
   it("uses only the locally hardened deepmerge replacement", () => {
     const packages = installed(root, "deepmerge");
     expect(packages.length).toBeGreaterThan(0);
