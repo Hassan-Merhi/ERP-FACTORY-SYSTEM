@@ -1,0 +1,60 @@
+name: Temporary Properties PR 2839 Formatter
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: ${{ github.event.pull_request.number == 2839 && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.1"
+          cache: npm
+      - run: npm ci --no-audit
+      - name: Format exactly nine existing Properties files
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write \
+            client/src/pages/properties/PropertyRentalPage.tsx \
+            client/src/pages/properties/property-rental/components/BulkPaymentDialog.tsx \
+            client/src/pages/properties/property-rental/components/EndContractForm.tsx \
+            client/src/pages/properties/property-rental/components/GuaranteeForm.tsx \
+            client/src/pages/properties/property-rental/components/PaymentForm.tsx \
+            client/src/pages/properties/property-rental/components/RentalUnitCards.tsx \
+            server/routes/rental/rentalPaymentsAccrualRoutes.ts \
+            server/routes/rental/units-contracts/guarantees.ts \
+            tests/properties-rent-cashbox-policy.test.ts
+      - name: Push formatting-only commit if needed
+        env:
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          git add -- \
+            client/src/pages/properties/PropertyRentalPage.tsx \
+            client/src/pages/properties/property-rental/components/BulkPaymentDialog.tsx \
+            client/src/pages/properties/property-rental/components/EndContractForm.tsx \
+            client/src/pages/properties/property-rental/components/GuaranteeForm.tsx \
+            client/src/pages/properties/property-rental/components/PaymentForm.tsx \
+            client/src/pages/properties/property-rental/components/RentalUnitCards.tsx \
+            server/routes/rental/rentalPaymentsAccrualRoutes.ts \
+            server/routes/rental/units-contracts/guarantees.ts \
+            tests/properties-rent-cashbox-policy.test.ts
+          if git diff --cached --quiet; then
+            echo "All nine files are already formatted."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "style(properties): run repository Prettier on nine PR files"
+          git push origin "HEAD:$BRANCH"
