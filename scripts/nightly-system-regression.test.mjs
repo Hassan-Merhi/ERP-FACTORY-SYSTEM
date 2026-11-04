@@ -84,7 +84,7 @@ test("reviewable training videos narrate every visible control as H.264 + AAC MP
   assert.ok(recorder.includes('["GET", "HEAD", "OPTIONS"]'), "prevent writes while recording");
   // Clicks are limited to login, already-visible tabs, and reversible demos
   // (typing into a search box, opening a dropdown/filter menu) that are undone.
-  assert.equal((recorder.match(/\.click\(/g) || []).length, 8, "login, onboarding, tab replay and reversible demo clicks only");
+  assert.equal((recorder.match(/\.click\(/g) || []).length, 9, "login, onboarding, tab replay and reversible demo clicks only");
   assert.ok(recorder.includes('page.keyboard.press("Escape")'), "opened menus are closed again");
   assert.ok(recorder.includes('page.keyboard.press("Backspace")'), "typed demo text is cleared again");
   assert.ok(recorder.includes("function demoFor(row)") && recorder.includes('return null;'), "demos are an allow-list, not arbitrary clicking");

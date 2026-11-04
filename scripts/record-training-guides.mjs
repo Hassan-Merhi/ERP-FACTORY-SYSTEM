@@ -549,20 +549,36 @@ async function recordOne(page, id, tour) {
         }
         if (demoActive) {
           // Undo the demonstration: clear the typed text or close the opened menu.
+          // The app treats a bare Escape on the page body as "go back", so Escape
+          // is only sent while a popover/menu is actually open and focused.
           if (segment.demo === "type") {
-            await page.keyboard.down("Control").catch(() => undefined);
-            await page.keyboard.press("KeyA").catch(() => undefined);
-            await page.keyboard.up("Control").catch(() => undefined);
-            await page.keyboard.press("Backspace").catch(() => undefined);
+            await page.mouse.click(cursor.x, cursor.y).catch(() => undefined);
+            const focused = await page.evaluate(() => /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || "")).catch(() => false);
+            if (focused) {
+              await page.keyboard.down("Control").catch(() => undefined);
+              await page.keyboard.press("KeyA").catch(() => undefined);
+              await page.keyboard.up("Control").catch(() => undefined);
+              await page.keyboard.press("Backspace").catch(() => undefined);
+            }
           }
-          await page.keyboard.press("Escape").catch(() => undefined);
-          await delay(400);
-          const stillOpen = await page.evaluate((testid) => {
-            const el = testid ? document.querySelector('[data-testid="' + testid + '"]') : null;
-            return Boolean(el && el.getAttribute("aria-expanded") === "true");
-          }, segment.testid).catch(() => false);
-          if (stillOpen) await page.mouse.click(cursor.x, cursor.y).catch(() => undefined);
+          for (let attempt = 0; attempt < 2; attempt++) {
+            const open = await page.evaluate(() => Boolean(document.querySelector(
+              '[data-radix-popper-content-wrapper], [role=menu], [role=listbox], [role=dialog][data-state=open], [data-state=open][role=menu]'))).catch(() => false);
+            if (!open) break;
+            await page.keyboard.press("Escape").catch(() => undefined);
+            await delay(300);
+          }
           await page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
+          await delay(300);
+        }
+        if (new URL(page.url()).pathname !== tour.route) {
+          // A demo or key press left the page: come back and replay the tab path.
+          await openRoute();
+          for (let k = 0; k < segment.tabPath.length; k++) {
+            const tab = await page.$('[data-testid="' + segment.tabPath[k] + '"]');
+            if (tab) await tab.click().catch(() => undefined);
+            await delay(1200);
+          }
         }
         captions.push(String(i + 1), vttTimestamp(elapsed) + " --> " + vttTimestamp(elapsed + segment.targetSeconds), segment.text, "");
         elapsed += segment.targetSeconds;
