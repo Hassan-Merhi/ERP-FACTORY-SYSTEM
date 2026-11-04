@@ -583,6 +583,10 @@ async function recordOne(page, id, tour) {
             if (segment.demo === "type") await page.keyboard.type(DEMO_TEXT, { delay: 60 }).catch(() => undefined);
             await delay(700);
             if (segment.keepOpen) openLayer = (await page.evaluate(openLayerType).catch(() => "")) ? keyOf(segment) : "";
+            if (segment.demo === "pick" && segment.layer) {
+              // The chosen entry closed its list: highlight the field it filled instead.
+              rect = (await page.evaluate(locateAndScroll, segment.layer.row)) || rect;
+            }
           }
           await page.evaluate(paintOverlay, { rect, title, text: segment.text, index: i + 1, total: segments.length, pulse: frame % 2 === 0, click });
           await page.screenshot({
