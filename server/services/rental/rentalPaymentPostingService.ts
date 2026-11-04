@@ -573,10 +573,11 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
 
   if (paymentDate <= clientDate) {
     if (!postedNow) throw new Error("Rental payment group was not posted");
-    // The cross-company auto-transfer is a distinct optional business action
-    // and must never fire inside a transaction that might later roll back.
+    // Properties landlord receipts remain in their own cash account; only
+    // ERP/Factory legacy flows may still use an optional auto-transfer.
+    // A transfer must never fire inside a transaction that might roll back.
     try {
-      if (cashAccountId && unit && scheduledRows.length > 0) {
+      if (mod !== "PROPERTIES" && cashAccountId && unit && scheduledRows.length > 0) {
         await maybeRunAutoTransfer(
           companyId,
           mod,
@@ -747,12 +748,12 @@ export async function postScheduledGroup(
 
   if (groupRows.length === 0) return false;
   // An outer transaction has not committed yet. Its caller performs the
-  // optional cross-company auto-transfer only *after* successful commit.
+  // Legacy ERP/Factory auto-transfer only *after* successful commit.
   if (existingTx) return true;
 
   try {
     const firstRow = groupRows[0];
-    if (firstRow.cashAccountId && unit) {
+    if (module !== "PROPERTIES" && firstRow.cashAccountId && unit) {
       const unitLabel = `${unit.locationGroup}/${unit.unitNumber}`;
       await maybeRunAutoTransfer(
         companyId,
