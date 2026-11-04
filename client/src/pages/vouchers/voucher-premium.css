@@ -4,7 +4,7 @@
  */
 .voucher-workspace {
   --voucher-accent: #d97706;
-  --voucher-tint: rgba(245, 158, 11, 0.10);
+  --voucher-tint: rgba(245, 158, 11, 0.1);
   --voucher-panel: #ffffff;
   --voucher-subtle: #f7f9fd;
   --voucher-line: #dde5ef;
@@ -44,7 +44,7 @@
   gap: 14px;
 }
 .voucher-workspace .voucher-type-nav [data-testid^="tab-"] {
-  min-height: 41px;
+  min-height: 48px;
   border-radius: 10px;
   padding-inline: 11px;
 }
@@ -109,7 +109,9 @@
   border-color: var(--voucher-line);
   background-color: var(--voucher-subtle);
   border-radius: 9px;
-  transition: border-color 150ms ease, box-shadow 150ms ease;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
 }
 .voucher-workspace .voucher-form-card :is(input, textarea):focus-visible,
 .voucher-workspace .voucher-journal-card :is(input, textarea):focus-visible,
@@ -136,7 +138,7 @@
 .voucher-workspace .voucher-journal-table th {
   padding-block: 13px;
   font-size: 10px;
-  letter-spacing: .07em;
+  letter-spacing: 0.07em;
   color: hsl(var(--muted-foreground));
 }
 .voucher-workspace .voucher-entries-table tbody tr,
@@ -161,7 +163,7 @@
 .voucher-workspace .voucher-action-bar {
   background: var(--voucher-panel);
   border-top: 1px solid var(--voucher-line);
-  box-shadow: 0 -9px 25px -22px rgba(0, 0, 0, .8);
+  box-shadow: 0 -9px 25px -22px rgba(0, 0, 0, 0.8);
 }
 .voucher-workspace .voucher-save-button,
 .voucher-workspace .voucher-journal-save-button {
@@ -178,8 +180,8 @@
 }
 .voucher-workspace .voucher-save-button:disabled,
 .voucher-workspace .voucher-journal-save-button:disabled {
-  filter: saturate(.6);
-  opacity: .65;
+  filter: saturate(0.6);
+  opacity: 0.65;
 }
 .voucher-workspace .voucher-account-panel > :first-child,
 .voucher-workspace .voucher-journal-account-panel > :first-child {
@@ -229,7 +231,7 @@
 .voucher-workspace .voucher-journal-title strong {
   font-size: 16px;
   font-weight: 750;
-  letter-spacing: -.025em;
+  letter-spacing: -0.025em;
 }
 .voucher-workspace .voucher-journal-form {
   padding: 20px 22px 22px;
@@ -240,7 +242,7 @@
   border: 1px solid var(--voucher-line);
   border-radius: 12px;
 }
-.voucher-workspace .voucher-journal-summary > div:nth-child(-n+2) {
+.voucher-workspace .voucher-journal-summary > div:nth-child(-n + 2) {
   border-color: var(--voucher-line);
   border-radius: 11px;
   background-color: var(--voucher-subtle);
@@ -256,15 +258,27 @@
   border-radius: 12px;
 }
 @media (max-width: 639px) {
-  .voucher-workspace .voucher-hero { padding: 15px; }
-  .voucher-workspace .voucher-form-card form > .voucher-fields { padding: 16px 12px 19px; }
-  .voucher-workspace .voucher-journal-form { padding: 14px 12px 20px; }
-  .voucher-workspace .voucher-journal-title { padding: 16px 13px; }
-  .voucher-workspace .voucher-action-bar { padding-inline: 12px; }
+  .voucher-workspace .voucher-hero {
+    padding: 15px;
+  }
+  .voucher-workspace .voucher-form-card form > .voucher-fields {
+    padding: 16px 12px 19px;
+  }
+  .voucher-workspace .voucher-journal-form {
+    padding: 14px 12px 20px;
+  }
+  .voucher-workspace .voucher-journal-title {
+    padding: 16px 13px;
+  }
+  .voucher-workspace .voucher-action-bar {
+    padding-inline: 12px;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .voucher-workspace .voucher-entries-table tbody tr,
   .voucher-workspace .voucher-journal-table tbody tr,
   .voucher-workspace input,
-  .voucher-workspace textarea { transition: none; }
+  .voucher-workspace textarea {
+    transition: none;
+  }
 }
