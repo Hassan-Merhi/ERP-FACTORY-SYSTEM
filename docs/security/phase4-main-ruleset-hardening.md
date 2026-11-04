@@ -73,3 +73,16 @@ reported as awaiting administration rather than dismissed.
 **Phase boundary:** Phase 4 changes remain on
 `fix/security-quality-36-20261104` / draft PR #2845. Do not merge or start
 Phase 5 without explicit approval.
+
+## Phase 5b closeout verification
+
+Before merging the shared security PR, require fresh CI checks on its latest
+commit after merging current `main` into the security branch. Earlier green
+checks on an ancestor commit are not equivalent evidence.
+
+The Phase 5b sync preserves the Factory Invoicing button removal and sidebar
+label already merged to `main`, verifies the documentation index and
+`docs/README.md` reference, and runs the new security regression tests.
+The PR still requires an independent GitHub code-scanning rescan and a live
+ruleset-admin change to establish closure of the original alerts. Never close
+alerts by dismissal or relax the required check policy to permit merging.
