@@ -40,6 +40,7 @@ export default function PropertyRentalPage({
   paymentsLogUrl,
 }: Props) {
   const { selectedCompany } = useCompany();
+  const isPropertiesRental = apiBase === "/api/properties/rental";
   const { toast } = useToast();
   const appMode = useAppMode();
   const [, navigate] = useLocation();
@@ -79,6 +80,18 @@ export default function PropertyRentalPage({
       return res.json();
     },
     enabled: !!selectedCompany,
+  });
+
+  const propertiesCashbox = isPropertiesRental
+    ? cashAccounts.find((account) => account.code === "PROP-RENT-CASH")
+    : undefined;
+  const ensureCashbox = useMutation({
+    mutationFn: () => apiRequest("POST", apiBase + "/cashbox/ensure", {}),
+    onSuccess: () => {
+      toast({ title: "Properties cashbox ready", description: "The new cashbox starts at zero. Historical balances remain unchanged." });
+      queryClient.invalidateQueries({ queryKey: [apiBase + "/cash-accounts", selectedCompany?.id] });
+    },
+    onError: (e: ClientErrorLike) => toast({ title: "Cashbox setup failed", description: e.message, variant: "destructive" }),
   });
 
   const grouped = useMemo(() => {
@@ -235,6 +248,13 @@ export default function PropertyRentalPage({
             disabled: runMonthly.isPending,
             testId: `button-${testIdPrefix}-run-monthly`,
           },
+          isPropertiesRental && canPostDue && !propertiesCashbox && {
+            label: "Create Properties Cashbox",
+            icon: Plus,
+            onSelect: () => ensureCashbox.mutate(),
+            disabled: ensureCashbox.isPending,
+            testId: `button-${testIdPrefix}-create-cashbox`,
+          },
           canPostDue && {
             label: "Post due accruals now",
             icon: BookCheck,
@@ -254,6 +274,11 @@ export default function PropertyRentalPage({
   );
   const headerActions = (
     <>
+      {isPropertiesRental && canPostDue && !propertiesCashbox && (
+        <Button variant="outline" size="sm" onClick={() => ensureCashbox.mutate()} disabled={ensureCashbox.isPending} data-testid={`button-${testIdPrefix}-create-cashbox`}>
+          <Plus className="h-4 w-4 mr-1" /> Create Properties Cashbox
+        </Button>
+      )}
       {selectedContractIds.size > 0 && (
         <Button size="sm" onClick={() => setBulkPayOpen(true)} data-testid={`button-${testIdPrefix}-bulk-pay`}>
           <CreditCard className="h-4 w-4 mr-1" />
@@ -326,6 +351,14 @@ export default function PropertyRentalPage({
           </div>
         )}
 
+        {isPropertiesRental && (
+          <p className="text-xs text-muted-foreground" data-testid="properties-rent-cashbox-status">
+            {propertiesCashbox
+              ? "New receipts can be posted to Properties Rent Cashbox. Historical balances and transfers stay as recorded; no automatic intercompany movement."
+              : "Set up a zero-opening Properties cashbox for new receipts; historical balances are not changed."}
+          </p>
+        )}
+
         {phoneCards ? (
           <ErpMobileSummaryGrid
             data-testid={`summary-${testIdPrefix}`}
@@ -337,16 +370,16 @@ export default function PropertyRentalPage({
                 valueClassName: "text-blue-600 dark:text-blue-400",
               },
               {
-                label: "OUTSTANDING",
-                value: `$${fmtMoney(totals.totalOwed)}`,
-                valueClassName: "text-red-600 dark:text-red-400",
+                label: isPropertiesRental ? "TO COLLECT" : "OUTSTANDING",
+                value: `${fmtMoney(totals.totalOwed)}`,
+                valueClassName: isPropertiesRental ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400",
               },
               {
-                label: "CREDIT",
-                value: `$${fmtMoney(totals.totalCredit)}`,
-                valueClassName: "text-green-600 dark:text-green-400",
+                label: isPropertiesRental ? "OWED TO TENANTS" : "CREDIT",
+                value: `${fmtMoney(totals.totalCredit)}`,
+                valueClassName: isPropertiesRental ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400",
               },
-              { label: "TOTAL GUARANTEE", value: `$${fmtMoney(totals.totalGuarantee)}` },
+              { label: isPropertiesRental ? "GUARANTEE HELD" : "TOTAL GUARANTEE", value: `${fmtMoney(totals.totalGuarantee)}`, valueClassName: isPropertiesRental ? "text-red-600 dark:text-red-400" : undefined },
               { label: paidLabel, value: paidValue },
             ]}
           />
@@ -385,11 +418,11 @@ export default function PropertyRentalPage({
             <Card>
               <CardHeader className="px-3 pt-3 pb-1">
                 <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">
-                  TOTAL GUARANTEE
+                  {isPropertiesRental ? "GUARANTEE HELD" : "TOTAL GUARANTEE"}
                 </CardTitle>
               </CardHeader>
               <CardContent className="px-3 pb-3">
-                <div className="text-lg font-bold" data-testid={`stat-${testIdPrefix}-total-guarantee`}>
+                <div className={`text-lg font-bold ${isPropertiesRental ? "text-red-600 dark:text-red-400" : ""}`} data-testid={`stat-${testIdPrefix}-total-guarantee`}>
                   ${fmtMoney(totals.totalGuarantee)}
                 </div>
               </CardContent>
@@ -412,31 +445,31 @@ export default function PropertyRentalPage({
             <Card>
               <CardHeader className="px-3 pt-3 pb-1">
                 <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">
-                  OUTSTANDING
+                  {isPropertiesRental ? "TO COLLECT" : "OUTSTANDING"}
                 </CardTitle>
               </CardHeader>
               <CardContent className="px-3 pb-3">
                 <div
-                  className="text-lg font-bold text-red-600 dark:text-red-400"
+                  className={`text-lg font-bold ${isPropertiesRental ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
                   data-testid={`stat-${testIdPrefix}-total-outstanding`}
                 >
                   ${fmtMoney(totals.totalOwed)}
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-0.5">owed by tenants</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">{isPropertiesRental ? "tenants owe you" : "owed by tenants"}</p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="px-3 pt-3 pb-1">
-                <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">CREDIT</CardTitle>
+                <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">{isPropertiesRental ? "OWED TO TENANTS" : "CREDIT"}</CardTitle>
               </CardHeader>
               <CardContent className="px-3 pb-3">
                 <div
-                  className="text-lg font-bold text-green-600 dark:text-green-400"
+                  className={`text-lg font-bold ${isPropertiesRental ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}
                   data-testid={`stat-${testIdPrefix}-total-credit`}
                 >
                   ${fmtMoney(totals.totalCredit)}
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-0.5">advance / overpaid</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">{isPropertiesRental ? "tenant prepayments / overpayments" : "advance / overpaid"}</p>
               </CardContent>
             </Card>
           </div>
@@ -453,6 +486,7 @@ export default function PropertyRentalPage({
             </div>
           ) : (
             <RentalUnitCards
+              landlordView={isPropertiesRental}
               grouped={grouped}
               selectedContractIds={selectedContractIds}
               onToggleSelect={(contractId) =>
@@ -493,7 +527,7 @@ export default function PropertyRentalPage({
                         <th className="text-left px-3 py-2 font-semibold">Note</th>
                         <th className="text-right px-3 py-2 font-semibold">Monthly Rent</th>
                         <th className="text-right px-3 py-2 font-semibold">Guarantee</th>
-                        <th className="text-right px-3 py-2 font-semibold">Outstanding</th>
+                        <th className="text-right px-3 py-2 font-semibold">{isPropertiesRental ? "Tenant Balance" : "Outstanding"}</th>
                         <th className="text-right px-3 py-2 font-semibold text-muted-foreground">Scheduled</th>
                         <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Next Billing</th>
                         <th className="text-left px-3 py-2 font-semibold">Start</th>
@@ -620,8 +654,8 @@ export default function PropertyRentalPage({
                                   className={`px-3 py-2 text-right tabular-nums font-semibold ${
                                     u.contract && Number(u.contract.guaranteeAmount) > 0
                                       ? u.contract.guaranteePostedToStatement
-                                        ? "text-green-600 dark:text-green-400"
-                                        : "text-red-600 dark:text-red-400"
+                                        ? isPropertiesRental ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"
+                                        : isPropertiesRental ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"
                                       : "text-muted-foreground"
                                   }`}
                                 >
@@ -639,7 +673,7 @@ export default function PropertyRentalPage({
                                    </span>
                                 </td>
                                 <td
-                                  className={`px-3 py-2 text-right tabular-nums font-semibold ${(u.outstanding ?? 0) > 0 ? "text-red-600 dark:text-red-400" : (u as { prepaidCredit: 0 }).prepaidCredit > 0 ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}
+                                  className={`px-3 py-2 text-right tabular-nums font-semibold ${(u.outstanding ?? 0) > 0 ? (isPropertiesRental ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400") : (u.prepaidCredit ?? 0) > 0 ? (isPropertiesRental ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400") : "text-muted-foreground"}`}
                                 >
                                   <span className={isFactoryShopTable ? "factory-rentals-money-pill" : undefined}>
                                      {u.outstanding !== null
