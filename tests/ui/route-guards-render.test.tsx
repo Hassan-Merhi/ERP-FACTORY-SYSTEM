@@ -151,6 +151,25 @@ describe("ErpRoutes access guard", () => {
     expect(await screen.findByTestId("page-InventoryHub")).toBeInTheDocument();
   });
 
+  it("keeps ERP Cost Centers Developer-only even for full-access roles", async () => {
+    const { ErpRoutes } = await import("@/routes/ErpRoutes");
+    const grant: Array<[unknown[], unknown]> = [
+      [["/api/my-erp-pages"], { fullAccess: true, pageKeys: ["accounts"] }],
+    ];
+
+    for (const role of ["Admin", "Owner", "Manager"]) {
+      const denied = mountAt("/cost-centers", <ErpRoutes user={{ role }} />, grant);
+      expect(await screen.findByTestId("page-TrackingHub")).toBeInTheDocument();
+      expect(denied.memory.history.at(-1)).toBe("/tracking");
+      expect(screen.queryByTestId("page-CostCenters")).not.toBeInTheDocument();
+      denied.unmount();
+    }
+
+    const allowed = mountAt("/cost-centers", <ErpRoutes user={{ role: "Developer" }} />, grant);
+    expect(await screen.findByTestId("page-CostCenters")).toBeInTheDocument();
+    allowed.unmount();
+  });
+
   it("follows the legacy /stock-items alias to the stock hub items tab", async () => {
     const { ErpRoutes } = await import("@/routes/ErpRoutes");
     const { memory } = mountAt("/stock-items", <ErpRoutes user={{ role: "Admin" }} />);
