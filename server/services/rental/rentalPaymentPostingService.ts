@@ -22,6 +22,7 @@ import { isRentalPeriodDue, getRentalBillingDay, getRentalPeriodDueDate } from "
 import { buildAllocationsForPayment, findEarliestOutstandingMonth } from "./rentalPaymentAllocationService";
 import { recordedRentalPaymentRate } from "./rentalPaymentRate";
 import { rentalPaymentGroupIdentity, rentalPaymentVoucherSuffix } from "./rentalPostingIdentity";
+import { shouldRunRentalAutoTransfer } from "./rentalCashboxPolicy";
 
 export { buildAllocationsForPayment, findEarliestOutstandingMonth } from "./rentalPaymentAllocationService";
 
@@ -577,7 +578,7 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
     // ERP/Factory legacy flows may still use an optional auto-transfer.
     // A transfer must never fire inside a transaction that might roll back.
     try {
-      if (mod !== "PROPERTIES" && cashAccountId && unit && scheduledRows.length > 0) {
+      if (shouldRunRentalAutoTransfer(mod) && cashAccountId && unit && scheduledRows.length > 0) {
         await maybeRunAutoTransfer(
           companyId,
           mod,
@@ -753,7 +754,7 @@ export async function postScheduledGroup(
 
   try {
     const firstRow = groupRows[0];
-    if (module !== "PROPERTIES" && firstRow.cashAccountId && unit) {
+    if (shouldRunRentalAutoTransfer(module) && firstRow.cashAccountId && unit) {
       const unitLabel = `${unit.locationGroup}/${unit.unitNumber}`;
       await maybeRunAutoTransfer(
         companyId,
