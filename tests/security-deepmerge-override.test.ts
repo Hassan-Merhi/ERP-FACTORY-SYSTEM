@@ -1,10 +1,11 @@
 import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
 const require = createRequire(import.meta.url);
-const merge = require("../vendor/secure-deepmerge/index.cjs") as
-  ((target: unknown, source: unknown, options?: Record<string, unknown>) => any) & {
-    all: (parts: unknown[]) => any;
-  };
+type DeepMerge = {
+  (target: unknown, source: unknown, options?: Record<string, unknown>): any;
+  all: (parts: unknown[]) => any;
+};
+const merge = require("../vendor/secure-deepmerge/index.cjs") as DeepMerge;
 
 describe("secure Puppeteer Extra deepmerge compatibility", () => {
   it("keeps normal nested objects, array concatenation and the .all API", () => {
@@ -33,8 +34,8 @@ describe("secure Puppeteer Extra deepmerge compatibility", () => {
   });
 
   it("rejects pollution via merging arrays of untrusted objects", () => {
-    const output = merge({items: []}, {items:[JSON.parse('{"__proto__":{"foo":1},"good":"yes"}')]});
-    expect(output).toEqual({items: [{good:"yes"}]});
+    const output = merge({ items: [] }, { items: [JSON.parse('{"__proto__":{"foo":1},"good":"yes"}')] });
+    expect(output).toEqual({ items: [{ good: "yes" }] });
     expect(Object.prototype).not.toHaveProperty("foo");
   });
 });
