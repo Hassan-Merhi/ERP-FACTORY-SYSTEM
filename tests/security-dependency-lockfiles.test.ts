@@ -31,7 +31,10 @@ describe("security remediation for root and desktop lockfiles", () => {
   const desktop = readLock("desktop/package-lock.json");
 
   it("keeps every modern minimatch outside the vulnerable 7.x-10.x range", () => {
-    for (const [file, lock] of [["root", root], ["desktop", desktop]] as const) {
+    for (const [file, lock] of [
+      ["root", root],
+      ["desktop", desktop],
+    ] as const) {
       const rows = installed(lock, "minimatch");
       expect(rows.length, file).toBeGreaterThan(0);
       for (const [path, pkg] of rows) {
