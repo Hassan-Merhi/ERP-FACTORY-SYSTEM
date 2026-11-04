@@ -615,13 +615,13 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024;
  * Idempotent: the same file sent again is acknowledged without a new row.
  */
 export async function stagePhase9AttachmentFile(queryable, siteId, sha256, bytes) {
-  if (
-    typeof sha256 !== "string" ||
-    !FILE_HASH.test(sha256) ||
-    !Buffer.isBuffer(bytes) ||
-    bytes.length < 1 ||
-    bytes.length > MAX_FILE_BYTES
-  ) {
+  // A signed request may still carry a malformed body. Assert the concrete
+  // Buffer type before reading its size; never trust an arbitrary .length.
+  if (typeof sha256 !== "string" || !FILE_HASH.test(sha256) || !Buffer.isBuffer(bytes)) {
+    throw new Phase9StageConflict("PHASE9_FILE_INVALID");
+  }
+  const byteSize = Buffer.byteLength(bytes);
+  if (byteSize < 1 || byteSize > MAX_FILE_BYTES) {
     throw new Phase9StageConflict("PHASE9_FILE_INVALID");
   }
   if (createHash("sha256").update(bytes).digest("hex") !== sha256) {
@@ -634,13 +634,13 @@ export async function stagePhase9AttachmentFile(queryable, siteId, sha256, bytes
     [siteId, sha256]
   );
   if (!referenced.rows.length) throw new Phase9StageConflict("PHASE9_FILE_NOT_REFERENCED");
-  if (Number(referenced.rows[0].file_size) !== bytes.length) throw new Phase9StageConflict("PHASE9_FILE_SIZE_MISMATCH");
+  if (Number(referenced.rows[0].file_size) !== byteSize) throw new Phase9StageConflict("PHASE9_FILE_SIZE_MISMATCH");
   await queryable.query(
     `INSERT INTO factory_edge_staged_files (site_id, file_sha256, byte_size, content)
      VALUES ($1::uuid, $2, $3, $4) ON CONFLICT (site_id, file_sha256) DO NOTHING`,
-    [siteId, sha256, bytes.length, bytes]
+    [siteId, sha256, byteSize, bytes]
   );
-  return { siteId, sha256, byteSize: bytes.length, state: "file-staged" };
+  return { siteId, sha256, byteSize, state: "file-staged" };
 }
 
 /** The verified bytes for a staged attachment, or null if not yet received. */

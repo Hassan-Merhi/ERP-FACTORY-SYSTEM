@@ -33,9 +33,9 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
+      # Dispatch uses actions:write; inspection needs checks/PR/status reads.
       actions: write
       checks: read
-      contents: read
       pull-requests: read
       statuses: read
     outputs:

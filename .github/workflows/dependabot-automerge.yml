@@ -1,8 +1,7 @@
 name: Maintenance - Dependabot Auto Merge
 
-# Dependabot-triggered pull_request runs get no secrets, and their token is
-# limited to the permissions below. Auto-merge still waits for every required
-# check and review in branch protection; this only queues the merge.
+# Read-only validation is isolated from the token that enables auto-merge.
+# Branch protection still controls approvals and all required checks.
 on:
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
@@ -14,20 +13,24 @@ concurrency:
 permissions: {}
 
 jobs:
-  enable-automerge:
+  inspect:
+    name: Verify Dependabot update with read-only token
     if: >-
       github.event.pull_request.user.login == 'dependabot[bot]' &&
       github.event.pull_request.draft == false
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
+      pull-requests: read
+    outputs:
+      trusted: ${{ steps.head.outputs.is_dependabot }}
+      update_type: ${{ steps.metadata.outputs.update-type }}
     steps:
       - name: Detect Dependabot-authored head
         id: head
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           REPO: ${{ github.repository }}
         shell: bash
@@ -41,19 +44,45 @@ jobs:
             echo "Head ${HEAD_SHA} is maintainer-authored; leaving auto-merge disabled."
           fi
 
-      - name: Fetch Dependabot metadata
+      - name: Fetch Dependabot metadata without write permissions
         if: steps.head.outputs.is_dependabot == 'true'
         id: metadata
         uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ github.token }}
 
-      - name: Enable auto-merge for patch and minor updates
-        if: >-
-          steps.head.outputs.is_dependabot == 'true' &&
-          (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
-          steps.metadata.outputs.update-type == 'version-update:semver-minor')
+  enable-automerge:
+    name: Queue authorized patch/minor update
+    needs: inspect
+    if: >-
+      needs.inspect.outputs.trusted == 'true' &&
+      (needs.inspect.outputs.update_type == 'version-update:semver-patch' ||
+      needs.inspect.outputs.update_type == 'version-update:semver-minor')
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      # These are needed only for gh pr merge --auto; no third-party code runs here.
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Reverify unchanged Dependabot PR head then enable auto-merge
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           PR_URL: ${{ github.event.pull_request.html_url }}
-        run: gh pr merge --auto --merge "$PR_URL"
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
+          current_sha="$(jq -r '.head.sha' <<<"$pr_json")"
+          author="$(jq -r '.user.login' <<<"$pr_json")"
+          head_repo="$(jq -r '.head.repo.full_name // ""' <<<"$pr_json")"
+          base="$(jq -r '.base.ref' <<<"$pr_json")"
+          draft="$(jq -r '.draft' <<<"$pr_json")"
+          [[ "$current_sha" == "$EXPECTED_HEAD_SHA" && "$author" == 'dependabot[bot]' &&
+             "$head_repo" == "$GITHUB_REPOSITORY" && "$base" == main && "$draft" == false ]] || {
+            echo "::notice::PR head or trust state changed since read-only inspection; refusing auto-merge."
+            exit 0
+          }
+          gh pr merge --auto --merge "$PR_URL"

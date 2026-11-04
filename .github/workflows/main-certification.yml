@@ -16,9 +16,9 @@ jobs:
   certify:
     name: Application Certification
     runs-on: ubuntu-26.04
+    # Status publication lives in a separate, minimal-privilege job.
     permissions:
       contents: read
-      statuses: write
     # The full sequential suite is the long pole: twelve backend shards plain,
     # then twelve under coverage, then the frontend passes and the remaining
     # gates. 120 left no margin once the shard budget stopped aborting the run

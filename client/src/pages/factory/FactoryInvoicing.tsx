@@ -65,25 +65,45 @@ export default function FactoryInvoicing() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className={activeTab === "pending" ? "shrink-0 border-b border-sky-200/60 bg-gradient-to-r from-slate-50 via-blue-50/80 to-violet-50/70 dark:border-sky-800/50 dark:from-[#0b1930] dark:via-[#0d2341] dark:to-[#241c48]" : "shrink-0 border-b border-border/70 bg-background"}>
-        <div className={activeTab === "invoices"
-          ? "mx-3 mt-2 rounded-2xl border border-blue-500/20 bg-gradient-to-r from-emerald-500/[0.08] via-blue-500/[0.07] to-violet-500/[0.08] px-3 pt-3 dark:from-[#0b2b32] dark:via-[#0d2038] dark:to-[#1b1c39] sm:mx-4 sm:px-4"
-          : activeTab === "proformas"
-            ? "mx-3 mt-2 rounded-2xl border border-violet-500/20 bg-gradient-to-r from-violet-500/[0.09] via-indigo-500/[0.06] to-fuchsia-500/[0.08] px-3 pt-3 dark:from-[#1a1535] dark:via-[#101b35] dark:to-[#22143d] sm:mx-4 sm:px-4"
-          : activeTab === "pending"
-            ? "mx-3 mt-2 rounded-2xl border border-blue-500/20 bg-gradient-to-r from-sky-500/[0.08] via-blue-500/[0.08] to-violet-500/[0.08] px-3 pt-3 dark:from-[#0b2e50] dark:via-[#0c2442] dark:to-[#29204c] sm:mx-4 sm:px-4"
-            : "px-4 pt-3"}>
+      <div
+        className={
+          activeTab === "pending"
+            ? "shrink-0 border-b border-sky-200/60 bg-gradient-to-r from-slate-50 via-blue-50/80 to-violet-50/70 dark:border-sky-800/50 dark:from-[#0b1930] dark:via-[#0d2341] dark:to-[#241c48]"
+            : "shrink-0 border-b border-border/70 bg-background"
+        }
+      >
+        <div
+          className={
+            activeTab === "invoices"
+              ? "mx-3 mt-2 rounded-2xl border border-blue-500/20 bg-gradient-to-r from-emerald-500/[0.08] via-blue-500/[0.07] to-violet-500/[0.08] px-3 pt-3 dark:from-[#0b2b32] dark:via-[#0d2038] dark:to-[#1b1c39] sm:mx-4 sm:px-4"
+              : activeTab === "proformas"
+                ? "mx-3 mt-2 rounded-2xl border border-violet-500/20 bg-gradient-to-r from-violet-500/[0.09] via-indigo-500/[0.06] to-fuchsia-500/[0.08] px-3 pt-3 dark:from-[#1a1535] dark:via-[#101b35] dark:to-[#22143d] sm:mx-4 sm:px-4"
+                : activeTab === "pending"
+                  ? "mx-3 mt-2 rounded-2xl border border-blue-500/20 bg-gradient-to-r from-sky-500/[0.08] via-blue-500/[0.08] to-violet-500/[0.08] px-3 pt-3 dark:from-[#0b2e50] dark:via-[#0c2442] dark:to-[#29204c] sm:mx-4 sm:px-4"
+                  : "px-4 pt-3"
+          }
+        >
           <div className="[&>header]:mb-0 [&>header]:border-b-0 [&>header]:pb-3">
             <PageHeader
               title="Invoicing"
               subtitle="Manage proformas, invoices and container shipments"
-              icon={activeTab === "invoices"
-                ? <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/15"><FileText className="h-6 w-6" /></span>
-                : activeTab === "proformas"
-                  ? <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-500/20"><FileText className="h-6 w-6" /></span>
-                : activeTab === "pending"
-                  ? <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-blue-700 text-white shadow-lg shadow-blue-500/20"><Truck className="h-6 w-6" /></span>
-                  : <FileText className="h-5 w-5" />}
+              icon={
+                activeTab === "invoices" ? (
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/15">
+                    <FileText className="h-6 w-6" />
+                  </span>
+                ) : activeTab === "proformas" ? (
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-500/20">
+                    <FileText className="h-6 w-6" />
+                  </span>
+                ) : activeTab === "pending" ? (
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-blue-700 text-white shadow-lg shadow-blue-500/20">
+                    <Truck className="h-6 w-6" />
+                  </span>
+                ) : (
+                  <FileText className="h-5 w-5" />
+                )
+              }
               showBackButton={false}
             />
           </div>
@@ -96,7 +116,11 @@ export default function FactoryInvoicing() {
                 <PillTabButton
                   key={tab.key}
                   selected={isActive}
-                  className={isActive && activeTab === "pending" ? "bg-blue-600 font-semibold text-white shadow-md shadow-blue-500/20 hover:bg-blue-500 hover:text-white dark:bg-blue-600 dark:text-white" : undefined}
+                  className={
+                    isActive && activeTab === "pending"
+                      ? "bg-blue-600 font-semibold text-white shadow-md shadow-blue-500/20 hover:bg-blue-500 hover:text-white dark:bg-blue-600 dark:text-white"
+                      : undefined
+                  }
                   data-testid={`tab-${tab.key}`}
                   onClick={() => setActiveTab(tab.key)}
                 >

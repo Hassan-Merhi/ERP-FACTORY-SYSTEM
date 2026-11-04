@@ -154,3 +154,24 @@ describe("attendance report payroll reconciliation", () => {
     });
   });
 });
+
+describe("attendance salary input tampering regressions", () => {
+  it.each([
+    ["startDate array", { startDate: ["2026-10-01"] }],
+    ["endDate array", { endDate: ["2026-10-31"] }],
+    ["startDate object", { startDate: { date: "2026-10-01" } }],
+    ["endDate null", { endDate: null }],
+    ["invalid calendar date", { startDate: "2026-02-30" }],
+    ["reversed range", { startDate: "2026-11-01" }],
+    ["overlong range", { endDate: "2028-10-31" }],
+  ])("rejects %s before payroll or date calculations", (_case, overriddenInput) => {
+    expect(() => salary([], overriddenInput)).toThrow("ATTENDANCE_REPORT_INVALID_RANGE");
+    expect(() => salary([payroll({})], overriddenInput)).toThrow("ATTENDANCE_REPORT_INVALID_RANGE");
+  });
+
+  it("rejects non-string dates in the exported payroll selector", () => {
+    expect(() =>
+      selectAttendanceReportPayrolls([payroll({})], ["2026-10-01"] as unknown as string, "2026-10-31")
+    ).toThrow("ATTENDANCE_REPORT_INVALID_RANGE");
+  });
+});

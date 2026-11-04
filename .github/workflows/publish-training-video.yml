@@ -12,49 +12,40 @@ on:
         required: true
         type: string
 
-permissions:
-  actions: read
-  contents: write
-  pull-requests: write
-  id-token: write
+# A source recorder is read and vetted without any repository write token.
+# Protected publication runs only after validation and environment approval.
+permissions: {}
 
 concurrency:
   group: training-publisher
   cancel-in-progress: false
 
 jobs:
-  publish:
+  verify-recording:
+    name: Validate training recording without publication privileges
     runs-on: ubuntu-26.04
     timeout-minutes: 20
-    # Maintainer MUST configure required environment reviewers in GitHub
-    # before setting the TRAINING_PUBLICATION_APPROVAL_ENABLED environment variable.
-    environment: training-publication
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      source_sha: ${{ steps.source.outputs.source_sha }}
     env:
       GH_TOKEN: ${{ github.token }}
-      TRAINING_PUBLICATION_APPROVAL_ENABLED: ${{ vars.TRAINING_PUBLICATION_APPROVAL_ENABLED }}
       SOURCE_RUN: ${{ inputs.source_run_id }}
       TOPIC: ${{ inputs.topic }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: main
-          persist-credentials: true
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24.22.1"
-      - name: Fail closed unless protected approval and storage are configured
+      - name: Reject malformed source identifiers before calling GitHub API
         shell: bash
         run: |
           set -euo pipefail
-          test "$TRAINING_PUBLICATION_APPROVAL_ENABLED" = "true" || {
-            echo "::error::Protected training publication approval is not configured"; exit 1;
-          }
           [[ "$SOURCE_RUN" =~ ^[0-9]{1,15}$ ]] || exit 1
           [[ "$TOPIC" =~ ^[a-z0-9-]{1,80}$ ]] || exit 1
-          [[ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" && -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]] || {
-            echo "::error::Protected GitHub OIDC identity is unavailable"; exit 1;
-          }
       - name: Fetch vetted completed recorder job (independent of unrelated audit failures)
+        id: source
         shell: bash
         run: |
           set -euo pipefail
@@ -85,8 +76,9 @@ jobs:
             throw new Error("The requested run has no successful training recording job");
           }
           fs.appendFileSync(process.env.GITHUB_ENV, "TRAINING_SOURCE_SHA=" + run.head_sha + "\n");
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, "source_sha=" + run.head_sha + "\n");
           NODE
-          gh run download "$SOURCE_RUN" -n "real-erp-training-$SOURCE_RUN" -D "$RUNNER_TEMP/review"
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" -n "real-erp-training-$SOURCE_RUN" -D "$RUNNER_TEMP/review"
       - name: Validate recorded evidence
         shell: bash
         run: |
@@ -132,6 +124,58 @@ jobs:
           }
           NODE
           ffmpeg -hide_banner -v error -xerror -i "$video" -f null -
+      - name: Transfer immutable reviewed candidate to protected publisher
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: vetted-training-publication
+          path: ${{ runner.temp }}/review/
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Protected publication after successful validation
+    needs: verify-recording
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    # This job alone has both publication approval and publication privileges.
+    # It is never run unless verify-recording finished successfully.
+    environment: training-publication
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TRAINING_PUBLICATION_APPROVAL_ENABLED: ${{ vars.TRAINING_PUBLICATION_APPROVAL_ENABLED }}
+      SOURCE_RUN: ${{ inputs.source_run_id }}
+      TOPIC: ${{ inputs.topic }}
+      TRAINING_SOURCE_SHA: ${{ needs.verify-recording.outputs.source_sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.1"
+      - name: Fail closed unless protected approval and storage are configured
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$TRAINING_PUBLICATION_APPROVAL_ENABLED" = "true" || {
+            echo "::error::Protected training publication approval is not configured"; exit 1;
+          }
+          [[ "$SOURCE_RUN" =~ ^[0-9]{1,15}$ ]] || exit 1
+          [[ "$TOPIC" =~ ^[a-z0-9-]{1,80}$ ]] || exit 1
+          [[ "$TRAINING_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          [[ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" && -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]] || {
+            echo "::error::Protected GitHub OIDC identity is unavailable"; exit 1;
+          }
+      - name: Download exact validated recording (not arbitrary run input)
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: vetted-training-publication
+          path: ${{ runner.temp }}/review/
       - name: Upload reviewed videos, captions and screenshots to PRIVATE Vercel Blob
         shell: bash
         run: |

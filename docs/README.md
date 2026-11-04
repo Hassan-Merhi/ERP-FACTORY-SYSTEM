@@ -105,6 +105,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [dead-code-prevention.md](dead-code-prevention.md) | Route, export, retirement and dependency rules that keep dead code out, and `npm run report:dead-code` |
 | [dead-code-cleanup-final-report.md](dead-code-cleanup-final-report.md) | 2026-10 dead-code cleanup: results, retained code, open decisions and required validation |
 | [ci/branch-protection.md](ci/branch-protection.md) | Required checks on `main` |
+| [security/phase4-main-ruleset-hardening.md](security/phase4-main-ruleset-hardening.md) | Current main ruleset security gaps, immutable dependency pinning and required administrative verification |
 | [mobile-tablet-web-regression.md](mobile-tablet-web-regression.md) | Browser regression checklist |
 | [erp-mobile-program.md](erp-mobile-program.md) | ERP phone contracts, route certification and phase status |
 | [factory-mobile-audit.md](factory-mobile-audit.md) | Factory mode phone layouts and mobile audit status |

@@ -25,6 +25,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
+          # The agent uses provider credentials, not the repository checkout token.
+          persist-credentials: false
       - name: Force OpenAI model in Pullfrog dispatch payload
         id: force-model
         shell: bash
@@ -38,7 +40,7 @@ jobs:
           fi
           printf 'prompt=%s\n' "$UPDATED_PROMPT" >> "$GITHUB_OUTPUT"
       - name: Run agent
-        uses: pullfrog/pullfrog@ae4145b3d72b3f4aa045e2352dc6b2c7538daeeb # v0
+        uses: pullfrog/pullfrog@ae4145b3d72b3f4aa045e2352dc6b2c7538daeeb # v0.1.101 (verified immutable release tag)
         with:
           prompt: ${{ steps.force-model.outputs.prompt }}
           model: openai/gpt
