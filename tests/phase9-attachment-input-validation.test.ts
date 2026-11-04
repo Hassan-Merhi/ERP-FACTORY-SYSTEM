@@ -24,7 +24,7 @@ describe("Phase 9 attachment staging rejects tampered HTTP shapes", () => {
     ["string", "phase9-verified-upload"],
   ])("rejects a %s body before accessing the database", async (_name, body) => {
     const queryable = fakeQueryable();
-    await expect(stagePhase9AttachmentFile(queryable, SITE, HASH, body)).rejects.toThrow("PHASE9_FILE_INVALID");
+    await expect(stagePhase9AttachmentFile(queryable as never, SITE, HASH, body as never)).rejects.toThrow("PHASE9_FILE_INVALID");
     expect(queryable.query).not.toHaveBeenCalled();
   });
 
@@ -34,16 +34,16 @@ describe("Phase 9 attachment staging rejects tampered HTTP shapes", () => {
     ["empty", ""],
   ])("rejects a %s digest before accessing the database", async (_name, digest) => {
     const queryable = fakeQueryable();
-    await expect(stagePhase9AttachmentFile(queryable, SITE, digest, BYTES)).rejects.toThrow("PHASE9_FILE_INVALID");
+    await expect(stagePhase9AttachmentFile(queryable as never, SITE, digest as never, BYTES)).rejects.toThrow("PHASE9_FILE_INVALID");
     expect(queryable.query).not.toHaveBeenCalled();
   });
 
   it("rejects empty and oversized Buffers before database access", async () => {
     const queryable = fakeQueryable();
-    await expect(stagePhase9AttachmentFile(queryable, SITE, HASH, Buffer.alloc(0))).rejects.toThrow(
+    await expect(stagePhase9AttachmentFile(queryable as never, SITE, HASH, Buffer.alloc(0))).rejects.toThrow(
       "PHASE9_FILE_INVALID"
     );
-    await expect(stagePhase9AttachmentFile(queryable, SITE, HASH, Buffer.alloc(10 * 1024 * 1024 + 1))).rejects.toThrow(
+    await expect(stagePhase9AttachmentFile(queryable as never, SITE, HASH, Buffer.alloc(10 * 1024 * 1024 + 1))).rejects.toThrow(
       "PHASE9_FILE_INVALID"
     );
     expect(queryable.query).not.toHaveBeenCalled();
@@ -51,7 +51,7 @@ describe("Phase 9 attachment staging rejects tampered HTTP shapes", () => {
 
   it("rejects a mismatched hash before database access", async () => {
     const queryable = fakeQueryable();
-    await expect(stagePhase9AttachmentFile(queryable, SITE, HASH, Buffer.from("different bytes"))).rejects.toThrow(
+    await expect(stagePhase9AttachmentFile(queryable as never, SITE, HASH, Buffer.from("different bytes"))).rejects.toThrow(
       "PHASE9_FILE_HASH_MISMATCH"
     );
     expect(queryable.query).not.toHaveBeenCalled();
@@ -59,7 +59,7 @@ describe("Phase 9 attachment staging rejects tampered HTTP shapes", () => {
 
   it("refuses a staged record whose declared size differs from the verified Buffer size", async () => {
     const queryable = fakeQueryable(BYTES.byteLength + 1);
-    await expect(stagePhase9AttachmentFile(queryable, SITE, HASH, BYTES)).rejects.toThrow(
+    await expect(stagePhase9AttachmentFile(queryable as never, SITE, HASH, BYTES)).rejects.toThrow(
       "PHASE9_FILE_SIZE_MISMATCH"
     );
     expect(queryable.query).toHaveBeenCalledTimes(1);
@@ -67,7 +67,7 @@ describe("Phase 9 attachment staging rejects tampered HTTP shapes", () => {
 
   it("persists the original bytes using the verified Buffer.byteLength", async () => {
     const queryable = fakeQueryable();
-    await expect(stagePhase9AttachmentFile(queryable, SITE, HASH, BYTES)).resolves.toEqual({
+    await expect(stagePhase9AttachmentFile(queryable as never, SITE, HASH, BYTES)).resolves.toEqual({
       siteId: SITE,
       sha256: HASH,
       byteSize: BYTES.byteLength,
