@@ -117,12 +117,10 @@ export function registerRentalPaymentsAccrualRoutes(
             .where(and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.code, PROPERTIES_RENT_CASH_CODE)))
             .limit(1);
           if (!account || account.deletedAt || !account.active || account.accountType !== "Cash") {
-            return res
-              .status(409)
-              .json({
-                message:
-                  "The Properties cashbox code is already held by a deleted or incompatible account. Restore or correct it before continuing.",
-              });
+            return res.status(409).json({
+              message:
+                "The Properties cashbox code is already held by a deleted or incompatible account. Restore or correct it before continuing.",
+            });
           }
           return res.json({ id: account.id, code: account.code, name: account.name, accountType: account.accountType });
         } catch (e: unknown) {
