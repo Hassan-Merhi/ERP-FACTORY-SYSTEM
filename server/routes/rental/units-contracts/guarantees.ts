@@ -30,6 +30,7 @@ import { parseId } from "../../../lib/parseId";
 import { parseMoneyInput } from "../../../lib/money";
 import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 import { nextGuaranteeVoucherNumberTx } from "../shared/guarantee-number";
+import { shouldRunRentalAutoTransfer } from "../../../services/rental/rentalCashboxPolicy";
 import {
   erpRequestSourceId,
   postErpVoucherTx,
@@ -278,7 +279,7 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
         .returning();
 
       // Only legacy ERP/Factory rent flows can use configured intercompany transfers.
-      if (module !== "PROPERTIES") {
+      if (shouldRunRentalAutoTransfer(module)) {
         await maybeRunAutoTransfer(
           companyId,
           module,
