@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2311,
+  "routeCount": 2312,
   "middlewareMountCount": 139,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -825,6 +825,7 @@
     "POST /api/properties/rental/contracts/:id/guarantee-to-rent [requireAuth > <anonymous>]",
     "POST /api/properties/rental/contracts/:id/undo-guarantee-as-rent [requireAuth > <anonymous>]",
     "DELETE /api/properties/rental/payments/:id [requireAuth > <anonymous>]",
+    "POST /api/properties/rental/cashbox/ensure [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/properties/rental/payments [requireAuth > <anonymous>]",
     "POST /api/properties/rental/payments/bulk [requireAuth > <anonymous>]",
     "GET /api/properties/rental/units/:id/detail [requireAuth > <anonymous>]",
