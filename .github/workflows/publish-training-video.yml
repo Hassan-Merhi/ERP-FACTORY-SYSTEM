@@ -112,22 +112,23 @@ jobs:
             throw new Error("Invalid captions");
           }
           NODE
-      - name: Verify H.264 video, browser playback and 35-60 second duration
+      - name: Verify H.264 video with AAC narration, browser playback and 1-20 minute duration
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg
           video="$RUNNER_TEMP/review/$TOPIC/screen.mp4"
-          ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,pix_fmt:format=duration -of json "$video" > "$RUNNER_TEMP/training-probe.json"
+          ffprobe -v error -show_entries stream=codec_type,codec_name,pix_fmt:format=duration -of json "$video" > "$RUNNER_TEMP/training-probe.json"
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           const result = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/training-probe.json", "utf8"));
-          const video = result.streams?.[0];
+          const video = result.streams?.find((stream) => stream.codec_type === "video");
+          const audio = result.streams?.find((stream) => stream.codec_type === "audio");
           const duration = Number(result.format?.duration);
-          if (video?.codec_name !== "h264" || video?.pix_fmt !== "yuv420p" ||
-              !Number.isFinite(duration) || duration < 35 || duration > 60) {
-            throw new Error("Training recording must decode as a 35-60 second Windows H.264/yuv420p MP4");
+          if (video?.codec_name !== "h264" || video?.pix_fmt !== "yuv420p" || audio?.codec_name !== "aac" ||
+              !Number.isFinite(duration) || duration < 60 || duration > 1200) {
+            throw new Error("Training recording must decode as a narrated 1-20 minute Windows H.264/yuv420p + AAC MP4");
           }
           NODE
           ffmpeg -hide_banner -v error -xerror -i "$video" -f null -

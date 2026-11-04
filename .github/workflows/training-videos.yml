@@ -6,6 +6,8 @@ on:
   pull_request:
     paths:
       - "scripts/record-training-guides.mjs"
+      - "scripts/training-narration.mjs"
+      - "scripts/training-narration-tts.py"
       - "scripts/nightly-system-regression.test.mjs"
       - ".github/workflows/training-videos.yml"
   workflow_call:
@@ -46,7 +48,8 @@ permissions:
 jobs:
   record-training:
     runs-on: ubuntu-26.04
-    timeout-minutes: 40
+    # Sixteen narrated tours take roughly 4-5 minutes each to capture and voice.
+    timeout-minutes: 180
     services:
       postgres:
         image: postgres:18
@@ -94,6 +97,37 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg
           node node_modules/puppeteer/lib/puppeteer/node/cli.js browsers install chrome
+      - name: Install the offline narration voice (Piper, verified checksums)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user --quiet piper-tts==1.8.0
+          voice="$RUNNER_TEMP/training-voice"
+          mkdir -p "$voice"
+          # The en_US-lessac-medium voice is published by the Piper project. The
+          # sherpa-onnx release mirror and the original Hugging Face repository
+          # carry byte-identical model files; either source must match the pins.
+          if curl -fsSL --retry 3 -o "$voice/voice.tar.bz2" \
+               https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-lessac-medium.tar.bz2; then
+            tar -xjf "$voice/voice.tar.bz2" -C "$voice" --strip-components=1 \
+              vits-piper-en_US-lessac-medium/en_US-lessac-medium.onnx \
+              vits-piper-en_US-lessac-medium/en_US-lessac-medium.onnx.json
+          else
+            echo "Release mirror unavailable, using the Piper voice repository"
+            curl -fsSL --retry 3 -o "$voice/en_US-lessac-medium.onnx" \
+              https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx
+            curl -fsSL --retry 3 -o "$voice/en_US-lessac-medium.onnx.json" \
+              https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json
+          fi
+          printf '%s\n' \
+            "4ba07d8549906668ee855fd9abf9faf66c5db74742712ff026a159f7277fca9f  $voice/en_US-lessac-medium.onnx" \
+            "efe19c417bed055f2d69908248c6ba650fa135bc868b0e6abb3da181dab690a0  $voice/en_US-lessac-medium.onnx.json" \
+            | sha256sum -c -
+          echo "TRAINING_TTS_MODEL=$voice/en_US-lessac-medium.onnx" >> "$GITHUB_ENV"
+          # Prove the voice synthesizes before spending an hour on browser capture.
+          printf '[{"id":"check","text":"Narration voice ready."}]' > "$voice/check.json"
+          python3 scripts/training-narration-tts.py --model "$voice/en_US-lessac-medium.onnx" \
+            --input "$voice/check.json" --output-dir "$voice/check-out" > /dev/null
       - name: Build actual ERP / Factory application
         run: |
           npm run prebuild
