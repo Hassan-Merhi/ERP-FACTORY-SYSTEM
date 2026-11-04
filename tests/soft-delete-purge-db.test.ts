@@ -248,8 +248,7 @@ describe("purgeOldSoftDeletes", () => {
         "[Purge] Isolated purge unit failed; retained its rows and continuing.",
         expect.objectContaining({
           label: "locations",
-          // Postgres 18 reports a RESTRICT foreign-key violation as 23001;
-          // older servers report 23503 for the same blocked delete.
+          // PostgreSQL reports 23001 for RESTRICT and 23503 for other FK violations.
           dbErrorCode: expect.stringMatching(/^(23001|23503)$/),
           dbTable: expect.any(String),
           dbConstraint: expect.any(String),

@@ -5,10 +5,7 @@ import FactoryInvoices from "@/pages/factory/FactoryInvoices";
 import FactoryContainerLoadingScan from "@/pages/factory/FactoryContainerLoadingScan";
 import FactoryPendingLoadings from "@/pages/factory/FactoryPendingLoadings";
 import FactoryPriorityScan from "@/pages/factory/FactoryPriorityScan";
-import { FileText, Plus, Truck } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useLocation } from "wouter";
-import type { AuthMe } from "@shared/apiTypes";
+import { FileText, Truck } from "lucide-react";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 import { TabsList, PillTabButton } from "@/components/ui/tabs";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
@@ -20,10 +17,6 @@ type TabDef = { key: InvoicingTab; label: string };
 const ALL_INVOICING_TABS: readonly InvoicingTab[] = ["proformas", "invoices", "loadings", "pending", "priority"];
 
 export default function FactoryInvoicing() {
-  const [, navigate] = useLocation();
-  const { data: authUser } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"], staleTime: 5 * 60000 });
-  const role = String(authUser?.currentRole || authUser?.role || "").toLowerCase();
-  const canOpenNewInvoice = !!role && role !== "view only";
   const { language } = useApplicationLanguage();
   const priorityScanLabel = translatePriorityScanText("priorityScan", language);
 
@@ -92,18 +85,7 @@ export default function FactoryInvoicing() {
                   ? <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-blue-700 text-white shadow-lg shadow-blue-500/20"><Truck className="h-6 w-6" /></span>
                   : <FileText className="h-5 w-5" />}
               showBackButton={false}
-            >
-              {activeTab === "invoices" && canOpenNewInvoice && (
-                <Button
-                  size="sm"
-                  className="h-9 rounded-xl bg-blue-600 px-4 font-semibold text-white hover:bg-blue-500"
-                  onClick={() => navigate("/factory/sales/new")}
-                  data-testid="button-invoicing-new-invoice"
-                >
-                  <Plus className="mr-1.5 h-4 w-4" /> New Invoice
-                </Button>
-              )}
-            </PageHeader>
+            />
           </div>
         </div>
         <div className="erp-mobile-scroll-tabs px-4 pb-2">

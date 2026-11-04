@@ -141,7 +141,7 @@ export const FACTORY_NAV_SECTIONS: FactoryNavSection[] = FACTORY_SIDEBAR_GROUP_O
     color: FACTORY_SIDEBAR_COLORS[label],
     developerOnly: pages.length > 0 && pages.every((page) => page.accessLevel === "developer"),
     items: pages.map((page) => ({
-      title: page.key === "factory/invoicing" ? "Invoicing & Loadings" : page.label,
+      title: page.key === "factory/invoicing" ? "Invoices & Loading" : page.label,
       url: page.route,
       icon: FACTORY_NAV_ICONS[page.key] ?? FileText,
       accessKey: page.key,
