@@ -10,6 +10,8 @@ on:
       - ".github/workflows/nightly-system-regression.yml"
       - ".github/workflows/training-videos.yml"
       - "scripts/record-training-guides.mjs"
+      - "scripts/training-narration.mjs"
+      - "scripts/training-narration-tts.py"
       - "scripts/verify-nightly-transaction-reconciliation.mjs"
       - "scripts/nightly-system-regression.test.mjs"
       - "scripts/generate-program6c-inventory-classifications.mjs"
