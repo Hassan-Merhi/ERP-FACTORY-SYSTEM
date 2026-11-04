@@ -90,3 +90,5 @@ alerts by dismissal or relax the required check policy to permit merging.
 ## Pre-merge synchronization
 
 The security branch was synchronized with the Properties cashbox implementation on `main` (commit `35e915f6678b218cf9a456801d7006fc0189392b`). The synchronized route manifest contains 2,312 registered routes, and `docs/system-quality-program.md` was updated to that count. The existing voucher minimum 48px touch target is preserved. Final GitHub checks must run against the current PR HEAD; older successful runs must not be substituted.
+
+The subsequent `main` update introduced narrated training recordings (H.264/AAC, 60–1,200 seconds). The protected training publisher now retains those codec and duration requirements inside the read-only validation job before any environment-approved publication. The shared security PR includes the newest `main` at the time of this verification; all required CI results must apply to its final head.
