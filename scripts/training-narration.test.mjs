@@ -36,6 +36,9 @@ test("tabs, fields, dropdowns and action buttons each get a specific sentence", 
   assert.match(describeControl(control({ label: "Next shipping page" })), /next page of the table/);
   assert.match(describeControl(control({ label: "This Month vs Last Month" })), /This Month against Last Month/);
   assert.match(describeControl(control({ label: "Scheduled Containers", count: "3", expanded: "true" })), /panel header.*open.*3, is how many/);
+  assert.match(describeControl(control({ label: "Nov 04, 2026", expanded: "false", haspopup: "dialog" })), /date button.*opens a calendar/);
+  assert.match(describeControl(control({ tag: "input", type: "text", placeholder: "Type location..." })), /where you type the location value/);
+  assert.match(describeControl(control({ tag: "input", type: "number", placeholder: "0.00", testid: "input-amount-0" })), /"amount" field takes a numeric value/);
 });
 
 test("grouped choices mention their siblings and the fallback never claims a feature it cannot see", () => {

@@ -209,7 +209,8 @@ export function describeControl(control) {
     if (role === "combobox") return `The "${label}" box is a searchable selector: start typing and choose a match from the list that appears.`;
     if (noun && label === noun) return `The "${label}" box is where you type or search for the ${lower}; matching entries appear as you type.`;
     if (/search|find|filter/.test(lower)) return `Typing in the "${label}" box filters the records as you type; clear it to see everything again.`;
-    return `The "${label}" field is where you type the ${lower.replace(/\.\.\.$/, "")} value.`;
+    const subject = lower.replace(/\.\.\.$/, "").replace(/^(type|enter|add|write)\s+(the\s+)?/, "").trim();
+    return `The "${label}" field is where you type the ${subject || "required"} value.`;
   }
   if (tag === "select" || role === "combobox" || testid.startsWith("select-")) {
     if (/^(all|any)\b/.test(lower)) return `The dropdown currently set to "${label}" narrows the list to one ${lower.replace(/^(all|any)\s+/, "").replace(/s$/, "")} at a time. "${label}" means no filter is applied.${trailing(control)}`;
@@ -220,6 +221,9 @@ export function describeControl(control) {
   }
   if (role === "switch") return `The "${label}" switch turns this option on or off.` + (control.pressed ? " It is on right now." : " It is off right now.");
   if (role === "checkbox" || testid.startsWith("checkbox-")) return `The "${label}" checkbox turns this option on or off.${trailing(control)}`;
+  if (/^\d{1,2}\s+\w+,?\s+\d{4}$|^\w{3}\s+\d{1,2},\s+\d{4}$|^\d{4}-\d{2}-\d{2}$/.test(label)) {
+    return `The date button showing "${label}" opens a calendar so you can pick another date.${trailing(control)}`;
+  }
   const popup = control.haspopup && control.haspopup !== "false";
   const panelNote = control.expanded !== null && control.expanded !== undefined && !popup
     ? ` It is ${control.expanded === "true" ? "open" : "collapsed"} at the moment.` : "";
