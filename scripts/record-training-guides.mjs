@@ -281,20 +281,36 @@ function locateAndScroll(segment) {
 }
 
 /** Draw the highlight ring, callout and caption bar for the current sentence. */
-function paintOverlay({ rect, title, text, index, total, pulse }) {
+function paintOverlay({ rect, title, text, index, total, pulse, cursor, click }) {
   let layer = document.getElementById("training-recording-layer");
   if (!layer) {
     layer = document.createElement("div");
     layer.id = "training-recording-layer";
     layer.setAttribute("aria-hidden", "true");
     layer.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:2147483647;font-family:system-ui,Segoe UI,sans-serif";
-    layer.innerHTML = '<div id="trl-ring"></div><div id="trl-chip"></div><div id="trl-caption"></div><div id="trl-step"></div>';
+    layer.innerHTML = '<div id="trl-ring"></div><div id="trl-chip"></div><div id="trl-caption"></div><div id="trl-step"></div>' +
+      '<div id="trl-click"></div><svg id="trl-cursor" width="28" height="28" viewBox="0 0 24 24" style="position:fixed;left:0;top:0;filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))">' +
+      '<path d="M5 3l14 8.5-6.2 1.3 3.6 6.4-2.6 1.4-3.6-6.4L5 18z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg>';
     document.body.appendChild(layer);
   }
   const ring = layer.querySelector("#trl-ring");
   const chip = layer.querySelector("#trl-chip");
   const caption = layer.querySelector("#trl-caption");
   const step = layer.querySelector("#trl-step");
+  const pointer = layer.querySelector("#trl-cursor");
+  const ripple = layer.querySelector("#trl-click");
+  if (cursor) {
+    pointer.style.left = (cursor.x - 4) + "px";
+    pointer.style.top = (cursor.y - 2) + "px";
+    pointer.style.display = "block";
+  } else {
+    pointer.style.display = "none";
+  }
+  if (click && cursor) {
+    ripple.style.cssText = "position:fixed;left:" + (cursor.x - 18) + "px;top:" + (cursor.y - 18) + "px;width:36px;height:36px;border-radius:50%;border:3px solid #ff7a00;background:rgba(255,122,0,.25)";
+  } else {
+    ripple.style.cssText = "display:none";
+  }
   if (rect) {
     const pad = 6;
     const left = Math.max(0, rect.x - pad);
@@ -315,6 +331,23 @@ function paintOverlay({ rect, title, text, index, total, pulse }) {
   caption.textContent = text;
   step.style.cssText = "position:fixed;right:24px;top:72px;background:rgba(9,20,42,.9);color:#fff;border-radius:999px;padding:6px 14px;font:600 13px system-ui";
   step.textContent = "Explaining " + index + " of " + total;
+}
+
+const DEMO_TEXT = "P7";
+
+/**
+ * Safe, reversible demonstrations. Typing into a search box and opening a
+ * dropdown, filter or column menu only change what is displayed; the capture
+ * pass clears the text and presses Escape afterwards. Nothing is ever chosen,
+ * submitted or saved, and every non-GET request stays blocked.
+ */
+function demoFor(row) {
+  if (row.region !== "main" || row.disabled) return null;
+  const label = (row.label || row.placeholder || "").toLowerCase();
+  if ((row.tag === "input" || row.tag === "textarea") && !["date", "month", "number", "checkbox", "file", "time"].includes(row.type) && /search|find|filter/.test(label)) return "type";
+  if (row.tag === "button" && !/^tab-/.test(row.testid) && row.role !== "tab" &&
+      (row.testid.startsWith("select-") || (row.haspopup && row.haspopup !== "false") || /^(filters?|columns?)$/.test(label))) return "open";
+  return null;
 }
 
 /** Discover every control, exploring each visible tab, and build the spoken script. */
@@ -345,8 +378,11 @@ async function planNarration(page, tour, route) {
         prefixCount.set(prefix, count);
         if (count > MAX_SAME_PREFIX) continue;
       }
-      const text = describeControl(row) + (row.testid !== prefix && prefixCount.get(prefix) === MAX_SAME_PREFIX ? " The rows below work the same way." : "");
-      segments.push({ ...row, id: "s" + segments.length, text, tabPath: [...tabPath], tabLabel });
+      const demo = demoFor(row);
+      const text = describeControl(row) + (row.testid !== prefix && prefixCount.get(prefix) === MAX_SAME_PREFIX ? " The rows below work the same way." : "") +
+        (demo === "type" ? " Watch: typing " + DEMO_TEXT.split("").join(" ") + " narrows the list to the matching rows, and clearing the box brings everything back." :
+          demo === "open" ? " Let me open it so you can see the choices; pressing Escape closes it again without choosing anything." : "");
+      segments.push({ ...row, id: "s" + segments.length, text, demo, tabPath: [...tabPath], tabLabel });
       const isTab = row.role === "tab" || /^tab-/.test(row.testid);
       if (isTab && row.region === "main" && row.testid && !row.selected && !tabQueue.some((item) => item.testid === row.testid)) tabQueue.push({ testid: row.testid, label: row.label });
     }
@@ -459,6 +495,8 @@ async function recordOne(page, id, tour) {
       let frameNumber = 0;
       let clicksDone = 0;
       let elapsed = 0;
+      let cursor = { x: 720, y: 450 };
+      const ease = (t) => 1 - Math.pow(1 - t, 3);
       for (let i = 0; i < segments.length; i++) {
         const segment = segments[i];
         for (; clicksDone < segment.tabPath.length; clicksDone++) {
@@ -479,12 +517,52 @@ async function recordOne(page, id, tour) {
         const title = segment.kind === "heading" ? "Section: " + segment.label
           : segment.kind === "control" ? (segment.role === "tab" || /^tab-/.test(segment.testid) ? "Tab: " : segment.tag === "input" || segment.tag === "select" || segment.tag === "textarea" ? "Field: " : segment.tag === "a" ? "Link: " : "Button: ") + (segment.label || segment.testid)
           : tour.title;
+        // The cursor glides to the control over the first frames, hovers it for
+        // real (hover styles show), then performs the reversible demo if any.
+        const from = { ...cursor };
+        const target = rect ? { x: rect.x + Math.min(rect.width - 8, Math.max(8, rect.width * 0.5)), y: rect.y + rect.height / 2 } : from;
+        const travelFrames = rect ? Math.min(3, Math.max(1, segment.frames - 2)) : 0;
+        let demoActive = false;
         for (let frame = 0; frame < segment.frames; frame++) {
-          await page.evaluate(paintOverlay, { rect, title, text: segment.text, index: i + 1, total: segments.length, pulse: frame % 2 === 0 });
+          if (rect && frame <= travelFrames) {
+            const t = ease(travelFrames ? frame / travelFrames : 1);
+            cursor = { x: from.x + (target.x - from.x) * t, y: from.y + (target.y - from.y) * t };
+            if (frame === travelFrames) await page.mouse.move(cursor.x, cursor.y).catch(() => undefined);
+          }
+          let click = false;
+          if (segment.demo && rect && frame === travelFrames + 1) {
+            click = true;
+            demoActive = true;
+            if (segment.demo === "type") {
+              await page.mouse.click(cursor.x, cursor.y).catch(() => undefined);
+              await page.keyboard.type(DEMO_TEXT, { delay: 60 }).catch(() => undefined);
+            } else {
+              await page.mouse.click(cursor.x, cursor.y).catch(() => undefined);
+            }
+            await delay(700);
+          }
+          await page.evaluate(paintOverlay, { rect, title, text: segment.text, index: i + 1, total: segments.length, pulse: frame % 2 === 0, cursor, click });
           await page.screenshot({
             path: path.join(framesDir, "frame-" + String(frameNumber++).padStart(5, "0") + ".jpg"),
             type: "jpeg", quality: 74, fullPage: false,
           });
+        }
+        if (demoActive) {
+          // Undo the demonstration: clear the typed text or close the opened menu.
+          if (segment.demo === "type") {
+            await page.keyboard.down("Control").catch(() => undefined);
+            await page.keyboard.press("KeyA").catch(() => undefined);
+            await page.keyboard.up("Control").catch(() => undefined);
+            await page.keyboard.press("Backspace").catch(() => undefined);
+          }
+          await page.keyboard.press("Escape").catch(() => undefined);
+          await delay(400);
+          const stillOpen = await page.evaluate((testid) => {
+            const el = testid ? document.querySelector('[data-testid="' + testid + '"]') : null;
+            return Boolean(el && el.getAttribute("aria-expanded") === "true");
+          }, segment.testid).catch(() => false);
+          if (stillOpen) await page.mouse.click(cursor.x, cursor.y).catch(() => undefined);
+          await page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
         }
         captions.push(String(i + 1), vttTimestamp(elapsed) + " --> " + vttTimestamp(elapsed + segment.targetSeconds), segment.text, "");
         elapsed += segment.targetSeconds;
