@@ -106,3 +106,15 @@ test("training publication still requires protected approval and a successful so
   assert.ok(workflow.includes('["screen.mp4", "captions.vtt", "guide.md", "screenshot.png"]'));
   assert.ok(workflow.includes('video?.codec_name !== "h264"'));
 });
+
+test("training PR smoke crosses Factory to ERP and only records after verified company switching", () => {
+  const workflow = read(".github/workflows/training-videos.yml");
+  const recorder = read("scripts/record-training-guides.mjs");
+  assert.ok(workflow.includes("'factory-overview,erp-tracking'"));
+  const switcher = recorder.slice(recorder.indexOf("async function selectFixtureCompany"), recorder.indexOf("async function encodeAndValidate"));
+  assert.ok(switcher.indexOf('page.goto(base + "/my-settings"') < switcher.indexOf('fetch("/api/auth/set-company"'));
+  assert.ok(switcher.includes("for (let attempt = 1; attempt <= 3; attempt++)"));
+  assert.ok(switcher.includes('Number(active.companyId) === companyId'));
+  assert.ok(switcher.includes('localStorage.getItem("selectedCompanyId") === String(companyId)'));
+  assert.ok(switcher.includes('throw new Error("Fixture session company would not settle'));
+});
