@@ -4,7 +4,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
  *
  * Extracted from PropertyRentalPage.tsx during the Phase 4 god-file split.
  */
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,15 @@ export function PaymentForm({
     exchangeRate: "1",
   });
   const [scheduleFuturePayment, setScheduleFuturePayment] = useState(false);
+  // Use the new zero-opening Properties cashbox by default; manual selections win.
+  const defaultCashboxId = apiBase === "/api/properties/rental"
+    ? cashAccounts.find((a) => a.code === "PROP-RENT-CASH")?.id
+    : undefined;
+  useEffect(() => {
+    if (defaultCashboxId) {
+      setForm((old) => old.cashAccountId ? old : { ...old, cashAccountId: String(defaultCashboxId) });
+    }
+  }, [defaultCashboxId]);
   // Keep the same request ID for a retry of unchanged form data (for example
   // after a lost HTTP response). A changed form produces a new request ID.
   const paymentRequest = useRef<{ fingerprint: string; id: string } | null>(null);
@@ -96,12 +105,12 @@ export function PaymentForm({
     <div className="space-y-3 pt-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <Label>Account</Label>
+          <Label>{apiBase === "/api/properties/rental" ? "Received into (Properties cashbox)" : "Account"}</Label>
           <AccountSearchSelect
             accounts={cashAccounts}
             value={form.cashAccountId}
             onChange={(v) => setForm((f) => ({ ...f, cashAccountId: v }))}
-            placeholder="Choose account…"
+            placeholder="Choose cash/bank account…"
             testId={`select-${testIdPrefix}-cash-box`}
           />
         </div>
@@ -203,7 +212,9 @@ export function PaymentForm({
 
       {!form.cashAccountId && (
         <p className="text-xs text-amber-600 dark:text-amber-400">
-          Select a cash/bank account so this payment is posted to the Daybook.
+          {apiBase === "/api/properties/rental"
+            ? "Select a Properties cash/bank account. This receipt stays in Properties."
+            : "Select a cash/bank account so this payment is posted to the Daybook."}
         </p>
       )}
       <DialogFooter>
