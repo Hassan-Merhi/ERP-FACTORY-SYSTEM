@@ -26,6 +26,8 @@ describe("GitHub token permission boundaries", () => {
     expect(validator).not.toContain("id-token: write");
     expect(validator).toContain("gh run download");
     expect(validator).toContain('--repo "$GITHUB_REPOSITORY"');
+    expect(validator).toContain('audio?.codec_name !== "aac"');
+    expect(validator).toContain("duration < 60 || duration > 1200");
     expect(publisher).toContain("needs: verify-recording");
     expect(publisher).toContain("environment: training-publication");
     expect(publisher).toContain("TRAINING_PUBLICATION_APPROVAL_ENABLED");
