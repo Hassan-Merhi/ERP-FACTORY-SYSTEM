@@ -44,12 +44,11 @@ export function PaymentForm({
   });
   const [scheduleFuturePayment, setScheduleFuturePayment] = useState(false);
   // Use the new zero-opening Properties cashbox by default; manual selections win.
-  const defaultCashboxId = apiBase === "/api/properties/rental"
-    ? cashAccounts.find((a) => a.code === "PROP-RENT-CASH")?.id
-    : undefined;
+  const defaultCashboxId =
+    apiBase === "/api/properties/rental" ? cashAccounts.find((a) => a.code === "PROP-RENT-CASH")?.id : undefined;
   useEffect(() => {
     if (defaultCashboxId) {
-      setForm((old) => old.cashAccountId ? old : { ...old, cashAccountId: String(defaultCashboxId) });
+      setForm((old) => (old.cashAccountId ? old : { ...old, cashAccountId: String(defaultCashboxId) }));
     }
   }, [defaultCashboxId]);
   // Keep the same request ID for a retry of unchanged form data (for example

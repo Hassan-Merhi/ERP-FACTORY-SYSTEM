@@ -86,7 +86,11 @@ function RentalUnitCard({
             tone: landlordView ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400",
           }
         : credit > 0
-          ? { label: landlordView ? "Owed to tenant" : "Credit", text: fmtMoneyCurrency(credit, currency), tone: landlordView ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400" }
+          ? {
+              label: landlordView ? "Owed to tenant" : "Credit",
+              text: fmtMoneyCurrency(credit, currency),
+              tone: landlordView ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400",
+            }
           : { label: "Outstanding", text: fmtMoneyCurrency(0, currency), tone: "text-muted-foreground" };
 
   return (

@@ -279,7 +279,16 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
 
       // Only legacy ERP/Factory rent flows can use configured intercompany transfers.
       if (module !== "PROPERTIES") {
-        await maybeRunAutoTransfer(companyId, module, cashAccountId, amount, dateStr, unitLabel, savedPayment?.id, notes);
+        await maybeRunAutoTransfer(
+          companyId,
+          module,
+          cashAccountId,
+          amount,
+          dateStr,
+          unitLabel,
+          savedPayment?.id,
+          notes
+        );
       }
 
       res.json({ ok: true });

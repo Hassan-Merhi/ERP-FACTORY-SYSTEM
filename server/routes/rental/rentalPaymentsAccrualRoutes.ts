@@ -52,18 +52,27 @@ const PROPERTIES_RENT_CASH_CODE = "PROP-RENT-CASH";
 const PROPERTIES_RENT_CASH_NAME = "Properties Rent Cashbox";
 const RECEIPT_ACCOUNT_TYPES = ["Cash", "Bank", "Asset"] as const;
 
-async function validatePropertiesReceiptAccount(companyId: number, cashAccountId: number | null | undefined): Promise<string | null> {
+async function validatePropertiesReceiptAccount(
+  companyId: number,
+  cashAccountId: number | null | undefined
+): Promise<string | null> {
   if (!cashAccountId) return "Choose a Properties cashbox or cash/bank account before receiving rent.";
-  const [account] = await db.select({
-    id: ledgerAccounts.id,
-    accountType: ledgerAccounts.accountType,
-  }).from(ledgerAccounts).where(and(
-    eq(ledgerAccounts.id, cashAccountId),
-    eq(ledgerAccounts.companyId, companyId),
-    eq(ledgerAccounts.active, true),
-    isNull(ledgerAccounts.deletedAt),
-  )).limit(1);
-  if (!account || !RECEIPT_ACCOUNT_TYPES.includes(account.accountType as typeof RECEIPT_ACCOUNT_TYPES[number])) {
+  const [account] = await db
+    .select({
+      id: ledgerAccounts.id,
+      accountType: ledgerAccounts.accountType,
+    })
+    .from(ledgerAccounts)
+    .where(
+      and(
+        eq(ledgerAccounts.id, cashAccountId),
+        eq(ledgerAccounts.companyId, companyId),
+        eq(ledgerAccounts.active, true),
+        isNull(ledgerAccounts.deletedAt)
+      )
+    )
+    .limit(1);
+  if (!account || !RECEIPT_ACCOUNT_TYPES.includes(account.accountType as (typeof RECEIPT_ACCOUNT_TYPES)[number])) {
     return "Choose an active cash/bank asset account belonging to the current Properties company.";
   }
   return null;
@@ -81,33 +90,49 @@ export function registerRentalPaymentsAccrualRoutes(
   // Explicit, zero-balance setup; never repost or reallocate historical rental receipts.
   // The endpoint is scoped to the selected Properties company and is idempotent by code.
   if (module === "PROPERTIES") {
-    app.post(`${urlPrefix}/cashbox/ensure`, requireAuth, requireRole("Admin", "Owner", "Developer"), async (req: Request, res: Response) => {
-      try {
-        const companyId = getCompanyId(req);
-        if (!companyId) return res.status(400).json({ message: "No company selected" });
-        await db.insert(ledgerAccounts).values({
-          companyId,
-          code: PROPERTIES_RENT_CASH_CODE,
-          name: PROPERTIES_RENT_CASH_NAME,
-          accountType: "Cash",
-          subType: "Current Asset",
-          openingBalance: "0",
-          active: true,
-          isHidden: false,
-        }).onConflictDoNothing({ target: [ledgerAccounts.companyId, ledgerAccounts.code] });
-        const [account] = await db.select().from(ledgerAccounts).where(and(
-          eq(ledgerAccounts.companyId, companyId),
-          eq(ledgerAccounts.code, PROPERTIES_RENT_CASH_CODE),
-        )).limit(1);
-        if (!account || account.deletedAt || !account.active || account.accountType !== "Cash") {
-          return res.status(409).json({ message: "The Properties cashbox code is already held by a deleted or incompatible account. Restore or correct it before continuing." });
+    app.post(
+      `${urlPrefix}/cashbox/ensure`,
+      requireAuth,
+      requireRole("Admin", "Owner", "Developer"),
+      async (req: Request, res: Response) => {
+        try {
+          const companyId = getCompanyId(req);
+          if (!companyId) return res.status(400).json({ message: "No company selected" });
+          await db
+            .insert(ledgerAccounts)
+            .values({
+              companyId,
+              code: PROPERTIES_RENT_CASH_CODE,
+              name: PROPERTIES_RENT_CASH_NAME,
+              accountType: "Cash",
+              subType: "Current Asset",
+              openingBalance: "0",
+              active: true,
+              isHidden: false,
+            })
+            .onConflictDoNothing({ target: [ledgerAccounts.companyId, ledgerAccounts.code] });
+          const [account] = await db
+            .select()
+            .from(ledgerAccounts)
+            .where(and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.code, PROPERTIES_RENT_CASH_CODE)))
+            .limit(1);
+          if (!account || account.deletedAt || !account.active || account.accountType !== "Cash") {
+            return res
+              .status(409)
+              .json({
+                message:
+                  "The Properties cashbox code is already held by a deleted or incompatible account. Restore or correct it before continuing.",
+              });
+          }
+          return res.json({ id: account.id, code: account.code, name: account.name, accountType: account.accountType });
+        } catch (e: unknown) {
+          logger.error("[PROPERTIES/rental] cashbox setup:", { error: e });
+          return res
+            .status(500)
+            .json({ message: "Could not create the Properties cashbox without changing existing accounts." });
         }
-        return res.json({ id: account.id, code: account.code, name: account.name, accountType: account.accountType });
-      } catch (e: unknown) {
-        logger.error("[PROPERTIES/rental] cashbox setup:", { error: e });
-        return res.status(500).json({ message: "Could not create the Properties cashbox without changing existing accounts." });
       }
-    });
+    );
   }
 
   app.post(`${urlPrefix}/payments`, requireAuth, async (req: Request, res: Response) => {
@@ -568,9 +593,10 @@ export function registerRentalPaymentsAccrualRoutes(
             isNull(ledgerAccounts.deletedAt)
           )
         );
-      const receiptAccounts = module === "PROPERTIES"
-        ? accts.filter((a) => RECEIPT_ACCOUNT_TYPES.includes(a.accountType as typeof RECEIPT_ACCOUNT_TYPES[number]))
-        : accts;
+      const receiptAccounts =
+        module === "PROPERTIES"
+          ? accts.filter((a) => RECEIPT_ACCOUNT_TYPES.includes(a.accountType as (typeof RECEIPT_ACCOUNT_TYPES)[number]))
+          : accts;
       res.json(receiptAccounts.sort((a, b) => a.name.localeCompare(b.name)));
     } catch (e: unknown) {
       res.status(500).json({ message: getErrorMessage(e) });

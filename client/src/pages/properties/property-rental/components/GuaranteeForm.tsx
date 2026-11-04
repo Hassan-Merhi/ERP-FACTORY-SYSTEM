@@ -63,9 +63,8 @@ function GuaranteeForm({
   // ── Move to Cash state ──
   const [moveAmount, setMoveAmount] = useState(remainingGuarantee.toFixed(2));
   const [moveAccountId, setMoveAccountId] = useState<string>("");
-  const defaultCashboxId = apiBase === "/api/properties/rental"
-    ? cashAccounts.find((a) => a.code === "PROP-RENT-CASH")?.id
-    : undefined;
+  const defaultCashboxId =
+    apiBase === "/api/properties/rental" ? cashAccounts.find((a) => a.code === "PROP-RENT-CASH")?.id : undefined;
   useEffect(() => {
     if (!defaultCashboxId) return;
     setPostAccountId((old) => old || String(defaultCashboxId));

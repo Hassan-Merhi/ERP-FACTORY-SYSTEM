@@ -53,9 +53,8 @@ function EndContractForm({
   const [refundAccountId, setRefundAccountId] = useState("");
   // Returning tenant deposits is an outflow from the Properties cashbox,
   // never an implicit transfer to another company.
-  const defaultCashboxId = apiBase === "/api/properties/rental"
-    ? cashAccounts.find((a) => a.code === "PROP-RENT-CASH")?.id
-    : undefined;
+  const defaultCashboxId =
+    apiBase === "/api/properties/rental" ? cashAccounts.find((a) => a.code === "PROP-RENT-CASH")?.id : undefined;
   useEffect(() => {
     if (defaultCashboxId) setRefundAccountId((old) => old || String(defaultCashboxId));
   }, [defaultCashboxId]);

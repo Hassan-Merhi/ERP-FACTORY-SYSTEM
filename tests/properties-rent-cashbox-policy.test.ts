@@ -11,7 +11,7 @@ describe("Properties rent cashbox rollout policy", () => {
     const code = source("server/services/rental/rentalPaymentPostingService.ts");
     expect(code).toContain('mod !== "PROPERTIES" && cashAccountId && unit');
     expect(code).toContain('module !== "PROPERTIES" && firstRow.cashAccountId');
-    expect(code).toContain('if (replayed) {');
+    expect(code).toContain("if (replayed) {");
   });
 
   it("does not auto-transfer new landlord guarantee receipts, but keeps historical reversal support", () => {
@@ -26,9 +26,9 @@ describe("Properties rent cashbox rollout policy", () => {
     expect(code).toContain('PROPERTIES_RENT_CASH_CODE = "PROP-RENT-CASH"');
     expect(code).toContain('openingBalance: "0"');
     expect(code).toContain('accountType: "Cash"');
-    expect(code).toContain('eq(ledgerAccounts.companyId, companyId)');
-    expect(code).toContain('validatePropertiesReceiptAccount(companyId, data.cashAccountId)');
-    expect(code).toContain('validatePropertiesReceiptAccount(companyId, item.cashAccountId)');
+    expect(code).toContain("eq(ledgerAccounts.companyId, companyId)");
+    expect(code).toContain("validatePropertiesReceiptAccount(companyId, data.cashAccountId)");
+    expect(code).toContain("validatePropertiesReceiptAccount(companyId, item.cashAccountId)");
   });
 
   it("shows tenant receivables green, tenant credits red, without changing rental arithmetic", () => {

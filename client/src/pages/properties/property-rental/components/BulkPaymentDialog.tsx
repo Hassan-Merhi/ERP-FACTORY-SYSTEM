@@ -52,9 +52,8 @@ function BulkPaymentDialog({
   const [paymentDate, setPaymentDate] = useState(today);
   const [scheduleFuturePayment, setScheduleFuturePayment] = useState(false);
   const [cashAccountId, setCashAccountId] = useState("");
-  const defaultCashboxId = apiBase === "/api/properties/rental"
-    ? cashAccounts.find((a) => a.code === "PROP-RENT-CASH")?.id
-    : undefined;
+  const defaultCashboxId =
+    apiBase === "/api/properties/rental" ? cashAccounts.find((a) => a.code === "PROP-RENT-CASH")?.id : undefined;
   useEffect(() => {
     if (defaultCashboxId) setCashAccountId((old) => old || String(defaultCashboxId));
   }, [defaultCashboxId]);
