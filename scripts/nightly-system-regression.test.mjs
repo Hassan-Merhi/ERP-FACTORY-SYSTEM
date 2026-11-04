@@ -93,3 +93,16 @@ test("reviewable training videos use five explained steps, H.264 MP4 and a 60-se
   assert.ok(signer.includes("webm|mp4|vtt|png"));
   assert.ok(api.includes('key.endsWith(".mp4") ? "video/mp4"'));
 });
+
+test("training publication still requires protected approval and a successful source recorder job", () => {
+  const workflow = read(".github/workflows/publish-training-video.yml");
+  assert.ok(workflow.includes("environment: training-publication"));
+  assert.ok(workflow.includes('TRAINING_PUBLICATION_APPROVAL_ENABLED:'));
+  assert.ok(workflow.includes('run.head_branch !== "main"'));
+  assert.ok(workflow.includes('"push", "schedule", "workflow_dispatch"'));
+  assert.ok(workflow.includes('job.name === "record / record-training"'));
+  assert.ok(workflow.includes('recorder[0].conclusion !== "success"'));
+  assert.ok(workflow.includes('entry.sourceSha !== process.env.TRAINING_SOURCE_SHA'));
+  assert.ok(workflow.includes('["screen.mp4", "captions.vtt", "guide.md", "screenshot.png"]'));
+  assert.ok(workflow.includes('video?.codec_name !== "h264"'));
+});
