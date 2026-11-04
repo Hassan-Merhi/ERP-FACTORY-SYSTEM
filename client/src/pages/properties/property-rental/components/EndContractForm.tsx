@@ -4,7 +4,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
  *
  * Extracted from PropertyRentalPage.tsx during the Phase 4 god-file split.
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,14 @@ function EndContractForm({
   const [refundGuarantee, setRefundGuarantee] = useState(false);
   const [refundAmount, setRefundAmount] = useState(remainingGuarantee.toFixed(2));
   const [refundAccountId, setRefundAccountId] = useState("");
+  // Returning tenant deposits is an outflow from the Properties cashbox,
+  // never an implicit transfer to another company.
+  const defaultCashboxId = apiBase === "/api/properties/rental"
+    ? cashAccounts.find((a) => a.code === "PROP-RENT-CASH")?.id
+    : undefined;
+  useEffect(() => {
+    if (defaultCashboxId) setRefundAccountId((old) => old || String(defaultCashboxId));
+  }, [defaultCashboxId]);
   const [refundNotes, setRefundNotes] = useState("");
 
   const end = useMutation({
