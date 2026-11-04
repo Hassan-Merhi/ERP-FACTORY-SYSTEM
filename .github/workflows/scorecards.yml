@@ -9,7 +9,7 @@ on:
       - main
   workflow_dispatch:
 
-permissions: read-all
+permissions: {}
 
 concurrency:
   group: scorecards-${{ github.ref }}
@@ -20,6 +20,12 @@ jobs:
     name: Scorecards analysis
     runs-on: ubuntu-latest
     permissions:
+      # Scorecard metadata reads must be explicit; do not use read-all.
+      contents: read
+      actions: read
+      checks: read
+      issues: read
+      pull-requests: read
       security-events: write
       id-token: write
 
