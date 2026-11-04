@@ -32,6 +32,11 @@ import { parseId } from "../../lib/parseId";
 import { getClientDate } from "../../lib/dateUtils";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../lib/money";
+import {
+  PROPERTIES_RENT_CASH_CODE,
+  isPropertiesReceiptAccountType,
+  propertiesRentCashboxSetupValues,
+} from "../../services/rental/rentalCashboxPolicy";
 
 export const RENTAL_POSTING_PERIOD_CLOSED_MESSAGE =
   "The books are closed through this date, so rent cannot be accrued on it.";
@@ -48,10 +53,6 @@ function requestActor(req: Request): { userId: string; username: string } {
  * New Properties rent money belongs to a company-local cash ledger account.
  * Existing rental balances and past voucher entries are never migrated.
  */
-const PROPERTIES_RENT_CASH_CODE = "PROP-RENT-CASH";
-const PROPERTIES_RENT_CASH_NAME = "Properties Rent Cashbox";
-const RECEIPT_ACCOUNT_TYPES = ["Cash", "Bank", "Asset"] as const;
-
 async function validatePropertiesReceiptAccount(
   companyId: number,
   cashAccountId: number | null | undefined
@@ -72,7 +73,7 @@ async function validatePropertiesReceiptAccount(
       )
     )
     .limit(1);
-  if (!account || !RECEIPT_ACCOUNT_TYPES.includes(account.accountType as (typeof RECEIPT_ACCOUNT_TYPES)[number])) {
+  if (!account || !isPropertiesReceiptAccountType(account.accountType)) {
     return "Choose an active cash/bank asset account belonging to the current Properties company.";
   }
   return null;
@@ -100,16 +101,7 @@ export function registerRentalPaymentsAccrualRoutes(
           if (!companyId) return res.status(400).json({ message: "No company selected" });
           await db
             .insert(ledgerAccounts)
-            .values({
-              companyId,
-              code: PROPERTIES_RENT_CASH_CODE,
-              name: PROPERTIES_RENT_CASH_NAME,
-              accountType: "Cash",
-              subType: "Current Asset",
-              openingBalance: "0",
-              active: true,
-              isHidden: false,
-            })
+            .values(propertiesRentCashboxSetupValues(companyId))
             .onConflictDoNothing({ target: [ledgerAccounts.companyId, ledgerAccounts.code] });
           const [account] = await db
             .select()
@@ -593,7 +585,7 @@ export function registerRentalPaymentsAccrualRoutes(
         );
       const receiptAccounts =
         module === "PROPERTIES"
-          ? accts.filter((a) => RECEIPT_ACCOUNT_TYPES.includes(a.accountType as (typeof RECEIPT_ACCOUNT_TYPES)[number]))
+          ? accts.filter((a) => isPropertiesReceiptAccountType(a.accountType))
           : accts;
       res.json(receiptAccounts.sort((a, b) => a.name.localeCompare(b.name)));
     } catch (e: unknown) {
