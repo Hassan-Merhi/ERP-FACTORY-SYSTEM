@@ -240,7 +240,7 @@ async function recordOne(page, id, tour) {
             overlay.textContent = title + " — Step " + (index + 1) + " of 5: " + instruction;
             const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
             const scrollRatio = (index + frame / framesPerStep) / 5;
-            window.scrollTo({ top: maxScroll * Math.min(1, scrollRatio), behavior: "instant" });
+            window.scrollTo({ top: maxScroll * Math.min(1, scrollRatio), behavior: "auto" });
           }, {
             title: tour.title,
             instruction: tour.steps[i],
