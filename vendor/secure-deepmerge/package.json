@@ -4,8 +4,5 @@
   "description": "Locally patched deepmerge 4.x API for Puppeteer Extra (prototype poisoning mitigated)",
   "private": true,
   "license": "MIT",
-  "main": "index.cjs",
-  "dependencies": {
-    "is-mergeable-object": "1.1.0"
-  }
+  "main": "index.cjs"
 }
