@@ -1,0 +1,106 @@
+name: Phase 2 one-time lockfile remediation
+
+on:
+  push:
+    branches: [fix/security-quality-36-20261104]
+    paths:
+      - .github/workflows/phase2-dependency-lockfiles.yml
+
+permissions: {}
+
+jobs:
+  refresh:
+    name: Rebuild and verify security lockfiles
+    if: github.repository == 'Hassan-Merhi/ERP-FACTORY-SYSTEM' && github.ref == 'refs/heads/fix/security-quality-36-20261104'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout isolated security branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: fix/security-quality-36-20261104
+          persist-credentials: true
+      - name: Use project Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24.22.1'
+      - name: Refresh root transitive dependencies and local patched adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm update --package-lock-only --ignore-scripts --no-audit --no-fund minimatch glob
+      - name: Refresh desktop transitive packages
+        shell: bash
+        working-directory: desktop
+        run: |
+          set -euo pipefail
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm update --package-lock-only --ignore-scripts --no-audit --no-fund undici fast-uri minimatch
+      - name: Verify intended advisory paths have been removed
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import assert from "node:assert/strict";
+          for (const location of ["package-lock.json", "desktop/package-lock.json"]) {
+            const data = JSON.parse(fs.readFileSync(location, "utf8"));
+            for (const [path, pkg] of Object.entries(data.packages)) {
+              const name = path.split("/node_modules/").at(-1);
+              if (name === "minimatch" && pkg.version) {
+                const v = Number(pkg.version.split(".")[0]);
+                assert(v < 7 || v >= 11, location + " contains vulnerable minimatch " + path + "@" + pkg.version);
+              }
+              if (name === "glob" && pkg.version && Number(pkg.version.split(".")[0]) >= 9) {
+                const version = pkg.version.split(".").map(Number);
+                assert(version[0] > 14 || version[0] === 14 && (version[1] > 0 || version[2] >= 2),
+                  location + " contains vulnerable glob " + path + "@" + pkg.version);
+              }
+              if (name === "deepmerge" && pkg.version) {
+                assert(!pkg.version.startsWith("4.3.1"), "Unpatched upstream deepmerge remains in " + location);
+              }
+              if (location.startsWith("desktop/") && name === "undici" && pkg.version) {
+                const v = pkg.version.split(".").map(Number);
+                assert(v[0] >= 8 || v[0] === 7 && (v[1] > 30 || v[1] === 30 && v[2] >= 1)
+                  || v[0] === 6 && (v[1] > 29 || v[1] === 29 && v[2] >= 1),
+                  "Unpatched desktop undici: " + pkg.version);
+              }
+              if (location.startsWith("desktop/") && name === "fast-uri" && pkg.version) {
+                const v = pkg.version.split(".").map(Number);
+                assert(v[0] >= 4 || v[0] === 3 && (v[1] > 1 || v[1] === 1 && v[2] >= 9),
+                  "Unpatched desktop fast-uri: " + pkg.version);
+              }
+            }
+            console.log("Checked locked advisory targets:", location);
+          }
+          NODE
+      - name: Install both lockfiles without executing third-party lifecycle scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          (cd desktop && npm ci --ignore-scripts --no-audit --no-fund)
+          node - <<'NODE'
+          const merge = require("deepmerge");
+          const poisoned = JSON.parse('{"__proto__":{"polluted":true},"allowed":1}');
+          const output = merge({}, poisoned);
+          if (Object.getPrototypeOf(output) !== Object.prototype || "polluted" in output || output.allowed !== 1) {
+            throw new Error("Patched deepmerge resolution failed");
+          }
+          console.log("Patched deepmerge installed and passed prototype-poisoning smoke test");
+          NODE
+      - name: Commit regenerated lockfiles and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "security-lockfile-bot"
+          git config user.email "security-lockfile-bot@users.noreply.github.com"
+          git rm -- .github/workflows/phase2-dependency-lockfiles.yml
+          git add package-lock.json desktop/package-lock.json
+          git diff --cached --stat
+          git diff --cached --quiet && { echo "::error::Expected lockfile differences"; exit 1; }
+          git commit -m "fix(deps): regenerate security-patched root and desktop lockfiles"
+          git push origin HEAD:refs/heads/fix/security-quality-36-20261104
