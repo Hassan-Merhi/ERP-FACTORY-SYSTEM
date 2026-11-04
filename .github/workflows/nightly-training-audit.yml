@@ -225,19 +225,39 @@ jobs:
     permissions:
       issues: write
     steps:
+      - name: Collect backend suite evidence when it exists
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: nightly-backend-regression
+          path: evidence/backend
       - name: Open human investigation task for failed fake transactions
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TRANSACTIONS_RESULT: ${{ needs.transactions.result }}
+          WHOLE_SYSTEM_RESULT: ${{ needs.whole-system.result }}
         shell: bash
         run: |
           set -euo pipefail
           {
             echo "The nightly disposable ERP/Factory transaction suite, its reconciliation, or the full system regression suite failed."
             echo
+            echo "- Fake transactions and reconciliation: **$TRANSACTIONS_RESULT**"
+            echo "- Whole-system regression: **$WHOLE_SYSTEM_RESULT**"
+            echo
             echo "Inspect browser screenshots, the reconciliation JSON report and server logs:"
             echo "$RUN_URL"
             echo
+            log=evidence/backend/artifacts/nightly-whole-system/backend-tests.log
+            if [ -f "$log" ]; then
+              echo "### Backend suite summary"
+              echo
+              echo '```'
+              grep -E "^ (FAIL|×|✗)|^ *(×|✗) |Test Files|Tests  |ERROR: Coverage|does not meet|threshold" "$log" | head -80 || echo "(no failure lines matched)"
+              echo '```'
+              echo
+            fi
             echo "No real-company accounting or inventory was touched. Do not publish affected tutorials until the discrepancy is investigated."
           } > "$RUNNER_TEMP/nightly-reconciliation-failure.md"
           gh issue create --repo "$GITHUB_REPOSITORY" \
