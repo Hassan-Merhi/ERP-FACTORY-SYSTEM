@@ -232,7 +232,10 @@
     "postcss-selector-parser@<7.1.6": "7.1.6",
     "@esbuild-kit/core-utils": {
       "esbuild": "^0.28.2"
-    }
+    },
+    "minimatch@>=7.0.0 <11.0.1": "^11.0.1",
+    "glob@>=9.0.0 <14.0.2": "^14.0.2",
+    "deepmerge": "file:vendor/secure-deepmerge"
   },
   "engines": {
     "node": ">=24.0.0"
