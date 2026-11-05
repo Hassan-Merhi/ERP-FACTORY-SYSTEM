@@ -1,7 +1,7 @@
 /** Confirmed HP-borne shared invoices: exact proportional allocation and controlled revisions. */
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
-  containerCharges, intercompanyAuditEvents, intercompanyPermissionGrants,
+  containerCharges, containers, intercompanyAuditEvents, intercompanyPermissionGrants,
   intercompanySharedChargeAllocations, intercompanySharedChargeInvoices,
   intercompanySharedChargePoAllocations, intercompanyTrades,
   userCompanyRoles,
@@ -262,13 +262,19 @@ export async function sharedInvoiceDetail(invoiceId:number,identity:EditIdentity
     rejectEdit("Shared invoice requires a dedicated editor grant","IC_CHARGE_FORBIDDEN",403);
   }
   return withGrantedInvoiceScope(identity,trades.flatMap(t=>[t.sourceCompanyId,t.destinationCompanyId]),
-    async()=>({invoiceId:invoice.id,externalInvoiceKey:invoice.externalInvoiceKey,
-      chargeType:invoice.chargeType,faceAmount:invoice.faceAmount,evidenceReference:invoice.evidenceReference,
-      version:invoice.version,allocations:entries.map(e=>({
-        tradeId:e.tradeId,amount:e.amount,
-        sourceCompanyId:trades.find(t=>t.id===e.tradeId)!.sourceCompanyId,
-        destinationCompanyId:trades.find(t=>t.id===e.tradeId)!.destinationCompanyId,
-      }))}));
+    async()=>{
+      const physical=await db.select({id:containers.id,containerNumber:containers.containerNumber})
+        .from(containers).where(inArray(containers.id,trades.map(t=>t.physicalContainerId)));
+      return {invoiceId:invoice.id,externalInvoiceKey:invoice.externalInvoiceKey,
+        chargeType:invoice.chargeType,faceAmount:invoice.faceAmount,evidenceReference:invoice.evidenceReference,
+        version:invoice.version,allocations:entries.map(e=>{
+          const trade=trades.find(t=>t.id===e.tradeId)!;
+          return {tradeId:e.tradeId,amount:e.amount,expectedVersion:trade.version,
+            relationshipId:trade.relationshipId,
+            containerNumber:physical.find(p=>p.id===trade.physicalContainerId)?.containerNumber??"Unknown",
+            sourceCompanyId:trade.sourceCompanyId,destinationCompanyId:trade.destinationCompanyId};
+        })};
+    });
 }
 export async function reviseSharedCharge(input:ReviseSharedChargeInput,identity:EditIdentity){
   requireInputs(input);
