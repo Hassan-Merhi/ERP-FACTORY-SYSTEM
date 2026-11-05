@@ -23,6 +23,7 @@ import {
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { getProformaCapacitySnapshot } from "../customer-orders/proformaCapacity";
 import { normalizeLoadingArticleCode } from "../customer-orders/bale-scanning/proformaScanPolicy";
+import { normalizeProformaDestination } from "./destination";
 
 /** Row shape returned by the raw `customer_proformas` queries below. */
 type ProformaRow = {
@@ -30,6 +31,7 @@ type ProformaRow = {
   company_id: number;
   customer_id: number;
   name: string | null;
+  destination: string | null;
   is_active: boolean | null;
   deleted_at: string | Date | null;
   created_at: string | Date | null;
@@ -125,6 +127,7 @@ export function registerFactoryCustomerProformaCrudRoutes(app: Express) {
         companyId: pr.company_id,
         customerId: pr.customer_id,
         name: pr.name ?? "",
+        destination: pr.destination ?? null,
         isActive: pr.is_active ?? false,
         deletedAt: pr.deleted_at ?? null,
         createdAt: pr.created_at,
@@ -193,6 +196,7 @@ export function registerFactoryCustomerProformaCrudRoutes(app: Express) {
             cp.company_id,
             cp.customer_id,
             cp.name,
+            cp.destination,
             cp.is_active,
             cp.created_at,
             COALESCE(NULLIF(to_jsonb(cp)->>'updated_at', '')::timestamptz, cp.created_at) AS updated_at,
@@ -229,6 +233,7 @@ export function registerFactoryCustomerProformaCrudRoutes(app: Express) {
           companyId: row.company_id,
           customerId: row.customer_id,
           name: row.name ?? "",
+          destination: row.destination ?? null,
           isActive: row.is_active ?? false,
           lineCount: Number(row.line_count) || 0,
           totalQty: Number(row.total_qty) || 0,
@@ -244,7 +249,7 @@ export function registerFactoryCustomerProformaCrudRoutes(app: Express) {
       }
 
       const rawProformasRes = await db.execute(
-        sql`SELECT id, company_id, customer_id, name, is_active, deleted_at, created_at,
+        sql`SELECT id, company_id, customer_id, name, destination, is_active, deleted_at, created_at,
                    COALESCE(NULLIF(to_jsonb(customer_proformas)->>'updated_at', '')::timestamptz, created_at) AS updated_at
             FROM customer_proformas
             WHERE company_id = ${companyId}
@@ -257,6 +262,7 @@ export function registerFactoryCustomerProformaCrudRoutes(app: Express) {
         companyId: r.company_id,
         customerId: r.customer_id,
         name: r.name ?? "",
+        destination: r.destination ?? null,
         isActive: r.is_active ?? false,
         deletedAt: r.deleted_at ?? null,
         createdAt: r.created_at,
@@ -350,6 +356,11 @@ export function registerFactoryCustomerProformaCrudRoutes(app: Express) {
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
       const parsed = insertCustomerProformaSchema.parse({ ...req.body, companyId });
+      if (req.body.destination !== undefined) {
+        const destination = normalizeProformaDestination(req.body.destination);
+        if (!destination) return res.status(400).json({ message: "A valid destination is required" });
+        parsed.destination = destination;
+      }
 
       const [duplicate] = await db
         .select({ id: customerProformas.id })
@@ -408,9 +419,18 @@ export function registerFactoryCustomerProformaCrudRoutes(app: Express) {
         }
       }
 
+      // Older proformas can be assigned a destination without editing prices.
+      const updateFields: Partial<typeof customerProformas.$inferInsert> = {};
+      if (req.body.name !== undefined) updateFields.name = String(req.body.name).trim();
+      if (req.body.isActive !== undefined) updateFields.isActive = req.body.isActive === true;
+      if (req.body.destination !== undefined) {
+        const destination = normalizeProformaDestination(req.body.destination);
+        if (!destination) return res.status(400).json({ message: "A valid destination is required" });
+        updateFields.destination = destination;
+      }
       const [updated] = await db
         .update(customerProformas)
-        .set({ ...req.body, updatedAt: new Date() })
+        .set({ ...updateFields, updatedAt: new Date() })
         .where(and(eq(customerProformas.id, id), eq(customerProformas.companyId, companyId)))
         .returning();
 

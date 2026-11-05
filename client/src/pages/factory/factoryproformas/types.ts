@@ -30,6 +30,7 @@ export interface Proforma {
   customerId: number;
   companyId: number;
   name: string;
+  destination?: string | null;
   isActive: boolean;
   createdAt: string | null;
   updatedAt: string | null;

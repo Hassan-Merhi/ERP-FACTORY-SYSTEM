@@ -38,6 +38,7 @@ interface ProformaData {
   name: string;
   isActive: boolean;
   customerId: number;
+  destination?: string | null;
   lines: ExistingLine[];
 }
 
@@ -68,6 +69,7 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
   const qc = useQueryClient();
 
   const [proformaName, setProformaName] = useState("");
+  const [destination, setDestination] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [prices, setPrices] = useState<Record<string, string>>({});
@@ -93,16 +95,20 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
     enabled: open && !!proformaId,
   });
 
-  // Saved prices are scoped to the customer on this proforma, never to the last selected customer.
+  // Price lookup is always scoped to customer + chosen destination.
+  // Linking an old proforma never automatically changes its existing line prices.
   const customerId = proformaQuery.data?.customerId;
   const customerPriceListQuery = useQuery<AgreedPriceRow[]>({
-    queryKey: ["/api/factory/customer-price-lists", customerId, proformaQuery.data?.companyId],
+    queryKey: ["/api/factory/customer-price-lists", customerId, proformaQuery.data?.companyId, destination.trim().toUpperCase()],
     queryFn: async () => {
-      const res = await fetch(`/api/factory/customer-price-lists/${customerId}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to load saved agreed prices");
+      const res = await fetch(
+        `/api/factory/customer-price-lists/${customerId}?destination=${encodeURIComponent(destination.trim())}`,
+        { credentials: "include" }
+      );
+      if (!res.ok) throw new Error("Failed to load destination agreed prices");
       return res.json();
     },
-    enabled: open && !!customerId && !!proformaQuery.data?.companyId,
+    enabled: open && !!customerId && !!proformaQuery.data?.companyId && !!destination.trim(),
   });
 
   const productsQuery = useQuery<BaleProduct[]>({
@@ -129,6 +135,7 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
     if (!proformaQuery.data || initialized) return;
     const pf = proformaQuery.data;
     setProformaName(pf.name);
+    setDestination(pf.destination ?? "");
     setIsActive(pf.isActive ?? true);
     const qtys: Record<string, string> = {};
     const prs: Record<string, string> = {};
@@ -158,6 +165,7 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
       setPricingModes({});
       setKgPrices({});
       setProformaName("");
+      setDestination("");
       setAppliedPrice(null);
       setShowZeroItems(true);
       setHideNonPositive(false);
@@ -181,12 +189,14 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
   const saveMutation = useMutation({
     mutationFn: async () => {
       const pf = proformaQuery.data!;
+      if (!destination.trim()) throw new Error("Select a destination before saving this proforma");
       const lineMap = new Map<string, ExistingLine>();
       for (const l of pf.lines) lineMap.set(l.articleCode, l);
 
       // 1. Update proforma header
       await apiRequest("PUT", `/api/factory/customer-proformas/${proformaId}`, {
         name: proformaName.trim(),
+        destination: destination.trim(),
         isActive,
       });
 
@@ -448,6 +458,30 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
                   onChange={(e) => setProformaName(e.target.value)}
                   placeholder="Proforma name"
                 />
+              </div>
+
+              <div className="flex flex-col gap-1.5 min-w-[190px] flex-1">
+                <Label htmlFor="edit-v5-proforma-destination" className="text-xs font-medium">
+                  Destination <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="edit-v5-proforma-destination"
+                  data-testid="input-edit-v5-proforma-destination"
+                  value={destination}
+                  onChange={(e) => { setDestination(e.target.value); setAppliedPrice(null); }}
+                  placeholder="e.g. L'SHI, MALI, KINSHASA"
+                  list="edit-proforma-destination-suggestions"
+                />
+                <datalist id="edit-proforma-destination-suggestions">
+                  <option value="L'SHI" />
+                  <option value="MALI" />
+                  <option value="KINSHASA" />
+                </datalist>
+                {!proformaQuery.data?.destination && (
+                  <p className="text-xs text-muted-foreground">
+                    Old proforma: assign its destination here. Existing prices are preserved until you explicitly apply destination prices.
+                  </p>
+                )}
               </div>
 
               <div className="flex flex-col gap-1.5">

@@ -71,6 +71,7 @@ export default function CustomerLoading() {
   const [draftPrices, setDraftPrices] = useState<Record<number, string>>({});
   const [previewOpen, setPreviewOpen] = useState(false);
   const [proformaName, setProformaName] = useState("");
+  const [proformaDestination, setProformaDestination] = useState("");
   const [historyProduct, setHistoryProduct] = useState<CustomerLoadingProduct | null>(null);
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(initialVisibleColumns);
@@ -216,9 +217,11 @@ export default function CustomerLoading() {
         throw new Error("Every selected product needs a quantity and a valid non-negative price.");
       const name = proformaName.trim();
       if (!name) throw new Error("Proforma name is required.");
+      if (!proformaDestination.trim()) throw new Error("Proforma destination is required.");
       const response = await apiRequest("POST", "/api/factory/customer-proformas/bulk", {
         customerId: Number(customerId),
         name,
+        destination: proformaDestination.trim(),
         isActive: true,
         lines: validSelectedLines.map(({ product, quantity, pricePerBale }) => ({
           articleCode: product.articleCode || product.code,
@@ -235,6 +238,7 @@ export default function CustomerLoading() {
       setPreviewOpen(false);
       resetSelection();
       setProformaName("");
+      setProformaDestination("");
       void queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-proformas"] });
       void queryClient.invalidateQueries({ queryKey: ["/api/factory/v2/stock-allocation"] });
       void queryClient.invalidateQueries({ queryKey: ["/api/factory/v5/stock-allocation"] });
@@ -825,6 +829,8 @@ export default function CustomerLoading() {
         customerName={loadingQuery.data?.customer.legalName}
         proformaName={proformaName}
         onProformaNameChange={setProformaName}
+        destination={proformaDestination}
+        onDestinationChange={setProformaDestination}
         lines={validSelectedLines}
         totals={selectedTotals}
         isPending={createProformaMutation.isPending}
