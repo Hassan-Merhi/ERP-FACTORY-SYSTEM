@@ -153,7 +153,7 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
       return next;
     });
     setAppliedPrice("customer" as React.SetStateAction<"sell" | "prod" | null>);
-  }, [customerPriceListQuery.data, articleRows]);
+  }, [customerPriceListQuery.data, articleRows, customerId, destination]);
 
   const productMap = useCallback((): Map<string, BaleProduct> => {
     const m = new Map<string, BaleProduct>();
