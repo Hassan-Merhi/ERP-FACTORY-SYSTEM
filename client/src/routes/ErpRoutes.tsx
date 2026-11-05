@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Switch, Route, Redirect } from "wouter";
 import NotFound from "@/pages/not-found";
 import LinkedTradesEditor from "@/pages/intercompany/LinkedTradesEditor";
+import IntercompanyPayments from "@/pages/intercompany/IntercompanyPayments";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 const HelpTraining = lazy(() => import("@/pages/HelpTraining"));
 import { canAccessAnyErpFeature, canAccessErpFeature, type ErpFeatureAccess } from "@/app/erpAccess";
@@ -257,6 +258,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
         canAccess("containers") && !["POS", "View Only"].includes(effectiveRole),
         LinkedTradesEditor
       )}
+      {R("/intercompany/payments", canAccess("containers") && !["POS","View Only"].includes(effectiveRole), IntercompanyPayments)}
       {R("/ai-validation", isDeveloper, AiValidationPage)}
       {R("/ai-command-center", isDeveloper, AICommandCenter)}
       {G("/pos-import", "pos", POSImport)}
