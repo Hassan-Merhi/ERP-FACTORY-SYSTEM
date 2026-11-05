@@ -22,7 +22,7 @@ describe("Phase 4 paired payment database protections",()=>{
     const journal=JSON.parse(readFileSync(join(process.cwd(),"migrations/meta/_journal.json"),"utf8"));
     expect(journal.entries.filter((e:{tag:string})=>
       e.tag==="20261105_004_intercompany_phase4_payments")).toHaveLength(1);
-    expect(scripts[3]).toContain("intercompany_payment_allocation_append_only");
+    expect(scripts[3]).toContain("ic_payment_allocation_append_only");
     expect(scripts[3]).toContain("ic_payment_voucher_guard");
   });
   it("rejects fabricated cross-company vouchers, moving credit and single-leg reversal",async()=>{
@@ -44,7 +44,7 @@ describe("Phase 4 paired payment database protections",()=>{
         "CREATE TABLE ledger_accounts(id integer PRIMARY KEY,company_id integer,account_type text,active boolean,deleted_at timestamp);"+
         "CREATE TABLE bank_accounts(id integer PRIMARY KEY,company_id integer,active boolean,deleted_at timestamp);"+
         "CREATE TABLE suppliers(id integer PRIMARY KEY,company_id integer,active boolean,deleted_at timestamp,legal_name text);"+
-        "CREATE TABLE containers(id integer PRIMARY KEY,company_id integer,status text,container_number text,offload_date date,items_total numeric,charges_total numeric,grand_total numeric);"+
+        "CREATE TABLE containers(id integer PRIMARY KEY,company_id integer,supplier_id integer,status text,container_number text,offload_date date,items_total numeric,charges_total numeric,grand_total numeric);"+
         "CREATE TABLE vouchers(id integer PRIMARY KEY,company_id integer,voucher_type text,total_amount numeric,deleted_at timestamp,description text,reversal_of_voucher_id integer);"+
         "CREATE TABLE purchase_orders(id integer PRIMARY KEY,company_id integer,container_id integer,voucher_id integer,po_number text,items_total numeric,freight numeric,surcharge numeric,fumigation numeric,document_charges numeric,discount numeric,other_charges numeric,charges_edited boolean);"+
         "CREATE TABLE voucher_entries(id serial PRIMARY KEY,voucher_id integer,bank_account_id integer,ledger_account_id integer,supplier_id integer,debit_amount numeric,credit_amount numeric);"+
