@@ -33,7 +33,7 @@ describe("Phase 3 shared interface translations", () => {
     // were translated (ca91d6511, 81eba8eea) ahead of the 2026-11-03 merges;
     // 665 -> 667 for the training video playback fallback (2026-11-05).
     expect(reviewedPhase3SharedUiTranslations).toHaveLength(667);
-    expect(new Set(reviewedPhase3SharedUiTranslations.map((entry) => entry.en)).size).toBe(665);
+    expect(new Set(reviewedPhase3SharedUiTranslations.map((entry) => entry.en)).size).toBe(667);
 
     for (const entry of reviewedPhase3SharedUiTranslations) {
       expect(entry.en.trim()).not.toBe("");
