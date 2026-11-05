@@ -1,12 +1,13 @@
 import type { Express, Request, Response } from "express";
 import multer from "multer";
+import { z } from "zod";
 import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { ticketCreateSchema } from "../lib/ticketInputs";
 import { db } from "../db";
 import { requireAuth } from "../auth";
 import { requirePageAccess, requireActionAccess } from "../lib/permissionMiddleware";
 import { getActiveCompanyPermissionContext } from "../services/security/activeCompanyPermissionContext";
-import { supportTickets, supportTicketRecords, supportTicketParticipants, userCompanyRoles, users, vouchers } from "@shared/schema";
+import { supportTickets, supportTicketRecords, supportTicketParticipants, supportTicketNotificationContacts, userCompanyRoles, users, vouchers } from "@shared/schema";
 import { createSupportTicket, transitionSupportTicket } from "../lib/ticketService";
 import { attachTicketEvidence, getTicketEvidence, getTicketConversation, postTicketComment } from "../lib/ticketCollaborationService";
 import { canAccessTicket, canPerformTicketAction, type TicketStatus } from "../lib/ticketPolicy";
@@ -49,8 +50,55 @@ async function actorForTicket(req:Request) {
     canReopen:await permitted(ctx.companyId,ctx.role,"act_ticket_reopen")};
 }
 
+const contactInput = z.object({
+  email:z.union([z.string().trim().email().max(254),z.literal("")]).default(""),
+  whatsappNumber:z.union([z.string().trim().regex(/^\\+?[0-9]{7,20}$/),z.literal("")]).default(""),
+  emailEnabled:z.boolean().default(false),
+  whatsappEnabled:z.boolean().default(false),
+}).strict().refine(x=>!x.emailEnabled || !!x.email,{message:"Email is required when enabled"})
+  .refine(x=>!x.whatsappEnabled || !!x.whatsappNumber,{message:"WhatsApp number is required when enabled"});
+
 export function registerTicketRoutes(app: Express) {
   const page = [requireAuth, requirePageAccess("page_ticket_management")] as const;
+
+
+  // Current-user notification destinations only. No admin enumeration or arbitrary contact assignment.
+  app.get("/api/tickets/notification-settings",...page,async(req:Request,res:Response)=>{
+    try{
+      const ctx=await getActiveCompanyPermissionContext(req);
+      const [contact]=await db.select({
+        email:supportTicketNotificationContacts.email,
+        whatsappChatId:supportTicketNotificationContacts.whatsappChatId,
+        emailEnabled:supportTicketNotificationContacts.emailEnabled,
+        whatsappEnabled:supportTicketNotificationContacts.whatsappEnabled,
+      }).from(supportTicketNotificationContacts).where(and(
+        eq(supportTicketNotificationContacts.companyId,ctx.companyId),
+        eq(supportTicketNotificationContacts.userId,ctx.userId)
+      )).limit(1);
+      return res.json({email:contact?.email??"",whatsappNumber:contact?.whatsappChatId?.replace(/@c[.]us$/,"")??"",
+        emailEnabled:contact?.emailEnabled??false,whatsappEnabled:contact?.whatsappEnabled??false});
+    }catch(error){return respondError(res,error);}
+  });
+
+  app.put("/api/tickets/notification-settings",...page,async(req:Request,res:Response)=>{
+    const input=contactInput.safeParse(req.body);
+    if(!input.success)return res.status(400).json({message:"Invalid contact preferences",errors:input.error.flatten()});
+    try{
+      const ctx=await getActiveCompanyPermissionContext(req);
+      const number=input.data.whatsappNumber.replace(/^\\+/,"");
+      await db.insert(supportTicketNotificationContacts).values({
+        companyId:ctx.companyId,userId:ctx.userId,email:input.data.email||null,
+        whatsappChatId:number?`${number}@c.us`:null,
+        emailEnabled:input.data.emailEnabled,whatsappEnabled:input.data.whatsappEnabled,
+        updatedAt:new Date(),
+      }).onConflictDoUpdate({
+        target:[supportTicketNotificationContacts.companyId,supportTicketNotificationContacts.userId],
+        set:{email:input.data.email||null,whatsappChatId:number?`${number}@c.us`:null,
+          emailEnabled:input.data.emailEnabled,whatsappEnabled:input.data.whatsappEnabled,updatedAt:new Date()},
+      });
+      return res.json({saved:true});
+    }catch(error){return respondError(res,error);}
+  });
 
   app.get("/api/tickets/users", ...page, async (req: Request, res: Response) => {
     try {
