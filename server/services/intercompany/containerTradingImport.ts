@@ -72,6 +72,8 @@ function generatedPoNumber(prefix: string, physical: string, key: string) {
 export function validateWorkbookSelections(preview: WorkbookPreview, input: IntercompanyImportInput) {
   const byName = new Map(preview.containers.map(p => [p.containerNumber, p]));
   assert(byName.size === preview.containers.length, "Duplicate physical container number in workbook");
+  assert(new Set(preview.containers.map((p) => p.containerNumber.trim().toUpperCase())).size === preview.containers.length,
+    "Duplicate physical container number ignoring case in workbook");
   assert(input.selections.length === preview.containers.length, "Select exactly one destination for every container");
   const unique = new Set<string>();
   return input.selections.map(selection => {
@@ -316,7 +318,8 @@ export async function postIntercompanyImport(args: {
       .where(eq(importLogs.fileHash, preview.md5)).limit(1);
     if (existing || legacy) throw new TradingImportError(409, "This Excel file has already been imported");
     const collisions = await tx.select({containerNumber:containers.containerNumber}).from(containers)
-      .where(inArray(containers.containerNumber, plans.map(p => p.containerNumber))).limit(1);
+      .where(inArray(sql`UPPER(BTRIM(${containers.containerNumber}))`,
+        plans.map((p) => p.containerNumber.trim().toUpperCase()))).limit(1);
     if (collisions.length) throw new TradingImportError(409, "Container already exists: " + collisions[0].containerNumber);
 
     const [source] = await tx.select().from(companies).where(eq(companies.id, sourceCompanyId));
