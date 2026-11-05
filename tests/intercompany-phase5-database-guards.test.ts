@@ -131,6 +131,17 @@ describe("Phase 5 destination inventory and pre-receipt cancellation database gu
       expect(Number(credit.rows[0].used)).toBe(0);
       const originalCash = await client.query("SELECT count(*)::int AS count FROM vouchers WHERE id IN (55,56)");
       expect(originalCash.rows[0].count).toBe(2);
+      const cancellationJournalTotals = await client.query(
+        "SELECT v.id, v.company_id, SUM(e.debit_amount) AS dr, SUM(e.credit_amount) AS cr, " +
+        "COUNT(e.bank_account_id)::int AS cash_legs FROM vouchers v " +
+        "JOIN voucher_entries e ON e.voucher_id=v.id " +
+        "WHERE v.id IN (101,102,103) GROUP BY v.id,v.company_id ORDER BY v.id"
+      );
+      expect(cancellationJournalTotals.rows.map((row) => [
+        Number(row.id), Number(row.company_id), Number(row.dr), Number(row.cr), row.cash_legs,
+      ])).toEqual([[101,1,100,100,0],[102,1,100,100,0],[103,2,100,100,0]]);
+      const canceledPair = await client.query("SELECT state,version FROM intercompany_trades WHERE id=1");
+      expect(canceledPair.rows[0]).toMatchObject({ state: "canceled", version: 2 });
 
       // Receive other pair's goods: ONLY MALI inventory and destination GIT.
       await client.query("INSERT INTO vouchers(id,company_id,voucher_type,total_amount,description) VALUES (201,3,'Journal',100,'MALI received stock'),(202,3,'Journal',100,'Wrong inventory line')");
@@ -146,6 +157,21 @@ describe("Phase 5 destination inventory and pre-receipt cancellation database gu
       await rejects("SET CONSTRAINTS ALL IMMEDIATE","cover all linked purchase stock items");
       await client.query("INSERT INTO intercompany_destination_receipt_items(receipt_id,stock_item_id,quantity,landed_value,value_moved,canonical_movement_id) VALUES (1,503,1,0,0,302)");
       await client.query("SET CONSTRAINTS ALL IMMEDIATE");
+      const destinationStock = await client.query(
+        "SELECT stock_item_id,quantity,landed_value FROM intercompany_destination_receipt_items " +
+        "WHERE receipt_id=1 ORDER BY stock_item_id"
+      );
+      expect(destinationStock.rows.map((row) => [
+        Number(row.stock_item_id), Number(row.quantity), Number(row.landed_value),
+      ])).toEqual([[502,10,100],[503,1,0]]);
+      const receiptJournal = await client.query(
+        "SELECT ledger_account_id,debit_amount,credit_amount,bank_account_id,supplier_id " +
+        "FROM voucher_entries WHERE voucher_id=201 ORDER BY ledger_account_id"
+      );
+      expect(receiptJournal.rows.map((row) => [
+        row.ledger_account_id, Number(row.debit_amount), Number(row.credit_amount),
+        row.bank_account_id, row.supplier_id,
+      ])).toEqual([[19,0,100,null,null],[29,100,0,null,null]]);
       await rejects("INSERT INTO intercompany_destination_receipt_items(receipt_id,stock_item_id,quantity,landed_value,value_moved,canonical_movement_id) VALUES (1,501,1,0,0,302)","destination");
       await rejects("INSERT INTO intercompany_trade_revisions(trade_id,revision_number,kind,request_key,actor_user_id,initiating_company_id,amount_before,amount_after,posting_date,reason) VALUES (2,2,'line_edit','after-mali-received','owner',1,100,99,'2026-11-05','Unsafe stock recost')","already received");
       await rejects("UPDATE intercompany_trades SET state='canceled',version=2,canceled_at=now() WHERE id=2","needs");
