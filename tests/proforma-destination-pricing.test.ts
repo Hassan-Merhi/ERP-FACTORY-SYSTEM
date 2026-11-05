@@ -59,6 +59,9 @@ databaseDescribe("destination-scoped proforma prices", () => {
     secondLineId = rows.find((row) => row.proforma_id === secondId)!.id;
   });
   afterAll(async () => {
+    if (fixture) {
+      await pool.query("DELETE FROM customer_destination_price_lists WHERE company_id = $1", [fixture.companyId]);
+    }
     await fixture?.cleanup();
   });
 
