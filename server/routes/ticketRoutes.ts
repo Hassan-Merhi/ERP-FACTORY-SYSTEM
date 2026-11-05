@@ -246,6 +246,11 @@ export function registerTicketRoutes(app: Express) {
       res.setHeader("Content-Disposition",`${file.mimeType.startsWith("image/")?"inline":"attachment"}; filename="${asciiName}"; filename*=UTF-8\'\'${encodeURIComponent(file.fileName)}`);
       res.setHeader("X-Content-Type-Options","nosniff");
       res.setHeader("Cache-Control","private, no-store");
+      // Ticket evidence is validated as binary image/PDF before storage.
+      // Prevent active content from executing if a browser opens an attachment.
+      res.setHeader("Content-Security-Policy","default-src 'none'; sandbox");
+      // nosemgrep: javascript.express.security.audit.xss.direct-response-write.direct-response-write
+      // Validated binary bytes, not unescaped user HTML or response markup.
       return res.send(file.bytes);
     } catch(error) {return respondError(res,error);}
   });
