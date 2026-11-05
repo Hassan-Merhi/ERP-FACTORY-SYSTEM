@@ -8,9 +8,10 @@ import { requirePageAccess, requireActionAccess } from "../lib/permissionMiddlew
 import { getActiveCompanyPermissionContext } from "../services/security/activeCompanyPermissionContext";
 import { supportTickets, supportTicketRecords, supportTicketParticipants, userCompanyRoles, users, vouchers } from "@shared/schema";
 import { createSupportTicket, transitionSupportTicket } from "../lib/ticketService";
-import { attachTicketEvidence, getTicketEvidence, getTicketConversation, postTicketComment, MAX_TICKET_ATTACHMENT_BYTES } from "../lib/ticketCollaborationService";
+import { attachTicketEvidence, getTicketEvidence, getTicketConversation, postTicketComment } from "../lib/ticketCollaborationService";
 import { canAccessTicket, canPerformTicketAction, type TicketStatus } from "../lib/ticketPolicy";
 import { storage } from "../storage";
+import { MAX_TICKET_ATTACHMENT_BYTES } from "../lib/ticketEvidenceValidation";
 import { buildPermissionMap, canAccess } from "../lib/permissionHelpers";
 
 function respondError(res: Response, error: unknown) {
