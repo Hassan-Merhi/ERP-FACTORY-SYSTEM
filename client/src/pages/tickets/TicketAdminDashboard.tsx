@@ -9,7 +9,8 @@ type Summary={total:string;open:string;seen:string;working:string;reopened:strin
 type Group={label:string;count:string;overdue:string};
 type Employee={user_id:string;username:string|null;count:string;finalized:string;overdue:string;avg_resolution_hours:string|null};
 type Day={day:string;created:string;finalized:string};
-type Report={summary:Summary;byStatus:Group[];byCategory:Group[];byEmployee:Employee[];byCreatedDay:Day[];generatedAt:string};
+type OverdueCase={id:number;ticket_number:string;title:string;assigned_to:string;username:string|null;status:string;priority:string;due_at:string;overdue_hours:string};
+type Report={summary:Summary;byStatus:Group[];byCategory:Group[];byEmployee:Employee[];byCreatedDay:Day[];overdueCases:OverdueCase[];generatedAt:string};
 const initial:ReportFilters={from:"",to:"",status:"",priority:"",sourceMode:"",category:"",assignedTo:""};
 function queryString(filters:ReportFilters){
   const params=new URLSearchParams();
@@ -19,7 +20,7 @@ function queryString(filters:ReportFilters){
 function safeNumber(value:string|null|undefined):number{
   const n=Number(value??0);return Number.isFinite(n)?n:0;
 }
-export default function TicketAdminDashboard({onBack}:{onBack:()=>void}){
+export default function TicketAdminDashboard({onBack,onOpenTicket,canExport}:{onBack:()=>void;onOpenTicket:(ticketId:number)=>void;canExport:boolean}){
   const {selectedCompany}=useCompany();
   const [filters,setFilters]=useState<ReportFilters>(initial);
   const [applied,setApplied]=useState<ReportFilters>(initial);
@@ -58,7 +59,7 @@ export default function TicketAdminDashboard({onBack}:{onBack:()=>void}){
   return <section className="mx-auto max-w-7xl space-y-5">
     <header className="flex flex-wrap items-center justify-between gap-3">
       <div className="space-y-1"><h2 className="text-2xl font-semibold">Ticket Admin Dashboard</h2><p className="text-sm text-muted-foreground">Company-restricted reporting and follow-up</p></div>
-      <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={onBack}>Back to tickets</Button><Button disabled={!report.data} onClick={download}>Export CSV</Button></div>
+      <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={onBack}>Back to tickets</Button>{canExport&&<Button disabled={!report.data} onClick={download}>Export CSV</Button>}</div>
     </header>
     <form onSubmit={submit} className="space-y-3 rounded-xl border bg-card p-3 sm:p-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -124,6 +125,19 @@ export default function TicketAdminDashboard({onBack}:{onBack:()=>void}){
             <div className="mt-1 h-2 rounded bg-muted"><div className="h-2 rounded bg-primary" style={{width:`${Math.min(100,safeNumber(row.count)/Math.max(1,safeNumber(s.total))*100)}%`}}/></div>
           </div>)}</div>
         </div>
+      </div>
+      <div className="overflow-hidden rounded-xl border bg-card">
+        <div className="border-b p-4"><h3 className="font-semibold">Oldest overdue tickets</h3><p className="text-xs text-muted-foreground">Top 30 unresolved tickets by due date. Open one to review its correction status.</p></div>
+        <div className="overflow-x-auto"><table className="w-full min-w-[620px] text-sm">
+          <thead className="bg-muted/40"><tr>{["Ticket","Subject","Assigned employee","Status","Hours overdue","Open"].map(h=><th key={h} scope="col" className="p-3 text-left font-medium">{h}</th>)}</tr></thead>
+          <tbody>{report.data?.overdueCases.map(t=><tr key={t.id} className="border-t">
+            <td className="p-3 font-medium">{t.ticket_number}</td><td className="max-w-[260px] break-words p-3">{t.title}</td>
+            <td className="p-3">{t.username??t.assigned_to}</td><td className="p-3">{t.status}</td>
+            <td className="p-3 tabular-nums">{t.overdue_hours}</td>
+            <td className="p-3"><Button size="sm" variant="outline" onClick={()=>onOpenTicket(t.id)}>View</Button></td>
+          </tr>)}</tbody>
+        </table></div>
+        {report.data?.overdueCases.length===0&&<p className="p-4 text-sm text-muted-foreground">No overdue tickets match your filters.</p>}
       </div>
       <div className="overflow-hidden rounded-xl border bg-card">
         <div className="border-b p-4"><h3 className="font-semibold">Employee assignment and resolution</h3><p className="text-xs text-muted-foreground">Counts reflect assignment, not fault or employee misconduct.</p></div>
