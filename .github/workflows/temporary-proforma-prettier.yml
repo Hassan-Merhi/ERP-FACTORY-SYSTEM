@@ -33,7 +33,22 @@ jobs:
         run: |
           set -euo pipefail
           git fetch origin main
-          mapfile -t files < <(git diff --name-only --diff-filter=ACMR origin/main...HEAD -- client/src server shared tests scripts | grep -E '\\.(ts|tsx|css|mjs)$' || true)
+          mapfile -t files < <(git diff --name-only --diff-filter=ACMR origin/main...HEAD -- client/src server shared tests scripts | grep -E '\.(ts|tsx|css|mjs) || true)
+          if [ "${#files[@]}" -gt 0 ]; then
+            node node_modules/prettier/bin/prettier.cjs --write "${files[@]}"
+          fi
+      - name: Commit formatting to the same feature branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add client/src server shared tests scripts
+          if ! git diff --cached --quiet; then
+            git commit -m "style: format proforma destination pricing changes"
+            git push origin HEAD:fix/proforma-price-isolation-20261105
+          fi
+ || true)
           if [ "${#files[@]}" -gt 0 ]; then
             node node_modules/prettier/bin/prettier.cjs --write "${files[@]}"
           fi
