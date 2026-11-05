@@ -12,6 +12,38 @@ import { parseMoneyInput } from "../../../lib/money";
 import { normalizeProformaDestination } from "./destination";
 
 export function registerFactoryCustomerPriceListRoutes(app: Express) {
+  // Destinations with a proforma or an explicitly saved destination price list.
+  // Legacy customer-wide prices are deliberately not assigned to any destination.
+  app.get(
+    "/api/factory/customer-price-lists/:customerId/destinations",
+    requireAuth,
+    async (req: import("express").Request, res: import("express").Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const customerId = parseInt(req.params.customerId, 10);
+        if (!Number.isInteger(customerId) || customerId <= 0) {
+          return res.status(400).json({ message: "Invalid customerId" });
+        }
+        const result = await pool.query<{ destination: string }>(
+          `SELECT destination FROM customer_proformas
+           WHERE company_id = $1 AND customer_id = $2
+             AND deleted_at IS NULL AND destination IS NOT NULL
+           UNION
+           SELECT destination FROM customer_destination_price_lists
+           WHERE company_id = $1 AND customer_id = $2`,
+          [companyId, customerId]
+        );
+        const destinations = [...new Set(
+          result.rows.map((row) => normalizeProformaDestination(row.destination)).filter((value): value is string => !!value)
+        )].sort((a, b) => a.localeCompare(b));
+        return res.json(destinations);
+      } catch (e: unknown) {
+        return res.status(500).json({ message: getErrorMessage(e) });
+      }
+    }
+  );
+
   // ───────────────────────────────────────────────
   // CUSTOMER PRICE LISTS (agreed prices per customer)
   // ───────────────────────────────────────────────
@@ -183,11 +215,26 @@ export function registerFactoryCustomerPriceListRoutes(app: Express) {
         const customerId = parseInt(req.params.customerId, 10);
         if (isNaN(customerId)) return res.status(400).json({ message: "Invalid customerId" });
         const articleCode = req.params.articleCode;
-        await pool.query(
-          `DELETE FROM customer_price_lists WHERE company_id = $1 AND customer_id = $2 AND article_code = $3`,
-          [companyId, customerId, articleCode]
-        );
-        return res.json({ deleted: true });
+        const destination = req.query.destination === undefined
+          ? null
+          : normalizeProformaDestination(req.query.destination);
+        if (req.query.destination !== undefined && !destination) {
+          return res.status(400).json({ message: "Valid destination is required" });
+        }
+        if (destination) {
+          await pool.query(
+            `DELETE FROM customer_destination_price_lists
+             WHERE company_id = $1 AND customer_id = $2 AND destination = $3 AND article_code = $4`,
+            [companyId, customerId, destination, articleCode]
+          );
+        } else {
+          // Legacy customer-wide entries remain separate from destination pricing.
+          await pool.query(
+            `DELETE FROM customer_price_lists WHERE company_id = $1 AND customer_id = $2 AND article_code = $3`,
+            [companyId, customerId, articleCode]
+          );
+        }
+        return res.json({ deleted: true, destination });
       } catch (e: unknown) {
         return res.status(500).json({ message: getErrorMessage(e) });
       }

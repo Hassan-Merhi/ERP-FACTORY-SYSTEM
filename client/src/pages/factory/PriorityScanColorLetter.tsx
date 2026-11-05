@@ -1,7 +1,7 @@
 import { getPriorityScanLetter, getPriorityScanLetterInk } from "@shared/priorityScanColors";
 
 /**
- * An approved priority color always displays its fixed M-W letter.
+ * An approved priority color always displays its fixed assigned letter.
  * Legacy/unsupported saved colors keep their visible swatch without inventing a letter.
  */
 export function PriorityScanColorLetter({

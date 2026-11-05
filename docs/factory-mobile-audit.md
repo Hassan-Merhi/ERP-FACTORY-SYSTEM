@@ -2,7 +2,7 @@
 
 Presentation-only work: no API, query-key, calculation, permission, mutation or schema changes. Desktop (≥ `sm`/`md`) keeps its tables and layouts; phones get cards, stacked forms and pinned workflow actions.
 
-Rendered certification: `scripts/verify-factory-mobile-browser.mjs` (see `docs/mobile-tablet-web-regression.md`), run in the UI Quality → Mobile Responsiveness job at 320×568, 360×800, 390×844, touch landscape 844×390, tablet 768×1024 and desktop 1440×900 over 70 routes (canonical pages, every hub section, forms and admin tools) and 18 seeded detail/workflow routes. The Wave 4 smoke continues to protect the Factory floor screens.
+Rendered certification: `scripts/verify-factory-mobile-browser.mjs` (see `docs/mobile-tablet-web-regression.md`), run in the UI Quality → Mobile Responsiveness job at 320×568, 360×800, 390×844, touch landscape 844×390, tablet 768×1024 and desktop 1440×900 over registered canonical routes, the Monthly Production Matrix, Production Bonuses, the V5 proforma editor, and seeded detail/workflow routes. The Wave 4 smoke continues to protect the Factory floor screens.
 
 ## Shared building blocks
 
@@ -32,7 +32,7 @@ Rendered certification: `scripts/verify-factory-mobile-browser.mjs` (see `docs/m
 | 11 Detail routes | Done: stock query detail, bale product history (product, year, month), monthly ledger, ledger vouchers, voucher detail and edit, proforma add-line, container detail and OTW dialogs rendered with data. Voucher detail under `/factory` was broken for every voucher (route matched only the ERP path) and is fixed. |
 | Escape / Back | Fixed: on a top-level Factory page the global Escape/Back fallback called `history.back()`, returning to whatever page came before (including ERP pages). Top-level Factory destinations now perform no navigation, as the navigation registry requires; child pages still go to their registered parent. Covered by `tests/ui/factory-escape-navigation.test.tsx` and the rendered regression. |
 | 12 Registry drift | Done: registry reconciled; Factory POS confirmed retired — its page and components are removed and `/factory/pos` only redirects old bookmarks (the `/api/factory/pos` endpoints stay for historical sales in analytics). Guarded by `tests/ui/factory-mobile-route-registry.test.ts`. |
-| 13 Browser coverage | Done: `scripts/verify-factory-mobile-browser.mjs` — 88 routes (canonical pages, every hub section, forms/admin tools, 18 seeded detail/workflow routes) × 6 viewports, with seeded data (`scripts/lib/factory-mobile-fixture.mjs`), a safe dialog per route (fits, scrolls, last action reachable, focused field visible, Escape closes without navigating) and Escape navigation rules. Runs in CI. |
+| 13 Browser coverage | Done: `scripts/verify-factory-mobile-browser.mjs` — the registered canonical routes and seeded workflows × 6 viewports, with seeded data (`scripts/lib/factory-mobile-fixture.mjs`), a safe dialog per route (fits, scrolls, last action reachable, focused field visible, Escape closes without navigating) and Escape navigation rules. Runs in CI. |
 
 ## Remaining limits
 
@@ -42,3 +42,11 @@ None open. Previously listed items are resolved:
 - The floating notes button is hidden on Factory phones (portrait and touch landscape); My Notes opens from the "…" workspace menu or the account menu, as in ERP. Tablet and desktop keep the button.
 - The on-screen keyboard cannot be opened headlessly, so its handling is unit-tested instead (`client/src/hooks/use-visual-viewport-metrics.test.tsx`: dialogs lifted by the keyboard height, focused dialog field scrolled into view); the rendered regression checks focused dialog fields stay inside the visible viewport.
 - Factory POS is retired: page removed, `/factory/pos` redirects old bookmarks.
+
+## iPhone Duo Phase 2 mobile page coverage (2026-11-05)
+
+The Monthly Production Matrix, worker drilldown, bale details, Production Bonuses daily sheet, V5 proforma Create/Edit and POS Container Tracking now use phone-sized cards below `md` and in short touch landscape (`phone-land`). Their existing desktop tables are retained on larger displays. These are presentation-only changes; callbacks, payment eligibility, balances, valuation and permissions remain on the existing models.
+
+Factory browser-regression routes include the new matrix, bonus and Create Proforma pages, plus seeded product/worker drilldowns. The shared V5 mobile line editor has rendered tests for quantity, bale/kg pricing modes, shortages and line removal.
+
+Physical iPhone Safari validation is still required for the actual Duo viewport, switching between covers and inner display, keyboard visibility, file exports, camera transitions and touch interactions. Chrome responsive emulation is not a physical device certification.

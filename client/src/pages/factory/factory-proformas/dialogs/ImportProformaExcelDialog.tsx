@@ -153,6 +153,7 @@ export function ImportProformaExcelDialog({
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) handleExcelFile(f);
+                e.currentTarget.value = "";
               }}
               data-testid="input-file-excel"
             />

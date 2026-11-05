@@ -96,7 +96,12 @@ async function upload(jwt, key, bytes, contentType, overwrite) {
       "x-allow-overwrite": overwrite ? "1" : "0",
     },
   });
-  if (!response.ok) throw new Error("Private storage rejected " + key + ": HTTP " + response.status);
+  if (response.ok) return "uploaded";
+  const detail = (await response.text().catch(() => "")).slice(0, 200);
+  // An immutable object that is already in the store refuses the overwrite:
+  // that is the rollback case, not a failure.
+  if (!overwrite && (response.status === 409 || /already exists/i.test(detail))) return "reused";
+  throw new Error("Private storage rejected " + key + ": HTTP " + response.status + (detail ? " " + detail : ""));
 }
 
 async function readUrl(jwt, key) {
@@ -115,11 +120,18 @@ async function readUrl(jwt, key) {
  * instead of failing on the refused overwrite.
  */
 async function alreadyStored(jwt, key, bytes) {
-  const response = await fetch(await readUrl(jwt, key), { method: "HEAD", redirect: "error" });
-  if (response.status === 404) return false;
-  if (!response.ok) throw new Error("Could not check " + key + ": HTTP " + response.status);
-  const length = Number(response.headers.get("content-length"));
-  if (Number.isFinite(length) && length > 0 && length !== bytes.length) {
+  // The signed read grant covers GET only (HEAD is refused), so ask for the
+  // first byte. A private store answers 404, or 403, for an object that does
+  // not exist; either means "not stored yet".
+  const response = await fetch(await readUrl(jwt, key), { headers: { Range: "bytes=0-0" }, redirect: "error" });
+  if (response.status === 404 || response.status === 403) return false;
+  if (response.status !== 200 && response.status !== 206) {
+    throw new Error("Could not check " + key + ": HTTP " + response.status);
+  }
+  const range = response.headers.get("content-range") || "";
+  const total = Number(range.includes("/") ? range.split("/")[1] : response.headers.get("content-length"));
+  await response.body?.cancel().catch(() => undefined);
+  if (Number.isFinite(total) && total > 0 && total !== bytes.length) {
     throw new Error("Stored object " + key + " differs in size from the validated recording");
   }
   return true;
@@ -151,12 +163,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === new URL(import.meta.url
       const bytes = await fs.readFile(path.join(root, item.topic, filename));
       if (bytes.length < 16 || bytes.length > limit) throw new Error("Invalid validated file " + item.topic + "/" + filename);
       const key = "training/videos/" + item.topic + "/" + sha + ext;
-      if (await alreadyStored(jwt, key, bytes)) {
-        receipts.push({ key, bytes: bytes.length, reused: true });
-        continue;
-      }
-      await upload(jwt, key, bytes, contentType, false);
-      receipts.push({ key, bytes: bytes.length, reused: false });
+      const outcome = (await alreadyStored(jwt, key, bytes)) ? "reused" : await upload(jwt, key, bytes, contentType, false);
+      receipts.push({ key, bytes: bytes.length, reused: outcome === "reused" });
     }
   }
   const manifest = mergeManifest(await currentManifest(jwt), validated, sha, publishedBy);
