@@ -154,9 +154,22 @@ RETURNS TRIGGER LANGUAGE plpgsql AS $blocked$
 DECLARE po_id INTEGER;
 BEGIN
   IF TG_TABLE_NAME = 'po_line_items' THEN
-    po_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.po_id ELSE NEW.po_id END;
+    po_id := CASE WHEN TG_OP = 'INSERT' THEN NEW.po_id ELSE OLD.po_id END;
   ELSE
     po_id := OLD.id;
+  END IF;
+  IF TG_TABLE_NAME = 'po_line_items' AND TG_OP = 'UPDATE'
+     AND NEW.po_id IS DISTINCT FROM OLD.po_id THEN
+    IF EXISTS (
+      SELECT 1 FROM intercompany_trades t WHERE t.state='active'
+      AND (t.destination_po_id=NEW.po_id OR t.original_supplier_po_id=NEW.po_id)
+    ) OR EXISTS (
+      SELECT 1 FROM intercompany_trade_source_pos sp
+      JOIN intercompany_trades t ON t.id=sp.trade_id
+      WHERE t.state='active' AND sp.source_po_id=NEW.po_id
+    ) THEN
+      RAISE EXCEPTION 'Cannot move PO line into an active intercompany purchase order';
+    END IF;
   END IF;
   IF EXISTS (
     SELECT 1 FROM intercompany_trades t
@@ -186,10 +199,16 @@ CREATE OR REPLACE FUNCTION intercompany_block_legacy_charge_change()
 RETURNS TRIGGER LANGUAGE plpgsql AS $blocked$
 DECLARE physical_id INTEGER;
 BEGIN
-  IF TG_OP = 'DELETE' THEN
-    physical_id := OLD.container_id;
-  ELSE
+  IF TG_OP = 'INSERT' THEN
     physical_id := NEW.container_id;
+  ELSE
+    physical_id := OLD.container_id;
+  END IF;
+  IF TG_OP = 'UPDATE' AND NEW.container_id IS DISTINCT FROM OLD.container_id AND EXISTS (
+    SELECT 1 FROM intercompany_trades
+    WHERE physical_container_id = NEW.container_id AND state='active'
+  ) THEN
+    RAISE EXCEPTION 'Cannot move charge into a linked intercompany container';
   END IF;
   IF EXISTS (
     SELECT 1 FROM intercompany_trades
@@ -296,3 +315,30 @@ DROP TRIGGER IF EXISTS intercompany_legacy_voucher_entry_guard ON voucher_entrie
 CREATE TRIGGER intercompany_legacy_voucher_entry_guard
 BEFORE INSERT OR UPDATE OR DELETE ON voucher_entries
 FOR EACH ROW EXECUTE FUNCTION intercompany_block_legacy_voucher_entry_change();
+
+
+-- Container tracking may continue, but no legacy form may change canonical
+-- ownership, original supplier, number or offload date after a trade is active.
+CREATE OR REPLACE FUNCTION intercompany_block_container_identity_change()
+RETURNS TRIGGER LANGUAGE plpgsql AS $blocked$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM intercompany_trades t
+    WHERE t.physical_container_id = OLD.id AND t.state = 'active'
+  ) THEN
+    RAISE EXCEPTION 'Active intercompany container ownership and offload identity are protected';
+  END IF;
+  RETURN NEW;
+END $blocked$;
+DROP TRIGGER IF EXISTS intercompany_container_identity_guard ON containers;
+CREATE TRIGGER intercompany_container_identity_guard
+BEFORE UPDATE OF company_id, container_number, supplier_id, offload_date
+ON containers
+FOR EACH ROW
+WHEN (
+  NEW.company_id IS DISTINCT FROM OLD.company_id OR
+  NEW.container_number IS DISTINCT FROM OLD.container_number OR
+  NEW.supplier_id IS DISTINCT FROM OLD.supplier_id OR
+  NEW.offload_date IS DISTINCT FROM OLD.offload_date
+)
+EXECUTE FUNCTION intercompany_block_container_identity_change();
