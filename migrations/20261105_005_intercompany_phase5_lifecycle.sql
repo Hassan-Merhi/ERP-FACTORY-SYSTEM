@@ -148,8 +148,11 @@ CREATE OR REPLACE FUNCTION ic_phase5_receipt_totals()
 RETURNS TRIGGER LANGUAGE plpgsql AS $fn$
 DECLARE receipt_id_to_check BIGINT; r RECORD; total NUMERIC(20,2);
 BEGIN
-  receipt_id_to_check := CASE WHEN TG_TABLE_NAME='intercompany_destination_receipts'
-    THEN NEW.id ELSE NEW.receipt_id END;
+  IF TG_TABLE_NAME='intercompany_destination_receipts' THEN
+    receipt_id_to_check := NEW.id;
+  ELSE
+    receipt_id_to_check := NEW.receipt_id;
+  END IF;
   SELECT landed_cost INTO r FROM intercompany_destination_receipts WHERE id=receipt_id_to_check;
   SELECT COALESCE(SUM(landed_value),0) INTO total
      FROM intercompany_destination_receipt_items WHERE receipt_id=receipt_id_to_check;
