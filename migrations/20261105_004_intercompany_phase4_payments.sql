@@ -372,18 +372,29 @@ BEGIN
     END IF;
     RETURN NEW;
   END IF;
-  vid := CASE WHEN TG_TABLE_NAME='voucher_entries'
-       THEN CASE WHEN TG_OP='INSERT' THEN NEW.voucher_id ELSE OLD.voucher_id END
-       ELSE OLD.id END;
+  IF TG_TABLE_NAME='voucher_entries' THEN
+    IF TG_OP='INSERT' THEN
+      vid := NEW.voucher_id;
+    ELSE
+      vid := OLD.voucher_id;
+    END IF;
+  ELSE
+    vid := OLD.id;
+  END IF;
   IF EXISTS(SELECT 1 FROM intercompany_container_payments p
     WHERE vid IN (p.source_receipt_voucher_id,p.destination_payment_voucher_id,
       p.source_reversal_voucher_id,p.destination_reversal_voucher_id))
   THEN RAISE EXCEPTION 'Mirrored intercompany cash vouchers require coordinated reversal'; END IF;
-  IF TG_TABLE_NAME='voucher_entries' AND TG_OP='UPDATE' AND NEW.voucher_id<>OLD.voucher_id THEN
-    IF EXISTS(SELECT 1 FROM intercompany_container_payments p
-      WHERE NEW.voucher_id IN (p.source_receipt_voucher_id,p.destination_payment_voucher_id,
-        p.source_reversal_voucher_id,p.destination_reversal_voucher_id))
-    THEN RAISE EXCEPTION 'Cannot move a voucher entry into a mirrored cash payment'; END IF;
+  IF TG_TABLE_NAME='voucher_entries' THEN
+    IF TG_OP='UPDATE' THEN
+      IF NEW.voucher_id IS DISTINCT FROM OLD.voucher_id THEN
+        IF EXISTS(SELECT 1 FROM intercompany_container_payments p
+          WHERE NEW.voucher_id IN (p.source_receipt_voucher_id,p.destination_payment_voucher_id,
+            p.source_reversal_voucher_id,p.destination_reversal_voucher_id)) THEN
+          RAISE EXCEPTION 'Cannot move a voucher entry into a mirrored cash payment';
+        END IF;
+      END IF;
+    END IF;
   END IF;
   RETURN CASE WHEN TG_OP='DELETE' THEN OLD ELSE NEW END;
 END $guard$;
