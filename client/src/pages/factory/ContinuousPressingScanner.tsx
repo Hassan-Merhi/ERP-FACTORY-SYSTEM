@@ -281,7 +281,11 @@ export function ContinuousPressingScanner({
     };
     // pagehide runs before React cleanup on iOS Safari and in the bfcache.
     const onPageHide = () => releaseCamera();
+    const onVisibilitySuspend = () => {
+      if (document.hidden) releaseCamera();
+    };
     window.addEventListener("pagehide", onPageHide);
+    document.addEventListener("visibilitychange", onVisibilitySuspend);
     const tick = async (detector: CameraBarcodeDecoder) => {
       if (canceled) return;
       const video = videoRef.current;
@@ -366,6 +370,7 @@ export function ContinuousPressingScanner({
     void start();
     return () => {
       window.removeEventListener("pagehide", onPageHide);
+      document.removeEventListener("visibilitychange", onVisibilitySuspend);
       releaseCamera();
       setEngine(null);
     };
