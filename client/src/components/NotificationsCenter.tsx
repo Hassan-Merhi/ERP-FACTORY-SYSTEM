@@ -84,7 +84,10 @@ const EVENT_META: Record<string, { label: string; className: string }> = {
   INTERCOMPANY_REQUEST: { label: "Intercompany", className: "bg-purple-500/15 text-purple-600 border-purple-300/50" },
 };
 
-function getNavPath(item: NotificationItem): string | null {
+function getNavPath(item: NotificationItem, isFactory: boolean): string | null {
+  if(item.entityType==="support_ticket" && item.entityId && item.entityId>0){
+    return `${isFactory?"/factory/tickets":"/tickets"}?ticketId=${item.entityId}`;
+  }
   switch (item.eventType) {
     case "LOADING_STARTED":
       return "/factory/sales/loadings";
@@ -264,7 +267,7 @@ export function NotificationsCenter() {
   // ── Notification item click ───────────────────────────────────────────────────
   const handleNotifClick = (item: NotificationItem) => {
     if (!item.isRead) markReadMutation.mutate(item.id);
-    const path = getNavPath(item);
+    const path = getNavPath(item, selectedCompany?.companyType==="factory" || selectedCompany?.companyType==="factory_v2");
     if (path) {
       setOpen(false);
       navigate(path);
