@@ -33,7 +33,7 @@ jobs:
         run: |
           set -euo pipefail
           git fetch origin main
-          mapfile -t files < <(git diff --name-only --diff-filter=ACMR origin/main...HEAD -- client/src server shared tests scripts | grep -E '\.(ts|tsx|css|mjs) || true)
+          mapfile -t files < <(git diff --name-only --diff-filter=ACMR origin/main...HEAD -- client/src server shared tests scripts | grep -E '\.(ts|tsx|css|mjs)$' || true)
           if [ "${#files[@]}" -gt 0 ]; then
             node node_modules/prettier/bin/prettier.cjs --write "${files[@]}"
           fi
