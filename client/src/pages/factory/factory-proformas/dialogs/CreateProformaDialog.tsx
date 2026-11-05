@@ -48,7 +48,9 @@ export function CreateProformaDialog({
             />
           </div>
           <div>
-            <label className="text-sm font-medium mb-1 block">Destination <span className="text-destructive">*</span></label>
+            <label className="text-sm font-medium mb-1 block">
+              Destination <span className="text-destructive">*</span>
+            </label>
             <Input
               placeholder="e.g. L'SHI, MALI, KINSHASA"
               value={newDestination}
