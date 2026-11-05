@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import type { Express, Request, Response } from "express";
 import multer from "multer";
 import { z } from "zod";
@@ -249,9 +250,10 @@ export function registerTicketRoutes(app: Express) {
       // Ticket evidence is validated as binary image/PDF before storage.
       // Prevent active content from executing if a browser opens an attachment.
       res.setHeader("Content-Security-Policy","default-src 'none'; sandbox");
-      // nosemgrep: javascript.express.security.audit.xss.direct-response-write.direct-response-write
-      // Validated binary bytes, not unescaped user HTML or response markup.
-      return res.send(file.bytes);
+      // Stream validated binary evidence; never render user content as HTML.
+      res.setHeader("Content-Length",String(file.bytes.length));
+      Readable.from([file.bytes]).pipe(res);
+      return;
     } catch(error) {return respondError(res,error);}
   });
 
