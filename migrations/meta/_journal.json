@@ -316,6 +316,13 @@
       "when": 1793867100000,
       "tag": "20261105_002_intercompany_phase2_import",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1793870400000,
+      "tag": "20261105_003_intercompany_phase3_sync",
+      "breakpoints": true
     }
   ]
 }
