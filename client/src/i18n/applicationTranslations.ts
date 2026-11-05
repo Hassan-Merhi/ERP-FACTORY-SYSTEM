@@ -328,6 +328,18 @@ export const applicationEnglishTranslations = {
   "monthlyProduction.category": "Category",
   "monthlyProduction.baleUnits": "bales",
   "monthlyProduction.couldNotLoad": "Could not load production",
+  "monthlyProduction.moveTo": "Move…",
+  "monthlyProduction.currentRow": "Current row",
+  "monthlyProduction.moveHint": "Choose a row number or search for the item you want to place this beside.",
+  "monthlyProduction.moveTop": "Move to top",
+  "monthlyProduction.moveBottom": "Move to bottom",
+  "monthlyProduction.rowPosition": "Destination row number",
+  "monthlyProduction.moveRow": "Move to row",
+  "monthlyProduction.placeNear": "Place next to another item",
+  "monthlyProduction.searchDestination": "Search item name or code…",
+  "monthlyProduction.noDestination": "No matching destination items",
+  "monthlyProduction.placeAbove": "Place above",
+  "monthlyProduction.placeBelow": "Place below",
 } as const;
 
 export type ApplicationTranslationKey = keyof typeof applicationEnglishTranslations;
