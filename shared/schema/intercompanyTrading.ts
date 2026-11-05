@@ -9,6 +9,7 @@ import { sql } from "drizzle-orm";
 import {
   pgTable,
   serial,
+  bigserial,
   integer,
   varchar,
   text,
@@ -24,6 +25,7 @@ import { ledgerAccounts } from "./accounting";
 import { companies } from "./common";
 import { containers, purchaseOrders } from "./containers";
 import { users } from "./users";
+import { companyScopedSuppliers } from "./supplierCompanyScope";
 import { vouchers } from "./erp/vouchers";
 
 export const intercompanyRelationshipPolicies = pgTable(
@@ -41,6 +43,21 @@ export const intercompanyRelationshipPolicies = pgTable(
       onDelete: "restrict",
     }),
     destinationPayableAccountId: integer("destination_payable_account_id").references(() => ledgerAccounts.id, {
+      onDelete: "restrict",
+    }),
+    destinationSupplierId: integer("destination_supplier_id").references(() => companyScopedSuppliers.id, {
+      onDelete: "restrict",
+    }),
+    sourceSalesAccountId: integer("source_sales_account_id").references(() => ledgerAccounts.id, {
+      onDelete: "restrict",
+    }),
+    sourceCostAccountId: integer("source_cost_account_id").references(() => ledgerAccounts.id, {
+      onDelete: "restrict",
+    }),
+    sourceChargeAccrualAccountId: integer("source_charge_accrual_account_id").references(() => ledgerAccounts.id, {
+      onDelete: "restrict",
+    }),
+    destinationGitAccountId: integer("destination_git_account_id").references(() => ledgerAccounts.id, {
       onDelete: "restrict",
     }),
     baseCurrency: varchar("base_currency", { length: 3 }).notNull().default("USD"),
@@ -140,6 +157,10 @@ export const intercompanyImportBatchContainers = pgTable(
       .references(() => companies.id, { onDelete: "restrict" }),
     physicalContainerId: integer("physical_container_id").references(() => containers.id, { onDelete: "restrict" }),
     tradeId: integer("trade_id").references(() => intercompanyTrades.id, { onDelete: "restrict" }),
+    chargesConfirmed: boolean("charges_confirmed").notNull().default(false),
+    chargeEvidenceReference: text("charge_evidence_reference"),
+    confirmedLandedCost: decimal("confirmed_landed_cost", { precision: 20, scale: 2 }),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
@@ -279,8 +300,30 @@ export const intercompanyRepairRequests = pgTable(
   })
 );
 
+
+/** Each original supplier PO is retained even when an Excel container has several PO numbers. */
+export const intercompanyTradeSourcePos = pgTable(
+  "intercompany_trade_source_pos",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    tradeId: integer("trade_id")
+      .notNull()
+      .references(() => intercompanyTrades.id, { onDelete: "restrict" }),
+    sourcePoId: integer("source_po_id")
+      .notNull()
+      .unique()
+      .references(() => purchaseOrders.id, { onDelete: "restrict" }),
+    originalPoNumber: text("original_po_number").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    tradeIdx: index("intercompany_trade_source_pos_trade_idx").on(t.tradeId),
+  })
+);
+
 export type IntercompanyRelationshipPolicy = typeof intercompanyRelationshipPolicies.$inferSelect;
 export type IntercompanyTrade = typeof intercompanyTrades.$inferSelect;
+export type IntercompanyTradeSourcePo = typeof intercompanyTradeSourcePos.$inferSelect;
 export type IntercompanyImportBatch = typeof intercompanyImportBatches.$inferSelect;
 export type IntercompanyPermissionGrant = typeof intercompanyPermissionGrants.$inferSelect;
 export type IntercompanyReconciliationFinding = typeof intercompanyReconciliationFindings.$inferSelect;
