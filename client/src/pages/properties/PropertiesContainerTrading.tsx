@@ -70,6 +70,7 @@ type MappingKey =
   | "sourceReceivableAccountId"
   | "destinationPayableAccountId"
   | "sourceSalesAccountId"
+  | "sourcePurchaseAccountId"
   | "sourceCostAccountId"
   | "sourceChargeAccrualAccountId"
   | "destinationGitAccountId"
@@ -86,6 +87,7 @@ const emptyMapping: PartnerMapping = {
   sourceReceivableAccountId: "",
   destinationPayableAccountId: "",
   sourceSalesAccountId: "",
+  sourcePurchaseAccountId: "",
   sourceCostAccountId: "",
   sourceChargeAccrualAccountId: "",
   destinationGitAccountId: "",
@@ -280,6 +282,9 @@ export default function PropertiesContainerTrading() {
                   <AccountSelect label="Properties intercompany sales" testId="ic-sales" companyId={sourceId}
                     accounts={setup.accounts} value={mapping.sourceSalesAccountId}
                     onChange={v=>setMapping(m=>({...m,sourceSalesAccountId:v}))}/>
+                  <AccountSelect label="Properties original purchases" testId="ic-purchases" companyId={sourceId}
+                    accounts={setup.accounts} value={mapping.sourcePurchaseAccountId}
+                    onChange={v=>setMapping(m=>({...m,sourcePurchaseAccountId:v}))}/>
                   <AccountSelect label="Properties cost of goods sold" testId="ic-cogs" companyId={sourceId}
                     accounts={setup.accounts} value={mapping.sourceCostAccountId}
                     onChange={v=>setMapping(m=>({...m,sourceCostAccountId:v}))}/>
