@@ -902,7 +902,19 @@ export default function FactoryCustomerStatement() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {priceListQuery.isLoading ? (
+                    {!priceDestination || priceDestinationsQuery.isLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
+                          Select a destination to view its agreed prices.
+                        </TableCell>
+                      </TableRow>
+                    ) : priceListQuery.isError ? (
+                      <TableRow>
+                        <TableCell colSpan={5} role="alert" className="text-center text-destructive py-6">
+                          Failed to load prices for this destination. Please retry.
+                        </TableCell>
+                      </TableRow>
+                    ) : priceListQuery.isLoading ? (
                       <TableRow>
                         <TableCell colSpan={5} className="text-center py-6">
                           <Skeleton className="h-4 w-48 mx-auto" />
@@ -915,7 +927,7 @@ export default function FactoryCustomerStatement() {
                           className="text-center text-muted-foreground py-8"
                           data-testid="text-no-prices"
                         >
-                          No prices set yet. Upload an Excel file or add manually below.
+                          No agreed prices for this destination yet. Upload Excel or add them manually below.
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -942,7 +954,7 @@ export default function FactoryCustomerStatement() {
                                 setPriceEdits((prev) => ({ ...prev, [entry.article_code]: e.target.value }))
                               }
                               onBlur={() => {
-                                if (priceEdits[entry.article_code] !== undefined) {
+                                if (priceEdits[entry.article_code] !== undefined && !savePricesMutation.isPending) {
                                   handleSavePrices();
                                 }
                               }}
@@ -958,8 +970,8 @@ export default function FactoryCustomerStatement() {
                               variant="ghost"
                               size="icon"
                               className="text-destructive"
-                              onClick={() => deletePriceMutation.mutate(entry.article_code)}
-                              disabled={deletePriceMutation.isPending}
+                              onClick={() => deletePriceMutation.mutate({ articleCode: entry.article_code, destination: priceDestination })}
+                              disabled={!priceDestination || deletePriceMutation.isPending || savePricesMutation.isPending}
                               data-testid={`button-delete-price-${entry.article_code}`}
                             >
                               <Trash2 className="h-4 w-4" />
@@ -980,6 +992,7 @@ export default function FactoryCustomerStatement() {
                           data-testid="input-new-price-code"
                         />
                       </TableCell>
+                      <TableCell />
                       <TableCell className="text-right">
                         <Input
                           type="number"
@@ -998,7 +1011,7 @@ export default function FactoryCustomerStatement() {
                           variant="ghost"
                           size="icon"
                           onClick={handleSavePrices}
-                          disabled={!newCode.trim() || !newPrice || savePricesMutation.isPending}
+                          disabled={!priceDestination || !newCode.trim() || !newPrice || savePricesMutation.isPending || deletePriceMutation.isPending}
                           data-testid="button-add-price"
                         >
                           <Plus className="h-4 w-4" />
@@ -1012,7 +1025,7 @@ export default function FactoryCustomerStatement() {
               <p className="text-xs text-muted-foreground mt-3">
                 Excel format: columns named <span className="font-mono">article_code</span> and{" "}
                 <span className="font-mono">price</span> (or <span className="font-mono">price_per_bale</span>). Prices
-                are also auto-saved when you create a proforma with prices set.
+                are saved only to the selected destination. Use "Save as Agreed Prices" on a proforma to store its prices here.
               </p>
             </TabsContent>
           )}
