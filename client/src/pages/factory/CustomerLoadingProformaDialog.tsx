@@ -66,7 +66,9 @@ export function CustomerLoadingProformaDialog({
             </div>
           </div>
           <div>
-            <Label htmlFor="customer-loading-proforma-destination">Destination <span className="text-destructive">*</span></Label>
+            <Label htmlFor="customer-loading-proforma-destination">
+              Destination <span className="text-destructive">*</span>
+            </Label>
             <Input
               id="customer-loading-proforma-destination"
               value={destination}
