@@ -24,6 +24,12 @@ import { AppLoadingState } from "@/app/AppLoadingState";
 import { useAuthenticatedUser } from "@/app/useAuthenticatedUser";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { applyGlobalForceRefresh, shouldApplyGlobalForceRefresh } from "@/lib/globalForceRefresh";
+import {
+  ColdStartReadOnlyBanner,
+  ColdStartUnlockScreen,
+  useColdStartTicketAvailable,
+} from "@/components/OfflineColdStartGate";
+import { authenticatedUserQueryKey } from "@/contracts/sessionQueryContracts";
 
 const Login = lazy(() => import("@/pages/Login"));
 const ChatWidget = lazy(() => import("@/components/ChatWidget").then((module) => ({ default: module.ChatWidget })));
@@ -82,10 +88,7 @@ function UpdateBanner() {
         // The server provides the current session's role-scoped refresh token
         // (regular users OR admins/owners/developers). Each tab watches only its
         // own group and shows the five-second notice when that token changes.
-        if (
-          typeof data.forceRefreshToken === "string" &&
-          shouldApplyGlobalForceRefresh(data.forceRefreshToken)
-        ) {
+        if (typeof data.forceRefreshToken === "string" && shouldApplyGlobalForceRefresh(data.forceRefreshToken)) {
           void applyGlobalForceRefresh(data.forceRefreshToken);
           return;
         }
@@ -194,10 +197,22 @@ function DeferredAuthenticatedUtilities() {
 
 function AuthenticatedRoot() {
   const { user, isLoading, error, handleLogout } = useAuthenticatedUser();
+  // Plan batch 5: with no connection at all, a laptop with a cold-start ticket
+  // may open its prepared data read-only instead of waiting to reconnect.
+  const coldStartAvailable = useColdStartTicketAvailable(Boolean(error) && !user);
 
   // fetchAuthenticatedUser returns null only for a confirmed 401. Temporary
   // network/server failures remain errors and must never masquerade as logout.
   if (!isLoading && !error && user === null) return <Redirect to="/login" />;
+  if (error && !user && coldStartAvailable) {
+    return (
+      <ApplicationLanguageProvider>
+        <ColdStartUnlockScreen
+          onUnlocked={() => void queryClient.resetQueries({ queryKey: authenticatedUserQueryKey })}
+        />
+      </ApplicationLanguageProvider>
+    );
+  }
   if (isLoading || error || !user) {
     return <AppLoadingState message={error ? "Reconnecting to your session" : undefined} />;
   }
@@ -210,6 +225,7 @@ function AuthenticatedRoot() {
             <CurrencyProvider>
               <CursorNavProvider>
                 <ServerRestartWatcher />
+                <ColdStartReadOnlyBanner />
                 <AuthenticatedApp user={user} handleLogout={handleLogout} />
                 <DeferredAuthenticatedUtilities />
               </CursorNavProvider>

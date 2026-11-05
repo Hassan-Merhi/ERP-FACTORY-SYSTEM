@@ -116,6 +116,22 @@ export interface OfflineReadGrant {
   vaultCheck?: string;
 }
 
+/**
+ * Plan batch 5 (decision 10): a cold-start ticket for a laptop that reaches
+ * neither the cloud nor the factory server. Sealed with the passphrase-derived
+ * vault key; userId, companyId, verifiedAt and expiresAt are bound into the
+ * AES-GCM authentication, so they cannot be edited on disk.
+ */
+export interface OfflineColdStartTicket {
+  key: string;
+  userId: string;
+  companyId: number;
+  verifiedAt: number;
+  expiresAt: number;
+  vaultSalt: string;
+  sealed: string;
+}
+
 export interface OfflineMeta {
   id?: number;
   key: string;
@@ -157,6 +173,7 @@ class ERPDatabase extends Dexie {
   offlineOperations!: Table<OfflineOperation, string>;
   offlineReadSnapshots!: Table<OfflineReadSnapshot, string>;
   offlineReadGrants!: Table<OfflineReadGrant, string>;
+  offlineColdStartTickets!: Table<OfflineColdStartTicket, string>;
   syncState!: Table<SyncState, number>;
   syncLogs!: Table<SyncLog, number>;
   conflicts!: Table<Conflict, number>;
@@ -273,6 +290,11 @@ class ERPDatabase extends Dexie {
     this.version(8).stores({
       offlineReadSnapshots: "&key, [companyId+userId], url, expiresAt",
       offlineReadGrants: "&key, [companyId+userId], expiresAt",
+    });
+
+    // Plan batch 5 (decision 10): sealed cold-start tickets for read-only laptops.
+    this.version(9).stores({
+      offlineColdStartTickets: "&key, [companyId+userId], verifiedAt, expiresAt",
     });
   }
 }

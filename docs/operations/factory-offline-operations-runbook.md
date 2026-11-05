@@ -56,6 +56,33 @@ an open cloud epoch.
 inventory and fails if any route becomes writable on the LAN without a reviewed
 capture policy.
 
+### Laptops that reach neither the cloud nor the factory server (decision 10)
+
+Such a laptop is a **read-only viewer**. It never takes a write.
+
+- **Ticket.** While the user is signed in online and has unlocked the
+  encrypted offline cache (Offline panel, passphrase), the browser seals a
+  cold-start ticket with that cache's key. The ticket expires 24 hours after
+  that online check.
+- **No connection after a restart.** The app shows a passphrase screen
+  instead of "Reconnecting". The same passphrase opens the cached data for
+  viewing until the ticket expires, under the banner "Not connected to the
+  factory server: view only".
+- **Writes.** Every write is refused in the browser with HTTP 423
+  `OFFLINE_COLD_START_READ_ONLY`, before it can be sent or queued. Buttons stay
+  visible; whatever they try to save is refused. Signing in again works as
+  soon as a connection returns.
+- **Data window.** An encrypted cache now stays readable for 24 hours after it
+  was prepared. An unencrypted cache keeps 8 hours and never opens on a cold
+  start.
+- **Wipes.** Signing out wipes that account's ticket on the laptop. When the
+  server reports at the next connection that the account was disabled, all
+  its tickets are wiped. When the account was removed from a company, that
+  company's ticket and cached data are wiped.
+- **Proof.** The expiry is bound into the ticket's encryption, so editing it
+  on disk makes the ticket fail to open
+  (`tests/ui/offline-cold-start-read-only.test.ts`).
+
 ### Plan batches stay off until their staging drill is approved
 
 The rows added by the owner-approved plan of 2026-11-05 are:
