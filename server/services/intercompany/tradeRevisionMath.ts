@@ -71,16 +71,19 @@ export function allocateByWeights(total: MoneyDecimal, weights: readonly MoneyDe
   if (!total.isFinite() || total.lt(0) || total.decimalPlaces() > 2) {
     throw new Error("Confirmed charge must be a non-negative USD amount in cents");
   }
+  const centsTotal = cents(total).times(100).toNumber();
+  if (!Number.isSafeInteger(centsTotal)) throw new Error("Shared charge is too large to allocate exactly");
   const denominator = sumMoney(weights);
-  let remainder = cents(total);
-  return weights.map((weight, index) => {
-    const portion = index === weights.length - 1
-      ? remainder
-      : cents(total.times(weight).div(denominator));
-    if (portion.gt(remainder)) throw new Error("Invalid proportional charge rounding");
-    remainder = remainder.minus(portion);
-    return portion;
+  const allocated = weights.map(weight => {
+    const exact = total.times(100).times(weight).div(denominator);
+    const floor = exact.floor();
+    return { cents: floor.toNumber(), remainder: exact.minus(floor) };
   });
+  let left = centsTotal - allocated.reduce((sum, part) => sum + part.cents, 0);
+  const ranked = allocated.map((part, index) => ({ index, remainder: part.remainder }))
+    .sort((a, b) => b.remainder.comparedTo(a.remainder) || a.index - b.index);
+  for (let i = 0; i < left; i++) allocated[ranked[i].index].cents++;
+  return allocated.map(part => new MoneyDecimal(part.cents).div(100));
 }
 
 export function requireCostEqual(label: string, actual: MoneyDecimal, expected: MoneyDecimal) {
