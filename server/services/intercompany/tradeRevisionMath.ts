@@ -8,6 +8,9 @@ export const cents = (value: string | number): Decimal =>
   toMoney(value).toDecimalPlaces(2, MoneyDecimal.ROUND_HALF_UP);
 
 export function exactPositiveQuantity(value: string): Decimal {
+  if (typeof value !== "string" || !/^\d+(?:\.\d{1,3})?$/.test(value)) {
+    throw new Error("PO quantity must be positive with at most 3 decimals");
+  }
   const qty = toMoney(value);
   if (!qty.isFinite() || qty.lte(0) || qty.decimalPlaces() > 3 || qty.gte("10000000000")) {
     throw new Error("PO quantity must be positive with at most 3 decimals");
@@ -16,6 +19,9 @@ export function exactPositiveQuantity(value: string): Decimal {
 }
 
 export function exactNonnegativeRate(value: string): Decimal {
+  if (typeof value !== "string" || !/^\d+(?:\.\d{1,2})?$/.test(value)) {
+    throw new Error("PO rate must be non-negative with at most 2 decimals");
+  }
   const rate = toMoney(value);
   if (!rate.isFinite() || rate.lt(0) || rate.decimalPlaces() > 2 || rate.gte("10000000000")) {
     throw new Error("PO rate must be non-negative with at most 2 decimals");
