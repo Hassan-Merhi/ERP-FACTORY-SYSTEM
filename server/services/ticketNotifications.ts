@@ -157,7 +157,7 @@ type Delivery={
  email_enabled:boolean|null;whatsapp_chat_id:string|null;whatsapp_enabled:boolean|null;
  actor_id:string|null;source_mode:string;
 };
-async function claimDelivery(channel:"in_app"|"email"|"whatsapp"):Promise<Delivery|null>{
+async function claimDelivery(channel:"email"|"whatsapp"):Promise<Delivery|{skipped:true}|null>{
   const client=await pool.connect();
   try{
     await client.query("BEGIN");
@@ -188,13 +188,13 @@ async function claimDelivery(channel:"in_app"|"email"|"whatsapp"):Promise<Delive
       (channel==="email"&&(!d.email_enabled||!d.email)) ||
       (channel==="whatsapp"&&(!d.whatsapp_enabled||!d.whatsapp_chat_id))) {
       await client.query("UPDATE support_ticket_notifications SET delivery_status='suppressed',error='Not eligible or no consent' WHERE id=$1",[d.id]);
-      await client.query("COMMIT");return null;
+      await client.query("COMMIT");return {skipped:true};
     }
     if(channel==="email" && !emailConfigured() || channel==="whatsapp" && !(await whatsappConfigured())) {
       await client.query(
         `UPDATE support_ticket_notifications SET next_attempt_at=now()+interval '15 minutes',error='Channel not configured'
          WHERE id=$1`,[d.id]);
-      await client.query("COMMIT");return null;
+      await client.query("COMMIT");return {skipped:true};
     }
     // Commit 'sending' BEFORE the external call. If the process crashes, the send is uncertain
     // and cannot be automatically repeated, avoiding duplicate WhatsApp/email messages.
@@ -238,31 +238,55 @@ async function sendTicketEmail(address:string,copy:ReturnType<typeof ticketEvent
 }
 
 async function deliverInApp():Promise<boolean>{
-  const d=await claimDelivery("in_app");
-  if(!d)return false;
-  // Notification insertion and delivery status are atomic; a failed transaction retries safely.
+  // Inbox insertion and completion are one transaction; SKIP LOCKED prevents duplicates.
   const client=await pool.connect();
   try {
     await client.query("BEGIN");
-    const copy=ticketEventCopy(d.event_type,d.ticket_number);
-    await client.query(
-      `INSERT INTO notifications(recipient_user_id,event_type,title,message,entity_type,entity_id,triggered_by_user_id,company_id,is_read)
-       VALUES($1,$2,$3,$4,'support_ticket',$5,$6,$7,false)`,
-      [d.recipient_user_id,copy.eventCode,copy.title,copy.message,d.ticket_id,d.actor_id,d.company_id]
+    const result=await client.query<Delivery>(`
+      SELECT n.id,n.company_id,n.ticket_id,n.recipient_user_id,n.channel,
+       o.event_type,t.ticket_number,t.created_by,t.assigned_to,t.status,t.source_mode,
+       o.payload->>'actorId' AS actor_id
+       FROM support_ticket_notifications n
+       JOIN support_ticket_outbox o ON o.id=n.outbox_id AND o.company_id=n.company_id
+       JOIN support_tickets t ON t.id=n.ticket_id AND t.company_id=n.company_id
+       JOIN users u ON u.id=n.recipient_user_id AND u.active=true
+       JOIN user_company_roles r ON r.user_id=u.id AND r.company_id=n.company_id
+      WHERE n.delivery_status='pending' AND n.channel='in_app'
+       AND n.next_attempt_at<=now()
+      ORDER BY n.id FOR UPDATE OF n SKIP LOCKED LIMIT 1`
     );
-    await client.query(
-      `UPDATE support_ticket_notifications SET delivery_status='delivered',sent_at=now(),delivered_at=now() WHERE id=$1`,
-      [d.id]
+    const d=result.rows[0];
+    if(!d){await client.query("COMMIT");return false;}
+    const access=await client.query(
+      `SELECT 1 WHERE $1=$2 OR $1=$3 OR EXISTS(
+       SELECT 1 FROM support_ticket_participants
+       WHERE company_id=$4 AND ticket_id=$5 AND user_id=$1)`,
+      [d.recipient_user_id,d.created_by,d.assigned_to,d.company_id,d.ticket_id]
     );
+    if(!access.rowCount || d.event_type==="ticket_overdue"&&d.status==="finalized"){
+      await client.query("UPDATE support_ticket_notifications SET delivery_status='suppressed' WHERE id=$1",[d.id]);
+    }else{
+      const copy=ticketEventCopy(d.event_type,d.ticket_number);
+      await client.query(
+        `INSERT INTO notifications(recipient_user_id,event_type,title,message,entity_type,entity_id,triggered_by_user_id,company_id,is_read)
+         VALUES($1,$2,$3,$4,'support_ticket',$5,$6,$7,false)`,
+        [d.recipient_user_id,copy.eventCode,copy.title,copy.message,d.ticket_id,d.actor_id,d.company_id]
+      );
+      await client.query(
+        `UPDATE support_ticket_notifications SET delivery_status='delivered',sent_at=now(),delivered_at=now()
+         WHERE id=$1`,[d.id]
+      );
+    }
     await client.query("COMMIT");
+    return true;
   }catch(e){await client.query("ROLLBACK").catch(()=>{});throw e;}
   finally{client.release();}
-  return true;
 }
 
 async function deliverExternal(channel:"email"|"whatsapp"):Promise<boolean>{
   const d=await claimDelivery(channel);
   if(!d)return false;
+  if("skipped" in d)return true;
   const copy=ticketEventCopy(d.event_type,d.ticket_number);
   try{
     if(channel==="email")await sendTicketEmail(d.email!,copy);
