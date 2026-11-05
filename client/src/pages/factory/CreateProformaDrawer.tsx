@@ -287,7 +287,13 @@ export default function CreateProformaDrawer({ open, onClose, articleRows, onSuc
         pricePerBale: sellingPrices[r.articleCode] || "0",
         productionPricePerBale: productionPrices[r.articleCode] || "0",
       }));
-    createMutation.mutate({ customerId: parseInt(customerId), name: proformaName.trim(), destination: destination.trim(), isActive, lines });
+    createMutation.mutate({
+      customerId: parseInt(customerId),
+      name: proformaName.trim(),
+      destination: destination.trim(),
+      isActive,
+      lines,
+    });
   }
 
   const map = productMap();
