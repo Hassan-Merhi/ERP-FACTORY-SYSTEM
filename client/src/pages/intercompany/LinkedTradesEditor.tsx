@@ -187,7 +187,7 @@ export default function LinkedTradesEditor(){
 
   return <div className="mx-auto max-w-6xl space-y-6 pb-12" data-testid="intercompany-linked-editor">
     <PageHeader title="Linked Container POs & Shared Charges"
-      description="Price edits and confirmed costs remain synchronized between Properties and the destination ERP company." />
+      subtitle="Price edits and confirmed costs remain synchronized between Properties and the destination ERP company." />
     <p className="text-sm text-muted-foreground">
       Each edit is a single audited transaction. Original supplier vouchers remain unchanged.
       Offloaded or sold containers are protected until the inventory adjustment workflow is available.
