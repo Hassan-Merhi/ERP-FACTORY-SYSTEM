@@ -58,6 +58,7 @@ export function useFactoryProformasModel() {
   // Excel import state
   const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
   const [excelImportName, setExcelImportName] = useState("");
+  const [excelImportDestination, setExcelImportDestination] = useState("");
   const [excelImportLines, setExcelImportLines] = useState<
     { articleCode: string; productName: string; quantity: string; pricePerBale: string }[]
   >([]);
@@ -393,7 +394,7 @@ export function useFactoryProformasModel() {
   };
 
   const bulkImportMutation = useMutation({
-    mutationFn: async (data: { customerId: number; name: string; isActive: boolean; lines: unknown[] }) => {
+    mutationFn: async (data: { customerId: number; name: string; destination: string; isActive: boolean; lines: unknown[] }) => {
       const res = await modeApiRequest("POST", "/api/factory/customer-proformas/bulk", data);
       if (!res.ok) {
         const e = await res.json();
@@ -406,6 +407,7 @@ export function useFactoryProformasModel() {
       invalidateCustomerProformas();
       setIsExcelImportOpen(false);
       setExcelImportName("");
+      setExcelImportDestination("");
       setExcelImportLines([]);
       setExcelImportErrors([]);
     },
@@ -675,6 +677,8 @@ export function useFactoryProformasModel() {
     setIsExcelImportOpen,
     excelImportName,
     setExcelImportName,
+    excelImportDestination,
+    setExcelImportDestination,
     excelImportLines,
     setExcelImportLines,
     excelImportErrors,
