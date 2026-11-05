@@ -4,7 +4,7 @@ import type { ErpVoucherLine } from "../accounting/erpVoucherPosting";
 
 export type FinancialTarget = { ledgerAccountId: number } | { supplierId: number };
 
-export const cents = (value: string | number): Decimal => toMoney(value).toDecimalPlaces(2, MoneyDecimal.ROUND_HALF_UP);
+export const cents = (value: Decimal.Value): Decimal => toMoney(value).toDecimalPlaces(2, MoneyDecimal.ROUND_HALF_UP);
 
 export function exactPositiveQuantity(value: string): Decimal {
   if (typeof value !== "string" || !/^\d+(?:\.\d{1,3})?$/.test(value)) {
