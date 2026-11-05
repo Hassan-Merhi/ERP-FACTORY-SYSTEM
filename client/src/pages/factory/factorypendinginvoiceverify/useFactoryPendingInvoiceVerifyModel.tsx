@@ -93,7 +93,8 @@ export function useFactoryPendingInvoiceVerifyModel() {
   const isDeveloper = currentUser?.role === "Developer";
 
   const { data: ledgerAccounts = [] } = useQuery<{ id: number; name: string; code: string; accountType: string }[]>({
-    queryKey: ["/api/ledger-accounts?profile=picker"],
+    // Charges must be posted to individual ledgers, not group headers or parent accounts.
+    queryKey: ["/api/ledger-accounts?profile=voucher-picker"],
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });

@@ -23,9 +23,9 @@ describe("sidebar navigation grouping", () => {
     expect(groupFor(FACTORY_NAV_SECTIONS, "/factory/bales-hub")).toBe("Production");
   });
 
-  it("puts Factory stock allocation and sheets & sacks under Sales & Loading", () => {
-    expect(groupFor(FACTORY_NAV_SECTIONS, "/factory/stock-allocation-v5")).toBe("Sales & Loading");
-    expect(groupFor(FACTORY_NAV_SECTIONS, "/factory/sheets-sacks")).toBe("Sales & Loading");
+  it("puts Factory stock allocation and sheets & sacks under Inventory", () => {
+    expect(groupFor(FACTORY_NAV_SECTIONS, "/factory/stock-allocation-v5")).toBe("Inventory");
+    expect(groupFor(FACTORY_NAV_SECTIONS, "/factory/sheets-sacks")).toBe("Inventory");
     expect(groupFor(FACTORY_NAV_SECTIONS, "/factory/location-inventory")).toBe("Inventory");
   });
 });
