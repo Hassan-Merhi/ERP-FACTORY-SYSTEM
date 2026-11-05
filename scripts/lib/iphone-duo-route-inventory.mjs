@@ -54,7 +54,7 @@ export async function discoverDuoRouteInventory() {
   // The developer/non-POS retail routes are dispatched through AppRoutes.
   // Derive them from source so a new retail page cannot escape the inventory.
   const retiredRetailRoutes = new Set(["/retail/quick-add", "/retail/stock"]);
-  const retailLiteralPaths = routeMatches(sources.app, /location\s*===\s*["'](\/retail[^"']+)["']/g)
+  const retailLiteralPaths = routeMatches(sources.app, /location\s*===\s*["'](\/retail[^"']*)["']/g)
     .filter((route) => !retiredRetailRoutes.has(route));
   const retailPrefixes = routeMatches(sources.app, /location\.startsWith\(["'](\/retail[^"']+)["']\)/g);
   const retailAdmin = splitRoutes([...retailLiteralPaths, ...retailPrefixes.filter((route) => !route.endsWith("/"))]);
