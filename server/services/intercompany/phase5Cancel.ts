@@ -128,6 +128,7 @@ export async function cancelUnreceivedTrade(input: CancelIntercompanyTradeInput,
       for (const entry of events) {
         net.set(entry.paymentId, (net.get(entry.paymentId) ?? new MoneyDecimal(0)).plus(entry.amount));
       }
+      await tx.execute(sql.raw("SELECT set_config('erp.ic_phase5_cancel','" + fresh.id + "',true)"));
       let totalReleased = new MoneyDecimal(0);
       for (const [paymentId, money] of [...net].sort((a, b) => a[0] - b[0])) {
         if (money.lt(0)) rejectEdit("Original payment allocation has a negative balance", "IC_CANCEL_CREDIT");
@@ -193,7 +194,7 @@ export async function cancelUnreceivedTrade(input: CancelIntercompanyTradeInput,
         reason, cancellationEvidence: input.cancellationEvidence.trim(),
         releasedCredit: totalReleased.toFixed(2), actorUserId: actor.actorUserId,
       }).returning();
-      await tx.execute(sql.raw("SELECT set_config('erp.ic_phase5_cancel','" + fresh.id + "',true)"));
+
       const [updated] = await tx.update(intercompanyTrades).set({
         state: "canceled", canceledAt: new Date(), version: fresh.version + 1,
       }).where(and(eq(intercompanyTrades.id, fresh.id), eq(intercompanyTrades.version, fresh.version))).returning();
