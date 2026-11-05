@@ -309,6 +309,13 @@
       "when": 1793864100000,
       "tag": "20261105_001_intercompany_phase1_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1793867100000,
+      "tag": "20261105_002_intercompany_phase2_import",
+      "breakpoints": true
     }
   ]
 }
