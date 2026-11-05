@@ -45,7 +45,7 @@ export async function discoverDuoRouteInventory() {
 
   // The POS router has two mutually exclusive trees, selected by company type.
   const posDivider = sources.pos.indexOf('if (selectedCompany?.companyType === "retail")');
-  const posSecondTree = sources.pos.indexOf("  return (", posDivider + 60);
+  const posSecondTree = sources.pos.indexOf("\n  return (", posDivider + 60);
   if (posDivider < 0 || posSecondTree < 0) {
     throw new Error("POS route dispatch layout changed; update the Duo inventory extractor");
   }
