@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation, useSearch } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -125,10 +125,9 @@ export default function StockItemDetail() {
   const [, navigate] = useLocation();
   const itemId = params?.id ? parseInt(params.id) : null;
 
-  const [preset, setPreset] = useState<DatePreset>("this-month");
-  const initialDates = useMemo(() => getPresetDates("this-month"), []);
-  const [fromDate, setFromDate] = useState(initialDates.from);
-  const [toDate, setToDate] = useState(initialDates.to);
+  const [preset, setPreset] = useState<DatePreset>("all");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [selectedLocation, setSelectedLocation] = useState("all");
 
   const applyPreset = (next: DatePreset) => {
