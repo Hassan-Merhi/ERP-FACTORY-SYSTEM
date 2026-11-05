@@ -25,7 +25,9 @@ const ALL_LANGUAGES = [
   { code: "ar", direction: "rtl", name: "Arabic" },
   { code: "fr", direction: "ltr", name: "French" },
 ];
-const LANGUAGES = ALL_LANGUAGES.filter((x) => (process.env.ERP_DUO_LANGUAGES || "en,fr,ar").split(",").includes(x.code));
+const LANGUAGES = ALL_LANGUAGES.filter((x) =>
+  (process.env.ERP_DUO_LANGUAGES || "en,fr,ar").split(",").includes(x.code)
+);
 
 const VIEWPORTS = [
   { name: "duo-cover", width: 466, height: 678, deviceScaleFactor: 3, isMobile: true, hasTouch: true },
@@ -33,7 +35,11 @@ const VIEWPORTS = [
   { name: "duo-inner", width: 626, height: 890, deviceScaleFactor: 3, isMobile: true, hasTouch: true },
   { name: "duo-inner-landscape", width: 890, height: 626, deviceScaleFactor: 3, isMobile: true, hasTouch: true },
   { name: "duo-split", width: 393, height: 890, deviceScaleFactor: 3, isMobile: true, hasTouch: true },
-].filter((x) => (process.env.ERP_DUO_VIEWPORTS || "duo-cover,duo-cover-landscape,duo-inner,duo-inner-landscape,duo-split").split(",").includes(x.name));
+].filter((x) =>
+  (process.env.ERP_DUO_VIEWPORTS || "duo-cover,duo-cover-landscape,duo-inner,duo-inner-landscape,duo-split")
+    .split(",")
+    .includes(x.name)
+);
 
 if (!LANGUAGES.length || !VIEWPORTS.length) throw new Error("No iPhone Duo language or viewport profiles selected");
 const inventory = await discoverDuoRouteInventory();
@@ -45,7 +51,9 @@ const WORKSPACE_ROUTE_GROUPS = inventory.groups.filter((group) =>
   group.requiredRole === role && chosen.includes(group.workspace)).map((group) => ({
   workspace: group.workspace,
   companyCode: group.companyCode,
-  routes: routeFilter.length ? group.static.filter((route) => routeFilter.some((part) => route.startsWith(part))) : group.static,
+  routes: routeFilter.length
+    ? group.static.filter((route) => routeFilter.some((part) => route.startsWith(part)))
+    : group.static,
   parameterized: group.parameterized,
 }));
 if (!WORKSPACE_ROUTE_GROUPS.length) throw new Error("No workspaces match ERP_DUO_WORKSPACES and ERP_DUO_ROLE");
@@ -488,7 +496,9 @@ async function verifyDuoTransitions(page, language, sourceViewport, group, route
       const screenshot = await capture(page, language.code, "transition-" + target.name, group.workspace + "-" + route);
       report.transitions.push({ workspace: group.workspace, route, from: sourceViewport.name,
         to: target.name, failures: errors, screenshot });
-      report.failures.push(...errors.map((reason) => group.workspace + " " + route + " -> " + target.name + ": " + reason));
+      report.failures.push(
+        ...errors.map((reason) => group.workspace + " " + route + " -> " + target.name + ": " + reason)
+      );
     }
   } finally {
     await page.setViewport(sourceViewport);
