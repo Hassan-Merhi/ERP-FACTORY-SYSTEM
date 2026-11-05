@@ -10,6 +10,7 @@ import {
   pgTable,
   serial,
   bigserial,
+  bigint,
   integer,
   varchar,
   text,
@@ -393,7 +394,7 @@ export const intercompanySharedChargeAllocations = pgTable(
   "intercompany_shared_charge_allocations",
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
-    invoiceId: bigserial("invoice_id", { mode: "number" })
+    invoiceId: bigint("invoice_id", { mode: "number" })
       .notNull().references(() => intercompanySharedChargeInvoices.id, { onDelete: "restrict" }),
     tradeId: integer("trade_id").notNull().references(() => intercompanyTrades.id, { onDelete: "restrict" }),
     amount: decimal("amount", { precision: 20, scale: 2 }).notNull(),
@@ -409,7 +410,7 @@ export const intercompanySharedChargePoAllocations = pgTable(
   "intercompany_shared_charge_po_allocations",
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
-    invoiceId: bigserial("invoice_id", { mode: "number" })
+    invoiceId: bigint("invoice_id", { mode: "number" })
       .notNull().references(() => intercompanySharedChargeInvoices.id, { onDelete: "restrict" }),
     tradeId: integer("trade_id").notNull().references(() => intercompanyTrades.id, { onDelete: "restrict" }),
     sourcePoId: integer("source_po_id").notNull().references(() => purchaseOrders.id, { onDelete: "restrict" }),
