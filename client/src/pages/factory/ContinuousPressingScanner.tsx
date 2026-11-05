@@ -108,6 +108,15 @@ export function ContinuousPressingScanner({
   const trackRef = useRef<MediaStreamTrack | null>(null);
   const audioRef = useRef<AudioContextLike | null>(null);
   const gateRef = useRef(new ContinuousScanGate(1500, 3));
+  const lastGateAssignmentId = useRef(assignment?.assignmentId);
+  useEffect(() => {
+    if (lastGateAssignmentId.current !== assignment?.assignmentId) {
+      // Switching stations is a new scanning context, unlike a screen-size
+      // interruption that should retain the brief duplicate cooldown.
+      lastGateAssignmentId.current = assignment?.assignmentId;
+      gateRef.current.reset();
+    }
+  }, [assignment?.assignmentId]);
   // The camera must keep decoding DIFFERENT barcodes during slow HTTP.
   // All captures are persisted individually in IndexedDB before submission.
   const inFlightRef = useRef(0);
@@ -124,8 +133,15 @@ export function ContinuousPressingScanner({
 
   useEffect(() => {
     const changed = () => setVisible(!document.hidden);
+    const pageHidden = () => setVisible(false);
     document.addEventListener("visibilitychange", changed);
-    return () => document.removeEventListener("visibilitychange", changed);
+    window.addEventListener("pagehide", pageHidden);
+    window.addEventListener("pageshow", changed);
+    return () => {
+      document.removeEventListener("visibilitychange", changed);
+      window.removeEventListener("pagehide", pageHidden);
+      window.removeEventListener("pageshow", changed);
+    };
   }, []);
 
   const usable = !!assignment?.machineActive && active;
@@ -232,7 +248,8 @@ export function ContinuousPressingScanner({
     let stream: MediaStream | null = null;
     let screenLock: ScreenWakeLock | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    gateRef.current.reset();
+    let cameraTrack: MediaStreamTrack | null = null;
+    gateRef.current.suspend();
     setStatus("starting");
     setError(null);
     setTorchAvailable(false);
@@ -240,6 +257,35 @@ export function ContinuousPressingScanner({
     lastCapturedMsRef.current = null;
 
     let decoder: CameraBarcodeDecoder | null = null;
+    const releaseCamera = () => {
+      canceled = true;
+      if (timer !== undefined) clearTimeout(timer);
+      cameraTrack?.removeEventListener?.("ended", onTrackEnded);
+      stream?.getTracks().forEach((track) => track.stop());
+      stream = null;
+      void screenLock?.release().catch(() => {});
+      decoder?.dispose();
+      decoder = null;
+      trackRef.current = null;
+      if (video) video.srcObject = null;
+      gate.suspend();
+    };
+    const onTrackEnded = () => {
+      if (canceled) return;
+      releaseCamera();
+      setEngine(null);
+      setTorchAvailable(false);
+      setTorchOn(false);
+      setStatus("error");
+      setError("Camera interrupted by a screen change or iOS. Tap Retry camera to restart scanning.");
+    };
+    // pagehide runs before React cleanup on iOS Safari and in the bfcache.
+    const onPageHide = () => releaseCamera();
+    const onVisibilitySuspend = () => {
+      if (document.hidden) releaseCamera();
+    };
+    window.addEventListener("pagehide", onPageHide);
+    document.addEventListener("visibilitychange", onVisibilitySuspend);
     const tick = async (detector: CameraBarcodeDecoder) => {
       if (canceled) return;
       const video = videoRef.current;
@@ -278,7 +324,9 @@ export function ContinuousPressingScanner({
         if (canceled) return;
         const videoTrack = stream.getVideoTracks()[0] ?? null;
         trackRef.current = videoTrack;
+        cameraTrack = videoTrack;
         if (videoTrack) {
+          videoTrack.addEventListener?.("ended", onTrackEnded);
           const capabilities = videoTrack.getCapabilities?.() as TorchCapabilities | undefined;
           setTorchAvailable(Boolean(capabilities?.torch));
           if (capabilities?.focusMode?.includes("continuous")) {
@@ -321,15 +369,9 @@ export function ContinuousPressingScanner({
     };
     void start();
     return () => {
-      canceled = true;
-      if (timer !== undefined) clearTimeout(timer);
-      stream?.getTracks().forEach(track => track.stop());
-      void screenLock?.release().catch(() => {});
-      decoder?.dispose();
-      decoder = null;
-      trackRef.current = null;
-      if (video) video.srcObject = null;
-      gate.reset();
+      window.removeEventListener("pagehide", onPageHide);
+      document.removeEventListener("visibilitychange", onVisibilitySuspend);
+      releaseCamera();
       setEngine(null);
     };
   // Restart only on assignment, explicit start/stop, tab or browser visibility.
@@ -402,6 +444,13 @@ export function ContinuousPressingScanner({
           </div>
         )}
         {error && running && <p role="alert" className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">{simpleControls && activeStatus === "manual" ? "Camera scanning is unavailable on this device. Close and reopen the camera, or allow camera access in your browser." : error}</p>}
+        {simpleControls && requested && running && (activeStatus === "error" || activeStatus === "manual") && (
+          <Button type="button" variant="outline" className="min-h-11"
+            onClick={() => setRetryAttempt((attempt) => attempt + 1)}
+            data-testid="button-pressing-simple-camera-retry">
+            <RotateCcw className="mr-2 h-4 w-4" /> Retry camera
+          </Button>
+        )}
         {!simpleControls && running && (
           <form onSubmit={submitManual} className="flex flex-wrap items-center gap-2">
             <Keyboard className="h-4 w-4 shrink-0 text-muted-foreground" />

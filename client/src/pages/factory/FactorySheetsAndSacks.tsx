@@ -1,3 +1,4 @@
+import { downloadBlob } from "@/lib/downloadBlob";
 import { TabsList, PillTabButton } from "@/components/ui/tabs";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useMemo, useEffect } from "react";
@@ -209,14 +210,7 @@ export default function FactorySheetsAndSacks() {
       shown.map((column) => csvCell(column.label)).join(","),
       ...rows.map((item) => shown.map((column) => csvCell(column.value(item))).join(",")),
     ].join("\r\n");
-    const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "sheets-sacks-stock.csv";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    downloadBlob(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }), "sheets-sacks-stock.csv");
   };
 
   const typeBadge = (type: string) => (

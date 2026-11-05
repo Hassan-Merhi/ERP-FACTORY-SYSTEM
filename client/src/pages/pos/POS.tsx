@@ -1,3 +1,4 @@
+import { downloadBlob } from "@/lib/downloadBlob";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useEffect, useMemo, useRef } from "react";
 import { useLocation as useLocationContext } from "@/contexts/LocationContext";
@@ -613,14 +614,9 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
       const blob = new Blob([buffer], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
       const dateStr = editVoucher?.voucherDate?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
       const num = editVoucher?.voucherNumber ?? editVoucherId ?? "txn";
-      a.download = `transaction-${num}-${dateStr}.xlsx`;
-      a.click();
-      URL.revokeObjectURL(url);
+      downloadBlob(blob, `transaction-${num}-${dateStr}.xlsx`);
     } catch (err) {
       toast({ title: "Export failed", description: getErrorDetails(err).optionalMessage, variant: "destructive" });
     }

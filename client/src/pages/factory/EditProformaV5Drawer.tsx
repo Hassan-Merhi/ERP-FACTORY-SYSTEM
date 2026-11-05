@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertTriangle, Loader2, CheckCircle2, Save, Trash2, BookmarkCheck, FilePenLine, Package, Boxes, Scale, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { V5ProformaMobileLines } from "./V5ProformaMobileLines";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -613,7 +614,23 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
             </div>
 
             {/* Table */}
-            <div className="mx-3 min-w-0 overflow-x-auto rounded-b-xl border border-t-0 bg-card shadow-sm sm:mx-5">
+            <V5ProformaMobileLines
+               variant="edit"
+               rows={visibleRows}
+               quantities={quantities}
+               prices={prices}
+               kgPrices={kgPrices}
+               pricingModes={pricingModes}
+               onQuantityChange={(code, value) => setQuantities((previous) => ({ ...previous, [code]: value }))}
+               onPriceChange={(code, value) => setPrices((previous) => ({ ...previous, [code]: value }))}
+               onKgPriceChange={(code, value) => setKgPrices((previous) => ({ ...previous, [code]: value }))}
+               onModeChange={(code, value) => setPricingModes((previous) => ({ ...previous, [code]: value }))}
+               weightPerBale={(code) => Number(map.get(code)?.weightPerBaleKg || 0)}
+               shortageCount={(row, qty) => qty > 0 && row.freeToPromise < 0 ? Math.abs(row.freeToPromise) : 0}
+               existingCodes={new Set(proformaQuery.data?.lines.map((line) => line.articleCode) ?? [])}
+               onClear={(code) => setQuantities((previous) => ({ ...previous, [code]: "0" }))}
+             />
+             <div className="mx-3 hidden min-w-0 overflow-x-auto rounded-b-xl border border-t-0 bg-card shadow-sm md:block phone-land:hidden sm:mx-5">
               <table className="w-full min-w-[1120px] table-fixed border-collapse text-sm">
                 <colgroup><col style={{ width: "27%" }} /><col style={{ width: "10%" }} /><col style={{ width: "15%" }} /><col style={{ width: "13%" }} /><col style={{ width: "12%" }} /><col style={{ width: "19%" }} /><col style={{ width: "4%" }} /></colgroup>
                 <thead><tr className="sticky top-0 z-30 bg-slate-100 text-slate-700 dark:bg-slate-800/95 dark:text-slate-200">

@@ -31,11 +31,13 @@ if (!new Set(["localhost", "127.0.0.1", "::1"]).has(database.hostname)) {
 const pool = new Pool({ connectionString: databaseUrl });
 const client = await pool.connect();
 
+const duoFixtures = process.env.ERP_DUO_CREATE_FIXTURES === "1";
 const companyFixtures = [
   { code: "PHASE9-ERP", name: "UX Verification ERP", companyType: "erp" },
   { code: "PHASE9-FACTORY", name: "UX Verification Factory", companyType: "factory" },
   { code: "PHASE9-PROPERTIES", name: "UX Verification Properties", companyType: "properties" },
   { code: "PHASE9-SP", name: "UX Verification Supplier Partner", companyType: "supplier_partner" },
+  ...(duoFixtures ? [{ code: "PHASE9-RETAIL", name: "UX Verification Retail", companyType: "retail" }] : []),
 ];
 
 try {
@@ -78,6 +80,28 @@ try {
     );
   }
 
+  if (duoFixtures) {
+    // The POS router is role-specific. A Developer-only fixture cannot certify it.
+    const posUsername = username + "_duo_pos";
+    const posUserResult = await client.query(
+      `INSERT INTO users (username, password, active)
+       VALUES ($1, $2, true)
+       ON CONFLICT (username) DO UPDATE
+         SET password = EXCLUDED.password, active = true
+       RETURNING id`,
+      [posUsername, passwordHash],
+    );
+    const posUserId = posUserResult.rows[0]?.id;
+    if (!posUserId) throw new Error("iPhone Duo POS fixture user creation failed");
+    await client.query("DELETE FROM user_company_roles WHERE user_id = $1", [posUserId]);
+    for (const code of ["PHASE9-ERP", "PHASE9-RETAIL"]) {
+      await client.query(
+        `INSERT INTO user_company_roles (user_id, company_id, role)
+         VALUES ($1, $2, 'POS')`,
+        [posUserId, companyIds[code]],
+      );
+    }
+  }
   await client.query("COMMIT");
   console.log(
     JSON.stringify({
