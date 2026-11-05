@@ -86,7 +86,7 @@ export function validateWorkbookSelections(preview: WorkbookPreview, input: Inte
 /** Always re-read the actual uploaded bytes, including at confirmation. */
 export async function parseIntercompanyWorkbook(file: Buffer, name: string, companyId: number): Promise<WorkbookPreview> {
   assert(file.length > 0 && file.length <= 10 * 1024 * 1024, "Upload an Excel file under 10 MB");
-  assert(/\.(xlsx|xls)$/i.test(name), "Only .xlsx and .xls workbooks are accepted");
+  assert(/\.xlsx$/i.test(name), "Only .xlsx workbooks are supported by this Excel parser");
   const workbook = await readExcel(file);
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   assert(sheet, "Excel file has no worksheet");
@@ -187,7 +187,7 @@ export async function eligibleDestinations(sourceCompanyId: number, userId: stri
   assert(source?.companyType === "properties" && source.active, "Trading is available only from an active Properties company");
   assert(role === "Developer" || role === "Owner", "Only Owners and Developers may import containers");
   const memberships = await db.select().from(userCompanyRoles).where(eq(userCompanyRoles.userId, userId));
-  const ids = memberships.map(m => m.companyId);
+  const ids = memberships.filter(m => m.role === "Owner" || m.role === "Developer").map(m => m.companyId);
   const candidates = role === "Developer"
     ? await db.select().from(companies).where(eq(companies.active, true))
     : await db.select().from(companies).where(and(eq(companies.active, true), inArray(companies.id, ids.length ? ids : [-1])));
@@ -262,13 +262,27 @@ export async function setTradingRelationship(sourceCompanyId: number, userId: st
       const trades = await tx.select({id:intercompanyTrades.id}).from(intercompanyTrades)
         .where(eq(intercompanyTrades.relationshipId, existing.id)).limit(1);
       assert(!trades.length, "Relationship mapping cannot change once a trade has been recorded");
-      return (await tx.update(intercompanyRelationshipPolicies).set({
+      const [updated] = await tx.update(intercompanyRelationshipPolicies).set({
         ...fields, tradeEnabled:true, version:existing.version+1, updatedAt:new Date(),
-      }).where(eq(intercompanyRelationshipPolicies.id, existing.id)).returning())[0];
+      }).where(eq(intercompanyRelationshipPolicies.id, existing.id)).returning();
+      await tx.insert(intercompanyAuditEvents).values({
+        eventKey:"ic-container-partner:" + updated.id + ":" + updated.version,
+        relationshipId:updated.id, sourceCompanyId, actorUserId:userId,
+        eventType:"trading-relationship-configured", sourceReference:"explicit Owner/Developer mapping",
+        payload:{destinationCompanyId:mapping.destinationCompanyId,version:updated.version,accountMapping:fields},
+      });
+      return updated;
     }
-    return (await tx.insert(intercompanyRelationshipPolicies).values({
+    const [created] = await tx.insert(intercompanyRelationshipPolicies).values({
       ...fields, relationshipType:"container_trade", baseCurrency:"USD", tradeEnabled:true,
-    }).returning())[0];
+    }).returning();
+    await tx.insert(intercompanyAuditEvents).values({
+      eventKey:"ic-container-partner:" + created.id + ":" + created.version,
+      relationshipId:created.id, sourceCompanyId, actorUserId:userId,
+      eventType:"trading-relationship-configured", sourceReference:"explicit Owner/Developer mapping",
+      payload:{destinationCompanyId:mapping.destinationCompanyId,version:created.version,accountMapping:fields},
+    });
+    return created;
   }));
 }
 
@@ -312,6 +326,15 @@ export async function postIntercompanyImport(args: {
       eq(companyScopedSuppliers.active, true), isNull(companyScopedSuppliers.deletedAt),
     ));
     assert(external, "External supplier must belong to the Properties company");
+    for (const container of preview.containers) {
+      const sheetCode = container.supplierCode?.trim();
+      if (sheetCode) {
+        assert(normalizedName(sheetCode) === normalizedName(external.code) ||
+          normalizedName(sheetCode) === normalizedName(external.legalName),
+          "External supplier code in container " + container.containerNumber +
+          " does not match the selected Properties supplier");
+      }
+    }
     const accounts = await tx.select().from(ledgerAccounts).where(and(
       inArray(ledgerAccounts.companyId, [sourceCompanyId, ...destinations]), isNull(ledgerAccounts.deletedAt)));
     const mappedAccounts = new Map(policies.map(p => [p.id, validatedAccounts(p, accounts)]));
