@@ -40,8 +40,7 @@ CREATE TABLE IF NOT EXISTS intercompany_container_payments (
   CONSTRAINT ic_payments_evidence_check CHECK(length(btrim(transfer_reference))>=5 AND length(btrim(confirmation_evidence))>=8),
   CONSTRAINT ic_payments_distinct_vouchers CHECK(source_receipt_voucher_id<>destination_payment_voucher_id),
   CONSTRAINT ic_payments_status_check CHECK(status IN ('confirmed','reversed')),
-  CONSTRAINT ic_payments_fingerprint CHECK(request_fingerprint ~ '^[0-9a-f]{64}
-  CONSTRAINT ic_payments_reversal_consistency CHECK(
+  CONSTRAINT ic_payments_fingerprint CHECK(request_fingerprint ~ '^[0-9a-f]{64}  CONSTRAINT ic_payments_reversal_consistency CHECK(
     (status='confirmed' AND reversed_at IS NULL AND reversed_by IS NULL
       AND reversal_date IS NULL AND reversal_reason IS NULL AND reversal_key IS NULL AND reversal_fingerprint IS NULL
       AND source_reversal_voucher_id IS NULL AND destination_reversal_voucher_id IS NULL)
@@ -266,14 +265,13 @@ FOR EACH ROW EXECUTE FUNCTION ic_block_payment_voucher_mutation();
 CREATE TRIGGER ic_payment_voucher_entry_guard BEFORE INSERT OR UPDATE OR DELETE ON voucher_entries
 FOR EACH ROW EXECUTE FUNCTION ic_block_payment_voucher_mutation();
 
-    AND (reversal_fingerprint IS NULL OR reversal_fingerprint ~ '^[0-9a-f]{64}
-  CONSTRAINT ic_payments_reversal_consistency CHECK(
+    AND (reversal_fingerprint IS NULL OR reversal_fingerprint ~ '^[0-9a-f]{64}  CONSTRAINT ic_payments_reversal_consistency CHECK(
     (status='confirmed' AND reversed_at IS NULL AND reversed_by IS NULL
-      AND reversal_date IS NULL AND reversal_reason IS NULL AND reversal_key IS NULL
+      AND reversal_date IS NULL AND reversal_reason IS NULL AND reversal_key IS NULL AND reversal_fingerprint IS NULL
       AND source_reversal_voucher_id IS NULL AND destination_reversal_voucher_id IS NULL)
     OR
     (status='reversed' AND reversed_at IS NOT NULL AND reversed_by IS NOT NULL
-      AND reversal_date IS NOT NULL AND length(btrim(reversal_reason))>=3 AND reversal_key IS NOT NULL
+      AND reversal_date IS NOT NULL AND length(btrim(reversal_reason))>=3 AND reversal_key IS NOT NULL AND reversal_fingerprint IS NOT NULL
       AND source_reversal_voucher_id IS NOT NULL AND destination_reversal_voucher_id IS NOT NULL)
   )
 );
@@ -341,6 +339,26 @@ CREATE CONSTRAINT TRIGGER ic_payment_pair_totals
   AFTER INSERT OR UPDATE ON intercompany_container_payments
   DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION ic_verify_payment_allocation_totals();
 
+-- A synchronized PO edit may change its confirmed landed cost without directly
+-- touching a payment. The deferred guard still requires any excess paid credit
+-- to be released atomically in that same edit transaction.
+CREATE OR REPLACE FUNCTION ic_check_trade_paid_after_cost()
+RETURNS TRIGGER LANGUAGE plpgsql AS $check$
+DECLARE total_paid NUMERIC(20,2);
+BEGIN
+  IF NEW.trade_id IS NULL THEN RETURN NULL; END IF;
+  SELECT COALESCE(SUM(amount),0) INTO total_paid FROM intercompany_payment_allocations
+  WHERE trade_id=NEW.trade_id;
+  IF total_paid<0 OR (NEW.confirmed_landed_cost IS NOT NULL AND total_paid>NEW.confirmed_landed_cost) THEN
+    RAISE EXCEPTION 'PO cost decrease must atomically release over-allocated original-pair credit';
+  END IF;
+  RETURN NULL;
+END $check$;
+CREATE CONSTRAINT TRIGGER ic_payment_po_cost_guard
+AFTER UPDATE ON intercompany_import_batch_containers
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION ic_check_trade_paid_after_cost();
+
+
 CREATE OR REPLACE FUNCTION ic_validate_payment_allocation_row()
 RETURNS TRIGGER LANGUAGE plpgsql AS $guard$
 DECLARE payment_row RECORD; trade_row RECORD;
@@ -379,7 +397,7 @@ BEGIN
       OR current_setting('erp.ic_payment_reversal',true) IS DISTINCT FROM OLD.id::text
       OR (to_jsonb(OLD) - ARRAY[
          'status','reversed_by','reversed_at','reversal_date','reversal_reason',
-         'reversal_key','source_reversal_voucher_id','destination_reversal_voucher_id']::text[])
+         'reversal_key','reversal_fingerprint','source_reversal_voucher_id','destination_reversal_voucher_id']::text[])
        IS DISTINCT FROM
          (to_jsonb(NEW) - ARRAY[
          'status','reversed_by','reversed_at','reversal_date','reversal_reason',
@@ -402,6 +420,12 @@ BEGIN
      dest_voucher.company_id IS DISTINCT FROM NEW.destination_company_id OR dest_voucher.voucher_type<>'Payment'
     OR dest_voucher.deleted_at IS NOT NULL THEN
     RAISE EXCEPTION 'Paired actual payment voucher companies/types are incorrect';
+  END IF;
+  IF NOT EXISTS(SELECT 1 FROM ledger_accounts WHERE id=NEW.source_receivable_account_id
+      AND company_id=NEW.source_company_id AND deleted_at IS NULL)
+    OR NOT EXISTS(SELECT 1 FROM suppliers WHERE id=NEW.destination_supplier_id
+      AND company_id=NEW.destination_company_id AND deleted_at IS NULL) THEN
+    RAISE EXCEPTION 'Original receivable/supplier identities do not belong to the paid company pair';
   END IF;
   IF NEW.source_cash_type='bank' THEN
     IF NOT EXISTS(SELECT 1 FROM bank_accounts WHERE id=NEW.source_cash_id
@@ -468,11 +492,11 @@ FOR EACH ROW EXECUTE FUNCTION ic_block_payment_voucher_mutation();
 )),
   CONSTRAINT ic_payments_reversal_consistency CHECK(
     (status='confirmed' AND reversed_at IS NULL AND reversed_by IS NULL
-      AND reversal_date IS NULL AND reversal_reason IS NULL AND reversal_key IS NULL
+      AND reversal_date IS NULL AND reversal_reason IS NULL AND reversal_key IS NULL AND reversal_fingerprint IS NULL
       AND source_reversal_voucher_id IS NULL AND destination_reversal_voucher_id IS NULL)
     OR
     (status='reversed' AND reversed_at IS NOT NULL AND reversed_by IS NOT NULL
-      AND reversal_date IS NOT NULL AND length(btrim(reversal_reason))>=3 AND reversal_key IS NOT NULL
+      AND reversal_date IS NOT NULL AND length(btrim(reversal_reason))>=3 AND reversal_key IS NOT NULL AND reversal_fingerprint IS NOT NULL
       AND source_reversal_voucher_id IS NOT NULL AND destination_reversal_voucher_id IS NOT NULL)
   )
 );
@@ -540,6 +564,26 @@ CREATE CONSTRAINT TRIGGER ic_payment_pair_totals
   AFTER INSERT OR UPDATE ON intercompany_container_payments
   DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION ic_verify_payment_allocation_totals();
 
+-- A synchronized PO edit may change its confirmed landed cost without directly
+-- touching a payment. The deferred guard still requires any excess paid credit
+-- to be released atomically in that same edit transaction.
+CREATE OR REPLACE FUNCTION ic_check_trade_paid_after_cost()
+RETURNS TRIGGER LANGUAGE plpgsql AS $check$
+DECLARE total_paid NUMERIC(20,2);
+BEGIN
+  IF NEW.trade_id IS NULL THEN RETURN NULL; END IF;
+  SELECT COALESCE(SUM(amount),0) INTO total_paid FROM intercompany_payment_allocations
+  WHERE trade_id=NEW.trade_id;
+  IF total_paid<0 OR (NEW.confirmed_landed_cost IS NOT NULL AND total_paid>NEW.confirmed_landed_cost) THEN
+    RAISE EXCEPTION 'PO cost decrease must atomically release over-allocated original-pair credit';
+  END IF;
+  RETURN NULL;
+END $check$;
+CREATE CONSTRAINT TRIGGER ic_payment_po_cost_guard
+AFTER UPDATE ON intercompany_import_batch_containers
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION ic_check_trade_paid_after_cost();
+
+
 CREATE OR REPLACE FUNCTION ic_validate_payment_allocation_row()
 RETURNS TRIGGER LANGUAGE plpgsql AS $guard$
 DECLARE payment_row RECORD; trade_row RECORD;
@@ -578,7 +622,7 @@ BEGIN
       OR current_setting('erp.ic_payment_reversal',true) IS DISTINCT FROM OLD.id::text
       OR (to_jsonb(OLD) - ARRAY[
          'status','reversed_by','reversed_at','reversal_date','reversal_reason',
-         'reversal_key','source_reversal_voucher_id','destination_reversal_voucher_id']::text[])
+         'reversal_key','reversal_fingerprint','source_reversal_voucher_id','destination_reversal_voucher_id']::text[])
        IS DISTINCT FROM
          (to_jsonb(NEW) - ARRAY[
          'status','reversed_by','reversed_at','reversal_date','reversal_reason',
@@ -601,6 +645,12 @@ BEGIN
      dest_voucher.company_id IS DISTINCT FROM NEW.destination_company_id OR dest_voucher.voucher_type<>'Payment'
     OR dest_voucher.deleted_at IS NOT NULL THEN
     RAISE EXCEPTION 'Paired actual payment voucher companies/types are incorrect';
+  END IF;
+  IF NOT EXISTS(SELECT 1 FROM ledger_accounts WHERE id=NEW.source_receivable_account_id
+      AND company_id=NEW.source_company_id AND deleted_at IS NULL)
+    OR NOT EXISTS(SELECT 1 FROM suppliers WHERE id=NEW.destination_supplier_id
+      AND company_id=NEW.destination_company_id AND deleted_at IS NULL) THEN
+    RAISE EXCEPTION 'Original receivable/supplier identities do not belong to the paid company pair';
   END IF;
   IF NEW.source_cash_type='bank' THEN
     IF NOT EXISTS(SELECT 1 FROM bank_accounts WHERE id=NEW.source_cash_id
