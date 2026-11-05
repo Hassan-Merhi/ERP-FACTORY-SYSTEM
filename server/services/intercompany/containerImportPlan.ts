@@ -1,3 +1,4 @@
+import type Decimal from "decimal.js";
 /**
  * Exact, deterministic Phase 2 Excel container pricing plan.
  * The uploaded workbook is re-parsed server-side at confirmation. Never trust a
@@ -154,7 +155,7 @@ export function createContainerImportPlan(
   }
 
   const confirmed = selection.chargesConfirmed;
-  const zeroOr = (v: MoneyDecimal) => (confirmed ? v : zero);
+  const zeroOr = (v: Decimal) => (confirmed ? v : zero);
   const charges = {
     freight: zeroOr(freight).toFixed(2),
     surcharge: zeroOr(surcharge).toFixed(2),
