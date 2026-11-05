@@ -52,3 +52,15 @@ export function ticketEventCopy(eventType:string,ticketNumber:string) {
     message:`Ticket ${ticketNumber} ${label}. Open the ERP/Factory Ticket Management page to review.` };
 }
 
+
+/** Optional authenticated deep link; never construct from user-supplied URLs. */
+export function ticketDestinationUrl(base:string|undefined,sourceMode:string,ticketId:number):string|null {
+  if(!base || !Number.isSafeInteger(ticketId) || ticketId<=0)return null;
+  try{
+    const parsed=new URL(base);
+    if(parsed.protocol!=="https:" || parsed.username || parsed.password)return null;
+    const destination=new URL(sourceMode==="factory"?"/factory/tickets":"/tickets",parsed.origin);
+    destination.searchParams.set("ticketId",String(ticketId));
+    return destination.toString();
+  }catch{return null;}
+}
