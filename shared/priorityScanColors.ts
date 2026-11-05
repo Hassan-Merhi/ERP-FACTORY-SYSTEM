@@ -30,7 +30,7 @@ export const DEFAULT_PRIORITY_SCAN_COLOR: PriorityScanColor = PRIORITY_SCAN_COLO
  * Historical colors outside today's palette deliberately have no letter.
  */
 export const PRIORITY_SCAN_COLOR_LETTERS = {
-  "#9400D3": "M",
+  "#9400D3": "D",
   "#F28500": "N",
   "#FFD700": "O",
   "#39FF14": "P",
@@ -40,7 +40,7 @@ export const PRIORITY_SCAN_COLOR_LETTERS = {
   "#000000": "T",
   "#B0E0E6": "U",
   "#DB7093": "V",
-  "#A7FC00": "W",
+  "#A7FC00": "C",
 } as const satisfies Record<PriorityScanColor, string>;
 
 export type PriorityScanLetter = (typeof PRIORITY_SCAN_COLOR_LETTERS)[PriorityScanColor];
