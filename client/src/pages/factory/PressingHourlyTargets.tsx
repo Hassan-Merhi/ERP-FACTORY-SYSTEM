@@ -10,8 +10,6 @@ import { type PressingHourlySnapshot } from "./pressing-scanner/pressingHourlyKp
 
 const ENDPOINT = "/api/factory/pressing-machines/report/hourly-targets";
 const ZONE = "Asia/Beirut";
-type Worker = { userId: string; slot: string; name: string; targetKgPerHour: number };
-type HourRow = { hourStart: string; userId: string; kg: string; bales: number };
 type HourlyResponse = PressingHourlySnapshot;
 const formatKg = (value: number) =>
   value.toLocaleString(undefined, { maximumFractionDigits: 3 });
