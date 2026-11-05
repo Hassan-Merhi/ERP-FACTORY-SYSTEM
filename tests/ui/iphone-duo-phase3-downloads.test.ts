@@ -43,7 +43,8 @@ describe("iOS Safari file-download lifecycle", () => {
     vi.advanceTimersByTime(BLOB_DOWNLOAD_GRACE_MS - 1);
     expect(revoke).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
-    expect(revoke).toHaveBeenCalledExactlyOnceWith("blob:test-export");
+    expect(revoke).toHaveBeenCalledTimes(1);
+    expect(revoke).toHaveBeenCalledWith("blob:test-export");
   });
 
   it("removes the anchor and schedules cleanup even when the browser rejects the click", () => {
