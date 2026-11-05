@@ -46,7 +46,7 @@ describe("monthly production Excel drill-down", () => {
     expect(sheet.getCell("E7").fill).toMatchObject({ fgColor: { argb: "FFFEE2E2" } });
     expect(sheet.getCell("F7").fill).toMatchObject({ fgColor: { argb: "FFD1FAE5" } });
     expect(sheet.getCell("G7").value).toMatchObject({ result: 15 });
-    expect(sheet.getCell("G9").value).toMatchObject({ result: 24 });
+    expect(sheet.getCell("G9").value).toBe(24);
   });
 
   it("navigates entirely within four embedded worksheets, with one detailed row per bale", () => {
