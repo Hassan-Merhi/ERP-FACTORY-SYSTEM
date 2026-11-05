@@ -122,7 +122,7 @@ export function createContainerImportPlan(
       originalPoNumber,
     };
     if (!line.barcode && !line.itemName) throw new Error(name + ": missing item identity on row " + item.rowNum);
-    const key = originalPoNumber || "[UNNUMBERED]";
+    const key = originalPoNumber;
     const current = groups.get(key) ?? [];
     current.push(line);
     groups.set(key, current);
@@ -185,7 +185,7 @@ export function createContainerImportPlan(
       throw new Error(name + ": source PO is not balanced");
     }
     return {
-      originalPoNumber: key === "[UNNUMBERED]" ? "" : key,
+      originalPoNumber: key,
       lines,
       itemsTotal: split.itemsTotal.toFixed(2),
       freight: split.freight.toFixed(2),
