@@ -170,13 +170,13 @@ describe("intercompany phase 1 foundation", () => {
         "INSERT INTO intercompany_permission_grants(user_id,granting_company_id,relationship_id,scope,invoice_key,granted_by) VALUES ('editor',1,1,'invoice','invoice-1','owner')"
       );
       await rejects(
-        "INSERT INTO intercompany_permission_grants(user_id,granting_company_id,scope,invoice_key,granted_by) VALUES ('editor',1,'invoice','invoice-1','owner')"
+        "INSERT INTO intercompany_permission_grants(user_id,granting_company_id,relationship_id,scope,invoice_key,granted_by) VALUES ('editor',1,1,'invoice','invoice-1','owner')"
       );
       await rejects(
         "INSERT INTO intercompany_permission_grants(user_id,granting_company_id,relationship_id,scope,granted_by) VALUES ('editor',1,1,'invoice','owner')"
       );
       await rejects(
-        "INSERT INTO intercompany_permission_grants(user_id,granting_company_id,relationship_id,scope,granted_by) VALUES ('editor',1,1,'relationship','owner')"
+        "INSERT INTO intercompany_permission_grants(user_id,granting_company_id,relationship_id,scope,invoice_key,granted_by) VALUES ('editor',1,1,'relationship','invoice-3','owner')"
       );
       await rejects(
         "INSERT INTO intercompany_permission_grants(user_id,granting_company_id,relationship_id,scope,invoice_key,granted_by) VALUES ('editor',1,1,'invoice','invoice-2','editor')",
@@ -188,7 +188,7 @@ describe("intercompany phase 1 foundation", () => {
       );
       await client.query("UPDATE intercompany_permission_grants SET revoked_at=NOW(), revoked_by='owner' WHERE id=1");
       await client.query(
-        "INSERT INTO intercompany_permission_grants(user_id,granting_company_id,scope,invoice_key,granted_by) VALUES ('editor',1,'invoice','invoice-1','owner')"
+        "INSERT INTO intercompany_permission_grants(user_id,granting_company_id,relationship_id,scope,invoice_key,granted_by) VALUES ('editor',1,1,'invoice','invoice-1','owner')"
       );
 
       // Audit records are append-only, including for privileged database clients.
