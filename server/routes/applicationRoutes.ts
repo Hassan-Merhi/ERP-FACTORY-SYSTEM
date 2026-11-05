@@ -47,6 +47,7 @@ import { registerLazyRouteModule } from "./lazyRouteRegistrar";
 import { registerLedgerRoutes } from "./ledgerRoutes";
 import { registerLocationRoutes } from "./locationRoutes";
 import { registerNotificationRoutes } from "./notificationRoutes";
+import { registerTicketRoutes } from "./ticketRoutes";
 import { registerPasskeyRoutes } from "./passkeyRoutes";
 import { registerPosRoutes } from "./posRoutes";
 import { registerPropertiesRentalRoutes } from "./propertiesRentalRoutes";
@@ -214,6 +215,7 @@ export async function registerApplicationRoutes(app: Express): Promise<Server> {
   registerBusinessAlertRoutes(app);
   registerIntercompanyNotificationRoutes(app);
   registerNotificationRoutes(app);
+  registerTicketRoutes(app);
   registerTransporterStatementRoutes(app);
 
   return createServer(app);
