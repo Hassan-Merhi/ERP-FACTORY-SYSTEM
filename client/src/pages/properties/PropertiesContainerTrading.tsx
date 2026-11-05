@@ -238,7 +238,7 @@ export default function PropertiesContainerTrading() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-10" data-testid="properties-container-trading">
-      <PageHeader title="Container Trading" description="Import Eurogulf and other supplier POs once in Properties, then create at-cost linked destination POs." />
+      <PageHeader title="Container Trading" subtitle="Import Eurogulf and other supplier POs once in Properties, then create at-cost linked destination POs." />
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <ShieldCheck className="h-4 w-4" />
         <span>Each container belongs to one destination. No markup, cash payment or duplicate stock is created.</span>
