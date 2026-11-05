@@ -251,7 +251,7 @@ async function checkChosenPos(tx: DbTransaction, pair: Policy, choices: ManualPo
       .select()
       .from(intercompanyImportBatchContainers)
       .where(eq(intercompanyImportBatchContainers.tradeId, trade.id));
-    if (!posted) rejectEdit("Selected PO has no confirmed landed cost");
+    if (!posted || posted.confirmedLandedCost == null) rejectEdit("Selected PO has no confirmed landed cost");
     const due = cents(posted.confirmedLandedCost).minus(await tradeAppliedTx(tx, trade.id));
     if (due.lt(0)) rejectEdit("Selected PO has inconsistent prior allocations");
     available.push(due);
