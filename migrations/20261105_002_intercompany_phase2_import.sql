@@ -3,6 +3,7 @@
 -- Never rewrites existing purchase orders, containers, journals or stock.
 ALTER TABLE intercompany_relationship_policies
   ADD COLUMN IF NOT EXISTS destination_supplier_id INTEGER REFERENCES suppliers(id) ON DELETE RESTRICT,
+  ADD COLUMN IF NOT EXISTS source_purchase_account_id INTEGER REFERENCES ledger_accounts(id) ON DELETE RESTRICT,
   ADD COLUMN IF NOT EXISTS source_sales_account_id INTEGER REFERENCES ledger_accounts(id) ON DELETE RESTRICT,
   ADD COLUMN IF NOT EXISTS source_cost_account_id INTEGER REFERENCES ledger_accounts(id) ON DELETE RESTRICT,
   ADD COLUMN IF NOT EXISTS source_charge_accrual_account_id INTEGER REFERENCES ledger_accounts(id) ON DELETE RESTRICT,
@@ -14,6 +15,7 @@ ALTER TABLE intercompany_relationship_policies
   ADD CONSTRAINT intercompany_policy_phase2_configuration CHECK (
     NOT trade_enabled OR (
       destination_supplier_id IS NOT NULL AND
+      source_purchase_account_id IS NOT NULL AND
       source_sales_account_id IS NOT NULL AND
       source_cost_account_id IS NOT NULL AND
       source_charge_accrual_account_id IS NOT NULL AND
@@ -55,6 +57,7 @@ BEGIN
     SELECT 'source receivable' AS label, NEW.source_receivable_account_id AS account_id,
            NEW.source_company_id AS company_id
     UNION ALL SELECT 'destination payable', NEW.destination_payable_account_id, NEW.destination_company_id
+    UNION ALL SELECT 'source purchases', NEW.source_purchase_account_id, NEW.source_company_id
     UNION ALL SELECT 'source sales', NEW.source_sales_account_id, NEW.source_company_id
     UNION ALL SELECT 'source cost', NEW.source_cost_account_id, NEW.source_company_id
     UNION ALL SELECT 'source charge accrual', NEW.source_charge_accrual_account_id, NEW.source_company_id
@@ -83,7 +86,7 @@ CREATE TRIGGER intercompany_policy_account_scope
 BEFORE INSERT OR UPDATE OF
   source_company_id, destination_company_id,
   source_receivable_account_id, destination_payable_account_id,
-  source_sales_account_id, source_cost_account_id, source_charge_accrual_account_id,
+  source_purchase_account_id, source_sales_account_id, source_cost_account_id, source_charge_accrual_account_id,
   destination_git_account_id, destination_supplier_id
 ON intercompany_relationship_policies
 FOR EACH ROW EXECUTE FUNCTION intercompany_check_policy_accounts();
