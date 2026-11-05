@@ -423,6 +423,54 @@ async function capture(page, language, viewport, route) {
   return path.relative(process.cwd(), file);
 }
 
+const TRANSITION_ROUTES = new Set([
+  "/", "/tracking", "/daybook", "/factory/stock-entry", "/factory/stock-allocation-v5",
+  "/factory/monthly-production-matrix", "/factory/production-bonuses",
+  "/properties/rentals", "/retail/pos", "/retail/inventory", "/pos-containers", "/sp/reports",
+]);
+const TRANSITION_PROFILES = [
+  { name: "duo-cover", width: 466, height: 678, deviceScaleFactor: 3, isMobile: true, hasTouch: true },
+  { name: "duo-inner", width: 626, height: 890, deviceScaleFactor: 3, isMobile: true, hasTouch: true },
+  { name: "duo-inner-landscape", width: 890, height: 626, deviceScaleFactor: 3, isMobile: true, hasTouch: true },
+  { name: "duo-split", width: 393, height: 890, deviceScaleFactor: 3, isMobile: true, hasTouch: true },
+];
+async function verifyDuoTransitions(page, language, sourceViewport, group, route, originalPath) {
+  if (process.env.ERP_DUO_TRANSITIONS !== "1" || !TRANSITION_ROUTES.has(route)) return;
+  const before = await page.evaluate(() => {
+    const input = document.querySelector('input[type="search"],input[type="text"]');
+    return input instanceof HTMLInputElement ? { name: input.name, value: input.value } : null;
+  });
+  try {
+    for (const target of TRANSITION_PROFILES) {
+      await page.setViewport(target);
+      await waitForSettledUi(page);
+      const state = await readPageState(page);
+      const errors = [];
+      if (state.path !== originalPath) errors.push("unexpected route change");
+      if (!state.main || !state.shell) errors.push("workspace disappeared");
+      if (state.horizontalOverflow) errors.push("root horizontal overflow");
+      const after = await page.evaluate(() => {
+        const main = document.getElementById("main-content");
+        const input = document.querySelector('input[type="search"],input[type="text"]');
+        return {
+          overflow: Boolean(main && main.scrollWidth > main.clientWidth + 2),
+          field: input instanceof HTMLInputElement ? { name: input.name, value: input.value } : null,
+        };
+      });
+      if (after.overflow) errors.push("main workspace horizontal overflow");
+      if (before && after.field && before.name === after.field.name && before.value !== after.field.value)
+        errors.push("filter value lost on resize");
+      const screenshot = await capture(page, language.code, "transition-" + target.name, group.workspace + "-" + route);
+      report.transitions.push({ workspace: group.workspace, route, from: sourceViewport.name,
+        to: target.name, failures: errors, screenshot });
+      report.failures.push(...errors.map((reason) => group.workspace + " " + route + " -> " + target.name + ": " + reason));
+    }
+  } finally {
+    await page.setViewport(sourceViewport);
+    await waitForSettledUi(page);
+  }
+}
+
 await fs.mkdir(OUTPUT_DIR, { recursive: true });
 
 for (const language of LANGUAGES) {
@@ -481,8 +529,17 @@ for (const language of LANGUAGES) {
           await applyLanguage(page, language.code);
           const languageOnboardingCompleted = await completeLanguageOnboarding(page, language.code);
           for (const group of WORKSPACE_ROUTE_GROUPS) {
-            const selectedWorkspaceCompany = await selectWorkspaceCompany(page, group.companyCode);
+            let selectedWorkspaceCompany;
+            try { selectedWorkspaceCompany = await selectWorkspaceCompany(page, group.companyCode); }
+            catch (error) {
+              const message = group.workspace + ": fixture selection failed: " +
+                (error instanceof Error ? error.message : String(error));
+              report.failures.push(message);
+              report.cases.push({ workspace: group.workspace, classification: "fixture-unavailable", error: message });
+              continue;
+            }
             for (const route of group.routes) {
+              try {
               const status = await openRoute(page, route);
               await applyLanguage(page, language.code);
               const state = await readPageState(page);
@@ -519,6 +576,14 @@ for (const language of LANGUAGES) {
                 failures,
               });
               report.failures.push(...failures);
+              await verifyDuoTransitions(page, language, viewport, group, route, state.path);
+              } catch (error) {
+                const message = language.name + " " + viewport.name + " " + group.workspace + " " +
+                  route + ": " + (error instanceof Error ? error.message : String(error));
+                report.failures.push(message);
+                report.cases.push({ language: language.code, viewport: viewport.name, workspace: group.workspace,
+                  requestedRoute: route, classification: "route-exception", error: message });
+              }
             }
           }
         }
@@ -544,7 +609,7 @@ report.finishedAt = new Date().toISOString();
 report.coverage = {
   staticDeclared: WORKSPACE_ROUTE_GROUPS.reduce((n, group) => n + group.routes.length, 0),
   dynamicWithoutSeeds: WORKSPACE_ROUTE_GROUPS.reduce((n, group) => n + group.parameterized.length, 0),
-  auditedCases: report.cases.filter((item) => Boolean(item.workspace)).length,
+  auditedCases: report.cases.filter((item) => Boolean(item.workspace) && !item.classification).length,
   transitions: report.transitions.length,
 };
 if (process.env.ERP_DUO_REQUIRE_COMPLETE === "1" && report.coverage.dynamicWithoutSeeds)
