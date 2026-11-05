@@ -324,15 +324,22 @@ export const intercompanyTradeSourcePos = pgTable(
   })
 );
 
-
 /** Exact source/destination row correspondence; never pair lines by name or approximate cost. */
 export const intercompanyTradeLineLinks = pgTable(
   "intercompany_trade_line_links",
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
-    tradeId: integer("trade_id").notNull().references(() => intercompanyTrades.id, { onDelete: "restrict" }),
-    sourceLineId: integer("source_line_id").notNull().unique().references(() => poLineItems.id, { onDelete: "restrict" }),
-    destinationLineId: integer("destination_line_id").notNull().unique().references(() => poLineItems.id, { onDelete: "restrict" }),
+    tradeId: integer("trade_id")
+      .notNull()
+      .references(() => intercompanyTrades.id, { onDelete: "restrict" }),
+    sourceLineId: integer("source_line_id")
+      .notNull()
+      .unique()
+      .references(() => poLineItems.id, { onDelete: "restrict" }),
+    destinationLineId: integer("destination_line_id")
+      .notNull()
+      .unique()
+      .references(() => poLineItems.id, { onDelete: "restrict" }),
     originalExcelRow: integer("original_excel_row").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -346,12 +353,18 @@ export const intercompanyTradeRevisions = pgTable(
   "intercompany_trade_revisions",
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
-    tradeId: integer("trade_id").notNull().references(() => intercompanyTrades.id, { onDelete: "restrict" }),
+    tradeId: integer("trade_id")
+      .notNull()
+      .references(() => intercompanyTrades.id, { onDelete: "restrict" }),
     revisionNumber: integer("revision_number").notNull(),
     kind: varchar("kind", { length: 40 }).notNull(),
     requestKey: varchar("request_key", { length: 160 }).notNull().unique(),
-    actorUserId: varchar("actor_user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
-    initiatingCompanyId: integer("initiating_company_id").notNull().references(() => companies.id, { onDelete: "restrict" }),
+    actorUserId: varchar("actor_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    initiatingCompanyId: integer("initiating_company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "restrict" }),
     state: varchar("state", { length: 20 }).notNull().default("posting"),
     amountBefore: decimal("amount_before", { precision: 20, scale: 2 }).notNull(),
     amountAfter: decimal("amount_after", { precision: 20, scale: 2 }).notNull(),
@@ -372,7 +385,9 @@ export const intercompanySharedChargeInvoices = pgTable(
   "intercompany_shared_charge_invoices",
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
-    sourceCompanyId: integer("source_company_id").notNull().references(() => companies.id, { onDelete: "restrict" }),
+    sourceCompanyId: integer("source_company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "restrict" }),
     externalInvoiceKey: varchar("external_invoice_key", { length: 120 }).notNull(),
     chargeType: varchar("charge_type", { length: 32 }).notNull(),
     faceAmount: decimal("face_amount", { precision: 20, scale: 2 }).notNull(),
@@ -380,7 +395,9 @@ export const intercompanySharedChargeInvoices = pgTable(
     evidenceReference: text("evidence_reference").notNull(),
     state: varchar("state", { length: 16 }).notNull().default("draft"),
     version: integer("version").notNull().default(1),
-    createdBy: varchar("created_by").notNull().references(() => users.id, { onDelete: "restrict" }),
+    createdBy: varchar("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
   },
@@ -395,10 +412,15 @@ export const intercompanySharedChargeAllocations = pgTable(
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
     invoiceId: bigint("invoice_id", { mode: "number" })
-      .notNull().references(() => intercompanySharedChargeInvoices.id, { onDelete: "restrict" }),
-    tradeId: integer("trade_id").notNull().references(() => intercompanyTrades.id, { onDelete: "restrict" }),
+      .notNull()
+      .references(() => intercompanySharedChargeInvoices.id, { onDelete: "restrict" }),
+    tradeId: integer("trade_id")
+      .notNull()
+      .references(() => intercompanyTrades.id, { onDelete: "restrict" }),
     amount: decimal("amount", { precision: 20, scale: 2 }).notNull(),
-    containerChargeId: integer("container_charge_id").unique().references(() => containerCharges.id, { onDelete: "restrict" }),
+    containerChargeId: integer("container_charge_id")
+      .unique()
+      .references(() => containerCharges.id, { onDelete: "restrict" }),
   },
   (t) => ({
     tradeIdx: index("ic_shared_charge_trade_idx").on(t.tradeId),
@@ -411,9 +433,14 @@ export const intercompanySharedChargePoAllocations = pgTable(
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
     invoiceId: bigint("invoice_id", { mode: "number" })
-      .notNull().references(() => intercompanySharedChargeInvoices.id, { onDelete: "restrict" }),
-    tradeId: integer("trade_id").notNull().references(() => intercompanyTrades.id, { onDelete: "restrict" }),
-    sourcePoId: integer("source_po_id").notNull().references(() => purchaseOrders.id, { onDelete: "restrict" }),
+      .notNull()
+      .references(() => intercompanySharedChargeInvoices.id, { onDelete: "restrict" }),
+    tradeId: integer("trade_id")
+      .notNull()
+      .references(() => intercompanyTrades.id, { onDelete: "restrict" }),
+    sourcePoId: integer("source_po_id")
+      .notNull()
+      .references(() => purchaseOrders.id, { onDelete: "restrict" }),
     amount: decimal("amount", { precision: 20, scale: 2 }).notNull(),
   },
   (t) => ({
