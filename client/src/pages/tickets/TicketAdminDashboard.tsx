@@ -118,7 +118,7 @@ export default function TicketAdminDashboard({onBack,onOpenTicket,canExport}:{on
           <p className="mt-2 text-2xl font-semibold">{s.avg_resolution_hours===null?"—":safeNumber(s.avg_resolution_hours).toFixed(1)+" hours"}</p>
           <p className="text-xs text-muted-foreground">Calculated from finalized cases in the current filter</p>
         </div>
-        <div className="rounded-xl border bg-card p-4"><p className="text-sm font-medium">Finalized within the default 24h target</p>
+        <div className="rounded-xl border bg-card p-4"><p className="text-sm font-medium">Finalized by ticket due time</p>
           <p className="mt-2 text-2xl font-semibold">{safeNumber(s.resolved_within_24_hours).toLocaleString()}</p>
           <p className="text-xs text-muted-foreground">Count of finalized tickets resolved by their due time</p>
         </div>
