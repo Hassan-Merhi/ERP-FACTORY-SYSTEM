@@ -79,3 +79,25 @@ Status: implemented as feature-branch code; **CI and isolated PostgreSQL certifi
 3. Disposable database end-to-end scenario: import, edit from each involved company, confirm invoice, redistribute, reject stale versions and refuse closed periods.
 4. Green TypeScript, formatting, backend, security, route-manifest, i18n and mobile checks, without regressions to existing ERP.
 5. No merge, production database migration, deployment, or feature activation without the user's approval.
+
+## Phase 4 — paired actual payments and same-pair credit (branch-only)
+
+Phase 4 is implemented on the independent feature branch only. It has **no migration, merge or production posting** until verified and deliberately activated.
+
+- One confirmed real-world transfer requires explicit evidence of a destination ERP cash/bank **payment** and a Hassan Properties cash/bank **receipt**, each using an active account in its own company. Confirmation creates both central-engine vouchers in **one database transaction** or neither.
+- The destination debit is its **Hassan Properties supplier payable**, and the source credit is its **intercompany receivable**. The cash/bank legs are the real, individually selected payment/receipt accounts; credits and allocations never fake a bank/cash posting.
+- A stable idempotency key and an immutable fingerprint of the transfer evidence, dates, historical FX, selected accounts and manual allocations prevent accidental double posting or changed-payload replay. The external transfer reference must also be unique for that company pair.
+- Payment currency can be USD, CFA or ZMW. The original transaction amount, exchange rate in **transaction units per USD**, posting date, and resulting USD-base amount are preserved. Each company's central posting engine validates current period restrictions.
+- Actual payments may be partially allocated to specific outstanding linked PO(s), selected by the user. Excess remains **unallocated credit belonging only to this specific Properties–destination pair**.
+- **On new container import only**, existing unapplied credits in that pair are applied oldest first. This step creates allocation evidence only; it does not move any cash/bank balance.
+- **On PO price decreases**, existing allocations are preserved wherever possible. If they exceed the new PO cost, the excess is released to its original payment/credit pool. Such credit is not automatically moved to another existing PO during edits.
+- Reversal requires explicit confirmation of **both real-world legs** and a documented permissible reversal date. It posts two balanced append-only reversal vouchers, releases only that payment's PO allocations, retains the original financial vouchers and historical FX, and is itself idempotent and audited.
+- Database triggers prohibit allocating HADI money to Kinshasa or vice versa, spending one cash receipt twice, keeping paid allocations after full reversal, editing allocation history, and uncoordinated editing/deletion/reversal of either mirrored voucher.
+- Cancellation and destination-change credit carryover hooks are reserved for Phase 5; their company-pair isolation remains mandatory. Phase 4 does not silently reassign physical container ownership.
+
+### Phase 4 verification
+
+1. `tests/intercompany-phase4-payment-money.test.ts`: historical exchange rate conversion, exact cent-level manual allocations, overpayments, and oldest-first credit use.
+2. `tests/intercompany-phase4-database-guards.test.ts`: disposable PostgreSQL schema with all four migrations, wrong-pair refusal, immutable actual voucher evidence, overpayment refusal and paired reversal.
+3. Manual staging checks must cover two-side bank/cash postings, partial allocations, credit before new import, independent ERP destinations, stale edits, closed-period reversal, FX retention, simultaneous payment attempts, and no unintended cash entry.
+4. Phase 4 is not certified until TypeScript, backend/DB, route security, formatting, translation, mobile and account balance tests pass. `main` remains untouched until explicit user permission.
