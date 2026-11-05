@@ -330,6 +330,11 @@ CREATE CONSTRAINT TRIGGER ic_shared_charge_po_sum_guard AFTER INSERT OR UPDATE O
 ON intercompany_shared_charge_po_allocations DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION ic_check_shared_po_allocations();
 
+-- Recheck source-PO totals when the parent container allocation changes too.
+CREATE CONSTRAINT TRIGGER ic_shared_charge_parent_po_sum_guard AFTER INSERT OR UPDATE OR DELETE
+ON intercompany_shared_charge_allocations DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW EXECUTE FUNCTION ic_check_shared_po_allocations();
+
 -- All trade/PO allocation references must be ownership-consistent.
 CREATE OR REPLACE FUNCTION ic_guard_shared_charge_allocation()
 RETURNS TRIGGER LANGUAGE plpgsql AS $check$
@@ -347,9 +352,9 @@ BEGIN
     IF OLD.invoice_id <> NEW.invoice_id OR OLD.trade_id <> NEW.trade_id THEN
       RAISE EXCEPTION 'Shared charge allocation ownership cannot change';
     END IF;
-    IF inv.state='confirmed' AND NOT ic_edit_scope_matches(NEW.trade_id) THEN
-      RAISE EXCEPTION 'Confirmed shared charge allocation requires an authorized transaction revision';
-    END IF;
+  END IF;
+  IF inv.state='confirmed' AND NOT ic_edit_scope_matches(NEW.trade_id) THEN
+    RAISE EXCEPTION 'Confirmed shared charge allocation requires an authorized transaction revision';
   END IF;
   RETURN NEW;
 END $check$;
@@ -374,7 +379,7 @@ BEGIN
     NEW.invoice_id <> OLD.invoice_id OR NEW.trade_id <> OLD.trade_id OR NEW.source_po_id <> OLD.source_po_id) THEN
     RAISE EXCEPTION 'Source PO allocation identities cannot change';
   END IF;
-  IF TG_OP='UPDATE' AND inv_state='confirmed' AND NOT ic_edit_scope_matches(NEW.trade_id) THEN
+  IF inv_state='confirmed' AND NOT ic_edit_scope_matches(NEW.trade_id) THEN
     RAISE EXCEPTION 'Confirmed source PO allocation requires an authorized transaction revision';
   END IF;
   RETURN NEW;
