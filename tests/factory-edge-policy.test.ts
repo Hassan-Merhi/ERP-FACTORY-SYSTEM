@@ -153,10 +153,15 @@ describe("factory LAN edge deployment policy", () => {
       expect(edgeBlocksWrite(config, "POST", "/api/edge/operator/sync-control")).toBe(false);
       expect(edgeBlocksWrite(config, "POST", "/api/edge/operator/conflicts/decide")).toBe(true);
       expect(edgeBlocksWrite(config, "PUT", "/api/edge/operator/sync-control")).toBe(true);
-      // Single stock item edit: PATCH only (create, delete and merge stay cloud-only).
+      // Single stock item: edit (PATCH), delete and create are captured; merge stays cloud-only.
       expect(edgeBlocksWrite(config, "PATCH", "/api/stock-items/42")).toBe(mode === "read-only");
-      for (const verb of ["POST", "PUT", "DELETE"]) {
+      expect(edgeBlocksWrite(config, "DELETE", "/api/stock-items/42")).toBe(mode === "read-only");
+      expect(edgeBlocksWrite(config, "POST", "/api/stock-items")).toBe(mode === "read-only");
+      for (const verb of ["POST", "PUT"]) {
         expect(edgeBlocksWrite(config, verb, "/api/stock-items/42")).toBe(true);
+      }
+      for (const verb of ["PUT", "PATCH", "DELETE"]) {
+        expect(edgeBlocksWrite(config, verb, "/api/stock-items")).toBe(true);
       }
       for (const path of [
         "/api/factory/pressing-machines/void",
@@ -167,7 +172,6 @@ describe("factory LAN edge deployment policy", () => {
         "/api/attachments",
         "/api/files/42",
         "/api/payments",
-        "/api/stock-items",
         "/api/stock-items/import",
         "/api/stock-items/bulk-delete",
         "/api/stock-items/42/merge",

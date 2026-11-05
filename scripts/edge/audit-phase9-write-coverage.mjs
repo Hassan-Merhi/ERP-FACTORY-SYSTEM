@@ -67,6 +67,18 @@ const SUPPORTED = new Map([
   ["POST /api/stock-items/import-opening-balances", STOCK_ITEM_EDIT],
   ["POST /api/stock-items/:id/location-prices", STOCK_ITEM_EDIT],
   ["PATCH /api/stock-items/:id", STOCK_ITEM_EDIT],
+  ["POST /api/stock-items", {
+    policy: "stock.item-create.v1",
+    limitations:
+      "Ids from a LAN-only range, mapped to the cloud item on replay; the code the user typed is kept " +
+      "(taken in the cloud = reject-only); a same-name item is held for Admin/Developer approve/reject",
+  }],
+  ["DELETE /api/stock-items/:id", {
+    policy: "stock.item-delete.v1",
+    limitations:
+      "Soft delete only for items with no inventory rows and no stock movements, on the LAN and again " +
+      "in the cloud (otherwise reject-only); merge and re-code stay cloud-only",
+  }],
   ["POST /api/pos/sales", {
     policy: "pos.sale.v1",
     limitations:

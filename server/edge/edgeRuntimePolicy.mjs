@@ -128,6 +128,7 @@ export const PHASE9_STOCK_ITEM_EDIT_STATIC_ROUTES = Object.freeze([
   "POST /api/stock-items/import-barcodes",
   "POST /api/stock-items/import-opening-balances",
 ]);
+export const PHASE9_STOCK_ITEM_CREATE_ROUTE = "POST /api/stock-items";
 export const PHASE9_STOCK_ITEM_PATH = /^\/api\/stock-items\/(?:[1-9][0-9]{0,9}|:id)$/;
 export const PHASE9_STOCK_ITEM_LOCATION_PRICES_PATH = /^\/api\/stock-items\/(?:[1-9][0-9]{0,9}|:id)\/location-prices$/;
 // A numeric container id, or the manifest template ":id" (which the route itself rejects as invalid).
@@ -180,6 +181,9 @@ export function phase9ApprovedCaptureRoute(method, path) {
   }
   if (verb === "DELETE" && PHASE9_VOUCHER_DELETE_PATH.test(path)) return "DELETE /api/vouchers/:id";
   if (verb === "PATCH" && PHASE9_STOCK_ITEM_PATH.test(path)) return "PATCH /api/stock-items/:id";
+  // Plan batch 2: new items and deletes of unused items, recorded for the cloud.
+  if (verb === "DELETE" && PHASE9_STOCK_ITEM_PATH.test(path)) return "DELETE /api/stock-items/:id";
+  if (key === PHASE9_STOCK_ITEM_CREATE_ROUTE) return key;
   if (verb === "POST" && PHASE9_STOCK_ITEM_LOCATION_PRICES_PATH.test(path)) {
     return "POST /api/stock-items/:id/location-prices";
   }

@@ -36,6 +36,7 @@ an open cloud epoch.
 | Stock movement: inventory quick adjust (add / subtract at a location) | yes, existing items and locations | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — replayed as a delta; below zero is held for Admin/Developer approve/reject |
 | New stock transfer (`POST /api/stock-transfers`, create-from-scratch form; the existing-voucher form is refused) | yes, existing items and locations | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — replayed through the same transfer code on the LAN request id, with a cloud voucher number; a source the cloud cannot cover is held for Admin/Developer approve/reject |
 | Stock-item master edits: bulk price update, bulk category, bulk rename, bulk unit fix, the update-by-code imports (names, categories, opening balances, barcodes), location prices and single-item edits | yes, existing items only; whitelisted fields (name, unit, selling price, category, group, active, opening balances, location prices, new barcodes) | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — each field applied only while the cloud value still equals what the LAN saw; a field the cloud changed meanwhile is held for Admin/Developer approve (LAN value wins) or reject; a re-coded or missing item, a missing category/group/location or a barcode another item holds is reject-only |
+| New stock item (`POST /api/stock-items`) and stock item delete (`DELETE /api/stock-items/:id`) | yes; the new item gets an id from the reserved LAN range (1,000,000,000 and up) and keeps the code the user typed; delete only for an item with no stock movements | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — the create makes the cloud item and records the LAN-id → cloud-id mapping (`factory_edge_stock_item_map`); every later record naming the LAN id is translated, and waits (no conflict) until the create has applied; a code the cloud already uses is reject-only, an item with the same name is held for Admin/Developer approve/reject; a delete of an item the cloud still holds stock of, or has movements for, is reject-only |
 | POS sale — cash, bank or credit; USD or another currency at the cashier's entered rate (non-supplier-partner company) | yes, numbered `LAN-<site>-000123` | `pos` (Phase 9) | `server/edge/phase9OperatorApply.ts apply pos` — replayed through the sale service on its `clientSaleId`; keeps the offline price; below-zero stock or a changed till account is held for Admin/Developer approve/reject |
 | Supplier receiving: container offload against its existing purchase orders, and offload edits, with duties, charges, cost corrections and agent lines | yes | `receiving` (Phase 9) | `server/edge/phase9OperatorApply.ts apply receiving` — same offload lifecycle on the receipt's transaction; cloud prices apply; changed order quantities are held for Admin/Developer approve/reject |
 | File upload (Files page), up to 10 MB | yes | `attachments` (Phase 9) + signed file upload | `server/edge/phase9OperatorApply.ts apply attachments` — the record syncs first; the relay then uploads the bytes to `/api/edge/sync/files/stage`, accepted only if their SHA-256 matches a staged record; the file is created in the cloud once its bytes arrive; a missing folder is held for approve/reject |
@@ -44,7 +45,7 @@ an open cloud epoch.
 | POS sale cancellation (`DELETE /api/vouchers/:id`, sales vouchers only, Admin) | yes | `pos` (same stream as the sale) | replayed through the same delete code; the operator tool refreshes the intercompany POS mirror for the date afterwards; a missing or already-cancelled sale is reject-only |
 | Login, logout, company switch | yes (session only) | none | n/a |
 | All reads covered by prepared offline reads | yes | n/a | n/a |
-| Everything else (1,155 write routes) | **refused** with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION` | none | n/a |
+| Everything else (1,154 write routes) | **refused** with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION` | none | n/a |
 
 `node scripts/edge/audit-phase9-write-coverage.mjs` prints the exact current
 inventory and fails if any route becomes writable on the LAN without a reviewed
@@ -59,14 +60,14 @@ conflict detection, and a PostgreSQL reconciliation test. Enabling a route
 without all of that would let the factory record transactions that cannot be
 reconciled safely, which is worse than refusing them.
 
-- **Creating, deleting, merging or re-coding stock items; Excel transfer
-  imports, inventory imports, transfer edits/approvals/revisions; bale
-  lifecycle, production finalisation:** item ids and codes are how every
-  other offline record (sales, transfers, adjustments) finds its item in the
-  cloud, so a new LAN item id could not be matched; the transfer workflow
-  edits and the Excel imports go through separate code that has no replay
-  handler yet. Quick adjustments, new transfers and master edits of existing
-  items are offline (above).
+- **Merging or re-coding stock items (owner decision 2026-11-05: stays
+  online-only); Excel transfer imports, inventory imports, transfer
+  edits/approvals/revisions; bale lifecycle, production finalisation:** a
+  merge or re-code rewrites the identity every other offline record uses to
+  find its item; the transfer workflow edits and the Excel imports go through
+  separate code that has no replay handler yet. Quick adjustments, new
+  transfers, new items, item deletes and master edits of existing items are
+  offline (above).
 - **Deletes of non-sales vouchers and payment edits:** each posts
   money and stock together through the central posting engine with
   multi-currency, tax and numbering rules. Payment/receipt edits and deletes

@@ -26,6 +26,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { vouchers } from "../erp/vouchers";
+import { stockItems } from "../inventory";
 import { factoryPressingConfirmations } from "../factory/pressing-machine-tracking";
 import { containerOffloads } from "../containers";
 import { storedFiles } from "../erp/documents";
@@ -277,6 +278,29 @@ export const factoryEdgeAttachmentFileReceipts = pgTable(
 );
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
+
+// Cloud: which cloud stock item each LAN-created item became (plan batch 2,
+// server/edge/phase9StockItemMap.mjs). The id CHECK, uniques and the
+// immutability trigger are installed by the runtime DDL.
+export const factoryEdgeStockItemMap = pgTable(
+  "factory_edge_stock_item_map",
+  {
+    siteId: uuid("site_id").notNull(),
+    lanItemId: integer("lan_item_id").notNull(),
+    cloudItemId: integer("cloud_item_id")
+      .notNull()
+      .references(() => stockItems.id, { onDelete: "restrict" }),
+    operationId: uuid("operation_id").notNull(),
+    mappedAt: timestamp("mapped_at", { withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (t) => [
+    primaryKey({ columns: [t.siteId, t.lanItemId] }),
+    unique().on(t.cloudItemId),
+    unique().on(t.siteId, t.operationId),
+  ]
+);
 
 // Cloud: verified attachment bytes (server/edge/phase9CloudEventStore.mjs).
 export const factoryEdgeStagedFiles = pgTable(

@@ -34,6 +34,7 @@ export const PHASE9_ATTACHMENT_UPLOAD_ROUTE: "POST /api/files/upload";
 export const PHASE9_PAYMENT_RECEIPT_ROUTE: "POST /api/vouchers/payment-receipt";
 export const PHASE9_STOCK_TRANSFER_ROUTE: "POST /api/stock-transfers";
 export const PHASE9_STOCK_ITEM_EDIT_STATIC_ROUTES: readonly string[];
+export const PHASE9_STOCK_ITEM_CREATE_ROUTE: "POST /api/stock-items";
 export const PHASE9_STOCK_ITEM_PATH: RegExp;
 export const PHASE9_STOCK_ITEM_LOCATION_PRICES_PATH: RegExp;
 export const PHASE9_RECEIVING_OFFLOAD_PATH: RegExp;

@@ -32,6 +32,8 @@ import { phase9PressingApplyHandler } from "./phase9PressingApply";
 import { phase9StockApplyHandler } from "./phase9StockApply";
 import { phase9StockTransferApplyHandler } from "./phase9StockTransferApply";
 import { phase9StockItemEditApplyHandler } from "./phase9StockItemEditApply";
+import { phase9StockItemCreateApplyHandler, phase9StockItemDeleteApplyHandler } from "./phase9StockItemLifecycleApply";
+import { PHASE9_STOCK_ITEM_CREATE_KIND, PHASE9_STOCK_ITEM_DELETE_KIND } from "./phase9StockItemLifecycleEnvelope.mjs";
 import { PHASE9_STOCK_ITEM_EDIT_KIND } from "./phase9StockItemEditEnvelope.mjs";
 import { phase9PosSaleApplyHandler } from "./phase9PosSaleApply";
 import {
@@ -64,6 +66,8 @@ export const PHASE9_HANDLERS = Object.freeze({
   [PHASE9_STOCK_ADJUST_KIND]: phase9StockApplyHandler,
   [PHASE9_STOCK_TRANSFER_KIND]: phase9StockTransferApplyHandler,
   [PHASE9_STOCK_ITEM_EDIT_KIND]: phase9StockItemEditApplyHandler,
+  [PHASE9_STOCK_ITEM_CREATE_KIND]: phase9StockItemCreateApplyHandler,
+  [PHASE9_STOCK_ITEM_DELETE_KIND]: phase9StockItemDeleteApplyHandler,
   [PHASE9_POS_SALE_KIND]: phase9PosSaleApplyHandler,
   [PHASE9_POS_SALE_EDIT_KIND]: phase9PosSaleEditApplyHandler,
   [PHASE9_POS_SALE_CANCEL_KIND]: phase9PosSaleCancelApplyHandler,

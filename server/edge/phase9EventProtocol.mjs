@@ -11,6 +11,13 @@
  * Registering a kind is the review gate for a new offline write workflow.
  */
 import {
+  PHASE9_STOCK_ITEM_CREATE_KIND,
+  PHASE9_STOCK_ITEM_DELETE_KIND,
+  PHASE9_STOCK_ITEM_NAME_EXISTS_CONFLICT,
+  phase9StockItemCreateEnvelope,
+  phase9StockItemDeleteEnvelope,
+} from "./phase9StockItemLifecycleEnvelope.mjs";
+import {
   PHASE9_STOCK_ITEM_CHANGED_CONFLICT,
   PHASE9_STOCK_ITEM_EDIT_KIND,
   phase9StockItemEditEnvelope,
@@ -126,6 +133,19 @@ function stockItemEditPayload(payload) {
   return stableEqual(rebuilt, payload) ? rebuilt : null;
 }
 
+function rebuiltPayload(payload, kind, envelope) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (payload.kind !== kind) return null;
+  const { kind: _kind, ...evidence } = payload;
+  let rebuilt;
+  try {
+    rebuilt = envelope(evidence);
+  } catch {
+    return null;
+  }
+  return stableEqual(rebuilt, payload) ? rebuilt : null;
+}
+
 function posSalePayload(payload) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
   if (payload.kind !== PHASE9_POS_SALE_KIND) return null;
@@ -235,6 +255,18 @@ const STREAMS = Object.freeze({
         parse: stockItemEditPayload,
         localRef: (payload) => payload.localEditId,
         overridable: Object.freeze([PHASE9_STOCK_ITEM_CHANGED_CONFLICT]),
+      }),
+      // Plan batch 2: items created / deleted on the LAN, on the same stream
+      // so a create always applies before the records that use the item.
+      [PHASE9_STOCK_ITEM_CREATE_KIND]: Object.freeze({
+        parse: (payload) => rebuiltPayload(payload, PHASE9_STOCK_ITEM_CREATE_KIND, phase9StockItemCreateEnvelope),
+        localRef: (payload) => payload.localStockItemId,
+        overridable: Object.freeze([PHASE9_STOCK_ITEM_NAME_EXISTS_CONFLICT]),
+      }),
+      [PHASE9_STOCK_ITEM_DELETE_KIND]: Object.freeze({
+        parse: (payload) => rebuiltPayload(payload, PHASE9_STOCK_ITEM_DELETE_KIND, phase9StockItemDeleteEnvelope),
+        localRef: (payload) => payload.stockItemId,
+        overridable: Object.freeze([]),
       }),
     }),
   }),

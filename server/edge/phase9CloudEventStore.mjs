@@ -17,6 +17,7 @@
  * Handlers MUST use the same client/transaction they are given.
  */
 import { createHash } from "node:crypto";
+import { translatePhase9LanStockItems } from "./phase9StockItemMap.mjs";
 import { validatePhase8OperatorApproval, hasVerifiedCloudWriterAuthority } from "./phase8ApplyStore.mjs";
 import {
   EDGE_EVENT_RECEIPT_PROTOCOL,
@@ -438,8 +439,11 @@ export async function applyStagedEventOnce(queryable, input, handlers) {
       }
       const handler = Object.prototype.hasOwnProperty.call(handlers, event.kind) ? handlers[event.kind] : null;
       if (!handler) throw new Phase9ApplyRefusal("PHASE9_HANDLER_MISSING");
-      await handler.authorize(queryable, event);
-      result = await handler.apply(queryable, event, Object.freeze({ overrideConflicts, siteId: approved.siteId }));
+      // Plan batch 2: items created on the LAN are named by their LAN id; the
+      // handler sees the cloud item instead (or the apply waits for its create).
+      const handled = await translatePhase9LanStockItems(queryable, approved.siteId, event);
+      await handler.authorize(queryable, handled);
+      result = await handler.apply(queryable, handled, Object.freeze({ overrideConflicts, siteId: approved.siteId }));
       if (
         !result ||
         !["cloud-applied", "already-present"].includes(result.outcome) ||
@@ -450,7 +454,7 @@ export async function applyStagedEventOnce(queryable, input, handlers) {
       ) {
         throw new Phase9ApplyRefusal("PHASE9_APPLY_RESULT_INVALID");
       }
-      if (!(await handler.verify(queryable, event, result))) {
+      if (!(await handler.verify(queryable, handled, result))) {
         throw new Phase9ApplyRefusal("PHASE9_READ_AFTER_APPLY_FAILED");
       }
     }

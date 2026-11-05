@@ -281,6 +281,8 @@ export function registerFactoryEdgeBoundary(app: Express): void {
             ...PHASE9_STOCK_ITEM_EDIT_STATIC_ROUTES,
             "PATCH /api/stock-items/:id",
             "POST /api/stock-items/:id/location-prices",
+            "POST /api/stock-items",
+            "DELETE /api/stock-items/:id",
           ].map((route) => [
             route,
             {

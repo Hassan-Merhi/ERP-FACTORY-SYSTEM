@@ -13,6 +13,7 @@
 import { sql } from "drizzle-orm";
 import type { Pool } from "pg";
 import type { DbTransaction } from "../db";
+import { EdgeRefusal } from "./edgeRefusal";
 import { readFactoryEdgeConfiguration } from "./edgeRuntimePolicy.mjs";
 import { hashEvidence } from "./edgeSyncStageProtocol.mjs";
 import {
@@ -22,12 +23,29 @@ import {
   type Phase9StockTransferEvidence,
 } from "./phase9StockEnvelope.mjs";
 import { phase9StockItemEditEnvelope, type Phase9StockItemEditEvidence } from "./phase9StockItemEditEnvelope.mjs";
+import {
+  PHASE9_LAN_ITEM_ID_BASE,
+  PHASE9_STOCK_ITEM_CREATE_KIND,
+  PHASE9_STOCK_ITEM_DELETE_KIND,
+  phase9StockItemCreateEnvelope,
+  phase9StockItemDeleteEnvelope,
+  type Phase9StockItemCreateEvidence,
+  type Phase9StockItemDeleteEvidence,
+} from "./phase9StockItemLifecycleEnvelope.mjs";
 
 /**
  * local_movement_id is the LAN source row: a canonical stock movement (quick
  * adjust), a stock transfer (transfer) or the edit's own stream sequence (item
  * edit); unique per kind.
  */
+const STOCK_OUTBOX_KINDS = [
+  "stock.quick-adjust.v1",
+  "stock.transfer.v1",
+  "stock.item-edit.v1",
+  PHASE9_STOCK_ITEM_CREATE_KIND,
+  PHASE9_STOCK_ITEM_DELETE_KIND,
+] as const;
+
 export async function ensurePhase9StockOutboxSchema(queryable: Pick<Pool, "query">): Promise<void> {
   if (readFactoryEdgeConfiguration().mode !== "lan") return;
   await queryable.query(`
@@ -44,7 +62,7 @@ export async function ensurePhase9StockOutboxSchema(queryable: Pick<Pool, "query
       company_id INTEGER NOT NULL CHECK(company_id > 0),
       actor_user_id TEXT NOT NULL CHECK(length(actor_user_id) > 0),
       local_movement_id BIGINT NOT NULL CHECK(local_movement_id > 0 AND local_movement_id <= 2147483647),
-      operation_kind TEXT NOT NULL CHECK(operation_kind IN ('stock.quick-adjust.v1', 'stock.transfer.v1', 'stock.item-edit.v1')),
+      operation_kind TEXT NOT NULL,
       payload JSONB NOT NULL,
       payload_sha256 CHAR(64) NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
@@ -53,6 +71,22 @@ export async function ensurePhase9StockOutboxSchema(queryable: Pick<Pool, "query
       UNIQUE (site_id, operation_kind, local_movement_id)
     )
   `);
+  // The allowed kinds are (re)set on every install, so an existing outbox
+  // learns new kinds without being rebuilt.
+  await queryable.query(
+    "ALTER TABLE factory_edge_stock_outbox DROP CONSTRAINT IF EXISTS factory_edge_stock_outbox_operation_kind_check"
+  );
+  await queryable.query(
+    `ALTER TABLE factory_edge_stock_outbox ADD CONSTRAINT factory_edge_stock_outbox_operation_kind_check
+       CHECK (operation_kind IN (${STOCK_OUTBOX_KINDS.map((kind) => `'${kind}'`).join(", ")}))`
+  );
+  // Plan batch 2: items created on this server take their id from a range the
+  // cloud never uses, so offline records naming them can be translated to the
+  // cloud's item (only the LAN create route draws from it).
+  await queryable.query(
+    `CREATE SEQUENCE IF NOT EXISTS factory_edge_lan_item_id_seq
+       AS integer START WITH ${PHASE9_LAN_ITEM_ID_BASE} MINVALUE ${PHASE9_LAN_ITEM_ID_BASE} MAXVALUE 2147483647`
+  );
   // Shared with the pressing install; both are idempotent.
   await queryable.query(`
     CREATE OR REPLACE FUNCTION factory_edge_stock_outbox_immutable()
@@ -156,4 +190,60 @@ export async function capturePhase9StockItemEditTx(
             ${event.companyId}, ${event.actorUserId}, ${event.localEditId},
             ${event.kind}, ${JSON.stringify(event)}::jsonb, ${hashEvidence(event)})
   `);
+}
+
+async function appendStockEventTx(
+  tx: DbTransaction,
+  siteId: string,
+  event: { kind: string; requestId: string; companyId: number; actorUserId: string },
+  localRef: number
+): Promise<void> {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('factory-edge-stock-outbox-order'))`);
+  await tx.execute(sql`
+    WITH next_sequence AS (
+      INSERT INTO factory_edge_stock_counter (site_id, last_sequence)
+      VALUES (${siteId}::uuid, 1)
+      ON CONFLICT (site_id)
+        DO UPDATE SET last_sequence = factory_edge_stock_counter.last_sequence + 1
+      RETURNING last_sequence
+    )
+    INSERT INTO factory_edge_stock_outbox
+      (site_id, sequence, operation_id, company_id, actor_user_id,
+       local_movement_id, operation_kind, payload, payload_sha256)
+    SELECT ${siteId}::uuid, next_sequence.last_sequence, ${event.requestId}::uuid,
+           ${event.companyId}, ${event.actorUserId}, ${localRef},
+           ${event.kind}, ${JSON.stringify(event)}::jsonb, ${hashEvidence(event)}
+    FROM next_sequence
+  `);
+}
+
+/** Plan batch 2: a stock item created on the LAN primary; no-op elsewhere. */
+export async function capturePhase9StockItemCreateTx(
+  tx: DbTransaction,
+  evidence: Phase9StockItemCreateEvidence
+): Promise<void> {
+  const config = readFactoryEdgeConfiguration();
+  if (config.mode !== "lan" || !config.primary) return;
+  const event = phase9StockItemCreateEnvelope(evidence);
+  await appendStockEventTx(tx, String(config.siteId), event, event.localStockItemId);
+}
+
+/** Plan batch 2: a stock item deleted (soft) on the LAN primary; no-op elsewhere. */
+export async function capturePhase9StockItemDeleteTx(
+  tx: DbTransaction,
+  evidence: Phase9StockItemDeleteEvidence
+): Promise<void> {
+  const config = readFactoryEdgeConfiguration();
+  if (config.mode !== "lan" || !config.primary) return;
+  const event = phase9StockItemDeleteEnvelope(evidence);
+  await appendStockEventTx(tx, String(config.siteId), event, event.stockItemId);
+}
+
+/** The next LAN stock item id (from the reserved range); LAN primary only. */
+export async function nextPhase9LanStockItemIdTx(tx: DbTransaction): Promise<number> {
+  const result = await tx.execute(sql`SELECT nextval('factory_edge_lan_item_id_seq')::int AS id`);
+  const id = Number((result.rows[0] as { id: number | string }).id);
+  if (!Number.isSafeInteger(id) || id < PHASE9_LAN_ITEM_ID_BASE)
+    throw new EdgeRefusal("PHASE9_LAN_ITEM_ID_RANGE_INVALID");
+  return id;
 }

@@ -4,6 +4,9 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
+import { isPhase9LanPrimary } from "../../../edge/phase9PosOutbox";
+import { capturePhase9StockItemCreateTx, nextPhase9LanStockItemIdTx } from "../../../edge/phase9StockOutbox";
+import { stockItemCreateEvidence } from "../../../services/inventory/stockItemLifecycleCapture";
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
@@ -232,9 +235,20 @@ export function registerStockItemRoutes(app: Express) {
         parsed.openingValue = (qty * rate).toFixed(2);
       }
 
+      // Plan batch 2: on the factory LAN server during an outage the item takes
+      // its id from the reserved LAN range and is recorded for the cloud.
+      const lanCapture = isPhase9LanPrimary();
       // Phase 21 (B): the write and its audit commit together.
       const item = await db.transaction(async (tx) => {
-        const written = await storage.createStockItem(parsed, tx);
+        const written = lanCapture
+          ? (
+              await tx
+                .insert(stockItems)
+                .values({ ...parsed, id: await nextPhase9LanStockItemIdTx(tx) })
+                .returning()
+            )[0]
+          : await storage.createStockItem(parsed, tx);
+        if (lanCapture) await capturePhase9StockItemCreateTx(tx, stockItemCreateEvidence(req, written));
         await logAudit(
           {
             userId: req.session.userId!,
