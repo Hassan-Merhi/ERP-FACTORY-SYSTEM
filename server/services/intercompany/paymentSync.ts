@@ -191,6 +191,7 @@ export async function confirmMirroredPayment(input:MirroredPaymentInput,actor:Ed
       transactionAmount:native.toFixed(6),historicalRate:rate.toFixed(10),baseAmount:base.toFixed(2),
       sourceCashType:input.sourceReceiptAccount.type,sourceCashId:input.sourceReceiptAccount.id,
       destinationCashType:input.destinationPaymentAccount.type,destinationCashId:input.destinationPaymentAccount.id,
+      sourceReceivableAccountId:fresh.sourceReceivableAccountId!,destinationSupplierId:fresh.destinationSupplierId!,
       sourceReceiptVoucherId:source.voucher.id,destinationPaymentVoucherId:destination.voucher.id,
       status:"confirmed",createdBy:actor.actorUserId,
     }).returning();
@@ -240,28 +241,35 @@ export async function reverseMirroredPayment(input:MirroredReversalInput,actor:E
       if(payment.reversalKey===input.requestKey&&payment.reversalFingerprint===reversalFingerprint)return {paymentId:payment.id,reversed:true,replayed:true};
       rejectEdit("Payment has already been reversed with a different key");
     }
-    const fresh=await activePaymentPairTx(tx,pair.id);
+    // Reversal follows ORIGINAL account targets even if the relationship was
+    // disabled or remapped after the real transfer. The payment row is immutable.
+    const [storedPair]=await tx.select().from(intercompanyRelationshipPolicies)
+      .where(eq(intercompanyRelationshipPolicies.id,pair.id)).for("update");
+    if(!storedPair||payment.sourceCompanyId!==storedPair.sourceCompanyId||
+      payment.destinationCompanyId!==storedPair.destinationCompanyId){
+      rejectEdit("Original paid company pair is inconsistent");
+    }
     const releases=await releasePaymentAllocationsTx(tx,{paymentId:payment.id,actorUserId:actor.actorUserId});
     const currency=payment.transactionCurrency as PaymentCurrency;
     const src=await postErpVoucherTx(tx,{
-      companyId:fresh.sourceCompanyId,voucherType:"Payment",voucherDate:input.reversalDate,
+      companyId:payment.sourceCompanyId,voucherType:"Payment",voucherDate:input.reversalDate,
       currency,exchangeRate:payment.historicalRate,sourceModule:"INTERCOMPANY_CONTAINER",
       description:"Actual reversal of Properties receipt "+payment.transferReference,
       source:{type:"ic-paired-receipt-reversed",id:input.requestKey},
       actor:{userId:actor.actorUserId,reason:input.reason.trim()},
       lines:paymentLines(payment.baseAmount,currency,payment.transactionAmount,payment.historicalRate,
-        {ledgerAccountId:fresh.sourceReceivableAccountId!},
+        {ledgerAccountId:payment.sourceReceivableAccountId},
         accountTarget({type:payment.sourceCashType as "bank"|"cash",id:payment.sourceCashId})),
     });
     const dst=await postErpVoucherTx(tx,{
-      companyId:fresh.destinationCompanyId,voucherType:"Receipt",voucherDate:input.reversalDate,
+      companyId:payment.destinationCompanyId,voucherType:"Receipt",voucherDate:input.reversalDate,
       currency,exchangeRate:payment.historicalRate,sourceModule:"INTERCOMPANY_CONTAINER",
       description:"Actual reversal of destination payment "+payment.transferReference,
       source:{type:"ic-paired-payment-reversed",id:input.requestKey},
       actor:{userId:actor.actorUserId,reason:input.reason.trim()},
       lines:paymentLines(payment.baseAmount,currency,payment.transactionAmount,payment.historicalRate,
         accountTarget({type:payment.destinationCashType as "bank"|"cash",id:payment.destinationCashId}),
-        {supplierId:fresh.destinationSupplierId!}),
+        {supplierId:payment.destinationSupplierId}),
     });
     await tx.execute(sql.raw("SELECT set_config('erp.ic_payment_reversal','"+payment.id+"',true)"));
     await tx.update(intercompanyContainerPayments).set({
