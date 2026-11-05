@@ -449,66 +449,91 @@ export const intercompanySharedChargePoAllocations = pgTable(
   })
 );
 
-
 /** Real, confirmed, balanced cash/bank transfer with immutable historic FX evidence. */
 export const intercompanyContainerPayments = pgTable(
   "intercompany_container_payments",
   {
-    id: bigserial("id", {mode:"number"}).primaryKey(),
-    relationshipId:integer("relationship_id").notNull().references(()=>intercompanyRelationshipPolicies.id,{onDelete:"restrict"}),
-    sourceCompanyId:integer("source_company_id").notNull().references(()=>companies.id,{onDelete:"restrict"}),
-    destinationCompanyId:integer("destination_company_id").notNull().references(()=>companies.id,{onDelete:"restrict"}),
-    requestKey:varchar("request_key",{length:160}).notNull().unique(),
-    requestFingerprint:varchar("request_fingerprint",{length:64}).notNull(),
-    transferReference:varchar("transfer_reference",{length:180}).notNull(),
-    confirmationEvidence:text("confirmation_evidence").notNull(),
-    paymentDate:date("payment_date").notNull(),
-    transactionCurrency:varchar("transaction_currency",{length:3}).notNull().default("USD"),
-    transactionAmount:decimal("transaction_amount",{precision:20,scale:6}).notNull(),
-    historicalRate:decimal("historical_rate",{precision:20,scale:10}).notNull().default("1"),
-    baseAmount:decimal("base_amount",{precision:20,scale:2}).notNull(),
-    sourceCashType:varchar("source_cash_type",{length:8}).notNull(),
-    sourceCashId:integer("source_cash_id").notNull(),
-    destinationCashType:varchar("destination_cash_type",{length:8}).notNull(),
-    destinationCashId:integer("destination_cash_id").notNull(),
-    sourceReceivableAccountId:integer("source_receivable_account_id").notNull().references(()=>ledgerAccounts.id,{onDelete:"restrict"}),
-    destinationSupplierId:integer("destination_supplier_id").notNull().references(()=>companyScopedSuppliers.id,{onDelete:"restrict"}),
-    sourceReceiptVoucherId:integer("source_receipt_voucher_id").notNull().unique().references(()=>vouchers.id,{onDelete:"restrict"}),
-    destinationPaymentVoucherId:integer("destination_payment_voucher_id").notNull().unique().references(()=>vouchers.id,{onDelete:"restrict"}),
-    status:varchar("status",{length:12}).notNull().default("confirmed"),
-    createdBy:varchar("created_by").notNull().references(()=>users.id,{onDelete:"restrict"}),
-    createdAt:timestamp("created_at",{withTimezone:true}).notNull().defaultNow(),
-    reversedBy:varchar("reversed_by").references(()=>users.id,{onDelete:"restrict"}),
-    reversedAt:timestamp("reversed_at",{withTimezone:true}),
-    reversalDate:date("reversal_date"),
-    reversalReason:text("reversal_reason"),
-    reversalKey:varchar("reversal_key",{length:160}).unique(),
-    reversalFingerprint:varchar("reversal_fingerprint",{length:64}),
-    sourceReversalVoucherId:integer("source_reversal_voucher_id").unique().references(()=>vouchers.id,{onDelete:"restrict"}),
-    destinationReversalVoucherId:integer("destination_reversal_voucher_id").unique().references(()=>vouchers.id,{onDelete:"restrict"}),
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    relationshipId: integer("relationship_id")
+      .notNull()
+      .references(() => intercompanyRelationshipPolicies.id, { onDelete: "restrict" }),
+    sourceCompanyId: integer("source_company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "restrict" }),
+    destinationCompanyId: integer("destination_company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "restrict" }),
+    requestKey: varchar("request_key", { length: 160 }).notNull().unique(),
+    requestFingerprint: varchar("request_fingerprint", { length: 64 }).notNull(),
+    transferReference: varchar("transfer_reference", { length: 180 }).notNull(),
+    confirmationEvidence: text("confirmation_evidence").notNull(),
+    paymentDate: date("payment_date").notNull(),
+    transactionCurrency: varchar("transaction_currency", { length: 3 }).notNull().default("USD"),
+    transactionAmount: decimal("transaction_amount", { precision: 20, scale: 6 }).notNull(),
+    historicalRate: decimal("historical_rate", { precision: 20, scale: 10 }).notNull().default("1"),
+    baseAmount: decimal("base_amount", { precision: 20, scale: 2 }).notNull(),
+    sourceCashType: varchar("source_cash_type", { length: 8 }).notNull(),
+    sourceCashId: integer("source_cash_id").notNull(),
+    destinationCashType: varchar("destination_cash_type", { length: 8 }).notNull(),
+    destinationCashId: integer("destination_cash_id").notNull(),
+    sourceReceivableAccountId: integer("source_receivable_account_id")
+      .notNull()
+      .references(() => ledgerAccounts.id, { onDelete: "restrict" }),
+    destinationSupplierId: integer("destination_supplier_id")
+      .notNull()
+      .references(() => companyScopedSuppliers.id, { onDelete: "restrict" }),
+    sourceReceiptVoucherId: integer("source_receipt_voucher_id")
+      .notNull()
+      .unique()
+      .references(() => vouchers.id, { onDelete: "restrict" }),
+    destinationPaymentVoucherId: integer("destination_payment_voucher_id")
+      .notNull()
+      .unique()
+      .references(() => vouchers.id, { onDelete: "restrict" }),
+    status: varchar("status", { length: 12 }).notNull().default("confirmed"),
+    createdBy: varchar("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    reversedBy: varchar("reversed_by").references(() => users.id, { onDelete: "restrict" }),
+    reversedAt: timestamp("reversed_at", { withTimezone: true }),
+    reversalDate: date("reversal_date"),
+    reversalReason: text("reversal_reason"),
+    reversalKey: varchar("reversal_key", { length: 160 }).unique(),
+    reversalFingerprint: varchar("reversal_fingerprint", { length: 64 }),
+    sourceReversalVoucherId: integer("source_reversal_voucher_id")
+      .unique()
+      .references(() => vouchers.id, { onDelete: "restrict" }),
+    destinationReversalVoucherId: integer("destination_reversal_voucher_id")
+      .unique()
+      .references(() => vouchers.id, { onDelete: "restrict" }),
   },
-  (t)=>({
-    relationshipDateIdx:index("ic_payments_pair_date_idx").on(t.relationshipId,t.paymentDate,t.id),
-    uniqueTransferRef:uniqueIndex("ic_payments_pair_transfer_ref").on(t.relationshipId,t.transferReference),
+  (t) => ({
+    relationshipDateIdx: index("ic_payments_pair_date_idx").on(t.relationshipId, t.paymentDate, t.id),
+    uniqueTransferRef: uniqueIndex("ic_payments_pair_transfer_ref").on(t.relationshipId, t.transferReference),
   })
 );
 
 export const intercompanyPaymentAllocations = pgTable(
   "intercompany_payment_allocations",
   {
-    id:bigserial("id",{mode:"number"}).primaryKey(),
-    paymentId:bigint("payment_id",{mode:"number"}).notNull().references(()=>intercompanyContainerPayments.id,{onDelete:"restrict"}),
-    tradeId:integer("trade_id").notNull().references(()=>intercompanyTrades.id,{onDelete:"restrict"}),
-    amount:decimal("amount",{precision:20,scale:2}).notNull(),
-    allocationKind:varchar("allocation_kind",{length:32}).notNull(),
-    requestKey:varchar("request_key",{length:180}).notNull().unique(),
-    createdBy:varchar("created_by").references(()=>users.id,{onDelete:"restrict"}),
-    reason:text("reason").notNull(),
-    createdAt:timestamp("created_at",{withTimezone:true}).notNull().defaultNow(),
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    paymentId: bigint("payment_id", { mode: "number" })
+      .notNull()
+      .references(() => intercompanyContainerPayments.id, { onDelete: "restrict" }),
+    tradeId: integer("trade_id")
+      .notNull()
+      .references(() => intercompanyTrades.id, { onDelete: "restrict" }),
+    amount: decimal("amount", { precision: 20, scale: 2 }).notNull(),
+    allocationKind: varchar("allocation_kind", { length: 32 }).notNull(),
+    requestKey: varchar("request_key", { length: 180 }).notNull().unique(),
+    createdBy: varchar("created_by").references(() => users.id, { onDelete: "restrict" }),
+    reason: text("reason").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t)=>({
-    paymentIdx:index("ic_payment_allocation_payment_idx").on(t.paymentId,t.id),
-    tradeIdx:index("ic_payment_allocation_trade_idx").on(t.tradeId,t.id),
+  (t) => ({
+    paymentIdx: index("ic_payment_allocation_payment_idx").on(t.paymentId, t.id),
+    tradeIdx: index("ic_payment_allocation_trade_idx").on(t.tradeId, t.id),
   })
 );
 
