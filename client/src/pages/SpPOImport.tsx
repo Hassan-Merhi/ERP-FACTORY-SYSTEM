@@ -403,8 +403,10 @@ export default function SpPOImport() {
   return (
     <div className="space-y-4">
       <PageHeader title={copy.pageHeading}>
-        <Button variant="outline" onClick={() => window.open("/api/po-import/template", "_blank")}>
-          <Download className="h-4 w-4 mr-2" /> {copy.downloadTemplate}
+        <Button variant="outline" asChild>
+          <a href="/api/po-import/template" download="po-import-template.xlsx">
+            <Download className="h-4 w-4 mr-2" /> {copy.downloadTemplate}
+          </a>
         </Button>
       </PageHeader>
       <Card>
@@ -423,6 +425,8 @@ export default function SpPOImport() {
               data-testid="input-file-upload"
               onChange={(event) => {
                 setFile(event.target.files?.[0] ?? null);
+                 // Reset the picker for reselecting the same Excel file in Safari.
+                 event.currentTarget.value = "";
                 setParseKey(requestId());
                 setParsed(null);
                 setParsedCompanyId(null);

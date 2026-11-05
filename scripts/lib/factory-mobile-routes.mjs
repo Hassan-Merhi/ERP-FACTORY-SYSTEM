@@ -7,6 +7,8 @@
 export const STATIC_ROUTES = [
   // Production / inventory
   "/factory/production-report",
+  "/factory/monthly-production-matrix",
+  "/factory/production-bonuses",
   "/factory/stock-entry",
   "/factory/raw-materials",
   "/factory/raw-stock",
@@ -15,6 +17,7 @@ export const STATIC_ROUTES = [
   "/factory/location-inventory",
   "/factory/containers-hub",
   "/factory/stock-allocation-v5",
+  "/factory/stock-allocation-v5/proformas/new",
   "/factory/sheets-sacks",
   "/factory/stock-query",
   // Finance / people
@@ -120,6 +123,10 @@ export const DIALOG_TRIGGERS = [
 
 /** Detail/workflow routes that need an existing record; ids resolve at runtime. */
 export const SEEDED_ROUTES = [
+  { key: "product", path: (s) =>
+    `/factory/monthly-production-matrix/${s.product}/workers?months=${new Date().toISOString().slice(0, 7)}` },
+  { key: "productWorker", path: (s) =>
+    `/factory/monthly-production-matrix/${s.product}/bales/${s.worker}?months=${new Date().toISOString().slice(0, 7)}` },
   { key: "order", path: (s) => `/factory/sales/invoices/${s.order}` },
   { key: "order", path: (s) => `/factory/invoices/${s.order}/loading-scan` },
   { key: "order", path: (s) => `/factory/sales/pending-invoices/${s.order}/verify` },
@@ -141,4 +148,4 @@ export const SEEDED_ROUTES = [
 ];
 
 /** Seed keys a seeded route needs (composite keys expand to their parts). */
-export const SEED_KEYS = { ride: ["batch", "ride"], productLocation: ["product", "location"] };
+export const SEED_KEYS = { ride: ["batch", "ride"], productLocation: ["product", "location"], productWorker: ["product", "worker"] };

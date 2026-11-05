@@ -1,3 +1,4 @@
+import { downloadBlob } from "@/lib/downloadBlob";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -202,12 +203,7 @@ export default function FactoryMonthlyProductionMatrix() {
         ...months.map((m) => byId(p.id, m)), rowTotal(p.id)]),
     ];
     const csv = "\uFEFF" + rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "factory-monthly-production.csv";
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), "factory-monthly-production.csv");
   };
   const exportExcel = async () => {
     if (exportingExcel || months.length === 0 || !data) return;
@@ -334,10 +330,74 @@ export default function FactoryMonthlyProductionMatrix() {
           <span>{t("monthlyProduction.highest")} <b className="text-emerald-600">{t("monthlyProduction.green")}</b> · {t("monthlyProduction.lowest")} <b className="text-red-600">{t("monthlyProduction.red")}</b> · {t("monthlyProduction.dragHint")}</span>
         </div>
       </div>
+      {!error && !isLoading && data && (
+        <section className="space-y-3 md:hidden phone-land:block" aria-label="Monthly production items" data-testid="monthly-matrix-mobile">
+          <div className="flex items-center justify-between rounded-xl border bg-muted/40 px-3 py-2 text-sm">
+            <span>{visibleProducts.length} {t("monthlyProduction.items")}</span>
+            <strong className="tabular-nums">{overallTotal.toLocaleString()} {t("monthlyProduction.baleUnits")}</strong>
+          </div>
+          {visibleProducts.map((product) => {
+            const values = months.map((month) => byId(product.id, month));
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            const hasRange = values.length > 1 && min !== max;
+            const total = rowTotal(product.id);
+            return (
+              <article key={product.id} className="min-w-0 rounded-xl border bg-card p-3 shadow-sm" data-testid={`monthly-matrix-mobile-item-${product.id}`}>
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <h2 className="break-words text-sm font-semibold">{product.name}</h2>
+                    <p className="mt-1 break-all text-xs text-muted-foreground">{product.articleCode} · {product.categoryName}</p>
+                  </div>
+                  <button type="button" disabled={total <= 0} onClick={() => openWorkerBreakdown(product.id, months)}
+                    aria-label={`View workers for ${product.name}: ${total} bales`}
+                    className="min-h-11 shrink-0 rounded-lg bg-primary/10 px-3 text-right font-bold text-primary tabular-nums disabled:opacity-50"
+                    data-testid={`monthly-matrix-mobile-total-${product.id}`}>
+                    {total.toLocaleString()}
+                    <span className="block text-[10px] font-normal">{t("monthlyProduction.baleUnits")}</span>
+                  </button>
+                </div>
+                <details className="mt-3 rounded-lg border bg-muted/20">
+                  <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium">
+                    {t("monthlyProduction.months")} · {months.length}
+                  </summary>
+                  <div className="grid grid-cols-2 gap-2 border-t p-2">
+                    {months.map((month, i) => {
+                      const value = values[i];
+                      const accent = hasRange && value === max
+                        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                        : hasRange && value === min
+                          ? "bg-red-500/10 text-red-700 dark:text-red-300" : "bg-background";
+                      return (
+                        <button key={month} type="button" disabled={value <= 0}
+                          onClick={() => openWorkerBreakdown(product.id, [month])}
+                          aria-label={`View ${value} bales of ${product.name} for ${monthLabel(month)}`}
+                          className={`min-h-11 rounded-lg border p-2 text-left disabled:opacity-60 ${accent}`}
+                          data-testid={`monthly-matrix-mobile-month-${product.id}-${month}`}>
+                          <span className="block text-xs">{monthLabel(month)}</span>
+                          <strong className="text-lg tabular-nums">{value.toLocaleString()}</strong>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </details>
+                {canReorder && (
+                  <Button type="button" size="sm" variant="outline" className="mt-2 min-h-11 w-full"
+                    disabled={saving} onClick={() => openMoveDialog(product.id)}
+                    data-testid={`monthly-matrix-mobile-move-${product.id}`}>
+                    <ListOrdered className="mr-2 h-4 w-4" /> {t("monthlyProduction.moveTo")}
+                  </Button>
+                )}
+              </article>
+            );
+          })}
+          {!visibleProducts.length && <p className="rounded-xl border p-6 text-center text-sm text-muted-foreground">{t("monthlyProduction.noMatching")}</p>}
+        </section>
+      )}
       {error ? <div className="rounded-lg border p-8 text-center text-destructive">
         {t("monthlyProduction.loadError")} <Button variant="outline" size="sm" onClick={() => void refetch()}>{t("monthlyProduction.retry")}</Button>
       </div> : isLoading || !data ? <div className="rounded-lg border p-10 text-center text-muted-foreground">{t("monthlyProduction.loading")}</div> :
-      <div className="overflow-auto rounded-xl border bg-card" style={{ maxHeight: "calc(100dvh - 280px)" }}>
+      <div className="hidden overflow-auto rounded-xl border bg-card md:block phone-land:hidden" style={{ maxHeight: "calc(100dvh - 280px)" }}>
         <table className="min-w-max w-full border-separate border-spacing-0 text-sm tabular-nums">
           <thead className="sticky top-0 z-20 bg-muted text-foreground">
             <tr>

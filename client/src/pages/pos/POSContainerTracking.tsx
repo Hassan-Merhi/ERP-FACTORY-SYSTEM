@@ -116,14 +116,17 @@ function uniqueValues(rows: PosContainerRow[], selector: (row: PosContainerRow) 
   );
 }
 
-function PortDepartureDateCell({ container, todayISO }: { container: PosContainerRow; todayISO: string }) {
-  const [draft, setDraft] = useState(container.portDepartureDate ?? "");
+function PortDepartureDateCell({
+  container, todayISO, mobile = false, draft, onDraftChange,
+}: {
+  container: PosContainerRow;
+  todayISO: string;
+  mobile?: boolean;
+  draft: string;
+  onDraftChange: (value: string) => void;
+}) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-
-  useEffect(() => {
-    setDraft(container.portDepartureDate ?? "");
-  }, [container.portDepartureDate]);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -162,11 +165,11 @@ function PortDepartureDateCell({ container, todayISO }: { container: PosContaine
         type="date"
         value={draft}
         max={todayISO}
-        onChange={(event) => setDraft(event.target.value)}
+        onChange={(event) => onDraftChange(event.target.value)}
         disabled={mutation.isPending}
         className="h-8 w-[145px] min-w-[145px] text-xs"
         aria-label={`Date ${container.containerNumber} left the port`}
-        data-testid={`input-port-departure-${container.id}`}
+        data-testid={`${mobile ? "mobile-" : ""}input-port-departure-${container.id}`}
       />
       {dirty ? (
         <Button
@@ -177,7 +180,7 @@ function PortDepartureDateCell({ container, todayISO }: { container: PosContaine
           disabled={mutation.isPending || Boolean(draft && draft > todayISO)}
           onClick={() => mutation.mutate()}
           aria-label={`Save port departure date for ${container.containerNumber}`}
-          data-testid={`button-save-port-departure-${container.id}`}
+          data-testid={`${mobile ? "mobile-" : ""}button-save-port-departure-${container.id}`}
         >
           {mutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
           Save
@@ -191,6 +194,15 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
   const [, setLocation] = useLocation();
   const { formatDisplayDate } = useDateFormat();
   const [todayISO, setTodayISO] = useState(() => getLocalTodayISO());
+  // Shared by phone cards and desktop rows so an unsaved edit survives a fold,
+  // rotation, or split-screen resize without cross-company drafts.
+  const [portDateDrafts, setPortDateDrafts] = useState<Record<number, string>>({});
+  useEffect(() => setPortDateDrafts({}), [posUser?.currentCompanyId]);
+  const departureEditorProps = (container: PosContainerRow) => ({
+    draft: portDateDrafts[container.id] ?? container.portDepartureDate ?? "",
+    onDraftChange: (value: string) =>
+      setPortDateDrafts((previous) => ({ ...previous, [container.id]: value })),
+  });
   useEffect(() => {
     const refreshToday = () => setTodayISO(getLocalTodayISO());
     const interval = window.setInterval(refreshToday, 60_000);
@@ -486,8 +498,74 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
         </div>
       </div>
 
+      <section className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-4 md:hidden phone-land:block"
+        aria-label="Containers on the way" data-testid="pos-container-mobile-list">
+        {isLoading ? Array.from({ length: 4 }, (_, index) => (
+          <Skeleton key={index} className="h-32 w-full rounded-xl" />
+        )) : isError ? (
+          <div role="alert" className="rounded-xl border p-5 text-sm text-destructive">
+            Could not load containers. {error instanceof Error ? error.message : "Please retry."}
+          </div>
+        ) : visibleContainers.length === 0 ? (
+          <p className="rounded-xl border bg-card p-6 text-center text-sm text-muted-foreground">
+            No containers match the selected filters.
+          </p>
+        ) : visibleContainers.map((container) => (
+          <article key={container.id} className="min-w-0 rounded-xl border bg-card p-3 shadow-sm"
+            data-testid={`pos-container-mobile-${container.id}`}>
+            <div className="flex min-w-0 items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <button type="button" onClick={() => setLocation(`/pos-containers/${container.id}`)}
+                  className="min-h-11 break-all text-left font-mono text-base font-bold text-primary underline-offset-4 hover:underline"
+                  data-testid={`pos-container-mobile-open-${container.id}`}>
+                  {container.containerNumber}
+                </button>
+                {isColumnVisible("supplier") && (
+                  <p className="break-words text-xs text-muted-foreground">{supplierLabel(container)}</p>
+                )}
+              </div>
+              {isColumnVisible("status") && <Badge variant="outline" className="max-w-[45%] break-words text-right">{container.status}</Badge>}
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-muted/30 p-2 text-xs">
+              {isColumnVisible("eta") && (
+                <div><span className="block text-muted-foreground">ETA</span>
+                  <strong>{container.eta ? formatDisplayDate(container.eta) : "—"}</strong></div>
+              )}
+              {isColumnVisible("daysSinceDeparture") && (
+                <div><span className="block text-muted-foreground">Days since port</span>
+                  <strong className="tabular-nums">{daysSincePortDeparture(container.portDepartureDate, todayISO) ?? "—"}</strong></div>
+              )}
+              {isColumnVisible("truck") && (
+                <div><span className="block text-muted-foreground">Truck</span>
+                  <strong className="break-all">{container.numberPlate || "—"}</strong></div>
+              )}
+              {isColumnVisible("docs") && (
+                <div><span className="block text-muted-foreground">Documents</span>
+                  <strong>{container.docReceived ? "Received" : "Pending"}</strong></div>
+              )}
+            </div>
+            <details className="mt-3 rounded-lg border">
+              <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium">
+                More tracking details
+              </summary>
+              <dl className="space-y-2 border-t p-3 text-xs">
+                {isColumnVisible("location") && <div><dt className="text-muted-foreground">Location</dt><dd className="break-words font-medium">{container.trackingLocation || "—"}</dd></div>}
+                {isColumnVisible("transporter") && <div><dt className="text-muted-foreground">Transporter</dt><dd className="break-words font-medium">{container.transporter || "—"}</dd></div>}
+                {isColumnVisible("agent") && <div><dt className="text-muted-foreground">Agent</dt><dd className="break-words font-medium">{container.agent || "—"}</dd></div>}
+                {isColumnVisible("docsSent") && <div><dt className="text-muted-foreground">Docs sent</dt><dd className="font-medium">{container.docsSentDate ? formatDisplayDate(container.docsSentDate) : container.docReceived ? "Not sent" : "—"}</dd></div>}
+              </dl>
+            </details>
+            {isColumnVisible("portDeparture") && (
+              <div className="mt-3">
+                <p className="mb-1 text-xs font-medium text-muted-foreground">Left port</p>
+                <PortDepartureDateCell container={container} todayISO={todayISO} mobile {...departureEditorProps(container)} />
+              </div>
+            )}
+          </article>
+        ))}
+      </section>
       <div
-        className="min-h-[320px] flex-1 overflow-auto rounded-xl border bg-card/30 shadow-xs"
+        className="hidden min-h-[320px] flex-1 overflow-auto rounded-xl border bg-card/30 shadow-xs md:block phone-land:hidden"
         data-table-scroll-region
       >
         {isLoading ? (
@@ -568,7 +646,7 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
                     ) : null}
                     {isColumnVisible("portDeparture") ? (
                       <TableCell className="whitespace-nowrap">
-                        <PortDepartureDateCell container={container} todayISO={todayISO} />
+                        <PortDepartureDateCell container={container} todayISO={todayISO} {...departureEditorProps(container)} />
                       </TableCell>
                     ) : null}
                     {isColumnVisible("daysSinceDeparture") ? (

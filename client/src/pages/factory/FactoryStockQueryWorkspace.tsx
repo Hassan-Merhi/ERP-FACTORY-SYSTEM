@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useDateFormat } from "@/contexts/DateFormatContext";
+import { downloadBlob } from "@/lib/downloadBlob";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,12 +42,7 @@ const csvSafe = (value: string | number) => {
 };
 function exportCsv(rows: (string | number)[][]) {
   const csv = rows.map((row) => row.map(csvSafe).join(",")).join("\r\n");
-  const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "factory-stock-query-sales.csv";
-  link.click();
-  URL.revokeObjectURL(url);
+  downloadBlob(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }), "factory-stock-query-sales.csv");
 }
 const baseSelect = "h-10 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
 const cell = "whitespace-nowrap px-3 py-2.5 text-sm";

@@ -43,9 +43,18 @@ export class ContinuousScanGate {
     return barcode;
   }
 
-  reset(): void {
+  /**
+   * Camera suspension releases the frame lock but retains short-lived recent
+   * codes so an iPhone fold/pagehide resume cannot immediately re-submit the
+   * barcode that was visible before the interruption.
+   */
+  suspend(): void {
     this.visible = null;
     this.missed = 0;
+  }
+
+  reset(): void {
+    this.suspend();
     this.recent.clear();
   }
 

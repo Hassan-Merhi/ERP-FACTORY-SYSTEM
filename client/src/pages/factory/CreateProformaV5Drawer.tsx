@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { V5ProformaMobileLines } from "./V5ProformaMobileLines";
 
 import type { Props } from "./createproformav5drawer/types";
 import { useCreateProformaV5Model } from "./createproformav5drawer/useCreateProformaV5Model";
@@ -432,8 +433,25 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
           </div>
         </div>
 
-        {/* Table */}
-        <div className="mx-3 min-w-0 overflow-x-auto rounded-b-xl border border-t-0 bg-card shadow-sm sm:mx-5">
+        {/* Both views write to the same proforma draft; only one is visible. */}
+        <V5ProformaMobileLines
+          variant="create"
+          rows={visibleRows}
+          quantities={quantities}
+          prices={sellingPrices}
+          kgPrices={kgPrices}
+          pricingModes={pricingModes}
+          onQuantityChange={handleQtyChange}
+          onPriceChange={(code, value) => setSellingPrices((previous) => ({ ...previous, [code]: value }))}
+          onKgPriceChange={(code, value) => setKgPrices((previous) => ({ ...previous, [code]: value }))}
+          onModeChange={(code, value) => setPricingModes((previous) => ({ ...previous, [code]: value }))}
+          weightPerBale={(code) => Number(map.get(code)?.weightPerBaleKg || 0)}
+          shortageCount={(row, qty) => Math.max(0, qty * (sendToLoading && n > 0 ? n : 1) - (row.stockAvailable - row.totalLoaded))}
+          multiplier={sendToLoading && n > 0 ? n : 1}
+          errors={errors}
+        />
+        {/* Desktop table remains unchanged for spreadsheet-style editing. */}
+        <div className="mx-3 hidden min-w-0 overflow-x-auto rounded-b-xl border border-t-0 bg-card shadow-sm md:block phone-land:hidden sm:mx-5">
           <table className="w-full min-w-[1120px] table-fixed border-collapse text-sm">
             <colgroup>
               {sendToLoading && n > 0 ? (<><col style={{ width: "25%" }} /><col style={{ width: "10%" }} /><col style={{ width: "14%" }} /><col style={{ width: "12%" }} /><col style={{ width: "11%" }} /><col style={{ width: "12%" }} /><col style={{ width: "16%" }} /></>) : (<><col style={{ width: "27%" }} /><col style={{ width: "10%" }} /><col style={{ width: "16%" }} /><col style={{ width: "14%" }} /><col style={{ width: "13%" }} /><col style={{ width: "20%" }} /></>)}
