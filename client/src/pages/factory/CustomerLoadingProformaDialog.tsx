@@ -19,6 +19,8 @@ interface CustomerLoadingProformaDialogProps {
   customerName?: string;
   proformaName: string;
   onProformaNameChange: (value: string) => void;
+  destination: string;
+  onDestinationChange: (value: string) => void;
   lines: SelectedLine[];
   totals: SelectedTotals;
   isPending: boolean;
@@ -31,6 +33,8 @@ export function CustomerLoadingProformaDialog({
   customerName,
   proformaName,
   onProformaNameChange,
+  destination,
+  onDestinationChange,
   lines,
   totals,
   isPending,
@@ -60,6 +64,21 @@ export function CustomerLoadingProformaDialog({
                 onChange={(e) => onProformaNameChange(e.target.value)}
               />
             </div>
+          </div>
+          <div>
+            <Label htmlFor="customer-loading-proforma-destination">Destination <span className="text-destructive">*</span></Label>
+            <Input
+              id="customer-loading-proforma-destination"
+              value={destination}
+              onChange={(event) => onDestinationChange(event.target.value)}
+              placeholder="e.g. L'SHI, MALI, KINSHASA"
+              list="customer-loading-destinations"
+            />
+            <datalist id="customer-loading-destinations">
+              <option value="L'SHI" />
+              <option value="MALI" />
+              <option value="KINSHASA" />
+            </datalist>
           </div>
           <div className="overflow-auto rounded-md border">
             <table className="w-full min-w-[720px] text-sm">
@@ -104,7 +123,7 @@ export function CustomerLoadingProformaDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
             Back
           </Button>
-          <Button onClick={onCreate} disabled={isPending || !proformaName.trim()}>
+          <Button onClick={onCreate} disabled={isPending || !proformaName.trim() || !destination.trim()}>
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Create Proforma
           </Button>
         </DialogFooter>
