@@ -45,7 +45,7 @@ async function materializeOneEvent():Promise<boolean> {
       `SELECT id,company_id,ticket_id,event_type,payload
         FROM support_ticket_outbox
         WHERE processed_at IS NULL AND available_at<=now()
-        ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1`
+        ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED`
     );
     const event=result.rows[0];
     if(!event) {await client.query("COMMIT");return false;}
@@ -132,7 +132,7 @@ async function claimDelivery(channel:"email"|"whatsapp"):Promise<Delivery|{skipp
       JOIN user_company_roles r ON r.user_id=u.id AND r.company_id=n.company_id
       LEFT JOIN support_ticket_notification_contacts c ON c.company_id=n.company_id AND c.user_id=n.recipient_user_id
       WHERE n.delivery_status='pending' AND n.next_attempt_at<=now() AND n.channel=$1
-      ORDER BY n.id FOR UPDATE OF n SKIP LOCKED LIMIT 1
+      ORDER BY n.id LIMIT 1 FOR UPDATE OF n SKIP LOCKED
     `,[channel]);
     const d=result.rows[0];
     if(!d){await client.query("COMMIT");return null;}
@@ -223,7 +223,7 @@ async function deliverInApp():Promise<boolean>{
        JOIN user_company_roles r ON r.user_id=u.id AND r.company_id=n.company_id
       WHERE n.delivery_status='pending' AND n.channel='in_app'
        AND n.next_attempt_at<=now()
-      ORDER BY n.id FOR UPDATE OF n SKIP LOCKED LIMIT 1`
+      ORDER BY n.id LIMIT 1 FOR UPDATE OF n SKIP LOCKED`
     );
     const d=result.rows[0];
     if(!d){await client.query("COMMIT");return false;}
