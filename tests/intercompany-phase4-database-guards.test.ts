@@ -92,8 +92,18 @@ describe("Phase 4 paired payment database protections",()=>{
       await rejects("INSERT INTO intercompany_payment_allocations(payment_id,trade_id,amount,allocation_kind,request_key,reason) VALUES (1,2,10,'manual','phase4-wrong-company','Wrong destination')","same active company pair");
       await rejects("INSERT INTO intercompany_payment_allocations(payment_id,trade_id,amount,allocation_kind,request_key,reason) VALUES (1,1,30,'manual','phase4-overpaid','Exceeds confirmed PO')","exceed");
       await rejects("UPDATE intercompany_payment_allocations SET amount=90 WHERE id=1","append-only");
-      // Releasing PO credit is not a second real-world bank event.
-      await client.query("INSERT INTO intercompany_payment_allocations(payment_id,trade_id,amount,allocation_kind,request_key,reason) VALUES (1,1,-80,'reversal_release','phase4-reversal-release','Reverse paired money')");
+      // Cost reductions must release excess paid credit without altering any cash vouchers.
+      await client.query("INSERT INTO intercompany_trade_revisions(trade_id,revision_number,kind,request_key,actor_user_id,initiating_company_id,amount_before,amount_after,posting_date,reason) VALUES (1,2,'line_edit','phase4-linked-edit','owner',1,100,50,'2026-11-05','Price reduction')");
+      await client.query("SELECT set_config('erp.ic_edit_revision','1',true)");
+      await client.query("SET CONSTRAINTS ALL DEFERRED");
+      await client.query("UPDATE intercompany_import_batch_containers SET confirmed_landed_cost=50 WHERE trade_id=1");
+      await rejects("SET CONSTRAINTS ALL IMMEDIATE","release over-allocated");
+      await client.query("INSERT INTO intercompany_payment_allocations(payment_id,trade_id,amount,allocation_kind,request_key,reason) VALUES (1,1,-30,'edit_release','phase4-price-release','Return excess pair credit')");
+      await client.query("SET CONSTRAINTS ALL IMMEDIATE");
+      await client.query("UPDATE intercompany_trades SET version=2 WHERE id=1");
+      await client.query("SELECT set_config('erp.ic_edit_revision','',true)");
+      // Reversing the original cash transaction releases the remaining applied amount.
+      await client.query("INSERT INTO intercompany_payment_allocations(payment_id,trade_id,amount,allocation_kind,request_key,reason) VALUES (1,1,-50,'reversal_release','phase4-reversal-release','Reverse paired money')");
       await client.query("SELECT set_config('erp.ic_payment_reversal','1',true)");
       await client.query("UPDATE intercompany_container_payments SET status='reversed',reversed_by='owner',reversed_at=now(),reversal_date='2026-11-05',reversal_reason='Bank returned transfer',reversal_key='reversal-key-001',reversal_fingerprint=repeat('f',64),source_reversal_voucher_id=57,destination_reversal_voucher_id=58 WHERE id=1");
       await client.query("SELECT set_config('erp.ic_payment_reversal','',true)");
