@@ -21,9 +21,14 @@ type Bale = {
   category: string | null; grade: string | null; workerName: string | null;
   locationName: string | null;
 };
+type DailyProductionGroup = {
+  date: string; productName: string; quantity: number; weightKg: string;
+};
+type BaleView = "condensed" | "detailed";
 type BaleResponse = {
   product: Product; months: string[]; workerId: number; page: number;
-  limit: number; totalBales: number; bales: Bale[];
+  view: BaleView; limit: number; totalBales: number; totalWeightKg: string;
+  totalRows: number; groups: DailyProductionGroup[]; bales: Bale[];
 };
 const root = "/factory/monthly-production-matrix";
 const validMonths = (raw: string) => {
@@ -184,24 +189,28 @@ export function FactoryMonthlyProductionBales() {
   const workerId = Number(match?.workerId);
   const { selectedCompany } = useCompany();
   const [page, setPage] = useState(1);
+  const [view, setView] = useState<BaleView>("condensed");
+  const changeView = (nextView: BaleView) => {
+    setView(nextView);
+    setPage(1);
+  };
   const enabled = Number.isSafeInteger(productId) && productId > 0 &&
     Number.isSafeInteger(workerId) && workerId >= 0 && validMonths(months);
   const { data, error, isLoading, isFetching, refetch } = useQuery<BaleResponse>({
-    queryKey: companyQueryKey("/api/factory/monthly-production-matrix/bales", selectedCompany?.id, productId, workerId, months, page),
+    queryKey: companyQueryKey("/api/factory/monthly-production-matrix/bales", selectedCompany?.id, productId, workerId, months, view, page),
     enabled: !!selectedCompany?.id && enabled,
     queryFn: () => requestJson<BaleResponse>(
       "/api/factory/monthly-production-matrix/bales?" +
-      periodQuery(productId, months) + "&workerId=" + workerId + "&page=" + page
+      periodQuery(productId, months) + "&workerId=" + workerId + "&page=" + page + "&view=" + view
     ),
-    placeholderData: (previous) => previous,
     staleTime: 60_000,
   });
   const backToWorkers = () => navigate(root + "/" + productId + "/workers?months=" + encodeURIComponent(query.get("returnMonths") || months));
-  const totalPages = Math.max(1, Math.ceil((data?.totalBales ?? 0) / (data?.limit ?? 100)));
+  const totalPages = Math.max(1, Math.ceil((data?.totalRows ?? 0) / (data?.limit ?? 100)));
 
   return <main className="space-y-4 p-3 sm:p-5" data-testid="monthly-production-bales">
     <DrilldownBack onClick={backToWorkers} label="Back to workers" />
-    <PageHeader title="Individual produced bales" subtitle={monthText(validMonths(months) ? months : "")} />
+    <PageHeader title="Produced bales" subtitle={monthText(validMonths(months) ? months : "")} />
     {!enabled ? <p className="rounded-lg border p-6 text-destructive">Invalid worker or month selection.</p> :
       isLoading ? <p className="rounded-lg border p-8 text-muted-foreground">Loading bale details…</p> :
         error ? <div className="rounded-lg border p-8 text-destructive">
@@ -218,8 +227,39 @@ export function FactoryMonthlyProductionBales() {
               <strong className="inline-flex items-center gap-2 text-xl tabular-nums"><Package className="h-5 w-5" />{format(data.totalBales)}</strong>
             </div>
           </div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              {view === "condensed" ? "Grouped by production date · Qty = number of bales" : "Individual bales with reference numbers and full details"}
+            </p>
+            <div className="inline-flex items-center gap-1 rounded-lg border bg-muted/40 p-1" role="group" aria-label="Bale table view">
+              <Button type="button" size="sm" variant={view === "condensed" ? "default" : "ghost"}
+                aria-pressed={view === "condensed"} data-testid="bales-view-condensed"
+                onClick={() => changeView("condensed")}>Condensed</Button>
+              <Button type="button" size="sm" variant={view === "detailed" ? "default" : "ghost"}
+                aria-pressed={view === "detailed"} data-testid="bales-view-detailed"
+                onClick={() => changeView("detailed")}>Detailed</Button>
+            </div>
+          </div>
           <div className="overflow-x-auto rounded-xl border bg-card">
-            <table className="w-full min-w-[1000px] text-sm tabular-nums">
+            {view === "condensed" ? (
+              <table className="w-full min-w-[420px] text-sm tabular-nums" data-testid="bales-condensed-table">
+                <thead className="bg-muted"><tr>
+                  <th className="p-2.5 text-left">Date</th>
+                  <th className="p-2.5 text-left">Product name</th>
+                  <th className="p-2.5 text-right">Qty</th>
+                  <th className="p-2.5 text-right">Weight (kg)</th>
+                </tr></thead>
+                <tbody>{data.groups.map((group) => (
+                  <tr key={group.date} className="border-t hover:bg-accent/30">
+                    <td className="whitespace-nowrap px-2.5 py-2">{dateLabel(group.date)}</td>
+                    <td className="px-2.5 py-2 font-medium">{group.productName}</td>
+                    <td className="px-2.5 py-2 text-right font-semibold">{format(group.quantity)}</td>
+                    <td className="px-2.5 py-2 text-right">{kg(group.weightKg)}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            ) : (
+            <table className="w-full min-w-[1000px] text-sm tabular-nums" data-testid="bales-detailed-table">
               <thead className="bg-muted"><tr>
                 <th className="p-3 text-left">Reference number</th>
                 <th className="p-3 text-left">Bale code</th>
@@ -243,10 +283,11 @@ export function FactoryMonthlyProductionBales() {
                 <td className="p-3">{bale.status.replaceAll("_", " ")}</td>
               </tr>)}</tbody>
             </table>
-            {data.bales.length === 0 && <p className="p-6 text-center text-muted-foreground">No bales for this worker in the selected months.</p>}
+            )}
+            {data.totalRows === 0 && <p className="p-6 text-center text-muted-foreground">No bales for this worker in the selected months.</p>}
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">Showing {data.totalBales ? (data.page - 1) * data.limit + 1 : 0}–{Math.min(data.page * data.limit, data.totalBales)} of {format(data.totalBales)} bales</p>
+            <p className="text-sm text-muted-foreground">Showing {data.totalRows ? (data.page - 1) * data.limit + 1 : 0}–{Math.min(data.page * data.limit, data.totalRows)} of {format(data.totalRows)} {view === "condensed" ? "production dates" : "bales"}</p>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" disabled={page <= 1 || isFetching} onClick={() => setPage((p) => p - 1)}><ChevronLeft className="mr-1 h-4 w-4" /> Previous</Button>
               <span className="text-sm tabular-nums">{page} / {totalPages}</span>
