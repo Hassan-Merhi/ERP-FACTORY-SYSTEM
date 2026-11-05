@@ -4,6 +4,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { bonusText } from "@/i18n/factoryProductionBonusCheckoutTranslations";
+import { duoMobileText } from "@/i18n/iphoneDuoMobileTranslations";
 import { isProductionWorkday } from "@shared/productionTargetBonusWeeklyMethod";
 
 /** Display only: calculated amounts/eligibility come from the checkout API. */
@@ -86,6 +87,7 @@ export function ProductionBonusWeeklySheet({
 }: Props) {
   const { language } = useApplicationLanguage();
   const t = (key: Parameters<typeof bonusText>[0]) => bonusText(key, language);
+  const dt = (key: Parameters<typeof duoMobileText>[0]) => duoMobileText(key, language);
   const dates = useMemo(() => productionSheetWorkdays(from, to), [from, to]);
   const rangeLabel = validDate(from) && validDate(to)
     ? dayLabel(from) + " – " + dayLabel(to) : "Choose valid dates";
@@ -183,8 +185,8 @@ export function ProductionBonusWeeklySheet({
                   data-linked-workers="true">
                   <UsersRound className="h-4 w-4" aria-hidden="true" />
                   {worker.workerId === teamLead.workerId
-                    ? `Linked team · ${members.length} workers`
-                    : `Linked to ${teamLead.workerName}`}
+                    ? `${dt("linkedTeam")} · ${members.length} ${t("worker")}`
+                    : `${dt("linkedTo")} ${teamLead.workerName}`}
                 </div>
               )}
               <div className="flex min-w-0 items-start gap-3">
@@ -197,22 +199,22 @@ export function ProductionBonusWeeklySheet({
                 <div className="min-w-0 flex-1">
                   <button type="button" disabled={!eligible}
                     onClick={() => onToggle(worker.workerId, !selected.includes(worker.workerId))}
-                    aria-label={"Select " + worker.workerName}
+                    aria-label={t("select") + " " + worker.workerName}
                     className="break-words text-left text-sm font-semibold disabled:cursor-not-allowed">
                     {worker.workerName}
                   </button>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {paidManually ? "Manual paid" : manualMode ? "Manual payment" : worker.paidDays
+                    {paidManually ? dt("manualPaid") : manualMode ? dt("manualPayment") : worker.paidDays
                       ? t("paidStatus") : worker.readyDays ? t("ready") : worker.weeklyProjected
-                        ? "Bonus projected" : worker.weeklyApproved ? "Bonus approved"
+                        ? dt("bonusProjected") : worker.weeklyApproved ? dt("bonusApproved")
                           : worker.needsSetup ? t("needsSetup") : t("sheetNoExtra")}
                   </p>
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-muted/30 p-2 text-center text-xs tabular-nums">
-                <div><span className="block text-muted-foreground">Produced</span><strong className="text-base">{made}</strong></div>
-                <div><span className="block text-muted-foreground">Target</span><strong className="text-base">{target}</strong></div>
-                <div><span className="block text-muted-foreground">Extra</span><strong className={worker.extra > 0 ? "text-emerald-600" : ""}>{worker.extra}</strong></div>
+                <div><span className="block text-muted-foreground">{dt("produced")}</span><strong className="text-base">{made}</strong></div>
+                <div><span className="block text-muted-foreground">{t("target")}</span><strong className="text-base">{target}</strong></div>
+                <div><span className="block text-muted-foreground">{t("extra")}</span><strong className={worker.extra > 0 ? "text-emerald-600" : ""}>{worker.extra}</strong></div>
               </div>
               <p className={"mt-2 text-sm font-semibold tabular-nums " +
                 (achieved ? "text-emerald-600 dark:text-emerald-400" : "")}>
@@ -220,23 +222,23 @@ export function ProductionBonusWeeklySheet({
               </p>
               {worker.weeklyAmount > 0 && (
                 <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                  {worker.weeklyProjected ? "Projected · approve before payment" : "Weekly approved · pay below"}
+                  {dt(worker.weeklyProjected ? "projectedPayHint" : "weeklyApprovedPay")}
                 </p>
               )}
               {manualMode && selected.includes(worker.workerId) && !paidManually && (
                 <label className="mt-3 block text-sm font-medium">
-                  Manual bonus (USD)
+                  {dt("manualBonusUsd")}
                   <Input type="number" min="0.01" max="1000000" step="0.01" inputMode="decimal"
                     value={manualAmounts[worker.workerId] ?? ""}
                     onChange={(event) => onAmountChange?.(worker.workerId, event.target.value)}
-                    aria-label={"Manual bonus USD for " + worker.workerName}
+                    aria-label={dt("manualBonusUsd") + ": " + worker.workerName}
                     className="mt-1 h-11 w-full text-base tabular-nums"
                     data-testid={`bonus-mobile-amount-${worker.workerId}`} />
                 </label>
               )}
               <details className="mt-3 rounded-lg border bg-muted/20">
                 <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium">
-                  Daily production · {dates.length} workdays
+                  {dt("dailyProduction")} · {dates.length} {dt("workdays")}
                 </summary>
                 <div className="space-y-2 border-t p-2">
                   {dates.map((date) => {
@@ -269,7 +271,7 @@ export function ProductionBonusWeeklySheet({
             <div className="flex justify-between"><span>{t("sheetTotal")}</span><strong>{totalProduced} / {totalTarget}</strong></div>
             <div className="mt-2 flex justify-between"><span>{t("extra")}</span><strong>{totalExtra}</strong></div>
             <div className="mt-2 flex justify-between font-semibold"><span>{t("bonus")}</span><strong>{dollars(displayedTotal)}</strong></div>
-            {includesWeekly && <p className="mt-2 text-xs text-muted-foreground">Includes weekly estimates; review and pay separately below.</p>}
+            {includesWeekly && <p className="mt-2 text-xs text-muted-foreground">{dt("weeklyEstimateHint")}</p>}
           </div>
         )}
       </div>
