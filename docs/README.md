@@ -107,6 +107,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [ci/branch-protection.md](ci/branch-protection.md) | Required checks on `main` |
 | [security/phase4-main-ruleset-hardening.md](security/phase4-main-ruleset-hardening.md) | Current main ruleset security gaps, immutable dependency pinning and required administrative verification |
 | [mobile-tablet-web-regression.md](mobile-tablet-web-regression.md) | Browser regression checklist |
+| [iphone-duo-phase1-mobile-regression.md](iphone-duo-phase1-mobile-regression.md) | Full-system iPhone Duo route inventory, viewport tests, evidence, and remaining certification gates |
 | [erp-mobile-program.md](erp-mobile-program.md) | ERP phone contracts, route certification and phase status |
 | [factory-mobile-audit.md](factory-mobile-audit.md) | Factory mode phone layouts and mobile audit status |
 | [universal-responsive-pill-tabs.md](universal-responsive-pill-tabs.md) | Shared pill tab component standard, migration map and verification status |
