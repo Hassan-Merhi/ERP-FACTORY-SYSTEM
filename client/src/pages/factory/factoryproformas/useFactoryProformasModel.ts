@@ -514,13 +514,9 @@ export function useFactoryProformasModel() {
     },
     onSuccess: (result) => {
       invalidateCustomerProformas();
-      const backfillNote =
-        result.backfilled > 0
-          ? ` Updated ${result.backfilled} line${result.backfilled !== 1 ? "s" : ""} across all existing proformas.`
-          : "";
       toast({
         title: "Agreed prices saved",
-        description: `${result.saved} price${result.saved !== 1 ? "s" : ""} saved.${backfillNote}`,
+        description: `${result.saved} price${result.saved !== 1 ? "s" : ""} saved to the customer's agreed price list. Existing proformas were not changed.`,
       });
     },
     onError: (error: Error) => {
