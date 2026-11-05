@@ -122,7 +122,6 @@ const FACTORY_SIDEBAR_GROUP_ORDER = [
   "Intelligence",
 ] as const;
 function visibleFactoryGroup(page: (typeof FACTORY_SIDEBAR_PAGES)[number]): string {
-  if (page.key === "factory/stock-allocation-v5" || page.key === "factory/sheets-sacks") return "Sales & Loading";
   return page.group === "Sales" ? "Sales & Loading" : page.group;
 }
 const FACTORY_SIDEBAR_COLORS: Record<string, string> = {
