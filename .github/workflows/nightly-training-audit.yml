@@ -227,9 +227,19 @@ jobs:
             echo "::error::Protected GitHub OIDC identity is unavailable"; exit 1;
           }
       - name: Install the decoder used to re-verify every recording
+        timeout-minutes: 17
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y ffmpeg
+          # A stalled apt mirror once held this step for 40 minutes; bound each
+          # attempt and retry instead of letting the job time out.
+          for attempt in 1 2 3; do
+            if timeout 300 sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update -qq &&
+               timeout 300 sudo DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y -qq ffmpeg; then
+              break
+            fi
+            if [ "$attempt" = 3 ]; then echo "::error::ffmpeg could not be installed"; exit 1; fi
+            echo "ffmpeg install attempt $attempt failed; retrying"
+            sleep 20
+          done
       - name: Download tonight's recordings from this run
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:

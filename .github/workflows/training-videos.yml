@@ -93,9 +93,19 @@ jobs:
           NODE
       - run: npm ci --ignore-scripts
       - name: Install browser and encoder
+        timeout-minutes: 17
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y ffmpeg
+          # A stalled apt mirror once held this step for 40 minutes; bound each
+          # attempt and retry instead of letting the job time out.
+          for attempt in 1 2 3; do
+            if timeout 300 sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update -qq &&
+               timeout 300 sudo DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y -qq ffmpeg; then
+              break
+            fi
+            if [ "$attempt" = 3 ]; then echo "::error::ffmpeg could not be installed"; exit 1; fi
+            echo "ffmpeg install attempt $attempt failed; retrying"
+            sleep 20
+          done
           node node_modules/puppeteer/lib/puppeteer/node/cli.js browsers install chrome
       - name: Install the offline narration voice (Piper, verified checksums)
         shell: bash
