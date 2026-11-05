@@ -25,7 +25,7 @@ describe("Phase 2 PostgreSQL intercompany import safeguards", () => {
           "CREATE TABLE user_company_roles (user_id varchar, company_id integer, role text);" +
           "CREATE TABLE ledger_accounts (id integer PRIMARY KEY, company_id integer, deleted_at timestamp);" +
           "CREATE TABLE suppliers (id integer PRIMARY KEY, company_id integer, active boolean, deleted_at timestamp);" +
-          "CREATE TABLE containers (id integer PRIMARY KEY, company_id integer, status text);" +
+          "CREATE TABLE containers (id integer PRIMARY KEY, company_id integer, supplier_id integer, container_number text, offload_date date, status text);" +
           "CREATE TABLE purchase_orders (id integer PRIMARY KEY, company_id integer, container_id integer, voucher_id integer, po_number text);" +
           "CREATE TABLE vouchers (id integer PRIMARY KEY, description text);" +
           "CREATE TABLE voucher_entries (id serial PRIMARY KEY, voucher_id integer, debit_amount numeric, credit_amount numeric);" +
