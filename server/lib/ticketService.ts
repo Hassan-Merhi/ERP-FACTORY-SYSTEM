@@ -1,10 +1,10 @@
 import { and, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import { db } from "../db";
+import { db, type DatabaseOrTransaction } from "../db";
 import { supportTickets, supportTicketEvents, supportTicketOutbox, supportTicketParticipants, supportTicketRecords, vouchers, users, userCompanyRoles } from "@shared/schema";
 import { canAccessTicket, transitionTicket, type TicketActor, type TicketStatus } from "./ticketPolicy";
 
-async function requireActiveCompanyUser(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], companyId: number, userId: string): Promise<void> {
+async function requireActiveCompanyUser(tx: DatabaseOrTransaction, companyId: number, userId: string): Promise<void> {
   const [found] = await tx.select({ id: users.id }).from(users)
     .innerJoin(userCompanyRoles, and(eq(userCompanyRoles.userId, users.id), eq(userCompanyRoles.companyId, companyId)))
     .where(and(eq(users.id, userId), eq(users.active, true))).limit(1);
