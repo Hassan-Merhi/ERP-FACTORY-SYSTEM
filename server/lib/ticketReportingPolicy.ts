@@ -32,8 +32,8 @@ export function ticketReportWhere(companyId:number,filters:TicketReportFilters,n
   const clauses=["t.company_id=$1"];
   const params:unknown[]=[companyId];
   const add=(sql:string,v:unknown)=>{params.push(v);clauses.push(sql.replace("?", "$"+params.length));};
-  if(filters.from)add("t.created_at>=?::date",filters.from);
-  if(filters.to)add("t.created_at<(?::date + interval '1 day')",filters.to);
+  if(filters.from)add("t.created_at >= (?::date AT TIME ZONE 'UTC')",filters.from);
+  if(filters.to)add("t.created_at < ((?::date + interval '1 day') AT TIME ZONE 'UTC')",filters.to);
   if(filters.status)add("t.status=?",filters.status);
   if(filters.priority)add("t.priority=?",filters.priority);
   if(filters.sourceMode)add("t.source_mode=?",filters.sourceMode);
