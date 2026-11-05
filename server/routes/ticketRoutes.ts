@@ -3,6 +3,7 @@ import multer from "multer";
 import { z } from "zod";
 import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { ticketCreateSchema } from "../lib/ticketInputs";
+import { registerTicketReportingRoutes } from "./ticketReportingRoutes";
 import { db } from "../db";
 import { requireAuth } from "../auth";
 import { requirePageAccess, requireActionAccess } from "../lib/permissionMiddleware";
@@ -59,6 +60,8 @@ const contactInput = z.object({
   .refine(x=>!x.whatsappEnabled || !!x.whatsappNumber,{message:"WhatsApp number is required when enabled"});
 
 export function registerTicketRoutes(app: Express) {
+  // Fixed report paths must precede parameterized /:id routes.
+  registerTicketReportingRoutes(app);
   const page = [requireAuth, requirePageAccess("page_ticket_management")] as const;
 
 
