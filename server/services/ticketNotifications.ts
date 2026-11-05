@@ -8,7 +8,7 @@ import { pool } from "../db";
 import { logger } from "../lib/logger";
 import { sendWhatsAppTextToChatId } from "./whatsappService";
 
-import { ticketEventRecipients, ticketEventCopy } from "./ticketNotificationPolicy";
+import { ticketEventRecipients, ticketEventCopy, ticketDestinationUrl } from "./ticketNotificationPolicy";
 const MAX_EVENTS_PER_TICK = 40;
 const MAX_DELIVERIES_PER_TICK = 80;
 /** Create one overdue event per ticket per 24-hour elapsed period, not per cron tick. */
@@ -189,7 +189,7 @@ async function whatsappConfigured():Promise<boolean> {
   }catch{return false;}
 }
 
-async function sendTicketEmail(address:string,copy:ReturnType<typeof ticketEventCopy>):Promise<void>{
+async function sendTicketEmail(address:string,title:string,message:string):Promise<void>{
   const transport=nodemailer.createTransport({
     host:process.env.TICKET_SMTP_HOST,
     port:Number(process.env.TICKET_SMTP_PORT||587),
@@ -199,8 +199,8 @@ async function sendTicketEmail(address:string,copy:ReturnType<typeof ticketEvent
   });
   try{
     await transport.sendMail({
-      from:process.env.TICKET_SMTP_FROM!,to:address,subject:copy.title,
-      text:copy.message,
+      from:process.env.TICKET_SMTP_FROM!,to:address,subject:title,
+      text:message,
     });
   }finally{transport.close();}
 }
@@ -263,10 +263,12 @@ async function deliverExternal(channel:"email"|"whatsapp"):Promise<boolean>{
   if(!d)return false;
   if("skipped" in d)return true;
   const copy=ticketEventCopy(d.event_type,d.ticket_number);
+  const deepLink=ticketDestinationUrl(process.env.TICKET_APP_BASE_URL,d.source_mode,d.ticket_id);
+  const message=deepLink?`${copy.message}\n${deepLink}`:copy.message;
   try{
-    if(channel==="email")await sendTicketEmail(d.email!,copy);
+    if(channel==="email")await sendTicketEmail(d.email!,copy.title,message);
     else{
-      const {success,error}=await sendWhatsAppTextToChatId(d.whatsapp_chat_id!,copy.message);
+      const {success,error}=await sendWhatsAppTextToChatId(d.whatsapp_chat_id!,message);
       if(!success)throw new Error(error||"WhatsApp provider rejected the message");
     }
     await pool.query(
