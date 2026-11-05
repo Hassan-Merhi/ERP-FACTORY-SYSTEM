@@ -176,6 +176,9 @@ describe("intercompany phase 1 foundation", () => {
         "INSERT INTO intercompany_permission_grants(user_id,granting_company_id,relationship_id,scope,granted_by) VALUES ('editor',1,1,'invoice','owner')"
       );
       await rejects(
+        "INSERT INTO intercompany_permission_grants(user_id,granting_company_id,relationship_id,scope,granted_by) VALUES ('editor',1,1,'relationship','owner')"
+      );
+      await rejects(
         "INSERT INTO intercompany_permission_grants(user_id,granting_company_id,relationship_id,scope,invoice_key,granted_by) VALUES ('editor',1,1,'invoice','invoice-2','editor')",
         "Only an Owner or Developer"
       );
