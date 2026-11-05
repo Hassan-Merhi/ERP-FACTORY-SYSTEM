@@ -271,6 +271,59 @@ const POS_PERMISSIONS: PermissionEntry[] = [
   { key: "pos_perm_view_shift_summary", label: "View Shift Summary", group: "POS Capabilities", type: "pos" },
 ];
 
+
+// Ticket module permissions - effective access must still be checked per company/ticket.
+const TICKET_PERMISSIONS: PermissionEntry[] = [
+  {
+    "key": "page_ticket_management",
+    "label": "Ticket Management",
+    "group": "Ticket Management",
+    "type": "page"
+  },
+  {
+    "key": "act_ticket_create",
+    "label": "Ticket create",
+    "group": "Ticket Management",
+    "type": "action"
+  },
+  {
+    "key": "act_ticket_comment",
+    "label": "Ticket comment",
+    "group": "Ticket Management",
+    "type": "action"
+  },
+  {
+    "key": "act_ticket_assign",
+    "label": "Ticket assign",
+    "group": "Ticket Management",
+    "type": "action"
+  },
+  {
+    "key": "act_ticket_finalize",
+    "label": "Ticket finalize",
+    "group": "Ticket Management",
+    "type": "action"
+  },
+  {
+    "key": "act_ticket_reopen",
+    "label": "Ticket reopen",
+    "group": "Ticket Management",
+    "type": "action"
+  },
+  {
+    "key": "act_ticket_manage_all",
+    "label": "Ticket manage all",
+    "group": "Ticket Management",
+    "type": "action"
+  },
+  {
+    "key": "exp_ticket_export",
+    "label": "Export Tickets",
+    "group": "Ticket Management",
+    "type": "export"
+  }
+];
+
 // ─── Combined catalog ─────────────────────────────────────────────────────────
 
 export const PERMISSION_CATALOG: PermissionEntry[] = [
@@ -281,6 +334,7 @@ export const PERMISSION_CATALOG: PermissionEntry[] = [
   ...SENSITIVE_PERMISSIONS,
   ...EXPORT_PERMISSIONS,
   ...POS_PERMISSIONS,
+  ...TICKET_PERMISSIONS,
 ];
 
 /** Convenience lookup by key */
