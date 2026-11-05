@@ -139,6 +139,18 @@ const SUPPORTED = new Map([
       "Each row is recorded as a quantity change (never an overwritten balance) through the quick-adjust " +
       "code; unknown codes are reported, not created; below zero is refused on the LAN and held in the cloud",
   }],
+  ["PATCH /api/files/:id", {
+    policy: "attachment.file-update.v1",
+    limitations:
+      "Rename / move only: applied while the cloud file still has the name and folder the factory saw " +
+      "(otherwise held, approve = factory wins); a missing target folder is reject-only; deletes stay online-only",
+  }],
+  ["PATCH /api/vouchers/:id/payment-receipt", {
+    policy: "voucher.payment-receipt-edit.v1",
+    limitations:
+      "Recorded with a digest of the voucher as the factory saw it; applied only while the cloud voucher " +
+      "still matches (otherwise held, approve = factory wins); reconciled or closed-period vouchers are reject-only",
+  }],
   ["POST /api/stock-transfer-revisions/:id/reject", {
     policy: "stock.transfer-revision-review.v1",
     limitations: "Applied only while the revision is still pending in the cloud; otherwise reject-only",

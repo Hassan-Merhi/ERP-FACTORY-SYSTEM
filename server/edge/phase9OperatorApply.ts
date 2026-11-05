@@ -59,9 +59,11 @@ import { phase9PosSaleEditApplyHandler } from "./phase9PosSaleEditApply";
 import { phase9ReceivingApplyHandler } from "./phase9ReceivingApply";
 import { PHASE9_RECEIVING_KIND } from "./phase9ReceivingEnvelope.mjs";
 import { phase9AttachmentApplyHandler } from "./phase9AttachmentApply";
-import { PHASE9_ATTACHMENT_KIND } from "./phase9AttachmentEnvelope.mjs";
+import { PHASE9_ATTACHMENT_KIND, PHASE9_ATTACHMENT_UPDATE_KIND } from "./phase9AttachmentEnvelope.mjs";
+import { phase9AttachmentUpdateApplyHandler } from "./phase9AttachmentUpdateApply";
 import { phase9PaymentApplyHandler } from "./phase9PaymentApply";
-import { PHASE9_PAYMENT_KIND } from "./phase9PaymentEnvelope.mjs";
+import { phase9PaymentDeleteApplyHandler, phase9PaymentEditApplyHandler } from "./phase9PaymentFollowUpApply";
+import { PHASE9_PAYMENT_DELETE_KIND, PHASE9_PAYMENT_EDIT_KIND, PHASE9_PAYMENT_KIND } from "./phase9PaymentEnvelope.mjs";
 import { PHASE9_STOCK_ADJUST_KIND, PHASE9_STOCK_TRANSFER_KIND } from "./phase9StockEnvelope.mjs";
 import {
   createTenantDatabaseScope,
@@ -89,7 +91,10 @@ export const PHASE9_HANDLERS = Object.freeze({
   [PHASE9_POS_SALE_CANCEL_KIND]: phase9PosSaleCancelApplyHandler,
   [PHASE9_RECEIVING_KIND]: phase9ReceivingApplyHandler,
   [PHASE9_ATTACHMENT_KIND]: phase9AttachmentApplyHandler,
+  [PHASE9_ATTACHMENT_UPDATE_KIND]: phase9AttachmentUpdateApplyHandler,
   [PHASE9_PAYMENT_KIND]: phase9PaymentApplyHandler,
+  [PHASE9_PAYMENT_EDIT_KIND]: phase9PaymentEditApplyHandler,
+  [PHASE9_PAYMENT_DELETE_KIND]: phase9PaymentDeleteApplyHandler,
 });
 
 const REVIEWER_ROLES = ["Admin", "Developer"];

@@ -1,5 +1,12 @@
 import { cancelFxAgentSettlementVoucherTx } from "../../services/factory/fxAgentSettlementCancellation";
 import { offlineEdgeText } from "../../i18n/offlineEdgeMessages";
+import { phase9PlanBatchApproved, readFactoryEdgeConfiguration } from "../../edge/edgeRuntimePolicy.mjs";
+import {
+  capturePhase9PaymentDeleteTx,
+  paymentFollowUpActor,
+  phase9PaymentSnapshotTx,
+  phase9PaymentVoucherRefTx,
+} from "../../edge/phase9PaymentOutbox";
 import { sessionRetirementActor, type VoucherRetirementActor } from "../../services/accounting/voucherRetirement";
 import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
 import { capturePosSaleCancelOfflineTx } from "../../services/pos/posSaleCancelOfflineCapture";
@@ -246,13 +253,19 @@ export function registerVoucherDeleteRoutes(app: Express) {
 
       // Wrap balance sync and deletion in a transaction
       const lanCapture = isPhase9LanPrimary();
-      if (lanCapture && voucher.voucherType !== "Sales") {
+      // Plan batch 4: Payment / Receipt deletes are recorded too (their drill gates them on the LAN).
+      const offlinePayment =
+        (voucher.voucherType === "Payment" || voucher.voucherType === "Receipt") &&
+        phase9PlanBatchApproved(readFactoryEdgeConfiguration(), 4);
+      if (lanCapture && voucher.voucherType !== "Sales" && !offlinePayment) {
         return res.status(409).json({
           code: "EDGE_VOUCHER_DELETE_OFFLINE_SALES_ONLY",
           message: offlineEdgeText("voucherDeleteSalesOnly", req.headers["accept-language"]),
         });
       }
       await db.transaction(async (tx) => {
+        const paymentBefore =
+          lanCapture && offlinePayment ? await phase9PaymentSnapshotTx(tx, companyId, voucher.id) : null;
         await deleteVoucherTx(tx, {
           companyId,
           voucher,
@@ -263,7 +276,17 @@ export function registerVoucherDeleteRoutes(app: Express) {
         });
         // Factory LAN server during an outage: record the cancellation for
         // replay on the sale's stream, in this transaction.
-        if (lanCapture) await capturePosSaleCancelOfflineTx(tx, { companyId, voucher, req });
+        if (lanCapture && voucher.voucherType === "Sales") {
+          await capturePosSaleCancelOfflineTx(tx, { companyId, voucher, req });
+        }
+        if (lanCapture && offlinePayment && paymentBefore) {
+          await capturePhase9PaymentDeleteTx(tx, {
+            ...paymentFollowUpActor(req),
+            localVoucherId: voucher.id,
+            voucherRef: await phase9PaymentVoucherRefTx(tx, voucher.id),
+            beforeSha256: paymentBefore,
+          });
+        }
       });
 
       // A deleted cash sale must leave the intercompany POS mirror for its date.

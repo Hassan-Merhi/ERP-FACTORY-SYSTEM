@@ -160,6 +160,8 @@ const PHASE9_TRANSFER_IMPORT_ROUTES = new Set(
   )
 );
 const PHASE9_LOCATION_IMPORT_PATH = /^\/api\/locations\/(?:[1-9][0-9]{0,9}|:locationId)\/import-inventory$/;
+const PHASE9_FILE_PATH = /^\/api\/files\/(?:[1-9][0-9]{0,9}|:id)$/;
+const PHASE9_PAYMENT_EDIT_PATH = /^\/api\/vouchers\/(?:[1-9][0-9]{0,9}|:id)\/payment-receipt$/;
 const PHASE9_VOUCHER_FINALIZE_PATH = /^\/api\/vouchers\/(?:[1-9][0-9]{0,9}|:id)\/finalize$/;
 export const PHASE9_STOCK_ITEM_PATH = /^\/api\/stock-items\/(?:[1-9][0-9]{0,9}|:id)$/;
 export const PHASE9_STOCK_ITEM_LOCATION_PRICES_PATH = /^\/api\/stock-items\/(?:[1-9][0-9]{0,9}|:id)\/location-prices$/;
@@ -229,6 +231,9 @@ export function phase9ApprovedCaptureRoute(method, path) {
   if (verb === "POST" && PHASE9_LOCATION_IMPORT_PATH.test(path)) {
     return "POST /api/locations/:locationId/import-inventory";
   }
+  // Plan batch 4: Payment / Receipt edits (deletes ride DELETE /api/vouchers/:id, gated in its handler).
+  if (verb === "PATCH" && PHASE9_PAYMENT_EDIT_PATH.test(path)) return "PATCH /api/vouchers/:id/payment-receipt";
+  if (verb === "PATCH" && PHASE9_FILE_PATH.test(path)) return "PATCH /api/files/:id";
   const review = verb === "POST" ? PHASE9_REVISION_REVIEW_PATH.exec(path) : null;
   if (review) return `POST /api/stock-transfer-revisions/:id/${review[1]}`;
   if (verb === "POST" && PHASE9_STOCK_ITEM_LOCATION_PRICES_PATH.test(path)) {
@@ -256,11 +261,18 @@ export const PHASE9_PLAN_BATCH_ROUTES = Object.freeze(
     ["POST /api/stock-transfer-revisions/:id/approve", 3],
     ["POST /api/stock-transfer-revisions/:id/reject", 3],
     ["POST /api/locations/:locationId/import-inventory", 3],
+    ["PATCH /api/vouchers/:id/payment-receipt", 4],
+    ["PATCH /api/files/:id", 4],
     ...["parse", "validate", "import", "parse-multi-source", "validate-multi-source", "import-multi-source"].map(
       (step) => [`POST /api/stock-transfer-import/${step}`, 3]
     ),
   ])
 );
+
+/** Has the operator recorded this plan batch's staging drill as approved on this server? */
+export function phase9PlanBatchApproved(config, batch) {
+  return config.mode === "lan" && (config.approvedPlanBatches ?? []).includes(batch);
+}
 
 /** Null when the route belongs to no gated batch. */
 export function phase9PlanBatchOf(routeKey) {

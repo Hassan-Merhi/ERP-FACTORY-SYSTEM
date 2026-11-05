@@ -319,9 +319,17 @@ export function registerFactoryEdgeBoundary(app: Express): void {
           installed: outboxInstalled("factory_edge_pos_outbox"),
           code: "EDGE_PHASE9_POS_CAPTURE_NOT_INSTALLED",
         },
+        "PATCH /api/vouchers/:id/payment-receipt": {
+          installed: outboxInstalled("factory_edge_payment_outbox"),
+          code: "EDGE_PHASE9_PAYMENT_CAPTURE_NOT_INSTALLED",
+        },
         [PHASE9_PAYMENT_RECEIPT_ROUTE]: {
           installed: outboxInstalled("factory_edge_payment_outbox"),
           code: "EDGE_PHASE9_PAYMENT_CAPTURE_NOT_INSTALLED",
+        },
+        "PATCH /api/files/:id": {
+          installed: outboxInstalled("factory_edge_attachment_outbox"),
+          code: "EDGE_PHASE9_ATTACHMENT_CAPTURE_NOT_INSTALLED",
         },
         [PHASE9_ATTACHMENT_UPLOAD_ROUTE]: {
           installed: outboxInstalled("factory_edge_attachment_outbox"),

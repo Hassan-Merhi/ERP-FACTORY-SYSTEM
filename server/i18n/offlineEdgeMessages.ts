@@ -15,9 +15,9 @@ const messages = {
     fr: "Seuls de nouveaux transferts de stock peuvent être saisis sur le serveur de l’usine pendant une coupure.",
   },
   voucherDeleteSalesOnly: {
-    en: "Only POS sales can be cancelled while the factory is offline.",
-    ar: "لا يمكن إلغاء سوى مبيعات نقاط البيع أثناء انقطاع اتصال المصنع.",
-    fr: "Seules les ventes au point de vente peuvent être annulées pendant que l’usine est hors ligne.",
+    en: "Only POS sales, payments and receipts can be deleted while the factory is offline.",
+    ar: "لا يمكن حذف سوى مبيعات نقاط البيع والمدفوعات والمقبوضات أثناء انقطاع اتصال المصنع.",
+    fr: "Seuls les ventes au point de vente, les paiements et les encaissements peuvent être supprimés pendant que l’usine est hors ligne.",
   },
   voucherFinalizeTransfersOnly: {
     en: "Only stock transfers can be finalized while the factory is offline.",
@@ -33,6 +33,11 @@ const messages = {
     en: "Importing stock while the factory is offline needs the stock adjustment permission.",
     ar: "يتطلب استيراد المخزون أثناء انقطاع اتصال المصنع صلاحية تعديل المخزون.",
     fr: "L’import de stock pendant que l’usine est hors ligne nécessite le droit d’ajuster le stock.",
+  },
+  paymentIntercompanyOnlineOnly: {
+    en: "This payment is one side of an intercompany transfer, so it can only be changed online.",
+    ar: "هذه الدفعة طرف في تحويل بين الشركات، لذا لا يمكن تعديلها إلا عند الاتصال.",
+    fr: "Ce paiement est un côté d’un transfert interentreprises ; il ne peut être modifié qu’en ligne.",
   },
   stockItemHasMovements: {
     en: "This stock item has stock movements, so it can only be deleted online.",

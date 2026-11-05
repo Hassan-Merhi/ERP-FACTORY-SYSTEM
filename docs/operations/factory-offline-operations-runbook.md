@@ -40,6 +40,8 @@ an open cloud epoch.
 | Changes to an existing stock transfer: edit (`PUT /api/stock-transfers/:id`), finalize/approve (`POST /api/vouchers/:id/finalize` for transfer vouchers, `POST /api/stock-transfers/:id/approve`), revisions (`POST /api/stock-transfers/:id/revisions`) and revision approve/reject | yes; other voucher types cannot be finalized offline (HTTP 423) | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — each change carries the transfer as the factory saw it; a transfer created offline is found through its create's receipt; an edit or finalize of a transfer the cloud changed meanwhile is held for Admin/Developer approve (factory change wins) or reject; a stale revision, a revision no longer pending, or a transfer whose offline create was rejected is reject-only |
 | Excel stock-transfer import, single and multi-source (`/api/stock-transfer-import/*`: parse and validate only read; import writes) | yes; each import is created through the same code as a hand-typed transfer | `stock` (Phase 9), as an ordinary `stock.transfer.v1` | replayed like any offline transfer, on its LAN request id; a cloud shortfall is held for Admin/Developer approve/reject |
 | Excel inventory import for a location (`POST /api/locations/:id/import-inventory`) | yes, existing items only; needs the stock-adjustment permission; a row below zero is refused | `stock` (Phase 9), each row an ordinary `stock.quick-adjust.v1` | each row's quantity change is added to the cloud's own figure (never an overwritten balance); below zero is held for Admin/Developer approve/reject. Offline, an unknown code is reported (not created) and rows are valued at the location's average cost |
+| Payment / Receipt edit (`PATCH /api/vouchers/:id/payment-receipt`) and delete (`DELETE /api/vouchers/:id`, Admin) | yes, once batch 4's drill is approved; intercompany transfer legs stay online-only (409) | `payments` (Phase 9), after the payment itself | each record carries a SHA-256 of the voucher (header and every entry) as the factory saw it. A voucher created offline is found through its create's receipt. The change applies through the same code only while the cloud voucher still has that digest. A changed voucher is held for Admin/Developer approve (factory change wins) or reject. A reconciled voucher, an intercompany leg, a closed period or any other posting refusal is reject-only |
+| File rename / move (`PATCH /api/files/:id`) | yes, once batch 4's drill is approved; file deletes stay online-only | `attachments` (Phase 9), after the upload | applied only while the cloud file still has the name and folder the factory saw. A file renamed or moved in the cloud meanwhile is held (approve = factory change wins). A missing target folder is reject-only |
 | POS sale — cash, bank or credit; USD or another currency at the cashier's entered rate (non-supplier-partner company) | yes, numbered `LAN-<site>-000123` | `pos` (Phase 9) | `server/edge/phase9OperatorApply.ts apply pos` — replayed through the sale service on its `clientSaleId`; keeps the offline price; below-zero stock or a changed till account is held for Admin/Developer approve/reject |
 | Supplier receiving: container offload against its existing purchase orders, and offload edits, with duties, charges, cost corrections and agent lines | yes | `receiving` (Phase 9) | `server/edge/phase9OperatorApply.ts apply receiving` — same offload lifecycle on the receipt's transaction; cloud prices apply; changed order quantities are held for Admin/Developer approve/reject |
 | File upload (Files page), up to 10 MB | yes | `attachments` (Phase 9) + signed file upload | `server/edge/phase9OperatorApply.ts apply attachments` — the record syncs first; the relay then uploads the bytes to `/api/edge/sync/files/stage`, accepted only if their SHA-256 matches a staged record; the file is created in the cloud once its bytes arrive; a missing folder is held for approve/reject |
@@ -48,7 +50,7 @@ an open cloud epoch.
 | POS sale cancellation (`DELETE /api/vouchers/:id`, sales vouchers only, Admin) | yes | `pos` (same stream as the sale) | replayed through the same delete code; the operator tool refreshes the intercompany POS mirror for the date afterwards; a missing or already-cancelled sale is reject-only |
 | Login, logout, company switch | yes (session only) | none | n/a |
 | All reads covered by prepared offline reads | yes | n/a | n/a |
-| Everything else (1,142 write routes) | **refused** with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION` | none | n/a |
+| Everything else (1,140 write routes) | **refused** with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION` | none | n/a |
 
 `node scripts/edge/audit-phase9-write-coverage.mjs` prints the exact current
 inventory and fails if any route becomes writable on the LAN without a reviewed
@@ -60,7 +62,7 @@ The rows added by the owner-approved plan of 2026-11-05 are:
 - batch 2: new stock items and item deletes;
 - batch 3: transfer edits, finalizes and revisions, and the Excel transfer
   and inventory imports;
-- batch 4, when added.
+- batch 4: Payment / Receipt edits and deletes, and file renames and moves.
 
 They are refused on the factory server (HTTP 423) until the owner has run
 that batch's staging drill and approved it. Record the approval in
@@ -69,6 +71,11 @@ that batch's staging drill and approved it. Record the approval in
 ```
 EDGE_APPROVED_PLAN_BATCHES=2,3
 ```
+
+On the factory server, Payment / Receipt creates, edits and deletes are served
+by the payment routes that record them for the cloud, not by the central
+posting routes. They use the same posting code the cloud replays, and the
+same `clientRequestId` keeps a retried create from posting twice.
 
 Leave it empty to keep every plan batch off. An unknown value stops the
 server at startup (`EDGE_PLAN_BATCHES_INVALID`). The coverage audit lists
@@ -95,13 +102,13 @@ reconciled safely, which is worse than refusing them.
   no replay handler yet. Quick adjustments, inventory imports, new and imported transfers,
   transfer edits, finalizes and revisions, new items, item deletes and master
   edits of existing items are offline (above).
-- **Deletes of non-sales vouchers and payment edits:** each posts
-  money and stock together through the central posting engine with
-  multi-currency, tax and numbering rules. Payment/receipt edits and deletes
-  stay online-only.
-- **Other documents and imports:** offline file upload covers the Files page
-  (`POST /api/files/upload`); renames, moves, deletes, imports and document
-  exports stay online-only.
+- **Deletes and edits of other voucher types:** each posts money and stock
+  together through the central posting engine with multi-currency, tax and
+  numbering rules. Only POS sales and Payment / Receipt vouchers are edited
+  or deleted offline (above). Intercompany transfer legs stay online-only.
+- **Other documents and imports:** offline file upload, rename and move cover
+  the Files page; file deletes, imports and document exports stay
+  online-only.
 - **Pressing voids/corrections and machine assignment changes:** supervisor
   actions on the cloud's view of the same records; they stay cloud-only so a
   void can never race a LAN scan of the same bale.

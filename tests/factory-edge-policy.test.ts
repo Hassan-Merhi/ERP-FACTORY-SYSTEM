@@ -109,7 +109,7 @@ describe("factory LAN edge deployment policy", () => {
               FACTORY_EDGE_WRITER_EPOCH: "2",
               FACTORY_EDGE_BASELINE_SHA256: "a".repeat(64),
               // The plan batches below have had their staging drill approved.
-              FACTORY_EDGE_APPROVED_PLAN_BATCHES: "2, 3",
+              FACTORY_EDGE_APPROVED_PLAN_BATCHES: "2, 3, 4",
             }
           : {}),
       };
@@ -193,6 +193,14 @@ describe("factory LAN edge deployment policy", () => {
       expect(edgeBlocksWrite(config, "POST", "/api/locations/12/import-inventory")).toBe(open);
       expect(edgeBlocksWrite(config, "POST", "/api/locations/12/import-cost-prices")).toBe(true);
       expect(edgeBlocksWrite(config, "PUT", "/api/locations/12/import-inventory")).toBe(true);
+      // Plan batch 4: Payment / Receipt edits (deletes ride DELETE /api/vouchers/:id).
+      expect(edgeBlocksWrite(config, "PATCH", "/api/vouchers/9/payment-receipt")).toBe(open);
+      expect(edgeBlocksWrite(config, "PUT", "/api/vouchers/9/payment-receipt")).toBe(true);
+      // Plan batch 4: file rename / move (PATCH); file delete stays cloud-only.
+      expect(edgeBlocksWrite(config, "PATCH", "/api/files/42")).toBe(open);
+      for (const verb of ["POST", "PUT", "DELETE"]) {
+        expect(edgeBlocksWrite(config, verb, "/api/files/42")).toBe(true);
+      }
       for (const path of [
         "/api/factory/pressing-machines/void",
         "/api/pos/retail/sales",
@@ -200,7 +208,6 @@ describe("factory LAN edge deployment policy", () => {
         "/api/containers/abc/offload",
         "/api/inventory/silent-transfer/apply",
         "/api/attachments",
-        "/api/files/42",
         "/api/payments",
         "/api/stock-items/import",
         "/api/stock-items/bulk-delete",
@@ -225,6 +232,8 @@ describe("factory LAN edge deployment policy", () => {
     expect(edgeBlocksWrite(none, "POST", "/api/stock-items")).toBe(true);
     expect(edgeBlocksWrite(none, "PUT", "/api/stock-transfers/42")).toBe(true);
     expect(edgeBlocksWrite(none, "POST", "/api/locations/12/import-inventory")).toBe(true);
+    expect(edgeBlocksWrite(none, "PATCH", "/api/vouchers/9/payment-receipt")).toBe(true);
+    expect(edgeBlocksWrite(none, "PATCH", "/api/files/42")).toBe(true);
     // Workflows approved before the plan, and the operator pause button, are not gated.
     expect(edgeBlocksWrite(none, "POST", "/api/stock-transfers")).toBe(false);
     expect(edgeBlocksWrite(none, "PATCH", "/api/stock-items/42")).toBe(false);

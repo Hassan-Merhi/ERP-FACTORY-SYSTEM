@@ -47,11 +47,22 @@ import {
   phase9ReceivingEnvelope,
 } from "./phase9ReceivingEnvelope.mjs";
 import {
+  PHASE9_ATTACHMENT_FILE_CHANGED,
   PHASE9_ATTACHMENT_FOLDER_MISSING,
   PHASE9_ATTACHMENT_KIND,
+  PHASE9_ATTACHMENT_UPDATE_KIND,
   phase9AttachmentEnvelope,
+  phase9AttachmentUpdateEnvelope,
 } from "./phase9AttachmentEnvelope.mjs";
-import { PHASE9_PAYMENT_KIND, phase9PaymentEnvelope } from "./phase9PaymentEnvelope.mjs";
+import {
+  PHASE9_PAYMENT_CHANGED_CONFLICT,
+  PHASE9_PAYMENT_DELETE_KIND,
+  PHASE9_PAYMENT_EDIT_KIND,
+  PHASE9_PAYMENT_KIND,
+  phase9PaymentDeleteEnvelope,
+  phase9PaymentEditEnvelope,
+  phase9PaymentEnvelope,
+} from "./phase9PaymentEnvelope.mjs";
 import {
   PHASE9_STOCK_TRANSFER_CHANGED_CONFLICT,
   PHASE9_STOCK_TRANSFER_EDIT_KIND,
@@ -347,6 +358,12 @@ const STREAMS = Object.freeze({
         localRef: (payload) => payload.localFileId,
         overridable: Object.freeze([PHASE9_ATTACHMENT_FOLDER_MISSING]),
       }),
+      // Plan batch 4: renames and moves, after the upload on the same stream.
+      [PHASE9_ATTACHMENT_UPDATE_KIND]: Object.freeze({
+        parse: (payload) => rebuiltPayload(payload, PHASE9_ATTACHMENT_UPDATE_KIND, phase9AttachmentUpdateEnvelope),
+        localRef: (payload) => payload.localFileId,
+        overridable: Object.freeze([PHASE9_ATTACHMENT_FILE_CHANGED]),
+      }),
     }),
   }),
   payments: Object.freeze({
@@ -355,6 +372,17 @@ const STREAMS = Object.freeze({
         parse: paymentPayload,
         localRef: (payload) => payload.localVoucherId,
         overridable: Object.freeze([]),
+      }),
+      // Plan batch 4: edits and deletes, on the same stream as the payment itself.
+      [PHASE9_PAYMENT_EDIT_KIND]: Object.freeze({
+        parse: (payload) => rebuiltPayload(payload, PHASE9_PAYMENT_EDIT_KIND, phase9PaymentEditEnvelope),
+        localRef: (payload) => payload.localVoucherId,
+        overridable: Object.freeze([PHASE9_PAYMENT_CHANGED_CONFLICT]),
+      }),
+      [PHASE9_PAYMENT_DELETE_KIND]: Object.freeze({
+        parse: (payload) => rebuiltPayload(payload, PHASE9_PAYMENT_DELETE_KIND, phase9PaymentDeleteEnvelope),
+        localRef: (payload) => payload.localVoucherId,
+        overridable: Object.freeze([PHASE9_PAYMENT_CHANGED_CONFLICT]),
       }),
     }),
   }),

@@ -52,18 +52,20 @@ const manifest = {
     "POST /api/stock-transfer-import/validate-multi-source [business]",
     "POST /api/stock-transfer-import/import-multi-source [business]",
     "POST /api/locations/:locationId/import-inventory [business]",
+    "PATCH /api/vouchers/:id/payment-receipt [business]",
+    "PATCH /api/files/:id [business]",
   ],
 };
 test("every unique API write has explicit capture, session-only or blocked disposition", () => {
   const report = auditPhase9WriteCoverage(manifest);
-  assert.equal(report.summary.uniqueApiWriteRoutes, 44);
-  assert.equal(report.summary.approvedCapture, 37);
+  assert.equal(report.summary.uniqueApiWriteRoutes, 46);
+  assert.equal(report.summary.approvedCapture, 39);
   assert.equal(report.summary.sessionOnly, 1);
   // Phase 10: pause/resume is an operator control on the LAN; the cloud-only
   // decision route stays blocked there.
   assert.equal(report.summary.operatorControl, 1);
   // Plan-batch routes in the sample: they count as captured, and wait for their drill approval on the LAN.
-  assert.equal(report.summary.awaitingDrillApproval, 15);
+  assert.equal(report.summary.awaitingDrillApproval, 17);
   assert.equal(report.summary.blocked, 5);
   assert.equal(report.summary.productionComplete, false);
   const byPath = new Map(report.routes.map((r) => [r.path, r]));
@@ -104,7 +106,7 @@ test("missing vetted route, bad manifest and unexpected allowed route are refuse
 test("real route manifest has explicit accounting/stock/POS/factory/attachment gaps", () => {
   const real = JSON.parse(fs.readFileSync(new URL("../config/route-manifest.json", import.meta.url), "utf8"));
   const report = auditPhase9WriteCoverage(real);
-  assert.equal(report.summary.approvedCapture, 37);
+  assert.equal(report.summary.approvedCapture, 39);
   assert.ok(report.summary.blocked > 0);
   assert.ok(report.routes.some((r) => r.module === "retail-pos" && r.disposition === "blocked"));
   assert.ok(report.routes.some((r) => r.module === "factory-production" && r.disposition === "blocked"));

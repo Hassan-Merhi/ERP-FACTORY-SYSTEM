@@ -10,6 +10,7 @@
  */
 import { sql } from "drizzle-orm";
 import {
+  uniqueIndex,
   bigint,
   bigserial,
   char,
@@ -255,7 +256,10 @@ export const factoryEdgeAttachmentOutbox = pgTable(
   (t) => [
     primaryKey({ columns: [t.siteId, t.sequence] }),
     unique().on(t.siteId, t.operationId),
-    unique().on(t.siteId, t.localFileId),
+    // Plan batch 4: renames and moves name the same file, so only the upload is one-per-file.
+    uniqueIndex("factory_edge_attachment_outbox_upload_once")
+      .on(t.siteId, t.localFileId)
+      .where(sql`operation_kind = 'attachment.file.v1'`),
     foreignKey({
       name: "factory_edge_attachment_source_fk",
       columns: [t.localFileId],
@@ -342,7 +346,10 @@ export const factoryEdgePaymentOutbox = pgTable(
   (t) => [
     primaryKey({ columns: [t.siteId, t.sequence] }),
     unique().on(t.siteId, t.operationId),
-    unique().on(t.siteId, t.localVoucherId),
+    // Plan batch 4: edits and deletes name the same voucher, so only the create is one-per-voucher.
+    uniqueIndex("factory_edge_payment_outbox_create_once")
+      .on(t.siteId, t.localVoucherId)
+      .where(sql`operation_kind = 'voucher.payment-receipt.v1'`),
     foreignKey({
       name: "factory_edge_payment_source_fk",
       columns: [t.localVoucherId],

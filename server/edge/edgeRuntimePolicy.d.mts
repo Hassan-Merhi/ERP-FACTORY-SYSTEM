@@ -18,6 +18,7 @@ export const PHASE10_CONFLICT_DECISION_ROUTE: "POST /api/edge/operator/conflicts
 export const PHASE9_GATED_PLAN_BATCHES: readonly number[];
 export const PHASE9_PLAN_BATCH_ROUTES: ReadonlyMap<string, number>;
 export function phase9PlanBatchOf(routeKey: string): number | null;
+export function phase9PlanBatchApproved(config: EdgeConfiguration, batch: number): boolean;
 export function edgeBlocksWrite(config: EdgeConfiguration, method: string, path: string): boolean;
 export function edgeStatusPayload(
   config: EdgeConfiguration,
