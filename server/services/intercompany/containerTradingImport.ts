@@ -79,7 +79,11 @@ export function validateWorkbookSelections(preview: WorkbookPreview, input: Inte
     unique.add(selection.containerNumber);
     const original = byName.get(selection.containerNumber);
     assert(original, "Selected container is not in the uploaded workbook: " + selection.containerNumber);
-    return createContainerImportPlan(original, selection);
+    try {
+      return createContainerImportPlan(original, selection);
+    } catch (error) {
+      throw new TradingImportError(400, error instanceof Error ? error.message : "Invalid workbook container");
+    }
   });
 }
 
