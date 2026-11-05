@@ -2,20 +2,30 @@ const SESSION_TOKEN_KEY = "erp:global-force-refresh-token";
 const FORCE_REFRESH_NOTICE_ID = "erp-global-force-refresh-notice";
 export const FORCE_REFRESH_COUNTDOWN_MS = 5_000;
 
-// Each tab keeps its own last-applied token. Using localStorage would cause
-// the first reloaded tab to suppress the update for other open tabs.
+// Treat the first token seen by each authenticated session as a baseline.
+// sessionStorage survives logout/login and Safari restores old tab state, so
+// comparing with a stored token can mistake login or role switching for a
+// fresh command. Only a change observed DURING the current session reloads.
+type RefreshAudience = "regular" | "privileged";
 let memoryToken: string | null = null;
+let memoryAudience: RefreshAudience | null = null;
 
-export function shouldApplyGlobalForceRefresh(token: string): boolean {
-  let previous = memoryToken;
-  try {
-    const stored = sessionStorage.getItem(SESSION_TOKEN_KEY);
-    if (stored !== null) previous = stored;
-    sessionStorage.setItem(SESSION_TOKEN_KEY, token); // persist BEFORE reload
-  } catch {
-    // Use the in-memory baseline when sessionStorage is unavailable.
-  }
+export function resetGlobalForceRefreshBaseline(): void {
+  memoryToken = null;
+  memoryAudience = null;
+}
+
+export function shouldApplyGlobalForceRefresh(token: string, audience: RefreshAudience = "regular"): boolean {
+  const previous = memoryAudience === audience ? memoryToken : null;
   memoryToken = token;
+  memoryAudience = audience;
+  try {
+    // Retain a per-tab audit marker before reload; it is never used to
+    // decide whether a new login or freshly loaded page should refresh.
+    sessionStorage.setItem(`${SESSION_TOKEN_KEY}:${audience}`, token);
+  } catch {
+    // In-memory observation still works when sessionStorage is unavailable.
+  }
   return previous !== null && previous !== token;
 }
 
