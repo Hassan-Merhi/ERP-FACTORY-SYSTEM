@@ -17,7 +17,12 @@
     "GET /api/intercompany-container-trading/shared-charges/:invoiceId [requireAuth > <anonymous>]",
     "PATCH /api/intercompany-container-trading/shared-charges/:invoiceId [requireAuth > <anonymous>]",
     "POST /api/intercompany-container-trading/shared-charge-grants [requireAuth > <anonymous>]",
-    "POST /api/intercompany-container-trading/shared-charge-grants/:grantId/revoke [requireAuth > <anonymous>]"
+    "POST /api/intercompany-container-trading/shared-charge-grants/:grantId/revoke [requireAuth > <anonymous>]",
+    "GET /api/intercompany-container-trading/payments/relationships [requireAuth > <anonymous>]",
+    "GET /api/intercompany-container-trading/payments/pairs/:relationshipId/setup [requireAuth > <anonymous>]",
+    "GET /api/intercompany-container-trading/payments/pairs/:relationshipId/history [requireAuth > <anonymous>]",
+    "POST /api/intercompany-container-trading/payments/confirm [requireAuth > <anonymous>]",
+    "POST /api/intercompany-container-trading/payments/:paymentId/reverse [requireAuth > <anonymous>]"
   ],
   "routeManifestMountAdditions": [],
   "routeManifestReplacements": [],
