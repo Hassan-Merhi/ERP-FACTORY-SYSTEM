@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import TicketConversation, { uploadInitialTicketEvidence } from "@/pages/tickets/TicketConversation";
 
 type Ticket = {
   id:number; ticketNumber:string; title:string; category:string; priority:string; status:string;
@@ -26,7 +27,7 @@ const statusLabels:Record<string,string> = {
 const priorities = ["low","normal","high","urgent"] as const;
 const categories = ["Voucher Error","Stock Discrepancy","Production Error","Attendance Issue","Invoice / Loading Error","Other"];
 const inputStyle = "w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm";
-function TicketForm({ onCreated, onCancel, sourceMode }:{onCreated:(id:number)=>void;onCancel:()=>void;sourceMode:"erp"|"factory"}) {
+function TicketForm({ onCreated, onCancel, sourceMode }:{onCreated:(id:number,warning?:string)=>void;onCancel:()=>void;sourceMode:"erp"|"factory"}) {
   const { selectedCompany } = useCompany();
   const client = useQueryClient();
   const [title,setTitle]=useState("");
@@ -39,6 +40,7 @@ function TicketForm({ onCreated, onCancel, sourceMode }:{onCreated:(id:number)=>
   const [voucherId,setVoucherId]=useState<number|undefined>();
   const [voucherLabel,setVoucherLabel]=useState("");
   const [error,setError]=useState("");
+  const [initialEvidence,setInitialEvidence]=useState<File|null>(null);
   const users=useQuery({queryKey:["ticket-users",selectedCompany?.id],queryFn:()=>fetchJson<{users:User[]}>("/api/tickets/users"),enabled:!!selectedCompany?.id});
   const vouchers=useQuery({queryKey:["ticket-voucher-search",selectedCompany?.id,voucherQ],queryFn:()=>fetchJson<{records:Voucher[]}>(`/api/tickets/voucher-search?q=${encodeURIComponent(voucherQ)}`),enabled:!!selectedCompany?.id&&voucherQ.trim().length>=2&&!voucherId});
   const create=useMutation({
@@ -46,7 +48,15 @@ function TicketForm({ onCreated, onCancel, sourceMode }:{onCreated:(id:number)=>
       const res=await apiRequest("POST","/api/tickets",{title,description,category,priority,assignedTo,sourceMode,...(reportedUserId?{reportedUserId}:{}),...(voucherId?{voucherId}:{})});
       return res.json() as Promise<{ticket:Ticket}>;
     },
-    onSuccess:async ({ticket})=>{await client.invalidateQueries({queryKey:ticketKey(selectedCompany?.id)});onCreated(ticket.id);},
+    onSuccess:async ({ticket})=>{
+      let warning: string|undefined;
+      if(initialEvidence) {
+        try { await uploadInitialTicketEvidence(ticket.id,initialEvidence); }
+        catch(err) { warning="Ticket saved, but photo upload failed: "+(err instanceof Error?err.message:"Unknown error"); }
+      }
+      await client.invalidateQueries({queryKey:ticketKey(selectedCompany?.id)});
+      onCreated(ticket.id,warning);
+    },
     onError:(err:Error)=>setError(err.message),
   });
   const submit=(event:FormEvent)=>{event.preventDefault();setError("");if(!assignedTo)return setError("Select an employee.");create.mutate();};
@@ -91,6 +101,21 @@ function TicketForm({ onCreated, onCancel, sourceMode }:{onCreated:(id:number)=>
             </div>}
           </>}
         </div>
+        <div className="space-y-2">
+          <span className="block text-sm font-medium">Photo or evidence (optional)</span>
+          <p className="text-xs text-muted-foreground">Select a photo now, or add evidence from inside the ticket later. Maximum 5 MB.</p>
+          <div className="flex flex-wrap gap-2">
+            <label className="inline-flex min-h-10 cursor-pointer items-center rounded-md border px-3 py-2 text-sm">
+              Take photo
+              <input aria-label="Take initial ticket photo" type="file" capture="environment" accept="image/*" className="sr-only" onChange={e=>setInitialEvidence(e.target.files?.[0]??null)}/>
+            </label>
+            <label className="inline-flex min-h-10 cursor-pointer items-center rounded-md border px-3 py-2 text-sm">
+              Choose file
+              <input aria-label="Select initial ticket evidence" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="sr-only" onChange={e=>setInitialEvidence(e.target.files?.[0]??null)}/>
+            </label>
+          </div>
+          {initialEvidence&&<div className="flex items-center gap-2 text-xs"><span className="min-w-0 break-all">{initialEvidence.name}</span><Button type="button" size="sm" variant="outline" onClick={()=>setInitialEvidence(null)}>Remove</Button></div>}
+        </div>
         <label className="block space-y-1 text-sm font-medium">Describe the issue
           <Textarea required minLength={3} maxLength={10000} rows={5} value={description} onChange={e=>setDescription(e.target.value)} placeholder="Explain the mistake and the correction needed."/>
         </label>
@@ -104,33 +129,32 @@ function TicketForm({ onCreated, onCancel, sourceMode }:{onCreated:(id:number)=>
 export default function TicketManagement({ sourceMode = "erp" }:{sourceMode?:"erp"|"factory"}) {
   const { selectedCompany } = useCompany();
   const [location,navigate]=useLocation();
+  const queryClient=useQueryClient();
   const [q,setQ]=useState("");
   const [status,setStatus]=useState("");
   const [page,setPage]=useState(1);
   const [creating,setCreating]=useState(false);
   const [ticketId,setTicketId]=useState<number|undefined>();
+  const [evidenceWarning,setEvidenceWarning]=useState<string|undefined>();
   useEffect(()=>{setPage(1);setTicketId(undefined);setCreating(false);},[selectedCompany?.id]);
   const params=new URLSearchParams({page:String(page),...(q.trim()?{q:q.trim()}:{}),...(status?{status}:{})});
   const users=useQuery({queryKey:["ticket-list-users",selectedCompany?.id],queryFn:()=>fetchJson<{users:User[]}>("/api/tickets/users"),enabled:!!selectedCompany?.id});
   const names=new Map<string,string>((users.data?.users??[]).map(u=>[u.id,u.username] as const));
   const listing=useQuery({queryKey:[...ticketKey(selectedCompany?.id),page,q,status],queryFn:()=>fetchJson<{tickets:Ticket[];hasMore:boolean}>(`/api/tickets?${params}`),enabled:!!selectedCompany?.id});
-  const detail=useQuery({queryKey:["ticket-detail",selectedCompany?.id,ticketId],queryFn:()=>fetchJson<{ticket:Ticket;records:{id:number;displayReference:string}[]}>(`/api/tickets/${ticketId}`),enabled:!!ticketId});
+
   const viewCreate=creating||location.endsWith("/new");
-  if(viewCreate)return <main className="w-full min-w-0 overflow-x-hidden p-3 sm:p-6"><TicketForm sourceMode={sourceMode} onCancel={()=>{setCreating(false);navigate(sourceMode==="factory"?"/factory/tickets":"/tickets");}} onCreated={id=>{setCreating(false);navigate(sourceMode==="factory"?"/factory/tickets":"/tickets");setTicketId(id);}}/></main>;
+  if(viewCreate)return <main className="w-full min-w-0 overflow-x-hidden p-3 sm:p-6"><TicketForm sourceMode={sourceMode} onCancel={()=>{setCreating(false);navigate(sourceMode==="factory"?"/factory/tickets":"/tickets");}} onCreated={(id,warning)=>{setCreating(false);setEvidenceWarning(warning);navigate(sourceMode==="factory"?"/factory/tickets":"/tickets");setTicketId(id);}}/></main>;
   return <main className="w-full min-w-0 space-y-4 overflow-x-hidden p-3 sm:p-6">
     <header className="flex flex-wrap items-center justify-between gap-3">
       <div><h1 className="text-2xl font-semibold">Ticket Management</h1><p className="text-sm text-muted-foreground">Your tickets and permitted company cases</p></div>
       <Button onClick={()=>{setCreating(true);setTicketId(undefined);}}>+ Create Ticket</Button>
     </header>
-    {ticketId ? <Card><CardHeader><Button variant="outline" className="w-fit" onClick={()=>setTicketId(undefined)}>Back to tickets</Button><CardTitle>{detail.data?.ticket.ticketNumber ?? "Ticket"}</CardTitle></CardHeader>
-      <CardContent className="space-y-3">{detail.isLoading&&"Loading ticket..."}{detail.isError&&<p role="alert">Unable to load ticket.</p>}
-        {detail.data&&<><h2 className="font-semibold">{detail.data.ticket.title}</h2>
-          <p className="whitespace-pre-wrap break-words">{detail.data.ticket.description}</p>
-          <p className="text-sm">Status: {statusLabels[detail.data.ticket.status]??detail.data.ticket.status} • Priority: {detail.data.ticket.priority}</p>
-          <p className="text-sm">Assigned to: {names.get(detail.data.ticket.assignedTo)??"Employee"}</p>
-          {detail.data.records.map(r=><p key={r.id} className="text-sm">Linked record: {r.displayReference}</p>)}
-        </>}
-      </CardContent></Card> : <>
+    {ticketId ? <>
+      {evidenceWarning&&<p role="alert" className="rounded-md border border-destructive p-3 text-sm text-destructive">{evidenceWarning}</p>}
+      <TicketConversation ticketId={ticketId} companyId={selectedCompany?.id}
+        userNames={names} onBack={()=>{setTicketId(undefined);setEvidenceWarning(undefined);}}
+        onChanged={()=>{void queryClient.invalidateQueries({queryKey:ticketKey(selectedCompany?.id)});}}/>
+    </> : <>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_12rem]">
         <Input aria-label="Search tickets" placeholder="Search ticket number or title" value={q} onChange={e=>{setQ(e.target.value);setPage(1);}}/>
         <select aria-label="Filter status" className={inputStyle} value={status} onChange={e=>{setStatus(e.target.value);setPage(1);}}>
