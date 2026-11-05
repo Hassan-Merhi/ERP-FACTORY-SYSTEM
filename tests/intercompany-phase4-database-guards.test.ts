@@ -86,6 +86,11 @@ describe("Phase 4 paired payment database protections",()=>{
       await client.query("INSERT INTO vouchers(id,company_id,voucher_type,total_amount,description) VALUES (60,1,'Receipt',120,'Wrong actual bank leg'),(61,2,'Payment',120,'Wrong supplier payable')");
       await client.query("INSERT INTO voucher_entries(voucher_id,bank_account_id,ledger_account_id,supplier_id,debit_amount,credit_amount) VALUES (60,33,NULL,NULL,120,0),(60,NULL,11,NULL,0,120),(61,NULL,NULL,3,120,0),(61,32,NULL,NULL,0,120)");
       await rejects("INSERT INTO intercompany_container_payments"+paymentColumns+" VALUES (1,1,2,'phase4-wrong-journal',repeat('a',64),'WRONG-LEG-001','Bank evidence differs from actual posting','2026-11-05','USD',120,1,120,'bank',31,'bank',32,11,2,60,61,'owner')","voucher lines");
+      // A direct DB caller must not invent USD value or substitute a different
+      // source receivable, even when authentic-looking voucher IDs are supplied.
+      await rejects("INSERT INTO intercompany_container_payments"+paymentColumns+" VALUES (1,1,2,'phase4-fake-fx',repeat('a',64),'WIRE-FX-001','Transfer evidence checked','2026-11-05','USD',100,1,120,'bank',31,'bank',32,11,2,55,56,'owner')","ic_payments_fx_consistency");
+      await rejects("INSERT INTO intercompany_container_payments"+paymentColumns+" VALUES (1,1,2,'phase4-fake-map',repeat('a',64),'WIRE-MAP-001','Transfer evidence checked','2026-11-05','USD',120,1,120,'bank',31,'bank',32,12,2,55,56,'owner')","verified company-pair");
+      await rejects("INSERT INTO intercompany_container_payments"+paymentColumns+" VALUES (1,1,2,'phase4-fake-usd-rate',repeat('a',64),'WIRE-RATE-001','Transfer evidence checked','2026-11-05','USD',120,2,60,'bank',31,'bank',32,11,2,55,56,'owner')","ic_payments_fx_consistency");
       await client.query("INSERT INTO intercompany_container_payments"+paymentColumns+" VALUES "+goodValues);
       await rejects("UPDATE vouchers SET description='tampered' WHERE id=55","Mirrored");
       await rejects("DELETE FROM vouchers WHERE id=56","Mirrored");
