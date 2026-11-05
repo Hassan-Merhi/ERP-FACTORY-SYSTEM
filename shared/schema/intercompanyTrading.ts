@@ -510,7 +510,7 @@ export const intercompanyContainerPayments = pgTable(
   },
   (t) => ({
     relationshipDateIdx: index("ic_payments_pair_date_idx").on(t.relationshipId, t.paymentDate, t.id),
-    uniqueTransferRef: uniqueIndex("ic_payments_pair_transfer_ref").on(t.relationshipId, t.transferReference),
+    uniqueTransferRef: uniqueIndex("ic_payments_pair_transfer_ref").on(t.relationshipId, sql`upper(btrim(${t.transferReference}))`),
   })
 );
 
