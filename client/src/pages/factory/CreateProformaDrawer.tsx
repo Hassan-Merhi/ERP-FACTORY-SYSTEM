@@ -47,6 +47,7 @@ interface Props {
 interface Draft {
   customerId: string;
   proformaName: string;
+  destination: string;
   isActive: boolean;
   quantities: Record<string, string>;
   sellingPrices: Record<string, string>;
@@ -84,6 +85,7 @@ export default function CreateProformaDrawer({ open, onClose, articleRows, onSuc
   const draft = loadDraft();
   const [customerId, setCustomerId] = useState(draft?.customerId ?? "");
   const [proformaName, setProformaName] = useState(draft?.proformaName ?? "");
+  const [destination, setDestination] = useState(draft?.destination ?? "");
   const [isActive, setIsActive] = useState(draft?.isActive ?? true);
   const [quantities, setQuantities] = useState<Record<string, string>>(draft?.quantities ?? {});
   const [sellingPrices, setSellingPrices] = useState<Record<string, string>>(draft?.sellingPrices ?? {});
@@ -180,13 +182,14 @@ export default function CreateProformaDrawer({ open, onClose, articleRows, onSuc
     triggerAutosave({
       customerId,
       proformaName,
+      destination,
       isActive,
       quantities,
       sellingPrices,
       productionPrices,
       savedAt: Date.now(),
     });
-  }, [customerId, proformaName, isActive, quantities, sellingPrices, productionPrices, triggerAutosave]);
+  }, [customerId, proformaName, destination, isActive, quantities, sellingPrices, productionPrices, triggerAutosave]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -253,6 +256,7 @@ export default function CreateProformaDrawer({ open, onClose, articleRows, onSuc
     const errs: Record<string, string> = {};
     if (!customerId) errs.customerId = "Customer is required";
     if (!proformaName.trim()) errs.proformaName = "Proforma name is required";
+    if (!destination.trim()) errs.destination = "Destination is required";
     const hasQty = articleRows.some((r) => {
       const v = quantities[r.articleCode];
       return v && parseInt(v) > 0;
@@ -283,7 +287,7 @@ export default function CreateProformaDrawer({ open, onClose, articleRows, onSuc
         pricePerBale: sellingPrices[r.articleCode] || "0",
         productionPricePerBale: productionPrices[r.articleCode] || "0",
       }));
-    createMutation.mutate({ customerId: parseInt(customerId), name: proformaName.trim(), isActive, lines });
+    createMutation.mutate({ customerId: parseInt(customerId), name: proformaName.trim(), destination: destination.trim(), isActive, lines });
   }
 
   const map = productMap();
@@ -386,6 +390,25 @@ export default function CreateProformaDrawer({ open, onClose, articleRows, onSuc
             {errors.proformaName && <p className="text-xs text-destructive">{errors.proformaName}</p>}
           </div>
 
+          <div className="flex flex-col gap-1.5 min-w-[190px] flex-1">
+            <Label htmlFor="proforma-destination" className="text-xs font-medium">
+              Destination <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="proforma-destination"
+              value={destination}
+              onChange={(e) => setDestination(e.target.value)}
+              placeholder="e.g. L'SHI, MALI, KINSHASA"
+              list="v2-proforma-destinations"
+              data-testid="input-proforma-destination-v2"
+            />
+            <datalist id="v2-proforma-destinations">
+              <option value="L'SHI" />
+              <option value="MALI" />
+              <option value="KINSHASA" />
+            </datalist>
+            {errors.destination && <p className="text-xs text-destructive">{errors.destination}</p>}
+          </div>
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-medium">Status</Label>
             <div className="flex items-center gap-2 h-9">
