@@ -69,11 +69,10 @@ export function registerFactoryCustomerPriceListRoutes(app: Express) {
           `SELECT article_code, price_per_bale FROM customer_proforma_lines WHERE proforma_id = $1 AND article_code IS NOT NULL AND price_per_bale IS NOT NULL`,
           [proformaId]
         );
-        if (linesRes.rows.length === 0) return res.json({ saved: 0 });
+        if (linesRes.rows.length === 0) return res.json({ saved: 0, backfilled: 0 });
 
         // Upsert each line into customer_price_lists
         let saved = 0;
-        let backfilled = 0;
         for (const row of linesRes.rows) {
           const price = parseMoneyInput(row.price_per_bale)?.toNumber() ?? NaN;
           if (isNaN(price) || price <= 0) continue;
@@ -88,21 +87,11 @@ export function registerFactoryCustomerPriceListRoutes(app: Express) {
           );
           saved++;
 
-          // 2. Backfill ALL existing proforma lines for this customer + article_code
-          //    (active and inactive, including the source proforma itself)
-          const backfillRes = await pool.query(
-            `UPDATE customer_proforma_lines cpl
-           SET price_per_bale = $1
-           FROM customer_proformas cp
-           WHERE cpl.proforma_id = cp.id
-             AND cp.company_id   = $2
-             AND cp.customer_id  = $3
-             AND cpl.article_code = $4`,
-            [price, companyId, customerId, row.article_code]
-          );
-          backfilled += backfillRes.rowCount ?? 0;
+          // Saving an agreed price must never rewrite existing proformas.
+          // Those documents own their line prices; users can explicitly apply
+          // agreed prices in an individual proforma when they want to.
         }
-        return res.json({ saved, backfilled });
+        return res.json({ saved, backfilled: 0 });
       } catch (e: unknown) {
         return res.status(500).json({ message: getErrorMessage(e) });
       }
