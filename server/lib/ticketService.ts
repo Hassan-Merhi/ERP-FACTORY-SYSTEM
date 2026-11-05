@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { db } from "../db";
 import { supportTickets, supportTicketEvents, supportTicketOutbox, supportTicketParticipants, users, userCompanyRoles } from "@shared/schema";
 import { canAccessTicket, transitionTicket, type TicketActor, type TicketStatus } from "./ticketPolicy";
@@ -31,7 +32,7 @@ export async function createSupportTicket(
     if (input.reportedUserId) await requireActiveCompanyUser(tx, actor.companyId, input.reportedUserId);
     // Sequence-backed ticket ID is globally unique, displayed numbers remain company scoped.
     const [ticket] = await tx.insert(supportTickets).values({
-      companyId: actor.companyId, ticketNumber: "PENDING",
+      companyId: actor.companyId, ticketNumber: `PENDING-${randomUUID()}`,
       sourceMode: input.sourceMode, category: input.category.trim(), priority: input.priority,
       status: "open", title: input.title.trim(), description: input.description.trim(),
       createdBy: actor.userId, assignedTo: input.assignedTo, reportedUserId: input.reportedUserId ?? null,
