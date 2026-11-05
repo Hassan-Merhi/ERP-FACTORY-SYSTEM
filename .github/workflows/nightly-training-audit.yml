@@ -13,6 +13,9 @@ on:
       - "scripts/training-narration.mjs"
       - "scripts/training-narration-tts.py"
       - "scripts/verify-nightly-transaction-reconciliation.mjs"
+      - "scripts/validate-training-recording.mjs"
+      - "scripts/upload-reviewed-training-vercel.mjs"
+      - "training/gateway/**"
       - "scripts/nightly-system-regression.test.mjs"
       - "scripts/generate-program6c-inventory-classifications.mjs"
       - "scripts/generate-program6c-inventory-classifications.test.mjs"
@@ -183,38 +186,109 @@ jobs:
     permissions:
       contents: read
 
-  notify:
+  publish:
+    name: Publish validated recordings to private training storage
     needs: [plan, record]
+    # Nightly publication is automatic: a captured, fully decoded recording of
+    # this exact main commit replaces the topic's previous video in the ERP.
+    if: needs.plan.outputs.record == 'true' && needs.record.result == 'success' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 40
+    environment: training-publication
+    concurrency:
+      group: training-publisher
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      TRAINING_PUBLICATION_APPROVAL_ENABLED: ${{ vars.TRAINING_PUBLICATION_APPROVAL_ENABLED }}
+      TRAINING_SOURCE_SHA: ${{ github.sha }}
+      TRAINING_REVIEW_DIR: ${{ runner.temp }}/review
+      TRAINING_VALIDATION: ${{ runner.temp }}/validated-recordings.json
+      TRAINING_PUBLISHED_BY: nightly-audit
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.1"
+      - name: Fail closed unless the protected publication environment is configured
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$TRAINING_PUBLICATION_APPROVAL_ENABLED" = "true" || {
+            echo "::error::Protected training publication is not enabled on the training-publication environment"; exit 1;
+          }
+          [[ "$TRAINING_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          [[ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" && -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]] || {
+            echo "::error::Protected GitHub OIDC identity is unavailable"; exit 1;
+          }
+      - name: Install the decoder used to re-verify every recording
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+      - name: Download tonight's recordings from this run
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: real-erp-training-${{ github.run_id }}
+          path: ${{ runner.temp }}/review/
+      - name: Validate every captured recording of this commit (codec, narration, duration, captions, guide)
+        run: node scripts/validate-training-recording.mjs
+        env:
+          TRAINING_VALIDATION_OUTPUT: ${{ env.TRAINING_VALIDATION }}
+      - name: Upload to PRIVATE Vercel Blob and replace the runtime manifest
+        run: node scripts/upload-reviewed-training-vercel.mjs
+      - name: Keep the publication receipt
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: nightly-training-publication
+          path: |
+            ${{ runner.temp }}/review/published-upload-report.json
+            ${{ runner.temp }}/validated-recordings.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  notify:
+    needs: [plan, record, publish]
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.record == 'true'
     permissions:
       issues: write
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
-      - name: Create human review task
+      - name: Report what was recorded and published
         env:
           GH_TOKEN: ${{ github.token }}
           TOPICS: ${{ needs.plan.outputs.topics }}
-          RESULT: ${{ needs.record.result }}
+          RECORD_RESULT: ${{ needs.record.result }}
+          PUBLISH_RESULT: ${{ needs.publish.result }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         shell: bash
         run: |
           set -euo pipefail
           {
-            echo "Nightly training capture result: **$RESULT**."
+            echo "Nightly training capture result: **$RECORD_RESULT**. Automatic publication: **$PUBLISH_RESULT**."
             echo
             echo "Affected modules: \`$TOPICS\`"
             echo
-            echo "Review real-screen videos, screenshots, VTT captions and written guides:"
-            echo "$RUN_URL"
+            if [ "$PUBLISH_RESULT" = "success" ]; then
+              echo "Every validated recording above is now live in Help & Training, replacing that topic's previous video."
+              echo "The previous files remain in private storage; to roll one back, run 'Approve & Publish ERP Training Video'"
+              echo "with the earlier recording run ID and that topic."
+            else
+              echo "Nothing was published. Inspect the recorder and publication logs, then re-run the workflow or publish"
+              echo "one topic manually with 'Approve & Publish ERP Training Video'."
+            fi
             echo
-            echo "Recordings are automatically prepared but **never published** until reviewed."
-            echo "After inspecting the artifact, use the separate 'Approve & Publish Training Video' action."
-            echo "That action is disabled until the protected training-publication environment"
-            echo "and private storage credentials have been configured."
+            echo "Videos, screenshots, VTT captions, written guides and the publication receipt:"
+            echo "$RUN_URL"
           } > "$RUNNER_TEMP/training-review-body.md"
           gh issue create --repo "$GITHUB_REPOSITORY" \
-            --title "Review ERP training recordings – run $GITHUB_RUN_ID ($RESULT)" \
+            --title "Nightly training recordings – run $GITHUB_RUN_ID (recorded: $RECORD_RESULT, published: $PUBLISH_RESULT)" \
             --body-file "$RUNNER_TEMP/training-review-body.md"
 
   notify-transaction-failure:

@@ -147,7 +147,7 @@ jobs:
       - name: Enforce nightly workflow and production-isolation contracts
         run: node --test scripts/nightly-system-regression.test.mjs
       - name: Test deterministic training narration and audio assembly
-        run: node --test scripts/training-narration.test.mjs scripts/plan-nightly-training.test.mjs
+        run: node --test scripts/training-narration.test.mjs scripts/plan-nightly-training.test.mjs scripts/upload-reviewed-training-vercel.test.mjs
       - name: Test Program 6C duplicate-reference handling
         run: node --test scripts/generate-program6c-inventory-classifications.test.mjs
       - name: Generate a test inventory showing coverage and known gaps
