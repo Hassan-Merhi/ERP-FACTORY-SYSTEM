@@ -52,7 +52,7 @@ export async function saveStockTransferWithCapture(
 ): Promise<StockTransferLifecycleResult> {
   if (!isPhase9LanPrimary()) return saveStockTransferLifecycle(input);
   return db.transaction(async (tx) => {
-    const before = await phase9TransferSnapshotTx(tx, input.transferId);
+    const before = await phase9TransferSnapshotTx(tx, input.companyId, input.transferId);
     const saved = await saveStockTransferLifecycleTx(tx, input);
     if (before) {
       const after: Phase9TransferEditTarget = {
@@ -86,7 +86,7 @@ export async function finalizeStockTransferWithCapture(
   return db.transaction(async (tx) => {
     const found = await tx.execute(sql`SELECT id FROM stock_transfer_vouchers WHERE voucher_id = ${voucherId}`);
     const transferId = Number((found.rows[0] as { id?: number } | undefined)?.id ?? 0);
-    const before = transferId ? await phase9TransferSnapshotTx(tx, transferId) : null;
+    const before = transferId ? await phase9TransferSnapshotTx(tx, companyId, transferId) : null;
     const result = await finalizeOptionalStockTransferTx(tx, companyId, voucherId);
     // Finalizing an already-final transfer changes nothing, so nothing is recorded.
     if (before && result.transition !== "no-op") {

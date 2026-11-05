@@ -177,9 +177,10 @@ async function applyDelete(client: Queryable, event: Phase9StockItemDeleteEvent)
   if (row.deleted_at !== null)
     return { outcome: "already-present", cloudRef: p.stockItemId, businessDate: p.businessDate };
   const usage = await client.query(
-    `SELECT (SELECT count(*) FROM inventory WHERE stock_item_id = $1)::int AS inventory_rows,
-            (SELECT count(*) FROM canonical_stock_movements WHERE stock_item_id = $1)::int AS movements`,
-    [p.stockItemId]
+    `SELECT (SELECT count(*) FROM inventory WHERE stock_item_id = $1 AND company_id = $2)::int AS inventory_rows,
+            (SELECT count(*) FROM canonical_stock_movements
+              WHERE stock_item_id = $1 AND company_id = $2)::int AS movements`,
+    [p.stockItemId, event.companyId]
   );
   const { inventory_rows: inventoryRows, movements } = usage.rows[0];
   if (inventoryRows > 0 || movements > 0) {

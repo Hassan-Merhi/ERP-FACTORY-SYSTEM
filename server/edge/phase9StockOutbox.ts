@@ -334,13 +334,14 @@ export async function phase9RevisionRefTx(tx: DbTransaction, revisionId: number)
 /** The transfer as it stands, locked for the rest of the transaction; null if it does not exist. */
 export async function phase9TransferSnapshotTx(
   tx: DbTransaction,
+  companyId: number,
   transferId: number
 ): Promise<Phase9TransferSnapshot | null> {
   const header = await tx.execute(sql`
     SELECT t.destination_location_id AS "destinationLocationId", t.source_location_id AS "headerSourceId",
            t.inventory_applied AS "inventoryApplied", v.optional
       FROM stock_transfer_vouchers t JOIN vouchers v ON v.id = t.voucher_id
-     WHERE t.id = ${transferId}
+     WHERE t.id = ${transferId} AND v.company_id = ${companyId}
      FOR UPDATE OF t, v
   `);
   const row = header.rows[0] as

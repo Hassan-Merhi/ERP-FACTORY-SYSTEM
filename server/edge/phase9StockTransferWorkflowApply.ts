@@ -182,15 +182,16 @@ async function cloudRevisionId(
 /** The cloud transfer, locked, in the same shape the LAN recorded. */
 async function cloudSnapshot(
   client: Queryable,
+  companyId: number,
   transferId: number
 ): Promise<Phase9TransferSnapshot & { voucherId: number }> {
   const header = await client.query(
     `SELECT t.voucher_id AS "voucherId", t.destination_location_id AS "destinationLocationId",
             t.source_location_id AS "headerSourceId", t.inventory_applied AS "inventoryApplied", v.optional
        FROM stock_transfer_vouchers t JOIN vouchers v ON v.id = t.voucher_id
-      WHERE t.id = $1
+      WHERE t.id = $1 AND v.company_id = $2
       FOR UPDATE OF t, v`,
-    [transferId]
+    [transferId, companyId]
   );
   const row = header.rows[0];
   const lines = await client.query(
@@ -246,7 +247,7 @@ async function applyEdit(
 ): Promise<Phase9StockTransferWorkflowResult> {
   const p = event.payload;
   const transferId = await cloudTransferId(client, context.siteId, event.companyId, p.transfer);
-  holdIfChanged(p.before, await cloudSnapshot(client, transferId), context);
+  holdIfChanged(p.before, await cloudSnapshot(client, event.companyId, transferId), context);
   try {
     await saveStockTransferLifecycleTx(txOf(client), {
       companyId: event.companyId,
@@ -266,7 +267,7 @@ async function verifyEdit(
   event: Phase9StockTransferEditEvent,
   result: Phase9StockTransferWorkflowResult
 ): Promise<boolean> {
-  const now = await cloudSnapshot(client, result.cloudRef);
+  const now = await cloudSnapshot(client, event.companyId, result.cloudRef);
   // Lines are merged by (source, item) on save, so compare against the merged target.
   const merged = new Map<string, { sourceLocationId: number; stockItemId: number; quantity: number }>();
   for (const item of event.payload.after.items) {
@@ -289,7 +290,7 @@ async function applyFinalize(
 ): Promise<Phase9StockTransferWorkflowResult> {
   const p = event.payload;
   const transferId = await cloudTransferId(client, context.siteId, event.companyId, p.transfer);
-  const current = await cloudSnapshot(client, transferId);
+  const current = await cloudSnapshot(client, event.companyId, transferId);
   if (!current.optional && current.inventoryApplied) {
     return { outcome: "already-present", cloudRef: transferId, businessDate: p.businessDate };
   }
@@ -304,10 +305,10 @@ async function applyFinalize(
 
 async function verifyFinalize(
   client: Queryable,
-  _event: Phase9StockTransferFinalizeEvent,
+  event: Phase9StockTransferFinalizeEvent,
   result: Phase9StockTransferWorkflowResult
 ): Promise<boolean> {
-  const now = await cloudSnapshot(client, result.cloudRef);
+  const now = await cloudSnapshot(client, event.companyId, result.cloudRef);
   return !now.optional && now.inventoryApplied;
 }
 
