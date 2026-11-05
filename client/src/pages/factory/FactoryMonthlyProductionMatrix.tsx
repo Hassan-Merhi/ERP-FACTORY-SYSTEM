@@ -6,8 +6,10 @@ import { companyQueryKey } from "@/lib/companyQueryScope";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { moveProductNearItem, moveProductToPosition } from "./monthlyProductionRowOrder";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowDown, ArrowUp, Download, GripVertical, Plus, RotateCcw, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Download, GripVertical, ListOrdered, Plus, RotateCcw, Search, X } from "lucide-react";
 
 type Product = { id: number; name: string; articleCode: string; categoryName: string };
 type MonthValue = { productId: number; month: string; quantity: number };
@@ -47,6 +49,10 @@ export default function FactoryMonthlyProductionMatrix() {
   const [orderedIds, setOrderedIds] = useState<number[]>([]);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [moveItemId, setMoveItemId] = useState<number | null>(null);
+  const [moveRowNumber, setMoveRowNumber] = useState("");
+  const [moveSearch, setMoveSearch] = useState("");
+  const [destinationId, setDestinationId] = useState<number | null>(null);
 
   useEffect(() => { if (data) setOrderedIds(data.rowOrder); }, [data]);
 
@@ -93,35 +99,84 @@ export default function FactoryMonthlyProductionMatrix() {
   const canReorder = !search.trim() && !category && !saving;
   const byId = (productId: number, month: string) => counts.get(productId)?.get(month) ?? 0;
   const rowTotal = (id: number) => months.reduce((sum, month) => sum + byId(id, month), 0);
-  const reorder = async (sourceId: number, targetId: number) => {
-    if (!canReorder || sourceId === targetId || !data) return;
-    const all = orderedProducts.map((p) => p.id);
-    const from = all.indexOf(sourceId), to = all.indexOf(targetId);
-    if (from < 0 || to < 0) return;
-    all.splice(from, 1);
-    all.splice(to, 0, sourceId);
+  const persistOrder = async (next: number[]): Promise<boolean> => {
+    if (!data || saving) return false;
+    const current = orderedProducts.map((product) => product.id);
+    if (next.every((id, index) => id === current[index])) return true;
     const before = orderedIds;
-    setOrderedIds(all);
+    setOrderedIds(next);
     setSaving(true);
     try {
       const response = await fetch("/api/factory/monthly-production-matrix/order", {
-        method: "PUT", credentials: "include",
+        method: "PUT",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productIds: all }),
+        body: JSON.stringify({ productIds: next }),
       });
       if (!response.ok) throw new Error(t("monthlyProduction.orderError"));
-      queryClient.setQueryData<MatrixResponse>(queryKey, { ...data, rowOrder: all });
+      queryClient.setQueryData<MatrixResponse>(queryKey, { ...data, rowOrder: next });
       toast({ title: t("monthlyProduction.orderSaved"), description: t("monthlyProduction.sharedSaved") });
+      return true;
     } catch {
       setOrderedIds(before);
       toast({ title: t("monthlyProduction.orderError"), description: t("monthlyProduction.restored"), variant: "destructive" });
-    } finally { setSaving(false); }
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+  const reorder = (sourceId: number, targetId: number) => {
+    if (!canReorder || sourceId === targetId) return;
+    const current = orderedProducts.map((product) => product.id);
+    const to = current.indexOf(targetId);
+    if (to === -1) return;
+    void persistOrder(moveProductToPosition(current, sourceId, to + 1));
   };
   const moveOne = (id: number, direction: number) => {
-    const idx = orderedProducts.findIndex((p) => p.id === id);
-    const neighbor = orderedProducts[idx + direction];
-    if (neighbor) void reorder(id, neighbor.id);
+    if (!canReorder) return;
+    const current = orderedProducts.map((product) => product.id);
+    const from = current.indexOf(id);
+    if (from < 0 || from + direction < 0 || from + direction >= current.length) return;
+    void persistOrder(moveProductToPosition(current, id, from + direction + 1));
   };
+  const openMoveDialog = (id: number) => {
+    const index = orderedProducts.findIndex((product) => product.id === id);
+    if (index === -1 || saving) return;
+    setMoveItemId(id);
+    setMoveRowNumber(String(index + 1));
+    setMoveSearch("");
+    setDestinationId(null);
+  };
+  const moveToPosition = async (position: number) => {
+    if (moveItemId === null) return;
+    const current = orderedProducts.map((product) => product.id);
+    if (!Number.isSafeInteger(position) || position < 1 || position > current.length) return;
+    if (await persistOrder(moveProductToPosition(current, moveItemId, position))) {
+      setMoveItemId(null);
+    }
+  };
+  const moveNextToItem = async (placement: "before" | "after") => {
+    if (moveItemId === null || destinationId === null) return;
+    const current = orderedProducts.map((product) => product.id);
+    if (await persistOrder(moveProductNearItem(current, moveItemId, destinationId, placement))) {
+      setMoveItemId(null);
+    }
+  };
+  const movingProduct = orderedProducts.find((product) => product.id === moveItemId);
+  const currentPosition = movingProduct ? orderedProducts.findIndex((product) => product.id === movingProduct.id) + 1 : 0;
+  const parsedMoveRow = /^\\d+$/.test(moveRowNumber.trim()) ? Number(moveRowNumber) : Number.NaN;
+  const validMoveRow = Number.isSafeInteger(parsedMoveRow) && parsedMoveRow >= 1 && parsedMoveRow <= orderedProducts.length;
+  const moveMatches = moveSearch.trim()
+    ? orderedProducts
+        .filter((product) =>
+          product.id !== moveItemId &&
+          (product.name + " " + product.articleCode + " " + product.categoryName)
+            .toLowerCase()
+            .includes(moveSearch.trim().toLowerCase())
+        )
+        .slice(0, 12)
+    : [];
+  const selectedDestination = orderedProducts.find((product) => product.id === destinationId);
   const addMonth = () => {
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(pickedMonth)) return;
     setPickedMonths((previous) => [...new Set(mode === "all" ? [pickedMonth] : [...previous, pickedMonth])].sort());
@@ -213,8 +268,20 @@ export default function FactoryMonthlyProductionMatrix() {
                     <GripVertical className={"h-4 w-4 shrink-0 " + (canReorder ? "cursor-grab text-muted-foreground" : "text-muted-foreground/30")} />
                     <div className="min-w-0 flex-1">
                       <div className="font-medium leading-tight">{product.name}</div>
-                      <div className="text-[11px] text-muted-foreground">{product.articleCode} · {product.categoryName}</div>
+                      <div className="text-[11px] text-muted-foreground">#{orderedProducts.findIndex((p) => p.id === product.id) + 1} · {product.articleCode} · {product.categoryName}</div>
                     </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 shrink-0 gap-1 px-2 text-xs"
+                      disabled={saving}
+                      onClick={() => openMoveDialog(product.id)}
+                      aria-label={t("monthlyProduction.moveTo") + ": " + product.name}
+                      data-testid={"move-matrix-item-" + product.id}
+                    >
+                      <ListOrdered className="h-3.5 w-3.5" /> {t("monthlyProduction.moveTo")}
+                    </Button>
                     <div className="flex flex-col">
                       <button type="button" aria-label={t("monthlyProduction.moveUp") + ": " + product.name} disabled={!canReorder || index === 0} onClick={() => moveOne(product.id, -1)} className="rounded hover:bg-muted disabled:opacity-25"><ArrowUp className="h-3.5 w-3.5" /></button>
                       <button type="button" aria-label={t("monthlyProduction.moveDown") + ": " + product.name} disabled={!canReorder || index === visibleProducts.length - 1} onClick={() => moveOne(product.id, 1)} className="rounded hover:bg-muted disabled:opacity-25"><ArrowDown className="h-3.5 w-3.5" /></button>
@@ -243,6 +310,90 @@ export default function FactoryMonthlyProductionMatrix() {
           </tfoot>
         </table>
       </div>}
+      <Dialog open={moveItemId !== null} onOpenChange={(open) => { if (!open && !saving) setMoveItemId(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("monthlyProduction.moveTo")}: {movingProduct?.name}</DialogTitle>
+            <DialogDescription>
+              {t("monthlyProduction.currentRow")}: {currentPosition} / {orderedProducts.length}.
+              {" "}{t("monthlyProduction.moveHint")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" size="sm" variant="outline" disabled={saving}
+                onClick={() => void moveToPosition(1)}>{t("monthlyProduction.moveTop")}</Button>
+              <Button type="button" size="sm" variant="outline" disabled={saving}
+                onClick={() => void moveToPosition(orderedProducts.length)}>{t("monthlyProduction.moveBottom")}</Button>
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="monthly-move-row" className="text-sm font-medium">
+                {t("monthlyProduction.rowPosition")} (1–{orderedProducts.length})
+              </label>
+              <div className="flex gap-2">
+                <Input
+                  id="monthly-move-row"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={orderedProducts.length}
+                  step={1}
+                  value={moveRowNumber}
+                  onChange={(event) => setMoveRowNumber(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && validMoveRow && !saving) void moveToPosition(parsedMoveRow);
+                  }}
+                  aria-invalid={moveRowNumber.trim().length > 0 && !validMoveRow}
+                  data-testid="monthly-matrix-row-number"
+                />
+                <Button type="button" disabled={!validMoveRow || saving}
+                  onClick={() => void moveToPosition(parsedMoveRow)}
+                  data-testid="monthly-matrix-move-row">{t("monthlyProduction.moveRow")}</Button>
+              </div>
+            </div>
+            <div className="border-t pt-3 space-y-2">
+              <label htmlFor="monthly-move-search" className="text-sm font-medium">
+                {t("monthlyProduction.placeNear")}
+              </label>
+              <Input
+                id="monthly-move-search"
+                value={moveSearch}
+                onChange={(event) => { setMoveSearch(event.target.value); setDestinationId(null); }}
+                placeholder={t("monthlyProduction.searchDestination")}
+                data-testid="monthly-matrix-destination-search"
+              />
+              {moveSearch.trim() && (
+                <div className="max-h-44 overflow-y-auto rounded-md border" role="group" aria-label={t("monthlyProduction.placeNear")}>
+                  {moveMatches.length ? moveMatches.map((product) => (
+                    <button
+                      key={product.id}
+                      type="button"
+                      className={"block w-full border-b px-3 py-2 text-left text-sm last:border-b-0 hover:bg-accent " +
+                        (destinationId === product.id ? "bg-accent font-semibold" : "")}
+                      onClick={() => setDestinationId(product.id)}
+                      aria-pressed={destinationId === product.id}
+                    >
+                      <span className="font-medium">{product.name}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        #{orderedProducts.findIndex((p) => p.id === product.id) + 1} · {product.articleCode}
+                      </span>
+                    </button>
+                  )) : <p className="p-3 text-sm text-muted-foreground">{t("monthlyProduction.noDestination")}</p>}
+                </div>
+              )}
+              {selectedDestination && <p className="text-sm font-medium">
+                {selectedDestination.name}
+              </p>}
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" disabled={!selectedDestination || saving}
+                  onClick={() => void moveNextToItem("before")}>{t("monthlyProduction.placeAbove")}</Button>
+                <Button type="button" variant="outline" disabled={!selectedDestination || saving}
+                  onClick={() => void moveNextToItem("after")}>{t("monthlyProduction.placeBelow")}</Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
       {saving && <p role="status" className="text-xs text-muted-foreground">{t("monthlyProduction.saving")}</p>}
     </main>
   );
