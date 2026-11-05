@@ -25,6 +25,7 @@ import { hasVerifiedPhase7WriterAuthority } from "./phase7WriterGate.mjs";
 import { supportsPhase8LanVoucherCapture } from "./phase8CapturePolicy.mjs";
 import { Phase9StatusRefusal, readPhase9OperationStatus } from "./phase9OperationStatus.mjs";
 import { registerCloudEdgeSyncReceiver } from "./edgeSyncReceiver";
+import { registerPhase10OperatorRoutes } from "./phase10OperatorRoutes";
 import { edgeStatusRateLimit } from "./edgeRateLimit";
 import { summarizeLanEvidence } from "./phase10Handover.mjs";
 import {
@@ -215,6 +216,8 @@ export function registerFactoryEdgeBoundary(app: Express): void {
       }
     });
   }
+  // Phase 10 operator buttons (pause/resume on the LAN, conflict decisions on the cloud console).
+  registerPhase10OperatorRoutes(app, config);
   registerCloudEdgeSyncReceiver(app);
   let pressingCheck: { value: boolean; at: number } | null = null;
   async function pressingCaptureInstalled(): Promise<boolean> {

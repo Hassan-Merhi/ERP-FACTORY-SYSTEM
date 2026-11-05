@@ -11,6 +11,8 @@ export type EdgeConfiguration = Readonly<
     }
 >;
 export function readFactoryEdgeConfiguration(env?: Record<string, string | undefined>): EdgeConfiguration;
+export const PHASE10_SYNC_CONTROL_ROUTE: "POST /api/edge/operator/sync-control";
+export const PHASE10_CONFLICT_DECISION_ROUTE: "POST /api/edge/operator/conflicts/decide";
 export function edgeBlocksWrite(config: EdgeConfiguration, method: string, path: string): boolean;
 export function edgeStatusPayload(
   config: EdgeConfiguration,

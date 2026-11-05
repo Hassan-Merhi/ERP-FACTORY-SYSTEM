@@ -24,6 +24,8 @@ const manifest = {
     "POST /api/suppliers/create [business]",
     "POST /api/documents/upload [multipart]",
     "PUT /api/payments/:id [business]",
+    "POST /api/edge/operator/sync-control [operator]",
+    "POST /api/edge/operator/conflicts/decide [operator]",
     "POST /api/stock-transfers [business]",
     "POST /api/stock-items/bulk-update-prices [business]",
     "POST /api/stock-items/bulk-assign-category [business]",
@@ -40,10 +42,13 @@ const manifest = {
 };
 test("every unique API write has explicit capture, session-only or blocked disposition", () => {
   const report = auditPhase9WriteCoverage(manifest);
-  assert.equal(report.summary.uniqueApiWriteRoutes, 28);
+  assert.equal(report.summary.uniqueApiWriteRoutes, 30);
   assert.equal(report.summary.approvedCapture, 22);
   assert.equal(report.summary.sessionOnly, 1);
-  assert.equal(report.summary.blocked, 5);
+  // Phase 10: pause/resume is an operator control on the LAN; the cloud-only
+  // decision route stays blocked there.
+  assert.equal(report.summary.operatorControl, 1);
+  assert.equal(report.summary.blocked, 6);
   assert.equal(report.summary.productionComplete, false);
   const byPath = new Map(report.routes.map((r) => [r.path, r]));
   for (const path of [

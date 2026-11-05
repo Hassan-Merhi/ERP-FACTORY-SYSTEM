@@ -186,10 +186,19 @@ export function phase9ApprovedCaptureRoute(method, path) {
   return null;
 }
 
+// Phase 10 operator controls (Admin/Owner pause/resume on the factory server;
+// Admin/Developer conflict decisions on the cloud operator console). Each
+// writes only through a DBA-owned database function that re-checks the user;
+// the route itself refuses unless the server is configured for it.
+export const PHASE10_SYNC_CONTROL_ROUTE = "POST /api/edge/operator/sync-control";
+export const PHASE10_CONFLICT_DECISION_ROUTE = "POST /api/edge/operator/conflicts/decide";
+
 export function edgeBlocksWrite(config, method, path) {
   const verb = String(method).toUpperCase();
   if (["GET", "HEAD", "OPTIONS"].includes(verb)) return false;
   if (SAFE_SESSION_WRITES.has(`${verb} ${path}`)) return false;
+  if (config.mode === "lan" && `${verb} ${path}` === PHASE10_SYNC_CONTROL_ROUTE) return false;
+  if (config.mode === "cloud" && `${verb} ${path}` === PHASE10_CONFLICT_DECISION_ROUTE) return false;
   if (config.mode === "cloud") return config.writeMode === "fenced";
   if (!config.primary) return true;
   return phase9ApprovedCaptureRoute(verb, path) === null;

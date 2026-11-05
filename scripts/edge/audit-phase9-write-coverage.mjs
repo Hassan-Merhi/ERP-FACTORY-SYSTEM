@@ -31,6 +31,9 @@ const STOCK_ITEM_EDIT = Object.freeze({
     "location prices, new barcodes); a field the cloud changed meanwhile is held for an Admin/Developer " +
     "decision; creating, deleting, merging and re-coding items stay cloud-only",
 });
+// Phase 10 operator controls: not business data, written only through a
+// DBA-owned database function that re-checks the user (plan batch 1).
+const OPERATOR_CONTROL_WRITES = new Set(["POST /api/edge/operator/sync-control"]);
 const SUPPORTED = new Map([
   ["POST /api/vouchers/with-entries", {
     policy: "voucher.with-entries.v1",
@@ -142,17 +145,24 @@ export function auditPhase9WriteCoverage(manifest, guard = edgeBlocksWrite) {
     seen.add(key);
     const supported = SUPPORTED.get(key);
     const sessionExempt = SAFE_SESSION_WRITES.has(key);
+    const operatorControl = OPERATOR_CONTROL_WRITES.has(key);
     const blockedByGuard = guard(config, method, path);
     // The guard must match the reviewed capture map EXACTLY; otherwise a
     // new route could commit locally without a durable cloud apply protocol.
-    if (blockedByGuard === Boolean(supported || sessionExempt)) {
+    if (blockedByGuard === Boolean(supported || sessionExempt || operatorControl)) {
       throw new Error("PHASE9_WRITE_GUARD_DRIFT: " + key);
     }
     routes.push({
       method,
       path,
       module: moduleForPath(path),
-      disposition: supported ? "approved-capture" : sessionExempt ? "session-only" : "blocked",
+      disposition: supported
+        ? "approved-capture"
+        : sessionExempt
+          ? "session-only"
+          : operatorControl
+            ? "operator-control"
+            : "blocked",
       ...(supported ? { policy: supported.policy, limitations: supported.limitations } : {}),
     });
   }
@@ -172,6 +182,7 @@ export function auditPhase9WriteCoverage(manifest, guard = edgeBlocksWrite) {
     uniqueApiWriteRoutes: routes.length,
     approvedCapture: routes.filter((r) => r.disposition === "approved-capture").length,
     sessionOnly: routes.filter((r) => r.disposition === "session-only").length,
+    operatorControl: routes.filter((r) => r.disposition === "operator-control").length,
     blocked: routes.filter((r) => r.disposition === "blocked").length,
     byModule,
     productionComplete: routes.every((r) => r.disposition !== "blocked"),

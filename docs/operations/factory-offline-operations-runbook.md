@@ -197,6 +197,17 @@ no longer matches, or the worker lost access before reconciliation. The apply
 transaction rolls back, the conflict is written to
 `factory_edge_event_conflicts`, and the stream stays blocked at that sequence.
 
+- **On screen (cloud operator console):** start a cloud instance with the same
+  settings as the apply (`FACTORY_SYNC_RECEIVE_ENABLED=1`,
+  `FACTORY_PHASE9_APPLY_ENABLED=1`, the apply acknowledgement, site, company,
+  baseline and cloud epoch, and the database fence settings). An Admin or
+  Developer of the approved company sees **Held offline records** in the
+  Offline panel: each held record with its reason, **Approve** (only where the
+  rules allow it) and **Reject**. Both need the user's password again and a
+  reason of at least 10 characters. The decision is written by the DBA-owned
+  function `factory_edge_operator_decide_conflict`, which re-checks the user.
+  On an ordinary cloud instance the panel does not appear
+  (`EDGE_OPERATOR_CONSOLE_DISABLED`). The command-line steps below do the same.
 - Inspect: `node --import tsx server/edge/phase9OperatorApply.ts status` and the
   conflict row's `code`/`detail`.
 - Decide: `node --import tsx server/edge/phase9OperatorApply.ts reject
@@ -232,10 +243,14 @@ transaction rolls back, the conflict is written to
 
 ### 4.5 Pause and resume delivery
 
-`recordPhase10SyncControl` (`server/edge/phase10SyncControl.mjs`) appends a
-`pause` or `resume` row with the operator's name and reason to
-`factory_edge_sync_control_log`. While paused, both relays transmit nothing;
-evidence is untouched. Use it during cloud incidents, restores or audits.
+On the factory server, an Admin or Owner presses **Pause delivery** (or
+**Resume delivery**) in the Offline panel and gives a reason and their
+password. The DBA-owned function `factory_edge_operator_sync_control` checks the
+user and appends a `pause` or `resume` row, with the user's name and reason, to
+`factory_edge_sync_control_log` (`recordPhase10SyncControl` in
+`server/edge/phase10SyncControl.mjs` remains the DBA path). While paused, both
+relays transmit nothing; evidence is untouched. Use it during cloud incidents,
+restores or audits.
 
 ### 4.6 Backup, restore and disaster recovery
 

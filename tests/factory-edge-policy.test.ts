@@ -149,6 +149,10 @@ describe("factory LAN edge deployment policy", () => {
       // POS sale cancellation: DELETE of a voucher (the route itself refuses non-sales).
       expect(edgeBlocksWrite(config, "DELETE", "/api/vouchers/42")).toBe(mode === "read-only");
       expect(edgeBlocksWrite(config, "PUT", "/api/vouchers/42")).toBe(true);
+      // Phase 10 operator buttons: pause/resume on any LAN server; decisions only on the cloud.
+      expect(edgeBlocksWrite(config, "POST", "/api/edge/operator/sync-control")).toBe(false);
+      expect(edgeBlocksWrite(config, "POST", "/api/edge/operator/conflicts/decide")).toBe(true);
+      expect(edgeBlocksWrite(config, "PUT", "/api/edge/operator/sync-control")).toBe(true);
       // Single stock item edit: PATCH only (create, delete and merge stay cloud-only).
       expect(edgeBlocksWrite(config, "PATCH", "/api/stock-items/42")).toBe(mode === "read-only");
       for (const verb of ["POST", "PUT", "DELETE"]) {
@@ -175,6 +179,12 @@ describe("factory LAN edge deployment policy", () => {
         }
       }
     }
+  });
+  it("lets only the conflict decision route through a fenced cloud", () => {
+    const fenced = { mode: "cloud", primary: false, siteId: null, writeMode: "fenced" } as never;
+    expect(edgeBlocksWrite(fenced, "POST", "/api/edge/operator/conflicts/decide")).toBe(false);
+    expect(edgeBlocksWrite(fenced, "POST", "/api/edge/operator/sync-control")).toBe(true);
+    expect(edgeBlocksWrite(fenced, "POST", "/api/vouchers/with-entries")).toBe(true);
   });
   it("never claims cloud sync", () => {
     const p = readFactoryEdgeConfiguration(safe);
