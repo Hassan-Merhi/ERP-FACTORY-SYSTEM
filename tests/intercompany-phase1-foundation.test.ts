@@ -187,6 +187,8 @@ describe("intercompany phase 1 foundation", () => {
         "participate"
       );
       await client.query("UPDATE intercompany_permission_grants SET revoked_at=NOW(), revoked_by='owner' WHERE id=1");
+      await rejects("UPDATE intercompany_permission_grants SET revoked_by='editor' WHERE id=1", "cannot be altered");
+      await rejects("DELETE FROM intercompany_permission_grants WHERE id=1", "must be revoked");
       await client.query(
         "INSERT INTO intercompany_permission_grants(user_id,granting_company_id,relationship_id,scope,invoice_key,granted_by) VALUES ('editor',1,1,'invoice','invoice-1','owner')"
       );
