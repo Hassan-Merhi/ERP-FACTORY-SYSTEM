@@ -204,6 +204,17 @@ CREATE OR REPLACE FUNCTION ic_block_payment_voucher_mutation()
 RETURNS TRIGGER LANGUAGE plpgsql AS $guard$
 DECLARE vid INTEGER;
 BEGIN
+  IF TG_TABLE_NAME='vouchers' AND TG_OP='INSERT' THEN
+    IF NEW.reversal_of_voucher_id IS NOT NULL AND EXISTS (
+      SELECT 1 FROM intercompany_container_payments p
+      WHERE NEW.reversal_of_voucher_id IN
+        (p.source_receipt_voucher_id,p.destination_payment_voucher_id,
+         p.source_reversal_voucher_id,p.destination_reversal_voucher_id)
+    ) THEN
+      RAISE EXCEPTION 'Use the coordinated Phase 4 payment reversal for mirrored actual cash';
+    END IF;
+    RETURN NEW;
+  END IF;
   vid := CASE WHEN TG_TABLE_NAME='voucher_entries'
        THEN CASE WHEN TG_OP='INSERT' THEN NEW.voucher_id ELSE OLD.voucher_id END
        ELSE OLD.id END;
@@ -219,7 +230,7 @@ BEGIN
   END IF;
   RETURN CASE WHEN TG_OP='DELETE' THEN OLD ELSE NEW END;
 END $guard$;
-CREATE TRIGGER ic_payment_voucher_guard BEFORE UPDATE OR DELETE ON vouchers
+CREATE TRIGGER ic_payment_voucher_guard BEFORE INSERT OR UPDATE OR DELETE ON vouchers
 FOR EACH ROW EXECUTE FUNCTION ic_block_payment_voucher_mutation();
 CREATE TRIGGER ic_payment_voucher_entry_guard BEFORE INSERT OR UPDATE OR DELETE ON voucher_entries
 FOR EACH ROW EXECUTE FUNCTION ic_block_payment_voucher_mutation();
