@@ -25,7 +25,7 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
   const [draftStatus, setDraftStatus] = useState<"idle" | "saved">("idle");
   const [appliedPrice, setAppliedPrice] = useState<"sell" | "prod" | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [showZeroItems, setShowZeroItems] = useState(false);
+  const [showZeroItems, setShowZeroItems] = useState(true);
   const [hideNonPositive, setHideNonPositive] = useState(false);
   const [showNegativeOnly, setShowNegativeOnly] = useState(false);
   const [showGarbageWipers, setShowGarbageWipers] = useState(false);
@@ -52,7 +52,7 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
       setContainerNames(["Container 1"]);
       setAppliedPrice(null);
       setErrors({});
-      setShowZeroItems(false);
+      setShowZeroItems(true);
       setHideNonPositive(false);
       setShowNegativeOnly(false);
       setShowGarbageWipers(false);
@@ -154,7 +154,7 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
     setContainerNames(["Container 1"]);
     setAppliedPrice(null);
     setErrors({});
-    setShowZeroItems(false);
+    setShowZeroItems(true);
     setHideNonPositive(false);
     setShowNegativeOnly(false);
     setShowGarbageWipers(false);

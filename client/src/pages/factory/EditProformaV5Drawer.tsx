@@ -73,7 +73,7 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
   const [prices, setPrices] = useState<Record<string, string>>({});
   const [pricingModes, setPricingModes] = useState<Record<string, "per_bale" | "per_kg">>({});
   const [kgPrices, setKgPrices] = useState<Record<string, string>>({});
-  const [showZeroItems, setShowZeroItems] = useState(false);
+  const [showZeroItems, setShowZeroItems] = useState(true);
   const [hideNonPositive, setHideNonPositive] = useState(false);
   const [showGarbageWipers, setShowGarbageWipers] = useState(false);
   const [catalogFilter, setCatalogFilter] = useState("__all__");
@@ -159,7 +159,7 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
       setKgPrices({});
       setProformaName("");
       setAppliedPrice(null);
-      setShowZeroItems(false);
+      setShowZeroItems(true);
       setHideNonPositive(false);
       setShowGarbageWipers(false);
       setCatalogFilter("__all__");

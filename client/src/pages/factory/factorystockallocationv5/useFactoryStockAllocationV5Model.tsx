@@ -35,7 +35,7 @@ export function useFactoryStockAllocationV5Model() {
 
   const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-  const [hideZero, setHideZero] = useState(true);
+  const [hideZero, setHideZero] = useState(false);
   const [showNegativeOnly, setShowNegativeOnly] = useState(false);
   const [showGarbageWipers, setShowGarbageWipers] = useState(false);
   const [refreshFlash, setRefreshFlash] = useState(false);
