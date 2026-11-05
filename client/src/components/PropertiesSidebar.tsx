@@ -76,9 +76,12 @@ export function getPropertiesVisibleNavSections(isDeveloper: boolean, canTrade =
       (item) =>
         (isDeveloper || !item.url.startsWith("/properties/accounting/")) &&
         (canTrade ||
-          !["/properties/container-trading", "/properties/linked-trades", "/properties/intercompany-payments", "/properties/intercompany-lifecycle"].includes(
-            item.url
-          ))
+          ![
+            "/properties/container-trading",
+            "/properties/linked-trades",
+            "/properties/intercompany-payments",
+            "/properties/intercompany-lifecycle",
+          ].includes(item.url))
     ),
   })).filter((section) => section.items.length > 0);
 }

@@ -633,8 +633,10 @@ export async function reviseSharedCharge(input: ReviseSharedChargeInput, identit
             poDeltas,
           });
           const releasedCredit = await releaseEditOverallocationTx(tx, {
-            tradeId: snap.trade.id, newLandedCost: applied.amountAfter,
-            actorUserId: identity.actorUserId, revisionId: revision.id,
+            tradeId: snap.trade.id,
+            newLandedCost: applied.amountAfter,
+            actorUserId: identity.actorUserId,
+            revisionId: revision.id,
           });
           const version = await completeRevisionTx(
             tx,

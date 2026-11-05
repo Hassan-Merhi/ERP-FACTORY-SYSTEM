@@ -192,7 +192,16 @@ export async function loadTradeTx(tx: DbTransaction, tradeId: number, lock = tru
   requireCostEqual("Source/destination POs", total, fullPoCost(dest));
   requireCostEqual("Physical container", total, cents(physical.grandTotal ?? "0"));
   requireCostEqual("Confirmed import cost", total, cents(imported.confirmedLandedCost ?? "0"));
-  return { trade, physical, policy, source, destination: { po: dest, lines: dstLines }, links, imported, received: received ?? null };
+  return {
+    trade,
+    physical,
+    policy,
+    source,
+    destination: { po: dest, lines: dstLines },
+    links,
+    imported,
+    received: received ?? null,
+  };
 }
 export function requireUnreceived(data: TradeData) {
   if (
@@ -630,8 +639,10 @@ export async function editLinkedTrade(input: LinkedTradeEditInput, identity: Edi
         poDeltas,
       });
       const releasedCredit = await releaseEditOverallocationTx(tx, {
-        tradeId: data.trade.id, newLandedCost: result.amountAfter,
-        actorUserId: identity.actorUserId, revisionId: revision.id,
+        tradeId: data.trade.id,
+        newLandedCost: result.amountAfter,
+        actorUserId: identity.actorUserId,
+        revisionId: revision.id,
       });
       const version = await completeRevisionTx(
         tx,

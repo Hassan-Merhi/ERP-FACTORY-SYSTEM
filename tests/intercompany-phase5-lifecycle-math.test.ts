@@ -19,7 +19,8 @@ describe("Phase 5 linked ERP receiving exact-value invariants", () => {
   it("handles discounts without creating an extra cash entry", () => {
     const result = exactDestinationReceiptPlan(
       [{ stockItemId: 1, quantity: "5.000", lineTotal: "100.00" }],
-      "100.00", "97.99"
+      "100.00",
+      "97.99"
     );
     expect(result).toEqual([{ stockItemId: 1, quantity: "5.000", value: "97.99" }]);
   });
@@ -28,19 +29,25 @@ describe("Phase 5 linked ERP receiving exact-value invariants", () => {
     const lines = [{ stockItemId: 1, quantity: "1.000", lineTotal: "23.00" }];
     expect(() => exactDestinationReceiptPlan(lines, "24.00", "23.00")).toThrow(/reconcile/);
     expect(() => exactDestinationReceiptPlan(lines, "23.00", "0.00")).toThrow(/positive/);
-    expect(() => exactDestinationReceiptPlan([{ ...lines[0], quantity: "1.0004" }], "23.00", "23.00"))
-      .toThrow(/quantity/);
-    expect(() => exactDestinationReceiptPlan([{ ...lines[0], stockItemId: -1 }], "23.00", "23.00"))
-      .toThrow(/identity/);
+    expect(() => exactDestinationReceiptPlan([{ ...lines[0], quantity: "1.0004" }], "23.00", "23.00")).toThrow(
+      /quantity/
+    );
+    expect(() => exactDestinationReceiptPlan([{ ...lines[0], stockItemId: -1 }], "23.00", "23.00")).toThrow(/identity/);
     expect(() => exactDestinationReceiptPlan([], "1.00", "1.00")).toThrow(/missing/);
   });
 
   it("gives different replay fingerprints to changed real-world receiving evidence", () => {
     const original = {
-      tradeId: 1, expectedVersion: 2, requestKey: "phase5-receipt-a",
-      postingDate: "2026-11-05", locationId: 10, inventoryAccountId: 14,
-      arrivalEvidence: "signed warehouse receipt", reason: "Arrived verified",
-      confirmPhysicalArrival: true, confirmNoAdditionalUnpostedCharges: true,
+      tradeId: 1,
+      expectedVersion: 2,
+      requestKey: "phase5-receipt-a",
+      postingDate: "2026-11-05",
+      locationId: 10,
+      inventoryAccountId: 14,
+      arrivalEvidence: "signed warehouse receipt",
+      reason: "Arrived verified",
+      confirmPhysicalArrival: true,
+      confirmNoAdditionalUnpostedCharges: true,
     };
     const a = receiptFingerprint(original);
     expect(receiptFingerprint({ ...original })).toBe(a);
@@ -50,10 +57,15 @@ describe("Phase 5 linked ERP receiving exact-value invariants", () => {
 
   it("ties cancellation retry to version, invoice disposition and BOTH cash confirmations", () => {
     const original = {
-      tradeId: 1, expectedVersion: 2, requestKey: "phase5-cancel-a",
-      postingDate: "2026-11-05", cancellationEvidence: "Shipment canceled by forwarder",
-      reason: "Cargo remains in transit", sharedChargeDecision: "none" as const,
-      confirmGoodsNotReceived: true, confirmNoRealCashReversal: true,
+      tradeId: 1,
+      expectedVersion: 2,
+      requestKey: "phase5-cancel-a",
+      postingDate: "2026-11-05",
+      cancellationEvidence: "Shipment canceled by forwarder",
+      reason: "Cargo remains in transit",
+      sharedChargeDecision: "none" as const,
+      confirmGoodsNotReceived: true,
+      confirmNoRealCashReversal: true,
     };
     const a = cancellationFingerprint(original);
     expect(cancellationFingerprint({ ...original })).toBe(a);

@@ -39,50 +39,82 @@ export type CancelIntercompanyTradeInput = {
 };
 
 export function cancellationFingerprint(input: CancelIntercompanyTradeInput) {
-  return createHash("sha256").update(JSON.stringify({
-    tradeId: input.tradeId,
-    expectedVersion: input.expectedVersion,
-    requestKey: input.requestKey,
-    postingDate: input.postingDate,
-    reason: input.reason.trim(),
-    cancellationEvidence: input.cancellationEvidence.trim(),
-    sharedChargeDecision: input.sharedChargeDecision,
-    confirmGoodsNotReceived: input.confirmGoodsNotReceived,
-    confirmNoRealCashReversal: input.confirmNoRealCashReversal,
-  })).digest("hex");
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        tradeId: input.tradeId,
+        expectedVersion: input.expectedVersion,
+        requestKey: input.requestKey,
+        postingDate: input.postingDate,
+        reason: input.reason.trim(),
+        cancellationEvidence: input.cancellationEvidence.trim(),
+        sharedChargeDecision: input.sharedChargeDecision,
+        confirmGoodsNotReceived: input.confirmGoodsNotReceived,
+        confirmNoRealCashReversal: input.confirmNoRealCashReversal,
+      })
+    )
+    .digest("hex");
 }
 
 export async function cancelUnreceivedTrade(input: CancelIntercompanyTradeInput, actor: EditIdentity) {
   postingDay(input.postingDate);
   validateRequestKey(input.requestKey);
-  if (!Number.isSafeInteger(input.tradeId) || input.tradeId < 1
-    || !Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1
-    || !["Owner", "Developer"].includes(actor.actorRole)
-    || !["none", "redistributed"].includes(input.sharedChargeDecision)
-    || !input.confirmGoodsNotReceived || !input.confirmNoRealCashReversal
-    || !input.reason?.trim() || input.reason.trim().length < 3 || input.reason.length > 1000
-    || !input.cancellationEvidence?.trim() || input.cancellationEvidence.trim().length < 8
-    || input.cancellationEvidence.length > 2000) {
-    rejectEdit("An Owner/Developer must verify the unreceived goods, both cash records, original invoice treatment and cancellation evidence", "IC_CANCEL_INPUT", 422);
+  if (
+    !Number.isSafeInteger(input.tradeId) ||
+    input.tradeId < 1 ||
+    !Number.isSafeInteger(input.expectedVersion) ||
+    input.expectedVersion < 1 ||
+    !["Owner", "Developer"].includes(actor.actorRole) ||
+    !["none", "redistributed"].includes(input.sharedChargeDecision) ||
+    !input.confirmGoodsNotReceived ||
+    !input.confirmNoRealCashReversal ||
+    !input.reason?.trim() ||
+    input.reason.trim().length < 3 ||
+    input.reason.length > 1000 ||
+    !input.cancellationEvidence?.trim() ||
+    input.cancellationEvidence.trim().length < 8 ||
+    input.cancellationEvidence.length > 2000
+  ) {
+    rejectEdit(
+      "An Owner/Developer must verify the unreceived goods, both cash records, original invoice treatment and cancellation evidence",
+      "IC_CANCEL_INPUT",
+      422
+    );
   }
   const fingerprint = cancellationFingerprint(input);
   const trade = await assertTradeAccess(input.tradeId, actor);
   return withTradeScope(actor, [trade.sourceCompanyId, trade.destinationCompanyId], () =>
     db.transaction(async (tx) => {
       // Same source-company lock order as import, edits, shared invoices and Phase 4 cash.
-      await tx.execute(sql.raw("SELECT pg_advisory_xact_lock(" + INTERCOMPANY_PAYMENT_LOCK_NAMESPACE + "," + trade.sourceCompanyId + ")"));
-      const [fresh] = await tx.select().from(intercompanyTrades).where(eq(intercompanyTrades.id, input.tradeId)).for("update");
+      await tx.execute(
+        sql.raw(
+          "SELECT pg_advisory_xact_lock(" + INTERCOMPANY_PAYMENT_LOCK_NAMESPACE + "," + trade.sourceCompanyId + ")"
+        )
+      );
+      const [fresh] = await tx
+        .select()
+        .from(intercompanyTrades)
+        .where(eq(intercompanyTrades.id, input.tradeId))
+        .for("update");
       if (!fresh) rejectEdit("Linked trade disappeared");
-      const [oldCancel] = await tx.select().from(intercompanyTradeCancellations)
+      const [oldCancel] = await tx
+        .select()
+        .from(intercompanyTradeCancellations)
         .where(eq(intercompanyTradeCancellations.tradeId, input.tradeId));
       if (oldCancel) {
-        if (fresh.state !== "canceled" || oldCancel.requestKey !== input.requestKey
-          || oldCancel.requestFingerprint !== fingerprint) {
+        if (
+          fresh.state !== "canceled" ||
+          oldCancel.requestKey !== input.requestKey ||
+          oldCancel.requestFingerprint !== fingerprint
+        ) {
           rejectEdit("Already canceled with different evidence. No second reversal is permitted", "IC_CANCEL_REPLAY");
         }
         return {
-          tradeId: input.tradeId, canceled: true, replayed: true,
-          cancellationId: oldCancel.id, releasedCredit: oldCancel.releasedCredit,
+          tradeId: input.tradeId,
+          canceled: true,
+          replayed: true,
+          cancellationId: oldCancel.id,
+          releasedCredit: oldCancel.releasedCredit,
         };
       }
       if (fresh.state !== "active" || fresh.version !== input.expectedVersion) {
@@ -90,29 +122,52 @@ export async function cancelUnreceivedTrade(input: CancelIntercompanyTradeInput,
       }
       const data = await loadTradeTx(tx, input.tradeId, false);
       requireUnreceived(data);
-      const [received] = await tx.select({ id: intercompanyDestinationReceipts.id })
-        .from(intercompanyDestinationReceipts).where(eq(intercompanyDestinationReceipts.tradeId, fresh.id));
-      if (received) rejectEdit("ERP stock has already been received. Cancellation requires a separately approved inventory/COGS correction", "IC_CANCEL_RECEIVED");
+      const [received] = await tx
+        .select({ id: intercompanyDestinationReceipts.id })
+        .from(intercompanyDestinationReceipts)
+        .where(eq(intercompanyDestinationReceipts.tradeId, fresh.id));
+      if (received)
+        rejectEdit(
+          "ERP stock has already been received. Cancellation requires a separately approved inventory/COGS correction",
+          "IC_CANCEL_RECEIVED"
+        );
 
       // Original external supplier invoices must NOT be deleted or debited merely
       // because the internal sale was canceled. Confirmed shared charge invoice
       // face amounts are immutable. An authorized Shared Charge Editor must first
       // redistribute any share to other active containers using Phase 3's audited
       // shared invoice revision; a zero amount alone is not sufficient evidence.
-      const shared = await tx.select().from(intercompanySharedChargeAllocations)
+      const shared = await tx
+        .select()
+        .from(intercompanySharedChargeAllocations)
         .where(eq(intercompanySharedChargeAllocations.tradeId, fresh.id));
       if (shared.some((row) => cents(row.amount).gt(0))) {
-        rejectEdit("Confirmed external shared charges must first be explicitly redistributed by a Shared Charge Editor", "IC_CANCEL_SHARED_CHARGE");
+        rejectEdit(
+          "Confirmed external shared charges must first be explicitly redistributed by a Shared Charge Editor",
+          "IC_CANCEL_SHARED_CHARGE"
+        );
       }
       if (shared.length) {
         if (input.sharedChargeDecision !== "redistributed") {
-          rejectEdit("Confirm the authorized shared-invoice redistribution before removing this container", "IC_CANCEL_SHARED_CHARGE");
+          rejectEdit(
+            "Confirm the authorized shared-invoice redistribution before removing this container",
+            "IC_CANCEL_SHARED_CHARGE"
+          );
         }
-        const invoices = await tx.select().from(intercompanySharedChargeInvoices).where(
-          inArray(intercompanySharedChargeInvoices.id, shared.map((s) => s.invoiceId))
-        );
+        const invoices = await tx
+          .select()
+          .from(intercompanySharedChargeInvoices)
+          .where(
+            inArray(
+              intercompanySharedChargeInvoices.id,
+              shared.map((s) => s.invoiceId)
+            )
+          );
         if (invoices.length !== shared.length || invoices.some((inv) => inv.state !== "confirmed" || inv.version < 2)) {
-          rejectEdit("The shared invoice requires a completed audited redistribution, preserving its full face amount", "IC_CANCEL_SHARED_CHARGE");
+          rejectEdit(
+            "The shared invoice requires a completed audited redistribution, preserving its full face amount",
+            "IC_CANCEL_SHARED_CHARGE"
+          );
         }
       } else if (input.sharedChargeDecision !== "none") {
         rejectEdit("No shared external invoice applies to this container", "IC_CANCEL_SHARED_CHARGE", 422);
@@ -122,7 +177,9 @@ export async function cancelUnreceivedTrade(input: CancelIntercompanyTradeInput,
       if (!amount.gt(0)) rejectEdit("Original landed cost is not verified");
       // Return every confirmed PO allocation to exactly the original payment
       // row/pair. This changes NO bank or cash voucher.
-      const events = await tx.select().from(intercompanyPaymentAllocations)
+      const events = await tx
+        .select()
+        .from(intercompanyPaymentAllocations)
         .where(eq(intercompanyPaymentAllocations.tradeId, fresh.id));
       const net = new Map<number, ReturnType<typeof cents>>();
       for (const entry of events) {
@@ -134,7 +191,8 @@ export async function cancelUnreceivedTrade(input: CancelIntercompanyTradeInput,
         if (money.lt(0)) rejectEdit("Original payment allocation has a negative balance", "IC_CANCEL_CREDIT");
         if (money.isZero()) continue;
         await tx.insert(intercompanyPaymentAllocations).values({
-          paymentId, tradeId: fresh.id,
+          paymentId,
+          tradeId: fresh.id,
           amount: money.negated().toFixed(2),
           allocationKind: "cancel_release",
           requestKey: "ic-cancel-credit:" + fresh.id + ":" + paymentId,
@@ -143,7 +201,8 @@ export async function cancelUnreceivedTrade(input: CancelIntercompanyTradeInput,
         });
         totalReleased = totalReleased.plus(money);
       }
-      const money = amount.toFixed(2), reason = input.reason.trim();
+      const money = amount.toFixed(2),
+        reason = input.reason.trim();
       const sourceSale = await postErpVoucherTx(tx, {
         companyId: fresh.sourceCompanyId,
         voucherType: "Journal",
@@ -153,8 +212,16 @@ export async function cancelUnreceivedTrade(input: CancelIntercompanyTradeInput,
         source: { type: "ic-phase5-cancel-sale", id: fresh.id },
         actor: { userId: actor.actorUserId, reason },
         lines: [
-          { ledgerAccountId: data.policy.sourceSalesAccountId!, debit: money, narration: "Reverse internal at-cost sale" },
-          { ledgerAccountId: data.policy.sourceReceivableAccountId!, credit: money, narration: "Release Properties internal receivable" },
+          {
+            ledgerAccountId: data.policy.sourceSalesAccountId!,
+            debit: money,
+            narration: "Reverse internal at-cost sale",
+          },
+          {
+            ledgerAccountId: data.policy.sourceReceivableAccountId!,
+            credit: money,
+            narration: "Release Properties internal receivable",
+          },
         ],
       });
       const sourceCost = await postErpVoucherTx(tx, {
@@ -166,8 +233,16 @@ export async function cancelUnreceivedTrade(input: CancelIntercompanyTradeInput,
         source: { type: "ic-phase5-cancel-cost", id: fresh.id },
         actor: { userId: actor.actorUserId, reason },
         lines: [
-          { ledgerAccountId: data.policy.sourcePurchaseAccountId!, debit: money, narration: "Original external supplier purchase remains" },
-          { ledgerAccountId: data.policy.sourceCostAccountId!, credit: money, narration: "Reverse unsold internal cost recognition" },
+          {
+            ledgerAccountId: data.policy.sourcePurchaseAccountId!,
+            debit: money,
+            narration: "Original external supplier purchase remains",
+          },
+          {
+            ledgerAccountId: data.policy.sourceCostAccountId!,
+            credit: money,
+            narration: "Reverse unsold internal cost recognition",
+          },
         ],
       });
       const destination = await postErpVoucherTx(tx, {
@@ -179,25 +254,49 @@ export async function cancelUnreceivedTrade(input: CancelIntercompanyTradeInput,
         source: { type: "ic-phase5-cancel-destination", id: fresh.id },
         actor: { userId: actor.actorUserId, reason },
         lines: [
-          { supplierId: data.policy.destinationSupplierId!, debit: money, narration: "Reverse payable to Hassan Properties" },
-          { ledgerAccountId: data.policy.destinationGitAccountId!, credit: money, narration: "Reverse unreceived goods in transit" },
+          {
+            supplierId: data.policy.destinationSupplierId!,
+            debit: money,
+            narration: "Reverse payable to Hassan Properties",
+          },
+          {
+            ledgerAccountId: data.policy.destinationGitAccountId!,
+            credit: money,
+            narration: "Reverse unreceived goods in transit",
+          },
         ],
       });
-      const [cancellation] = await tx.insert(intercompanyTradeCancellations).values({
-        tradeId: fresh.id, relationshipId: fresh.relationshipId,
-        sourceCompanyId: fresh.sourceCompanyId, destinationCompanyId: fresh.destinationCompanyId,
-        requestKey: input.requestKey, requestFingerprint: fingerprint,
-        expectedVersion: fresh.version, postingDate: input.postingDate,
-        landedCost: money, sourceSaleReversalVoucherId: sourceSale.voucher.id,
-        sourceCostReversalVoucherId: sourceCost.voucher.id,
-        destinationGitReversalVoucherId: destination.voucher.id,
-        reason, cancellationEvidence: input.cancellationEvidence.trim(),
-        releasedCredit: totalReleased.toFixed(2), actorUserId: actor.actorUserId,
-      }).returning();
+      const [cancellation] = await tx
+        .insert(intercompanyTradeCancellations)
+        .values({
+          tradeId: fresh.id,
+          relationshipId: fresh.relationshipId,
+          sourceCompanyId: fresh.sourceCompanyId,
+          destinationCompanyId: fresh.destinationCompanyId,
+          requestKey: input.requestKey,
+          requestFingerprint: fingerprint,
+          expectedVersion: fresh.version,
+          postingDate: input.postingDate,
+          landedCost: money,
+          sourceSaleReversalVoucherId: sourceSale.voucher.id,
+          sourceCostReversalVoucherId: sourceCost.voucher.id,
+          destinationGitReversalVoucherId: destination.voucher.id,
+          reason,
+          cancellationEvidence: input.cancellationEvidence.trim(),
+          releasedCredit: totalReleased.toFixed(2),
+          actorUserId: actor.actorUserId,
+        })
+        .returning();
 
-      const [updated] = await tx.update(intercompanyTrades).set({
-        state: "canceled", canceledAt: new Date(), version: fresh.version + 1,
-      }).where(and(eq(intercompanyTrades.id, fresh.id), eq(intercompanyTrades.version, fresh.version))).returning();
+      const [updated] = await tx
+        .update(intercompanyTrades)
+        .set({
+          state: "canceled",
+          canceledAt: new Date(),
+          version: fresh.version + 1,
+        })
+        .where(and(eq(intercompanyTrades.id, fresh.id), eq(intercompanyTrades.version, fresh.version)))
+        .returning();
       if (!updated) rejectEdit("A simultaneous trade update invalidated the cancellation");
       await tx.execute(sql.raw("SELECT set_config('erp.ic_phase5_cancel','',true)"));
       await tx.insert(intercompanyAuditEvents).values({
@@ -208,9 +307,11 @@ export async function cancelUnreceivedTrade(input: CancelIntercompanyTradeInput,
         eventType: "intercompany-unreceived-trade-canceled",
         sourceReference: "trade:" + fresh.id,
         payload: {
-          cancellationId: cancellation.id, originalExternalSupplierPosPreserved: data.source.map((s) => s.po.id),
+          cancellationId: cancellation.id,
+          originalExternalSupplierPosPreserved: data.source.map((s) => s.po.id),
           physicalContainerId: fresh.physicalContainerId,
-          noCashVoucherPosted: true, sharedChargeDecision: input.sharedChargeDecision,
+          noCashVoucherPosted: true,
+          sharedChargeDecision: input.sharedChargeDecision,
           releasedOriginalPairCredit: totalReleased.toFixed(2),
           sourceSaleVoucherId: sourceSale.voucher.id,
           sourceCostVoucherId: sourceCost.voucher.id,
@@ -219,8 +320,11 @@ export async function cancelUnreceivedTrade(input: CancelIntercompanyTradeInput,
         },
       });
       return {
-        tradeId: fresh.id, canceled: true, replayed: false,
-        cancellationId: cancellation.id, releasedCredit: totalReleased.toFixed(2),
+        tradeId: fresh.id,
+        canceled: true,
+        replayed: false,
+        cancellationId: cancellation.id,
+        releasedCredit: totalReleased.toFixed(2),
       };
     })
   );
