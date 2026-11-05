@@ -3,7 +3,22 @@
   "godFileLineCaps": {
     "server/routes/pos/retailPosRoutes.ts": 903
   },
-  "routeManifestAdditions": [],
+  "routeManifestAdditions": [
+    "GET /api/intercompany-container-trading/setup [requireAuth > <anonymous> > <anonymous>]",
+    "POST /api/intercompany-container-trading/relationships [requireAuth > <anonymous> > <anonymous>]",
+    "POST /api/intercompany-container-trading/preview [requireAuth > <anonymous> > multerMiddleware > <anonymous>]",
+    "POST /api/intercompany-container-trading/import [requireAuth > <anonymous> > multerMiddleware > <anonymous>]",
+    "GET /api/intercompany-container-trading/trades [requireAuth > <anonymous> > <anonymous>]",
+    "GET /api/intercompany-container-trading/linked-trades [requireAuth > <anonymous>]",
+    "GET /api/intercompany-container-trading/linked-trades/:tradeId [requireAuth > <anonymous>]",
+    "PATCH /api/intercompany-container-trading/linked-trades/:tradeId [requireAuth > <anonymous>]",
+    "POST /api/intercompany-container-trading/shared-charges/preview [requireAuth > <anonymous>]",
+    "POST /api/intercompany-container-trading/shared-charges/confirm [requireAuth > <anonymous>]",
+    "GET /api/intercompany-container-trading/shared-charges/:invoiceId [requireAuth > <anonymous>]",
+    "PATCH /api/intercompany-container-trading/shared-charges/:invoiceId [requireAuth > <anonymous>]",
+    "POST /api/intercompany-container-trading/shared-charge-grants [requireAuth > <anonymous>]",
+    "POST /api/intercompany-container-trading/shared-charge-grants/:grantId/revoke [requireAuth > <anonymous>]"
+  ],
   "routeManifestMountAdditions": [],
   "routeManifestReplacements": [],
   "sourceTextAssertionDelta": {
