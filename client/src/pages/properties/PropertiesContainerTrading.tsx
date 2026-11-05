@@ -176,7 +176,7 @@ export default function PropertiesContainerTrading() {
   });
 
   const enabledPairs = (setup?.policies || []).filter(
-    (p) => p.tradeEnabled && setup.destinations.some((d) => d.id === p.destinationCompanyId)
+    (p) => p.tradeEnabled && (setup?.destinations ?? []).some((d) => d.id === p.destinationCompanyId)
   );
 
   useEffect(() => {
