@@ -7,6 +7,7 @@ import { resultRows } from "../../../lib/queryResult";
 import { logger } from "../../../lib/logger";
 import { factorySettings } from "@shared/schema";
 import { authorizeFactoryPageAccess, sendFactoryAccessDenied } from "../../../lib/factoryAccessControl";
+import { mergeActiveMatrixOrder } from "./monthly-production-order";
 
 type DbRow = Record<string, unknown>;
 const number = (value: unknown) => Number(value ?? 0);
@@ -31,7 +32,7 @@ export function registerFactoryMonthlyProductionMatrixRoutes(app: Express) {
                  COALESCE(c.name, 'Uncategorized') AS "categoryName"
           FROM factory_bale_products p
           LEFT JOIN factory_categories c ON c.id = p.category_id AND c.company_id = p.company_id
-          WHERE p.company_id = ${companyId} AND p.deleted_at IS NULL
+          WHERE p.company_id = ${companyId} AND p.deleted_at IS NULL AND p.active = TRUE
           ORDER BY p.name, p.id
         `),
         db.execute(sql`
@@ -39,7 +40,7 @@ export function registerFactoryMonthlyProductionMatrixRoutes(app: Express) {
                  TO_CHAR(DATE_TRUNC('month', COALESCE(b.stock_entry_date::date, b.created_at::date)), 'YYYY-MM') AS month,
                  COUNT(*)::int AS quantity
           FROM factory_bales b
-          JOIN factory_bale_products p ON p.company_id = b.company_id AND p.deleted_at IS NULL
+          JOIN factory_bale_products p ON p.company_id = b.company_id AND p.deleted_at IS NULL AND p.active = TRUE
             AND (p.id = b.product_id OR (b.product_id IS NULL AND p.article_code = b.article_code))
           WHERE b.company_id = ${companyId}
             AND b.deleted_at IS NULL
@@ -79,18 +80,33 @@ export function registerFactoryMonthlyProductionMatrixRoutes(app: Express) {
       return res.status(400).json({ message: "Invalid product ordering" });
     }
     try {
-      const known = resultRows<DbRow>(await db.execute(sql`
-        SELECT id FROM factory_bale_products
-        WHERE company_id = ${companyId} AND deleted_at IS NULL
-      `));
+      const [knownResult, existingSettings] = await Promise.all([
+        db.execute(sql`
+          SELECT id, active FROM factory_bale_products
+          WHERE company_id = ${companyId} AND deleted_at IS NULL
+          ORDER BY name, id
+        `),
+        db.select({ extraSettings: factorySettings.extraSettings })
+          .from(factorySettings).where(eq(factorySettings.companyId, companyId)).limit(1),
+      ]);
+      const known = resultRows<DbRow>(knownResult);
       const knownIds = new Set(known.map((row) => number(row.id)));
-      if (!ids.every((id: number) => knownIds.has(id))) {
-        return res.status(400).json({ message: "Ordering includes a product outside this company" });
+      const activeIds = new Set(known.filter((row) => row.active === true).map((row) => number(row.id)));
+      if (!ids.every((id: number) => activeIds.has(id))) {
+        return res.status(400).json({ message: "Ordering includes an inactive or foreign product" });
       }
+      // A hidden inactive item stays in its previous slot. Reactivating it will
+      // restore its placement without showing it while inactive.
+      const rowOrder = mergeActiveMatrixOrder(
+        ids as number[],
+        getSavedOrder(existingSettings[0]?.extraSettings),
+        activeIds,
+        knownIds
+      );
       // Atomically merge this layout key, preserving unrelated Factory settings.
-      const patch = JSON.stringify({ monthlyProductionRowOrder: ids });
+      const patch = JSON.stringify({ monthlyProductionRowOrder: rowOrder });
       await db.insert(factorySettings).values({
-        companyId, extraSettings: { monthlyProductionRowOrder: ids },
+        companyId, extraSettings: { monthlyProductionRowOrder: rowOrder },
       }).onConflictDoUpdate({
         target: factorySettings.companyId,
         set: {
@@ -99,7 +115,7 @@ export function registerFactoryMonthlyProductionMatrixRoutes(app: Express) {
         },
       });
       res.set("Cache-Control", "private, no-store");
-      return res.json({ rowOrder: ids });
+      return res.json({ rowOrder });
     } catch (error: unknown) {
       logger.error("Monthly production matrix order save failed", { error });
       return res.status(500).json({ message: "Unable to save shared item order" });
