@@ -79,9 +79,9 @@ describe("Phase 4 paired payment database protections",()=>{
         expect(error,query).not.toBe("");
         if(fragment)expect(error).toContain(fragment);
       };
-      const paymentColumns="(relationship_id,source_company_id,destination_company_id,request_key,request_fingerprint,transfer_reference,confirmation_evidence,payment_date,transaction_currency,transaction_amount,historical_rate,base_amount,source_cash_type,source_cash_id,destination_cash_type,destination_cash_id,source_receipt_voucher_id,destination_payment_voucher_id,created_by)";
-      const goodValues="(1,1,2,'phase4-key-001',repeat('a',64),'WIRE-REF-001','Bank receipt and payment verified','2026-11-05','USD',120,1,120,'bank',31,'bank',32,55,56,'owner')";
-      await rejects("INSERT INTO intercompany_container_payments"+paymentColumns+" VALUES (1,1,3,'phase4-wrong-pair',repeat('a',64),'WRONG-001','Both sides verified','2026-11-05','USD',120,1,120,'bank',31,'bank',33,55,56,'owner')","pair");
+      const paymentColumns="(relationship_id,source_company_id,destination_company_id,request_key,request_fingerprint,transfer_reference,confirmation_evidence,payment_date,transaction_currency,transaction_amount,historical_rate,base_amount,source_cash_type,source_cash_id,destination_cash_type,destination_cash_id,source_receivable_account_id,destination_supplier_id,source_receipt_voucher_id,destination_payment_voucher_id,created_by)";
+      const goodValues="(1,1,2,'phase4-key-001',repeat('a',64),'WIRE-REF-001','Bank receipt and payment verified','2026-11-05','USD',120,1,120,'bank',31,'bank',32,11,2,55,56,'owner')";
+      await rejects("INSERT INTO intercompany_container_payments"+paymentColumns+" VALUES (1,1,3,'phase4-wrong-pair',repeat('a',64),'WRONG-001','Both sides verified','2026-11-05','USD',120,1,120,'bank',31,'bank',33,11,2,55,56,'owner')","pair");
       await client.query("INSERT INTO intercompany_container_payments"+paymentColumns+" VALUES "+goodValues);
       await rejects("UPDATE vouchers SET description='tampered' WHERE id=55","Mirrored");
       await rejects("DELETE FROM vouchers WHERE id=56","Mirrored");
