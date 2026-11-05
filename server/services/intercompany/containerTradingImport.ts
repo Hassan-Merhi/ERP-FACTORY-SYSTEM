@@ -31,6 +31,7 @@ import { sumMoney, toMoney } from "../../lib/money";
 import { parsePoImportSheetRows, type ParsedContainerPreview } from "../../routes/import/poImportExcelParser";
 import { postErpVoucherTx, type ErpVoucherLine } from "../accounting/erpVoucherPosting";
 import { destinationContainerGitPostingLines } from "./containerDestinationPosting";
+import { autoAllocateNewTradeCreditTx } from "./paymentAllocationCore";
 import {
   createTenantDatabaseScope,
   getDatabaseScopeRuntimeContext,
@@ -862,6 +863,12 @@ export async function postIntercompanyImport(args: {
           chargeEvidenceReference: plan.chargeEvidenceReference,
           confirmedLandedCost: plan.landedTotal,
         });
+        // Only at NEW PO import: reuse older verified credit of this exact company pair.
+        // Credit allocation has no voucher entries; the original cash receipt already posted.
+        const previousCredit = await autoAllocateNewTradeCreditTx(tx, {
+          tradeId: trade.id, relationshipId: policy.id,
+          confirmedLandedCost: plan.landedTotal,
+        });
         await tx.insert(intercompanyAuditEvents).values({
           eventKey: "ic-container-import:" + batch.id + ":" + trade.id,
           relationshipId: policy.id,
@@ -878,6 +885,8 @@ export async function postIntercompanyImport(args: {
             destinationPoId: destPo.id,
             destinationVoucherId: destVoucher.voucher.id,
             landedCost: plan.landedTotal,
+            previousCreditAllocated: previousCredit.applied,
+            unpaidAfterExistingCredit: previousCredit.remainingDue,
             chargesConfirmed: plan.chargesConfirmed,
             chargeEvidenceReference: plan.chargeEvidenceReference,
             proposedCharges: plan.proposedCharges,
