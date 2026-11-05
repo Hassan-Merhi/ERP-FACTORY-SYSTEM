@@ -169,12 +169,12 @@ export default function LinkedTradesEditor() {
     onError: (e: Error) => toast({ title: "Edit refused", description: e.message, variant: "destructive" }),
   });
   const previewMutation = useMutation({
-    mutationFn: () =>
-      json<AllocationPreview>(BASE + "/shared-charges/preview", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sourceCompanyId: companyId, tradeIds: chosen, amount: face }),
-      }),
+    mutationFn: async () => {
+      const response = await apiRequest("POST", BASE + "/shared-charges/preview", {
+        sourceCompanyId: companyId, tradeIds: chosen, amount: face,
+      });
+      return response.json() as Promise<AllocationPreview>;
+    },
     onSuccess: (data) => {
       setProposal(data);
       setManual(Object.fromEntries(data.allocations.map((a) => [a.tradeId, a.suggestedAmount])));
