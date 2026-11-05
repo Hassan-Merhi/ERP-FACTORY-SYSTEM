@@ -4,7 +4,7 @@ import { db, type DatabaseOrTransaction } from "../db";
 import { supportTickets, supportTicketParticipants, supportTicketAttachments, supportTicketComments, supportTicketEvents, supportTicketOutbox } from "@shared/schema";
 import { canAccessTicket, canPerformTicketAction, type TicketActor, type TicketResource, type TicketStatus } from "./ticketPolicy";
 
-import { MAX_TICKET_ATTACHMENT_BYTES, sniffTicketEvidence, safeTicketFileName } from "./ticketEvidenceValidation";
+import { sniffTicketEvidence, safeTicketFileName } from "./ticketEvidenceValidation";
 
 async function ticketResource(tx: DatabaseOrTransaction, actor: TicketActor, ticketId: number): Promise<TicketResource> {
   if (!actor.canAccessPage || !actor.userId || !Number.isSafeInteger(ticketId) || ticketId <= 0) throw new Error("TICKET_ACCESS_DENIED");
