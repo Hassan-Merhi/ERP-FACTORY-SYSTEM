@@ -1,4 +1,4 @@
-import { pgTable, bigserial, integer, varchar, text, timestamp, jsonb, boolean, index, uniqueIndex, check } from "drizzle-orm/pg-core";
+import { pgTable, bigserial, bigint, integer, varchar, text, timestamp, jsonb, boolean, index, uniqueIndex, check } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 export const supportTickets = pgTable("support_tickets", {
@@ -36,7 +36,7 @@ export const supportTickets = pgTable("support_tickets", {
 
 export const supportTicketParticipants = pgTable("support_ticket_participants", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  ticketId: integer("ticket_id").notNull(),
+  ticketId: bigint("ticket_id", { mode: "number" }).notNull(),
   companyId: integer("company_id").notNull(),
   userId: varchar("user_id", { length: 100 }).notNull(),
   addedBy: varchar("added_by", { length: 100 }).notNull(),
@@ -45,7 +45,7 @@ export const supportTicketParticipants = pgTable("support_ticket_participants", 
 
 export const supportTicketRecords = pgTable("support_ticket_records", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  ticketId: integer("ticket_id").notNull(),
+  ticketId: bigint("ticket_id", { mode: "number" }).notNull(),
   companyId: integer("company_id").notNull(),
   recordType: varchar("record_type", { length: 80 }).notNull(),
   recordId: varchar("record_id", { length: 120 }).notNull(),
@@ -56,7 +56,7 @@ export const supportTicketRecords = pgTable("support_ticket_records", {
 
 export const supportTicketAttachments = pgTable("support_ticket_attachments", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  ticketId: integer("ticket_id").notNull(),
+  ticketId: bigint("ticket_id", { mode: "number" }).notNull(),
   companyId: integer("company_id").notNull(),
   uploadedBy: varchar("uploaded_by", { length: 100 }).notNull(),
   storageKey: text("storage_key").notNull(),
@@ -69,7 +69,7 @@ export const supportTicketAttachments = pgTable("support_ticket_attachments", {
 
 export const supportTicketComments = pgTable("support_ticket_comments", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  ticketId: integer("ticket_id").notNull(),
+  ticketId: bigint("ticket_id", { mode: "number" }).notNull(),
   companyId: integer("company_id").notNull(),
   authorId: varchar("author_id", { length: 100 }).notNull(),
   body: text("body").notNull(),
@@ -78,7 +78,7 @@ export const supportTicketComments = pgTable("support_ticket_comments", {
 
 export const supportTicketEvents = pgTable("support_ticket_events", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  ticketId: integer("ticket_id").notNull(),
+  ticketId: bigint("ticket_id", { mode: "number" }).notNull(),
   companyId: integer("company_id").notNull(),
   actorId: varchar("actor_id", { length: 100 }).notNull(),
   eventType: varchar("event_type", { length: 64 }).notNull(),
@@ -91,7 +91,7 @@ export const supportTicketEvents = pgTable("support_ticket_events", {
 export const supportTicketOutbox = pgTable("support_ticket_outbox", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   companyId: integer("company_id").notNull(),
-  ticketId: integer("ticket_id").notNull(),
+  ticketId: bigint("ticket_id", { mode: "number" }).notNull(),
   eventKey: varchar("event_key", { length: 180 }).notNull(),
   eventType: varchar("event_type", { length: 64 }).notNull(),
   payload: jsonb("payload").notNull(),
@@ -104,8 +104,8 @@ export const supportTicketOutbox = pgTable("support_ticket_outbox", {
 export const supportTicketNotifications = pgTable("support_ticket_notifications", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   companyId: integer("company_id").notNull(),
-  ticketId: integer("ticket_id").notNull(),
-  outboxId: integer("outbox_id").notNull(),
+  ticketId: bigint("ticket_id", { mode: "number" }).notNull(),
+  outboxId: bigint("outbox_id", { mode: "number" }).notNull(),
   recipientUserId: varchar("recipient_user_id", { length: 100 }).notNull(),
   channel: varchar("channel", { length: 16 }).notNull(),
   deliveryStatus: varchar("delivery_status", { length: 24 }).notNull().default("pending"),
