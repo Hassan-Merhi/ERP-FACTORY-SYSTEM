@@ -1,3 +1,4 @@
+import type Decimal from "decimal.js";
 /** Confirmed HP-borne shared invoices: exact proportional allocation and controlled revisions. */
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
@@ -46,7 +47,7 @@ function requireInputs(input: {postingDate:string;requestKey:string;reason:strin
     rejectEdit("Enter a meaningful invoice allocation reason","IC_CHARGE_REASON",422);
   }
 }
-function validateAllocations(allocations:SharedChargeEntry[], face:MoneyDecimal) {
+function validateAllocations(allocations:SharedChargeEntry[], face:Decimal) {
   if(!Array.isArray(allocations)||!allocations.length||allocations.length>100) {
     rejectEdit("Select one to one hundred eligible containers","IC_CHARGE_ALLOCATION",422);
   }
@@ -121,7 +122,7 @@ async function withGrantedInvoiceScope<T>(identity:EditIdentity,companies:readon
 async function lockSource(tx:DbTransaction,sourceCompanyId:number){
   await tx.execute(sql.raw("SELECT pg_advisory_xact_lock("+IMPORT_LOCK+","+sourceCompanyId+")"));
 }
-function poSplit(data:Awaited<ReturnType<typeof loadTradeTx>>,amount:MoneyDecimal){
+function poSplit(data:Awaited<ReturnType<typeof loadTradeTx>>,amount:Decimal){
   const groups=data.source;
   const weights=groups.map(g=>cents(g.po.itemsTotal??"0"));
   return allocateByWeights(amount,weights).map((share,i)=>({poId:groups[i].po.id,amount:share}));
