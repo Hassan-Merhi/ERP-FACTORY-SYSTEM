@@ -13,7 +13,12 @@ import {Label} from "@/components/ui/label";
 import {Table,TableBody,TableCell,TableHead,TableHeader,TableRow} from "@/components/ui/table";
 
 const BASE="/api/intercompany-container-trading/payments";
-const newKey=()=> "icpay-"+crypto.randomUUID();
+const newKey=()=>{
+  const id=typeof crypto!=="undefined" && typeof crypto.randomUUID==="function"
+    ? crypto.randomUUID()
+    : Date.now().toString(36)+"-"+Math.random().toString(36).slice(2)+"-"+Math.random().toString(36).slice(2);
+  return "icpay-"+id;
+};
 const dateNow=()=>new Date().toLocaleDateString("en-CA");
 const money=(s:string|number|null)=>new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(Number(s||0));
 type Pair={relationshipId:number;sourceCompanyId:number;destinationCompanyId:number;tradeEnabled:boolean};
