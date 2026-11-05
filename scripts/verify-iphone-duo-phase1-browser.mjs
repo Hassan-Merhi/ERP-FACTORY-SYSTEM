@@ -13,7 +13,7 @@ const AUTHENTICATED = Boolean(USERNAME && PASSWORD);
 const REQUIRE_AUTHENTICATED = process.env.ERP_SMOKE_REQUIRE_AUTHENTICATED === "1";
 const TIMEOUT_MS = Number(process.env.ERP_SMOKE_TIMEOUT_MS || 60_000);
 const OUTPUT_DIR = path.resolve(process.env.ERP_DUO_OUTPUT_DIR || "artifacts/iphone-duo-phase1");
-const REQUIRE_EXACT_ROUTES = process.env.ERP_SMOKE_REQUIRE_EXACT_ROUTES === "1";
+const REQUIRE_EXACT_ROUTES = process.env.ERP_DUO_REQUIRE_EXACT_ROUTES === "1";
 const STORAGE_KEY = "erp.application-language";
 const COOKIE_NAME = "erp_application_language";
 const LANGUAGE_EVENT = "erp:application-language-change";
@@ -338,6 +338,10 @@ async function readPageState(page) {
       rootScrollWidth: root.scrollWidth,
       bodyScrollWidth: body?.scrollWidth || 0,
       horizontalOverflow: Math.max(root.scrollWidth, body?.scrollWidth || 0) > window.innerWidth + 2,
+      workspaceOverflow: (() => {
+        const main = document.getElementById("main-content");
+        return Boolean(main && main.scrollWidth > main.clientWidth + 2);
+      })(),
       loginButton: visibleRect(document.querySelector('[data-testid="button-login"]')),
       username: visibleRect(document.querySelector('[data-testid="input-username"]')),
       password: visibleRect(document.querySelector('[data-testid="input-password"]')),
@@ -392,6 +396,9 @@ function assertPage(state, expectedLanguage, expectedDirection, mode, label) {
     failures.push(
       `${label}: application direction metadata is ${state.dataLanguage || "missing"}/${state.dataDirection || "missing"}`,
     );
+  }
+  if (state.workspaceOverflow) {
+    failures.push(label + ": #main-content overflows horizontally");
   }
   if (state.horizontalOverflow) {
     failures.push(`${label}: root horizontal overflow (${state.rootScrollWidth}px > ${state.viewport.width}px)`);
