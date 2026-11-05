@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db } from "../db";
-import { supportTickets, supportTicketEvents, supportTicketOutbox, supportTicketParticipants, users, userCompanyRoles } from "@shared/schema";
+import { supportTickets, supportTicketEvents, supportTicketOutbox, supportTicketParticipants, supportTicketRecords, vouchers, users, userCompanyRoles } from "@shared/schema";
 import { canAccessTicket, transitionTicket, type TicketActor, type TicketStatus } from "./ticketPolicy";
 
 async function requireActiveCompanyUser(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], companyId: number, userId: string): Promise<void> {
@@ -21,7 +21,7 @@ function assertActor(actor: TicketActor) {
 export async function createSupportTicket(
   actor: TicketActor,
   input: { assignedTo: string; category: string; priority: "low" | "normal" | "high" | "urgent";
-    sourceMode: "erp" | "factory"; title: string; description: string; reportedUserId?: string | null },
+    sourceMode: "erp" | "factory"; title: string; description: string; reportedUserId?: string | null; voucherId?: number },
 ) {
   assertActor(actor);
   if (actor.canCreate !== true) throw new Error("TICKET_CREATE_DENIED");
@@ -40,6 +40,15 @@ export async function createSupportTicket(
     }).returning();
     const ticketNumber = `TKT-${new Date(ticket.createdAt).getUTCFullYear()}-${String(ticket.id).padStart(6, "0")}`;
     const [saved] = await tx.update(supportTickets).set({ ticketNumber }).where(eq(supportTickets.id,ticket.id)).returning();
+    if (input.voucherId !== undefined) {
+      if (!Number.isSafeInteger(input.voucherId) || input.voucherId <= 0) throw new Error("TICKET_INVALID_VOUCHER");
+      const [voucher] = await tx.select({ id: vouchers.id, voucherNumber: vouchers.voucherNumber, voucherType: vouchers.voucherType }).from(vouchers)
+        .where(and(eq(vouchers.id, input.voucherId), eq(vouchers.companyId, actor.companyId))).limit(1);
+      if (!voucher) throw new Error("TICKET_VOUCHER_NOT_FOUND");
+      await tx.insert(supportTicketRecords).values({ ticketId: saved.id, companyId: actor.companyId,
+        recordType: "voucher", recordId: String(voucher.id), displayReference: voucher.voucherNumber,
+        snapshot: { voucherNumber: voucher.voucherNumber, voucherType: voucher.voucherType } });
+    }
     await tx.insert(supportTicketEvents).values({
       ticketId: saved.id, companyId: actor.companyId, actorId: actor.userId,
       eventType: "created", afterState: { status: "open", assignedTo: input.assignedTo },
