@@ -86,8 +86,13 @@ jobs:
             tests/intercompany-phase5-lifecycle-math.test.ts \
             tests/intercompany-phase5-mirrored-lines.test.ts
 
-      - name: Execute Phase 1-5 regressions against disposable PostgreSQL
+      - name: Initialize the disposable PostgreSQL reference application schema
+        id: schema
         if: always() && steps.install.outcome == 'success'
+        run: node node_modules/drizzle-kit/bin.cjs push --force
+
+      - name: Execute Phase 1-5 regressions against disposable PostgreSQL
+        if: always() && steps.schema.outcome == 'success'
         shell: bash
         run: |
           set -euo pipefail
