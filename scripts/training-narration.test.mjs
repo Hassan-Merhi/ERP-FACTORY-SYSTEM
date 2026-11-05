@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   describeControl, describeHeading, introNarration, closingNarration,
-  speakable, parseWav, joinWavClips, vttTimestamp,
+  speakable, parseWav, joinWavClips, vttTimestamp, singular,
 } from "./training-narration.mjs";
 
 const control = (overrides) => ({
@@ -85,4 +85,17 @@ test("narration clips are padded to the frame boundary and joined into one PCM t
 test("VTT timestamps are zero-padded and millisecond precise", () => {
   assert.equal(vttTimestamp(0), "00:00:00.000");
   assert.equal(vttTimestamp(754.5), "00:12:34.500");
+});
+
+test("filter dropdowns and period options are narrated with real English singulars", () => {
+  assert.equal(singular("statuses"), "status");
+  assert.equal(singular("shipping companies"), "shipping company");
+  assert.equal(singular("categories"), "category");
+  assert.equal(singular("suppliers"), "supplier");
+  assert.equal(singular("destinations"), "destination");
+  assert.match(describeControl(control({ tag: "select", label: "All statuses" })), /to one status at a time/);
+  assert.match(describeControl(control({ tag: "select", label: "All shipping companies" })), /to one shipping company at a time/);
+  assert.match(describeControl(control({ label: "Daily", group: ["Daily", "Monthly"] })), /figures by day so/);
+  assert.match(describeControl(control({ label: "Monthly", group: ["Daily", "Monthly"] })), /figures by month so/);
+  assert.match(describeControl(control({ label: "Yearly", group: ["Daily", "Yearly"] })), /figures by year so/);
 });
