@@ -90,6 +90,34 @@ jobs:
             tests/intercompany-phase5-lifecycle-math.test.ts \
             tests/intercompany-phase5-mirrored-lines.test.ts
 
+      # Temporary read-only formatting proposal. It does not commit, push,
+      # alter the repository branch or excuse the preceding formatting gate.
+      - name: Emit formatter proposal for review (no repository write)
+        if: always() && steps.install.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            server/services/intercompany/phase5Receipt.ts
+            server/services/intercompany/phase5Cancel.ts
+            server/services/intercompany/tradeSync.ts
+            server/services/intercompany/sharedChargeSync.ts
+            server/routes/import/intercompany-phase5.ts
+            shared/schema/intercompanyTrading.ts
+            client/src/pages/intercompany/IntercompanyLifecycle.tsx
+            client/src/components/PropertiesSidebar.tsx
+            tests/intercompany-phase5-database-guards.test.ts
+            tests/intercompany-phase5-lifecycle-math.test.ts
+            tests/intercompany-phase5-mirrored-lines.test.ts
+          )
+          node node_modules/prettier/bin/prettier.cjs --write "${files[@]}" >/dev/null
+          for file in "${files[@]}"; do
+            echo "IC_FORMAT_START:${file}"
+            base64 -w0 "${file}"
+            echo
+            echo "IC_FORMAT_END:${file}"
+          done
+
       - name: Initialize the disposable PostgreSQL reference application schema
         id: schema
         if: always() && steps.install.outcome == 'success'
