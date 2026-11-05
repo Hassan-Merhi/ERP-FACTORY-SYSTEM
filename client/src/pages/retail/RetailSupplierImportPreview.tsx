@@ -1,3 +1,4 @@
+import { downloadBlob } from "@/lib/downloadBlob";
 import { useMemo } from "react";
 import { AlertTriangle, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -93,14 +94,7 @@ export function RetailSupplierImportPreview({
         [row.rowNumber, row.name, row.brand, issues.join("; ")].map(csvCell).join(",")
       ),
     ].join("\r\n");
-    const href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    const anchor = document.createElement("a");
-    anchor.href = href;
-    anchor.download = "retail_supplier_import_errors.csv";
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(href);
+    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), "retail_supplier_import_errors.csv");
   };
 
   return (
