@@ -3,6 +3,7 @@ import PropertiesRentalsHub from "@/pages/properties/PropertiesRentalsHub";
 import PropertiesContainerTrading from "@/pages/properties/PropertiesContainerTrading";
 import LinkedTradesEditor from "@/pages/intercompany/LinkedTradesEditor";
 import IntercompanyPayments from "@/pages/intercompany/IntercompanyPayments";
+import IntercompanyLifecycle from "@/pages/intercompany/IntercompanyLifecycle";
 import { AccountingToolbox } from "@/lazyPages";
 import type { AuthenticatedUser } from "@/contracts/sessionContracts";
 import {
@@ -84,6 +85,9 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       )}
       {(user.role === "Owner" || user.role === "Developer") && (
         <Route path="/properties/intercompany-payments" component={IntercompanyPayments} />
+      )}
+      {(user.role === "Owner" || user.role === "Developer") && (
+        <Route path="/properties/intercompany-lifecycle" component={IntercompanyLifecycle} />
       )}
       <Route path="/properties/rentals" component={PropertiesRentalsHub} />
       <Route path="/properties/rental/warehouses">{() => <Redirect replace to="/properties/rentals" />}</Route>
