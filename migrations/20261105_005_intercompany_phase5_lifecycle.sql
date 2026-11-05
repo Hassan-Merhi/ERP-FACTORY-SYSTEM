@@ -134,6 +134,7 @@ BEGIN
     OR movement.source_type<>'intercompany-destination-receipt'
     OR movement.source_id<>r.trade_id::text
     OR movement.quantity_delta<>NEW.quantity
+    OR ROUND(movement.quantity_delta*movement.unit_cost,2)<>NEW.landed_value
     OR NOT EXISTS (SELECT 1 FROM stock_items s
         WHERE s.id=NEW.stock_item_id AND s.company_id=r.destination_company_id) THEN
     RAISE EXCEPTION 'Destination receipt movement must be in the ERP destination only';
