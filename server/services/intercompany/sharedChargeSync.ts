@@ -580,7 +580,7 @@ export async function reviseSharedCharge(input: ReviseSharedChargeInput, identit
             postingDate: input.postingDate,
             amountAfter: fullPoCost(snap.destination.po).plus(delta).toFixed(2),
             reason: input.reason,
-            evidence: { invoiceId: invoice.id, from: old.toFixed(2), to: next.toFixed(2), releasedCredit },
+            evidence: { invoiceId: invoice.id, from: old.toFixed(2), to: next.toFixed(2) },
           });
           if (record.containerChargeId) {
             await tx
@@ -644,7 +644,7 @@ export async function reviseSharedCharge(input: ReviseSharedChargeInput, identit
             applied.vouchers,
             identity,
             "shared_invoice_reallocate",
-            { invoiceId: invoice.id, from: old.toFixed(2), to: next.toFixed(2) }
+            { invoiceId: invoice.id, from: old.toFixed(2), to: next.toFixed(2), releasedCredit }
           );
           result.push({ tradeId: item.tradeId, amount: next.toFixed(2), version });
         }
