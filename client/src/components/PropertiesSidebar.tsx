@@ -56,6 +56,7 @@ export const PROPERTIES_NAV_SECTIONS: NavSection[] = [
       { title: "Container Trading", url: "/properties/container-trading", icon: Package },
       { title: "Linked POs & Freight", url: "/properties/linked-trades", icon: Package },
       { title: "Intercompany Payments & Credits", url: "/properties/intercompany-payments", icon: Landmark },
+      { title: "Receiving & Cancellation", url: "/properties/intercompany-lifecycle", icon: Package },
     ],
   },
   {
@@ -75,7 +76,7 @@ export function getPropertiesVisibleNavSections(isDeveloper: boolean, canTrade =
       (item) =>
         (isDeveloper || !item.url.startsWith("/properties/accounting/")) &&
         (canTrade ||
-          !["/properties/container-trading", "/properties/linked-trades", "/properties/intercompany-payments"].includes(
+          !["/properties/container-trading", "/properties/linked-trades", "/properties/intercompany-payments", "/properties/intercompany-lifecycle"].includes(
             item.url
           ))
     ),
