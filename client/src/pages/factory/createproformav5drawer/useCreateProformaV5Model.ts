@@ -36,6 +36,8 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const qtyRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const lastPriceScopeRef = useRef<string | null>(null);
+  const lastAgreedScopeRef = useRef<string | null>(null);
 
   // Reset to blank every time the dialog opens
   useEffect(() => {
@@ -112,6 +114,10 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
 
   // Auto-fill only the chosen customer/destination prices.
   useEffect(() => {
+    const scope = `${customerId}:${destination.trim().toUpperCase()}`;
+    if (lastPriceScopeRef.current === scope) return;
+    lastPriceScopeRef.current = scope;
+    lastAgreedScopeRef.current = null;
     if (!customerId || !destination.trim()) return;
     // Switching destinations must not retain the previous destination's prices.
     // Start with catalog defaults, then apply the matching destination's rates.
@@ -134,6 +140,9 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
 
   useEffect(() => {
     if (!customerPriceListQuery.data || customerPriceListQuery.data.length === 0) return;
+    const scope = `${customerId}:${destination.trim().toUpperCase()}`;
+    if (lastAgreedScopeRef.current === scope) return;
+    lastAgreedScopeRef.current = scope;
     const priceMap = new Map(customerPriceListQuery.data.map((r) => [r.article_code, r.price_per_bale]));
     setSellingPrices((prev) => {
       const next = { ...prev };
