@@ -25,6 +25,7 @@ import {
   date,
   bigserial,
   bigint,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { companies } from "../common";
@@ -369,6 +370,35 @@ export const customerPriceLists = pgTable(
       table.customerId,
       table.articleCode
     ),
+  ]
+);
+
+/**
+ * Agreed prices per customer and destination (ensureProformaDestinationPricingSchema).
+ * New proformas use only the prices saved for their own customer and destination.
+ */
+export const customerDestinationPriceLists = pgTable(
+  "customer_destination_price_lists",
+  {
+    companyId: integer("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "cascade" }),
+    customerId: integer("customer_id").notNull(),
+    destination: text("destination").notNull(),
+    articleCode: varchar("article_code", { length: 50 }).notNull(),
+    pricePerBale: numeric("price_per_bale", { precision: 20, scale: 2 }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.companyId, table.customerId, table.destination, table.articleCode] }),
+    index("customer_destination_price_lists_customer_idx").using(
+      "btree",
+      table.companyId,
+      table.customerId,
+      table.destination
+    ),
+    check("customer_destination_price_lists_price_per_bale_check", sql`${table.pricePerBale} > 0`),
+    check("cdpl_destination_not_blank", sql`length(trim(${table.destination})) > 0`),
   ]
 );
 

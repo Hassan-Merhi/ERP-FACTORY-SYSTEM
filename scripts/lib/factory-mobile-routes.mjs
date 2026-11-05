@@ -8,7 +8,8 @@ export const STATIC_ROUTES = [
   // Production / inventory
   "/factory/production-report",
   "/factory/monthly-production-matrix",
-  "/factory/production-bonuses",
+  // /factory/production-bonuses is Admin/Owner-only (FactoryRoutes); the Developer
+  // sweep user is redirected to the production report, so it is not swept here.
   "/factory/stock-entry",
   "/factory/raw-materials",
   "/factory/raw-stock",

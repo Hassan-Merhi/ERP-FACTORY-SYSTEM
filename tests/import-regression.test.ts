@@ -13,12 +13,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
-import {
-  seedTestData,
-  cleanupTestData,
-  closeTestServer,
-  type TestContext,
-} from "./setup";
+import { seedTestData, cleanupTestData, closeTestServer, type TestContext } from "./setup";
 import { db } from "../server/db";
 import { eq } from "drizzle-orm";
 import * as schema from "../shared/schema";
@@ -175,9 +170,7 @@ describe("Import — Company isolation", () => {
   it("GET /api/locations returns only this company's locations", async () => {
     const res = await agent.get("/api/locations");
     expect(res.status).toBe(200);
-    const companyIds = (res.body as any[])
-      .filter((l) => l.companyId !== undefined)
-      .map((l) => l.companyId);
+    const companyIds = (res.body as any[]).filter((l) => l.companyId !== undefined).map((l) => l.companyId);
     // If companyId is exposed, all must match; if not exposed, just verify 200
     const allMatch = companyIds.every((id) => id === ctx.companyId);
     expect(allMatch).toBe(true);
@@ -213,9 +206,7 @@ describe("Import — Stock item naming and search data", () => {
     const res = await agent.get("/api/stock-items");
     expect(res.status).toBe(200);
     // The seeded items are named "Test Item 1", "Test Item 2", "Test Item 3"
-    const testItems = (res.body as any[]).filter((i) =>
-      i.name?.startsWith("Test Item"),
-    );
+    const testItems = (res.body as any[]).filter((i) => i.name?.startsWith("Test Item"));
     expect(testItems.length).toBeGreaterThanOrEqual(3);
   });
 });
@@ -235,12 +226,14 @@ describe("Import — POS import item validation logic", () => {
 
     const res = await agent.post("/api/pos-import/validate").send({
       locationId: ctx.locationId,
-      items: [{
-        barcode: seededItem.code,
-        quantity: 1,
-        sellingPrice: 10,
-        rowNum: 1,
-      }],
+      items: [
+        {
+          barcode: seededItem.code,
+          quantity: 1,
+          sellingPrice: 10,
+          rowNum: 1,
+        },
+      ],
     });
     expect(res.status).toBe(200);
     const validatedItem = res.body?.validatedItems?.[0];
@@ -252,12 +245,14 @@ describe("Import — POS import item validation logic", () => {
   it("nonexistent barcode returns error row in validatedItems (not 500)", async () => {
     const res = await agent.post("/api/pos-import/validate").send({
       locationId: ctx.locationId,
-      items: [{
-        barcode: "NONEXISTENT-BARCODE-XYZ-999",
-        quantity: 1,
-        sellingPrice: 10,
-        rowNum: 1,
-      }],
+      items: [
+        {
+          barcode: "NONEXISTENT-BARCODE-XYZ-999",
+          quantity: 1,
+          sellingPrice: 10,
+          rowNum: 1,
+        },
+      ],
     });
     expect(res.status).toBe(200); // validate always returns 200; errors are in the body
     const validatedItem = res.body?.validatedItems?.[0];
@@ -297,14 +292,17 @@ describe("Import — POS import item validation logic", () => {
 // ── PO validate — item matching logic ─────────────────────────────────────────
 
 describe("Import — PO import validate logic", () => {
-  it("missing supplierId returns 400 not 500", async () => {
+  it("missing supplierId is a validation error, not a 500", async () => {
+    // Since #2873 item resolution stays available while the operator is still
+    // completing the form: a missing supplier is reported in the result body.
     const res = await agent.post("/api/po-import/validate").send({
       containerNumber: "TEST-CONT-001",
       preview: [],
       // supplierId intentionally omitted
     });
-    expect(res.status).toBe(400);
-    expect(res.status).toBeLessThan(500);
+    expect(res.status).toBe(200);
+    expect(res.body.valid).toBe(false);
+    expect(res.body.errors.some((e: string) => /supplier/i.test(e))).toBe(true);
   });
 
   it("valid call with empty preview returns non-500 with validation result", async () => {
@@ -332,11 +330,13 @@ describe("Import — PO import validate logic", () => {
     const res = await agent.post("/api/po-import/validate").send({
       containerNumber: "TEST-CONT-KNOWN",
       supplierId: 999999, // supplier error expected, but item should resolve
-      preview: [{
-        containerNumber: "TEST-CONT-KNOWN",
-        items: [{ barcode: seededItem.code, itemName: seededItem.name, qty: 1, rate: 10, rowNum: 1 }],
-        charges: {},
-      }],
+      preview: [
+        {
+          containerNumber: "TEST-CONT-KNOWN",
+          items: [{ barcode: seededItem.code, itemName: seededItem.name, qty: 1, rate: 10, rowNum: 1 }],
+          charges: {},
+        },
+      ],
     });
     expect(res.status).toBeLessThan(500);
     if (res.status === 200) {

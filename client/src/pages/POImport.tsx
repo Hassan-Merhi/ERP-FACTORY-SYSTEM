@@ -13,173 +13,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useCompany } from "@/contexts/CompanyContext";
-import { Upload, FileSpreadsheet, CheckCircle, XCircle, Download, Check, ChevronsUpDown, RefreshCw } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Upload, FileSpreadsheet, CheckCircle, XCircle, Download, RefreshCw } from "lucide-react";
 import type { Supplier } from "@shared/schema";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-interface SupplierComboboxProps {
-  value: string;
-  onValueChange: (value: string) => void;
-  suppliers: Supplier[];
-  placeholder?: string;
-  testId?: string;
-  isLoading?: boolean;
-  hasError?: boolean;
-}
-
-interface POImportItem {
-  poNumber: string;
-  barcode?: string | null;
-  stockItemId?: number | null;
-  itemName: string;
-  quantity: string | number;
-  rate: string | number;
-  lineTotal: string | number;
-  currency?: string;
-}
-
-interface POImportCharges {
-  freight: string | number;
-  surcharge: string | number;
-  fumigation: string | number;
-  discount: string | number;
-  documentCharges: string | number;
-}
-
-interface POImportContainer {
-  containerNumber: string;
-  itemsCount: number;
-  posCount: number;
-  itemsTotal: string | number;
-  grandTotal: string | number;
-  charges: POImportCharges;
-  items: POImportItem[];
-}
-
-interface POImportPreview {
-  fileHash: string;
-  fileName: string;
-  preview: POImportContainer[];
-}
-
-interface POValidationResult {
-  errors: React.ReactNode[];
-  resolvedItems?: { index: number; stockItemId: number; itemName: string }[];
-}
-
-interface POImportDraft {
-  preview: POImportPreview;
-  selectedSupplier: string;
-  containerNumber: string;
-  importDate: string;
-  freightPaidBy: "supplier" | "parent";
-  freightParentAccountId: string;
-  importCurrency: "" | "USD" | "ZMW";
-}
-
-const draftStorageKey = (companyId: number) => `po-import-draft:${companyId}`;
-
-/** Merge server-resolved names into the parsed file without touching its amounts. */
-function withResolvedStockItems(
-  current: POImportPreview | null,
-  payload: POImportPayload,
-  result: POValidationResult
-): POImportPreview | null {
-  if (!current || current.fileHash !== payload.fileHash || !result.resolvedItems?.length) return current;
-  const resolved = new Map(result.resolvedItems.map((item) => [item.index, item]));
-  let changed = false;
-  const containers = current.preview.map((container) => {
-    if (container.containerNumber !== payload.containerNumber) return container;
-    const items = container.items.map((item, index) => {
-      const match = resolved.get(index);
-      if (!match || (item.itemName === match.itemName && item.stockItemId === match.stockItemId)) return item;
-      changed = true;
-      return { ...item, itemName: match.itemName, stockItemId: match.stockItemId };
-    });
-    return changed ? { ...container, items } : container;
-  });
-  return changed ? { ...current, preview: containers } : current;
-}
-
-type POImportPayload = POImportPreview & {
-  containerNumber: string;
-  supplierId: number;
-  importDate: string;
-  exchangeRate?: string;
-  /** Explicit invoice currency for a USD/ZMW company; absent elsewhere. */
-  currency?: "USD" | "ZMW";
-  freightPaidBy: "supplier" | "parent";
-  freightParentAccountId: number | null;
-};
-
-function SupplierCombobox({
-  value,
-  onValueChange,
-  suppliers,
-  placeholder = "Select supplier",
-  testId,
-  isLoading = false,
-  hasError = false,
-}: SupplierComboboxProps) {
-  const [open, setOpen] = useState(false);
-  const selectedSupplier = suppliers.find((supplier) => supplier.id.toString() === value);
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className="w-full justify-between"
-          data-testid={testId}
-          disabled={isLoading || hasError}
-        >
-          {isLoading
-            ? "Loading suppliers..."
-            : hasError
-              ? "Unable to load suppliers"
-              : selectedSupplier
-                ? selectedSupplier.legalName
-                : placeholder}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-full p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Search suppliers..." />
-          <CommandList>
-            <CommandEmpty>No supplier found for this company.</CommandEmpty>
-            <CommandGroup>
-              {suppliers.map((supplier) => (
-                <CommandItem
-                  key={supplier.id}
-                  value={supplier.legalName}
-                  onSelect={() => {
-                    onValueChange(supplier.id.toString());
-                    setOpen(false);
-                  }}
-                >
-                  <Check
-                    className={cn("mr-2 h-4 w-4", value === supplier.id.toString() ? "opacity-100" : "opacity-0")}
-                  />
-                  {supplier.legalName}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  );
-}
+import { SupplierCombobox } from "./po-import/SupplierCombobox";
+import {
+  draftStorageKey,
+  withResolvedStockItems,
+  type POImportContainer,
+  type POImportDraft,
+  type POImportItem,
+  type POImportPayload,
+  type POImportPreview,
+  type POValidationResult,
+} from "./po-import/poImportModel";
 
 function ErpPOImport() {
   const [, navigate] = useLocation();
@@ -623,11 +474,7 @@ function ErpPOImport() {
   return (
     <div className="space-y-4">
       <PageHeader title="PO Import (Excel)">
-        <Button
-          variant="outline"
-          asChild
-          data-testid="button-download-template"
-        >
+        <Button variant="outline" asChild data-testid="button-download-template">
           <a href="/api/po-import/template" download="po-import-template.xlsx">
             <Download className="w-4 h-4 mr-2" />
             Download Template

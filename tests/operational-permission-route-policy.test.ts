@@ -23,6 +23,8 @@ const listedEntries = (
  * but that deliberately need no operational permission. Each needs a reason.
  */
 const REVIEWED_UNGUARDED_ROUTES: Record<string, string> = {
+  "GET /api/tickets/export":
+    "Ticket export checks the exp_ticket_export role permission inside its handler before streaming the workbook.",
   "GET /api/stats/import-cycle-balance": "Import-cycle balance is a dashboard read, not an import.",
   "GET /api/stats/import-cycle-diagnostics": "Import-cycle diagnostics is a read, not an import.",
   "GET /api/debug/import-cycle": "Import-cycle debug read with its own guard chain; not an import.",

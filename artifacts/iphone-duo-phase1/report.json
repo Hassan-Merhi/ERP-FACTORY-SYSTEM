@@ -1,0 +1,687 @@
+{
+  "baseUrl": "http://127.0.0.1:5000",
+  "workspaceRouteGroups": [
+    {
+      "workspace": "erp",
+      "companyCode": "PHASE9-ERP",
+      "routes": [
+        "/tickets/new",
+        "/tickets",
+        "/",
+        "/tracking",
+        "/help-training",
+        "/pos",
+        "/pos-item-replacement",
+        "/inventory",
+        "/stock",
+        "/location-inventory",
+        "/stock-items",
+        "/stock-otw",
+        "/sold-containers",
+        "/agents",
+        "/parties",
+        "/suppliers",
+        "/customers",
+        "/vouchers",
+        "/daybook",
+        "/stock-query",
+        "/offload-item-search",
+        "/location-summary",
+        "/stock-transfer-order",
+        "/sales-tools",
+        "/stock-transfers",
+        "/combined-inventory",
+        "/pos-daybook",
+        "/pos-price-list",
+        "/price-list",
+        "/factory-production",
+        "/bales",
+        "/production-bales",
+        "/bale-products",
+        "/erp/rental/warehouses",
+        "/erp/rental/shops",
+        "/erp/rental/payments",
+        "/conflicts",
+        "/intercompany-requests",
+        "/financial-overview",
+        "/mock-containers-otw",
+        "/containers-otw",
+        "/mock-git",
+        "/git",
+        "/containers",
+        "/po-import",
+        "/ai-validation",
+        "/ai-command-center",
+        "/pos-import",
+        "/analytics",
+        "/accounts/historical-openings",
+        "/accounts",
+        "/accounting/toolbox",
+        "/accounting/open-items",
+        "/accounting/cash-bank",
+        "/accounting/monetary-fx",
+        "/accounting/erp-inventory",
+        "/accounting/factory-production",
+        "/accounting/rentals",
+        "/accounting/consolidation",
+        "/accounting/history",
+        "/accounting/statements",
+        "/accounting/fiscal-review",
+        "/accounting/dashboard",
+        "/accounting/rollout",
+        "/cost-centers",
+        "/supplier-profit-check",
+        "/transaction-journal",
+        "/payroll",
+        "/create",
+        "/import-stock-items",
+        "/optional-vouchers",
+        "/sales-report",
+        "/supplier-profit-reconciliation",
+        "/stock-in-sales-report",
+        "/item-market-analysis",
+        "/sales-report/detail",
+        "/sales-report/comparison",
+        "/company-transfer",
+        "/net-profit-report",
+        "/live-sheets",
+        "/bale-ledger",
+        "/opening-stock",
+        "/closing-stock-summary",
+        "/barcode-manager",
+        "/chat",
+        "/settings",
+        "/intercompany-links",
+        "/orphaned-records",
+        "/deleted-items",
+        "/chatbot-settings",
+        "/notification-settings",
+        "/account-groups",
+        "/import-cycle-diagnostics",
+        "/inventory-repair",
+        "/balance-repair",
+        "/convergence-reconciliation",
+        "/net-position-details",
+        "/company-data-reset",
+        "/account-migration",
+        "/account-transfer",
+        "/my-settings"
+      ],
+      "parameterized": [
+        "/pos/edit/:id",
+        "/ledger-monthly/:accountId",
+        "/ledger-vouchers/:accountId/:year/:month",
+        "/voucher-detail/:voucherId",
+        "/stock-query/:id",
+        "/containers/:containerId/verification",
+        "/containers/:id",
+        "/offloads/:id",
+        "/suppliers/:supplierId/proformas",
+        "/suppliers/:id/edit",
+        "/vouchers/:id/edit",
+        "/purchase-orders/:id/edit",
+        "/stock-items/:id/history",
+        "/stock-items/:id/history/:year/:month",
+        "/stock-items/:stockItemId/monthly-summary",
+        "/locations/:locationId/stock-items/:stockItemId/history",
+        "/locations/:locationId/stock-items/:stockItemId/vouchers/:year/:month",
+        "/opening-stock/:groupId",
+        "/closing-stock/:groupId"
+      ]
+    },
+    {
+      "workspace": "factory",
+      "companyCode": "PHASE9-FACTORY",
+      "routes": [
+        "/factory/tickets/new",
+        "/factory/tickets",
+        "/factory/help-training",
+        "/factory/daybook",
+        "/factory/transporters",
+        "/factory/finance",
+        "/factory/suppliers",
+        "/factory/containers/new",
+        "/factory/containers",
+        "/factory/bale-products",
+        "/factory/raw-stock/recalculate",
+        "/factory/raw-stock",
+        "/factory/raw-materials",
+        "/factory/pressing",
+        "/factory/finalize",
+        "/factory/production-bonuses",
+        "/factory/stock-entry",
+        "/factory/bales-history",
+        "/factory/bales-hub",
+        "/factory/reprint-labels",
+        "/factory/location-inventory",
+        "/factory/location-inventory-mockup",
+        "/factory/containers-hub",
+        "/factory/stock-otw",
+        "/factory/stock-bale-list",
+        "/factory/stock-query",
+        "/factory/monthly-production-matrix",
+        "/factory/contacts",
+        "/factory/accounts",
+        "/factory/accounting/toolbox",
+        "/factory/balance-repair",
+        "/factory/accounting/open-items",
+        "/factory/accounting/cash-bank",
+        "/factory/accounting/monetary-fx",
+        "/factory/accounting/production",
+        "/factory/accounting/rentals",
+        "/factory/accounting/consolidation",
+        "/factory/accounting/history",
+        "/factory/accounting/statements",
+        "/factory/accounting/fiscal-review",
+        "/factory/accounting/dashboard",
+        "/factory/accounting/rollout",
+        "/factory/cost-centers",
+        "/factory/account-groups",
+        "/factory/agents",
+        "/factory/vouchers",
+        "/factory/create",
+        "/factory/payroll",
+        "/factory/analytics",
+        "/factory/production-summary",
+        "/factory/sales/new",
+        "/factory/sales/loading/pending",
+        "/factory/sales/loading/new",
+        "/factory/sales/loadings",
+        "/factory/price-list",
+        "/factory/bale-tracking",
+        "/factory/dispatch-batches",
+        "/factory/invoicing",
+        "/factory/stock-allocation",
+        "/factory/stock-allocation-v3",
+        "/factory/stock-allocation-v5/proformas/new",
+        "/factory/stock-allocation-v5",
+        "/factory/parties",
+        "/factory/customers",
+        "/factory/payroll-hub",
+        "/factory/insurance",
+        "/factory/sheets-sacks",
+        "/factory/employees",
+        "/factory/workers",
+        "/factory/worker-payroll",
+        "/factory/supplier-report",
+        "/factory/supplier-statement",
+        "/factory/broker-visual-statement",
+        "/factory/barcode-lookup",
+        "/factory/import",
+        "/factory/bale-relabeling",
+        "/factory/merge-bale-products",
+        "/factory/catalog-translations",
+        "/factory/bale-product-images",
+        "/factory/customer-logos",
+        "/factory/label-banners",
+        "/factory/bale-relabeling/wipers-re-entry",
+        "/factory/users",
+        "/factory/intelligence/dashboard",
+        "/factory/intelligence/kpis",
+        "/factory/intelligence/profitability",
+        "/factory/intelligence/alerts",
+        "/factory/intelligence/supplier-hub",
+        "/factory/intelligence/financial-hub",
+        "/factory/intelligence/production-hub",
+        "/factory/intelligence/supplier-scores",
+        "/factory/intelligence/mix-optimizer",
+        "/factory/intelligence/cashflow",
+        "/factory/intelligence/waste",
+        "/factory/waste-dispatch",
+        "/factory/pos",
+        "/factory/bale-ledger",
+        "/factory/intelligence/settings",
+        "/factory/spreadsheet",
+        "/factory/chat",
+        "/factory/conflicts",
+        "/factory/settings",
+        "/factory/deleted-items",
+        "/factory/orphaned-records",
+        "/factory/chatbot-settings",
+        "/factory/import-cycle-diagnostics",
+        "/factory/inventory-repair",
+        "/factory/company-data-reset",
+        "/factory/net-position-details",
+        "/factory/net-profit-analytics",
+        "/factory/net-position",
+        "/factory/financial-snapshot",
+        "/factory/production-comparison",
+        "/factory/production-report",
+        "/factory/rental/warehouses",
+        "/factory/rental/shops",
+        "/factory/rental/payments"
+      ],
+      "parameterized": [
+        "/factory/raw-stock/opening-balance/:id/edit",
+        "/factory/bale-product-history/:productId/:locationId/:year/all",
+        "/factory/bale-product-history/:productId/:locationId/:year/:month",
+        "/factory/bale-product-history/:productId/:locationId",
+        "/factory/stock-query/:id",
+        "/factory/monthly-production-matrix/:productId/bales/:workerId",
+        "/factory/monthly-production-matrix/:productId/workers",
+        "/factory/vouchers/:id/edit",
+        "/factory/voucher-detail/:voucherId",
+        "/factory/sales/pending-invoices/:id/verify",
+        "/factory/invoices/:id/loading-scan",
+        "/factory/sales/invoices/:id",
+        "/factory/sales/proformas/:proformaId/add-line",
+        "/factory/dispatch-batches/:batchId/rides/:rideId/scan",
+        "/factory/dispatch-batches/:id",
+        "/factory/invoicing/proformas/:id/edit",
+        "/factory/stock-allocation-v5/proformas/:id/edit",
+        "/factory/customers/:id",
+        "/factory/employees/:id",
+        "/factory/workers/:id",
+        "/factory/ledger-monthly/:accountId",
+        "/factory/ledger-vouchers/:accountId/:year/:month"
+      ]
+    },
+    {
+      "workspace": "properties",
+      "companyCode": "PHASE9-PROPERTIES",
+      "routes": [
+        "/properties/dashboard",
+        "/properties/accounts",
+        "/properties/accounting/toolbox",
+        "/properties/accounting/open-items",
+        "/properties/accounting/cash-bank",
+        "/properties/accounting/monetary-fx",
+        "/properties/accounting/rentals",
+        "/properties/accounting/consolidation",
+        "/properties/accounting/history",
+        "/properties/accounting/statements",
+        "/properties/accounting/fiscal-review",
+        "/properties/accounting/dashboard",
+        "/properties/accounting/rollout",
+        "/properties/vouchers",
+        "/properties/create",
+        "/properties/analytics",
+        "/properties/agents",
+        "/properties/daybook",
+        "/properties/rentals",
+        "/properties/rental/warehouses",
+        "/properties/rental/shops",
+        "/properties/rental/payments",
+        "/properties/transfer",
+        "/properties/settings",
+        "/properties/net-position-details",
+        "/properties/deleted-items",
+        "/properties/orphaned-records",
+        "/properties/chatbot-settings",
+        "/properties/import-cycle-diagnostics",
+        "/properties/inventory-repair",
+        "/properties/company-data-reset",
+        "/properties/account-groups",
+        "/properties/balance-repair",
+        "/properties/my-settings"
+      ],
+      "parameterized": [
+        "/properties/vouchers/:id/edit",
+        "/properties/voucher-detail/:voucherId",
+        "/properties/ledger-monthly/:accountId",
+        "/properties/ledger-vouchers/:accountId/:year/:month"
+      ]
+    },
+    {
+      "workspace": "supplier-partner",
+      "companyCode": "PHASE9-SP",
+      "routes": [
+        "/sp",
+        "/sp/opening-stock",
+        "/sp/reports",
+        "/sp/aliases",
+        "/sp/migration",
+        "/sp/gc-migration",
+        "/sp/setup",
+        "/spreadsheet",
+        "/sp/golden-coast"
+      ],
+      "parameterized": []
+    },
+    {
+      "workspace": "retail-admin",
+      "companyCode": "PHASE9-RETAIL",
+      "routes": [
+        "/retail/pos",
+        "/retail/stock-count",
+        "/retail/history",
+        "/retail/reports",
+        "/retail",
+        "/retail/inventory"
+      ],
+      "parameterized": [
+        "/retail/products/:id"
+      ]
+    }
+  ],
+  "authenticatedRequired": false,
+  "startedAt": "2026-11-05T22:04:13.586Z",
+  "declaredRoutes": [
+    {
+      "workspace": "erp",
+      "companyCode": "PHASE9-ERP",
+      "requiredRole": "Developer",
+      "staticRoutes": 101,
+      "parameterizedRoutes": 19
+    },
+    {
+      "workspace": "factory",
+      "companyCode": "PHASE9-FACTORY",
+      "requiredRole": "Developer",
+      "staticRoutes": 117,
+      "parameterizedRoutes": 22
+    },
+    {
+      "workspace": "properties",
+      "companyCode": "PHASE9-PROPERTIES",
+      "requiredRole": "Developer",
+      "staticRoutes": 34,
+      "parameterizedRoutes": 4
+    },
+    {
+      "workspace": "supplier-partner",
+      "companyCode": "PHASE9-SP",
+      "requiredRole": "Developer",
+      "staticRoutes": 9,
+      "parameterizedRoutes": 0
+    },
+    {
+      "workspace": "retail-admin",
+      "companyCode": "PHASE9-RETAIL",
+      "requiredRole": "Developer",
+      "staticRoutes": 6,
+      "parameterizedRoutes": 1
+    },
+    {
+      "workspace": "pos",
+      "companyCode": "PHASE9-ERP",
+      "requiredRole": "POS",
+      "staticRoutes": 14,
+      "parameterizedRoutes": 4
+    },
+    {
+      "workspace": "retail-pos",
+      "companyCode": "PHASE9-RETAIL",
+      "requiredRole": "POS",
+      "staticRoutes": 5,
+      "parameterizedRoutes": 0
+    }
+  ],
+  "unresolvedParameterizedRoutes": [
+    {
+      "workspace": "erp",
+      "route": "/pos/edit/:id",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "erp",
+      "route": "/ledger-monthly/:accountId",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "erp",
+      "route": "/ledger-vouchers/:accountId/:year/:month",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "erp",
+      "route": "/voucher-detail/:voucherId",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "erp",
+      "route": "/stock-query/:id",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "erp",
+      "route": "/containers/:containerId/verification",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "erp",
+      "route": "/containers/:id",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "erp",
+      "route": "/offloads/:id",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "erp",
+      "route": "/suppliers/:supplierId/proformas",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "erp",
+      "route": "/suppliers/:id/edit",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "erp",
+      "route": "/vouchers/:id/edit",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "erp",
+      "route": "/purchase-orders/:id/edit",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "erp",
+      "route": "/stock-items/:id/history",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "erp",
+      "route": "/stock-items/:id/history/:year/:month",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "erp",
+      "route": "/stock-items/:stockItemId/monthly-summary",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "erp",
+      "route": "/locations/:locationId/stock-items/:stockItemId/history",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "erp",
+      "route": "/locations/:locationId/stock-items/:stockItemId/vouchers/:year/:month",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "erp",
+      "route": "/opening-stock/:groupId",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "erp",
+      "route": "/closing-stock/:groupId",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "factory",
+      "route": "/factory/raw-stock/opening-balance/:id/edit",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "factory",
+      "route": "/factory/bale-product-history/:productId/:locationId/:year/all",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "factory",
+      "route": "/factory/bale-product-history/:productId/:locationId/:year/:month",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "factory",
+      "route": "/factory/bale-product-history/:productId/:locationId",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "factory",
+      "route": "/factory/stock-query/:id",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "factory",
+      "route": "/factory/monthly-production-matrix/:productId/bales/:workerId",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "factory",
+      "route": "/factory/monthly-production-matrix/:productId/workers",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "factory",
+      "route": "/factory/vouchers/:id/edit",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "factory",
+      "route": "/factory/voucher-detail/:voucherId",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "factory",
+      "route": "/factory/sales/pending-invoices/:id/verify",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "factory",
+      "route": "/factory/invoices/:id/loading-scan",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "factory",
+      "route": "/factory/sales/invoices/:id",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "factory",
+      "route": "/factory/sales/proformas/:proformaId/add-line",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "factory",
+      "route": "/factory/dispatch-batches/:batchId/rides/:rideId/scan",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "factory",
+      "route": "/factory/dispatch-batches/:id",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "factory",
+      "route": "/factory/invoicing/proformas/:id/edit",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "factory",
+      "route": "/factory/stock-allocation-v5/proformas/:id/edit",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "factory",
+      "route": "/factory/customers/:id",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "factory",
+      "route": "/factory/employees/:id",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "factory",
+      "route": "/factory/workers/:id",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "factory",
+      "route": "/factory/ledger-monthly/:accountId",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "factory",
+      "route": "/factory/ledger-vouchers/:accountId/:year/:month",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "properties",
+      "route": "/properties/vouchers/:id/edit",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "properties",
+      "route": "/properties/voucher-detail/:voucherId",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "properties",
+      "route": "/properties/ledger-monthly/:accountId",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "properties",
+      "route": "/properties/ledger-vouchers/:accountId/:year/:month",
+      "category": "needs-seeded-route-parameters"
+    },
+    {
+      "workspace": "retail-admin",
+      "route": "/retail/products/:id",
+      "category": "needs-seeded-route-parameters"
+    }
+  ],
+  "emulationNote": "Chrome CSS-pixel profiles; physical iOS Safari verification still required",
+  "transitions": [],
+  "seededRouteEvidence": [],
+  "cases": [],
+  "failures": [
+    "English duo-cover: document failed: net::ERR_CONNECTION_REFUSED",
+    "English duo-cover: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:5000/login",
+    "English duo-cover-landscape: document failed: net::ERR_CONNECTION_REFUSED",
+    "English duo-cover-landscape: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:5000/login",
+    "English duo-inner: document failed: net::ERR_CONNECTION_REFUSED",
+    "English duo-inner: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:5000/login",
+    "English duo-inner-landscape: document failed: net::ERR_CONNECTION_REFUSED",
+    "English duo-inner-landscape: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:5000/login",
+    "English duo-split: document failed: net::ERR_CONNECTION_REFUSED",
+    "English duo-split: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:5000/login",
+    "Arabic duo-cover: document failed: net::ERR_CONNECTION_REFUSED",
+    "Arabic duo-cover: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:5000/login",
+    "Arabic duo-cover-landscape: document failed: net::ERR_CONNECTION_REFUSED",
+    "Arabic duo-cover-landscape: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:5000/login",
+    "Arabic duo-inner: document failed: net::ERR_CONNECTION_REFUSED",
+    "Arabic duo-inner: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:5000/login",
+    "Arabic duo-inner-landscape: document failed: net::ERR_CONNECTION_REFUSED",
+    "Arabic duo-inner-landscape: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:5000/login",
+    "Arabic duo-split: document failed: net::ERR_CONNECTION_REFUSED",
+    "Arabic duo-split: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:5000/login",
+    "French duo-cover: document failed: net::ERR_CONNECTION_REFUSED",
+    "French duo-cover: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:5000/login",
+    "French duo-cover-landscape: document failed: net::ERR_CONNECTION_REFUSED",
+    "French duo-cover-landscape: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:5000/login",
+    "French duo-inner: document failed: net::ERR_CONNECTION_REFUSED",
+    "French duo-inner: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:5000/login",
+    "French duo-inner-landscape: document failed: net::ERR_CONNECTION_REFUSED",
+    "French duo-inner-landscape: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:5000/login",
+    "French duo-split: document failed: net::ERR_CONNECTION_REFUSED",
+    "French duo-split: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:5000/login"
+  ],
+  "finishedAt": "2026-11-05T22:04:18.894Z",
+  "coverage": {
+    "staticDeclared": 267,
+    "dynamicWithoutSeeds": 46,
+    "seededDetailCases": 0,
+    "auditedCases": 0,
+    "redirectedCases": 0,
+    "transitions": 0
+  }
+}

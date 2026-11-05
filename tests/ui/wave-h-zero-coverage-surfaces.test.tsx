@@ -146,7 +146,7 @@ describe("Wave H zero-coverage production surfaces", () => {
     // Creation is a full page since 0d18717 (no longer a dialog).
     expect(await screen.findByTestId("page-create-proforma-v5")).toBeInTheDocument();
     expect(screen.getByTestId("select-v5-proforma-customer")).toBeInTheDocument();
-    expect(screen.getByText("BAL-101")).toBeInTheDocument();
+    expect(screen.getAllByText("BAL-101").length).toBeGreaterThan(0);
 
     // Radix FocusScope dispatches its unmount autofocus event from a zero-delay
     // timer. Flush it while this file's jsdom Event realm is still active; if

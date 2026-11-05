@@ -23,8 +23,8 @@ import type {
   SortDir,
   SortField,
 } from "./factorylocationinventory/types";
-import { applySortProducts, isSpecialFactoryCategory } from "./factorylocationinventory/utils";
-import { productMatchesSearch } from "@shared/factoryProductSearch";
+import { isSpecialFactoryCategory } from "./factorylocationinventory/utils";
+import { filterInventoryProducts, withProductsSelected } from "./factorylocationinventory/filterInventoryProducts";
 import { useFactoryLocationReprint } from "./factorylocationinventory/useFactoryLocationReprint";
 import { buildActiveInventoryData } from "./factorylocationinventory/activeInventory";
 
@@ -451,34 +451,32 @@ export function useFactoryLocationInventory() {
   const sortedLocations = [...locations].sort((a, b) => a.name.localeCompare(b.name));
   const filteredLocations = sortedLocations.filter((l) => l.name.toLowerCase().includes(locationSearch.toLowerCase()));
 
-  const filteredProducts = useMemo(() => {
-    return applySortProducts(
-      activeInventoryData.filter((p) => {
-        const matchesSearch = productMatchesSearch(
-          { name: p.productName, nameAr: p.productNameAr, articleCode: p.articleCode },
-          productSearch
-        );
-        const matchesCat = categoryFilter.length === 0 || categoryFilter.includes(p.category ?? "Uncategorized");
-        const hideZero = proformaMode ? hideZeroAvailable : !showZeroStock;
-        if (hideZero && p.baleCount - (p.loadingCount ?? 0) <= 0) return false;
-        if (proformaMode && showSelectedOnly) return matchesSearch && matchesCat && selections.has(p.productId);
-        return matchesSearch && matchesCat;
+  const filteredProducts = useMemo(
+    () =>
+      filterInventoryProducts(activeInventoryData, {
+        productSearch,
+        categoryFilter,
+        prodSortField,
+        prodSortDir,
+        proformaMode,
+        hideZeroAvailable,
+        showZeroStock,
+        showSelectedOnly,
+        selections,
       }),
+    [
+      activeInventoryData,
+      productSearch,
+      categoryFilter,
       prodSortField,
-      prodSortDir
-    );
-  }, [
-    activeInventoryData,
-    productSearch,
-    categoryFilter,
-    prodSortField,
-    prodSortDir,
-    proformaMode,
-    hideZeroAvailable,
-    showZeroStock,
-    showSelectedOnly,
-    selections,
-  ]);
+      prodSortDir,
+      proformaMode,
+      hideZeroAvailable,
+      showZeroStock,
+      showSelectedOnly,
+      selections,
+    ]
+  );
 
   const regularProducts = filteredProducts.filter((p) => !isSpecialFactoryCategory(p.category || ""));
   const specialProducts = filteredProducts.filter((p) => isSpecialFactoryCategory(p.category || ""));
@@ -511,23 +509,7 @@ export function useFactoryLocationInventory() {
   }, [proformaMode]);
 
   const selectAllVisible = useCallback(() => {
-    setSelections((prev) => {
-      const next = new Map(prev);
-      filteredProducts.forEach((prod) => {
-        if (!next.has(prod.productId)) {
-          next.set(prod.productId, {
-            productId: prod.productId,
-            articleCode: prod.articleCode,
-            productName: prod.productName,
-            availableBales: prod.baleCount,
-            totalWeight: prod.totalWeight,
-            selectedQty: prod.baleCount,
-            pricePerBale: prod.sellingPrice || "0",
-          });
-        }
-      });
-      return next;
-    });
+    setSelections((prev) => withProductsSelected(prev, filteredProducts));
   }, [filteredProducts]);
 
   const deselectAllVisible = useCallback(() => {

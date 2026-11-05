@@ -190,12 +190,16 @@ vi.mock("@/components/ui/dialog", () => ({
   DialogHeader: ({ children }: any) => <div>{children}</div>,
   DialogTitle: ({ children }: any) => <div>{children}</div>,
   DialogFooter: ({ children }: any) => <div>{children}</div>,
+  DialogBody: ({ children }: any) => <div>{children}</div>,
 }));
 vi.mock("@/components/ui/scroll-area", () => ({
   ScrollArea: ({ children }: any) => <div>{children}</div>,
 }));
 
 import POSPriceList from "@/pages/pos/POSPriceList";
+import { DateFormatProvider } from "@/contexts/DateFormatContext";
+
+const renderPage = (ui: React.ReactElement) => render(<DateFormatProvider>{ui}</DateFormatProvider>);
 
 describe("POS price list page behavior", () => {
   beforeEach(() => {
@@ -204,7 +208,7 @@ describe("POS price list page behavior", () => {
   });
 
   it("selects a location, filters items, surfaces unpriced stock, and updates a location price", async () => {
-    render(<POSPriceList />);
+    renderPage(<POSPriceList />);
     expect(screen.getByText("Select a location")).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("button-location-11"));
@@ -253,7 +257,7 @@ describe("POS price list page behavior", () => {
   });
 
   it("supports all-locations visibility and independent master price editing", async () => {
-    render(<POSPriceList />);
+    renderPage(<POSPriceList />);
     fireEvent.click(screen.getByTestId("button-location-all"));
 
     expect(screen.getByTestId("chip-location-11")).toHaveTextContent("Main");
@@ -292,7 +296,7 @@ describe("POS price list page behavior", () => {
   });
 
   it("keeps POS users scoped to their assigned priced inventory and read-only", async () => {
-    render(<POSPriceList posUser />);
+    renderPage(<POSPriceList posUser />);
     await waitFor(() => expect(screen.getByTestId("row-price-101")).toBeInTheDocument());
     expect(screen.queryByTestId("row-price-102")).not.toBeInTheDocument();
     expect(screen.queryByTestId("button-location-all")).not.toBeInTheDocument();
