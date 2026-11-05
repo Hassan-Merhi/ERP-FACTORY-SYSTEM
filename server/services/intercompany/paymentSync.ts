@@ -13,6 +13,7 @@ import {
   ledgerAccounts,
 } from "@shared/schema";
 import { db, type DbTransaction } from "../../db";
+import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
 import { sumMoney } from "../../lib/money";
 import { postErpVoucherTx, type ErpVoucherLine } from "../accounting/erpVoucherPosting";
 import { normalizeCurrencyCode } from "../accounting/currencyAmounts";
@@ -208,6 +209,21 @@ async function activePaymentPairTx(tx: DbTransaction, id: number) {
     (dest.baseCurrency ?? "USD") !== "USD"
   ) {
     rejectEdit("Paired payment requires active USD-base Properties and ERP companies");
+  }
+  const [destinationSupplier] = await tx
+    .select()
+    .from(companyScopedSuppliers)
+    .where(
+      and(
+        eq(companyScopedSuppliers.id, pair.destinationSupplierId!),
+        eq(companyScopedSuppliers.companyId, pair.destinationCompanyId),
+        eq(companyScopedSuppliers.active, true),
+        isNull(companyScopedSuppliers.deletedAt)
+      )
+    );
+  const normalizeName = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase();
+  if (!destinationSupplier || normalizeName(destinationSupplier.legalName) !== normalizeName(source.name)) {
+    rejectEdit("The destination intercompany supplier must represent the original Properties company");
   }
   return pair;
 }
