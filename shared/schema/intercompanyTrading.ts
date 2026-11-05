@@ -20,6 +20,7 @@ import {
   index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { ledgerAccounts } from "./accounting";
 import { companies } from "./common";
 import { containers, purchaseOrders } from "./containers";
 import { users } from "./users";
@@ -36,8 +37,12 @@ export const intercompanyRelationshipPolicies = pgTable(
       .notNull()
       .references(() => companies.id, { onDelete: "restrict" }),
     relationshipType: varchar("relationship_type", { length: 40 }).notNull(),
-    sourceReceivableAccountId: integer("source_receivable_account_id"),
-    destinationPayableAccountId: integer("destination_payable_account_id"),
+    sourceReceivableAccountId: integer("source_receivable_account_id").references(() => ledgerAccounts.id, {
+      onDelete: "restrict",
+    }),
+    destinationPayableAccountId: integer("destination_payable_account_id").references(() => ledgerAccounts.id, {
+      onDelete: "restrict",
+    }),
     baseCurrency: varchar("base_currency", { length: 3 }).notNull().default("USD"),
     tradeEnabled: boolean("trade_enabled").notNull().default(false),
     immediateReconciliationEnabled: boolean("immediate_reconciliation_enabled").notNull().default(false),
