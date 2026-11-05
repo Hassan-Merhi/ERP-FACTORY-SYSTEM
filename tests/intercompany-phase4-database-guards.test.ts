@@ -92,6 +92,10 @@ describe("Phase 4 paired payment database protections",()=>{
       await rejects("INSERT INTO intercompany_payment_allocations(payment_id,trade_id,amount,allocation_kind,request_key,reason) VALUES (1,2,10,'manual','phase4-wrong-company','Wrong destination')","same active company pair");
       await rejects("INSERT INTO intercompany_payment_allocations(payment_id,trade_id,amount,allocation_kind,request_key,reason) VALUES (1,1,30,'manual','phase4-overpaid','Exceeds confirmed PO')","exceed");
       await rejects("UPDATE intercompany_payment_allocations SET amount=90 WHERE id=1","append-only");
+      await rejects("UPDATE intercompany_trades SET state='canceled' WHERE id=1",
+        "requires releasing original company-pair credit");
+      await rejects("UPDATE intercompany_trades SET relationship_id=2, destination_company_id=3 WHERE id=1",
+        "requires releasing original company-pair credit");
       // Cost reductions must release excess paid credit without altering any cash vouchers.
       await client.query("INSERT INTO intercompany_trade_revisions(trade_id,revision_number,kind,request_key,actor_user_id,initiating_company_id,amount_before,amount_after,posting_date,reason) VALUES (1,2,'line_edit','phase4-linked-edit','owner',1,100,50,'2026-11-05','Price reduction')");
       await client.query("SELECT set_config('erp.ic_edit_revision','1',true)");
