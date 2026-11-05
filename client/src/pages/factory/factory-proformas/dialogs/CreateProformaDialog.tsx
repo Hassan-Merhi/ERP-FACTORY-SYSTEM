@@ -17,6 +17,8 @@ export function CreateProformaDialog({
   setIsCreateOpen,
   newProformaName,
   setNewProformaName,
+  newDestination,
+  setNewDestination,
   createProformaMutation,
   handleCreateProforma,
 }: {
@@ -24,6 +26,8 @@ export function CreateProformaDialog({
   setIsCreateOpen: FactoryProformasModel["setIsCreateOpen"];
   newProformaName: FactoryProformasModel["newProformaName"];
   setNewProformaName: FactoryProformasModel["setNewProformaName"];
+  newDestination: FactoryProformasModel["newDestination"];
+  setNewDestination: FactoryProformasModel["setNewDestination"];
   createProformaMutation: FactoryProformasModel["createProformaMutation"];
   handleCreateProforma: FactoryProformasModel["handleCreateProforma"];
 }) {
@@ -43,13 +47,28 @@ export function CreateProformaDialog({
               data-testid="input-proforma-name"
             />
           </div>
+          <div>
+            <label className="text-sm font-medium mb-1 block">Destination <span className="text-destructive">*</span></label>
+            <Input
+              placeholder="e.g. L'SHI, MALI, KINSHASA"
+              value={newDestination}
+              onChange={(e) => setNewDestination(e.target.value)}
+              data-testid="input-proforma-destination"
+              list="factory-proforma-destinations"
+            />
+            <datalist id="factory-proforma-destinations">
+              <option value="L'SHI" />
+              <option value="MALI" />
+              <option value="KINSHASA" />
+            </datalist>
+          </div>
           <div className="flex justify-end gap-3">
             <Button variant="outline" onClick={() => setIsCreateOpen(false)} data-testid="button-cancel-create">
               Cancel
             </Button>
             <Button
               onClick={handleCreateProforma}
-              disabled={!newProformaName.trim() || createProformaMutation.isPending}
+              disabled={!newProformaName.trim() || !newDestination.trim() || createProformaMutation.isPending}
               data-testid="button-confirm-create"
             >
               Create Proforma
