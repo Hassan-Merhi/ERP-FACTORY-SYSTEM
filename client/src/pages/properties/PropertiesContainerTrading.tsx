@@ -251,7 +251,7 @@ export default function PropertiesContainerTrading() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><Link2 className="h-5 w-5" /> Partner setup</CardTitle>
-              <CardDescription>Owners and Developers must verify existing ledger accounts and the destination supplier representing {selectedCompany?.name}. No accounts are created automatically.</CardDescription>
+              <CardDescription>Owners and Developers with permission in both companies must verify existing ledger accounts and the destination supplier representing {selectedCompany?.name}. No accounts are created automatically.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
@@ -322,7 +322,7 @@ export default function PropertiesContainerTrading() {
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="ic-excel">Original supplier workbook</Label>
-                  <Input id="ic-excel" type="file" accept=".xlsx,.xls"
+                  <Input id="ic-excel" type="file" accept=".xlsx"
                     onChange={e=>{setFile(e.target.files?.[0]??null);setPreview(null);setResult(null);}}
                     data-testid="input-ic-excel"/>
                 </div>
