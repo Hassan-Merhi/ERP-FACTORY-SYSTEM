@@ -302,6 +302,13 @@
       "when": 1793101000000,
       "tag": "20261027_002_factory_pressing_history_report_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1793870000000,
+      "tag": "20261105_001_ticket_management_phase1",
+      "breakpoints": true
     }
   ]
 }
