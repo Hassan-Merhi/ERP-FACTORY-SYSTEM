@@ -72,6 +72,25 @@ interface PriceListEntry {
   updated_at: string;
 }
 
+// Older customer-wide prices are retained for reference, but never used as
+// destination-specific agreed prices on new proformas.
+const LEGACY_PRICE_DESTINATION = "__legacy__";
+
+function priceListUrl(customerId: string, destination: string, articleCode?: string): string {
+  const base = `/api/factory/customer-price-lists/${customerId}`;
+  const path = articleCode ? `${base}/${encodeURIComponent(articleCode)}` : base;
+  return destination === LEGACY_PRICE_DESTINATION
+    ? path
+    : `${path}?destination=${encodeURIComponent(destination)}`;
+}
+
+function normalizePriceDestination(value: string): string {
+  const normalized = value.trim().replace(/\s+/g, " ").toUpperCase().replace(/[\u2019\u2018]/g, "'");
+  if (["LUBUMBASHI", "LSHI", "L'SHI", "L SHI"].includes(normalized)) return "L'SHI";
+  if (normalized === "MALI 53") return "MALI";
+  return normalized;
+}
+
 function fmtMoney(value: number | null | undefined): string {
   if (value == null || isNaN(value)) return "$0";
   const abs = Math.abs(value);
@@ -123,7 +142,9 @@ export default function FactoryCustomerStatement() {
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
 
-  // Price list state
+  // Prices are scoped by customer and selected destination.
+  const [priceDestination, setPriceDestination] = useState("");
+  const [newDestination, setNewDestination] = useState("");
   const [priceEdits, setPriceEdits] = useState<Record<string, string>>({});
   const [newCode, setNewCode] = useState("");
   const [newPrice, setNewPrice] = useState("");
@@ -147,15 +168,61 @@ export default function FactoryCustomerStatement() {
     enabled: !!customerId,
   });
 
-  const priceListQuery = useQuery<PriceListEntry[]>({
-    queryKey: ["/api/factory/customer-price-lists", customerId],
-    enabled: !!customerId,
+  const priceDestinationsQuery = useQuery<string[]>({
+    queryKey: ["/api/factory/customer-price-lists", customerId, "destinations"],
+    enabled: !!customerId && showPriceListTab,
     queryFn: async () => {
-      const res = await fetch(`/api/factory/customer-price-lists/${customerId}`, { credentials: "include" });
-      if (!res.ok) return [];
+      const res = await fetch(`/api/factory/customer-price-lists/${customerId}/destinations`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to load customer price destinations");
       return res.json();
     },
   });
+
+  const priceListQuery = useQuery<PriceListEntry[]>({
+    queryKey: ["/api/factory/customer-price-lists", customerId, priceDestination],
+    enabled: !!customerId && !!priceDestination && showPriceListTab,
+    queryFn: async () => {
+      const res = await fetch(priceListUrl(customerId, priceDestination), { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load destination agreed prices");
+      return res.json();
+    },
+  });
+
+  useEffect(() => {
+    setPriceDestination("");
+    setPriceEdits({});
+    setNewCode("");
+    setNewPrice("");
+    setNewDestination("");
+  }, [customerId]);
+
+  useEffect(() => {
+    if (!priceDestination && priceDestinationsQuery.data) {
+      setPriceDestination(priceDestinationsQuery.data[0] ?? LEGACY_PRICE_DESTINATION);
+    }
+  }, [priceDestination, priceDestinationsQuery.data]);
+
+  const selectPriceDestination = (destination: string) => {
+    if (!destination || savePricesMutation.isPending || deletePriceMutation.isPending) return;
+    const hasPendingEdits = Object.keys(priceEdits).length > 0 || !!(newCode.trim() && newPrice);
+    if (hasPendingEdits && !window.confirm("Discard unsaved price edits before changing destination?")) return;
+    setPriceDestination(destination);
+    setPriceEdits({});
+    setNewCode("");
+    setNewPrice("");
+  };
+
+  const addPriceDestination = () => {
+    const destination = normalizePriceDestination(newDestination);
+    if (!destination || destination.length > 120 || destination === LEGACY_PRICE_DESTINATION.toUpperCase()) {
+      toast({ title: "Enter a valid destination (up to 120 characters)", variant: "destructive" });
+      return;
+    }
+    selectPriceDestination(destination);
+    setNewDestination("");
+  };
 
   useEffect(() => {
     if (statement?.customer && draftNote === null) {
@@ -188,36 +255,47 @@ export default function FactoryCustomerStatement() {
   });
 
   const savePricesMutation = useMutation({
-    mutationFn: async (lines: { articleCode: string; pricePerBale: string | number }[]) => {
-      const res = await factoryApiRequest("PUT", `/api/factory/customer-price-lists/${customerId}`, lines);
+    mutationFn: async (payload: {
+      destination: string;
+      lines: { articleCode: string; pricePerBale: string | number }[];
+    }) => {
+      const res = await factoryApiRequest("PUT", priceListUrl(customerId, payload.destination), payload.lines);
       return (await res.json()) as { saved?: number };
     },
-    onSuccess: (data: { saved?: number }) => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-price-lists", customerId] });
-      setPriceEdits({});
-      setNewCode("");
-      setNewPrice("");
-      toast({ title: "Price list saved", description: `${data?.saved ?? 0} price(s) updated` });
+      if (priceDestination === variables.destination) {
+        setPriceEdits({});
+        setNewCode("");
+        setNewPrice("");
+      }
+      toast({
+        title: "Agreed prices saved",
+        description: `${data?.saved ?? 0} price(s) updated for ${variables.destination === LEGACY_PRICE_DESTINATION ? "legacy prices" : variables.destination}`,
+      });
     },
     onError: () => {
-      toast({ title: "Failed to save prices", variant: "destructive" });
+      toast({ title: "Failed to save destination prices", variant: "destructive" });
     },
   });
 
   const deletePriceMutation = useMutation({
-    mutationFn: async (articleCode: string) => {
-      return await factoryApiRequest(
-        "DELETE",
-        `/api/factory/customer-price-lists/${customerId}/${encodeURIComponent(articleCode)}`,
-        {}
-      );
+    mutationFn: async (payload: { articleCode: string; destination: string }) => {
+      return factoryApiRequest("DELETE", priceListUrl(customerId, payload.destination, payload.articleCode), {});
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-price-lists", customerId] });
-      toast({ title: "Price removed" });
+      if (priceDestination === variables.destination) {
+        setPriceEdits((prev) => {
+          const next = { ...prev };
+          delete next[variables.articleCode];
+          return next;
+        });
+      }
+      toast({ title: "Price removed from selected destination" });
     },
     onError: () => {
-      toast({ title: "Failed to remove price", variant: "destructive" });
+      toast({ title: "Failed to remove destination price", variant: "destructive" });
     },
   });
 
@@ -272,7 +350,10 @@ export default function FactoryCustomerStatement() {
 
   const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !priceDestination) return;
+    // Capture the scope before FileReader completes so an import cannot land
+    // in whichever destination happens to be selected later.
+    const destination = priceDestination;
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
@@ -300,7 +381,7 @@ export default function FactoryCustomerStatement() {
           });
           return;
         }
-        savePricesMutation.mutate(lines);
+        savePricesMutation.mutate({ destination, lines });
       } catch {
         toast({ title: "Failed to read file", variant: "destructive" });
       }
@@ -310,22 +391,31 @@ export default function FactoryCustomerStatement() {
   };
 
   const handleSavePrices = () => {
+    if (!priceDestination) return;
+    // Save only edited/new rows: resending stale unchanged prices can overwrite
+    // a newer explicit save from another screen.
     const lines: { articleCode: string; pricePerBale: string | number }[] = [];
-    for (const entry of priceListQuery.data ?? []) {
-      const edited = priceEdits[entry.article_code];
-      const price = edited !== undefined ? edited : entry.price_per_bale;
-      const p = parseFloat(String(price));
-      if (!isNaN(p) && p > 0) lines.push({ articleCode: entry.article_code, pricePerBale: p });
+    for (const [articleCode, value] of Object.entries(priceEdits)) {
+      const price = Number(value);
+      if (!Number.isFinite(price) || price <= 0) {
+        toast({ title: `Enter a valid positive price for ${articleCode}`, variant: "destructive" });
+        return;
+      }
+      lines.push({ articleCode, pricePerBale: price });
     }
     if (newCode.trim() && newPrice) {
-      const p = parseFloat(newPrice);
-      if (!isNaN(p) && p > 0) lines.push({ articleCode: newCode.trim(), pricePerBale: p });
+      const price = Number(newPrice);
+      if (!Number.isFinite(price) || price <= 0) {
+        toast({ title: "Enter a valid positive new price", variant: "destructive" });
+        return;
+      }
+      lines.push({ articleCode: newCode.trim(), pricePerBale: price });
     }
     if (lines.length === 0) {
       toast({ title: "No valid prices to save", variant: "destructive" });
       return;
     }
-    savePricesMutation.mutate(lines);
+    savePricesMutation.mutate({ destination: priceDestination, lines });
   };
 
   const hasPriceEdits = Object.keys(priceEdits).length > 0 || (newCode.trim() !== "" && newPrice !== "");
