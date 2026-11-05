@@ -4,8 +4,7 @@ import type { ErpVoucherLine } from "../accounting/erpVoucherPosting";
 
 export type FinancialTarget = { ledgerAccountId: number } | { supplierId: number };
 
-export const cents = (value: string | number): Decimal =>
-  toMoney(value).toDecimalPlaces(2, MoneyDecimal.ROUND_HALF_UP);
+export const cents = (value: string | number): Decimal => toMoney(value).toDecimalPlaces(2, MoneyDecimal.ROUND_HALF_UP);
 
 export function exactPositiveQuantity(value: string): Decimal {
   if (typeof value !== "string" || !/^\d+(?:\.\d{1,3})?$/.test(value)) {
@@ -30,7 +29,8 @@ export function exactNonnegativeRate(value: string): Decimal {
 }
 
 export function lineTotal(quantity: string, rate: string): Decimal {
-  return exactPositiveQuantity(quantity).times(exactNonnegativeRate(rate))
+  return exactPositiveQuantity(quantity)
+    .times(exactNonnegativeRate(rate))
     .toDecimalPlaces(2, MoneyDecimal.ROUND_HALF_UP);
 }
 
@@ -43,9 +43,9 @@ export function fullPoCost(po: {
   discount: string | null;
   otherCharges: string | null;
 }): Decimal {
-  return sumMoney([
-    po.itemsTotal, po.freight, po.surcharge, po.fumigation, po.documentCharges, po.otherCharges,
-  ]).minus(toMoney(po.discount)).toDecimalPlaces(2);
+  return sumMoney([po.itemsTotal, po.freight, po.surcharge, po.fumigation, po.documentCharges, po.otherCharges])
+    .minus(toMoney(po.discount))
+    .toDecimalPlaces(2);
 }
 
 /** Append-only journal delta: a decrease reverses both sides; no mutation of historical vouchers. */
@@ -72,7 +72,7 @@ export function signedPair(
 
 /** Cent-exact deterministic weight allocation; final row absorbs the rounding remainder. */
 export function allocateByWeights(total: Decimal, weights: readonly Decimal[]): Decimal[] {
-  if (!weights.length || weights.some(w => w.lt(0)) || sumMoney(weights).lte(0)) {
+  if (!weights.length || weights.some((w) => w.lt(0)) || sumMoney(weights).lte(0)) {
     throw new Error("Confirmed charge requires positive eligible purchase weights");
   }
   if (!total.isFinite() || total.lt(0) || total.decimalPlaces() > 2) {
@@ -81,20 +81,20 @@ export function allocateByWeights(total: Decimal, weights: readonly Decimal[]): 
   const centsTotal = cents(total).times(100).toNumber();
   if (!Number.isSafeInteger(centsTotal)) throw new Error("Shared charge is too large to allocate exactly");
   const denominator = sumMoney(weights);
-  const allocated = weights.map(weight => {
+  const allocated = weights.map((weight) => {
     const exact = total.times(100).times(weight).div(denominator);
     const floor = exact.floor();
     return { cents: floor.toNumber(), remainder: exact.minus(floor) };
   });
   let left = centsTotal - allocated.reduce((sum, part) => sum + part.cents, 0);
-  const ranked = allocated.map((part, index) => ({ index, remainder: part.remainder }))
+  const ranked = allocated
+    .map((part, index) => ({ index, remainder: part.remainder }))
     .sort((a, b) => b.remainder.comparedTo(a.remainder) || a.index - b.index);
   for (let i = 0; i < left; i++) allocated[ranked[i].index].cents++;
-  return allocated.map(part => new MoneyDecimal(part.cents).div(100));
+  return allocated.map((part) => new MoneyDecimal(part.cents).div(100));
 }
 
 export function requireCostEqual(label: string, actual: Decimal, expected: Decimal) {
-  if (!actual.eq(expected)) throw new Error(
-    label + " does not reconcile (" + actual.toFixed(2) + " versus " + expected.toFixed(2) + ")"
-  );
+  if (!actual.eq(expected))
+    throw new Error(label + " does not reconcile (" + actual.toFixed(2) + " versus " + expected.toFixed(2) + ")");
 }
