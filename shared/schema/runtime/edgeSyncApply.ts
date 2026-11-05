@@ -421,7 +421,8 @@ export const factoryEdgeStagedEvents = pgTable(
   (t) => [
     primaryKey({ columns: [t.siteId, t.stream, t.sequence] }),
     unique().on(t.siteId, t.operationId),
-    unique().on(t.siteId, t.stream, t.companyId, t.localRef),
+    // No unique local_ref: follow-up records (an edit, a cancellation, a
+    // delete) name the same LAN row as the record that created it.
   ]
 );
 

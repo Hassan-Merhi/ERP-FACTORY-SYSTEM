@@ -27,7 +27,12 @@ import { pool } from "../server/db";
 import { ensurePhase9StockOutboxSchema } from "../server/edge/phase9StockOutbox";
 import { hashEvidence } from "../server/edge/edgeSyncStageProtocol.mjs";
 import { validatePhase9Event } from "../server/edge/phase9EventProtocol.mjs";
-import { Phase9EventConflict } from "../server/edge/phase9CloudEventStore.mjs";
+import {
+  ensurePhase9CloudEventSchema,
+  Phase9EventConflict,
+  stagePhase9Events,
+} from "../server/edge/phase9CloudEventStore.mjs";
+import { EDGE_EVENT_STAGE_PROTOCOL } from "../server/edge/phase9EventProtocol.mjs";
 import {
   PHASE9_LAN_ITEM_ID_BASE,
   phase9StockItemCreateEnvelope,
@@ -157,10 +162,15 @@ beforeAll(async () => {
   await ensurePhase9StockOutboxSchema(pool);
   edge.config = CLOUD;
   await ensurePhase9StockItemMapSchema(pool);
+  await ensurePhase9CloudEventSchema(pool);
 }, 120_000);
 
 afterAll(async () => {
   edge.config = CLOUD;
+  await pool.query("ALTER TABLE factory_edge_staged_events DISABLE TRIGGER USER");
+  await pool.query("DELETE FROM factory_edge_staged_events WHERE site_id = $1", [SITE]);
+  await pool.query("ALTER TABLE factory_edge_staged_events ENABLE TRIGGER USER");
+  await pool.query("DELETE FROM factory_edge_event_stage_cursor WHERE site_id = $1", [SITE]);
   await pool.query("ALTER TABLE factory_edge_stock_outbox DISABLE TRIGGER USER");
   await pool.query("DELETE FROM factory_edge_stock_outbox WHERE site_id = $1", [SITE]);
   await pool.query("ALTER TABLE factory_edge_stock_outbox ENABLE TRIGGER USER");
@@ -284,5 +294,25 @@ describe("Cloud replay of LAN-created and LAN-deleted stock items", () => {
         await conflictCode(replayDelete(client, deleteEvent(ctx.stockItemIds[0], String(stocked.rows[0].code))))
       ).toBe("PHASE9_STOCK_ITEM_IN_USE");
     });
+  });
+});
+
+describe("Staging follow-up records that name the same LAN row", () => {
+  it("stages a delete of a LAN-created item after its create (both carry the item's LAN id)", async () => {
+    const created = createEvent(`${PREFIX}-S1`, "Staged item");
+    const removed = deleteEvent(created.payload.localStockItemId, `${PREFIX}-S1`);
+    const events = [created, removed].map((event, index) => ({ ...event, sequence: String(index + 1) }));
+    const body = { protocol: EDGE_EVENT_STAGE_PROTOCOL, siteId: SITE, stream: "stock", events };
+    await stagePhase9Events(pool, body, SITE);
+    const staged = await pool.query(
+      "SELECT operation_kind, local_ref FROM factory_edge_staged_events WHERE site_id = $1 ORDER BY sequence",
+      [SITE]
+    );
+    expect(staged.rows).toEqual([
+      { operation_kind: "stock.item-create.v1", local_ref: created.payload.localStockItemId },
+      { operation_kind: "stock.item-delete.v1", local_ref: created.payload.localStockItemId },
+    ]);
+    // A replay of the same batch stays idempotent.
+    await stagePhase9Events(pool, body, SITE);
   });
 });
