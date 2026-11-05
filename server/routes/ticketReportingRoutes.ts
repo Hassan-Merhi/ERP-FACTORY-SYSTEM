@@ -65,9 +65,9 @@ export function registerTicketReportingRoutes(app:Express):void {
           GROUP BY date_trunc('day',t.created_at AT TIME ZONE 'UTC')
           ORDER BY day DESC LIMIT 31`,params]),
         pool.query<OverdueCase>(`SELECT t.id,t.ticket_number,t.title,t.assigned_to,u.username,t.status,t.priority,t.due_at,
-          floor(extract(epoch FROM (${params.length+1}::timestamptz-t.due_at))/3600)::text AS overdue_hours
+          floor(extract(epoch FROM ($${params.length+1}::timestamptz-t.due_at))/3600)::text AS overdue_hours
           FROM support_tickets t LEFT JOIN users u ON u.id=t.assigned_to
-          WHERE ${where} AND t.status<>'finalized' AND t.due_at<${params.length+1}::timestamptz
+          WHERE ${where} AND t.status<>'finalized' AND t.due_at<$${params.length+1}::timestamptz
           ORDER BY t.due_at ASC,t.id ASC LIMIT 30`,[...params,now]),
       ]);
       return res.json({
