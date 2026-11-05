@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS intercompany_container_payments (
   source_cash_id INTEGER NOT NULL,
   destination_cash_type VARCHAR(8) NOT NULL,
   destination_cash_id INTEGER NOT NULL,
+  source_receivable_account_id INTEGER NOT NULL REFERENCES ledger_accounts(id) ON DELETE RESTRICT,
+  destination_supplier_id INTEGER NOT NULL REFERENCES suppliers(id) ON DELETE RESTRICT,
   source_receipt_voucher_id INTEGER NOT NULL UNIQUE REFERENCES vouchers(id) ON DELETE RESTRICT,
   destination_payment_voucher_id INTEGER NOT NULL UNIQUE REFERENCES vouchers(id) ON DELETE RESTRICT,
   status VARCHAR(12) NOT NULL DEFAULT 'confirmed',
@@ -194,6 +196,12 @@ BEGIN
      dest_voucher.company_id IS DISTINCT FROM NEW.destination_company_id OR dest_voucher.voucher_type<>'Payment'
     OR dest_voucher.deleted_at IS NOT NULL THEN
     RAISE EXCEPTION 'Paired actual payment voucher companies/types are incorrect';
+  END IF;
+  IF NOT EXISTS(SELECT 1 FROM ledger_accounts WHERE id=NEW.source_receivable_account_id
+      AND company_id=NEW.source_company_id AND deleted_at IS NULL)
+    OR NOT EXISTS(SELECT 1 FROM suppliers WHERE id=NEW.destination_supplier_id
+      AND company_id=NEW.destination_company_id AND deleted_at IS NULL) THEN
+    RAISE EXCEPTION 'Original receivable/supplier identities do not belong to the paid company pair';
   END IF;
   IF NEW.source_cash_type='bank' THEN
     IF NOT EXISTS(SELECT 1 FROM bank_accounts WHERE id=NEW.source_cash_id
