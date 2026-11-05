@@ -4,6 +4,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   containers,
   intercompanyAuditEvents,
+  intercompanyDestinationReceipts,
   intercompanyImportBatchContainers,
   intercompanyRelationshipPolicies,
   intercompanyTradeLineLinks,
@@ -66,6 +67,7 @@ export type TradeData = {
   destination: SourcePo;
   links: (typeof intercompanyTradeLineLinks.$inferSelect)[];
   imported: typeof intercompanyImportBatchContainers.$inferSelect;
+  received: typeof intercompanyDestinationReceipts.$inferSelect | null;
 };
 export const postingDay = (value: string) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(value + "T12:00:00Z"))) {
@@ -134,7 +136,7 @@ export async function loadTradeTx(tx: DbTransaction, tradeId: number, lock = tru
   const query = tx.select().from(intercompanyTrades).where(eq(intercompanyTrades.id, tradeId));
   const [trade] = lock ? await query.for("update") : await query;
   if (!trade || trade.state !== "active" || !trade.destinationPoId) rejectEdit("Trade is not active");
-  const [[physical], [policy], sourceLinks, [dest], links, [imported]] = await Promise.all([
+  const [[physical], [policy], sourceLinks, [dest], links, [imported], [received]] = await Promise.all([
     tx.select().from(containers).where(eq(containers.id, trade.physicalContainerId)),
     tx
       .select()
@@ -144,6 +146,7 @@ export async function loadTradeTx(tx: DbTransaction, tradeId: number, lock = tru
     tx.select().from(purchaseOrders).where(eq(purchaseOrders.id, trade.destinationPoId)),
     tx.select().from(intercompanyTradeLineLinks).where(eq(intercompanyTradeLineLinks.tradeId, trade.id)),
     tx.select().from(intercompanyImportBatchContainers).where(eq(intercompanyImportBatchContainers.tradeId, trade.id)),
+    tx.select().from(intercompanyDestinationReceipts).where(eq(intercompanyDestinationReceipts.tradeId, trade.id)),
   ]);
   if (!physical || !policy || !dest || !imported || !sourceLinks.length) rejectEdit("Trade documents are incomplete");
   if (
@@ -189,10 +192,11 @@ export async function loadTradeTx(tx: DbTransaction, tradeId: number, lock = tru
   requireCostEqual("Source/destination POs", total, fullPoCost(dest));
   requireCostEqual("Physical container", total, cents(physical.grandTotal ?? "0"));
   requireCostEqual("Confirmed import cost", total, cents(imported.confirmedLandedCost ?? "0"));
-  return { trade, physical, policy, source, destination: { po: dest, lines: dstLines }, links, imported };
+  return { trade, physical, policy, source, destination: { po: dest, lines: dstLines }, links, imported, received: received ?? null };
 }
 export function requireUnreceived(data: TradeData) {
   if (
+    data.received != null ||
     data.physical.status !== "OTW" ||
     data.physical.offloadDate != null ||
     data.destination.po.status !== "Open" ||
@@ -231,6 +235,8 @@ export async function getTradeDetail(tradeId: number, identity: EditIdentity) {
         sourceCompanyId: data.trade.sourceCompanyId,
         destinationCompanyId: data.trade.destinationCompanyId,
         physicalStatus: data.physical.status,
+        destinationReceivedAt: data.received?.postingDate ?? null,
+        destinationReceiptVoucherId: data.received?.receiptVoucherId ?? null,
         landedCost: cents(data.physical.grandTotal ?? "0").toFixed(2),
         goodsCost: cents(data.physical.itemsTotal ?? "0").toFixed(2),
         sourcePos: data.source.map((g) => ({ poId: g.po.id, poNumber: g.po.poNumber, itemsTotal: g.po.itemsTotal })),
