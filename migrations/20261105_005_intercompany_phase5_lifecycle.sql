@@ -122,6 +122,12 @@ BEGIN
   SELECT * INTO r FROM intercompany_destination_receipts WHERE id=NEW.receipt_id;
   SELECT * INTO movement FROM canonical_stock_movements WHERE id=NEW.canonical_movement_id;
   IF r.id IS NULL OR movement.id IS NULL
+    OR NEW.quantity IS DISTINCT FROM (
+      SELECT COALESCE(SUM(li.quantity),0)::numeric
+      FROM intercompany_trades t
+      JOIN po_line_items li ON li.po_id=t.destination_po_id
+      WHERE t.id=r.trade_id AND li.stock_item_id=NEW.stock_item_id
+    )
     OR movement.company_id<>r.destination_company_id
     OR movement.stock_item_id<>NEW.stock_item_id
     OR movement.location_id<>r.location_id OR movement.movement_kind<>'receipt'
@@ -177,6 +183,13 @@ BEGIN
     OR v1.total_amount<>NEW.landed_cost OR v2.total_amount<>NEW.landed_cost
     OR v3.total_amount<>NEW.landed_cost THEN
     RAISE EXCEPTION 'Cancellation requires exact original-pair balanced voucher evidence';
+  END IF;
+  IF NEW.released_credit IS DISTINCT FROM (
+      SELECT COALESCE(SUM(-a.amount),0)::numeric
+      FROM intercompany_payment_allocations a
+      WHERE a.trade_id=NEW.trade_id AND a.allocation_kind='cancel_release'
+    ) THEN
+    RAISE EXCEPTION 'Canceled trade credit evidence must match original payment releases';
   END IF;
   IF EXISTS(SELECT 1 FROM intercompany_destination_receipts WHERE trade_id=NEW.trade_id)
      OR EXISTS(SELECT 1 FROM intercompany_shared_charge_allocations
@@ -291,14 +304,18 @@ BEGIN
   END IF;
   IF pid IS NOT NULL AND EXISTS (
     SELECT 1 FROM intercompany_trades t
-    WHERE t.state='canceled' AND (
+    WHERE (t.state='canceled' OR EXISTS(
+      SELECT 1 FROM intercompany_destination_receipts r WHERE r.trade_id=t.id
+    )) AND (
       t.destination_po_id=pid OR t.original_supplier_po_id=pid
       OR EXISTS(SELECT 1 FROM intercompany_trade_source_pos sp WHERE sp.trade_id=t.id AND sp.source_po_id=pid)
     )
-  ) THEN RAISE EXCEPTION 'Canceled intercompany purchase orders and lines are immutable'; END IF;
+  ) THEN RAISE EXCEPTION 'Received or canceled intercompany purchase orders and lines are immutable'; END IF;
   IF cid IS NOT NULL AND EXISTS (
-    SELECT 1 FROM intercompany_trades t WHERE t.state='canceled' AND t.physical_container_id=cid
-  ) THEN RAISE EXCEPTION 'Canceled intercompany physical container and charge evidence cannot be altered'; END IF;
+    SELECT 1 FROM intercompany_trades t WHERE (t.state='canceled' OR EXISTS(
+      SELECT 1 FROM intercompany_destination_receipts r WHERE r.trade_id=t.id
+    )) AND t.physical_container_id=cid
+  ) THEN RAISE EXCEPTION 'Received or canceled intercompany physical container and charge evidence cannot be altered'; END IF;
   IF vid IS NOT NULL AND EXISTS (
     SELECT 1 FROM intercompany_trade_cancellations c
     WHERE vid IN (c.source_sale_reversal_voucher_id,c.source_cost_reversal_voucher_id,c.destination_git_reversal_voucher_id)
