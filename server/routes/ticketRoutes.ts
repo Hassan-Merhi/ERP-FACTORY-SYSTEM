@@ -180,9 +180,9 @@ export function registerTicketRoutes(app: Express) {
       const id=positiveId(req.params.id),attachmentId=positiveId(req.params.attachmentId);
       if(!id||!attachmentId) return res.status(400).json({message:"Invalid attachment"});
       const file=await getTicketEvidence(await actorForTicket(req),id,attachmentId);
-      const safeName=file.fileName.replace(/["\\\r\n]/g,"_");
+      const asciiName=file.fileName.replace(/[^\x20-\x7e]/g,"_").replace(/["\\]/g,"_").slice(0,160) || "attachment";
       res.setHeader("Content-Type",file.mimeType);
-      res.setHeader("Content-Disposition",`${file.mimeType.startsWith("image/")?"inline":"attachment"}; filename="${safeName}"`);
+      res.setHeader("Content-Disposition",`${file.mimeType.startsWith("image/")?"inline":"attachment"}; filename="${asciiName}"; filename*=UTF-8\'\'${encodeURIComponent(file.fileName)}`);
       res.setHeader("X-Content-Type-Options","nosniff");
       res.setHeader("Cache-Control","private, no-store");
       return res.send(file.bytes);
