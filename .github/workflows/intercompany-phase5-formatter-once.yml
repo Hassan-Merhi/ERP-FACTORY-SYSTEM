@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - feature/intercompany-container-trading
-    paths:
-      - .github/workflows/intercompany-phase5-formatter-once.yml
 
 permissions:
   contents: write
