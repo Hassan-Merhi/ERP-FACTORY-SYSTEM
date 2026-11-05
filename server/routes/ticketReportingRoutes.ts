@@ -12,6 +12,7 @@ type Scalar = { total:string; open:string; seen:string; working:string; reopened
 type GroupRow = { label:string; count:string; overdue:string };
 type EmployeeRow = {user_id:string;username:string|null;count:string;finalized:string;overdue:string;avg_resolution_hours:string|null};
 type TrendRow={day:string;created:string;finalized:string};
+type OverdueCase={id:number;ticket_number:string;title:string;assigned_to:string;username:string|null;status:string;priority:string;due_at:string;overdue_hours:string};
 
 function parseFilters(req:Request,res:Response):TicketReportFilters|null {
   const raw=Object.fromEntries(Object.entries(req.query).map(([key,val])=>[key,typeof val==="string"?val:undefined]).filter(([,val])=>val!==undefined));
@@ -32,7 +33,7 @@ export function registerTicketReportingRoutes(app:Express):void {
       const companyId=await scope(req,res);if(!companyId)return;
       const filters=parseFilters(req,res);if(!filters)return;
       const {where,params,now}=ticketReportWhere(companyId,filters);
-      const [stats,statuses,categories,employees,trends]=await Promise.all([
+      const [stats,statuses,categories,employees,trends,overdueCases]=await Promise.all([
         pool.query<Scalar>(`
           SELECT count(*)::text AS total,
            count(*) FILTER(WHERE t.status='open')::text AS open,
@@ -63,11 +64,17 @@ export function registerTicketReportingRoutes(app:Express):void {
           FROM support_tickets t WHERE ${where}
           GROUP BY date_trunc('day',t.created_at AT TIME ZONE 'UTC')
           ORDER BY day DESC LIMIT 31`,params]),
+        pool.query<OverdueCase>(`SELECT t.id,t.ticket_number,t.title,t.assigned_to,u.username,t.status,t.priority,t.due_at,
+          floor(extract(epoch FROM (${params.length+1}::timestamptz-t.due_at))/3600)::text AS overdue_hours
+          FROM support_tickets t LEFT JOIN users u ON u.id=t.assigned_to
+          WHERE ${where} AND t.status<>'finalized' AND t.due_at<${params.length+1}::timestamptz
+          ORDER BY t.due_at ASC,t.id ASC LIMIT 30`,[...params,now]),
       ]);
       return res.json({
         generatedAt:now.toISOString(),filters,
         summary:stats.rows[0]??null,
         byStatus:statuses.rows,byCategory:categories.rows,byEmployee:employees.rows,byCreatedDay:trends.rows.reverse(),
+        overdueCases:overdueCases.rows,
       });
     }catch(error){console.error("[TicketReporting] dashboard failure",error);return res.status(500).json({message:"Ticket reporting unavailable"});}
   });
