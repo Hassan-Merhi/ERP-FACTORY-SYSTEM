@@ -1,4 +1,4 @@
-import { pgTable, bigserial, bigint, integer, varchar, text, timestamp, jsonb, index, uniqueIndex, check } from "drizzle-orm/pg-core";
+import { pgTable, bigserial, bigint, integer, varchar, text, boolean, timestamp, jsonb, index, uniqueIndex, check } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 export const supportTickets = pgTable("support_tickets", {
@@ -97,6 +97,9 @@ export const supportTicketOutbox = pgTable("support_ticket_outbox", {
   payload: jsonb("payload").notNull(),
   availableAt: timestamp("available_at", { withTimezone: true }).notNull().defaultNow(),
   processedAt: timestamp("processed_at", { withTimezone: true }),
+  claimToken: varchar("claim_token", { length: 80 }),
+  claimExpiresAt: timestamp("claim_expires_at", { withTimezone: true }),
+  lastError: text("last_error"),
   attemptCount: integer("attempt_count").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, t => ({ eventKeyUnique: uniqueIndex("support_ticket_outbox_key_uq").on(t.eventKey), pendingIndex: index("support_ticket_outbox_pending_idx").on(t.processedAt, t.availableAt) }));
@@ -114,5 +117,19 @@ export const supportTicketNotifications = pgTable("support_ticket_notifications"
   deliveredAt: timestamp("delivered_at", { withTimezone: true }),
   readAt: timestamp("read_at", { withTimezone: true }),
   error: text("error"),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
+  lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, t => ({ uniqueDelivery: uniqueIndex("support_ticket_notification_delivery_uq").on(t.outboxId,t.recipientUserId,t.channel) }));
+
+/** Company-owned contact preferences; no global address book access. */
+export const supportTicketNotificationContacts = pgTable("support_ticket_notification_contacts", {
+  companyId: integer("company_id").notNull(),
+  userId: varchar("user_id", { length: 100 }).notNull(),
+  email: text("email"),
+  whatsappChatId: varchar("whatsapp_chat_id", { length: 48 }),
+  emailEnabled: boolean("email_enabled").notNull().default(false),
+  whatsappEnabled: boolean("whatsapp_enabled").notNull().default(false),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => ({ companyUserUnique: uniqueIndex("support_ticket_contacts_company_user_uq").on(t.companyId, t.userId) }));
