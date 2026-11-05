@@ -60,7 +60,7 @@ describe("Phase 5 destination inventory and pre-receipt cancellation database gu
         "CREATE TABLE container_offloads(id serial PRIMARY KEY,container_id integer);" +
         "CREATE TABLE locations(id integer PRIMARY KEY,company_id integer,deleted_at timestamp);" +
         "CREATE TABLE stock_items(id integer PRIMARY KEY,company_id integer);" +
-        "CREATE TABLE canonical_stock_movements(id bigint PRIMARY KEY,company_id integer,stock_item_id integer,location_id integer,movement_kind text,source_type text,source_id text,quantity_delta numeric);"
+        "CREATE TABLE canonical_stock_movements(id bigint PRIMARY KEY,company_id integer,stock_item_id integer,location_id integer,movement_kind text,source_type text,source_id text,quantity_delta numeric,unit_cost numeric);"
       );
       for (const ddl of migrations) await client.query(ddl);
       await client.query("INSERT INTO companies VALUES (1,'Hassan Properties'),(2,'HADI'),(3,'MALI')");
@@ -130,7 +130,7 @@ describe("Phase 5 destination inventory and pre-receipt cancellation database gu
       // Receive other pair's goods: ONLY MALI inventory and destination GIT.
       await client.query("INSERT INTO vouchers(id,company_id,voucher_type,total_amount,description) VALUES (201,3,'Journal',100,'MALI received stock'),(202,3,'Journal',100,'Wrong inventory line')");
       await client.query("INSERT INTO voucher_entries(voucher_id,ledger_account_id,debit_amount,credit_amount) VALUES (201,29,100,0),(201,19,0,100),(202,19,100,0),(202,29,0,100)");
-      await client.query("INSERT INTO canonical_stock_movements(id,company_id,stock_item_id,location_id,movement_kind,source_type,source_id,quantity_delta) VALUES (301,3,502,302,'receipt','intercompany-destination-receipt','2',10)");
+      await client.query("INSERT INTO canonical_stock_movements(id,company_id,stock_item_id,location_id,movement_kind,source_type,source_id,quantity_delta,unit_cost) VALUES (301,3,502,302,'receipt','intercompany-destination-receipt','2',10,10)");
       const receiveColumns = "(trade_id,relationship_id,destination_company_id,location_id,inventory_account_id,git_account_id,receipt_voucher_id,request_key,request_fingerprint,posting_date,landed_cost,arrival_evidence,reason,actor_user_id)";
       await rejects("INSERT INTO intercompany_destination_receipts"+receiveColumns+" VALUES (2,2,3,301,29,19,201,'phase5-wrong-location',repeat('e',64),'2026-11-05',100,'Signed arrival evidence','Received warehouse','owner')","receipt ownership");
       await rejects("INSERT INTO intercompany_destination_receipts"+receiveColumns+" VALUES (2,2,3,302,29,19,202,'phase5-wrong-account',repeat('e',64),'2026-11-05',100,'Signed arrival evidence','Received warehouse','owner')","exact inventory/GIT");
