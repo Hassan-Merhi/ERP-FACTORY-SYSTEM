@@ -251,8 +251,9 @@ export function ContinuousPressingScanner({
     const releaseCamera = () => {
       canceled = true;
       if (timer !== undefined) clearTimeout(timer);
-      cameraTrack?.removeEventListener("ended", onTrackEnded);
+      cameraTrack?.removeEventListener?.("ended", onTrackEnded);
       stream?.getTracks().forEach((track) => track.stop());
+      stream = null;
       void screenLock?.release().catch(() => {});
       decoder?.dispose();
       decoder = null;
@@ -312,7 +313,7 @@ export function ContinuousPressingScanner({
         trackRef.current = videoTrack;
         cameraTrack = videoTrack;
         if (videoTrack) {
-          videoTrack.addEventListener("ended", onTrackEnded);
+          videoTrack.addEventListener?.("ended", onTrackEnded);
           const capabilities = videoTrack.getCapabilities?.() as TorchCapabilities | undefined;
           setTorchAvailable(Boolean(capabilities?.torch));
           if (capabilities?.focusMode?.includes("continuous")) {
