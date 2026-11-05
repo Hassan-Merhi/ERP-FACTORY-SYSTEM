@@ -65,6 +65,7 @@ describe("intercompany phase 1 foundation", () => {
       await client.query(
         "CREATE TABLE companies (id integer PRIMARY KEY);" +
         "CREATE TABLE users (id varchar PRIMARY KEY);" +
+        "CREATE TABLE user_company_roles (user_id varchar, company_id integer, role text);" +
         "CREATE TABLE ledger_accounts (id integer PRIMARY KEY, company_id integer, deleted_at timestamp);" +
         "CREATE TABLE containers (id integer PRIMARY KEY, company_id integer);" +
         "CREATE TABLE purchase_orders (id integer PRIMARY KEY, company_id integer, container_id integer);" +
@@ -73,6 +74,7 @@ describe("intercompany phase 1 foundation", () => {
       await client.query(MIGRATION);
       await client.query("INSERT INTO companies(id) VALUES (1),(2),(3)");
       await client.query("INSERT INTO users(id) VALUES ('owner'),('editor')");
+      await client.query("INSERT INTO user_company_roles(user_id,company_id,role) VALUES ('owner',1,'Owner')");
       await client.query("INSERT INTO ledger_accounts(id, company_id) VALUES (11,1),(22,2),(33,3)");
       await client.query("INSERT INTO containers(id, company_id) VALUES (100,1),(101,1)");
       await client.query("INSERT INTO purchase_orders(id, company_id, container_id) VALUES (201,1,100),(202,2,100),(203,2,100),(204,1,101),(205,2,101)");
@@ -130,10 +132,12 @@ describe("intercompany phase 1 foundation", () => {
       await rejects("INSERT INTO intercompany_import_batch_containers(batch_id,container_number,destination_company_id) VALUES (1,'MSCU-001',3)");
 
       // Dedicated invoice access is explicit; NULL targets cannot bypass deduplication.
-      await client.query("INSERT INTO intercompany_permission_grants(user_id,granting_company_id,scope,invoice_key,granted_by) VALUES ('editor',1,'invoice','invoice-1','owner')");
+      await client.query("INSERT INTO intercompany_permission_grants(user_id,granting_company_id,relationship_id,scope,invoice_key,granted_by) VALUES ('editor',1,1,'invoice','invoice-1','owner')");
       await rejects("INSERT INTO intercompany_permission_grants(user_id,granting_company_id,scope,invoice_key,granted_by) VALUES ('editor',1,'invoice','invoice-1','owner')");
-      await rejects("INSERT INTO intercompany_permission_grants(user_id,granting_company_id,scope,granted_by) VALUES ('editor',1,'invoice','owner')");
-      await client.query("UPDATE intercompany_permission_grants SET revoked_at=NOW() WHERE id=1");
+      await rejects("INSERT INTO intercompany_permission_grants(user_id,granting_company_id,relationship_id,scope,granted_by) VALUES ('editor',1,1,'invoice','owner')");
+      await rejects("INSERT INTO intercompany_permission_grants(user_id,granting_company_id,relationship_id,scope,invoice_key,granted_by) VALUES ('editor',1,1,'invoice','invoice-2','editor')", "Only an Owner or Developer");
+      await rejects("INSERT INTO intercompany_permission_grants(user_id,granting_company_id,relationship_id,scope,invoice_key,granted_by) VALUES ('editor',3,1,'invoice','invoice-3','owner')", "participate");
+      await client.query("UPDATE intercompany_permission_grants SET revoked_at=NOW(), revoked_by='owner' WHERE id=1");
       await client.query("INSERT INTO intercompany_permission_grants(user_id,granting_company_id,scope,invoice_key,granted_by) VALUES ('editor',1,'invoice','invoice-1','owner')");
 
       // Audit records are append-only, including for privileged database clients.
