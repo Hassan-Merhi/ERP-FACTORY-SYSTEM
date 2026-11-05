@@ -5,7 +5,7 @@ import {bankAccounts,companies,intercompanyAuditEvents,intercompanyContainerPaym
   intercompanyImportBatchContainers,intercompanyPaymentAllocations,
   intercompanyRelationshipPolicies,intercompanyTrades,ledgerAccounts} from "@shared/schema";
 import {db,type DbTransaction} from "../../db";
-import {MoneyDecimal,sumMoney} from "../../lib/money";
+import {sumMoney} from "../../lib/money";
 import {postErpVoucherTx,type ErpVoucherLine} from "../accounting/erpVoucherPosting";
 import {normalizeCurrencyCode} from "../accounting/currencyAmounts";
 import {type EditIdentity,postingDay,rejectEdit,validateRequestKey,withTradeScope} from "./tradeSync";
@@ -95,7 +95,7 @@ export async function accessiblePaymentPair(relationshipId:number,actor:EditIden
 async function activePaymentPairTx(tx:DbTransaction,id:number){
   const [pair]=await tx.select().from(intercompanyRelationshipPolicies)
     .where(eq(intercompanyRelationshipPolicies.id,id)).for("update");
-  if(!pair||pair.relationshipType!=="container_trade"||(requireEnabled&&!pair.tradeEnabled)||
+  if(!pair||pair.relationshipType!=="container_trade"||!pair.tradeEnabled||
     !pair.sourceReceivableAccountId||!pair.destinationSupplierId){
     rejectEdit("Pair is disabled or lacks verified receivable and supplier mappings");
   }
