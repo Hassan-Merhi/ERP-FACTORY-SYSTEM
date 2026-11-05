@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 /** Confirmed physical transfers: destination Payment and Properties Receipt, atomic and audited. */
 import {and,eq,inArray,isNull,sql} from "drizzle-orm";
 import {bankAccounts,companies,intercompanyAuditEvents,intercompanyContainerPayments,
@@ -136,13 +137,23 @@ function paymentLines(usd:string,currency:PaymentCurrency,native:string,rate:str
 }
 export async function confirmMirroredPayment(input:MirroredPaymentInput,actor:EditIdentity){
   const {native,rate,base,currency}=validatePayment(input);
+  const fingerprint=createHash("sha256").update(JSON.stringify({
+    pair:input.relationshipId,paymentDate:input.paymentDate,currency,
+    native:native.toFixed(6),rate:rate.toFixed(10),base:base.toFixed(2),
+    transferReference:input.transferReference.trim(),
+    confirmationEvidence:input.confirmationEvidence.trim(),reason:input.reason.trim(),
+    sourceCash:input.sourceReceiptAccount,destinationCash:input.destinationPaymentAccount,
+    allocations:[...input.allocations].map(a=>({
+      tradeId:a.tradeId,version:a.expectedVersion,amount:cents(a.amount).toFixed(2),
+    })).sort((a,b)=>a.tradeId-b.tradeId),
+  })).digest("hex");
   const pair=await accessiblePaymentPair(input.relationshipId,actor);
   return withTradeScope(actor,[pair.sourceCompanyId,pair.destinationCompanyId],()=>db.transaction(async tx=>{
     await tx.execute(sql.raw("SELECT pg_advisory_xact_lock("+INTERCOMPANY_PAYMENT_LOCK_NAMESPACE+","+pair.sourceCompanyId+")"));
     const [duplicate]=await tx.select().from(intercompanyContainerPayments)
       .where(eq(intercompanyContainerPayments.requestKey,input.requestKey));
     if(duplicate){
-      if(duplicate.relationshipId!==input.relationshipId||duplicate.status!=="confirmed"){
+      if(duplicate.relationshipId!==input.relationshipId||duplicate.status!=="confirmed"||duplicate.requestFingerprint!==fingerprint){
         rejectEdit("Payment key already belongs to a different transaction","IC_PAYMENT_REPLAY");
       }
       return {paymentId:duplicate.id,usdAmount:duplicate.baseAmount,
@@ -174,6 +185,7 @@ export async function confirmMirroredPayment(input:MirroredPaymentInput,actor:Ed
     const [payment]=await tx.insert(intercompanyContainerPayments).values({
       relationshipId:fresh.id,sourceCompanyId:fresh.sourceCompanyId,
       destinationCompanyId:fresh.destinationCompanyId,requestKey:input.requestKey,
+      requestFingerprint:fingerprint,
       transferReference:input.transferReference.trim(),confirmationEvidence:input.confirmationEvidence.trim(),
       paymentDate:input.paymentDate,transactionCurrency:currency,
       transactionAmount:native.toFixed(6),historicalRate:rate.toFixed(10),baseAmount:base.toFixed(2),
@@ -212,6 +224,9 @@ export async function reverseMirroredPayment(input:MirroredReversalInput,actor:E
     !input.reason||input.reason.trim().length<3||input.reason.length>1000){
     rejectEdit("Confirm both real cash movements were reversed, with a reason","IC_PAYMENT_REVERSAL",422);
   }
+  const reversalFingerprint=createHash("sha256").update(JSON.stringify({
+    paymentId:input.paymentId,reversalDate:input.reversalDate,reason:input.reason.trim(),
+  })).digest("hex");
   const [original]=await db.select().from(intercompanyContainerPayments)
     .where(eq(intercompanyContainerPayments.id,input.paymentId));
   if(!original)rejectEdit("Mirrored payment not found","IC_PAYMENT_NOT_FOUND",404);
@@ -222,7 +237,7 @@ export async function reverseMirroredPayment(input:MirroredReversalInput,actor:E
       .where(eq(intercompanyContainerPayments.id,input.paymentId)).for("update");
     if(!payment)rejectEdit("Payment was not found");
     if(payment.status==="reversed"){
-      if(payment.reversalKey===input.requestKey)return {paymentId:payment.id,reversed:true,replayed:true};
+      if(payment.reversalKey===input.requestKey&&payment.reversalFingerprint===reversalFingerprint)return {paymentId:payment.id,reversed:true,replayed:true};
       rejectEdit("Payment has already been reversed with a different key");
     }
     const fresh=await activePaymentPairTx(tx,pair.id);
@@ -252,6 +267,7 @@ export async function reverseMirroredPayment(input:MirroredReversalInput,actor:E
     await tx.update(intercompanyContainerPayments).set({
       status:"reversed",reversedBy:actor.actorUserId,reversedAt:new Date(),
       reversalDate:input.reversalDate,reversalReason:input.reason.trim(),reversalKey:input.requestKey,
+      reversalFingerprint,
       sourceReversalVoucherId:src.voucher.id,destinationReversalVoucherId:dst.voucher.id,
     }).where(eq(intercompanyContainerPayments.id,payment.id));
     await tx.execute(sql.raw("SELECT set_config('erp.ic_payment_reversal','',true)"));
