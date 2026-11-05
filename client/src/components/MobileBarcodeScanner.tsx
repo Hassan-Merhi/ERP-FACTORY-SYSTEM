@@ -40,6 +40,7 @@ export function MobileBarcodeScanner({
   // Shared scanner: tolerate rendering outside the language provider.
   const language = useOptionalApplicationLanguage()?.language ?? "en";
   const [open, setOpen] = useState(false);
+  const [retryAttempt, setRetryAttempt] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [lastDetected, setLastDetected] = useState("");
   const [visibleFeedback, setVisibleFeedback] = useState<CameraScanFeedback | null>(null);
@@ -70,7 +71,22 @@ export function MobileBarcodeScanner({
     let timeout: ReturnType<typeof setTimeout> | undefined;
     let stream: MediaStream | undefined;
     let decoder: CameraBarcodeDecoder | null = null;
+    let cameraTrack: MediaStreamTrack | null = null;
     const videoElement = videoRef.current;
+    const onTrackEnded = () => {
+      if (canceled) return;
+      // iOS may end the camera track after a fold/orientation change while
+      // the page stays visible. Pause reads until an explicit retry.
+      canceled = true;
+      if (timeout) clearTimeout(timeout);
+      decoder?.dispose();
+      decoder = null;
+      trackRef.current = null;
+      if (videoElement) videoElement.srcObject = null;
+      setTorchAvailable(false);
+      setTorchOn(false);
+      setError("Camera interrupted by the browser or screen change. Tap Retry camera to reopen it.");
+    };
     // Re-presenting the same retail item should count again after a brief removal;
     // suppress duplicate frames while leaving different barcodes immediately scannable.
     const gate = new ContinuousScanGate(1200, 2);
@@ -130,6 +146,8 @@ export function MobileBarcodeScanner({
         const track = acquired.getVideoTracks?.()[0];
         if (track) {
           trackRef.current = track;
+          cameraTrack = track;
+          cameraTrack.addEventListener("ended", onTrackEnded);
           try {
             const capabilities = track.getCapabilities?.() as MediaTrackCapabilities & { torch?: boolean };
             setTorchAvailable(capabilities?.torch === true);
@@ -168,22 +186,35 @@ export function MobileBarcodeScanner({
         );
       }
     };
-    const onVisibilityChange = () => {
-      if (document.hidden) setOpen(false);
-    };
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    void start();
-    return () => {
+    const release = () => {
       canceled = true;
       if (timeout) clearTimeout(timeout);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
+      cameraTrack?.removeEventListener("ended", onTrackEnded);
       stream?.getTracks().forEach((track) => track.stop());
       trackRef.current = null;
       if (videoElement) videoElement.srcObject = null;
       decoder?.dispose();
+      decoder = null;
       gate.reset();
     };
-  }, [open]);
+    const onSuspend = () => {
+      // pagehide can freeze Safari before React effects run. Release the track
+      // synchronously, including on back-forward cache transitions.
+      release();
+      setOpen(false);
+    };
+    const onVisibilityChange = () => {
+      if (document.hidden) onSuspend();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pagehide", onSuspend);
+    void start();
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pagehide", onSuspend);
+      release();
+    };
+  }, [open, retryAttempt]);
 
   const toggleTorch = async () => {
     const track = trackRef.current;
@@ -283,9 +314,19 @@ export function MobileBarcodeScanner({
             </Button>
           )}
           {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
+            <div className="space-y-2">
+              <p role="alert" className="text-sm text-destructive">{error}</p>
+              <Button type="button" variant="outline" size="sm" className="min-h-11"
+                onClick={() => {
+                  setError(null);
+                  setTorchAvailable(false);
+                  setTorchOn(false);
+                  setRetryAttempt((attempt) => attempt + 1);
+                }}
+                data-testid="button-mobile-camera-retry">
+                Retry camera
+              </Button>
+            </div>
           )}
           {lastDetected && (
             <p role="status" className="break-all text-sm">
