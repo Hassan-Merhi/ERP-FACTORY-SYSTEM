@@ -5,10 +5,14 @@ let click: ReturnType<typeof vi.spyOn>;
 let create: ReturnType<typeof vi.fn>;
 let revoke: ReturnType<typeof vi.fn>;
 let clickedAnchor: HTMLAnchorElement | null;
+let originalCreate: PropertyDescriptor | undefined;
+let originalRevoke: PropertyDescriptor | undefined;
 
 beforeEach(() => {
   vi.useFakeTimers();
   clickedAnchor = null;
+  originalCreate = Object.getOwnPropertyDescriptor(URL, "createObjectURL");
+  originalRevoke = Object.getOwnPropertyDescriptor(URL, "revokeObjectURL");
   create = vi.fn(() => "blob:test-export");
   revoke = vi.fn();
   Object.defineProperty(URL, "createObjectURL", { configurable: true, value: create });
@@ -23,6 +27,10 @@ afterEach(() => {
   click.mockRestore();
   vi.clearAllTimers();
   vi.useRealTimers();
+  if (originalCreate) Object.defineProperty(URL, "createObjectURL", originalCreate);
+  else Reflect.deleteProperty(URL, "createObjectURL");
+  if (originalRevoke) Object.defineProperty(URL, "revokeObjectURL", originalRevoke);
+  else Reflect.deleteProperty(URL, "revokeObjectURL");
 });
 
 describe("iOS Safari file-download lifecycle", () => {
