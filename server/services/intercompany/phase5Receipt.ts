@@ -13,7 +13,7 @@ import {
 } from "@shared/schema";
 import { db } from "../../db";
 import { receiveInventoryAtValue } from "../../inventoryHelper";
-import { MoneyDecimal, sumMoney } from "../../lib/money";
+import { MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
 import { postErpVoucherTx } from "../accounting/erpVoucherPosting";
 import { createDatabaseStockMovementAdapter } from "../inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../inventory/stockMovementIntegrityService";
@@ -144,7 +144,7 @@ export async function receiveLinkedTrade(input: ReceiveIntercompanyTradeInput, a
           inArray(inventory.stockItemId, rows.map((row) => row.stockItemId)))
       ).for("update");
       if (current.some((row) => row.companyId !== data.trade.destinationCompanyId
-        || cents(row.quantity).lt(0) || (cents(row.quantity).isZero() && !cents(row.totalValue).isZero()))) {
+        || toMoney(row.quantity).lt(0) || (toMoney(row.quantity).isZero() && !cents(row.totalValue).isZero()))) {
         rejectEdit("Destination stock has a shortage or residual cost requiring independent COGS review", "IC_RECEIPT_STOCK_VARIANCE");
       }
       const value = cents(data.imported.confirmedLandedCost ?? "0").toFixed(2);
