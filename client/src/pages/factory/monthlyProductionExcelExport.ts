@@ -195,6 +195,7 @@ export function buildMonthlyProductionExcelWorkbook(options: MonthlyProductionEx
         cell.fill = background(PALETTE.redFill);
         cell.font = { name: "Aptos", size: 10, bold: true, color: { argb: PALETTE.redText } };
       }
+    }
     const totalCell = dataRow.getCell(totalColumn);
     totalCell.fill = background(PALETTE.totalFill);
     totalCell.font = { name: "Aptos", size: 10, bold: true, color: { argb: PALETTE.totalText } };
