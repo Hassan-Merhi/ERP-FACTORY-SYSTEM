@@ -54,6 +54,28 @@ an open cloud epoch.
 inventory and fails if any route becomes writable on the LAN without a reviewed
 capture policy.
 
+### Plan batches stay off until their staging drill is approved
+
+The rows added by the owner-approved plan of 2026-11-05 are:
+- batch 2: new stock items and item deletes;
+- batch 3: transfer edits, finalizes and revisions, and the Excel transfer
+  and inventory imports;
+- batch 4, when added.
+
+They are refused on the factory server (HTTP 423) until the owner has run
+that batch's staging drill and approved it. Record the approval in
+`deploy/lan/.env` and restart the server:
+
+```
+EDGE_APPROVED_PLAN_BATCHES=2,3
+```
+
+Leave it empty to keep every plan batch off. An unknown value stops the
+server at startup (`EDGE_PLAN_BATCHES_INVALID`). The coverage audit lists
+each gated route with its `planBatch`. Workflows approved before the plan are
+not gated, and neither is the operator Pause/Resume button, which writes no
+business data.
+
 ### Why the remaining workflows are online-only
 
 A workflow is approved only when it has: an atomic LAN capture in its own

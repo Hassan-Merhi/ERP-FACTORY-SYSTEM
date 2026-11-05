@@ -62,6 +62,8 @@ test("every unique API write has explicit capture, session-only or blocked dispo
   // Phase 10: pause/resume is an operator control on the LAN; the cloud-only
   // decision route stays blocked there.
   assert.equal(report.summary.operatorControl, 1);
+  // Plan-batch routes in the sample: they count as captured, and wait for their drill approval on the LAN.
+  assert.equal(report.summary.awaitingDrillApproval, 15);
   assert.equal(report.summary.blocked, 5);
   assert.equal(report.summary.productionComplete, false);
   const byPath = new Map(report.routes.map((r) => [r.path, r]));
@@ -81,6 +83,9 @@ test("every unique API write has explicit capture, session-only or blocked dispo
   assert.equal(route("POST", "/api/stock-items").policy, "stock.item-create.v1");
   assert.equal(route("DELETE", "/api/stock-items/:id").policy, "stock.item-delete.v1");
   assert.equal(route("PUT", "/api/stock-transfers/:id").policy, "stock.transfer-edit.v1");
+  assert.equal(route("PUT", "/api/stock-transfers/:id").planBatch, 3);
+  assert.equal(route("POST", "/api/stock-items").planBatch, 2);
+  assert.equal(route("PATCH", "/api/stock-items/:id").planBatch, undefined);
   assert.equal(route("POST", "/api/stock-transfer-revisions/:id/reject").policy, "stock.transfer-revision-review.v1");
 });
 test("policy drift from an accidental LAN write bypass fails the audit", () => {

@@ -15,7 +15,11 @@
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve, dirname } from "node:path";
-import { edgeBlocksWrite } from "../../server/edge/edgeRuntimePolicy.mjs";
+import {
+  PHASE9_GATED_PLAN_BATCHES,
+  edgeBlocksWrite,
+  phase9PlanBatchOf,
+} from "../../server/edge/edgeRuntimePolicy.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const MANIFEST = resolve(ROOT, "config/route-manifest.json");
@@ -198,7 +202,14 @@ function moduleForPath(path) {
 
 export function auditPhase9WriteCoverage(manifest, guard = edgeBlocksWrite) {
   if (!manifest || !Array.isArray(manifest.routes)) throw new Error("PHASE9_MANIFEST_MISSING");
-  const config = { mode: "lan", writeMode: "lan-primary", primary: true };
+  // Every plan batch counted as drill-approved: the audit checks capture readiness;
+  // each route also reports its batch, which the LAN refuses until approved.
+  const config = {
+    mode: "lan",
+    writeMode: "lan-primary",
+    primary: true,
+    approvedPlanBatches: PHASE9_GATED_PLAN_BATCHES,
+  };
   const seen = new Set();
   const routes = [];
   for (const route of manifest.routes) {
@@ -236,6 +247,7 @@ export function auditPhase9WriteCoverage(manifest, guard = edgeBlocksWrite) {
             ? "operator-control"
             : "blocked",
       ...(supported ? { policy: supported.policy, limitations: supported.limitations } : {}),
+      ...(phase9PlanBatchOf(key) !== null ? { planBatch: phase9PlanBatchOf(key) } : {}),
     });
   }
   for (const key of SUPPORTED.keys()) {
@@ -255,6 +267,7 @@ export function auditPhase9WriteCoverage(manifest, guard = edgeBlocksWrite) {
     approvedCapture: routes.filter((r) => r.disposition === "approved-capture").length,
     sessionOnly: routes.filter((r) => r.disposition === "session-only").length,
     operatorControl: routes.filter((r) => r.disposition === "operator-control").length,
+    awaitingDrillApproval: routes.filter((r) => r.planBatch !== undefined).length,
     blocked: routes.filter((r) => r.disposition === "blocked").length,
     byModule,
     productionComplete: routes.every((r) => r.disposition !== "blocked"),

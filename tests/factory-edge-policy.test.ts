@@ -108,6 +108,8 @@ describe("factory LAN edge deployment policy", () => {
               FACTORY_EDGE_PRIMARY_ACK: "CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED",
               FACTORY_EDGE_WRITER_EPOCH: "2",
               FACTORY_EDGE_BASELINE_SHA256: "a".repeat(64),
+              // The plan batches below have had their staging drill approved.
+              FACTORY_EDGE_APPROVED_PLAN_BATCHES: "2, 3",
             }
           : {}),
       };
@@ -208,6 +210,34 @@ describe("factory LAN edge deployment policy", () => {
           expect(edgeBlocksWrite(config, verb, path)).toBe(true);
         }
       }
+    }
+  });
+  it("refuses each plan batch's offline routes on the LAN until its staging drill is approved", () => {
+    const primary = {
+      ...safe,
+      FACTORY_EDGE_WRITE_MODE: "lan-primary",
+      FACTORY_EDGE_PRIMARY_ACK: "CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED",
+      FACTORY_EDGE_WRITER_EPOCH: "2",
+      FACTORY_EDGE_BASELINE_SHA256: "a".repeat(64),
+    };
+    const none = readFactoryEdgeConfiguration(primary);
+    expect(none).toMatchObject({ approvedPlanBatches: [] });
+    expect(edgeBlocksWrite(none, "POST", "/api/stock-items")).toBe(true);
+    expect(edgeBlocksWrite(none, "PUT", "/api/stock-transfers/42")).toBe(true);
+    expect(edgeBlocksWrite(none, "POST", "/api/locations/12/import-inventory")).toBe(true);
+    // Workflows approved before the plan, and the operator pause button, are not gated.
+    expect(edgeBlocksWrite(none, "POST", "/api/stock-transfers")).toBe(false);
+    expect(edgeBlocksWrite(none, "PATCH", "/api/stock-items/42")).toBe(false);
+    expect(edgeBlocksWrite(none, "POST", "/api/edge/operator/sync-control")).toBe(false);
+
+    const onlyTwo = readFactoryEdgeConfiguration({ ...primary, FACTORY_EDGE_APPROVED_PLAN_BATCHES: "2" });
+    expect(edgeBlocksWrite(onlyTwo, "DELETE", "/api/stock-items/42")).toBe(false);
+    expect(edgeBlocksWrite(onlyTwo, "POST", "/api/stock-transfer-import/import")).toBe(true);
+
+    for (const value of ["1", "5", "2;3", "two", "2,9"]) {
+      expect(() => readFactoryEdgeConfiguration({ ...primary, FACTORY_EDGE_APPROVED_PLAN_BATCHES: value })).toThrow(
+        "EDGE_PLAN_BATCHES_INVALID"
+      );
     }
   });
   it("lets only the conflict decision route through a fenced cloud", () => {

@@ -27,6 +27,18 @@ function parseHostname(value) {
   );
 }
 
+/** Plan batches whose offline routes need an explicit drill approval before the LAN accepts them. */
+export const PHASE9_GATED_PLAN_BATCHES = Object.freeze([2, 3, 4]);
+
+function parsePlanBatches(value) {
+  if (value === undefined || value.trim() === "") return Object.freeze([]);
+  const batches = value.split(",").map((part) => part.trim());
+  if (batches.some((part) => !/^[1-9]$/.test(part) || !PHASE9_GATED_PLAN_BATCHES.includes(Number(part)))) {
+    throw new Error("EDGE_PLAN_BATCHES_INVALID");
+  }
+  return Object.freeze([...new Set(batches.map(Number))].sort());
+}
+
 export function readFactoryEdgeConfiguration(env = process.env) {
   const mode = env.FACTORY_EDGE_MODE || "cloud";
   if (mode !== "cloud" && mode !== "lan") throw new Error("EDGE_MODE_INVALID");
@@ -100,8 +112,14 @@ export function readFactoryEdgeConfiguration(env = process.env) {
     throw new Error("EDGE_PHASE7_EPOCH_WITHOUT_PRIMARY");
   }
 
+  // Owner plan rule (2026-11-05): each plan batch's offline routes stay refused
+  // on the factory server until its staging drill is run and approved, which
+  // the operator records here (for example "2,3").
+  const approvedPlanBatches = parsePlanBatches(env.FACTORY_EDGE_APPROVED_PLAN_BATCHES);
+
   return Object.freeze({
     mode: "lan",
+    approvedPlanBatches,
     siteId: env.FACTORY_EDGE_SITE_ID,
     hostname: env.FACTORY_EDGE_HOSTNAME,
     writeMode,
@@ -226,6 +244,29 @@ export function phase9ApprovedCaptureRoute(method, path) {
 export const PHASE10_SYNC_CONTROL_ROUTE = "POST /api/edge/operator/sync-control";
 export const PHASE10_CONFLICT_DECISION_ROUTE = "POST /api/edge/operator/conflicts/decide";
 
+/** The owner-approved plan batch each gated offline route belongs to. */
+export const PHASE9_PLAN_BATCH_ROUTES = Object.freeze(
+  new Map([
+    ["POST /api/stock-items", 2],
+    ["DELETE /api/stock-items/:id", 2],
+    ["PUT /api/stock-transfers/:id", 3],
+    ["POST /api/stock-transfers/:id/approve", 3],
+    ["POST /api/vouchers/:id/finalize", 3],
+    ["POST /api/stock-transfers/:transferId/revisions", 3],
+    ["POST /api/stock-transfer-revisions/:id/approve", 3],
+    ["POST /api/stock-transfer-revisions/:id/reject", 3],
+    ["POST /api/locations/:locationId/import-inventory", 3],
+    ...["parse", "validate", "import", "parse-multi-source", "validate-multi-source", "import-multi-source"].map(
+      (step) => [`POST /api/stock-transfer-import/${step}`, 3]
+    ),
+  ])
+);
+
+/** Null when the route belongs to no gated batch. */
+export function phase9PlanBatchOf(routeKey) {
+  return PHASE9_PLAN_BATCH_ROUTES.get(routeKey) ?? null;
+}
+
 export function edgeBlocksWrite(config, method, path) {
   const verb = String(method).toUpperCase();
   if (["GET", "HEAD", "OPTIONS"].includes(verb)) return false;
@@ -234,7 +275,10 @@ export function edgeBlocksWrite(config, method, path) {
   if (config.mode === "cloud" && `${verb} ${path}` === PHASE10_CONFLICT_DECISION_ROUTE) return false;
   if (config.mode === "cloud") return config.writeMode === "fenced";
   if (!config.primary) return true;
-  return phase9ApprovedCaptureRoute(verb, path) === null;
+  const route = phase9ApprovedCaptureRoute(verb, path);
+  if (route === null) return true;
+  const batch = phase9PlanBatchOf(route);
+  return batch !== null && !(config.approvedPlanBatches ?? []).includes(batch);
 }
 
 export function edgeStatusPayload(config, databaseProvisioned = false) {

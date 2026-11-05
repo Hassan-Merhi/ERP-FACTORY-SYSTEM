@@ -2,6 +2,8 @@ export type EdgeConfiguration = Readonly<
   | { mode: "cloud"; siteId: null; hostname: null; writeMode: "cloud" | "fenced"; primary: false }
   | {
       mode: "lan";
+      /** Plan batches whose staging drill the operator approved (their offline routes are accepted). */
+      approvedPlanBatches?: readonly number[];
       siteId: string;
       hostname: string;
       writeMode: "read-only" | "lan-primary";
@@ -13,6 +15,9 @@ export type EdgeConfiguration = Readonly<
 export function readFactoryEdgeConfiguration(env?: Record<string, string | undefined>): EdgeConfiguration;
 export const PHASE10_SYNC_CONTROL_ROUTE: "POST /api/edge/operator/sync-control";
 export const PHASE10_CONFLICT_DECISION_ROUTE: "POST /api/edge/operator/conflicts/decide";
+export const PHASE9_GATED_PLAN_BATCHES: readonly number[];
+export const PHASE9_PLAN_BATCH_ROUTES: ReadonlyMap<string, number>;
+export function phase9PlanBatchOf(routeKey: string): number | null;
 export function edgeBlocksWrite(config: EdgeConfiguration, method: string, path: string): boolean;
 export function edgeStatusPayload(
   config: EdgeConfiguration,
