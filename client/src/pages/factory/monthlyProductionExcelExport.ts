@@ -45,16 +45,6 @@ const background = (color: string): ExcelJS.Fill => ({
   fgColor: { argb: color },
 });
 
-function columnLetter(column: number): string {
-  let n = column;
-  let letters = "";
-  while (n > 0) {
-    n -= 1;
-    letters = String.fromCharCode(65 + (n % 26)) + letters;
-    n = Math.floor(n / 26);
-  }
-  return letters;
-}
 
 /** Same highest/lowest logic as the on-screen Monthly Production Matrix. */
 export function productionMonthTone(values: number[], index: number): "highest" | "lowest" | "normal" {
@@ -213,10 +203,9 @@ export function buildMonthlyProductionExcelWorkbook(options: MonthlyProductionEx
   monthTotals.concat(grandTotal).forEach((sum, index) => {
     const col = monthStartColumn + index;
     const cell = totalRow.getCell(col);
-    cell.value = rows.length ? {
-      formula: "SUM(" + columnLetter(col) + firstDataRow + ":" + columnLetter(col) + lastDataRow + ")",
-      result: sum,
-    } : sum;
+    // HYPERLINK may recalculate as text in Excel. Use the validated snapshot
+    // total directly rather than SUM over hyperlink formulas.
+    cell.value = sum;
     cell.numFmt = "#,##0";
   });
   totalRow.eachCell({ includeEmpty: true }, (cell, col) => {
