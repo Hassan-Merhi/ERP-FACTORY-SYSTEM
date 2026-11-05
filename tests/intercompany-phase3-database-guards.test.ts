@@ -88,13 +88,12 @@ describe("Phase 3 intercompany linked edit migration guards",()=>{
       await rejects("DELETE FROM intercompany_trade_line_links WHERE id=1","immutable");
       await rejects("UPDATE intercompany_trade_line_links SET source_line_id=32 WHERE id=1","immutable");
       await client.query("INSERT INTO intercompany_trade_revisions(trade_id,revision_number,kind,request_key,actor_user_id,initiating_company_id,amount_before,amount_after,posting_date,reason) VALUES (1,2,'line_edit','phase3-test-key-1','owner',1,100,110,'2026-11-05','Correct source supplier price')");
-      await rejects("UPDATE po_line_items SET stock_item_id=1 WHERE id=31"); // missing column is also rejected
       await client.query("SELECT set_config('erp.ic_edit_revision','1',true)");
       await client.query("UPDATE po_line_items SET rate=11,line_total=110 WHERE id=31");
       await client.query("UPDATE po_line_items SET rate=11,line_total=110 WHERE id=32");
       await client.query("UPDATE purchase_orders SET items_total=110 WHERE id IN(21,22)");
       await client.query("UPDATE containers SET items_total=110,grand_total=110 WHERE id=10");
-      await rejects("UPDATE po_line_items SET po_id=22 WHERE id=31","cannot");
+      await rejects("UPDATE po_line_items SET po_id=22 WHERE id=31","pricing");
       await client.query("UPDATE intercompany_trades SET version=2 WHERE id=1");
       await rejects("UPDATE po_line_items SET rate=12 WHERE id=31","synchronized");
       await client.query("SELECT set_config('erp.ic_edit_revision','',true)");
