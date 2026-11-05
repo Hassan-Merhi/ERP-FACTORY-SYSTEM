@@ -3,7 +3,14 @@ import type { useFactoryProformasModel } from "../../factoryproformas/useFactory
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type Model = ReturnType<typeof useFactoryProformasModel>;
 
@@ -21,7 +28,12 @@ export function AssignProformaDestinationDialog({
   assignDestinationMutation: Model["assignDestinationMutation"];
 }) {
   return (
-    <Dialog open={!!destinationProforma} onOpenChange={(open) => { if (!open && !assignDestinationMutation.isPending) setDestinationProforma(null); }}>
+    <Dialog
+      open={!!destinationProforma}
+      onOpenChange={(open) => {
+        if (!open && !assignDestinationMutation.isPending) setDestinationProforma(null);
+      }}
+    >
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{destinationProforma?.destination ? "Change Destination" : "Assign Destination"}</DialogTitle>
@@ -51,7 +63,13 @@ export function AssignProformaDestinationDialog({
           </p>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => setDestinationProforma(null)} disabled={assignDestinationMutation.isPending}>Cancel</Button>
+          <Button
+            variant="outline"
+            onClick={() => setDestinationProforma(null)}
+            disabled={assignDestinationMutation.isPending}
+          >
+            Cancel
+          </Button>
           <Button
             disabled={!destinationValue.trim() || assignDestinationMutation.isPending}
             onClick={() => {
