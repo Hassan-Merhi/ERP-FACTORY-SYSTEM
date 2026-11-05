@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   phase5-isolated:
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-latest
     timeout-minutes: 35
     services:
       postgres:
