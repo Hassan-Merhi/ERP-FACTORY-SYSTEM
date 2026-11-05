@@ -184,6 +184,32 @@ END $fn$;
 CREATE TRIGGER ic_phase5_trade_cancel_guard BEFORE UPDATE ON intercompany_trades
 FOR EACH ROW EXECUTE FUNCTION ic_phase5_trade_cancellation_guard();
 
+CREATE OR REPLACE FUNCTION ic_validate_payment_allocation_row()
+RETURNS TRIGGER LANGUAGE plpgsql AS $guard$
+DECLARE payment_row RECORD; trade_row RECORD;
+BEGIN
+  IF TG_OP<>'INSERT' THEN
+    RAISE EXCEPTION 'Intercompany payment allocations are append-only; post a release entry';
+  END IF;
+  SELECT * INTO payment_row FROM intercompany_container_payments WHERE id=NEW.payment_id;
+  SELECT * INTO trade_row FROM intercompany_trades WHERE id=NEW.trade_id;
+  IF NOT FOUND OR trade_row.state <> 'active'
+    OR payment_row.status <> 'confirmed'
+    OR payment_row.relationship_id <> trade_row.relationship_id
+    OR payment_row.source_company_id <> trade_row.source_company_id
+    OR payment_row.destination_company_id <> trade_row.destination_company_id THEN
+    RAISE EXCEPTION 'Payment credit may be applied only to the same active company pair';
+  END IF;
+  IF NEW.amount < 0 AND NEW.allocation_kind NOT IN ('edit_release','reversal_release','cancel_release') THEN
+    RAISE EXCEPTION 'Only audited payment releases may reduce allocation';
+  END IF;
+  IF NEW.allocation_kind = 'cancel_release'
+    AND current_setting('erp.ic_phase5_cancel',true) IS DISTINCT FROM NEW.trade_id::text THEN
+    RAISE EXCEPTION 'Phase 5 payment release requires the same atomic cancellation request';
+  END IF;
+  RETURN NEW;
+END $guard$;
+
 -- Verify ALL THREE real cancellation journals, not merely their headers.
 -- Source sale: Dr Sales / Cr Receivable. Source cost: Dr Purchases /
 -- Cr COGS. Destination: Dr Properties Supplier / Cr Goods In Transit.
