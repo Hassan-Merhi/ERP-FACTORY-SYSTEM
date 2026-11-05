@@ -24,7 +24,7 @@ async function ticketResource(tx: DatabaseOrTransaction, actor: TicketActor, tic
 
 export async function getTicketConversation(actor: TicketActor, ticketId: number) {
   await ticketResource(db,actor,ticketId);
-  const [comments,attachments] = await Promise.all([
+  const [comments,attachments,events] = await Promise.all([
     db.select({id:supportTicketComments.id,authorId:supportTicketComments.authorId,body:supportTicketComments.body,
       createdAt:supportTicketComments.createdAt})
       .from(supportTicketComments).where(and(eq(supportTicketComments.companyId,actor.companyId),
@@ -34,8 +34,13 @@ export async function getTicketConversation(actor: TicketActor, ticketId: number
       uploadedBy:supportTicketAttachments.uploadedBy,createdAt:supportTicketAttachments.createdAt})
       .from(supportTicketAttachments).where(and(eq(supportTicketAttachments.companyId,actor.companyId),
         eq(supportTicketAttachments.ticketId,ticketId))).orderBy(asc(supportTicketAttachments.id)).limit(500),
+    db.select({id:supportTicketEvents.id,actorId:supportTicketEvents.actorId,
+      eventType:supportTicketEvents.eventType,reason:supportTicketEvents.reason,
+      createdAt:supportTicketEvents.createdAt})
+      .from(supportTicketEvents).where(and(eq(supportTicketEvents.companyId,actor.companyId),
+        eq(supportTicketEvents.ticketId,ticketId))).orderBy(asc(supportTicketEvents.id)).limit(500),
   ]);
-  return {comments,attachments};
+  return {comments,attachments,events};
 }
 
 export async function postTicketComment(actor: TicketActor,ticketId:number,body:string) {
