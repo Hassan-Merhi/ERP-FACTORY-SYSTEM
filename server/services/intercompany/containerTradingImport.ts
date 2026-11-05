@@ -15,7 +15,7 @@ import {
 import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
 import { db } from "../../db";
 import { readExcel, sheetToJson } from "../../excelHelper";
-import { MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
+import { sumMoney, toMoney } from "../../lib/money";
 import { parsePoImportSheetRows, type ParsedContainerPreview } from "../../routes/import/poImportExcelParser";
 import { postErpVoucherTx, type ErpVoucherLine } from "../accounting/erpVoucherPosting";
 import {
@@ -132,6 +132,7 @@ function validatedAccounts(p: Policy, all: Account[]) {
     ar: verifyAccount(all, p.sourceCompanyId, p.sourceReceivableAccountId, /asset/i, "Receivable"),
     ap: verifyAccount(all, p.destinationCompanyId, p.destinationPayableAccountId, /liability/i, "Payable"),
     sales: verifyAccount(all, p.sourceCompanyId, p.sourceSalesAccountId, /income|sales|revenue/i, "Sales"),
+    purchase: verifyAccount(all, p.sourceCompanyId, p.sourcePurchaseAccountId, /expense|cost/i, "Purchases"),
     cogs: verifyAccount(all, p.sourceCompanyId, p.sourceCostAccountId, /expense|cost/i, "COGS"),
     charges: verifyAccount(all, p.sourceCompanyId, p.sourceChargeAccrualAccountId, /liability/i, "Charge accrual"),
     git: verifyAccount(all, p.destinationCompanyId, p.destinationGitAccountId, /asset/i, "Goods in transit"),
@@ -219,6 +220,7 @@ export const relationshipInputSchema = z.object({
   sourceReceivableAccountId: positive,
   destinationPayableAccountId: positive,
   sourceSalesAccountId: positive,
+  sourcePurchaseAccountId: positive,
   sourceCostAccountId: positive,
   sourceChargeAccrualAccountId: positive,
   destinationGitAccountId: positive,
@@ -237,7 +239,9 @@ export async function setTradingRelationship(sourceCompanyId: number, userId: st
       sourceCompanyId, destinationCompanyId:mapping.destinationCompanyId,
       ...mapping,
     };
-    validatedAccounts(fields as Policy, accounts);
+    const selectedAccounts = validatedAccounts(fields as Policy, accounts);
+    assert(selectedAccounts.purchase !== selectedAccounts.cogs,
+      "Purchases and COGS must be distinct ledger accounts");
     const [source] = await tx.select().from(companies).where(eq(companies.id, sourceCompanyId));
     const [dest] = await tx.select().from(companies).where(eq(companies.id, mapping.destinationCompanyId));
     assert(source?.companyType === "properties" && dest?.active, "Company pair is not available");
@@ -311,6 +315,10 @@ export async function postIntercompanyImport(args: {
     const accounts = await tx.select().from(ledgerAccounts).where(and(
       inArray(ledgerAccounts.companyId, [sourceCompanyId, ...destinations]), isNull(ledgerAccounts.deletedAt)));
     const mappedAccounts = new Map(policies.map(p => [p.id, validatedAccounts(p, accounts)]));
+    for (const policyAccounts of mappedAccounts.values()) {
+      assert(policyAccounts.purchase !== policyAccounts.cogs,
+        "Purchases and COGS accounts must be distinct");
+    }
     const partners = await tx.select().from(companyScopedSuppliers).where(inArray(
       companyScopedSuppliers.id, policies.map(p => p.destinationSupplierId!).filter(Boolean)));
     for (const p of policies) {
@@ -369,7 +377,7 @@ export async function postIntercompanyImport(args: {
         // Cost is recognized at the immediate at-cost resale, not as held HP stock.
         // Only verified supplier and confirmed charge liabilities are credited.
         const lines: ErpVoucherLine[] = [
-          {ledgerAccountId:acct.cogs, debit:group.grandTotal, narration:"External goods and confirmed landed cost"},
+          {ledgerAccountId:acct.purchase, debit:group.grandTotal, narration:"External goods and confirmed landed cost"},
         ];
         if (money(group.supplierCredit).gt(0)) lines.push({
           supplierId:external.id, credit:group.supplierCredit, narration:"Eurogulf/external supplier payable",
@@ -443,6 +451,18 @@ export async function postIntercompanyImport(args: {
         source:{type:"ic-container-source-sale",id:trade.id},
         actor:{userId,reason:"Zero-markup intercompany resale"},
       });
+      // Reclassify purchased cost to COGS when HP immediately resells the goods.
+      // Purchases nets to zero, and sale proceeds exactly equal COGS (no markup).
+      const costVoucher = await postErpVoucherTx(tx, {
+        companyId:sourceCompanyId, voucherType:"Journal", voucherDate:input.importDate,
+        description:"At-cost goods transferred out - " + plan.containerNumber,
+        lines:[
+          {ledgerAccountId:acct.cogs, debit:plan.landedTotal, narration:"Internal sale cost of goods sold"},
+          {ledgerAccountId:acct.purchase, credit:plan.landedTotal, narration:"Release original purchase cost"},
+        ],
+        source:{type:"ic-container-source-cost",id:trade.id},
+        actor:{userId,reason:"Cost of goods sold on at-cost intercompany resale"},
+      });
       for (const [name,value] of [
         ["Freight",plan.charges.freight],["Surcharge",plan.charges.surcharge],
         ["Fumigation",plan.charges.fumigation],["Document Charges",plan.charges.documentCharges],
@@ -463,7 +483,7 @@ export async function postIntercompanyImport(args: {
         eventType:"container-import-confirmed",sourceReference:preview.sha256,
         payload:{
           physicalContainerId:physical.id,sourcePoIds,originalSupplierVoucherIds:supplierVoucherIds,
-          sourceSaleVoucherId:saleVoucher.voucher.id,destinationPoId:destPo.id,
+          sourceSaleVoucherId:saleVoucher.voucher.id,sourceCostVoucherId:costVoucher.voucher.id,destinationPoId:destPo.id,
           destinationVoucherId:destVoucher.voucher.id,landedCost:plan.landedTotal,
           chargesConfirmed:plan.chargesConfirmed,chargeEvidenceReference:plan.chargeEvidenceReference,
           proposedCharges:plan.proposedCharges,
