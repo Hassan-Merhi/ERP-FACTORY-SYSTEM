@@ -67,9 +67,10 @@ export const PROPERTIES_NAV_SECTIONS: NavSection[] = [
 export function getPropertiesVisibleNavSections(isDeveloper: boolean, canTrade = false): NavSection[] {
   return PROPERTIES_NAV_SECTIONS.map((section) => ({
     ...section,
-    items: section.items.filter((item) =>
-      (isDeveloper || !item.url.startsWith("/properties/accounting/")) &&
-      (canTrade || item.url !== "/properties/container-trading")
+    items: section.items.filter(
+      (item) =>
+        (isDeveloper || !item.url.startsWith("/properties/accounting/")) &&
+        (canTrade || item.url !== "/properties/container-trading")
     ),
   })).filter((section) => section.items.length > 0);
 }
@@ -83,7 +84,10 @@ export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogo
   const isAdmin = user?.role === "Admin" || user?.role === "Developer";
   const isDeveloper = user?.role === "Developer";
   const canTrade = user?.role === "Developer" || user?.role === "Owner";
-  const visibleSections = useMemo(() => getPropertiesVisibleNavSections(isDeveloper, canTrade), [isDeveloper, canTrade]);
+  const visibleSections = useMemo(
+    () => getPropertiesVisibleNavSections(isDeveloper, canTrade),
+    [isDeveloper, canTrade]
+  );
 
   const { items: pinnedItems, reorder: reorderPinned } = usePinnedOrder(
     "properties-pinned-order",

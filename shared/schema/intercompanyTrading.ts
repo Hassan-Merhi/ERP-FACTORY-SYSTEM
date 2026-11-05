@@ -303,7 +303,6 @@ export const intercompanyRepairRequests = pgTable(
   })
 );
 
-
 /** Each original supplier PO is retained even when an Excel container has several PO numbers. */
 export const intercompanyTradeSourcePos = pgTable(
   "intercompany_trade_source_pos",
