@@ -327,8 +327,15 @@ jobs:
       - name: Full responsive contract matrix
         run: node scripts/verify-mobile-responsive-phase11-regression.mjs
 
-      - name: Focused responsive tests
-        run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/mobile-responsive-*.test.ts tests/ui/factory-mobile-*.test.*
+      - name: Focused responsive and iOS workflow tests
+        run: >-
+          node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts
+          tests/ui/mobile-responsive-*.test.ts
+          tests/ui/factory-mobile-*.test.*
+          tests/ui/iphone-duo-phase3-downloads.test.ts
+          client/src/components/MobileBarcodeScanner.test.tsx
+          client/src/pages/factory/ContinuousPressingScanner.test.tsx
+          client/src/pages/factory/pressing-scanner/continuousScanGate.test.ts
 
       - name: Upload rendered UX evidence
         if: always()
