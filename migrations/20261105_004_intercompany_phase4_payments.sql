@@ -37,6 +37,14 @@ CREATE TABLE IF NOT EXISTS intercompany_container_payments (
   CONSTRAINT ic_payments_currency_check CHECK(transaction_currency IN ('USD','CFA','ZMW')),
   CONSTRAINT ic_payments_cash_type_check CHECK(source_cash_type IN ('bank','cash') AND destination_cash_type IN ('bank','cash')),
   CONSTRAINT ic_payments_amounts_positive CHECK(transaction_amount>0 AND historical_rate>0 AND base_amount>0),
+  -- Original-currency evidence must always reconcile to the exact USD-base
+  -- amount used for BOTH real cash vouchers. An arbitrary base amount must
+  -- not be attached to genuine-looking transfer references.
+  CONSTRAINT ic_payments_fx_consistency CHECK(
+    transaction_amount=round(transaction_amount,2)
+    AND (transaction_currency<>'USD' OR historical_rate=1)
+    AND base_amount=round(transaction_amount/historical_rate,2)
+  ),
   CONSTRAINT ic_payments_evidence_check CHECK(length(btrim(transfer_reference))>=5 AND length(btrim(confirmation_evidence))>=8),
   CONSTRAINT ic_payments_distinct_vouchers CHECK(source_receipt_voucher_id<>destination_payment_voucher_id),
   CONSTRAINT ic_payments_status_check CHECK(status IN ('confirmed','reversed')),
@@ -248,6 +256,13 @@ BEGIN
     OR pair_record.source_company_id<>NEW.source_company_id
     OR pair_record.destination_company_id<>NEW.destination_company_id THEN
     RAISE EXCEPTION 'Payment must belong to an enabled original company pair';
+  END IF;
+  -- Only the mapping reviewed for this source/destination relationship may
+  -- underlie a new real payment. The original mapping is stored immutably on
+  -- the payment so later account reconfiguration does not rewrite history.
+  IF pair_record.source_receivable_account_id IS DISTINCT FROM NEW.source_receivable_account_id
+     OR pair_record.destination_supplier_id IS DISTINCT FROM NEW.destination_supplier_id THEN
+    RAISE EXCEPTION 'Actual payment must use the verified company-pair receivable and supplier mappings';
   END IF;
   SELECT id,company_id,voucher_type,deleted_at INTO source_voucher
     FROM vouchers WHERE id=NEW.source_receipt_voucher_id;
