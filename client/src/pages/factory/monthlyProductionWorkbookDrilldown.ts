@@ -236,7 +236,6 @@ export function buildProductionDrilldownSheets(
     const periods = [...months.filter((month) => productBales.some((bale) => bale.month === month)), ALL];
     for (const period of periods) {
       const forPeriod = period === ALL ? productBales : productBales.filter((bale) => bale.month === period);
-      const matrixCol = period === ALL ? 4 + months.length : 4 + months.indexOf(period);
       const matrixCellRow = 7 + productIndex;
       const anchor = section(workersSheet, product.name + " • " +
         (period === ALL ? "All selected months" : monthLabels[months.indexOf(period)]), matrixCellRow);
@@ -258,10 +257,7 @@ export function buildProductionDrilldownSheets(
         row.getCell(3).numFmt = weightFormat;
       }
       subtotal(workersSheet, "TOTAL", forPeriod.length, sumWeight(forPeriod));
-      // Make the section's Back-to-Matrix jump to the selected count column.
-      const back = workersSheet.getRow(anchor).getCell(6);
-      back.value = { formula: 'HYPERLINK("#\\'Monthly Production\\'!' + columnLetter(matrixCol) +
-        matrixCellRow + '","Back to matrix")', result: "Back to matrix" };
+
     }
   }
 
@@ -272,13 +268,3 @@ export function buildProductionDrilldownSheets(
   return matrixAnchors;
 }
 
-function columnLetter(col: number): string {
-  let n = col;
-  let letters = "";
-  while (n > 0) {
-    n--;
-    letters = String.fromCharCode(65 + (n % 26)) + letters;
-    n = Math.floor(n / 26);
-  }
-  return letters;
-}
