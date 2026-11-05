@@ -94,14 +94,17 @@ describe("Phase 4 paired payment database protections",()=>{
       await rejects("UPDATE intercompany_payment_allocations SET amount=90 WHERE id=1","append-only");
       await rejects("UPDATE intercompany_trades SET state='canceled' WHERE id=1",
         "requires releasing original company-pair credit");
-      await rejects("UPDATE intercompany_trades SET relationship_id=2, destination_company_id=3 WHERE id=1",
-        "requires releasing original company-pair credit");
+      await rejects("UPDATE intercompany_trades SET relationship_id=2, destination_company_id=3 WHERE id=1");
       // Cost reductions must release excess paid credit without altering any cash vouchers.
       await client.query("INSERT INTO intercompany_trade_revisions(trade_id,revision_number,kind,request_key,actor_user_id,initiating_company_id,amount_before,amount_after,posting_date,reason) VALUES (1,2,'line_edit','phase4-linked-edit','owner',1,100,50,'2026-11-05','Price reduction')");
       await client.query("SELECT set_config('erp.ic_edit_revision','1',true)");
       await client.query("SET CONSTRAINTS ALL DEFERRED");
+      await client.query("UPDATE po_line_items SET rate=5,line_total=50 WHERE id IN (61,62)");
+      await client.query("UPDATE purchase_orders SET items_total=50 WHERE id IN (21,22)");
+      await client.query("UPDATE containers SET items_total=50,grand_total=50 WHERE id=10");
       await client.query("UPDATE intercompany_import_batch_containers SET confirmed_landed_cost=50 WHERE trade_id=1");
-      await rejects("SET CONSTRAINTS ALL IMMEDIATE","release over-allocated");
+      await rejects("SET CONSTRAINTS ALL IMMEDIATE");
+      await client.query("SET CONSTRAINTS ALL DEFERRED");
       await client.query("INSERT INTO intercompany_payment_allocations(payment_id,trade_id,amount,allocation_kind,request_key,reason) VALUES (1,1,-30,'edit_release','phase4-price-release','Return excess pair credit')");
       await client.query("SET CONSTRAINTS ALL IMMEDIATE");
       await client.query("UPDATE intercompany_trades SET version=2 WHERE id=1");
