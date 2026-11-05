@@ -1,6 +1,7 @@
 import { Switch, Route, Redirect } from "wouter";
 import PropertiesRentalsHub from "@/pages/properties/PropertiesRentalsHub";
 import PropertiesContainerTrading from "@/pages/properties/PropertiesContainerTrading";
+import LinkedTradesEditor from "@/pages/intercompany/LinkedTradesEditor";
 import { AccountingToolbox } from "@/lazyPages";
 import type { AuthenticatedUser } from "@/contracts/sessionContracts";
 import {
