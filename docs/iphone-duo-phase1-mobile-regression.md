@@ -79,3 +79,22 @@ route lacks seeded data; the saved report lists each one.
 do not replace a real signed-in Duo Safari run, and unresolved dynamic routes
 block any claim of 100% authenticated coverage. Do not run data-seeding
 commands against production.
+
+## Phase 4 integration and release certification
+
+The combined candidate is [PR #2902](https://github.com/Hassan-Merhi/ERP-FACTORY-SYSTEM/pull/2902). Its tree unifies Phases 1, 2 and 3 without modifying the original draft PRs. Phase 4 fixes the inventory extraction for both `R(...)` and `G(...)` ERP routes; explicitly assigns `exp_excel` permission to the read-only production-matrix bale export; and adds EN/FR/AR strings for the new phone cards. The combined UI Quality workflow executes the Phase 1 inventory, browser regression, Phase 2 component tests and Phase 3 scanner/download tests.
+
+### Automated release gates
+
+- The route inventory and Phase 4 source-contract verifier must pass with all seven workspace/role contexts present.
+- The full frontend TypeScript build and the backend/security checks must be green.
+- The authenticated browser checks must pass on the five Duo-inspired viewport profiles, including viewport resize/reorientation with no app-shell loss or horizontal overflow on the audited screens.
+- All new text must pass the classified multilingual EN/FR/AR ratchet; the runtime must retain keyboard/dialog accessibility.
+- Payment, cost, and stock calculations must stay delegated to the existing server and page handlers; the release does not include database migrations.
+- GitHub merge eligibility and a successful Render deployment/health check are required for a production release.
+
+### Physical Safari acceptance — not automatable by GitHub
+
+Use the user's actual iPhone and the **same signed-in test company**. Record pass/fail evidence for the five scenarios: closed/open/split layout transitions on production matrix and POS; camera permission, duplicate bales, background/lock and retry on scanner; Excel and CSV download into Files followed by opening and verifying rows; re-importing the exact same test spreadsheet and confirming no unintended stock postings; and printing an invoice to PDF while the software keyboard is active. Confirm English, French and Arabic displays, including RTL and saved unsent input state.
+
+Do **not** report 100% device certification or deploy a candidate with any failed required check. Source-contract pass is a code audit only; seeded dynamic routes and physical hardware remain separate certification evidence. Never seed or run synthetic transactions in the production company.
