@@ -178,7 +178,7 @@ BEGIN
        IS DISTINCT FROM
          (to_jsonb(NEW) - ARRAY[
          'status','reversed_by','reversed_at','reversal_date','reversal_reason',
-         'reversal_key','source_reversal_voucher_id','destination_reversal_voucher_id']::text[])
+         'reversal_key','reversal_fingerprint','source_reversal_voucher_id','destination_reversal_voucher_id']::text[])
     THEN RAISE EXCEPTION 'Intercompany payment records are immutable except a coordinated reversal'; END IF;
     RETURN NEW;
   END IF;
