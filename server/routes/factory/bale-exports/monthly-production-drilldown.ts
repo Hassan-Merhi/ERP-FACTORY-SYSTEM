@@ -78,23 +78,46 @@ export function registerFactoryMonthlyProductionDrilldownRoutes(app: Express): v
       const product = await productFor(companyId, period.productId);
       if (!product) return res.status(404).json({ message: "Item not found" });
 
+      // Aggregate the same qualifying bales by worker AND production month.
+      // The worker total is the sum of these groups, so month cells always
+      // reconcile with the total and with the source matrix.
       const result = await db.execute(sql`
         SELECT COALESCE(b.finalized_by, 0)::int AS "workerId",
           CASE WHEN b.finalized_by IS NULL THEN 'Unassigned'
             ELSE COALESCE(NULLIF(MAX(b.worker_name), ''), NULLIF(MAX(fw.full_name), ''), 'Unknown worker')
           END AS "workerName",
+          TO_CHAR(DATE_TRUNC('month', COALESCE(b.stock_entry_date::date, b.created_at::date)), 'YYYY-MM') AS "month",
           COUNT(*)::int AS quantity,
           COALESCE(SUM(b.weight_kg), 0)::text AS "weightKg"
         ${productionSource(companyId, period)}
-        GROUP BY b.finalized_by
-        ORDER BY quantity DESC, "workerName" ASC
+        GROUP BY b.finalized_by,
+          TO_CHAR(DATE_TRUNC('month', COALESCE(b.stock_entry_date::date, b.created_at::date)), 'YYYY-MM')
       `);
-      const workers = resultRows<Row>(result).map((row) => ({
-        workerId: number(row.workerId),
-        workerName: String(row.workerName ?? "Unassigned"),
-        quantity: number(row.quantity),
-        weightKg: String(row.weightKg ?? "0"),
-      }));
+      type MonthlyWorker = {
+        workerId: number; workerName: string; quantity: number;
+        weightKg: string; monthlyBales: Record<string, number>;
+      };
+      const byWorker = new Map<number, MonthlyWorker>();
+      for (const row of resultRows<Row>(result)) {
+        const workerId = number(row.workerId);
+        let worker = byWorker.get(workerId);
+        if (!worker) {
+          worker = {
+            workerId, workerName: String(row.workerName ?? "Unassigned"),
+            quantity: 0, weightKg: "0",
+            monthlyBales: Object.fromEntries(period.months.map((month) => [month, 0])),
+          };
+          byWorker.set(workerId, worker);
+        }
+        const count = number(row.quantity);
+        const month = String(row.month);
+        worker.quantity += count;
+        worker.weightKg = String(number(worker.weightKg) + number(row.weightKg));
+        worker.monthlyBales[month] = (worker.monthlyBales[month] ?? 0) + count;
+      }
+      const workers = [...byWorker.values()].sort((a, b) =>
+        b.quantity - a.quantity || a.workerName.localeCompare(b.workerName)
+      );
       res.set("Cache-Control", "private, no-store");
       return res.json({
         product, months: period.months, workers,

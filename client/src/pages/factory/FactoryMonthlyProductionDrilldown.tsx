@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 type Product = { id: number; name: string; articleCode: string };
-type Worker = { workerId: number; workerName: string; quantity: number; weightKg: string };
+type Worker = { workerId: number; workerName: string; quantity: number; weightKg: string; monthlyBales: Record<string, number> };
 type WorkerResponse = {
   product: Product; months: string[]; workers: Worker[];
   totalBales: number; totalWeightKg: number;
@@ -83,8 +83,9 @@ export function FactoryMonthlyProductionWorkers() {
     worker.workerName.toLowerCase().includes(search.toLowerCase()) ||
     String(worker.workerId).includes(search.trim())), [data?.workers, search]);
   const backToMatrix = () => navigate(root + "?months=" + encodeURIComponent(months));
-  const openBales = (worker: Worker) => {
-    const params = new URLSearchParams({ months, name: worker.workerName });
+  const openBales = (worker: Worker, selectedMonth?: string) => {
+    const params = new URLSearchParams({ months: selectedMonth ?? months, name: worker.workerName });
+    if (selectedMonth && selectedMonth !== months) params.set("returnMonths", months);
     navigate(root + "/" + productId + "/bales/" + worker.workerId + "?" + params.toString());
   };
 
@@ -112,29 +113,63 @@ export function FactoryMonthlyProductionWorkers() {
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search workers" aria-label="Search workers" className="pl-9" />
           </div>
-          <div className="overflow-x-auto rounded-xl border bg-card">
-            <table className="w-full min-w-[500px] text-sm">
-              <thead className="bg-muted"><tr>
-                <th className="p-3 text-left">Worker</th>
-                <th className="p-3 text-right">Bales produced</th>
-                <th className="p-3 text-right">Weight (kg)</th>
+          <p className="text-xs text-muted-foreground">
+            Highest month per worker <strong className="text-emerald-600 dark:text-emerald-300">green</strong>
+            {" · "}lowest <strong className="text-red-600 dark:text-red-300">red</strong>.
+            Click a monthly count to see only that month's bales.
+          </p>
+          <div className="overflow-auto rounded-xl border bg-card" style={{ maxHeight: "calc(100dvh - 315px)" }}>
+            <table className="min-w-max w-full border-separate border-spacing-0 text-sm tabular-nums">
+              <thead className="sticky top-0 z-20 bg-muted text-foreground"><tr>
+                <th className="sticky left-0 z-30 min-w-64 border-b border-r bg-muted p-3 text-left">Worker</th>
+                {data.months.map((month) =>
+                  <th key={month} className="min-w-24 whitespace-nowrap border-b border-r px-3 py-2 text-right">{monthText(month)}</th>
+                )}
+                <th className="min-w-28 whitespace-nowrap border-b border-r p-3 text-right">Weight (kg)</th>
+                <th className="sticky right-0 z-30 min-w-24 border-b bg-muted p-3 text-right">Total bales</th>
               </tr></thead>
-              <tbody>{filtered.map((worker) => <tr key={worker.workerId} className="border-t hover:bg-accent/30">
-                <td className="p-3 font-medium">
-                  <span className="inline-flex items-center gap-2"><Users className="h-4 w-4 text-muted-foreground" />{worker.workerName}</span>
-                  {worker.workerId === 0 && <span className="ml-2 text-xs text-muted-foreground">(no worker recorded)</span>}
-                </td>
-                <td className="p-3 text-right">
-                  <button type="button" className="font-bold text-primary underline-offset-4 hover:underline focus-visible:underline"
-                    onClick={() => openBales(worker)} aria-label={"View " + worker.quantity + " bales for " + worker.workerName}
-                    data-testid={"worker-production-bales-" + worker.workerId}>{format(worker.quantity)}</button>
-                </td>
-                <td className="p-3 text-right tabular-nums">{kg(worker.weightKg)}</td>
-              </tr>)}</tbody>
-              <tfoot className="bg-muted font-semibold"><tr>
-                <td className="p-3">Total (all workers)</td>
-                <td className="p-3 text-right">{format(data.totalBales)}</td>
-                <td className="p-3 text-right">{kg(data.totalWeightKg)}</td>
+              <tbody>{filtered.map((worker) => {
+                const values = data.months.map((month) => worker.monthlyBales[month] ?? 0);
+                const min = Math.min(...values);
+                const max = Math.max(...values);
+                const hasRange = values.length > 1 && min !== max;
+                return <tr key={worker.workerId} className="group hover:bg-accent/30">
+                  <td className="sticky left-0 z-10 border-b border-r bg-card p-3 font-medium group-hover:bg-accent/30">
+                    <span className="inline-flex items-center gap-2"><Users className="h-4 w-4 shrink-0 text-muted-foreground" />{worker.workerName}</span>
+                    {worker.workerId === 0 && <span className="ml-2 text-xs text-muted-foreground">(no worker recorded)</span>}
+                  </td>
+                  {values.map((value, index) => {
+                    const month = data.months[index];
+                    const accent = hasRange && value === max
+                      ? "bg-emerald-100 text-emerald-800 font-bold dark:bg-emerald-950/50 dark:text-emerald-300"
+                      : hasRange && value === min
+                        ? "bg-red-100 text-red-800 font-bold dark:bg-red-950/50 dark:text-red-300" : "";
+                    return <td key={month} className={"border-b border-r px-3 py-2 text-right " + accent}
+                      title={monthText(month) + ": " + format(value) + " bales"}>
+                      {value > 0 ? <button type="button"
+                        className="font-semibold underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                        onClick={() => openBales(worker, month)}
+                        aria-label={"View " + format(value) + " bales for " + worker.workerName + " in " + monthText(month)}
+                        data-testid={"worker-production-month-" + worker.workerId + "-" + month}>{format(value)}</button> : format(value)}
+                    </td>;
+                  })}
+                  <td className="border-b border-r p-3 text-right">{kg(worker.weightKg)}</td>
+                  <td className="sticky right-0 z-10 border-b bg-card p-3 text-right group-hover:bg-accent/30">
+                    <button type="button" className="font-bold text-primary underline-offset-4 hover:underline focus-visible:underline"
+                      onClick={() => openBales(worker)} aria-label={"View " + worker.quantity + " bales for " + worker.workerName}
+                      data-testid={"worker-production-bales-" + worker.workerId}>{format(worker.quantity)}</button>
+                  </td>
+                </tr>;
+              })}</tbody>
+              <tfoot className="sticky bottom-0 z-20 bg-muted font-semibold"><tr>
+                <td className="sticky left-0 z-10 border-t border-r bg-muted p-3">Total (all workers)</td>
+                {data.months.map((month) =>
+                  <td key={month} className="border-t border-r px-3 py-2 text-right">
+                    {format(data.workers.reduce((sum, worker) => sum + (worker.monthlyBales[month] ?? 0), 0))}
+                  </td>
+                )}
+                <td className="border-t border-r p-3 text-right">{kg(data.totalWeightKg)}</td>
+                <td className="sticky right-0 z-10 border-t bg-muted p-3 text-right">{format(data.totalBales)}</td>
               </tr></tfoot>
             </table>
             {filtered.length === 0 && <p className="p-6 text-center text-muted-foreground">No workers match your search.</p>}
@@ -170,7 +205,7 @@ export function FactoryMonthlyProductionBales() {
     ),
     staleTime: 60_000,
   });
-  const backToWorkers = () => navigate(root + "/" + productId + "/workers?months=" + encodeURIComponent(months));
+  const backToWorkers = () => navigate(root + "/" + productId + "/workers?months=" + encodeURIComponent(query.get("returnMonths") || months));
   const totalPages = Math.max(1, Math.ceil((data?.totalRows ?? 0) / (data?.limit ?? 100)));
 
   return <main className="space-y-4 p-3 sm:p-5" data-testid="monthly-production-bales">
