@@ -4,6 +4,7 @@ import { Switch, Route, Redirect } from "wouter";
 import NotFound from "@/pages/not-found";
 import LinkedTradesEditor from "@/pages/intercompany/LinkedTradesEditor";
 import IntercompanyPayments from "@/pages/intercompany/IntercompanyPayments";
+import IntercompanyLifecycle from "@/pages/intercompany/IntercompanyLifecycle";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 const HelpTraining = lazy(() => import("@/pages/HelpTraining"));
 import { canAccessAnyErpFeature, canAccessErpFeature, type ErpFeatureAccess } from "@/app/erpAccess";
@@ -262,6 +263,11 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
         "/intercompany/payments",
         canAccess("containers") && !["POS", "View Only"].includes(effectiveRole),
         IntercompanyPayments
+      )}
+      {R(
+        "/intercompany/lifecycle",
+        canAccess("containers") && !["POS", "View Only"].includes(effectiveRole),
+        IntercompanyLifecycle
       )}
       {R("/ai-validation", isDeveloper, AiValidationPage)}
       {R("/ai-command-center", isDeveloper, AICommandCenter)}
