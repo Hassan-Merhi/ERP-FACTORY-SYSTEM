@@ -16,12 +16,12 @@ const BASE="/api/intercompany-container-trading/payments";
 const newKey=()=> "icpay-"+crypto.randomUUID();
 const dateNow=()=>new Date().toLocaleDateString("en-CA");
 const money=(s:string|number|null)=>new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(Number(s||0));
-type Pair={relationshipId:number;sourceCompanyId:number;destinationCompanyId:number};
+type Pair={relationshipId:number;sourceCompanyId:number;destinationCompanyId:number;tradeEnabled:boolean};
 type CashRef={type:"bank"|"cash";id:number};
 type CashAccount=CashRef&{companyId:number;name:string};
 type UnpaidPO={tradeId:number;version:number;containerNumber:string;landedCost:string;applied:string;unpaid:string};
 type Credit={paymentId:number;available:string;originalPaymentDate:string};
-type Setup={relationshipId:number;sourceCompanyId:number;destinationCompanyId:number;
+type Setup={relationshipId:number;tradeEnabled:boolean;sourceCompanyId:number;destinationCompanyId:number;
   cashAccounts:CashAccount[];purchaseOrders:UnpaidPO[];credits:Credit[]};
 type HistoryPayment={id:number;status:"confirmed"|"reversed";paymentDate:string;transferReference:string;
   currency:string;nativeAmount:string;historicalRate:string;baseAmount:string;credit:string;
@@ -138,7 +138,7 @@ export default function IntercompanyPayments(){
   });
   const usdAmount=Number(nativeAmount||0)/Number(historicalRate||1);
   const manuallyAllocated=Object.values(allocation).reduce((sum,value)=>sum+Number(value||0),0);
-  const canConfirm=Boolean(relationshipId&&sourceCash&&destinationCash&&transferReference.trim().length>=5&&
+  const canConfirm=Boolean(setup.data?.tradeEnabled&&relationshipId&&sourceCash&&destinationCash&&transferReference.trim().length>=5&&
     evidence.trim().length>=8&&nativeAmount&&historicalRate&&Number.isFinite(usdAmount)&&usdAmount>0&&
     sourceConfirmed&&destConfirmed&&
     manuallyAllocated<=Math.round(usdAmount*100)/100+.00001&&!confirm.isPending);
@@ -158,7 +158,7 @@ export default function IntercompanyPayments(){
           value={relationshipId??""} onChange={e=>setRelationshipId(Number(e.target.value)||null)}>
           <option value="">Choose an enabled relationship</option>
           {pairs.data?.relationships.map(p=><option key={p.relationshipId} value={p.relationshipId}>
-            Properties #{p.sourceCompanyId} / ERP #{p.destinationCompanyId}
+            Properties #{p.sourceCompanyId} / ERP #{p.destinationCompanyId} {p.tradeEnabled?"":"(history only)"}
           </option>)}
         </select>
         {setup.isError&&<p role="alert" className="text-destructive">Cannot access the verified partner accounts. Check company permissions.</p>}
