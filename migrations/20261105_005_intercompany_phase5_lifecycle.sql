@@ -29,7 +29,9 @@ CREATE TABLE intercompany_destination_receipt_items (
   quantity NUMERIC(18,3) NOT NULL CHECK(quantity>0),
   landed_value NUMERIC(20,2) NOT NULL CHECK(landed_value>=0),
   value_moved NUMERIC(20,2) NOT NULL,
-  canonical_movement_id BIGINT NOT NULL UNIQUE REFERENCES canonical_stock_movements(id) ON DELETE RESTRICT,
+  -- The canonical movement table is created at runtime, not by Drizzle migrations.
+  -- Ownership is enforced by the append-only guard below instead of a DDL FK.
+  canonical_movement_id BIGINT NOT NULL UNIQUE,
   CONSTRAINT ic_receipt_one_item UNIQUE(receipt_id,stock_item_id),
   CONSTRAINT ic_receipt_no_cost_variance CHECK(landed_value=value_moved)
 );
@@ -312,7 +314,8 @@ BEFORE INSERT OR UPDATE OR DELETE ON po_line_items FOR EACH ROW EXECUTE FUNCTION
 CREATE TRIGGER ic_phase5_canceled_charge_lock
 BEFORE INSERT OR UPDATE OR DELETE ON container_charges FOR EACH ROW EXECUTE FUNCTION ic_phase5_preserve_closed_trade_history();
 CREATE TRIGGER ic_phase5_canceled_container_lock
-BEFORE UPDATE OR DELETE ON containers FOR EACH ROW EXECUTE FUNCTION ic_phase5_preserve_closed_trade_history();
+BEFORE UPDATE OF company_id,supplier_id,status,offload_date,items_total,charges_total,grand_total
+ OR DELETE ON containers FOR EACH ROW EXECUTE FUNCTION ic_phase5_preserve_closed_trade_history();
 CREATE TRIGGER ic_phase5_evidence_voucher_lock
 BEFORE UPDATE OR DELETE ON vouchers FOR EACH ROW EXECUTE FUNCTION ic_phase5_preserve_closed_trade_history();
 CREATE TRIGGER ic_phase5_evidence_entry_lock
