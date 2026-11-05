@@ -18,7 +18,6 @@ import {
   insertCustomerProformaSchema,
 } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
-import { autoSavePriceToPriceList } from "./_helpers";
 import { toMoney } from "../../../lib/money";
 
 function hasDuplicateNormalizedArticleCodes(lines: Array<{ articleCode?: unknown }>): boolean {
@@ -84,12 +83,8 @@ export function registerFactoryCustomerProformaBulkPricingRoutes(app: Express) {
       // Sync outside transaction — reservations are derived, not transactional
       await syncProformaReservations(db, companyId, result.id);
 
-      // Auto-save all line prices to customer price list
-      for (const l of validLines) {
-        if (l.articleCode && l.pricePerBale) {
-          await autoSavePriceToPriceList(companyId, customerId, l.articleCode, l.pricePerBale).catch(() => {});
-        }
-      }
+      // Creation must not alter the customer's saved agreed prices. Those
+      // prices change only through explicit price-list actions.
 
       res.json(result);
     } catch (error: unknown) {
