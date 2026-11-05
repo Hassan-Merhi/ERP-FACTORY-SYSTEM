@@ -22,7 +22,10 @@
     "GET /api/intercompany-container-trading/payments/pairs/:relationshipId/setup [requireAuth > <anonymous>]",
     "GET /api/intercompany-container-trading/payments/pairs/:relationshipId/history [requireAuth > <anonymous>]",
     "POST /api/intercompany-container-trading/payments/confirm [requireAuth > <anonymous>]",
-    "POST /api/intercompany-container-trading/payments/:paymentId/reverse [requireAuth > <anonymous>]"
+    "POST /api/intercompany-container-trading/payments/:paymentId/reverse [requireAuth > <anonymous>]",
+    "GET /api/intercompany-container-trading/lifecycle [requireAuth > <anonymous>]",
+    "POST /api/intercompany-container-trading/lifecycle/:tradeId/receive [requireAuth > <anonymous>]",
+    "POST /api/intercompany-container-trading/lifecycle/:tradeId/cancel [requireAuth > <anonymous>]"
   ],
   "routeManifestMountAdditions": [],
   "routeManifestReplacements": [],
