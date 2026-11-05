@@ -116,14 +116,17 @@ function uniqueValues(rows: PosContainerRow[], selector: (row: PosContainerRow) 
   );
 }
 
-function PortDepartureDateCell({ container, todayISO, mobile = false }: { container: PosContainerRow; todayISO: string; mobile?: boolean }) {
-  const [draft, setDraft] = useState(container.portDepartureDate ?? "");
+function PortDepartureDateCell({
+  container, todayISO, mobile = false, draft, onDraftChange,
+}: {
+  container: PosContainerRow;
+  todayISO: string;
+  mobile?: boolean;
+  draft: string;
+  onDraftChange: (value: string) => void;
+}) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-
-  useEffect(() => {
-    setDraft(container.portDepartureDate ?? "");
-  }, [container.portDepartureDate]);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -162,7 +165,7 @@ function PortDepartureDateCell({ container, todayISO, mobile = false }: { contai
         type="date"
         value={draft}
         max={todayISO}
-        onChange={(event) => setDraft(event.target.value)}
+        onChange={(event) => onDraftChange(event.target.value)}
         disabled={mutation.isPending}
         className="h-8 w-[145px] min-w-[145px] text-xs"
         aria-label={`Date ${container.containerNumber} left the port`}
@@ -191,6 +194,15 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
   const [, setLocation] = useLocation();
   const { formatDisplayDate } = useDateFormat();
   const [todayISO, setTodayISO] = useState(() => getLocalTodayISO());
+  // Shared by phone cards and desktop rows so an unsaved edit survives a fold,
+  // rotation, or split-screen resize without cross-company drafts.
+  const [portDateDrafts, setPortDateDrafts] = useState<Record<number, string>>({});
+  useEffect(() => setPortDateDrafts({}), [posUser?.currentCompanyId]);
+  const departureEditorProps = (container: PosContainerRow) => ({
+    draft: portDateDrafts[container.id] ?? container.portDepartureDate ?? "",
+    onDraftChange: (value: string) =>
+      setPortDateDrafts((previous) => ({ ...previous, [container.id]: value })),
+  });
   useEffect(() => {
     const refreshToday = () => setTodayISO(getLocalTodayISO());
     const interval = window.setInterval(refreshToday, 60_000);
@@ -546,7 +558,7 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
             {isColumnVisible("portDeparture") && (
               <div className="mt-3">
                 <p className="mb-1 text-xs font-medium text-muted-foreground">Left port</p>
-                <PortDepartureDateCell container={container} todayISO={todayISO} mobile />
+                <PortDepartureDateCell container={container} todayISO={todayISO} mobile {...departureEditorProps(container)} />
               </div>
             )}
           </article>
@@ -634,7 +646,7 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
                     ) : null}
                     {isColumnVisible("portDeparture") ? (
                       <TableCell className="whitespace-nowrap">
-                        <PortDepartureDateCell container={container} todayISO={todayISO} />
+                        <PortDepartureDateCell container={container} todayISO={todayISO} {...departureEditorProps(container)} />
                       </TableCell>
                     ) : null}
                     {isColumnVisible("daysSinceDeparture") ? (
