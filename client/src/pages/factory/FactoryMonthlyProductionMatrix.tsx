@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
+import { downloadBlob } from "@/lib/downloadBlob";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -202,12 +203,7 @@ export default function FactoryMonthlyProductionMatrix() {
         ...months.map((m) => byId(p.id, m)), rowTotal(p.id)]),
     ];
     const csv = "\uFEFF" + rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "factory-monthly-production.csv";
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), "factory-monthly-production.csv");
   };
   const exportExcel = async () => {
     if (exportingExcel || months.length === 0 || !data) return;
