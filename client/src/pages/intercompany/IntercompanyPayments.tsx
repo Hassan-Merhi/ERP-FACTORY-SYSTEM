@@ -213,6 +213,12 @@ export default function IntercompanyPayments() {
   });
   const usdAmount = Number(nativeAmount || 0) / Number(historicalRate || 1);
   const manuallyAllocated = Object.values(allocation).reduce((sum, value) => sum + Number(value || 0), 0);
+  const invalidPoAllocation = Object.entries(allocation).some(([tradeId, value]) => {
+    if (!value.trim()) return false;
+    if (!/^\d+(?:\.\d{1,2})?$/.test(value)) return true;
+    const linked = setup.data?.purchaseOrders.find((po) => po.tradeId === Number(tradeId));
+    return !linked || Math.round(Number(value) * 100) > Math.round(Number(linked.unpaid) * 100);
+  });
   const canConfirm = Boolean(
     setup.data?.tradeEnabled &&
     relationshipId &&
@@ -226,6 +232,7 @@ export default function IntercompanyPayments() {
     usdAmount > 0 &&
     sourceConfirmed &&
     destConfirmed &&
+    !invalidPoAllocation &&
     manuallyAllocated <= Math.round(usdAmount * 100) / 100 + 0.00001 &&
     !confirm.isPending
   );
