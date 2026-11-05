@@ -64,7 +64,13 @@ const report = {
 };
 
 function matchesPattern(pattern, concreteRoute) {
-  const escape = (value) => value.replace(/[.*+?^$\\{}()|[\\]\\]/g, "\\function fileSafe(value) {");
+  const expected = pattern.split("/");
+  const actual = concreteRoute.split("?")[0].split("/");
+  return expected.length === actual.length &&
+    expected.every((segment, index) => segment.startsWith(":") || segment === actual[index]);
+}
+
+function fileSafe(value) {");
   const segments = pattern.split("/").map((segment) => segment.startsWith(":") ? "[^/?]+" : escape(segment));
   return new RegExp("^" + segments.join("/") + "$").test(concreteRoute.split("?")[0]);
 }
