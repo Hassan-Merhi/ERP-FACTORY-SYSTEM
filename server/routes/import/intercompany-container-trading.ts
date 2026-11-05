@@ -81,7 +81,12 @@ export function registerIntercompanyContainerTradingRoutes(app: Express) {
       try {
         const {companyId,userId,role} = companyFromSession(req);
         if (!req.file) throw new TradingImportError(400,"Select the original Excel workbook");
-        const selections: unknown = JSON.parse(String(req.body.selections ?? "null"));
+        let selections: unknown;
+        try {
+          selections = JSON.parse(String(req.body.selections ?? "null"));
+        } catch {
+          throw new TradingImportError(400, "Invalid container destination selections");
+        }
         const input = importInputSchema.parse({
           externalSupplierId:Number(req.body.externalSupplierId),
           importDate:req.body.importDate,
