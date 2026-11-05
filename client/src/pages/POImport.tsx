@@ -19,16 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useCompany } from "@/contexts/CompanyContext";
-import {
-  Upload,
-  FileSpreadsheet,
-  CheckCircle,
-  XCircle,
-  Download,
-  Check,
-  ChevronsUpDown,
-  RefreshCw,
-} from "lucide-react";
+import { Upload, FileSpreadsheet, CheckCircle, XCircle, Download, Check, ChevronsUpDown, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Supplier } from "@shared/schema";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -492,7 +483,7 @@ function ErpPOImport() {
     ]
   );
 
-  const { mutate: refreshStockItemsMutate } = refreshStockItemsMutation;
+  const refreshStockItemsMutate = refreshStockItemsMutation.mutate;
   const refreshStockItems = useCallback(() => {
     if (!preview || refreshInFlight.current) return;
     refreshInFlight.current = true;
