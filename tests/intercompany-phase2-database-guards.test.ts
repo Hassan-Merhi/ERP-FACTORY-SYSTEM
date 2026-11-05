@@ -41,7 +41,7 @@ describe("Phase 2 PostgreSQL intercompany import safeguards", () => {
       await client.query("INSERT INTO ledger_accounts(id,company_id) VALUES (11,1),(12,1),(13,1),(14,1),(15,2),(16,2),(17,1)");
       await client.query("INSERT INTO suppliers(id,company_id,active) VALUES (1,1,true),(2,2,true),(3,3,true)");
       await client.query("INSERT INTO containers(id,company_id,status) VALUES (10,1,'OTW'),(11,1,'OTW')");
-      await client.query("INSERT INTO vouchers(id) VALUES (51),(52),(53),(54)");
+      await client.query("INSERT INTO vouchers(id) VALUES (51),(52),(53),(54),(55)");
       await client.query("INSERT INTO purchase_orders(id,company_id,container_id,voucher_id,po_number) VALUES (21,1,10,51,'EXT-1'),(22,2,10,52,'IC-1'),(23,1,11,NULL,'OTHER')");
 
       let serial = 0;
@@ -109,7 +109,11 @@ describe("Phase 2 PostgreSQL intercompany import safeguards", () => {
       await rejects("INSERT INTO voucher_entries(voucher_id,debit_amount) VALUES (54,20)", "coordinated");
       // Unrelated physical containers and vouchers are unaffected.
       await client.query("INSERT INTO container_offloads(container_id) VALUES (11)");
-      await client.query("UPDATE vouchers SET description='unrelated' WHERE id=999");
+      await client.query("UPDATE vouchers SET description='unrelated' WHERE id=55");
+      const [unrelatedVoucher] = (await client.query("SELECT description FROM vouchers WHERE id=55")).rows;
+      expect(unrelatedVoucher.description).toBe("unrelated");
+      await rejects("UPDATE containers SET container_number='changed' WHERE id=10", "ownership");
+      await rejects("UPDATE containers SET offload_date=CURRENT_DATE WHERE id=10", "ownership");
     } finally {
       await client.query("ROLLBACK");
       await client.end();
