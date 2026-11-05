@@ -155,7 +155,7 @@ export default function TicketManagement({ sourceMode = "erp" }:{sourceMode?:"er
   const listing=useQuery({queryKey:[...ticketKey(selectedCompany?.id),page,q,status],queryFn:()=>fetchJson<{tickets:Ticket[];hasMore:boolean}>(`/api/tickets?${params}`),enabled:!!selectedCompany?.id});
 
   const viewCreate=creating||location.endsWith("/new");
-  if(showingDashboard)return <main className="w-full min-w-0 overflow-x-hidden p-3 sm:p-6"><TicketAdminDashboard onBack={()=>{setShowingDashboard(false);navigate(sourceMode==="factory"?"/factory/tickets":"/tickets");}}/></main>;
+  if(showingDashboard)return <main className="w-full min-w-0 overflow-x-hidden p-3 sm:p-6"><TicketAdminDashboard canExport={adminAccess.data?.canExport===true} onBack={()=>{setShowingDashboard(false);navigate(sourceMode==="factory"?"/factory/tickets":"/tickets");}} onOpenTicket={id=>{setShowingDashboard(false);setTicketId(id);navigate(`${sourceMode==="factory"?"/factory/tickets":"/tickets"}?ticketId=${id}`);}}/></main>;
   if(editingNotifications)return <main className="w-full min-w-0 overflow-x-hidden p-3 sm:p-6"><TicketNotificationSettings onClose={()=>setEditingNotifications(false)}/></main>;
   if(viewCreate)return <main className="w-full min-w-0 overflow-x-hidden p-3 sm:p-6"><TicketForm sourceMode={sourceMode} onCancel={()=>{setCreating(false);navigate(sourceMode==="factory"?"/factory/tickets":"/tickets");}} onCreated={(id,warning)=>{setCreating(false);setEvidenceWarning(warning);navigate(sourceMode==="factory"?"/factory/tickets":"/tickets");setTicketId(id);navigate(`${sourceMode==="factory"?"/factory/tickets":"/tickets"}?ticketId=${id}`);}}/></main>;
   return <main className="w-full min-w-0 space-y-4 overflow-x-hidden p-3 sm:p-6">
