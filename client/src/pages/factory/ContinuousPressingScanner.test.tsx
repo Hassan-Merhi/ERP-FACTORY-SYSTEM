@@ -140,4 +140,35 @@ describe("ContinuousPressingScanner camera lifecycle", () => {
     await waitFor(() => expect(screen.getByText(/NOT yet counted/)).toBeInTheDocument(), { timeout: 3000 });
     expect(screen.queryByText(/Server confirmed:/)).not.toBeInTheDocument();
   });
+  it("releases the pressing camera on Safari pagehide and restarts on pageshow", async () => {
+    await startScanner();
+    await act(async () => window.dispatchEvent(new Event("pagehide")));
+    expect(stopTrack).toHaveBeenCalledTimes(1);
+    await act(async () => window.dispatchEvent(new Event("pageshow")));
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2));
+  });
+
+  it("shows Retry camera when a folded screen ends the pressing stream", async () => {
+    let ended: (() => void) | undefined;
+    const track = {
+      stop: stopTrack,
+      getCapabilities: () => ({ torch: true }),
+      applyConstraints: vi.fn(async () => {}),
+      addEventListener: vi.fn((name: string, handler: () => void) => {
+        if (name === "ended") ended = handler;
+      }),
+      removeEventListener: vi.fn(),
+    };
+    getUserMedia.mockImplementation(async () => ({
+      getTracks: () => [track],
+      getVideoTracks: () => [track],
+    }));
+    await startScanner();
+    await waitFor(() => expect(ended).toBeTypeOf("function"));
+    await act(async () => ended?.());
+    expect(screen.getByRole("alert")).toHaveTextContent(/Camera interrupted/);
+    fireEvent.click(screen.getByRole("button", { name: /Retry camera/i }));
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2));
+  });
+
 });
