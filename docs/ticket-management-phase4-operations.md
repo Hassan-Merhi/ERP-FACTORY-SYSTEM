@@ -7,6 +7,7 @@ Phase 4 processes the outbox created by the Phase 1–3 ticket services. It adds
 
 Environment:
 - `TICKET_NOTIFICATIONS_ENABLED=true` starts the once-per-minute ticket worker when `ENABLE_SCHEDULERS` is not `false`.
+- Optional `TICKET_APP_BASE_URL=https://your-erp.example.com` adds a validated HTTPS deep link to email/WhatsApp messages.
 - SMTP email: `TICKET_SMTP_HOST`, `TICKET_SMTP_PORT` (default `587`), `TICKET_SMTP_SECURE=true|false`, `TICKET_SMTP_USER`, `TICKET_SMTP_PASS`, `TICKET_SMTP_FROM`. These are server-only secrets. Do not put passwords in the database, frontend, or commit history.
 - WhatsApp: reuses the existing Green API `whatsapp_settings` row `id=1` (enabled, instance ID, API token). The provider must be authorized for the intended recipient messages. There is **no** approved WhatsApp Business template-management or delivery-webhook integration in Phase 4.
 - Recipients must set their own company-scoped email/phone details and explicitly enable each external channel in Ticket Management → Notification settings. Without an opt-in, only in-app delivery is created.
