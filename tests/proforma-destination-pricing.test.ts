@@ -115,6 +115,38 @@ databaseDescribe("destination-scoped proforma prices", () => {
     expect(await readLinePrice(secondLineId)).toBe(10);
   });
 
+  it("lists destinations and deletes only the selected destination's price", async () => {
+    const params = { customerId: String(fixture.customerId) };
+    const list = await call("GET", "/api/factory/customer-price-lists/:customerId/destinations", fixture.companyId, { params });
+    expect(list.statusCode).toBe(200);
+    expect(list.body).toEqual(expect.arrayContaining(["L'SHI", "MALI"]));
+
+    const legacy = await call("PUT", "/api/factory/customer-price-lists/:customerId", fixture.companyId, {
+      params,
+      body: [{ articleCode, pricePerBale: 99 }],
+    });
+    expect(legacy.statusCode).toBe(200);
+
+    const deleted = await call("DELETE", "/api/factory/customer-price-lists/:customerId/:articleCode", fixture.companyId, {
+      params: { ...params, articleCode },
+      query: { destination: "MALI" },
+    });
+    expect(deleted.statusCode).toBe(200);
+    expect(await agreedPrice("MALI")).toBeUndefined();
+    expect(Number(await agreedPrice("L'SHI"))).toBe(25);
+    const old = await call("GET", "/api/factory/customer-price-lists/:customerId", fixture.companyId, { params });
+    expect(Number(old.body.find((row: { article_code: string }) => row.article_code === articleCode)?.price_per_bale)).toBe(99);
+    expect(await readLinePrice(secondLineId)).toBe(10);
+
+    const restored = await call("PUT", "/api/factory/customer-price-lists/:customerId", fixture.companyId, {
+      params,
+      query: { destination: "MALI" },
+      body: [{ articleCode, pricePerBale: 10 }],
+    });
+    expect(restored.statusCode).toBe(200);
+    expect(Number(await agreedPrice("MALI"))).toBe(10);
+  });
+
   it("changing an old proforma's destination does not reprice it", async () => {
     const response = await call("PUT", "/api/factory/customer-proformas/:id", fixture.companyId, {
       params: { id: String(secondId) },
