@@ -99,14 +99,34 @@ async function upload(jwt, key, bytes, contentType, overwrite) {
   if (!response.ok) throw new Error("Private storage rejected " + key + ": HTTP " + response.status);
 }
 
-async function currentManifest(jwt) {
-  const result = await grant(jwt, { key: MANIFEST_KEY, operation: "get" });
-  if (typeof result.readUrl !== "string") throw new Error("Gateway returned no manifest read grant");
+async function readUrl(jwt, key) {
+  const result = await grant(jwt, { key, operation: "get" });
+  if (typeof result.readUrl !== "string") throw new Error("Gateway returned no read grant for " + key);
   const url = new URL(result.readUrl);
-  if (url.protocol !== "https:" || url.host !== "txyfgtsysrceqhoj.private.blob.vercel-storage.com" || url.pathname !== "/" + MANIFEST_KEY) {
-    throw new Error("Gateway returned an untrusted manifest location");
+  if (url.protocol !== "https:" || url.host !== "txyfgtsysrceqhoj.private.blob.vercel-storage.com" || url.pathname !== "/" + key) {
+    throw new Error("Gateway returned an untrusted location for " + key);
   }
-  const response = await fetch(url, { redirect: "error" });
+  return url;
+}
+
+/**
+ * Media objects are immutable and named after the source commit, so a
+ * rollback to an earlier recording finds them already in storage. Reuse them
+ * instead of failing on the refused overwrite.
+ */
+async function alreadyStored(jwt, key, bytes) {
+  const response = await fetch(await readUrl(jwt, key), { method: "HEAD", redirect: "error" });
+  if (response.status === 404) return false;
+  if (!response.ok) throw new Error("Could not check " + key + ": HTTP " + response.status);
+  const length = Number(response.headers.get("content-length"));
+  if (Number.isFinite(length) && length > 0 && length !== bytes.length) {
+    throw new Error("Stored object " + key + " differs in size from the validated recording");
+  }
+  return true;
+}
+
+async function currentManifest(jwt) {
+  const response = await fetch(await readUrl(jwt, MANIFEST_KEY), { redirect: "error" });
   if (response.status === 404) return {};
   if (!response.ok) throw new Error("Could not read the current manifest: HTTP " + response.status);
   const text = await response.text();
@@ -131,8 +151,12 @@ if (process.argv[1] && path.resolve(process.argv[1]) === new URL(import.meta.url
       const bytes = await fs.readFile(path.join(root, item.topic, filename));
       if (bytes.length < 16 || bytes.length > limit) throw new Error("Invalid validated file " + item.topic + "/" + filename);
       const key = "training/videos/" + item.topic + "/" + sha + ext;
+      if (await alreadyStored(jwt, key, bytes)) {
+        receipts.push({ key, bytes: bytes.length, reused: true });
+        continue;
+      }
       await upload(jwt, key, bytes, contentType, false);
-      receipts.push({ key, bytes: bytes.length });
+      receipts.push({ key, bytes: bytes.length, reused: false });
     }
   }
   const manifest = mergeManifest(await currentManifest(jwt), validated, sha, publishedBy);
