@@ -6,6 +6,7 @@
 import { ExcelJS, writeFile } from "@/lib/excelHelper";
 
 export type MonthlyProductionExcelRow = {
+  productId: number;
   name: string;
   articleCode: string;
   categoryName: string;
@@ -18,6 +19,7 @@ export type MonthlyProductionExcelOptions = {
   monthLabels: string[];
   category: string;
   search: string;
+  appOrigin: string;
 };
 
 const PALETTE = {
@@ -53,6 +55,29 @@ function columnLetter(column: number): string {
   return letters;
 }
 
+/**
+ * Build the same worker drill-down destination used by clicking a quantity
+ * on the live Monthly Production Matrix. Workbook links open the signed-in
+ * ERP in a browser; the XLSX does not embed or expose employee/bale records.
+ */
+export function monthlyProductionDrilldownUrl(appOrigin: string, productId: number, selectedMonths: string[]): string {
+  if (!Number.isSafeInteger(productId) || productId <= 0 ||
+      !selectedMonths.length || selectedMonths.some((month) => !/^\d{4}-(0[1-9]|1[0-2])$/.test(month))) {
+    throw new Error("Invalid monthly production drill-down link");
+  }
+  const origin = new URL(appOrigin);
+  if (!["https:", "http:"].includes(origin.protocol)) throw new Error("Invalid ERP address");
+  const url = new URL("/factory/monthly-production-matrix/" + productId + "/workers", origin.origin);
+  url.searchParams.set("months", selectedMonths.join(","));
+  return url.toString();
+}
+
+function linkedCount(url: string, count: number): ExcelJS.CellFormulaValue {
+  // Numeric friendly_name preserves the value for SUMs and Excel table filters.
+  // ExcelJS stores the precomputed result for a correct display before recalc.
+  return { formula: 'HYPERLINK("' + url.replaceAll('"', '""') + '",' + count + ')', result: count };
+}
+
 /** Same highest/lowest logic as the on-screen Monthly Production Matrix. */
 export function productionMonthTone(values: number[], index: number): "highest" | "lowest" | "normal" {
   if (values.length <= 1) return "normal";
@@ -65,13 +90,16 @@ export function productionMonthTone(values: number[], index: number): "highest" 
 }
 
 export function buildMonthlyProductionExcelWorkbook(options: MonthlyProductionExcelOptions): ExcelJS.Workbook {
-  const { rows, months, monthLabels, category, search } = options;
+  const { rows, months, monthLabels, category, search, appOrigin } = options;
   if (months.length === 0 || months.length !== monthLabels.length) {
     throw new Error("Select at least one valid month before exporting.");
   }
   if (rows.some((row) => row.values.length !== months.length)) {
     throw new Error("Production matrix export contains mismatched month columns.");
   }
+  // Validate the origin before writing hyperlink formulas into any cell.
+  const exportOrigin = new URL(appOrigin);
+  if (!["https:", "http:"].includes(exportOrigin.protocol)) throw new Error("Invalid ERP address");
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Business OS Factory";
@@ -109,7 +137,7 @@ export function buildMonthlyProductionExcelWorkbook(options: MonthlyProductionEx
 
   worksheet.mergeCells("A3:" + lastColumn + "3");
   const legendCell = worksheet.getCell("A3");
-  legendCell.value = "GREEN = highest month per item     |     RED = lowest month per item     |     Equal months are not highlighted";
+  legendCell.value = "GREEN = highest month     |     RED = lowest month     |     CLICK A NONZERO COUNT = open worker details in ERP";
   legendCell.font = { name: "Aptos", size: 9, italic: true, color: { argb: PALETTE.subdued } };
   legendCell.alignment = { vertical: "middle", indent: 1 };
   worksheet.getRow(3).height = 22;
@@ -117,7 +145,7 @@ export function buildMonthlyProductionExcelWorkbook(options: MonthlyProductionEx
   worksheet.mergeCells("A4:" + lastColumn + "4");
   worksheet.getRow(4).height = 12;
   worksheet.mergeCells("A5:" + lastColumn + "5");
-  worksheet.getCell("A5").value = "Monthly counts are based on stock-entry production. Values reflect the current matrix filters and item order.";
+  worksheet.getCell("A5").value = "Click a number to open its live worker breakdown in your browser (ERP sign-in required). The export reflects the selected filters.";
   worksheet.getCell("A5").font = { name: "Aptos", size: 9, color: { argb: PALETTE.subdued } };
   worksheet.getCell("A5").alignment = { vertical: "middle", indent: 1 };
   worksheet.getRow(5).height = 23;
@@ -170,15 +198,21 @@ export function buildMonthlyProductionExcelWorkbook(options: MonthlyProductionEx
         cell.fill = background(PALETTE.redFill);
         cell.font = { name: "Aptos", size: 10, bold: true, color: { argb: PALETTE.redText } };
       }
+      // Zero is not clickable on the web matrix, so leave zero numeric.
+      const value = rows[i].values[monthIndex];
+      if (value > 0) {
+        cell.value = linkedCount(monthlyProductionDrilldownUrl(appOrigin, rows[i].productId, [months[monthIndex]]), value);
+        cell.font = { ...cell.font, underline: true };
+      }
     }
     const totalCell = dataRow.getCell(totalColumn);
     totalCell.fill = background(PALETTE.totalFill);
     totalCell.font = { name: "Aptos", size: 10, bold: true, color: { argb: PALETTE.totalText } };
-    totalCell.value = {
-      formula: "SUM(" + columnLetter(monthStartColumn) + dataRow.number + ":" +
-        columnLetter(totalColumn - 1) + dataRow.number + ")",
-      result: rows[i].values.reduce((sum, count) => sum + count, 0),
-    };
+    const itemTotal = rows[i].values.reduce((sum, count) => sum + count, 0);
+    totalCell.value = itemTotal > 0
+      ? linkedCount(monthlyProductionDrilldownUrl(appOrigin, rows[i].productId, months), itemTotal)
+      : 0;
+    if (itemTotal > 0) totalCell.font = { ...totalCell.font, underline: true };
   }
 
   const totalRow = worksheet.getRow(totalRowNumber);
