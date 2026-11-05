@@ -312,6 +312,23 @@ export async function postIntercompanyImport(args: {
   const destinations = [...new Set(policies.map(p => p.destinationCompanyId))];
   return withinTrustedPair(sourceCompanyId, destinations, () => db.transaction(async tx => {
     await tx.execute(sql.raw("SELECT pg_advisory_xact_lock(" + IMPORT_LOCK + ", " + sourceCompanyId + ")"));
+    // Partner settings may have changed while the request awaited the source lock.
+    // Never post under a stale account map or a now-disabled relationship.
+    const freshPolicies = await tx.select().from(intercompanyRelationshipPolicies)
+      .where(inArray(intercompanyRelationshipPolicies.id, ids)).for("update");
+    const postingKeys = [
+      "sourceReceivableAccountId", "destinationPayableAccountId", "sourceSalesAccountId",
+      "sourcePurchaseAccountId", "sourceCostAccountId", "sourceChargeAccrualAccountId",
+      "destinationGitAccountId", "destinationSupplierId",
+    ] as const;
+    for (const selected of policies) {
+      const current = freshPolicies.find(p => p.id === selected.id);
+      assert(current && current.tradeEnabled && current.version === selected.version &&
+        current.sourceCompanyId === sourceCompanyId &&
+        current.destinationCompanyId === selected.destinationCompanyId &&
+        postingKeys.every(key => current[key] === selected[key]),
+        "Partner account mapping changed during import. Preview again before confirming.");
+    }
     const [existing] = await tx.select({id:intercompanyImportBatches.id}).from(intercompanyImportBatches)
       .where(and(eq(intercompanyImportBatches.sourceCompanyId, sourceCompanyId),
         eq(intercompanyImportBatches.fileSha256, preview.sha256))).limit(1);
