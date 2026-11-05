@@ -2,6 +2,8 @@ import { AlertTriangle, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { duoMobileText } from "@/i18n/iphoneDuoMobileTranslations";
 
 type PricingMode = "per_bale" | "per_kg";
 export type MobileProformaRow = {
@@ -57,10 +59,12 @@ export function V5ProformaMobileLines({
   onClear,
   variant,
 }: Props) {
+  const language = useOptionalApplicationLanguage()?.language ?? "en";
+  const tx = (key: Parameters<typeof duoMobileText>[0]) => duoMobileText(key, language);
   return (
     <section
       className="mx-3 space-y-3 rounded-b-xl border border-t-0 bg-card p-3 md:hidden phone-land:block sm:mx-5"
-      aria-label={variant === "create" ? "Create proforma item lines" : "Edit proforma item lines"}
+      aria-label={tx(variant === "create" ? "createLines" : "editLines")}
       data-testid={variant === "create" ? "v5-create-mobile-lines" : "v5-edit-mobile-lines"}
     >
       {rows.map((row) => {
@@ -91,7 +95,7 @@ export function V5ProformaMobileLines({
                   size="icon"
                   variant="ghost"
                   className="h-11 w-11 shrink-0 text-destructive"
-                  aria-label={`Remove ${row.productName} from proforma`}
+                  aria-label={`${tx("removeLine")}: ${row.productName}`}
                   onClick={() => onClear(row.articleCode)}
                   data-testid={`v5-${variant}-mobile-clear-${row.articleCode}`}
                 >
@@ -101,25 +105,25 @@ export function V5ProformaMobileLines({
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-muted/40 p-2 text-xs">
               <div>
-                <span className="block text-muted-foreground">Available balance</span>
+                <span className="block text-muted-foreground">{tx("availableBalance")}</span>
                 <strong className={cn("tabular-nums", row.freeToPromise < 0 ? "text-destructive" : "text-emerald-600 dark:text-emerald-400")}>
                   {row.freeToPromise > 0 ? "+" : ""}{row.freeToPromise.toLocaleString()}
                 </strong>
               </div>
               <div>
-                <span className="block text-muted-foreground">Total weight</span>
+                <span className="block text-muted-foreground">{tx("totalWeight")}</span>
                 <strong className="tabular-nums">{totalWeight ? `${totalWeight.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg` : "—"}</strong>
               </div>
               {multiplier > 1 ? (
                 <div className="col-span-2">
-                  <span className="block text-muted-foreground">Expected across {multiplier} containers</span>
-                  <strong className="tabular-nums">{requested.toLocaleString()} bales</strong>
+                  <span className="block text-muted-foreground">{tx("expectedAcrossContainers")} · {multiplier}</span>
+                  <strong className="tabular-nums">{requested.toLocaleString()} {tx("bales")}</strong>
                 </div>
               ) : null}
             </div>
             <div className="mt-3 grid grid-cols-1 gap-3">
               <label className="block min-w-0 text-sm font-medium">
-                Qty / container
+                {tx("quantityPerContainer")}
                 <Input
                   type="number"
                   inputMode="numeric"
@@ -127,16 +131,16 @@ export function V5ProformaMobileLines({
                   value={raw}
                   onChange={(event) => onQuantityChange(row.articleCode, event.target.value)}
                   onFocus={(event) => event.target.select()}
-                  aria-label={`Quantity for ${row.productName}`}
+                  aria-label={`${tx("quantityPerContainer")}: ${row.productName}`}
                   aria-invalid={Boolean(error)}
                   className={cn("mt-1 h-11 w-full text-base tabular-nums", (error || short > 0) && "border-amber-500")}
                   data-testid={`v5-${variant}-mobile-qty-${row.articleCode}`}
                 />
               </label>
               <div className="min-w-0">
-                <span className="block text-sm font-medium">Price</span>
+                <span className="block text-sm font-medium">{tx("price")}</span>
                 <div className="mt-1 flex min-w-0 items-center gap-2">
-                  <div className="flex shrink-0 overflow-hidden rounded-lg border" role="group" aria-label={`Price unit for ${row.productName}`}>
+                  <div className="flex shrink-0 overflow-hidden rounded-lg border" role="group" aria-label={`${tx("price")}: ${row.productName}`}>
                     {(["per_bale", "per_kg"] as const).map((nextMode) => (
                       <button
                         key={nextMode}
@@ -146,7 +150,7 @@ export function V5ProformaMobileLines({
                         onClick={() => onModeChange(row.articleCode, nextMode)}
                         data-testid={`v5-${variant}-mobile-mode-${nextMode}-${row.articleCode}`}
                       >
-                        {nextMode === "per_kg" ? "/kg" : "/bale"}
+                        {tx(nextMode === "per_kg" ? "perKg" : "perBale")}
                       </button>
                     ))}
                   </div>
@@ -160,7 +164,7 @@ export function V5ProformaMobileLines({
                       ? onKgPriceChange(row.articleCode, event.target.value)
                       : onPriceChange(row.articleCode, event.target.value)}
                     onFocus={(event) => event.target.select()}
-                    aria-label={`${mode === "per_kg" ? "Per-kg" : "Per-bale"} price for ${row.productName}`}
+                    aria-label={`${tx("price")} ${tx(mode === "per_kg" ? "perKg" : "perBale")}: ${row.productName}`}
                     className="h-11 min-w-0 flex-1 text-base tabular-nums"
                     data-testid={`v5-${variant}-mobile-price-${row.articleCode}`}
                   />
@@ -171,13 +175,13 @@ export function V5ProformaMobileLines({
             {short > 0 ? (
               <p className="mt-2 flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400">
                 <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
-                {variant === "create" ? `Short ${short.toLocaleString()} bales` : "Low stock"}
+                {variant === "create" ? `${tx("shortBales")} ${short.toLocaleString()} ${tx("bales")}` : tx("lowStock")}
               </p>
             ) : null}
           </article>
         );
       })}
-      {!rows.length ? <p className="p-6 text-center text-sm text-muted-foreground">No items match these filters.</p> : null}
+      {!rows.length ? <p className="p-6 text-center text-sm text-muted-foreground">{tx("noMatchingItems")}</p> : null}
     </section>
   );
 }
