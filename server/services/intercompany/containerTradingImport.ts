@@ -346,7 +346,6 @@ export async function setTradingRelationship(
         );
       const fields = {
         sourceCompanyId,
-        destinationCompanyId: mapping.destinationCompanyId,
         ...mapping,
       };
       const selectedAccounts = validatedAccounts(fields as Policy, accounts);
