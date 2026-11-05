@@ -402,6 +402,10 @@ function ErpPOImport() {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
       setFile(selectedFile);
+      // Safari will not fire a second change event for the same Excel file
+      // unless the native file input is reset. The File object is retained
+      // independently in React state, including while parsing asynchronously.
+      e.currentTarget.value = "";
       setPreview(null);
       setValidationResult(null);
       if (selectedCompany?.id) {
@@ -621,11 +625,13 @@ function ErpPOImport() {
       <PageHeader title="PO Import (Excel)">
         <Button
           variant="outline"
-          onClick={() => window.open("/api/po-import/template", "_blank")}
+          asChild
           data-testid="button-download-template"
         >
-          <Download className="w-4 h-4 mr-2" />
-          Download Template
+          <a href="/api/po-import/template" download="po-import-template.xlsx">
+            <Download className="w-4 h-4 mr-2" />
+            Download Template
+          </a>
         </Button>
       </PageHeader>
 
