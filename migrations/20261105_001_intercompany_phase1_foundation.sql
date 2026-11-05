@@ -168,20 +168,68 @@ CREATE TABLE IF NOT EXISTS intercompany_permission_grants (
   id SERIAL PRIMARY KEY,
   user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   granting_company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE RESTRICT,
-  relationship_id INTEGER REFERENCES intercompany_relationship_policies(id) ON DELETE RESTRICT,
+  relationship_id INTEGER NOT NULL REFERENCES intercompany_relationship_policies(id) ON DELETE RESTRICT,
   permission VARCHAR(50) NOT NULL DEFAULT 'shared_charge_editor',
   scope VARCHAR(20) NOT NULL DEFAULT 'invoice',
   invoice_key VARCHAR(120),
   granted_by VARCHAR NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   revoked_at TIMESTAMPTZ,
+  revoked_by VARCHAR REFERENCES users(id) ON DELETE RESTRICT,
+  CONSTRAINT intercompany_grant_revoke_actor CHECK ((revoked_at IS NULL) = (revoked_by IS NULL)),
   CONSTRAINT intercompany_grant_permission CHECK (permission = 'shared_charge_editor'),
   CONSTRAINT intercompany_grant_scope CHECK (scope IN ('invoice', 'relationship')),
   CONSTRAINT intercompany_grant_scope_target CHECK (
     (scope = 'invoice' AND invoice_key IS NOT NULL AND btrim(invoice_key) <> '')
-    OR (scope = 'relationship' AND relationship_id IS NOT NULL AND invoice_key IS NULL)
+    OR (scope = 'relationship' AND invoice_key IS NULL)
   )
 );
+-- Only Owners/Developers with access to an affected company can grant or revoke scoped access.
+CREATE OR REPLACE FUNCTION intercompany_assert_permission_actor()
+RETURNS TRIGGER LANGUAGE plpgsql AS $actor$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'Intercompany permissions must be revoked, not deleted';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM intercompany_relationship_policies p
+                 WHERE p.id = NEW.relationship_id
+                   AND NEW.granting_company_id IN (p.source_company_id, p.destination_company_id)) THEN
+    RAISE EXCEPTION 'Permission issuer company must participate in this relationship';
+  END IF;
+  IF TG_OP = 'UPDATE' THEN
+    IF (NEW.user_id, NEW.granting_company_id, NEW.relationship_id, NEW.permission,
+        NEW.scope, NEW.invoice_key, NEW.granted_by, NEW.created_at)
+       IS DISTINCT FROM
+       (OLD.user_id, OLD.granting_company_id, OLD.relationship_id, OLD.permission,
+        OLD.scope, OLD.invoice_key, OLD.granted_by, OLD.created_at) THEN
+      RAISE EXCEPTION 'Intercompany grants are immutable except for revocation';
+    END IF;
+    IF NEW.revoked_at IS DISTINCT FROM OLD.revoked_at AND OLD.revoked_at IS NOT NULL THEN
+      RAISE EXCEPTION 'A revoked intercompany grant cannot be reinstated';
+    END IF;
+    IF NEW.revoked_at IS DISTINCT FROM OLD.revoked_at AND
+       NOT EXISTS (SELECT 1 FROM user_company_roles
+                   WHERE user_id = NEW.revoked_by
+                     AND company_id = NEW.granting_company_id
+                     AND role IN ('Owner', 'Developer')) THEN
+      RAISE EXCEPTION 'Only an Owner or Developer can revoke shared-charge permissions';
+    END IF;
+    RETURN NEW;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM user_company_roles
+                 WHERE user_id = NEW.granted_by
+                   AND company_id = NEW.granting_company_id
+                   AND role IN ('Owner', 'Developer')) THEN
+    RAISE EXCEPTION 'Only an Owner or Developer can grant shared-charge permissions';
+  END IF;
+  RETURN NEW;
+END
+$actor$;
+DROP TRIGGER IF EXISTS intercompany_permission_actor_guard ON intercompany_permission_grants;
+CREATE TRIGGER intercompany_permission_actor_guard
+BEFORE INSERT OR UPDATE OR DELETE ON intercompany_permission_grants
+FOR EACH ROW EXECUTE FUNCTION intercompany_assert_permission_actor();
+
 CREATE INDEX IF NOT EXISTS intercompany_grant_user_company_idx
   ON intercompany_permission_grants(user_id, granting_company_id);
 -- NULLS do not create duplicate grants; expression index prevents repeated active grants with NULL targets.
