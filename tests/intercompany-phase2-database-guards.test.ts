@@ -83,7 +83,7 @@ describe("Phase 2 PostgreSQL intercompany import safeguards", () => {
       );
       await client.query(
         "INSERT INTO intercompany_trades(relationship_id,physical_container_id,source_company_id,destination_company_id," +
-          "original_supplier_po_id,destination_po_id,state) VALUES (1,10,1,2,21,22,'active')"
+          "original_supplier_po_id,destination_po_id,state) VALUES ((SELECT id FROM intercompany_relationship_policies WHERE relationship_type='container_trade'),10,1,2,21,22,'active')"
       );
       await rejects(
         "INSERT INTO intercompany_trade_source_pos(trade_id,source_po_id,original_po_number) VALUES (1,23,'OTHER')",
