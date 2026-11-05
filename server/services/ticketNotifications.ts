@@ -11,6 +11,13 @@ import { sendWhatsAppTextToChatId } from "./whatsappService";
 import { ticketEventRecipients, ticketEventCopy, ticketDestinationUrl } from "./ticketNotificationPolicy";
 const MAX_EVENTS_PER_TICK = 40;
 const MAX_DELIVERIES_PER_TICK = 80;
+const TICKET_PAGE_ALLOWED_SQL = `AND (r.role IN ('Admin','Developer')
+ OR (r.role='Normal User' AND EXISTS (SELECT 1 FROM role_feature_permissions p
+  WHERE p.company_id=r.company_id AND p.role=r.role
+   AND p.feature_key='page_ticket_management' AND p.enabled=true))
+ OR (r.role NOT IN ('Admin','Developer','Normal User') AND NOT EXISTS
+  (SELECT 1 FROM role_feature_permissions p WHERE p.company_id=r.company_id
+   AND p.role=r.role AND p.feature_key='page_ticket_management' AND p.enabled=false)))`;
 /** Create one overdue event per ticket per 24-hour elapsed period, not per cron tick. */
 export async function enqueueTicketOverdueReminders(now:Date=new Date()):Promise<number> {
   const result=await pool.query(
@@ -87,7 +94,7 @@ async function materializeOneEvent():Promise<boolean> {
         `SELECT DISTINCT u.id,c.email,c.email_enabled,c.whatsapp_chat_id,c.whatsapp_enabled
            FROM users u JOIN user_company_roles r ON r.user_id=u.id AND r.company_id=$1
            LEFT JOIN support_ticket_notification_contacts c ON c.company_id=r.company_id AND c.user_id=u.id
-          WHERE u.active=true AND u.id=ANY($2::varchar[])`,[event.company_id,recipients]
+          WHERE u.active=true AND u.id=ANY($2::varchar[]) ${TICKET_PAGE_ALLOWED_SQL}`,[event.company_id,recipients]
       );
       for(const recipient of active.rows) {
         const channels=["in_app"];
@@ -132,6 +139,7 @@ async function claimDelivery(channel:"email"|"whatsapp"):Promise<Delivery|{skipp
       JOIN user_company_roles r ON r.user_id=u.id AND r.company_id=n.company_id
       LEFT JOIN support_ticket_notification_contacts c ON c.company_id=n.company_id AND c.user_id=n.recipient_user_id
       WHERE n.delivery_status='pending' AND n.next_attempt_at<=now() AND n.channel=$1
+        ${TICKET_PAGE_ALLOWED_SQL}
       ORDER BY n.id LIMIT 1 FOR UPDATE OF n SKIP LOCKED
     `,[channel]);
     const d=result.rows[0];
@@ -222,7 +230,7 @@ async function deliverInApp():Promise<boolean>{
        JOIN users u ON u.id=n.recipient_user_id AND u.active=true
        JOIN user_company_roles r ON r.user_id=u.id AND r.company_id=n.company_id
       WHERE n.delivery_status='pending' AND n.channel='in_app'
-       AND n.next_attempt_at<=now()
+       AND n.next_attempt_at<=now() ${TICKET_PAGE_ALLOWED_SQL}
       ORDER BY n.id LIMIT 1 FOR UPDATE OF n SKIP LOCKED`
     );
     const d=result.rows[0];
