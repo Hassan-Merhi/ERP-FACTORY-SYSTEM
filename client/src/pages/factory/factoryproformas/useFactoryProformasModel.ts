@@ -44,6 +44,8 @@ export function useFactoryProformasModel() {
   const [inlineQtyLineId, setInlineQtyLineId] = useState<number | null>(null);
   const [inlineQtyValue, setInlineQtyValue] = useState<string>("");
   const [renamingProforma, setRenamingProforma] = useState<Proforma | null>(null);
+  const [destinationProforma, setDestinationProforma] = useState<Proforma | null>(null);
+  const [destinationValue, setDestinationValue] = useState("");
   const [renameValue, setRenameValue] = useState("");
   const [addLineMode, setAddLineMode] = useState<"manual" | "catalog">("catalog");
   const [catalogSearch, setCatalogSearch] = useState("");
@@ -244,6 +246,27 @@ export function useFactoryProformasModel() {
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
       toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Header-only update: linking an older proforma must never save/reprice its lines.
+  const assignDestinationMutation = useMutation({
+    mutationFn: async ({ id, destination }: { id: number; destination: string }) => {
+      const response = await modeApiRequest("PUT", `/api/factory/customer-proformas/${id}`, { destination });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to assign destination");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      invalidateCustomerProformas();
+      toast({ title: "Destination linked", description: "Only the proforma destination was updated. Item prices are unchanged." });
+      setDestinationProforma(null);
+      setDestinationValue("");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to assign destination", description: error.message, variant: "destructive" });
     },
   });
 
@@ -654,6 +677,11 @@ export function useFactoryProformasModel() {
     setInlineQtyValue,
     renamingProforma,
     setRenamingProforma,
+    destinationProforma,
+    setDestinationProforma,
+    destinationValue,
+    setDestinationValue,
+    assignDestinationMutation,
     renameValue,
     setRenameValue,
     addLineMode,
