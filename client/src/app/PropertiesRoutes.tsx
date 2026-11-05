@@ -2,6 +2,7 @@ import { Switch, Route, Redirect } from "wouter";
 import PropertiesRentalsHub from "@/pages/properties/PropertiesRentalsHub";
 import PropertiesContainerTrading from "@/pages/properties/PropertiesContainerTrading";
 import LinkedTradesEditor from "@/pages/intercompany/LinkedTradesEditor";
+import IntercompanyPayments from "@/pages/intercompany/IntercompanyPayments";
 import { AccountingToolbox } from "@/lazyPages";
 import type { AuthenticatedUser } from "@/contracts/sessionContracts";
 import {
@@ -80,6 +81,9 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       )}
       {(user.role === "Owner" || user.role === "Developer") && (
         <Route path="/properties/linked-trades" component={LinkedTradesEditor} />
+      )}
+      {(user.role === "Owner" || user.role === "Developer") && (
+        <Route path="/properties/intercompany-payments" component={IntercompanyPayments} />
       )}
       <Route path="/properties/rentals" component={PropertiesRentalsHub} />
       <Route path="/properties/rental/warehouses">{() => <Redirect replace to="/properties/rentals" />}</Route>
