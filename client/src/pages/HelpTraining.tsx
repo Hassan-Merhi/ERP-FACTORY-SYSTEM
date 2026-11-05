@@ -37,6 +37,8 @@ export default function HelpTraining({ mode, role, accessKeys, fullAccess = fals
   const home = mode === "factory" ? "/factory/production-report" : "/tracking";
   const videoUrl = active ? publishedTrainingVideos[active.id] : undefined;
   const supportedVideo = videoUrl && videoUrl.startsWith("/api/training/media/");
+  const [failedVideo, setFailedVideo] = useState<string | null>(null);
+  const videoFailed = Boolean(videoUrl) && failedVideo === videoUrl;
 
   return (
     <main className="mx-auto w-full max-w-7xl space-y-6 px-4 py-5 sm:px-7" data-testid="help-training">
@@ -141,14 +143,32 @@ export default function HelpTraining({ mode, role, accessKeys, fullAccess = fals
               <p className="mt-2 text-sm text-muted-foreground">{active.description}</p>
             </div>
             <div className="overflow-hidden rounded-xl border bg-muted/30">
-              {supportedVideo ? (
+              {supportedVideo && videoFailed ? (
+                <div className="flex aspect-video flex-col items-center justify-center gap-3 p-6 text-center">
+                  <Clapperboard className="h-10 w-10 text-muted-foreground" />
+                  <p className="font-semibold">This video could not be played here</p>
+                  <a
+                    className="text-sm font-medium text-primary underline"
+                    href={videoUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open the video in a new tab
+                  </a>
+                </div>
+              ) : supportedVideo ? (
                 <video
+                  key={videoUrl}
                   className="aspect-video w-full bg-black"
                   controls
+                  playsInline
                   preload="metadata"
-                  src={videoUrl}
+                  poster={publishedTrainingScreenshots[active.id]}
                   aria-label={"Training video: " + active.title}
+                  data-testid="training-video"
+                  onError={() => setFailedVideo(videoUrl ?? null)}
                 >
+                  <source src={videoUrl} type="video/mp4" onError={() => setFailedVideo(videoUrl ?? null)} />
                   {publishedTrainingCaptions[active.id] && (
                     <track
                       kind="captions"

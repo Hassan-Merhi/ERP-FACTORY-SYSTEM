@@ -42,9 +42,62 @@ export function guideSteps(guideText) {
   return steps;
 }
 
+/**
+ * Top-level MP4 box order. Apple's players (iPhone/iPad/Mac Safari) stream an
+ * MP4 over HTTP byte ranges and need the index (moov) before the media (mdat).
+ */
+export function topLevelBoxes(video) {
+  const fd = fs.openSync(video, "r");
+  try {
+    const size = fs.fstatSync(fd).size;
+    const header = Buffer.alloc(16);
+    const boxes = [];
+    let offset = 0;
+    while (offset + 8 <= size && boxes.length < 64) {
+      fs.readSync(fd, header, 0, 16, offset);
+      let length = header.readUInt32BE(0);
+      const type = header.toString("latin1", 4, 8);
+      if (length === 1) length = Number(header.readBigUInt64BE(8));
+      else if (length === 0) length = size - offset;
+      if (length < 8) throw new Error("Corrupt MP4 box " + JSON.stringify(type));
+      boxes.push(type);
+      offset += length;
+    }
+    return boxes;
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/** Rejects files Apple's players refuse even though desktop FFmpeg decodes them. */
+export function assertAppleCompatible(boxes, stream) {
+  const moov = boxes.indexOf("moov");
+  const mdat = boxes.indexOf("mdat");
+  if (boxes[0] !== "ftyp" || moov < 0 || mdat < 0 || moov > mdat) {
+    throw new Error("Training recording must be fast-start (ftyp, moov before mdat); found " + boxes.join(","));
+  }
+  const width = Number(stream.width);
+  const height = Number(stream.height);
+  const [num, den] = String(stream.avg_frame_rate || "0/1").split("/").map(Number);
+  const fps = den ? num / den : 0;
+  if (!["Main", "High", "Constrained Baseline", "Baseline"].includes(stream.profile) ||
+      !(Number(stream.level) > 0 && Number(stream.level) <= 42) ||
+      !(width > 0 && height > 0 && width % 2 === 0 && height % 2 === 0 && width <= 1920 && height <= 1080) ||
+      !(fps >= 10 && fps <= 60) || stream.codec_tag_string !== "avc1") {
+    throw new Error("Training recording is not Apple-playable H.264: " + describeStream(stream));
+  }
+}
+
+function describeStream(stream) {
+  return [stream.codec_tag_string, stream.profile, "L" + stream.level, stream.width + "x" + stream.height,
+    stream.avg_frame_rate + "fps"].join(" ");
+}
+
 export async function probe(video) {
   const { stdout } = await execFile("ffprobe", [
-    "-v", "error", "-show_entries", "stream=codec_type,codec_name,pix_fmt:format=duration", "-of", "json", video,
+    "-v", "error", "-show_entries",
+    "stream=codec_type,codec_name,codec_tag_string,profile,level,width,height,avg_frame_rate,pix_fmt:format=duration",
+    "-of", "json", video,
   ]);
   const result = JSON.parse(stdout);
   const stream = result.streams?.find((item) => item.codec_type === "video");
@@ -54,6 +107,9 @@ export async function probe(video) {
       !Number.isFinite(duration) || duration < MIN_DURATION_SECONDS || duration > MAX_DURATION_SECONDS) {
     throw new Error("Training recording must decode as a narrated 1-20 minute H.264/yuv420p + AAC MP4");
   }
+  const boxes = topLevelBoxes(video);
+  process.stdout.write(path.basename(path.dirname(video)) + " layout " + boxes.join(",") + "; " + describeStream(stream) + "\n");
+  assertAppleCompatible(boxes, stream);
   await execFile("ffmpeg", ["-hide_banner", "-v", "error", "-xerror", "-i", video, "-f", "null", "-"]);
   return duration;
 }
