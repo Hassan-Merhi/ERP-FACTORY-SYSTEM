@@ -12,7 +12,7 @@ import {type EditIdentity,postingDay,rejectEdit,validateRequestKey,withTradeScop
 import {cents} from "./tradeRevisionMath";
 import {exactManualAllocation,paymentBaseAmount,paymentMoney,paymentHistoricalRate,
   type PaymentCurrency} from "./paymentMoney";
-import {INTERCOMPANY_PAYMENT_LOCK_NAMESPACE,releasePaymentAllocationsTx,tradeAppliedTx} from "./paymentAllocationCore";
+import {INTERCOMPANY_PAYMENT_LOCK_NAMESPACE,paymentAvailableTx,releasePaymentAllocationsTx,tradeAppliedTx} from "./paymentAllocationCore";
 
 export type CashRef={type:"bank"|"cash";id:number};
 export type ManualPoChoice={tradeId:number;expectedVersion:number;amount:string};
@@ -156,9 +156,11 @@ export async function confirmMirroredPayment(input:MirroredPaymentInput,actor:Ed
       if(duplicate.relationshipId!==input.relationshipId||duplicate.status!=="confirmed"||duplicate.requestFingerprint!==fingerprint){
         rejectEdit("Payment key already belongs to a different transaction","IC_PAYMENT_REPLAY");
       }
+      const available=await paymentAvailableTx(tx,duplicate.id);
       return {paymentId:duplicate.id,usdAmount:duplicate.baseAmount,
         sourceVoucherId:duplicate.sourceReceiptVoucherId,
-        destinationVoucherId:duplicate.destinationPaymentVoucherId,replayed:true};
+        destinationVoucherId:duplicate.destinationPaymentVoucherId,
+        unallocatedCredit:available.toFixed(2),replayed:true};
     }
     const fresh=await activePaymentPairTx(tx,pair.id);
     await checkAccount(tx,fresh.sourceCompanyId,input.sourceReceiptAccount);
