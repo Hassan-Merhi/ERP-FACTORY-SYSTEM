@@ -215,6 +215,7 @@ export default function FactoryMonthlyProductionMatrix() {
       const { exportMonthlyProductionExcel } = await import("./monthlyProductionExcelExport");
       await exportMonthlyProductionExcel({
         rows: visibleProducts.map((product) => ({
+          productId: product.id,
           name: product.name,
           articleCode: product.articleCode,
           categoryName: product.categoryName,
@@ -224,6 +225,7 @@ export default function FactoryMonthlyProductionMatrix() {
         monthLabels: months.map(monthLabel),
         category,
         search,
+        appOrigin: window.location.origin,
       });
     } catch (error) {
       toast({
