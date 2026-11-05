@@ -61,6 +61,7 @@ interface ProformaCardProps {
   deleteProformaMutation: ProformaMutationLike<number>;
   renameProforma: (proforma: Proforma, currentName: string) => void;
   transferProforma: (proforma: Proforma) => void;
+  onAssignDestination: (proforma: Proforma) => void;
   setPendingDelete: (action: (() => void) | null) => void;
   // "Add Item" wiring (dialog state lives in the page model)
   onAddLine: () => void;
@@ -98,6 +99,7 @@ export function ProformaCard(props: ProformaCardProps) {
     deleteProformaMutation,
     renameProforma,
     transferProforma,
+    onAssignDestination,
     setPendingDelete,
     onAddLine,
     saveAgreedPricesMutation,
@@ -263,7 +265,7 @@ export function ProformaCard(props: ProformaCardProps) {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => navigate(invoicingProformaEditPath(proforma.id, customerId))}
+                onClick={() => onAssignDestination(proforma)}
                 className="h-9 rounded-xl border-border/70 bg-background/70 px-3 shadow-sm"
                 data-testid={`button-link-proforma-destination-${proforma.id}`}
               >
