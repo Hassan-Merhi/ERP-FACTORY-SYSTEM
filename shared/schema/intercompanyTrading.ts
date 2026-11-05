@@ -23,7 +23,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { ledgerAccounts } from "./accounting";
 import { companies } from "./common";
-import { containers, purchaseOrders } from "./containers";
+import { containers, purchaseOrders, poLineItems, containerCharges } from "./containers";
 import { users } from "./users";
 import { companyScopedSuppliers } from "./supplierCompanyScope";
 import { vouchers } from "./erp/vouchers";
@@ -323,6 +323,104 @@ export const intercompanyTradeSourcePos = pgTable(
   })
 );
 
+
+/** Exact source/destination row correspondence; never pair lines by name or approximate cost. */
+export const intercompanyTradeLineLinks = pgTable(
+  "intercompany_trade_line_links",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    tradeId: integer("trade_id").notNull().references(() => intercompanyTrades.id, { onDelete: "restrict" }),
+    sourceLineId: integer("source_line_id").notNull().unique().references(() => poLineItems.id, { onDelete: "restrict" }),
+    destinationLineId: integer("destination_line_id").notNull().unique().references(() => poLineItems.id, { onDelete: "restrict" }),
+    originalExcelRow: integer("original_excel_row").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    tradeIdx: index("ic_trade_line_trade_idx").on(t.tradeId),
+    uniqueRow: uniqueIndex("ic_trade_line_excel_row_unique").on(t.tradeId, t.originalExcelRow),
+  })
+);
+
+export const intercompanyTradeRevisions = pgTable(
+  "intercompany_trade_revisions",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    tradeId: integer("trade_id").notNull().references(() => intercompanyTrades.id, { onDelete: "restrict" }),
+    revisionNumber: integer("revision_number").notNull(),
+    kind: varchar("kind", { length: 40 }).notNull(),
+    requestKey: varchar("request_key", { length: 160 }).notNull().unique(),
+    actorUserId: varchar("actor_user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+    initiatingCompanyId: integer("initiating_company_id").notNull().references(() => companies.id, { onDelete: "restrict" }),
+    state: varchar("state", { length: 20 }).notNull().default("posting"),
+    amountBefore: decimal("amount_before", { precision: 20, scale: 2 }).notNull(),
+    amountAfter: decimal("amount_after", { precision: 20, scale: 2 }).notNull(),
+    postingDate: date("posting_date").notNull(),
+    reason: text("reason").notNull(),
+    evidence: jsonb("evidence").notNull().default({}),
+    postedVoucherIds: integer("posted_voucher_ids").array().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (t) => ({
+    tradeIdx: index("ic_trade_revision_trade_idx").on(t.tradeId, t.createdAt),
+    uniqueRevision: uniqueIndex("ic_trade_revision_number_unique").on(t.tradeId, t.revisionNumber),
+  })
+);
+
+export const intercompanySharedChargeInvoices = pgTable(
+  "intercompany_shared_charge_invoices",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    sourceCompanyId: integer("source_company_id").notNull().references(() => companies.id, { onDelete: "restrict" }),
+    externalInvoiceKey: varchar("external_invoice_key", { length: 120 }).notNull(),
+    chargeType: varchar("charge_type", { length: 32 }).notNull(),
+    faceAmount: decimal("face_amount", { precision: 20, scale: 2 }).notNull(),
+    currency: varchar("currency", { length: 3 }).notNull().default("USD"),
+    evidenceReference: text("evidence_reference").notNull(),
+    state: varchar("state", { length: 16 }).notNull().default("draft"),
+    version: integer("version").notNull().default(1),
+    createdBy: varchar("created_by").notNull().references(() => users.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+  },
+  (t) => ({
+    sourceIdx: index("ic_shared_invoice_source_idx").on(t.sourceCompanyId, t.createdAt),
+    uniqueKey: uniqueIndex("ic_invoice_unique_source_key").on(t.sourceCompanyId, t.externalInvoiceKey),
+  })
+);
+
+export const intercompanySharedChargeAllocations = pgTable(
+  "intercompany_shared_charge_allocations",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    invoiceId: bigserial("invoice_id", { mode: "number" })
+      .notNull().references(() => intercompanySharedChargeInvoices.id, { onDelete: "restrict" }),
+    tradeId: integer("trade_id").notNull().references(() => intercompanyTrades.id, { onDelete: "restrict" }),
+    amount: decimal("amount", { precision: 20, scale: 2 }).notNull(),
+    containerChargeId: integer("container_charge_id").unique().references(() => containerCharges.id, { onDelete: "restrict" }),
+  },
+  (t) => ({
+    tradeIdx: index("ic_shared_charge_trade_idx").on(t.tradeId),
+    uniqueTrade: uniqueIndex("ic_charge_trade_unique").on(t.invoiceId, t.tradeId),
+  })
+);
+
+export const intercompanySharedChargePoAllocations = pgTable(
+  "intercompany_shared_charge_po_allocations",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    invoiceId: bigserial("invoice_id", { mode: "number" })
+      .notNull().references(() => intercompanySharedChargeInvoices.id, { onDelete: "restrict" }),
+    tradeId: integer("trade_id").notNull().references(() => intercompanyTrades.id, { onDelete: "restrict" }),
+    sourcePoId: integer("source_po_id").notNull().references(() => purchaseOrders.id, { onDelete: "restrict" }),
+    amount: decimal("amount", { precision: 20, scale: 2 }).notNull(),
+  },
+  (t) => ({
+    tradeIdx: index("ic_shared_charge_po_trade_idx").on(t.tradeId),
+    uniqueSourcePo: uniqueIndex("ic_charge_po_unique").on(t.invoiceId, t.sourcePoId),
+  })
+);
+
 export type IntercompanyRelationshipPolicy = typeof intercompanyRelationshipPolicies.$inferSelect;
 export type IntercompanyTrade = typeof intercompanyTrades.$inferSelect;
 export type IntercompanyTradeSourcePo = typeof intercompanyTradeSourcePos.$inferSelect;
@@ -330,3 +428,7 @@ export type IntercompanyImportBatch = typeof intercompanyImportBatches.$inferSel
 export type IntercompanyPermissionGrant = typeof intercompanyPermissionGrants.$inferSelect;
 export type IntercompanyReconciliationFinding = typeof intercompanyReconciliationFindings.$inferSelect;
 export type IntercompanyRepairRequest = typeof intercompanyRepairRequests.$inferSelect;
+
+export type IntercompanyTradeLineLink = typeof intercompanyTradeLineLinks.$inferSelect;
+export type IntercompanyTradeRevision = typeof intercompanyTradeRevisions.$inferSelect;
+export type IntercompanySharedChargeInvoice = typeof intercompanySharedChargeInvoices.$inferSelect;
