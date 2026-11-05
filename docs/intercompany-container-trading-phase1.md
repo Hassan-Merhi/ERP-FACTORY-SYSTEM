@@ -1,7 +1,7 @@
 # Intercompany Container Trading — Phase 1 foundation
 
 Branch: feature/intercompany-container-trading  
-Status: Phase 1 foundation and Phase 2 trading import implemented **on the isolated feature branch only**. Pair trading remains disabled by default until explicitly configured; historical repair remains disabled. Nothing is merged or deployed.
+Status: Phases 1–4 are implemented in **branch-only code**; Phase 4 includes the paired-payment SQL guards and regression cases. CI and a disposable PostgreSQL run must pass before Phase 4 is certified. Pair trading remains disabled until explicitly configured; historical repair remains disabled. Nothing is merged or deployed.
 
 ## Scope and invariants
 
@@ -101,3 +101,36 @@ Phase 4 is implemented on the independent feature branch only. It has **no migra
 2. `tests/intercompany-phase4-database-guards.test.ts`: disposable PostgreSQL schema with all four migrations, wrong-pair refusal, immutable actual voucher evidence, overpayment refusal and paired reversal.
 3. Manual staging checks must cover two-side bank/cash postings, partial allocations, credit before new import, independent ERP destinations, stale edits, closed-period reversal, FX retention, simultaneous payment attempts, and no unintended cash entry.
 4. Phase 4 is not certified until TypeScript, backend/DB, route security, formatting, translation, mobile and account balance tests pass. `main` remains untouched until explicit user permission.
+
+## Phase 4 isolated validation and rollout hold
+
+**Current release status: NOT CERTIFIED.** Code in this feature branch is not evidence of successful staging database, account-balance or production checks. The draft PR is intentionally not to be merged, and no production migration or activation is authorized.
+
+### Automated checks required on the exact candidate commit
+
+1. Run `npm ci`, `npm run check`, `npm run format:check:changed`, `npm run lint`, `npm run verify:migrations`, `npm run verify:startup-migrations`, `npm run check:security`, `npm run audit:write-routes`, `npm run audit:company-scope`, and `npm run build` as appropriate to the repository's CI matrix. Do not waive ratchet or security gates to get green.
+2. Run `node node_modules/vitest/vitest.mjs run tests/intercompany-phase4-payment-money.test.ts tests/intercompany-phase4-database-guards.test.ts` against a **disposable PostgreSQL instance** with `DATABASE_URL` defined. The database-guard suite skips its SQL case if `DATABASE_URL` is not set: a green skipped run **does not count** as certification.
+3. Also rerun Phases 1–3 tests and the existing backend/frontend accounting and authorization tests. Record commit SHA, run URLs, summary and any failures. CI queued or cancelled is **not** a pass.
+
+### Manual staging acceptance matrix
+
+Use isolated test companies and fresh non-production accounts. Record the original cash, bank, receivable, supplier, GIT and voucher balances for BOTH companies before each scenario, then compare balances and journal entries afterwards.
+
+| Scenario | Expected proof |
+| --- | --- |
+| USD 120 transfer, allocate 80 to an outstanding PO | Exactly one destination Payment (Dr supplier 120 / Cr selected bank 120) and one Properties Receipt (Dr selected bank 120 / Cr receivable 120); remaining same-pair credit 40; replay with same key creates no voucher |
+| A second ERP destination pair | Its trade cannot spend the first pair's 40 credit, even with an otherwise valid trade ID |
+| CFA and ZMW with recorded historical rates | Original currency, exchange rate and date remain visible; USD amount is rounded once to cents and both voucher totals agree |
+| Next new-container import | Oldest eligible credit for that exact pair is allocated without any additional cash or bank voucher |
+| Linked PO price reduction | Excess paid allocation returns to original pair credit; original cash and supplier vouchers do not change |
+| Stale trade version, disabled pair, different company, duplicate transfer reference, invalid FX or invalid ledger mapping | Whole operation rejected, with no single-sided payment or credit mutation |
+| Reverse a confirmed transfer | Evidence of both real-world returns, valid open posting date, two opposite append-only vouchers, zero net allocations; repeated reversal key is idempotent; altered replay is rejected |
+| Closed-period reversal, failed posting engine call and two competing confirms | Whole transaction rolls back; no partial real-money entry, no over-allocation and no orphan paired payment |
+| Existing ERP Daybook, supplier payment and Properties balances | Legacy vouchers remain unchanged; no unrelated purchase, sales, inventory or credit change |
+
+### Release/rollback boundary
+
+- Before any deployment: review the additive migrations in order, capture database backup and baseline accounting totals, verify flags remain OFF, and have a named owner approve a **separate** staging test plan. Avoid live bank/cash confirmation until independent accounting sign-off.
+- A failed staging check means stop, disable feature access, preserve audit evidence, and repair via a reviewed follow-up migration or compensating entries. **Do not delete confirmed payments or drop applied financial tables to roll back real transactions.**
+- Phase 5 cancellation/offload and Phases 6–8 reconciliation/historical repair are outside this Phase 4 acceptance. Do not enable those workflows through a Phase 4 sign-off.
+- Completion requires a passing commit-specific CI matrix, real PostgreSQL and staging ledger acceptance results, and explicit owner approval. Until then, keep the draft PR unmerged and avoid production activation.
