@@ -108,6 +108,15 @@ export function ContinuousPressingScanner({
   const trackRef = useRef<MediaStreamTrack | null>(null);
   const audioRef = useRef<AudioContextLike | null>(null);
   const gateRef = useRef(new ContinuousScanGate(1500, 3));
+  const lastGateAssignmentId = useRef(assignment?.assignmentId);
+  useEffect(() => {
+    if (lastGateAssignmentId.current !== assignment?.assignmentId) {
+      // Switching stations is a new scanning context, unlike a screen-size
+      // interruption that should retain the brief duplicate cooldown.
+      lastGateAssignmentId.current = assignment?.assignmentId;
+      gateRef.current.reset();
+    }
+  }, [assignment?.assignmentId]);
   // The camera must keep decoding DIFFERENT barcodes during slow HTTP.
   // All captures are persisted individually in IndexedDB before submission.
   const inFlightRef = useRef(0);
