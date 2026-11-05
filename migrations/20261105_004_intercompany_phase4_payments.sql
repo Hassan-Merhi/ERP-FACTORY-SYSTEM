@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS intercompany_container_payments (
 );
 CREATE INDEX IF NOT EXISTS ic_payments_pair_date_idx ON intercompany_container_payments(relationship_id,payment_date,id);
 CREATE UNIQUE INDEX IF NOT EXISTS ic_payments_pair_transfer_ref
-  ON intercompany_container_payments(relationship_id,transfer_reference);
+  ON intercompany_container_payments(relationship_id,upper(btrim(transfer_reference)));
 
 -- Allocation ledger is append-only: signed credit usage and releases never
 -- mutate the cash/bank ledger. Negative lines return credit to its original pair.
@@ -269,8 +269,15 @@ BEGIN
   END IF;
   IF NOT EXISTS(SELECT 1 FROM ledger_accounts WHERE id=NEW.source_receivable_account_id
       AND company_id=NEW.source_company_id AND deleted_at IS NULL)
-    OR NOT EXISTS(SELECT 1 FROM suppliers WHERE id=NEW.destination_supplier_id
-      AND company_id=NEW.destination_company_id AND deleted_at IS NULL) THEN
+    OR NOT EXISTS(
+      SELECT 1 FROM suppliers supplier
+      JOIN companies property ON property.id=NEW.source_company_id
+      WHERE supplier.id=NEW.destination_supplier_id
+        AND supplier.company_id=NEW.destination_company_id
+        AND supplier.active=true AND supplier.deleted_at IS NULL
+        AND lower(regexp_replace(btrim(supplier.legal_name),'[[:space:]]+',' ','g'))
+          = lower(regexp_replace(btrim(property.name),'[[:space:]]+',' ','g'))
+    ) THEN
     RAISE EXCEPTION 'Original receivable/supplier identities do not belong to the paid company pair';
   END IF;
   IF NEW.source_cash_type='bank' THEN
