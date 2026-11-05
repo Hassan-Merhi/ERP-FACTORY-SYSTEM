@@ -23,7 +23,8 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { ledgerAccounts } from "./accounting";
-import { companies } from "./common";
+import { companies, locations } from "./common";
+import { stockItems } from "./inventory";
 import { containers, purchaseOrders, poLineItems, containerCharges } from "./containers";
 import { users } from "./users";
 import { companyScopedSuppliers } from "./supplierCompanyScope";
@@ -537,6 +538,72 @@ export const intercompanyPaymentAllocations = pgTable(
   })
 );
 
+/** Phase 5 single, append-only destination receipt without a duplicate container. */
+export const intercompanyDestinationReceipts = pgTable(
+  "intercompany_destination_receipts",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    tradeId: integer("trade_id").notNull().unique().references(() => intercompanyTrades.id, { onDelete: "restrict" }),
+    relationshipId: integer("relationship_id").notNull().references(() => intercompanyRelationshipPolicies.id, { onDelete: "restrict" }),
+    destinationCompanyId: integer("destination_company_id").notNull().references(() => companies.id, { onDelete: "restrict" }),
+    locationId: integer("location_id").notNull().references(() => locations.id, { onDelete: "restrict" }),
+    inventoryAccountId: integer("inventory_account_id").notNull().references(() => ledgerAccounts.id, { onDelete: "restrict" }),
+    gitAccountId: integer("git_account_id").notNull().references(() => ledgerAccounts.id, { onDelete: "restrict" }),
+    receiptVoucherId: integer("receipt_voucher_id").notNull().unique().references(() => vouchers.id, { onDelete: "restrict" }),
+    requestKey: varchar("request_key", { length: 128 }).notNull().unique(),
+    requestFingerprint: varchar("request_fingerprint", { length: 64 }).notNull(),
+    postingDate: date("posting_date").notNull(),
+    landedCost: decimal("landed_cost", { precision: 20, scale: 2 }).notNull(),
+    arrivalEvidence: text("arrival_evidence").notNull(),
+    reason: text("reason").notNull(),
+    actorUserId: varchar("actor_user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    companyIdx: index("ic_destination_receipts_company_idx").on(t.destinationCompanyId, t.postingDate),
+  })
+);
+
+export const intercompanyDestinationReceiptItems = pgTable(
+  "intercompany_destination_receipt_items",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    receiptId: bigint("receipt_id", { mode: "number" }).notNull().references(() => intercompanyDestinationReceipts.id, { onDelete: "restrict" }),
+    stockItemId: integer("stock_item_id").notNull().references(() => stockItems.id, { onDelete: "restrict" }),
+    quantity: decimal("quantity", { precision: 18, scale: 3 }).notNull(),
+    landedValue: decimal("landed_value", { precision: 20, scale: 2 }).notNull(),
+    valueMoved: decimal("value_moved", { precision: 20, scale: 2 }).notNull(),
+    canonicalMovementId: bigint("canonical_movement_id", { mode: "number" }).notNull().unique(),
+  },
+  (t) => ({
+    uniqueReceiptItem: uniqueIndex("ic_receipt_one_item").on(t.receiptId, t.stockItemId),
+  })
+);
+
+export const intercompanyTradeCancellations = pgTable(
+  "intercompany_trade_cancellations",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    tradeId: integer("trade_id").notNull().unique().references(() => intercompanyTrades.id, { onDelete: "restrict" }),
+    relationshipId: integer("relationship_id").notNull().references(() => intercompanyRelationshipPolicies.id, { onDelete: "restrict" }),
+    sourceCompanyId: integer("source_company_id").notNull().references(() => companies.id, { onDelete: "restrict" }),
+    destinationCompanyId: integer("destination_company_id").notNull().references(() => companies.id, { onDelete: "restrict" }),
+    requestKey: varchar("request_key", { length: 128 }).notNull().unique(),
+    requestFingerprint: varchar("request_fingerprint", { length: 64 }).notNull(),
+    expectedVersion: integer("expected_version").notNull(),
+    postingDate: date("posting_date").notNull(),
+    landedCost: decimal("landed_cost", { precision: 20, scale: 2 }).notNull(),
+    sourceSaleReversalVoucherId: integer("source_sale_reversal_voucher_id").notNull().unique().references(() => vouchers.id, { onDelete: "restrict" }),
+    sourceCostReversalVoucherId: integer("source_cost_reversal_voucher_id").notNull().unique().references(() => vouchers.id, { onDelete: "restrict" }),
+    destinationGitReversalVoucherId: integer("destination_git_reversal_voucher_id").notNull().unique().references(() => vouchers.id, { onDelete: "restrict" }),
+    reason: text("reason").notNull(),
+    cancellationEvidence: text("cancellation_evidence").notNull(),
+    releasedCredit: decimal("released_credit", { precision: 20, scale: 2 }).notNull().default("0"),
+    actorUserId: varchar("actor_user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  })
+);
+
 export type IntercompanyRelationshipPolicy = typeof intercompanyRelationshipPolicies.$inferSelect;
 export type IntercompanyTrade = typeof intercompanyTrades.$inferSelect;
 export type IntercompanyTradeSourcePo = typeof intercompanyTradeSourcePos.$inferSelect;
@@ -551,3 +618,7 @@ export type IntercompanySharedChargeInvoice = typeof intercompanySharedChargeInv
 
 export type IntercompanyContainerPayment = typeof intercompanyContainerPayments.$inferSelect;
 export type IntercompanyPaymentAllocation = typeof intercompanyPaymentAllocations.$inferSelect;
+
+export type IntercompanyDestinationReceipt = typeof intercompanyDestinationReceipts.$inferSelect;
+export type IntercompanyDestinationReceiptItem = typeof intercompanyDestinationReceiptItems.$inferSelect;
+export type IntercompanyTradeCancellation = typeof intercompanyTradeCancellations.$inferSelect;
