@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   CalendarDays, ChevronDown, ChevronUp, Download, LayoutList, List,
@@ -16,6 +16,7 @@ import {
 import PressingCorrectionReview from "./PressingCorrectionReview";
 import { approx40KgText } from "./pressing-scanner/pressingKpiFormatting";
 import PressingHourlyTargets from "./PressingHourlyTargets";
+import { pressingHourlyKpiTotals, type PressingHourlySnapshot } from "./pressing-scanner/pressingHourlyKpi";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translatePressingUiText } from "@/i18n/pressingUiTranslations";
 
@@ -55,6 +56,11 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
   const [exporting, setExporting] = useState(false);
   const [showCorrections, setShowCorrections] = useState(false);
   const [initialDate, setInitialDate] = useState(false);
+  const [hourlyDay, setHourlyDay] = useState("");
+  const [hourlySnapshot, setHourlySnapshot] = useState<{ companyId: number; data?: PressingHourlySnapshot } | null>(null);
+  const onHourlyData = useCallback((data: PressingHourlySnapshot | undefined, sourceCompanyId: number) => {
+    setHourlySnapshot({ companyId: sourceCompanyId, data });
+  }, []);
   const invalidDates = Boolean(filters.from && filters.to && (
     filters.from > filters.to || (filters.from === filters.to &&
       !!filters.fromTime && !!filters.toTime && filters.fromTime > filters.toTime)
@@ -77,12 +83,16 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
     setInitialDate(true);
     setFilters(current => ({ ...current, from: day, to: day, page: 1 }));
   }, [options.data?.serverToday, initialDate, simpleMode]);
+  useEffect(() => {
+    if (options.data?.serverToday) setHourlyDay(options.data.serverToday);
+  }, [companyId, options.data?.serverToday]);
 
   const report = useQuery({
     queryKey: [...key, filters],
     enabled: active && !invalidDates,
     queryFn: () => fetchPressingReport(filters),
-    staleTime: Infinity, refetchOnWindowFocus: false, refetchOnReconnect: false,
+    staleTime: 0, refetchInterval: active ? 30000 : false,
+    refetchOnWindowFocus: true, refetchOnReconnect: true,
   });
   const update = (value: Partial<PressingReportFilters>) =>
     setFilters(current => ({ ...current, ...value, asOf: undefined, page: 1 }));
@@ -90,7 +100,13 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
   const canCorrect = options.data?.canCorrect === true;
   const summary = report.data?.summary;
   const kpiSummary = report.data?.overview || summary;
-  const byOperator = kpiSummary?.byOperator || [];
+  // The four daily KPI cards are the sum of the exact same 07:00–17:00
+  // server-confirmed hourly rows displayed underneath, for the same Beirut date.
+  // History filters below remain independent and can cover larger periods.
+  const sameHourlyDay = hourlySnapshot?.companyId === companyId &&
+    hourlySnapshot.data?.day === (hourlyDay || options.data?.serverToday);
+  const byOperator = simpleMode ? (kpiSummary?.byOperator || []) :
+    pressingHourlyKpiTotals(sameHourlyDay ? hourlySnapshot?.data : undefined);
   const detail = (report.data?.rows || []).filter(
     (row): row is PressingDetailRow => "id" in row,
   );
@@ -133,7 +149,9 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
           <div>
             <h3 className="text-lg font-bold tracking-tight">Pressing Overview</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Confirmed items and KG · totals cover the complete selected period
+              {simpleMode ? "Confirmed items and KG · totals cover the complete selected period" :
+                "Confirmed scans · 07:00–17:00 Beirut time · " + (hourlyDay || options.data?.serverToday || "Today")}
+              {!simpleMode && !sameHourlyDay && " · Updating totals…"}
             </p>
           </div>
         </div>
@@ -143,6 +161,7 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
             onClick={() => {
               void queryClient.invalidateQueries({ queryKey: key });
               void queryClient.invalidateQueries({ queryKey: [ROOT, "options", companyId, userId] });
+              void queryClient.invalidateQueries({ queryKey: ["/api/factory/pressing-machines/report/hourly-targets", companyId] });
             }}>
             <RefreshCw className={"mr-1.5 h-4 w-4 " + (report.isFetching ? "animate-spin" : "")} />
             Refresh
@@ -227,14 +246,15 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
       </div>
 
       {!simpleMode && canSeeEveryone && (
-        <PressingHourlyTargets active={active} companyId={companyId} serverToday={options.data?.serverToday} />
+        <PressingHourlyTargets active={active} companyId={companyId} serverToday={options.data?.serverToday}
+          selectedDay={hourlyDay} onDayChange={setHourlyDay} onDataChange={onHourlyData} />
       )}
 
       {!simpleMode && (
         <div className="rounded-xl border bg-card p-3 shadow-sm sm:p-4" data-testid="pressing-report-filters">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-sm font-semibold">
-              <SlidersHorizontal className="h-4 w-4 text-muted-foreground" /> Filters
+              <SlidersHorizontal className="h-4 w-4 text-muted-foreground" /> History filters
             </div>
             <div className="flex flex-wrap gap-1.5">
               <Button size="sm" variant="outline" className="h-8" onClick={() => {
@@ -249,6 +269,7 @@ export default function PressingHistoryReport({ active, companyId, userId, simpl
                 onClick={() => update({ from: undefined, to: undefined, fromTime: undefined, toTime: undefined })}>All Time</Button>
             </div>
           </div>
+          <p className="mb-3 text-xs text-muted-foreground">These filters apply to the scan history and export below. The KPIs above always match the selected hourly production date (07:00–17:00).</p>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <div className="min-w-0 space-y-1">
               <div className="text-xs font-medium text-muted-foreground">From <span className="font-normal">(Beirut time)</span></div>
