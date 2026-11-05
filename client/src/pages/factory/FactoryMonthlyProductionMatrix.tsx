@@ -53,6 +53,7 @@ export default function FactoryMonthlyProductionMatrix() {
   const [orderedIds, setOrderedIds] = useState<number[]>([]);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
   const [moveItemId, setMoveItemId] = useState<number | null>(null);
   const [moveRowNumber, setMoveRowNumber] = useState("");
   const [moveSearch, setMoveSearch] = useState("");
@@ -206,6 +207,34 @@ export default function FactoryMonthlyProductionMatrix() {
     link.click();
     URL.revokeObjectURL(url);
   };
+  const exportExcel = async () => {
+    if (exportingExcel || months.length === 0 || !data) return;
+    setExportingExcel(true);
+    try {
+      // Load the spreadsheet library only when a formatted workbook is requested.
+      const { exportMonthlyProductionExcel } = await import("./monthlyProductionExcelExport");
+      await exportMonthlyProductionExcel({
+        rows: visibleProducts.map((product) => ({
+          name: product.name,
+          articleCode: product.articleCode,
+          categoryName: product.categoryName,
+          values: months.map((month) => byId(product.id, month)),
+        })),
+        months,
+        monthLabels: months.map(monthLabel),
+        category,
+        search,
+      });
+    } catch (error) {
+      toast({
+        title: "Unable to export Excel",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setExportingExcel(false);
+    }
+  };
   const totals = months.map((month) => visibleProducts.reduce((sum, product) => sum + byId(product.id, month), 0));
   const overallTotal = totals.reduce((sum, count) => sum + count, 0);
 
@@ -217,7 +246,12 @@ export default function FactoryMonthlyProductionMatrix() {
           <Button variant="outline" size="sm" disabled={isFetching} onClick={() => void refetch()}>
             <RotateCcw className="mr-2 h-4 w-4" /> {t("monthlyProduction.refresh")}
           </Button>
-          <Button variant="outline" size="sm" disabled={!data} onClick={exportCsv}>
+          <Button variant="outline" size="sm" disabled={!data || months.length === 0 || exportingExcel}
+            onClick={() => void exportExcel()} data-testid="export-monthly-production-excel">
+            <Download className="mr-2 h-4 w-4" /> {exportingExcel ? "Exporting…" : "Export Excel"}
+          </Button>
+          <Button variant="outline" size="sm" disabled={!data || months.length === 0} onClick={exportCsv}
+            data-testid="export-monthly-production-csv">
             <Download className="mr-2 h-4 w-4" /> {t("monthlyProduction.exportCsv")}
           </Button>
         </div>
