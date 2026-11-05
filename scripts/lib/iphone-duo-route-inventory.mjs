@@ -40,7 +40,9 @@ export async function discoverDuoRouteInventory() {
     ...erpAll.filter((route) => route.startsWith("/sp")),
     "/sp/golden-coast",
   ]);
-  const factory = splitRoutes(routeMatches(sources.factory, routePattern).filter((route) => route.startsWith("/factory/")));
+  const factory = splitRoutes(
+    routeMatches(sources.factory, routePattern).filter((route) => route.startsWith("/factory/"))
+  );
   const properties = splitRoutes(routeMatches(sources.properties, routePattern));
 
   // The POS router has two mutually exclusive trees, selected by company type.
@@ -58,7 +60,9 @@ export async function discoverDuoRouteInventory() {
     .filter((route) => !retiredRetailRoutes.has(route));
   const retailPrefixes = routeMatches(sources.app, /location\.startsWith\(["'](\/retail[^"']+)["']\)/g);
   const retailAdmin = splitRoutes([...retailLiteralPaths, ...retailPrefixes.filter((route) => !route.endsWith("/"))]);
-  retailAdmin.parameterized.push(...retailPrefixes.filter((route) => route.endsWith("/")).map((route) => route + ":id"));
+  retailAdmin.parameterized.push(
+    ...retailPrefixes.filter((route) => route.endsWith("/")).map((route) => route + ":id")
+  );
 
   const groups = [
     { workspace: "erp", companyCode: "PHASE9-ERP", requiredRole: "Developer", ...erp },
