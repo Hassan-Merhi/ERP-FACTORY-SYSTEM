@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
-import { z } from "zod";
+import { ticketCreateSchema } from "../lib/ticketInputs";
 import { db } from "../db";
 import { requireAuth } from "../auth";
 import { requirePageAccess, requireActionAccess } from "../lib/permissionMiddleware";
@@ -10,17 +10,6 @@ import { createSupportTicket } from "../lib/ticketService";
 import { canAccessTicket } from "../lib/ticketPolicy";
 import { storage } from "../storage";
 import { buildPermissionMap, canAccess } from "../lib/permissionHelpers";
-
-const createSchema = z.object({
-  title: z.string().trim().min(3).max(240),
-  description: z.string().trim().min(3).max(10000),
-  category: z.string().trim().min(2).max(80),
-  priority: z.enum(["low","normal","high","urgent"]).default("normal"),
-  sourceMode: z.enum(["erp","factory"]),
-  assignedTo: z.string().min(1).max(100),
-  reportedUserId: z.string().max(100).nullable().optional(),
-  voucherId: z.number().int().positive().optional(),
-}).strict();
 
 function respondError(res: Response, error: unknown) {
   const code = error instanceof Error ? error.message : "TICKET_ERROR";
@@ -114,7 +103,7 @@ export function registerTicketRoutes(app: Express) {
   });
 
   app.post("/api/tickets", ...page, requireActionAccess("act_ticket_create"), async (req: Request, res: Response) => {
-    const parsed = createSchema.safeParse(req.body);
+    const parsed = ticketCreateSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message:"Invalid ticket", errors:parsed.error.flatten() });
     try {
       const ctx = await getActiveCompanyPermissionContext(req);
