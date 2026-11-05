@@ -30,7 +30,7 @@ describe("Ticket Management Phase 5 reporting security",()=>{
   });
   it("neutralizes formula injection and escapes CSV special characters",()=>{
     for(const formula of ["=2+2","+cmd","-4","@SUM(A1)"," =IMPORTXML(A1)"])
-      expect(sanitizeTicketCsvCell(formula)).toMatch(/^"'/.source);
+      expect(sanitizeTicketCsvCell(formula)).toMatch(/^"'/);
     expect(sanitizeTicketCsvCell('a"b')).toBe('"a""b"');
     expect(serializeTicketCsv([["Ticket","Title"],["TKT-1","row\nline"]]))
       .toBe('"Ticket","Title"\r\n"TKT-1","row line"\r\n');
