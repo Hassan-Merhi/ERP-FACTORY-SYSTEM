@@ -166,6 +166,45 @@ CREATE TRIGGER ic_payment_allocation_append_only
 BEFORE INSERT OR UPDATE OR DELETE ON intercompany_payment_allocations
 FOR EACH ROW EXECUTE FUNCTION ic_validate_payment_allocation_row();
 
+-- Validate the ACTUAL journal legs, not just voucher headings. A misleading
+-- pre-existing voucher cannot be linked as proof of a new intercompany payment.
+CREATE OR REPLACE FUNCTION ic_payment_voucher_has_legs(
+  p_voucher INTEGER,p_cash_type TEXT,p_cash_id INTEGER,
+  p_partner_type TEXT,p_partner_id INTEGER,p_usd NUMERIC,p_cash_side TEXT)
+RETURNS BOOLEAN LANGUAGE plpgsql STABLE AS $check$
+DECLARE is_exact_count BOOLEAN; valid_cash BOOLEAN; valid_partner BOOLEAN;
+BEGIN
+  SELECT COUNT(*)=2 INTO is_exact_count FROM voucher_entries WHERE voucher_id=p_voucher;
+  SELECT EXISTS(
+    SELECT 1 FROM vouchers v WHERE v.id=p_voucher AND v.total_amount=p_usd
+      AND v.deleted_at IS NULL
+  ) INTO valid_cash;
+  IF NOT is_exact_count OR NOT valid_cash THEN RETURN FALSE; END IF;
+  SELECT EXISTS(
+    SELECT 1 FROM voucher_entries e WHERE e.voucher_id=p_voucher
+      AND ((p_cash_side='debit' AND COALESCE(e.debit_amount,0)=p_usd
+             AND COALESCE(e.credit_amount,0)=0)
+        OR (p_cash_side='credit' AND COALESCE(e.credit_amount,0)=p_usd
+             AND COALESCE(e.debit_amount,0)=0))
+      AND ((p_cash_type='bank' AND e.bank_account_id=p_cash_id AND e.ledger_account_id IS NULL
+             AND e.supplier_id IS NULL)
+        OR (p_cash_type='cash' AND e.ledger_account_id=p_cash_id AND e.bank_account_id IS NULL
+             AND e.supplier_id IS NULL))
+  ) INTO valid_cash;
+  SELECT EXISTS(
+    SELECT 1 FROM voucher_entries e WHERE e.voucher_id=p_voucher
+      AND ((p_cash_side='debit' AND COALESCE(e.credit_amount,0)=p_usd
+             AND COALESCE(e.debit_amount,0)=0)
+        OR (p_cash_side='credit' AND COALESCE(e.debit_amount,0)=p_usd
+             AND COALESCE(e.credit_amount,0)=0))
+      AND ((p_partner_type='ledger' AND e.ledger_account_id=p_partner_id
+             AND e.bank_account_id IS NULL AND e.supplier_id IS NULL)
+        OR (p_partner_type='supplier' AND e.supplier_id=p_partner_id
+             AND e.bank_account_id IS NULL AND e.ledger_account_id IS NULL))
+  ) INTO valid_partner;
+  RETURN valid_cash AND valid_partner;
+END $check$;
+
 CREATE OR REPLACE FUNCTION ic_validate_payment_pair()
 RETURNS TRIGGER LANGUAGE plpgsql AS $guard$
 DECLARE pair_record RECORD; source_voucher RECORD; dest_voucher RECORD;
@@ -194,6 +233,14 @@ BEGIN
     ) THEN
       RAISE EXCEPTION 'A coordinated payment reversal requires a valid original-company Payment/Receipt pair';
     END IF;
+    IF NOT ic_payment_voucher_has_legs(NEW.source_reversal_voucher_id,
+      OLD.source_cash_type,OLD.source_cash_id,'ledger',OLD.source_receivable_account_id,
+      OLD.base_amount,'credit')
+      OR NOT ic_payment_voucher_has_legs(NEW.destination_reversal_voucher_id,
+      OLD.destination_cash_type,OLD.destination_cash_id,'supplier',OLD.destination_supplier_id,
+      OLD.base_amount,'debit') THEN
+      RAISE EXCEPTION 'Reversal voucher lines do not offset the original actual cash and partner accounts';
+    END IF;
     RETURN NEW;
   END IF;
   SELECT * INTO pair_record FROM intercompany_relationship_policies WHERE id=NEW.relationship_id;
@@ -211,6 +258,14 @@ BEGIN
      dest_voucher.company_id IS DISTINCT FROM NEW.destination_company_id OR dest_voucher.voucher_type<>'Payment'
     OR dest_voucher.deleted_at IS NOT NULL THEN
     RAISE EXCEPTION 'Paired actual payment voucher companies/types are incorrect';
+  END IF;
+  IF NOT ic_payment_voucher_has_legs(NEW.source_receipt_voucher_id,
+    NEW.source_cash_type,NEW.source_cash_id,'ledger',NEW.source_receivable_account_id,
+    NEW.base_amount,'debit')
+    OR NOT ic_payment_voucher_has_legs(NEW.destination_payment_voucher_id,
+    NEW.destination_cash_type,NEW.destination_cash_id,'supplier',NEW.destination_supplier_id,
+    NEW.base_amount,'credit') THEN
+    RAISE EXCEPTION 'Actual payment voucher lines do not match confirmed bank, supplier and receivable amounts';
   END IF;
   IF NOT EXISTS(SELECT 1 FROM ledger_accounts WHERE id=NEW.source_receivable_account_id
       AND company_id=NEW.source_company_id AND deleted_at IS NULL)
