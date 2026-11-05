@@ -55,9 +55,9 @@ export default { async fetch(request) {
       return Response.json({ error: "invalid upload" }, { status: 400 });
     }
     if (operation === "get") {
-      // Only the manifest is read back by the publisher, so it can merge
-      // tonight's recordings with the topics published on earlier nights.
-      if (key !== manifestKey) return Response.json({ error: "invalid read" }, { status: 400 });
+      // The publisher reads the manifest back to merge tonight's recordings
+      // with earlier nights, and checks whether an immutable media object
+      // already exists before a rollback re-publishes an older recording.
       const token = await issueSignedToken({ pathname: key, operations: ["get"], validUntil: Date.now() + 100000 });
       const result = await presignUrl(token, { pathname: key, operation: "get", access: "private", validUntil: Date.now() + 60000 });
       const url = new URL(result.presignedUrl);
