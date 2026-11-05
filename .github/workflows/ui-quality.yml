@@ -261,6 +261,9 @@ jobs:
       - name: Verify iPhone Duo all-workspace route inventory
         run: node scripts/verify-iphone-duo-phase1-inventory.mjs
 
+      - name: Verify iPhone Duo Phase 4 source and release contracts
+        run: node scripts/verify-iphone-duo-phase4-release.mjs
+
       - name: Prepare disposable browser fixture
         run: |
           node node_modules/drizzle-kit/bin.cjs push --force
