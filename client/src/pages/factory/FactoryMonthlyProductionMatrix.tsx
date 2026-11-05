@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -16,14 +17,15 @@ const currentMonth = () => {
   const now = new Date();
   return String(now.getFullYear()) + "-" + String(now.getMonth() + 1).padStart(2, "0");
 };
-const prettyMonth = (month: string) => {
+const prettyMonth = (month: string, locale?: string) => {
   const [y, m] = month.split("-").map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: "short", year: "numeric" });
+  return new Date(y, m - 1, 1).toLocaleDateString(locale, { month: "short", year: "numeric" });
 };
 const csvCell = (value: string | number) => '"' + String(value).replace(/"/g, '""') + '"';
 
 export default function FactoryMonthlyProductionMatrix() {
   const { selectedCompany } = useCompany();
+  const { t, language } = useApplicationLanguage();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const queryKey = companyQueryKey("/api/factory/monthly-production-matrix", selectedCompany?.id);
@@ -32,7 +34,7 @@ export default function FactoryMonthlyProductionMatrix() {
     enabled: !!selectedCompany?.id,
     queryFn: async () => {
       const response = await fetch("/api/factory/monthly-production-matrix", { credentials: "include" });
-      if (!response.ok) throw new Error("Could not load production");
+      if (!response.ok) throw new Error(t("monthlyProduction.couldNotLoad"));
       return response.json();
     },
     staleTime: 60_000,
@@ -62,6 +64,7 @@ export default function FactoryMonthlyProductionMatrix() {
     return months;
   }, [data?.monthly]);
   const months = mode === "all" ? allMonths : [...pickedMonths].sort();
+  const monthLabel = (month: string) => prettyMonth(month, language === "ar" ? "ar" : language === "fr" ? "fr" : "en");
   const counts = useMemo(() => {
     const map = new Map<number, Map<string, number>>();
     for (const record of data?.monthly ?? []) {
@@ -106,12 +109,12 @@ export default function FactoryMonthlyProductionMatrix() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ productIds: all }),
       });
-      if (!response.ok) throw new Error("Save failed");
+      if (!response.ok) throw new Error(t("monthlyProduction.orderError"));
       queryClient.setQueryData<MatrixResponse>(queryKey, { ...data, rowOrder: all });
-      toast({ title: "Item order saved", description: "Everyone in this company now sees the same order." });
+      toast({ title: t("monthlyProduction.orderSaved"), description: t("monthlyProduction.sharedSaved") });
     } catch {
       setOrderedIds(before);
-      toast({ title: "Could not save order", description: "The previous order was restored.", variant: "destructive" });
+      toast({ title: t("monthlyProduction.orderError"), description: t("monthlyProduction.restored"), variant: "destructive" });
     } finally { setSaving(false); }
   };
   const moveOne = (id: number, direction: number) => {
@@ -126,7 +129,7 @@ export default function FactoryMonthlyProductionMatrix() {
   };
   const exportCsv = () => {
     const rows: (string | number)[][] = [
-      ["Article code", "Item", "Category", ...months.map(prettyMonth), "Total"],
+      [t("monthlyProduction.code"), t("monthlyProduction.item"), t("monthlyProduction.category"), ...months.map(monthLabel), t("monthlyProduction.total")],
       ...visibleProducts.map((p) => [p.articleCode, p.name, p.categoryName,
         ...months.map((m) => byId(p.id, m)), rowTotal(p.id)]),
     ];
@@ -144,53 +147,53 @@ export default function FactoryMonthlyProductionMatrix() {
   return (
     <main className="p-3 sm:p-5 space-y-4" data-testid="factory-monthly-production-matrix">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <PageHeader title="Monthly Production Matrix" subtitle="Produced bales by item and month · shared item order" />
+        <PageHeader title={t("monthlyProduction.title")} subtitle={t("monthlyProduction.subtitle")} />
         <div className="flex gap-2">
           <Button variant="outline" size="sm" disabled={isFetching} onClick={() => void refetch()}>
-            <RotateCcw className="mr-2 h-4 w-4" /> Refresh
+            <RotateCcw className="mr-2 h-4 w-4" /> {t("monthlyProduction.refresh")}
           </Button>
           <Button variant="outline" size="sm" disabled={!data} onClick={exportCsv}>
-            <Download className="mr-2 h-4 w-4" /> Export CSV
+            <Download className="mr-2 h-4 w-4" /> {t("monthlyProduction.exportCsv")}
           </Button>
         </div>
       </div>
       <div className="rounded-xl border bg-card p-3 space-y-3">
         <div className="flex flex-wrap gap-2 items-center">
-          <Button size="sm" variant={mode === "all" ? "default" : "outline"} onClick={() => setMode("all")}>All months</Button>
-          <Button size="sm" variant={mode === "selected" ? "default" : "outline"} onClick={() => setMode("selected")}>Specific months</Button>
-          <Input aria-label="Choose production month" type="month" className="w-44" value={pickedMonth} onChange={(e) => setPickedMonth(e.target.value)} />
-          <Button size="sm" variant="outline" onClick={addMonth}><Plus className="mr-1 h-4 w-4" /> Add month</Button>
+          <Button size="sm" variant={mode === "all" ? "default" : "outline"} onClick={() => setMode("all")}>{t("monthlyProduction.allMonths")}</Button>
+          <Button size="sm" variant={mode === "selected" ? "default" : "outline"} onClick={() => setMode("selected")}>{t("monthlyProduction.selectedMonths")}</Button>
+          <Input aria-label={t("monthlyProduction.chooseMonth")} type="month" className="w-44" value={pickedMonth} onChange={(e) => setPickedMonth(e.target.value)} />
+          <Button size="sm" variant="outline" onClick={addMonth}><Plus className="mr-1 h-4 w-4" /> {t("monthlyProduction.addMonth")}</Button>
           <div className="relative w-full sm:w-64 sm:ml-auto">
             <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input aria-label="Search production items" className="pl-9" placeholder="Search item / code" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input aria-label={t("monthlyProduction.searchItems")} className="pl-9" placeholder={t("monthlyProduction.searchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <select aria-label="Filter production category" className="h-9 rounded-md border bg-background px-2 text-sm" value={category} onChange={(e) => setCategory(e.target.value)}>
-            <option value="">All categories</option>
+          <select aria-label={t("monthlyProduction.categoryFilter")} className="h-9 rounded-md border bg-background px-2 text-sm" value={category} onChange={(e) => setCategory(e.target.value)}>
+            <option value="">{t("monthlyProduction.allCategories")}</option>
             {categories.map((value) => <option key={value} value={value}>{value}</option>)}
           </select>
         </div>
         {mode === "selected" && <div className="flex flex-wrap items-center gap-1.5">
-          {pickedMonths.length === 0 && <span className="text-sm text-muted-foreground">Add a month to display its column.</span>}
+          {pickedMonths.length === 0 && <span className="text-sm text-muted-foreground">{t("monthlyProduction.addMonthHint")}</span>}
           {pickedMonths.map((month) => <button key={month} type="button" onClick={() => setPickedMonths((prev) => prev.filter((m) => m !== month))}
             className="inline-flex items-center gap-1 rounded-full border bg-muted px-2.5 py-1 text-xs hover:bg-accent">
-            {prettyMonth(month)} <X className="h-3 w-3" aria-label="Remove month" />
+            {monthLabel(month)} <X className="h-3 w-3" aria-label={t("monthlyProduction.removeMonth")} />
           </button>)}
         </div>}
         <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
-          <span>{visibleProducts.length} items · {months.length} months · counts from stock-entry production</span>
-          <span>Highest month per item <b className="text-emerald-600">green</b> · lowest <b className="text-red-600">red</b> · drag rows to reorder for everyone</span>
+          <span>{visibleProducts.length} {t("monthlyProduction.items")} · {months.length} {t("monthlyProduction.months")} · {t("monthlyProduction.countsHint")}</span>
+          <span>{t("monthlyProduction.highest")} <b className="text-emerald-600">{t("monthlyProduction.green")}</b> · {t("monthlyProduction.lowest")} <b className="text-red-600">{t("monthlyProduction.red")}</b> · {t("monthlyProduction.dragHint")}</span>
         </div>
       </div>
       {error ? <div className="rounded-lg border p-8 text-center text-destructive">
-        Could not load monthly production. <Button variant="outline" size="sm" onClick={() => void refetch()}>Retry</Button>
-      </div> : isLoading || !data ? <div className="rounded-lg border p-10 text-center text-muted-foreground">Loading monthly production…</div> :
+        {t("monthlyProduction.loadError")} <Button variant="outline" size="sm" onClick={() => void refetch()}>{t("monthlyProduction.retry")}</Button>
+      </div> : isLoading || !data ? <div className="rounded-lg border p-10 text-center text-muted-foreground">{t("monthlyProduction.loading")}</div> :
       <div className="overflow-auto rounded-xl border bg-card" style={{ maxHeight: "calc(100dvh - 280px)" }}>
         <table className="min-w-max w-full border-separate border-spacing-0 text-sm tabular-nums">
           <thead className="sticky top-0 z-20 bg-muted text-foreground">
             <tr>
-              <th className="sticky left-0 z-30 min-w-72 border-b border-r bg-muted p-2 text-left">Item / article code</th>
-              {months.map((month) => <th key={month} className="min-w-24 border-b border-r px-3 py-2 text-right whitespace-nowrap">{prettyMonth(month)}</th>)}
-              <th className="sticky right-0 z-30 min-w-24 border-b bg-muted px-3 py-2 text-right">Total</th>
+              <th className="sticky left-0 z-30 min-w-72 border-b border-r bg-muted p-2 text-left">{t("monthlyProduction.itemCode")}</th>
+              {months.map((month) => <th key={month} className="min-w-24 border-b border-r px-3 py-2 text-right whitespace-nowrap">{monthLabel(month)}</th>)}
+              <th className="sticky right-0 z-30 min-w-24 border-b bg-muted px-3 py-2 text-right">{t("monthlyProduction.total")}</th>
             </tr>
           </thead>
           <tbody>
@@ -213,8 +216,8 @@ export default function FactoryMonthlyProductionMatrix() {
                       <div className="text-[11px] text-muted-foreground">{product.articleCode} · {product.categoryName}</div>
                     </div>
                     <div className="flex flex-col">
-                      <button type="button" aria-label={"Move " + product.name + " up"} disabled={!canReorder || index === 0} onClick={() => moveOne(product.id, -1)} className="rounded hover:bg-muted disabled:opacity-25"><ArrowUp className="h-3.5 w-3.5" /></button>
-                      <button type="button" aria-label={"Move " + product.name + " down"} disabled={!canReorder || index === visibleProducts.length - 1} onClick={() => moveOne(product.id, 1)} className="rounded hover:bg-muted disabled:opacity-25"><ArrowDown className="h-3.5 w-3.5" /></button>
+                      <button type="button" aria-label={t("monthlyProduction.moveUp") + ": " + product.name} disabled={!canReorder || index === 0} onClick={() => moveOne(product.id, -1)} className="rounded hover:bg-muted disabled:opacity-25"><ArrowUp className="h-3.5 w-3.5" /></button>
+                      <button type="button" aria-label={t("monthlyProduction.moveDown") + ": " + product.name} disabled={!canReorder || index === visibleProducts.length - 1} onClick={() => moveOne(product.id, 1)} className="rounded hover:bg-muted disabled:opacity-25"><ArrowDown className="h-3.5 w-3.5" /></button>
                     </div>
                   </div>
                 </td>
@@ -223,24 +226,24 @@ export default function FactoryMonthlyProductionMatrix() {
                     ? "bg-emerald-100 text-emerald-800 font-bold dark:bg-emerald-950/50 dark:text-emerald-300"
                     : hasRange && value === min
                       ? "bg-red-100 text-red-800 font-bold dark:bg-red-950/50 dark:text-red-300" : "";
-                  return <td key={months[i]} title={prettyMonth(months[i]) + ": " + value + " bales"}
+                  return <td key={months[i]} title={monthLabel(months[i]) + ": " + value + " " + t("monthlyProduction.baleUnits")}
                     className={"border-b border-r px-3 py-2 text-right " + accent}>{value.toLocaleString()}</td>;
                 })}
                 <td className="sticky right-0 z-10 border-b bg-card px-3 py-2 text-right font-semibold group-hover:bg-accent/30">{rowTotal(product.id).toLocaleString()}</td>
               </tr>;
             })}
-            {visibleProducts.length === 0 && <tr><td colSpan={months.length + 2} className="p-10 text-center text-muted-foreground">No matching products</td></tr>}
+            {visibleProducts.length === 0 && <tr><td colSpan={months.length + 2} className="p-10 text-center text-muted-foreground">{t("monthlyProduction.noMatching")}</td></tr>}
           </tbody>
           <tfoot className="sticky bottom-0 z-10 bg-muted font-bold">
             <tr>
-              <td className="sticky left-0 border-t border-r bg-muted px-3 py-2">Total produced (bales)</td>
+              <td className="sticky left-0 border-t border-r bg-muted px-3 py-2">{t("monthlyProduction.totalProduced")}</td>
               {totals.map((value, index) => <td key={months[index]} className="border-t border-r px-3 py-2 text-right">{value.toLocaleString()}</td>)}
               <td className="sticky right-0 border-t bg-muted px-3 py-2 text-right">{overallTotal.toLocaleString()}</td>
             </tr>
           </tfoot>
         </table>
       </div>}
-      {saving && <p role="status" className="text-xs text-muted-foreground">Saving shared item order…</p>}
+      {saving && <p role="status" className="text-xs text-muted-foreground">{t("monthlyProduction.saving")}</p>}
     </main>
   );
 }

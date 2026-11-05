@@ -483,11 +483,12 @@ function ErpPOImport() {
     ]
   );
 
+  const refreshStockItemsMutate = refreshStockItemsMutation.mutate;
   const refreshStockItems = useCallback(() => {
     if (!preview || refreshInFlight.current) return;
     refreshInFlight.current = true;
-    refreshStockItemsMutation.mutate(buildPayload());
-  }, [preview, refreshStockItemsMutation.mutate, buildPayload]);
+    refreshStockItemsMutate(buildPayload());
+  }, [preview, refreshStockItemsMutate, buildPayload]);
 
   const hasUnresolvedItems = Boolean(
     preview?.preview.some((container) => container.items.some((item) => !item.stockItemId || !item.itemName))
