@@ -202,10 +202,12 @@ export function PageHeader({
             {navContent}
           </nav>
         )}
-        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+        {/* Actions sit beside the title when they fit; a long action row wraps under it
+            instead of pushing the workspace sideways (e.g. tablet-width Properties rentals). */}
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-4">
           <div className="min-w-0 flex-1 border-l-[3px] border-primary pl-3">{titleContent}</div>
           {hasActions && (
-            <WorkspaceActions className="shrink-0" data-testid="page-header-actions">
+            <WorkspaceActions className="min-w-0 max-w-full" data-testid="page-header-actions">
               {children}
             </WorkspaceActions>
           )}
