@@ -97,7 +97,9 @@ describe("Phase 4 paired payment database protections",()=>{
         "Original receivable/supplier identities");
       await client.query("ROLLBACK TO SAVEPOINT wrong_supplier_identity");
       await client.query("RELEASE SAVEPOINT wrong_supplier_identity");
-      await client.query("INSERT INTO intercompany_container_payments"+paymentColumns+" VALUES "+goodValues);
+      // Rejected fixture INSERTs consume sequence numbers even after savepoint rollback.
+      // Pin the genuine payment identity used by later credit/reversal assertions.
+      await client.query("INSERT INTO intercompany_container_payments(id,"+paymentColumns.slice(1)+" VALUES (1,"+goodValues.slice(1));
       await client.query("INSERT INTO vouchers(id,company_id,voucher_type,total_amount,description) VALUES (62,1,'Receipt',120,'Other bank reference'),(63,2,'Payment',120,'Other supplier reference')");
       await client.query("INSERT INTO voucher_entries(voucher_id,bank_account_id,ledger_account_id,supplier_id,debit_amount,credit_amount) VALUES (62,31,NULL,NULL,120,0),(62,NULL,11,NULL,0,120),(63,NULL,NULL,2,120,0),(63,32,NULL,NULL,0,120)");
       await rejects("INSERT INTO intercompany_container_payments"+paymentColumns+
