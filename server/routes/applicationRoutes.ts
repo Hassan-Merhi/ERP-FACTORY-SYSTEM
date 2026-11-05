@@ -1,6 +1,5 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-
 import { requireAuth } from "../auth";
 import { db } from "../db";
 import { registerAccountRoutes } from "./accounts";
@@ -98,7 +97,6 @@ import { registerIntercompanyPosConfigRoutes } from "./pos/intercompanyPosConfig
 import { registerBandwidthPhase3FactoryReads } from "./performance/bandwidthPhase3FactoryReads";
 import { registerApplicationAiLazyRoutes } from "./applicationAiLazyRoutes";
 import { enforceSharedFactoryAccess } from "../middleware/sharedFactoryAccessBoundary";
-
 export async function registerApplicationRoutes(app: Express): Promise<Server> {
   installRemoteSupportSessionStopAudit();
   registerWriteInvalidationSignal(app);
