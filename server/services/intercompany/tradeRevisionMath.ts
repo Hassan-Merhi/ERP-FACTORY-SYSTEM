@@ -1,12 +1,13 @@
+import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney, sumMoney } from "../../lib/money";
 import type { ErpVoucherLine } from "../accounting/erpVoucherPosting";
 
 export type FinancialTarget = { ledgerAccountId: number } | { supplierId: number };
 
-export const cents = (value: string | number): MoneyDecimal =>
+export const cents = (value: string | number): Decimal =>
   toMoney(value).toDecimalPlaces(2, MoneyDecimal.ROUND_HALF_UP);
 
-export function exactPositiveQuantity(value: string): MoneyDecimal {
+export function exactPositiveQuantity(value: string): Decimal {
   const qty = toMoney(value);
   if (!qty.isFinite() || qty.lte(0) || qty.decimalPlaces() > 3 || qty.gte("10000000000")) {
     throw new Error("PO quantity must be positive with at most 3 decimals");
@@ -14,7 +15,7 @@ export function exactPositiveQuantity(value: string): MoneyDecimal {
   return qty;
 }
 
-export function exactNonnegativeRate(value: string): MoneyDecimal {
+export function exactNonnegativeRate(value: string): Decimal {
   const rate = toMoney(value);
   if (!rate.isFinite() || rate.lt(0) || rate.decimalPlaces() > 2 || rate.gte("10000000000")) {
     throw new Error("PO rate must be non-negative with at most 2 decimals");
@@ -22,7 +23,7 @@ export function exactNonnegativeRate(value: string): MoneyDecimal {
   return rate;
 }
 
-export function lineTotal(quantity: string, rate: string): MoneyDecimal {
+export function lineTotal(quantity: string, rate: string): Decimal {
   return exactPositiveQuantity(quantity).times(exactNonnegativeRate(rate))
     .toDecimalPlaces(2, MoneyDecimal.ROUND_HALF_UP);
 }
@@ -35,7 +36,7 @@ export function fullPoCost(po: {
   documentCharges: string | null;
   discount: string | null;
   otherCharges: string | null;
-}): MoneyDecimal {
+}): Decimal {
   return sumMoney([
     po.itemsTotal, po.freight, po.surcharge, po.fumigation, po.documentCharges, po.otherCharges,
   ]).minus(toMoney(po.discount)).toDecimalPlaces(2);
@@ -45,7 +46,7 @@ export function fullPoCost(po: {
 export function signedPair(
   positiveDebit: FinancialTarget,
   positiveCredit: FinancialTarget,
-  signedAmount: MoneyDecimal,
+  signedAmount: Decimal,
   narration: string
 ): ErpVoucherLine[] {
   const amount = cents(signedAmount);
@@ -64,7 +65,7 @@ export function signedPair(
 }
 
 /** Cent-exact deterministic weight allocation; final row absorbs the rounding remainder. */
-export function allocateByWeights(total: MoneyDecimal, weights: readonly MoneyDecimal[]): MoneyDecimal[] {
+export function allocateByWeights(total: Decimal, weights: readonly Decimal[]): Decimal[] {
   if (!weights.length || weights.some(w => w.lt(0)) || sumMoney(weights).lte(0)) {
     throw new Error("Confirmed charge requires positive eligible purchase weights");
   }
@@ -86,7 +87,7 @@ export function allocateByWeights(total: MoneyDecimal, weights: readonly MoneyDe
   return allocated.map(part => new MoneyDecimal(part.cents).div(100));
 }
 
-export function requireCostEqual(label: string, actual: MoneyDecimal, expected: MoneyDecimal) {
+export function requireCostEqual(label: string, actual: Decimal, expected: Decimal) {
   if (!actual.eq(expected)) throw new Error(
     label + " does not reconcile (" + actual.toFixed(2) + " versus " + expected.toFixed(2) + ")"
   );
