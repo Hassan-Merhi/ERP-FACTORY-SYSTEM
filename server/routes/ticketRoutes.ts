@@ -9,7 +9,7 @@ import { getActiveCompanyPermissionContext } from "../services/security/activeCo
 import { supportTickets, supportTicketRecords, supportTicketParticipants, userCompanyRoles, users, vouchers } from "@shared/schema";
 import { createSupportTicket, transitionSupportTicket } from "../lib/ticketService";
 import { attachTicketEvidence, getTicketEvidence, getTicketConversation, postTicketComment, MAX_TICKET_ATTACHMENT_BYTES } from "../lib/ticketCollaborationService";
-import { canAccessTicket } from "../lib/ticketPolicy";
+import { canAccessTicket, canPerformTicketAction, type TicketStatus } from "../lib/ticketPolicy";
 import { storage } from "../storage";
 import { buildPermissionMap, canAccess } from "../lib/permissionHelpers";
 
@@ -110,16 +110,20 @@ export function registerTicketRoutes(app: Express) {
       if (!ticket) return res.status(404).json({ message: "Ticket not found" });
       const participants = await db.select({ userId: supportTicketParticipants.userId })
         .from(supportTicketParticipants).where(and(eq(supportTicketParticipants.companyId,ctx.companyId),eq(supportTicketParticipants.ticketId,id)));
-      if (!canAccessTicket({ userId:ctx.userId,companyId:ctx.companyId,role:ctx.role,canAccessPage:true,
-          canManageAll:["Admin","Developer","Owner","Manager"].includes(ctx.role) && await permitted(ctx.companyId,ctx.role,"act_ticket_manage_all") },
-        { companyId: ticket.companyId, createdBy: ticket.createdBy, assignedTo: ticket.assignedTo,
-          participantIds:participants.map(p=>p.userId),status:ticket.status as "open" })) {
-        return res.status(404).json({ message: "Ticket not found" });
-      }
+      const actor=await actorForTicket(req);
+      const resource={ companyId:ticket.companyId,createdBy:ticket.createdBy,assignedTo:ticket.assignedTo,
+        participantIds:participants.map(p=>p.userId),status:ticket.status as TicketStatus };
+      if (!canAccessTicket(actor,resource)) return res.status(404).json({ message:"Ticket not found" });
+      const capabilities={
+        seen:canPerformTicketAction(actor,resource,"seen"),
+        start:canPerformTicketAction(actor,resource,"start"),
+        finalize:canPerformTicketAction(actor,resource,"finalize"),
+        reopen:canPerformTicketAction(actor,resource,"reopen"),
+      };
       const records = await db.select({ id:supportTicketRecords.id,recordType:supportTicketRecords.recordType,
         displayReference:supportTicketRecords.displayReference })
         .from(supportTicketRecords).where(and(eq(supportTicketRecords.companyId,ctx.companyId),eq(supportTicketRecords.ticketId,id)));
-      return res.json({ ticket, records });
+      return res.json({ ticket, records, capabilities });
     } catch (error) { return respondError(res,error); }
   });
 
