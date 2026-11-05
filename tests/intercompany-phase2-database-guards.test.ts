@@ -28,6 +28,7 @@ describe("Phase 2 PostgreSQL intercompany import safeguards", () => {
         "CREATE TABLE containers (id integer PRIMARY KEY, company_id integer, status text);" +
         "CREATE TABLE purchase_orders (id integer PRIMARY KEY, company_id integer, container_id integer, voucher_id integer, po_number text);" +
         "CREATE TABLE vouchers (id integer PRIMARY KEY, description text);" +
+        "CREATE TABLE voucher_entries (id serial PRIMARY KEY, voucher_id integer, debit_amount numeric, credit_amount numeric);" +
         "CREATE TABLE po_line_items (id serial PRIMARY KEY, po_id integer);" +
         "CREATE TABLE container_charges (id serial PRIMARY KEY, container_id integer);" +
         "CREATE TABLE container_offloads (id serial PRIMARY KEY, container_id integer);"
@@ -93,6 +94,10 @@ describe("Phase 2 PostgreSQL intercompany import safeguards", () => {
       await rejects("INSERT INTO container_charges(container_id) VALUES (10)", "Phase 3");
       await rejects("UPDATE vouchers SET description='tampered' WHERE id=51", "coordinated");
       await rejects("UPDATE vouchers SET description='tampered' WHERE id=52", "coordinated");
+      await rejects("INSERT INTO voucher_entries(voucher_id,debit_amount) VALUES (51,123)", "coordinated");
+      await rejects("INSERT INTO voucher_entries(voucher_id,credit_amount) VALUES (52,123)", "coordinated");
+      await client.query("INSERT INTO voucher_entries(voucher_id,debit_amount) VALUES (55,12)");
+      await rejects("UPDATE voucher_entries SET voucher_id=51 WHERE voucher_id=55", "Cannot move");
       await client.query(
         "INSERT INTO intercompany_audit_events(event_key,source_company_id,event_type,payload) " +
         "VALUES ('ic-container-import:1:1',1,'container-import-confirmed'," +
@@ -100,6 +105,8 @@ describe("Phase 2 PostgreSQL intercompany import safeguards", () => {
       );
       await rejects("UPDATE vouchers SET description='tampered' WHERE id=53", "coordinated");
       await rejects("UPDATE vouchers SET description='tampered' WHERE id=54", "coordinated");
+      await rejects("INSERT INTO voucher_entries(voucher_id,credit_amount) VALUES (53,20)", "coordinated");
+      await rejects("INSERT INTO voucher_entries(voucher_id,debit_amount) VALUES (54,20)", "coordinated");
       // Unrelated physical containers and vouchers are unaffected.
       await client.query("INSERT INTO container_offloads(container_id) VALUES (11)");
       await client.query("UPDATE vouchers SET description='unrelated' WHERE id=999");
