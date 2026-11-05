@@ -65,6 +65,16 @@ export function registerTicketRoutes(app: Express) {
   const page = [requireAuth, requirePageAccess("page_ticket_management")] as const;
 
 
+  app.get("/api/tickets/dashboard-access",...page,async(req:Request,res:Response)=>{
+    try{
+      const ctx=await getActiveCompanyPermissionContext(req);
+      const allowed=["Admin","Developer","Owner","Manager"].includes(ctx.role) &&
+        await permitted(ctx.companyId,ctx.role,"act_ticket_manage_all");
+      return res.json({canViewDashboard:allowed,canExport:allowed &&
+        await permitted(ctx.companyId,ctx.role,"exp_ticket_export")});
+    }catch(error){return respondError(res,error);}
+  });
+
   // Current-user notification destinations only. No admin enumeration or arbitrary contact assignment.
   app.get("/api/tickets/notification-settings",...page,async(req:Request,res:Response)=>{
     try{
