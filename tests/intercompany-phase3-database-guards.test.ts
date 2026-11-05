@@ -128,7 +128,7 @@ describe("Phase 3 intercompany linked edit migration guards", () => {
       await rejects("UPDATE po_line_items SET rate=12 WHERE id=31", "synchronized");
       await client.query("SELECT set_config('erp.ic_edit_revision','',true)");
       await client.query(
-        "INSERT INTO intercompany_shared_charge_invoices(source_company_id,external_invoice_key,charge_type,face_amount,evidence_reference,created_by,state,confirmed_at) VALUES (1,'INVOICE-A','freight',50,'PDF-A','owner','confirmed',NOW())"
+        "INSERT INTO intercompany_shared_charge_invoices(source_company_id,external_invoice_key,charge_type,face_amount,evidence_reference,created_by,state) VALUES (1,'INVOICE-A','freight',50,'PDF-A','owner','draft')"
       );
       await client.query(
         "INSERT INTO intercompany_shared_charge_allocations(invoice_id,trade_id,amount) VALUES (1,1,50)"
@@ -136,6 +136,7 @@ describe("Phase 3 intercompany linked edit migration guards", () => {
       await client.query(
         "INSERT INTO intercompany_shared_charge_po_allocations(invoice_id,trade_id,source_po_id,amount) VALUES (1,1,21,50)"
       );
+      await client.query("UPDATE intercompany_shared_charge_invoices SET state='confirmed', confirmed_at=NOW() WHERE id=1");
       await client.query("SET CONSTRAINTS ALL IMMEDIATE");
       await rejects("UPDATE intercompany_shared_charge_invoices SET face_amount=51 WHERE id=1", "face");
       await rejects("UPDATE intercompany_shared_charge_allocations SET amount=40 WHERE id=1", "allocation");
