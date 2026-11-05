@@ -146,12 +146,16 @@ BEGIN
     END IF;
   END IF;
   -- Guard the new po_id too; moving unrelated lines INTO a linked PO is never legal.
-  IF TG_TABLE_NAME='po_line_items' AND TG_OP='UPDATE' AND NEW.po_id IS DISTINCT FROM OLD.po_id THEN
-    IF EXISTS (SELECT 1 FROM intercompany_trades t WHERE t.state='active'
-       AND (t.destination_po_id=NEW.po_id OR t.original_supplier_po_id=NEW.po_id))
-      OR EXISTS (SELECT 1 FROM intercompany_trade_source_pos l JOIN intercompany_trades t ON t.id=l.trade_id
-                 WHERE t.state='active' AND l.source_po_id=NEW.po_id) THEN
-      RAISE EXCEPTION 'Cannot move PO line into a linked intercompany purchase order';
+  IF TG_TABLE_NAME='po_line_items' THEN
+    IF TG_OP='UPDATE' THEN
+      IF NEW.po_id IS DISTINCT FROM OLD.po_id THEN
+        IF EXISTS (SELECT 1 FROM intercompany_trades t WHERE t.state='active'
+           AND (t.destination_po_id=NEW.po_id OR t.original_supplier_po_id=NEW.po_id))
+          OR EXISTS (SELECT 1 FROM intercompany_trade_source_pos l JOIN intercompany_trades t ON t.id=l.trade_id
+                     WHERE t.state='active' AND l.source_po_id=NEW.po_id) THEN
+          RAISE EXCEPTION 'Cannot move PO line into a linked intercompany purchase order';
+        END IF;
+      END IF;
     END IF;
   END IF;
   RETURN CASE WHEN TG_OP='DELETE' THEN OLD ELSE NEW END;
