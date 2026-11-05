@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation, useSearch } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
@@ -27,6 +28,9 @@ const csvCell = (value: string | number) => '"' + String(value).replace(/"/g, '"
 
 export default function FactoryMonthlyProductionMatrix() {
   const { selectedCompany } = useCompany();
+  const [, navigate] = useLocation();
+  const returnMonths = new URLSearchParams(useSearch()).get("months")?.split(",")
+    .filter((month) => /^\d{4}-(0[1-9]|1[0-2])$/.test(month)) ?? [];
   const { t, language } = useApplicationLanguage();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -43,9 +47,9 @@ export default function FactoryMonthlyProductionMatrix() {
   });
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
-  const [mode, setMode] = useState<"all" | "selected">("all");
+  const [mode, setMode] = useState<"all" | "selected">(returnMonths.length ? "selected" : "all");
   const [pickedMonth, setPickedMonth] = useState(currentMonth);
-  const [pickedMonths, setPickedMonths] = useState<string[]>([]);
+  const [pickedMonths, setPickedMonths] = useState<string[]>([...new Set(returnMonths)].sort());
   const [orderedIds, setOrderedIds] = useState<number[]>([]);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -99,6 +103,11 @@ export default function FactoryMonthlyProductionMatrix() {
   });
   const canReorder = !search.trim() && !category && !saving;
   const byId = (productId: number, month: string) => counts.get(productId)?.get(month) ?? 0;
+  const openWorkerBreakdown = (productId: number, selectedMonths: string[]) => {
+    if (selectedMonths.length === 0) return;
+    const params = new URLSearchParams({ months: selectedMonths.join(",") });
+    navigate("/factory/monthly-production-matrix/" + productId + "/workers?" + params.toString());
+  };
   const rowTotal = (id: number) => months.reduce((sum, month) => sum + byId(id, month), 0);
   const persistOrder = async (next: number[]): Promise<boolean> => {
     if (!data || saving) return false;
@@ -295,9 +304,21 @@ export default function FactoryMonthlyProductionMatrix() {
                     : hasRange && value === min
                       ? "bg-red-100 text-red-800 font-bold dark:bg-red-950/50 dark:text-red-300" : "";
                   return <td key={months[i]} title={monthLabel(months[i]) + ": " + value + " " + t("monthlyProduction.baleUnits")}
-                    className={"border-b border-r px-3 py-2 text-right " + accent}>{value.toLocaleString()}</td>;
+                    className={"border-b border-r px-3 py-2 text-right " + accent}>
+                    {value > 0 ? <button type="button" className="font-semibold underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                      onClick={() => openWorkerBreakdown(product.id, [months[i]])}
+                      title="View production by worker"
+                      aria-label={"View workers who produced " + value + " bales of " + product.name + " in " + monthLabel(months[i])}
+                      data-testid={"matrix-worker-drilldown-" + product.id + "-" + months[i]}>{value.toLocaleString()}</button> : value.toLocaleString()}
+                  </td>;
                 })}
-                <td className="sticky right-0 z-10 border-b bg-card px-3 py-2 text-right font-semibold group-hover:bg-accent/30">{rowTotal(product.id).toLocaleString()}</td>
+                <td className="sticky right-0 z-10 border-b bg-card px-3 py-2 text-right font-semibold group-hover:bg-accent/30">
+                  {rowTotal(product.id) > 0 ? <button type="button" className="font-semibold underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                    onClick={() => openWorkerBreakdown(product.id, months)}
+                    title="View production by worker for selected months"
+                    aria-label={"View workers who produced " + rowTotal(product.id) + " bales of " + product.name + " across selected months"}
+                    data-testid={"matrix-total-drilldown-" + product.id}>{rowTotal(product.id).toLocaleString()}</button> : rowTotal(product.id).toLocaleString()}
+                </td>
               </tr>;
             })}
             {visibleProducts.length === 0 && <tr><td colSpan={months.length + 2} className="p-10 text-center text-muted-foreground">{t("monthlyProduction.noMatching")}</td></tr>}

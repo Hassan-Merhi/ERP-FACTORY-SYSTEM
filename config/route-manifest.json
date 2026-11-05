@@ -248,6 +248,8 @@
     "GET /api/factory/production-value-report [requireAuth > <anonymous>]",
     "GET /api/factory/monthly-production-matrix [requireAuth > <anonymous>]",
     "PUT /api/factory/monthly-production-matrix/order [requireAuth > <anonymous>]",
+    "GET /api/factory/monthly-production-matrix/workers [requireAuth > <anonymous>]",
+    "GET /api/factory/monthly-production-matrix/bales [requireAuth > <anonymous>]",
     "GET /api/factory/fx-rates [requireAuth > <anonymous>]",
     "GET /api/factory/fx-rates/latest/:currencyCode [requireAuth > <anonymous>]",
     "GET /api/factory/fx-rates/:currencyCode/:date [requireAuth > <anonymous>]",

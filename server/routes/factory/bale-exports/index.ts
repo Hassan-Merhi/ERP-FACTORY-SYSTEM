@@ -11,6 +11,7 @@ import { registerFactoryWeeklyReportExportRoutes } from "./weekly-report";
 import { registerFactoryWeeklyReportWhatsappRoutes } from "./weekly-report-whatsapp";
 import { registerFactoryProductionValueReportRoutes } from "./production-value-report";
 import { registerFactoryMonthlyProductionMatrixRoutes } from "./monthly-production-matrix";
+import { registerFactoryMonthlyProductionDrilldownRoutes } from "./monthly-production-drilldown";
 
 export function registerFactoryBaleExportRoutes(app: Express) {
   registerFactoryDailyReportRoutes(app);
@@ -18,4 +19,5 @@ export function registerFactoryBaleExportRoutes(app: Express) {
   registerFactoryWeeklyReportWhatsappRoutes(app);
   registerFactoryProductionValueReportRoutes(app);
   registerFactoryMonthlyProductionMatrixRoutes(app);
+  registerFactoryMonthlyProductionDrilldownRoutes(app);
 }

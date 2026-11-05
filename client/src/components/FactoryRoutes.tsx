@@ -120,6 +120,8 @@ import {
 
 const FactoryStockQueryWorkspace = lazy(() => import("@/pages/factory/FactoryStockQueryWorkspace"));
 const FactoryMonthlyProductionMatrix = lazy(() => import("@/pages/factory/FactoryMonthlyProductionMatrix"));
+const FactoryMonthlyProductionWorkers = lazy(() => import("@/pages/factory/FactoryMonthlyProductionDrilldown").then((module) => ({ default: module.FactoryMonthlyProductionWorkers })));
+const FactoryMonthlyProductionBales = lazy(() => import("@/pages/factory/FactoryMonthlyProductionDrilldown").then((module) => ({ default: module.FactoryMonthlyProductionBales })));
 const HelpTraining = lazy(() => import("@/pages/HelpTraining"));
 const AccountGroups = lazy(() => import("@/pages/AccountGroups"));
 const FactoryInvoiceDetailBilingual = lazy(() => import("@/pages/factory/FactoryInvoiceDetailBilingual"));
@@ -210,6 +212,8 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       <Route path="/factory/stock-bale-list" component={FactoryStockBaleList} />
       <Route path="/factory/stock-query/:id" component={FactoryStockItemDetail} />
       <Route path="/factory/stock-query" component={FactoryStockQueryWorkspace} />
+      <Route path="/factory/monthly-production-matrix/:productId/bales/:workerId" component={FactoryMonthlyProductionBales} />
+      <Route path="/factory/monthly-production-matrix/:productId/workers" component={FactoryMonthlyProductionWorkers} />
       <Route path="/factory/monthly-production-matrix" component={FactoryMonthlyProductionMatrix} />
       <Route path="/factory/contacts" component={FactoryContacts} />
       <Route path="/factory/accounts" component={FactoryAccounts} />
