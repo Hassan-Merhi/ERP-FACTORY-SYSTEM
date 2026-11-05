@@ -86,6 +86,7 @@ export async function getPairPaymentSetup(relationshipId: number, actor: EditIde
       for (const trade of allTrades) {
         const importRow = imports.find((row) => row.tradeId === trade.id);
         if (!importRow) continue;
+        if (importRow.confirmedLandedCost == null) rejectEdit("Linked PO lacks a confirmed landed cost");
         const applied = await tradeAppliedTx(tx, trade.id);
         const due = cents(importRow.confirmedLandedCost).minus(applied);
         if (due.lt(0)) rejectEdit("Linked PO payment allocation is not reconciled");
