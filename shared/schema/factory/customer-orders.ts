@@ -30,6 +30,7 @@ export const customerProformas = pgTable(
       .notNull()
       .references(() => customers.id, { onDelete: "restrict" }),
     name: text("name").notNull(),
+    destination: text("destination"),
     isActive: boolean("is_active").notNull().default(false),
     status: text("status").notNull().default("ACTIVE"),
     deletedAt: timestamp("deleted_at"),
@@ -53,6 +54,7 @@ export const insertCustomerProformaSchema = createInsertSchema(customerProformas
     companyId: z.number().min(1, "Company is required"),
     customerId: z.number().min(1, "Customer is required"),
     name: z.string().min(1, "Proforma name is required"),
+    destination: z.string().trim().min(1).max(120).optional().nullable(),
     isActive: z.boolean().optional(),
     status: z.enum(["ACTIVE", "PARTIALLY_DISPATCHED", "FULLY_INVOICED", "CANCELLED"]).optional(),
   });
