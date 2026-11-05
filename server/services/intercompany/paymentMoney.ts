@@ -3,10 +3,10 @@ import { MoneyDecimal, sumMoney } from "../../lib/money";
 
 /** Currency convention: number of transaction units for one USD. */
 export type PaymentCurrency = "USD" | "CFA" | "ZMW";
-const AMOUNT_PATTERN = /^\d+(?:\.\d{1,6})?$/;
+const AMOUNT_PATTERN = /^\d+(?:\.\d{1,2})?$/;
 const RATE_PATTERN = /^\d+(?:\.\d{1,10})?$/;
 export function paymentMoney(value:string):Decimal {
-  if(typeof value!=="string" || !AMOUNT_PATTERN.test(value))throw new Error("Transaction amount must be an exact nonnegative number with at most 6 decimals");
+  if(typeof value!=="string" || !AMOUNT_PATTERN.test(value))throw new Error("Transaction amount must be an exact nonnegative number with at most 2 decimals");
   const amount=new MoneyDecimal(value);
   if(!amount.isFinite()||amount.lte(0)||amount.gte("1000000000000"))throw new Error("Transaction amount must be positive and within safe range");
   return amount;
