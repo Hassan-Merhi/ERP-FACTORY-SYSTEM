@@ -82,11 +82,11 @@ async function checkAccount(tx:DbTransaction,companyId:number,ref:CashRef){
     if(!row)rejectEdit("Selected cash account is not available in the correct company","IC_PAYMENT_ACCOUNT",422);
   }
 }
-export async function accessiblePaymentPair(relationshipId:number,actor:EditIdentity){
+export async function accessiblePaymentPair(relationshipId:number,actor:EditIdentity,requireEnabled=true){
   if(!Number.isSafeInteger(relationshipId)||relationshipId<1)rejectEdit("Invalid company relationship","IC_PAYMENT_PAIR",422);
   const [pair]=await db.select().from(intercompanyRelationshipPolicies)
     .where(eq(intercompanyRelationshipPolicies.id,relationshipId));
-  if(!pair||pair.relationshipType!=="container_trade"||!pair.tradeEnabled||
+  if(!pair||pair.relationshipType!=="container_trade"||(requireEnabled&&!pair.tradeEnabled)||
     ![pair.sourceCompanyId,pair.destinationCompanyId].includes(actor.initiatingCompanyId)){
     rejectEdit("No active paired intercompany payment relation in your company","IC_PAYMENT_PAIR",403);
   }
@@ -95,7 +95,7 @@ export async function accessiblePaymentPair(relationshipId:number,actor:EditIden
 async function activePaymentPairTx(tx:DbTransaction,id:number){
   const [pair]=await tx.select().from(intercompanyRelationshipPolicies)
     .where(eq(intercompanyRelationshipPolicies.id,id)).for("update");
-  if(!pair||pair.relationshipType!=="container_trade"||!pair.tradeEnabled||
+  if(!pair||pair.relationshipType!=="container_trade"||(requireEnabled&&!pair.tradeEnabled)||
     !pair.sourceReceivableAccountId||!pair.destinationSupplierId){
     rejectEdit("Pair is disabled or lacks verified receivable and supplier mappings");
   }
@@ -231,7 +231,7 @@ export async function reverseMirroredPayment(input:MirroredReversalInput,actor:E
   const [original]=await db.select().from(intercompanyContainerPayments)
     .where(eq(intercompanyContainerPayments.id,input.paymentId));
   if(!original)rejectEdit("Mirrored payment not found","IC_PAYMENT_NOT_FOUND",404);
-  const pair=await accessiblePaymentPair(original.relationshipId,actor);
+  const pair=await accessiblePaymentPair(original.relationshipId,actor,false);
   return withTradeScope(actor,[pair.sourceCompanyId,pair.destinationCompanyId],()=>db.transaction(async tx=>{
     await tx.execute(sql.raw("SELECT pg_advisory_xact_lock("+INTERCOMPANY_PAYMENT_LOCK_NAMESPACE+","+pair.sourceCompanyId+")"));
     const [payment]=await tx.select().from(intercompanyContainerPayments)
