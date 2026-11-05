@@ -31,6 +31,7 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     settingsVisible: false,
     landing: false,
   },
+  { key: "factory/tickets", label: "Ticket Management", group: "Finance", route: "/factory/tickets", aliases: ["/factory/tickets/new"], sidebar: true, landing: false },
   // Pinned / primary
   {
     key: "factory/production-report",
