@@ -86,7 +86,7 @@ CREATE INDEX IF NOT EXISTS ic_payment_allocation_trade_idx ON intercompany_payme
 CREATE OR REPLACE FUNCTION ic_verify_payment_allocation_totals()
 RETURNS TRIGGER LANGUAGE plpgsql AS $guard$
 DECLARE pid BIGINT; tid INTEGER; payment_row RECORD; used_payment NUMERIC(20,2);
-        used_trade NUMERIC(20,2); trade_cost NUMERIC(20,2);
+        used_trade NUMERIC(20,2); used_pair NUMERIC(20,2); trade_cost NUMERIC(20,2);
 BEGIN
   pid := CASE WHEN TG_TABLE_NAME='intercompany_container_payments' THEN
        NEW.id ELSE NEW.payment_id END;
@@ -101,6 +101,11 @@ BEGIN
   END IF;
   IF TG_TABLE_NAME='intercompany_payment_allocations' THEN
     tid:=NEW.trade_id;
+    SELECT COALESCE(SUM(amount),0) INTO used_pair FROM intercompany_payment_allocations
+      WHERE trade_id=tid AND payment_id=pid;
+    IF used_pair<0 THEN
+      RAISE EXCEPTION 'A payment cannot release more credit from one PO than it previously applied';
+    END IF;
     SELECT COALESCE(SUM(amount),0) INTO used_trade FROM intercompany_payment_allocations WHERE trade_id=tid;
     SELECT confirmed_landed_cost INTO trade_cost FROM intercompany_import_batch_containers WHERE trade_id=tid;
     IF trade_cost IS NULL OR used_trade<0 OR used_trade>trade_cost THEN
@@ -180,6 +185,15 @@ BEGIN
          'status','reversed_by','reversed_at','reversal_date','reversal_reason',
          'reversal_key','reversal_fingerprint','source_reversal_voucher_id','destination_reversal_voucher_id']::text[])
     THEN RAISE EXCEPTION 'Intercompany payment records are immutable except a coordinated reversal'; END IF;
+    IF NOT EXISTS(
+      SELECT 1 FROM vouchers v WHERE v.id=NEW.source_reversal_voucher_id
+        AND v.company_id=OLD.source_company_id AND v.voucher_type='Payment' AND v.deleted_at IS NULL
+    ) OR NOT EXISTS(
+      SELECT 1 FROM vouchers v WHERE v.id=NEW.destination_reversal_voucher_id
+        AND v.company_id=OLD.destination_company_id AND v.voucher_type='Receipt' AND v.deleted_at IS NULL
+    ) THEN
+      RAISE EXCEPTION 'A coordinated payment reversal requires a valid original-company Payment/Receipt pair';
+    END IF;
     RETURN NEW;
   END IF;
   SELECT * INTO pair_record FROM intercompany_relationship_policies WHERE id=NEW.relationship_id;
@@ -229,6 +243,37 @@ END $guard$;
 CREATE TRIGGER ic_payment_pair_immutable
 BEFORE INSERT OR UPDATE OR DELETE ON intercompany_container_payments
 FOR EACH ROW EXECUTE FUNCTION ic_validate_payment_pair();
+
+-- Canceling or changing destination company must never carry another pair's
+-- paid credit. The Phase 5 service must release/reallocate credits first.
+CREATE OR REPLACE FUNCTION ic_check_trade_payment_ownership()
+RETURNS TRIGGER LANGUAGE plpgsql AS $guard$
+DECLARE row RECORD;
+BEGIN
+  FOR row IN
+    SELECT p.relationship_id,p.source_company_id,p.destination_company_id,
+      SUM(a.amount) AS paid
+      FROM intercompany_payment_allocations a
+      JOIN intercompany_container_payments p ON p.id=a.payment_id
+      WHERE a.trade_id=NEW.id
+      GROUP BY p.relationship_id,p.source_company_id,p.destination_company_id
+  LOOP
+    IF row.paid < 0 THEN
+      RAISE EXCEPTION 'Negative historical intercompany credit found on trade';
+    END IF;
+    IF row.paid > 0 AND (NEW.state <> 'active'
+      OR NEW.relationship_id <> row.relationship_id
+      OR NEW.source_company_id <> row.source_company_id
+      OR NEW.destination_company_id <> row.destination_company_id) THEN
+      RAISE EXCEPTION 'Changing container destination/canceling requires releasing original company-pair credit';
+    END IF;
+  END LOOP;
+  RETURN NULL;
+END $guard$;
+CREATE CONSTRAINT TRIGGER ic_trade_payment_pair_guard
+AFTER UPDATE ON intercompany_trades
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW EXECUTE FUNCTION ic_check_trade_payment_ownership();
 
 -- Generic voucher edit or deletion must not mutate either side of a paired
 -- payment, its reversals, or the underlying lines: use Phase 4 reverse workflow.
