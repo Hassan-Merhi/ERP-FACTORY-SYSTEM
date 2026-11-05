@@ -10,15 +10,17 @@ import {cents} from "./tradeRevisionMath";
 import {pairCreditsTx,paymentAvailableTx,tradeAppliedTx} from "./paymentAllocationCore";
 
 export async function listPaymentRelationships(actor:EditIdentity){
-  const relationships=await db.select().from(intercompanyRelationshipPolicies).where(and(
-    or(eq(intercompanyRelationshipPolicies.sourceCompanyId,actor.initiatingCompanyId),
-      eq(intercompanyRelationshipPolicies.destinationCompanyId,actor.initiatingCompanyId)),
-    eq(intercompanyRelationshipPolicies.relationshipType,"container_trade")
-  ));
-  return {relationships:relationships.map(p=>({
-    relationshipId:p.id,sourceCompanyId:p.sourceCompanyId,destinationCompanyId:p.destinationCompanyId,
-    tradeEnabled:p.tradeEnabled,
-  }))};
+  return withTradeScope(actor,[],async()=>{
+    const relationships=await db.select().from(intercompanyRelationshipPolicies).where(and(
+      or(eq(intercompanyRelationshipPolicies.sourceCompanyId,actor.initiatingCompanyId),
+        eq(intercompanyRelationshipPolicies.destinationCompanyId,actor.initiatingCompanyId)),
+      eq(intercompanyRelationshipPolicies.relationshipType,"container_trade")
+    ));
+    return {relationships:relationships.map(p=>({
+      relationshipId:p.id,sourceCompanyId:p.sourceCompanyId,destinationCompanyId:p.destinationCompanyId,
+      tradeEnabled:p.tradeEnabled,
+    }))};
+  });
 }
 export async function getPairPaymentSetup(relationshipId:number,actor:EditIdentity){
   const pair=await accessiblePaymentPair(relationshipId,actor,false);
