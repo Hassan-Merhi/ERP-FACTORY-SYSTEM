@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - .github/workflows/intercompany-phase4-formatter-preview.yml
+      - tests/intercompany-phase4-*
+      - client/src/pages/intercompany/IntercompanyPayments.tsx
 permissions:
   contents: read
 jobs:
