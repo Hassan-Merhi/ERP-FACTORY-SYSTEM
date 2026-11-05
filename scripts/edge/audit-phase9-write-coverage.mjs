@@ -129,6 +129,12 @@ const SUPPORTED = new Map([
       "On the LAN each import is created through the same code as a hand-typed transfer and recorded as " +
       "an ordinary offline transfer; a cloud shortfall is held for Admin/Developer approve/reject",
   }],
+  ["POST /api/locations/:locationId/import-inventory", {
+    policy: "stock.quick-adjust.v1",
+    limitations:
+      "Each row is recorded as a quantity change (never an overwritten balance) through the quick-adjust " +
+      "code; unknown codes are reported, not created; below zero is refused on the LAN and held in the cloud",
+  }],
   ["POST /api/stock-transfer-revisions/:id/reject", {
     policy: "stock.transfer-revision-review.v1",
     limitations: "Applied only while the revision is still pending in the cloud; otherwise reject-only",

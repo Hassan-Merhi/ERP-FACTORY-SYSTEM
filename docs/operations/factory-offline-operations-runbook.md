@@ -39,6 +39,7 @@ an open cloud epoch.
 | New stock item (`POST /api/stock-items`) and stock item delete (`DELETE /api/stock-items/:id`) | yes; the new item gets an id from the reserved LAN range (1,000,000,000 and up) and keeps the code the user typed; delete only for an item with no stock movements | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — the create makes the cloud item and records the LAN-id → cloud-id mapping (`factory_edge_stock_item_map`); every later record naming the LAN id is translated, and waits (no conflict) until the create has applied; a code the cloud already uses is reject-only, an item with the same name is held for Admin/Developer approve/reject; a delete of an item the cloud still holds stock of, or has movements for, is reject-only |
 | Changes to an existing stock transfer: edit (`PUT /api/stock-transfers/:id`), finalize/approve (`POST /api/vouchers/:id/finalize` for transfer vouchers, `POST /api/stock-transfers/:id/approve`), revisions (`POST /api/stock-transfers/:id/revisions`) and revision approve/reject | yes; other voucher types cannot be finalized offline (HTTP 423) | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — each change carries the transfer as the factory saw it; a transfer created offline is found through its create's receipt; an edit or finalize of a transfer the cloud changed meanwhile is held for Admin/Developer approve (factory change wins) or reject; a stale revision, a revision no longer pending, or a transfer whose offline create was rejected is reject-only |
 | Excel stock-transfer import, single and multi-source (`/api/stock-transfer-import/*`: parse and validate only read; import writes) | yes; each import is created through the same code as a hand-typed transfer | `stock` (Phase 9), as an ordinary `stock.transfer.v1` | replayed like any offline transfer, on its LAN request id; a cloud shortfall is held for Admin/Developer approve/reject |
+| Excel inventory import for a location (`POST /api/locations/:id/import-inventory`) | yes, existing items only; needs the stock-adjustment permission; a row below zero is refused | `stock` (Phase 9), each row an ordinary `stock.quick-adjust.v1` | each row's quantity change is added to the cloud's own figure (never an overwritten balance); below zero is held for Admin/Developer approve/reject. Offline, an unknown code is reported (not created) and rows are valued at the location's average cost |
 | POS sale — cash, bank or credit; USD or another currency at the cashier's entered rate (non-supplier-partner company) | yes, numbered `LAN-<site>-000123` | `pos` (Phase 9) | `server/edge/phase9OperatorApply.ts apply pos` — replayed through the sale service on its `clientSaleId`; keeps the offline price; below-zero stock or a changed till account is held for Admin/Developer approve/reject |
 | Supplier receiving: container offload against its existing purchase orders, and offload edits, with duties, charges, cost corrections and agent lines | yes | `receiving` (Phase 9) | `server/edge/phase9OperatorApply.ts apply receiving` — same offload lifecycle on the receipt's transaction; cloud prices apply; changed order quantities are held for Admin/Developer approve/reject |
 | File upload (Files page), up to 10 MB | yes | `attachments` (Phase 9) + signed file upload | `server/edge/phase9OperatorApply.ts apply attachments` — the record syncs first; the relay then uploads the bytes to `/api/edge/sync/files/stage`, accepted only if their SHA-256 matches a staged record; the file is created in the cloud once its bytes arrive; a missing folder is held for approve/reject |
@@ -63,13 +64,13 @@ without all of that would let the factory record transactions that cannot be
 reconciled safely, which is worse than refusing them.
 
 - **Merging or re-coding stock items (owner decision 2026-11-05: stays
-  online-only); inventory imports; legacy
+  online-only); inventory cost-price imports; legacy
   transfer line edits (`PATCH /api/stock-transfer-items/:id`), the voucher
   editor's transfer save (`PATCH /api/vouchers/:id/transfer`) and reopen;
   bale lifecycle, production finalisation:** a merge or re-code rewrites the
-  identity every other offline record uses to find its item; the inventory
+  identity every other offline record uses to find its item; the cost-price
   import and the remaining transfer paths go through separate code that has
-  no replay handler yet. Quick adjustments, new and imported transfers,
+  no replay handler yet. Quick adjustments, inventory imports, new and imported transfers,
   transfer edits, finalizes and revisions, new items, item deletes and master
   edits of existing items are offline (above).
 - **Deletes of non-sales vouchers and payment edits:** each posts

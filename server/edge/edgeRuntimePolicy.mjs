@@ -141,6 +141,7 @@ const PHASE9_TRANSFER_IMPORT_ROUTES = new Set(
     (step) => `/api/stock-transfer-import/${step}`
   )
 );
+const PHASE9_LOCATION_IMPORT_PATH = /^\/api\/locations\/(?:[1-9][0-9]{0,9}|:locationId)\/import-inventory$/;
 const PHASE9_VOUCHER_FINALIZE_PATH = /^\/api\/vouchers\/(?:[1-9][0-9]{0,9}|:id)\/finalize$/;
 export const PHASE9_STOCK_ITEM_PATH = /^\/api\/stock-items\/(?:[1-9][0-9]{0,9}|:id)$/;
 export const PHASE9_STOCK_ITEM_LOCATION_PRICES_PATH = /^\/api\/stock-items\/(?:[1-9][0-9]{0,9}|:id)\/location-prices$/;
@@ -206,6 +207,10 @@ export function phase9ApprovedCaptureRoute(method, path) {
   // Plan batch 3: the Excel transfer import (parse and validate only read the
   // spreadsheet; import records an ordinary offline transfer).
   if (verb === "POST" && PHASE9_TRANSFER_IMPORT_ROUTES.has(path)) return key;
+  // Plan batch 3: the inventory import, each row recorded as a quantity change.
+  if (verb === "POST" && PHASE9_LOCATION_IMPORT_PATH.test(path)) {
+    return "POST /api/locations/:locationId/import-inventory";
+  }
   const review = verb === "POST" ? PHASE9_REVISION_REVIEW_PATH.exec(path) : null;
   if (review) return `POST /api/stock-transfer-revisions/:id/${review[1]}`;
   if (verb === "POST" && PHASE9_STOCK_ITEM_LOCATION_PRICES_PATH.test(path)) {

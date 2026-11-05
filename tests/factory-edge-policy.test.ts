@@ -188,6 +188,9 @@ describe("factory LAN edge deployment policy", () => {
         expect(edgeBlocksWrite(config, "POST", `/api/stock-transfer-import/${step}`)).toBe(open);
         expect(edgeBlocksWrite(config, "PUT", `/api/stock-transfer-import/${step}`)).toBe(true);
       }
+      expect(edgeBlocksWrite(config, "POST", "/api/locations/12/import-inventory")).toBe(open);
+      expect(edgeBlocksWrite(config, "POST", "/api/locations/12/import-cost-prices")).toBe(true);
+      expect(edgeBlocksWrite(config, "PUT", "/api/locations/12/import-inventory")).toBe(true);
       for (const path of [
         "/api/factory/pressing-machines/void",
         "/api/pos/retail/sales",

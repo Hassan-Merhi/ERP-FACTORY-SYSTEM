@@ -24,6 +24,16 @@ const messages = {
     ar: "لا يمكن اعتماد سوى تحويلات المخزون أثناء انقطاع اتصال المصنع.",
     fr: "Seuls les transferts de stock peuvent être finalisés pendant que l’usine est hors ligne.",
   },
+  inventoryImportUnknownItem: {
+    en: "This code is not a stock item yet. While the factory is offline, add the item on the Stock Items page first, then import again.",
+    ar: "هذا الرمز ليس صنفًا بعد. أثناء انقطاع اتصال المصنع، أضف الصنف من صفحة الأصناف أولًا ثم أعد الاستيراد.",
+    fr: "Ce code n’est pas encore un article. Pendant que l’usine est hors ligne, ajoutez d’abord l’article dans la page Articles, puis réimportez.",
+  },
+  inventoryImportNeedsAdjustRight: {
+    en: "Importing stock while the factory is offline needs the stock adjustment permission.",
+    ar: "يتطلب استيراد المخزون أثناء انقطاع اتصال المصنع صلاحية تعديل المخزون.",
+    fr: "L’import de stock pendant que l’usine est hors ligne nécessite le droit d’ajuster le stock.",
+  },
   stockItemHasMovements: {
     en: "This stock item has stock movements, so it can only be deleted online.",
     ar: "لهذا الصنف حركات مخزون، لذا لا يمكن حذفه إلا عند الاتصال.",

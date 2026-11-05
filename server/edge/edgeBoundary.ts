@@ -272,6 +272,10 @@ export function registerFactoryEdgeBoundary(app: Express): void {
           installed: outboxInstalled("factory_edge_stock_outbox"),
           code: "EDGE_PHASE9_STOCK_CAPTURE_NOT_INSTALLED",
         },
+        "POST /api/locations/:locationId/import-inventory": {
+          installed: outboxInstalled("factory_edge_stock_outbox"),
+          code: "EDGE_PHASE9_STOCK_CAPTURE_NOT_INSTALLED",
+        },
         [PHASE9_STOCK_TRANSFER_ROUTE]: {
           installed: outboxInstalled("factory_edge_stock_outbox"),
           code: "EDGE_PHASE9_STOCK_CAPTURE_NOT_INSTALLED",
