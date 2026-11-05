@@ -104,7 +104,9 @@ export function FinalizeProformaDialog({
 
             {!editingProformaId ? (
               <div>
-                <label className="text-sm font-medium mb-1 block">Destination <span className="text-destructive">*</span></label>
+                <label className="text-sm font-medium mb-1 block">
+                  Destination <span className="text-destructive">*</span>
+                </label>
                 <Input
                   value={proformaDestination}
                   onChange={(e) => setProformaDestination(e.target.value)}
@@ -119,7 +121,8 @@ export function FinalizeProformaDialog({
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Destination: {proformaDestination || "Not linked"}. To assign or change it, use Edit Proforma in Invoicing.
+                Destination: {proformaDestination || "Not linked"}. To assign or change it, use Edit Proforma in
+                Invoicing.
               </p>
             )}
             <div>
