@@ -118,7 +118,11 @@ CREATE OR REPLACE FUNCTION intercompany_block_legacy_offload()
 RETURNS TRIGGER LANGUAGE plpgsql AS $block$
 DECLARE physical_id INTEGER;
 BEGIN
-  physical_id := CASE WHEN TG_TABLE_NAME = 'container_offloads' THEN NEW.container_id ELSE NEW.id END;
+  IF TG_TABLE_NAME = 'container_offloads' THEN
+    physical_id := NEW.container_id;
+  ELSE
+    physical_id := NEW.id;
+  END IF;
   IF EXISTS (
     SELECT 1 FROM intercompany_trades
     WHERE physical_container_id = physical_id AND state = 'active'
@@ -138,3 +142,95 @@ CREATE TRIGGER intercompany_legacy_container_state_guard
 BEFORE UPDATE OF status ON containers
 FOR EACH ROW WHEN (NEW.status IN ('OFFLOADED', 'SOLD') AND OLD.status IS DISTINCT FROM NEW.status)
 EXECUTE FUNCTION intercompany_block_legacy_offload();
+
+
+-- Existing PO edit routes do not know how to mirror an intercompany transaction.
+-- Fail closed until Phase 3 replaces these protections with linked sync logic.
+CREATE OR REPLACE FUNCTION intercompany_block_legacy_po_change()
+RETURNS TRIGGER LANGUAGE plpgsql AS $blocked$
+DECLARE po_id INTEGER;
+BEGIN
+  IF TG_TABLE_NAME = 'po_line_items' THEN
+    po_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.po_id ELSE NEW.po_id END;
+  ELSE
+    po_id := OLD.id;
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM intercompany_trades t
+    WHERE t.state = 'active' AND
+      (t.destination_po_id = po_id OR t.original_supplier_po_id = po_id)
+  ) OR EXISTS (
+    SELECT 1 FROM intercompany_trade_source_pos link
+    INNER JOIN intercompany_trades t ON t.id = link.trade_id
+    WHERE t.state = 'active' AND link.source_po_id = po_id
+  ) THEN
+    RAISE EXCEPTION 'Linked intercompany purchase orders require the Phase 3 synchronized editing workflow';
+  END IF;
+  RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END $blocked$;
+
+DROP TRIGGER IF EXISTS intercompany_legacy_po_guard ON purchase_orders;
+CREATE TRIGGER intercompany_legacy_po_guard
+BEFORE UPDATE OR DELETE ON purchase_orders
+FOR EACH ROW EXECUTE FUNCTION intercompany_block_legacy_po_change();
+
+DROP TRIGGER IF EXISTS intercompany_legacy_po_line_guard ON po_line_items;
+CREATE TRIGGER intercompany_legacy_po_line_guard
+BEFORE INSERT OR UPDATE OR DELETE ON po_line_items
+FOR EACH ROW EXECUTE FUNCTION intercompany_block_legacy_po_change();
+
+CREATE OR REPLACE FUNCTION intercompany_block_legacy_charge_change()
+RETURNS TRIGGER LANGUAGE plpgsql AS $blocked$
+DECLARE physical_id INTEGER;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    physical_id := OLD.container_id;
+  ELSE
+    physical_id := NEW.container_id;
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM intercompany_trades
+    WHERE physical_container_id = physical_id AND state = 'active'
+  ) THEN
+    RAISE EXCEPTION 'Linked intercompany charges require the Phase 3 synchronized allocation workflow';
+  END IF;
+  RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END $blocked$;
+
+DROP TRIGGER IF EXISTS intercompany_legacy_charge_guard ON container_charges;
+CREATE TRIGGER intercompany_legacy_charge_guard
+BEFORE INSERT OR UPDATE OR DELETE ON container_charges
+FOR EACH ROW EXECUTE FUNCTION intercompany_block_legacy_charge_change();
+
+-- Financial vouchers linked to these POs or their original at-cost resale must
+-- not be retired or changed by standalone voucher tools.
+CREATE OR REPLACE FUNCTION intercompany_block_legacy_voucher_change()
+RETURNS TRIGGER LANGUAGE plpgsql AS $blocked$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM intercompany_trades t
+    LEFT JOIN purchase_orders src ON src.id = t.original_supplier_po_id
+    LEFT JOIN purchase_orders dst ON dst.id = t.destination_po_id
+    WHERE t.state = 'active'
+      AND (src.voucher_id = OLD.id OR dst.voucher_id = OLD.id)
+  ) OR EXISTS (
+    SELECT 1 FROM intercompany_trade_source_pos link
+    JOIN intercompany_trades t ON t.id = link.trade_id
+    JOIN purchase_orders po ON po.id = link.source_po_id
+    WHERE t.state = 'active' AND po.voucher_id = OLD.id
+  ) OR EXISTS (
+    SELECT 1 FROM intercompany_audit_events audit
+    JOIN intercompany_trades t ON t.id::text = split_part(audit.event_key, ':', 3)
+    WHERE t.state = 'active' AND audit.event_type = 'container-import-confirmed'
+      AND (audit.payload->>'sourceSaleVoucherId')::integer = OLD.id
+  ) THEN
+    RAISE EXCEPTION 'Linked intercompany vouchers require a coordinated reversal or update';
+  END IF;
+  RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END $blocked$;
+
+DROP TRIGGER IF EXISTS intercompany_legacy_voucher_guard ON vouchers;
+CREATE TRIGGER intercompany_legacy_voucher_guard
+BEFORE UPDATE OR DELETE ON vouchers
+FOR EACH ROW EXECUTE FUNCTION intercompany_block_legacy_voucher_change();
+
