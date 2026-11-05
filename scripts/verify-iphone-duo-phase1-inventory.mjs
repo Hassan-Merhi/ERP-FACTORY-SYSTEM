@@ -7,7 +7,12 @@ import { discoverDuoRouteInventory } from "./lib/iphone-duo-route-inventory.mjs"
 const inventory = await discoverDuoRouteInventory();
 const required = {
   erp: ["/tracking", "/daybook", "/accounts", "/vouchers", "/stock-query"],
-  factory: ["/factory/stock-entry", "/factory/stock-allocation-v5", "/factory/monthly-production-matrix", "/factory/production-bonuses"],
+  factory: [
+    "/factory/stock-entry",
+    "/factory/stock-allocation-v5",
+    "/factory/monthly-production-matrix",
+    "/factory/production-bonuses",
+  ],
   properties: ["/properties/dashboard", "/properties/rentals", "/properties/vouchers"],
   "supplier-partner": ["/sp", "/sp/reports"],
   "retail-admin": ["/retail/inventory", "/retail/pos", "/retail/reports"],
@@ -22,7 +27,9 @@ for (const [workspace, routes] of Object.entries(required)) {
     if (!group.static.includes(route)) issues.push(workspace + ": missing " + route);
   }
   if (!group.static.length) issues.push(workspace + ": empty route inventory");
-  if (group.static.some((route) => /:\w+|\*/.test(route))) issues.push(workspace + ": parameterized route in static set");
+  if (group.static.some((route) => /:\w+|\*/.test(route))) {
+    issues.push(workspace + ": parameterized route in static set");
+  }
   if (new Set(group.static).size !== group.static.length) issues.push(workspace + ": duplicate static route");
 }
 const expectedUnresolved = inventory.groups.reduce((total, group) => total + group.parameterized.length, 0);
