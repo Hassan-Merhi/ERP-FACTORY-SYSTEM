@@ -8,6 +8,8 @@ import { getActiveCompanyPermissionContext } from "../services/security/activeCo
 import { supportTickets, supportTicketRecords, supportTicketParticipants, userCompanyRoles, users, vouchers } from "@shared/schema";
 import { createSupportTicket } from "../lib/ticketService";
 import { canAccessTicket } from "../lib/ticketPolicy";
+import { storage } from "../storage";
+import { buildPermissionMap, canAccess } from "../lib/permissionHelpers";
 
 const createSchema = z.object({
   title: z.string().trim().min(3).max(240),
@@ -30,6 +32,12 @@ function respondError(res: Response, error: unknown) {
   return res.status(500).json({ message: "Ticket operation failed" });
 }
 
+async function permitted(companyId: number, role: string, key: string): Promise<boolean> {
+  if (role === "Developer" || role === "Admin") return true;
+  const permissions = await storage.getRoleFeaturePermissions(companyId);
+  return canAccess(role, key, buildPermissionMap(permissions, role));
+}
+
 export function registerTicketRoutes(app: Express) {
   const page = [requireAuth, requirePageAccess("page_ticket_management")] as const;
 
@@ -48,7 +56,7 @@ export function registerTicketRoutes(app: Express) {
       const ctx = await getActiveCompanyPermissionContext(req);
       // Search is intentionally limited to actual company vouchers. Broader record types need explicit registry permissions.
       // Voucher discovery is limited to staff with a pre-existing accounting role.
-      if (!["Admin","Developer","Owner","Manager"].includes(ctx.role)) return res.status(403).json({ message: "Voucher search requires accounting access" });
+      if (!["Admin","Developer","Owner","Manager"].includes(ctx.role) || !await permitted(ctx.companyId,ctx.role,"page_vouchers")) return res.status(403).json({ message: "Voucher search requires accounting access" });
       const q = String(req.query.q ?? "").trim().slice(0,80);
       if (q.length < 2) return res.json({ records: [] });
       const escaped = q.replace(/[\\%_]/g, c => "\\" + c);
@@ -64,7 +72,7 @@ export function registerTicketRoutes(app: Express) {
       const ctx = await getActiveCompanyPermissionContext(req);
       const pageNumber = Math.max(1,Math.min(10000,Number(req.query.page) || 1));
       const limit = 30;
-      const isAdmin = ["Admin","Developer","Owner","Manager"].includes(ctx.role);
+      const isAdmin = ["Admin","Developer","Owner","Manager"].includes(ctx.role) && await permitted(ctx.companyId,ctx.role,"act_ticket_manage_all");
       const allowed = isAdmin ? sql`true` :
         or(eq(supportTickets.createdBy,ctx.userId),eq(supportTickets.assignedTo,ctx.userId),
           sql`exists (select 1 from support_ticket_participants p where p.company_id = ${ctx.companyId}
@@ -93,7 +101,7 @@ export function registerTicketRoutes(app: Express) {
       const participants = await db.select({ userId: supportTicketParticipants.userId })
         .from(supportTicketParticipants).where(and(eq(supportTicketParticipants.companyId,ctx.companyId),eq(supportTicketParticipants.ticketId,id)));
       if (!canAccessTicket({ userId:ctx.userId,companyId:ctx.companyId,role:ctx.role,canAccessPage:true,
-          canManageAll:["Admin","Developer","Owner","Manager"].includes(ctx.role) },
+          canManageAll:["Admin","Developer","Owner","Manager"].includes(ctx.role) && await permitted(ctx.companyId,ctx.role,"act_ticket_manage_all") },
         { companyId: ticket.companyId, createdBy: ticket.createdBy, assignedTo: ticket.assignedTo,
           participantIds:participants.map(p=>p.userId),status:ticket.status as "open" })) {
         return res.status(404).json({ message: "Ticket not found" });
@@ -111,7 +119,7 @@ export function registerTicketRoutes(app: Express) {
     try {
       const ctx = await getActiveCompanyPermissionContext(req);
       if (["View Only","POS"].includes(ctx.role)) return res.status(403).json({ message:"Ticket creation disabled for role" });
-      if (parsed.data.voucherId && !["Admin","Developer","Owner","Manager"].includes(ctx.role))
+      if (parsed.data.voucherId && (!["Admin","Developer","Owner","Manager"].includes(ctx.role) || !await permitted(ctx.companyId,ctx.role,"page_vouchers")) )
         return res.status(403).json({ message:"Voucher linking requires accounting access" });
       const ticket = await createSupportTicket({ userId:ctx.userId, companyId:ctx.companyId, role:ctx.role,
         canAccessPage:true,canCreate:true },parsed.data);
