@@ -60,7 +60,7 @@ export function registerPosPriceListRoutes(app: Express) {
       const fromDate = typeof req.query.fromDate === "string" ? req.query.fromDate : "";
       const toDate = typeof req.query.toDate === "string" ? req.query.toDate : "";
       const validDate = (value: string) =>
-        !value || (/^\\d{4}-\\d{2}-\\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)));
+        !value || (/^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)));
       if (!validDate(fromDate) || !validDate(toDate) || (fromDate && toDate && fromDate > toDate)) {
         return res.status(400).json({ message: "Invalid sales date range" });
       }
