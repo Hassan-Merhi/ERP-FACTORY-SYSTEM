@@ -252,6 +252,14 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     landing: true,
   },
   {
+    key: "factory/monthly-production-matrix",
+    label: "Monthly Production Matrix",
+    group: "Inventory",
+    route: "/factory/monthly-production-matrix",
+    sidebar: true,
+    landing: true,
+  },
+  {
     key: "factory/stock-query",
     label: "Stock Query",
     group: "Inventory",

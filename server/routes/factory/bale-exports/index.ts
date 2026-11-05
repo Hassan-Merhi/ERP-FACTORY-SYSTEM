@@ -10,10 +10,12 @@ import { registerFactoryDailyReportRoutes } from "./daily-report";
 import { registerFactoryWeeklyReportExportRoutes } from "./weekly-report";
 import { registerFactoryWeeklyReportWhatsappRoutes } from "./weekly-report-whatsapp";
 import { registerFactoryProductionValueReportRoutes } from "./production-value-report";
+import { registerFactoryMonthlyProductionMatrixRoutes } from "./monthly-production-matrix";
 
 export function registerFactoryBaleExportRoutes(app: Express) {
   registerFactoryDailyReportRoutes(app);
   registerFactoryWeeklyReportExportRoutes(app);
   registerFactoryWeeklyReportWhatsappRoutes(app);
   registerFactoryProductionValueReportRoutes(app);
+  registerFactoryMonthlyProductionMatrixRoutes(app);
 }
