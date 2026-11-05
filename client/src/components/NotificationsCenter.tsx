@@ -82,9 +82,20 @@ const EVENT_META: Record<string, { label: string; className: string }> = {
   INVOICE_PENDING: { label: "Invoice", className: "bg-amber-500/15 text-amber-600 border-amber-300/50" },
   INVOICE_FINALIZED: { label: "Invoice", className: "bg-emerald-500/15 text-emerald-600 border-emerald-300/50" },
   INTERCOMPANY_REQUEST: { label: "Intercompany", className: "bg-purple-500/15 text-purple-600 border-purple-300/50" },
+  TICKET_CREATED: { label: "Ticket", className: "bg-blue-500/15 text-blue-600 border-blue-300/50" },
+  TICKET_SEEN: { label: "Ticket", className: "bg-blue-500/15 text-blue-600 border-blue-300/50" },
+  TICKET_START: { label: "Ticket", className: "bg-blue-500/15 text-blue-600 border-blue-300/50" },
+  TICKET_FINALIZE: { label: "Ticket", className: "bg-emerald-500/15 text-emerald-600 border-emerald-300/50" },
+  TICKET_REOPEN: { label: "Ticket", className: "bg-amber-500/15 text-amber-600 border-amber-300/50" },
+  TICKET_COMMENT: { label: "Ticket", className: "bg-blue-500/15 text-blue-600 border-blue-300/50" },
+  TICKET_ATTACHMENT: { label: "Ticket", className: "bg-blue-500/15 text-blue-600 border-blue-300/50" },
+  TICKET_OVERDUE: { label: "Overdue", className: "bg-amber-500/15 text-amber-600 border-amber-300/50" },
 };
 
-function getNavPath(item: NotificationItem): string | null {
+function getNavPath(item: NotificationItem, isFactory: boolean): string | null {
+  if(item.entityType==="support_ticket" && item.entityId && item.entityId>0){
+    return `${isFactory?"/factory/tickets":"/tickets"}?ticketId=${item.entityId}`;
+  }
   switch (item.eventType) {
     case "LOADING_STARTED":
       return "/factory/sales/loadings";
@@ -264,7 +275,7 @@ export function NotificationsCenter() {
   // ── Notification item click ───────────────────────────────────────────────────
   const handleNotifClick = (item: NotificationItem) => {
     if (!item.isRead) markReadMutation.mutate(item.id);
-    const path = getNavPath(item);
+    const path = getNavPath(item, selectedCompany?.companyType==="factory" || selectedCompany?.companyType==="factory_v2");
     if (path) {
       setOpen(false);
       navigate(path);
@@ -460,7 +471,7 @@ export function NotificationsCenter() {
                 <div className="divide-y">
                   {notifList.map((item) => {
                     const meta = EVENT_META[item.eventType];
-                    const navPath = getNavPath(item);
+                    const navPath = getNavPath(item, selectedCompany?.companyType==="factory" || selectedCompany?.companyType==="factory_v2");
                     return (
                       <div
                         key={item.id}

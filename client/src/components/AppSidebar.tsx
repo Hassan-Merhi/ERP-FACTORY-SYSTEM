@@ -27,6 +27,7 @@ import {
   Handshake,
   Bot,
   ShieldCheck,
+  Ticket,
   ArrowRight,
   Replace,
 } from "lucide-react";
@@ -96,6 +97,7 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
       { title: "Cost Centers", url: "/cost-centers", icon: ListTree },
       { title: "Parties", url: "/parties", icon: Handshake },
       { title: "Payroll", url: "/payroll", icon: UserCheck },
+      { title: "Ticket Management", url: "/tickets", icon: Ticket },
     ],
   },
   {
