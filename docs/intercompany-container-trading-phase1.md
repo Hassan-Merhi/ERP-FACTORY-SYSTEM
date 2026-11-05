@@ -1,7 +1,7 @@
 # Intercompany Container Trading — Phase 1 foundation
 
 Branch: feature/intercompany-container-trading  
-Status: Phase 1 foundation only. **No trading feature, posting route, UI, scheduler or repair is enabled.**
+Status: Phase 1 foundation and Phase 2 trading import implemented **on the isolated feature branch only**. Pair trading remains disabled by default until explicitly configured; historical repair remains disabled. Nothing is merged or deployed.
 
 ## Scope and invariants
 
