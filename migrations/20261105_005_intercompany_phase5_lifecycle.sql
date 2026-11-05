@@ -324,16 +324,19 @@ BEGIN
   ) THEN RAISE EXCEPTION 'Phase 5 posted vouchers and their entries are immutable'; END IF;
   -- Updates may not move an unrelated journal entry INTO an existing
   -- protected Phase 5 voucher, even if the old voucher was unprotected.
-  IF TG_TABLE_NAME='voucher_entries' AND TG_OP='UPDATE'
-    AND NEW.voucher_id IS DISTINCT FROM OLD.voucher_id
-    AND (
-      EXISTS (SELECT 1 FROM intercompany_trade_cancellations c
-        WHERE NEW.voucher_id IN (c.source_sale_reversal_voucher_id,
-          c.source_cost_reversal_voucher_id,c.destination_git_reversal_voucher_id))
-      OR EXISTS (SELECT 1 FROM intercompany_destination_receipts r
-        WHERE r.receipt_voucher_id=NEW.voucher_id)
-    ) THEN
-    RAISE EXCEPTION 'Cannot move a journal entry into a protected Phase 5 voucher';
+  IF TG_TABLE_NAME='voucher_entries' THEN
+    IF TG_OP='UPDATE' THEN
+      IF NEW.voucher_id IS DISTINCT FROM OLD.voucher_id
+        AND (
+          EXISTS (SELECT 1 FROM intercompany_trade_cancellations c
+            WHERE NEW.voucher_id IN (c.source_sale_reversal_voucher_id,
+              c.source_cost_reversal_voucher_id,c.destination_git_reversal_voucher_id))
+          OR EXISTS (SELECT 1 FROM intercompany_destination_receipts r
+            WHERE r.receipt_voucher_id=NEW.voucher_id)
+        ) THEN
+        RAISE EXCEPTION 'Cannot move a journal entry into a protected Phase 5 voucher';
+      END IF;
+    END IF;
   END IF;
   RETURN CASE WHEN TG_OP='DELETE' THEN OLD ELSE NEW END;
 END $fn$;
