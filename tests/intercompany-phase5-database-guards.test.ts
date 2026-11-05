@@ -150,6 +150,9 @@ describe("Phase 5 destination inventory and pre-receipt cancellation database gu
       const receiveColumns = "(trade_id,relationship_id,destination_company_id,location_id,inventory_account_id,git_account_id,receipt_voucher_id,request_key,request_fingerprint,posting_date,landed_cost,arrival_evidence,reason,actor_user_id)";
       await rejects("INSERT INTO intercompany_destination_receipts"+receiveColumns+" VALUES (2,2,3,301,29,19,201,'phase5-wrong-location',repeat('e',64),'2026-11-05',100,'Signed arrival evidence','Received warehouse','owner')","receipt ownership");
       await rejects("INSERT INTO intercompany_destination_receipts"+receiveColumns+" VALUES (2,2,3,302,29,19,202,'phase5-wrong-account',repeat('e',64),'2026-11-05',100,'Signed arrival evidence','Received warehouse','owner')","exact inventory/GIT");
+      // Earlier cancellation assertions switched constraints to IMMEDIATE.
+      // A real receipt inserts its header and stock items as one deferred transaction.
+      await client.query("SET CONSTRAINTS ALL DEFERRED");
       await client.query("INSERT INTO intercompany_destination_receipts"+receiveColumns+" VALUES (2,2,3,302,29,19,201,'phase5-good-receipt',repeat('e',64),'2026-11-05',100,'Signed arrival evidence','Received warehouse','owner')");
       await rejects("SET CONSTRAINTS ALL IMMEDIATE","received destination item values");
       await client.query("INSERT INTO intercompany_destination_receipt_items(receipt_id,stock_item_id,quantity,landed_value,value_moved,canonical_movement_id) VALUES (1,502,10,100,100,301)");
