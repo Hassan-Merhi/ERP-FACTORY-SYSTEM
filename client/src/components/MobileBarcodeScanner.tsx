@@ -81,6 +81,7 @@ export function MobileBarcodeScanner({
       if (timeout) clearTimeout(timeout);
       decoder?.dispose();
       decoder = null;
+      stream?.getTracks().forEach((track) => track.stop());
       trackRef.current = null;
       if (videoElement) videoElement.srcObject = null;
       setTorchAvailable(false);
@@ -165,7 +166,7 @@ export function MobileBarcodeScanner({
           }
         }
         decoder = await createCameraDecoder();
-        if (canceled) return;
+        if (canceled) { decoder?.dispose(); return; }
         if (!decoder) {
           acquired.getTracks().forEach((cameraTrack) => cameraTrack.stop());
           setError("Barcode decoding is unavailable on this device. Enter the barcode manually.");
