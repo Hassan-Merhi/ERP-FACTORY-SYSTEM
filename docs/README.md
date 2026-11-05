@@ -53,6 +53,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [historical-sales-cogs-transfer-revision-findings.md](historical-sales-cogs-transfer-revision-findings.md) | Historical sales COGS repair: evidence findings and remaining blockers |
 | [historical-sales-cogs-partial-apply-runbook.md](historical-sales-cogs-partial-apply-runbook.md) | Historical sales COGS: proven-rows-only partial apply and rollback |
 | [vouchers-flow.md](vouchers-flow.md) | Voucher lifecycle |
+| [intercompany-container-trading-phase1.md](intercompany-container-trading-phase1.md) | Phase 1 branch-only intercompany foundation, safeguards, migration and rollout gates |
 | [containers-flow.md](containers-flow.md) | Import shipments, PO to warehouse receipt |
 | [factory-flow.md](factory-flow.md) | Bales, production, payroll, raw materials |
 | [factory-container-planner.md](factory-container-planner.md) | Stock Allocation V5 container planning, saved drafts, and live reconciliation |
