@@ -80,6 +80,37 @@ describe("Wave 5 Factory backend access certification", () => {
     });
   });
 
+  it("maps Monthly Production Matrix reads and shared ordering to the Inventory page", () => {
+    expect(resolveFactoryBackendAccessRequirement(request("/monthly-production-matrix"))).toEqual({
+      pageKey: "factory/monthly-production-matrix",
+    });
+    expect(
+      resolveFactoryBackendAccessRequirement(request("/monthly-production-matrix/order", { method: "PUT" }))
+    ).toEqual({
+      pageKey: "factory/monthly-production-matrix",
+    });
+  });
+
+  it("requires Monthly Production Matrix permission for reads and shared reordering", async () => {
+    accessMocks.authorizeFactoryPageAccess.mockImplementation(async (_req: unknown, page: string) =>
+      page === "factory/monthly-production-matrix"
+        ? { allowed: true, state: { ...normalState, pageKeys: [page] } }
+        : { allowed: false, code: "FACTORY_PAGE_ACCESS_DENIED", message: "No access" }
+    );
+    for (const [path, method] of [[
+      "/monthly-production-matrix",
+      "GET",
+    ], [
+      "/monthly-production-matrix/order",
+      "PUT",
+    ]] as const) {
+      const { res } = response();
+      const next = vi.fn();
+      await enforceFactoryBackendAccess(request(path, { method }), res, next);
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(res.status).not.toHaveBeenCalled();
+    }
+  });
   it("permits scheduled container creation from Invoicing without granting unrelated pages", async () => {
     accessMocks.authorizeFactoryPageAccess.mockImplementation(async (_req: unknown, page: string) => {
       if (page === "factory/invoicing") {
