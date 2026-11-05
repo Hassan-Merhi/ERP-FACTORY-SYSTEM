@@ -13,15 +13,15 @@ export async function listPaymentRelationships(actor:EditIdentity){
   const relationships=await db.select().from(intercompanyRelationshipPolicies).where(and(
     or(eq(intercompanyRelationshipPolicies.sourceCompanyId,actor.initiatingCompanyId),
       eq(intercompanyRelationshipPolicies.destinationCompanyId,actor.initiatingCompanyId)),
-    eq(intercompanyRelationshipPolicies.relationshipType,"container_trade"),
-    eq(intercompanyRelationshipPolicies.tradeEnabled,true)
+    eq(intercompanyRelationshipPolicies.relationshipType,"container_trade")
   ));
   return {relationships:relationships.map(p=>({
     relationshipId:p.id,sourceCompanyId:p.sourceCompanyId,destinationCompanyId:p.destinationCompanyId,
+    tradeEnabled:p.tradeEnabled,
   }))};
 }
 export async function getPairPaymentSetup(relationshipId:number,actor:EditIdentity){
-  const pair=await accessiblePaymentPair(relationshipId,actor);
+  const pair=await accessiblePaymentPair(relationshipId,actor,false);
   return withTradeScope(actor,[pair.sourceCompanyId,pair.destinationCompanyId],async()=>{
     const [cash,bank,allTrades]=await Promise.all([
       db.select({id:ledgerAccounts.id,companyId:ledgerAccounts.companyId,name:ledgerAccounts.name})
@@ -49,7 +49,7 @@ export async function getPairPaymentSetup(relationshipId:number,actor:EditIdenti
           landedCost:importRow.confirmedLandedCost,applied:applied.toFixed(2),unpaid:due.toFixed(2)});
       }
       const credits=await pairCreditsTx(tx,pair.id);
-      return {relationshipId:pair.id,
+      return {relationshipId:pair.id,tradeEnabled:pair.tradeEnabled,
         sourceCompanyId:pair.sourceCompanyId,destinationCompanyId:pair.destinationCompanyId,
         cashAccounts:[
           ...cash.map(a=>({id:a.id,companyId:a.companyId,type:"cash",name:a.name})),
@@ -61,7 +61,7 @@ export async function getPairPaymentSetup(relationshipId:number,actor:EditIdenti
   });
 }
 export async function getPairPaymentHistory(relationshipId:number,actor:EditIdentity){
-  const pair=await accessiblePaymentPair(relationshipId,actor);
+  const pair=await accessiblePaymentPair(relationshipId,actor,false);
   return withTradeScope(actor,[pair.sourceCompanyId,pair.destinationCompanyId],async()=>{
     const all=await db.select().from(intercompanyContainerPayments).where(
       eq(intercompanyContainerPayments.relationshipId,relationshipId))
