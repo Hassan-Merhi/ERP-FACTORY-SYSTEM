@@ -111,6 +111,25 @@ describe("Wave 5 Factory backend access certification", () => {
       expect(res.status).not.toHaveBeenCalled();
     }
   });
+  it("rejects Monthly Production Matrix API requests without the page grant", async () => {
+    accessMocks.authorizeFactoryPageAccess.mockResolvedValue({
+      allowed: false,
+      code: "FACTORY_PAGE_ACCESS_DENIED",
+      message: "You do not have access to this Factory page.",
+      state: normalState,
+    });
+    for (const [path, method] of [
+      ["/monthly-production-matrix", "GET"],
+      ["/monthly-production-matrix/order", "PUT"],
+    ] as const) {
+      const { res, state } = response();
+      const next = vi.fn();
+      await enforceFactoryBackendAccess(request(path, { method }), res, next);
+      expect(state.status).toBe(403);
+      expect(state.body).toMatchObject({ code: "FACTORY_PAGE_ACCESS_DENIED" });
+      expect(next).not.toHaveBeenCalled();
+    }
+  });
   it("permits scheduled container creation from Invoicing without granting unrelated pages", async () => {
     accessMocks.authorizeFactoryPageAccess.mockImplementation(async (_req: unknown, page: string) => {
       if (page === "factory/invoicing") {
