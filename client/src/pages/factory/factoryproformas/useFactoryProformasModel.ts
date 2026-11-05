@@ -526,9 +526,10 @@ export function useFactoryProformasModel() {
     },
     onSuccess: (result) => {
       invalidateCustomerProformas();
+      queryClient.invalidateQueries({ predicate: keyStartsWith("/api/factory/customer-price-lists") });
       toast({
         title: "Agreed prices saved",
-        description: `${result.saved} price${result.saved !== 1 ? "s" : ""} saved to the customer's agreed price list. Existing proformas were not changed.`,
+        description: `${result.saved} price${result.saved !== 1 ? "s" : ""} saved for destination ${result.destination}. Existing proformas were not changed.`,
       });
     },
     onError: (error: Error) => {
