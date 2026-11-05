@@ -196,6 +196,8 @@ async function sendTicketEmail(address:string,title:string,message:string):Promi
     secure:process.env.TICKET_SMTP_SECURE==="true",
     auth:{user:process.env.TICKET_SMTP_USER!,pass:process.env.TICKET_SMTP_PASS!},
     connectionTimeout:10000,greetingTimeout:10000,socketTimeout:15000,
+    requireTLS:process.env.TICKET_SMTP_SECURE!=="true",
+    tls:{rejectUnauthorized:true},
   });
   try{
     await transport.sendMail({
