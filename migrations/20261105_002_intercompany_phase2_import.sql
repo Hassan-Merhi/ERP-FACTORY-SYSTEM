@@ -238,3 +238,61 @@ CREATE TRIGGER intercompany_legacy_voucher_guard
 BEFORE UPDATE OR DELETE ON vouchers
 FOR EACH ROW EXECUTE FUNCTION intercompany_block_legacy_voucher_change();
 
+
+-- Voucher-entry edits can bypass a voucher-header trigger. Protect BOTH levels.
+-- Pre-trade entries can be written because no active linkage exists yet.
+CREATE OR REPLACE FUNCTION intercompany_block_legacy_voucher_entry_change()
+RETURNS TRIGGER LANGUAGE plpgsql AS $blocked$
+DECLARE posted_voucher_id INTEGER;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    posted_voucher_id := NEW.voucher_id;
+  ELSE
+    posted_voucher_id := OLD.voucher_id;
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM intercompany_trades t
+    LEFT JOIN purchase_orders src ON src.id = t.original_supplier_po_id
+    LEFT JOIN purchase_orders dst ON dst.id = t.destination_po_id
+    WHERE t.state = 'active'
+      AND (src.voucher_id = posted_voucher_id OR dst.voucher_id = posted_voucher_id)
+  ) OR EXISTS (
+    SELECT 1 FROM intercompany_trade_source_pos link
+    JOIN intercompany_trades t ON t.id = link.trade_id
+    JOIN purchase_orders po ON po.id = link.source_po_id
+    WHERE t.state = 'active' AND po.voucher_id = posted_voucher_id
+  ) OR EXISTS (
+    SELECT 1 FROM intercompany_audit_events audit
+    JOIN intercompany_trades t ON t.id::text = split_part(audit.event_key, ':', 3)
+    WHERE t.state = 'active'
+      AND audit.event_type = 'container-import-confirmed'
+      AND (
+        (audit.payload->>'sourceSaleVoucherId')::integer = posted_voucher_id OR
+        (audit.payload->>'sourceCostVoucherId')::integer = posted_voucher_id
+      )
+  ) THEN
+    RAISE EXCEPTION 'Linked intercompany voucher entries require coordinated changes';
+  END IF;
+  IF TG_OP = 'UPDATE' AND NEW.voucher_id <> OLD.voucher_id THEN
+    -- Relinking an unrelated entry INTO a protected voucher must not bypass guard.
+    IF EXISTS (
+      SELECT 1 FROM intercompany_trades t
+      LEFT JOIN purchase_orders src ON src.id = t.original_supplier_po_id
+      LEFT JOIN purchase_orders dst ON dst.id = t.destination_po_id
+      WHERE t.state = 'active'
+        AND (src.voucher_id = NEW.voucher_id OR dst.voucher_id = NEW.voucher_id)
+    ) OR EXISTS (
+      SELECT 1 FROM intercompany_trade_source_pos link
+      JOIN intercompany_trades t ON t.id = link.trade_id
+      JOIN purchase_orders po ON po.id = link.source_po_id
+      WHERE t.state = 'active' AND po.voucher_id = NEW.voucher_id
+    ) THEN
+      RAISE EXCEPTION 'Cannot move voucher lines into a protected intercompany voucher';
+    END IF;
+  END IF;
+  RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END $blocked$;
+DROP TRIGGER IF EXISTS intercompany_legacy_voucher_entry_guard ON voucher_entries;
+CREATE TRIGGER intercompany_legacy_voucher_entry_guard
+BEFORE INSERT OR UPDATE OR DELETE ON voucher_entries
+FOR EACH ROW EXECUTE FUNCTION intercompany_block_legacy_voucher_entry_change();
