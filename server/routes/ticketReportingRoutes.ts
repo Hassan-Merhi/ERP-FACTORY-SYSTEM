@@ -70,6 +70,7 @@ export function registerTicketReportingRoutes(app:Express):void {
           WHERE ${where} AND t.status<>'finalized' AND t.due_at<$${params.length+1}::timestamptz
           ORDER BY t.due_at ASC,t.id ASC LIMIT 30`,[...params,now]),
       ]);
+      res.setHeader("Cache-Control","private, no-store");
       return res.json({
         generatedAt:now.toISOString(),filters,
         summary:stats.rows[0]??null,
