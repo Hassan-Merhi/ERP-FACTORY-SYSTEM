@@ -38,6 +38,7 @@ export interface Props {
 export interface Draft {
   customerId: string;
   proformaName: string;
+  destination: string;
   isActive: boolean;
   quantities: Record<string, string>;
   sellingPrices: Record<string, string>;

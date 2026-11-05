@@ -34,6 +34,8 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
     setCustomerId,
     proformaName,
     setProformaName,
+    destination,
+    setDestination,
     isActive,
     setIsActive,
     quantities,
@@ -168,6 +170,30 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                 className={cn(errors.proformaName && "border-destructive")}
               />
               {errors.proformaName && <p className="text-xs text-destructive">{errors.proformaName}</p>}
+            </div>
+
+            <div className="flex flex-col gap-1.5 min-w-[180px] flex-1">
+              <Label htmlFor="v5-proforma-destination" className="text-xs font-medium">
+                Destination <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="v5-proforma-destination"
+                data-testid="input-v5-proforma-destination"
+                value={destination}
+                onChange={(e) => {
+                  setDestination(e.target.value);
+                  setErrors((p) => { const next = { ...p }; delete next.destination; return next; });
+                }}
+                placeholder="e.g. L'SHI, MALI, KINSHASA"
+                list="v5-proforma-destinations"
+                className={cn(errors.destination && "border-destructive")}
+              />
+              <datalist id="v5-proforma-destinations">
+                <option value="L'SHI" />
+                <option value="MALI" />
+                <option value="KINSHASA" />
+              </datalist>
+              {errors.destination && <p className="text-xs text-destructive">{errors.destination}</p>}
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -321,12 +347,12 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                     });
                     setAppliedPrice("customer" as React.SetStateAction<"sell" | "prod" | null>);
                   }}
-                  disabled={!customerPriceListQuery.data?.length}
+                  disabled={!destination.trim() || !customerPriceListQuery.data?.length}
                   data-testid="button-v5-apply-customer-price"
                   title={
                     customerPriceListQuery.data?.length
-                      ? `Apply ${customerPriceListQuery.data.length} agreed price(s) for this customer`
-                      : "No agreed prices saved for this customer yet"
+                      ? `Apply ${customerPriceListQuery.data.length} agreed price(s) for ${destination}`
+                      : "No agreed prices saved for this destination yet"
                   }
                   className={cn("h-9 rounded-full px-4 text-xs font-semibold", (appliedPrice as string) === "customer" && "ring-2 ring-violet-500/40")}
                 >

@@ -372,6 +372,7 @@ export function registerOrderLoadingRoutes(app: Express) {
                 companyId,
                 customerId: order.customerId,
                 name: carriedOverName,
+                destination: proforma.destination,
                 isActive: true,
                 status: "ACTIVE",
               })
