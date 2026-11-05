@@ -28,6 +28,7 @@ describe("Phase 5 destination inventory and pre-receipt cancellation database gu
       entry.tag === "20261105_005_intercompany_phase5_lifecycle")).toHaveLength(1);
     expect(migrations[4]).toContain("ic_phase5_exact_cancel_journal");
     expect(migrations[4]).toContain("ic_destination_receipt_item_sum");
+    expect(migrations[4]).toContain("must cover all linked purchase stock items");
     expect(migrations[4]).toContain("ic_phase5_no_reprice_received_trade");
     expect(migrations[4]).toContain("cancel_release");
   });
@@ -70,12 +71,12 @@ describe("Phase 5 destination inventory and pre-receipt cancellation database gu
       await client.query("INSERT INTO bank_accounts(id,company_id,active) VALUES (31,1,true),(32,2,true),(33,3,true)");
       await client.query("INSERT INTO suppliers(id,company_id,active,legal_name) VALUES (1,1,true,'Eurogulf'),(2,2,true,'Hassan Properties'),(3,3,true,'Hassan Properties')");
       await client.query("INSERT INTO locations VALUES (301,2,NULL),(302,3,NULL)");
-      await client.query("INSERT INTO stock_items VALUES (501,2),(502,3)");
+      await client.query("INSERT INTO stock_items VALUES (501,2),(502,3),(503,3)");
       await client.query("INSERT INTO containers(id,company_id,supplier_id,status,container_number,items_total,charges_total,grand_total) VALUES (10,1,1,'OTW','IC-A',100,0,100),(11,1,1,'OTW','IC-B',100,0,100)");
       await client.query("INSERT INTO vouchers(id,company_id,voucher_type,total_amount,description) VALUES (51,1,'Purchase',100,'External A'),(52,2,'Purchase',100,'Linked A'),(53,1,'Purchase',100,'External B'),(54,3,'Purchase',100,'Linked B'),(55,1,'Receipt',120,'Real bank received'),(56,2,'Payment',120,'Real bank paid')");
       await client.query("INSERT INTO voucher_entries(voucher_id,bank_account_id,ledger_account_id,supplier_id,debit_amount,credit_amount) VALUES (55,31,NULL,NULL,120,0),(55,NULL,11,NULL,0,120),(56,NULL,NULL,2,120,0),(56,32,NULL,NULL,0,120)");
       await client.query("INSERT INTO purchase_orders(id,company_id,container_id,voucher_id,po_number,items_total,freight,surcharge,fumigation,document_charges,discount,other_charges) VALUES (21,1,10,51,'EXT-A',100,0,0,0,0,0,0),(22,2,10,52,'IC-A',100,0,0,0,0,0,0),(23,1,11,53,'EXT-B',100,0,0,0,0,0,0),(24,3,11,54,'IC-B',100,0,0,0,0,0,0)");
-      await client.query("INSERT INTO po_line_items(id,po_id,stock_item_id,item_name,quantity,rate,line_total) VALUES (61,21,501,'A',10,10,100),(62,22,501,'A',10,10,100),(63,23,502,'B',10,10,100),(64,24,502,'B',10,10,100)");
+      await client.query("INSERT INTO po_line_items(id,po_id,stock_item_id,item_name,quantity,rate,line_total) VALUES (61,21,501,'A',10,10,100),(62,22,501,'A',10,10,100),(63,23,502,'B',10,10,100),(64,24,502,'B',10,10,100),(65,23,503,'Bonus',1,0,0),(66,24,503,'Bonus',1,0,0)");
       await client.query("INSERT INTO intercompany_relationship_policies(source_company_id,destination_company_id,relationship_type,trade_enabled,source_receivable_account_id,destination_payable_account_id,destination_supplier_id,source_purchase_account_id,source_sales_account_id,source_cost_account_id,source_charge_accrual_account_id,destination_git_account_id) VALUES (1,2,'container_trade',true,11,15,2,12,13,14,17,16),(1,3,'container_trade',true,11,18,3,12,13,14,17,19)");
       await client.query("INSERT INTO intercompany_trades(relationship_id,physical_container_id,source_company_id,destination_company_id,original_supplier_po_id,destination_po_id,state) VALUES (1,10,1,2,21,22,'active'),(2,11,1,3,23,24,'active')");
       await client.query("INSERT INTO intercompany_trade_source_pos(trade_id,source_po_id,original_po_number) VALUES (1,21,'EXT-A'),(2,23,'EXT-B')");
@@ -109,7 +110,10 @@ describe("Phase 5 destination inventory and pre-receipt cancellation database gu
       await client.query("INSERT INTO voucher_entries(voucher_id,ledger_account_id,supplier_id,debit_amount,credit_amount) VALUES (101,13,NULL,100,0),(101,11,NULL,0,100),(102,12,NULL,100,0),(102,14,NULL,0,100),(103,NULL,2,100,0),(103,16,NULL,0,100),(104,16,NULL,100,0),(104,NULL,2,0,100)");
       await rejects("UPDATE intercompany_trades SET state='canceled',version=2,canceled_at=now() WHERE id=1","synchronized Phase 5");
       const cancelColumns = "(trade_id,relationship_id,source_company_id,destination_company_id,request_key,request_fingerprint,expected_version,posting_date,landed_cost,source_sale_reversal_voucher_id,source_cost_reversal_voucher_id,destination_git_reversal_voucher_id,reason,cancellation_evidence,released_credit,actor_user_id)";
+      await rejects("INSERT INTO intercompany_trade_cancellations"+cancelColumns+" VALUES (1,1,1,2,'phase5-unscoped',repeat('d',64),1,'2026-11-05',100,101,102,103,'No goods arrived','Freight forwarder returned goods',40,'owner')","same atomic cancellation transaction");
+      await client.query("SELECT set_config('erp.ic_phase5_cancel','1',true)");
       await rejects("INSERT INTO intercompany_trade_cancellations"+cancelColumns+" VALUES (1,1,1,2,'phase5-wrong-voucher',repeat('d',64),1,'2026-11-05',100,101,102,104,'No goods arrived','Freight forwarder returned goods',40,'owner')","reversal journal lines");
+      await client.query("SELECT set_config('erp.ic_phase5_cancel','',true)");
       await rejects("INSERT INTO intercompany_payment_allocations(payment_id,trade_id,amount,allocation_kind,request_key,reason) VALUES (1,1,-40,'cancel_release','phase5-unscoped-release','Must be atomic')", "atomic cancellation");
       await client.query("SELECT set_config('erp.ic_phase5_cancel','1',true)");
       await client.query("INSERT INTO intercompany_payment_allocations(payment_id,trade_id,amount,allocation_kind,request_key,reason) VALUES (1,1,-40,'cancel_release','phase5-credit-return','Return to same original payment')");
@@ -119,6 +123,7 @@ describe("Phase 5 destination inventory and pre-receipt cancellation database gu
       await client.query("SELECT set_config('erp.ic_phase5_cancel','',true)");
       await client.query("SET CONSTRAINTS ALL IMMEDIATE");
       await rejects("UPDATE purchase_orders SET items_total=99 WHERE id=22","immutable");
+      await rejects("UPDATE intercompany_trades SET version=version+1 WHERE id=1","immutable");
       await rejects("UPDATE containers SET status='OFFLOADED' WHERE id=10","cannot be altered");
       await rejects("UPDATE vouchers SET description='rewrite' WHERE id=103","immutable");
       await rejects("UPDATE intercompany_trade_cancellations SET reason='rewrite' WHERE trade_id=1","cannot be modified");
@@ -130,13 +135,16 @@ describe("Phase 5 destination inventory and pre-receipt cancellation database gu
       // Receive other pair's goods: ONLY MALI inventory and destination GIT.
       await client.query("INSERT INTO vouchers(id,company_id,voucher_type,total_amount,description) VALUES (201,3,'Journal',100,'MALI received stock'),(202,3,'Journal',100,'Wrong inventory line')");
       await client.query("INSERT INTO voucher_entries(voucher_id,ledger_account_id,debit_amount,credit_amount) VALUES (201,29,100,0),(201,19,0,100),(202,19,100,0),(202,29,0,100)");
-      await client.query("INSERT INTO canonical_stock_movements(id,company_id,stock_item_id,location_id,movement_kind,source_type,source_id,quantity_delta,unit_cost) VALUES (301,3,502,302,'receipt','intercompany-destination-receipt','2',10,10)");
+      await client.query("INSERT INTO canonical_stock_movements(id,company_id,stock_item_id,location_id,movement_kind,source_type,source_id,quantity_delta,unit_cost) VALUES (301,3,502,302,'receipt','intercompany-destination-receipt','2',10,10),(302,3,503,302,'receipt','intercompany-destination-receipt','2',1,0)");
       const receiveColumns = "(trade_id,relationship_id,destination_company_id,location_id,inventory_account_id,git_account_id,receipt_voucher_id,request_key,request_fingerprint,posting_date,landed_cost,arrival_evidence,reason,actor_user_id)";
       await rejects("INSERT INTO intercompany_destination_receipts"+receiveColumns+" VALUES (2,2,3,301,29,19,201,'phase5-wrong-location',repeat('e',64),'2026-11-05',100,'Signed arrival evidence','Received warehouse','owner')","receipt ownership");
       await rejects("INSERT INTO intercompany_destination_receipts"+receiveColumns+" VALUES (2,2,3,302,29,19,202,'phase5-wrong-account',repeat('e',64),'2026-11-05',100,'Signed arrival evidence','Received warehouse','owner')","exact inventory/GIT");
       await client.query("INSERT INTO intercompany_destination_receipts"+receiveColumns+" VALUES (2,2,3,302,29,19,201,'phase5-good-receipt',repeat('e',64),'2026-11-05',100,'Signed arrival evidence','Received warehouse','owner')");
       await rejects("SET CONSTRAINTS ALL IMMEDIATE","received destination item values");
       await client.query("INSERT INTO intercompany_destination_receipt_items(receipt_id,stock_item_id,quantity,landed_value,value_moved,canonical_movement_id) VALUES (1,502,10,100,100,301)");
+      // The receipt value balances, but the zero-price bonus item is missing.
+      await rejects("SET CONSTRAINTS ALL IMMEDIATE","cover all linked purchase stock items");
+      await client.query("INSERT INTO intercompany_destination_receipt_items(receipt_id,stock_item_id,quantity,landed_value,value_moved,canonical_movement_id) VALUES (1,503,1,0,0,302)");
       await client.query("SET CONSTRAINTS ALL IMMEDIATE");
       await rejects("INSERT INTO intercompany_destination_receipt_items(receipt_id,stock_item_id,quantity,landed_value,value_moved,canonical_movement_id) VALUES (1,501,1,0,0,302)","destination");
       await rejects("INSERT INTO intercompany_trade_revisions(trade_id,revision_number,kind,request_key,actor_user_id,initiating_company_id,amount_before,amount_after,posting_date,reason) VALUES (2,2,'line_edit','after-mali-received','owner',1,100,99,'2026-11-05','Unsafe stock recost')","already received");
