@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "r
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
 type Ticket = { id:number;ticketNumber:string;title:string;description:string;status:string;priority:string;assignedTo:string;createdBy:string };
