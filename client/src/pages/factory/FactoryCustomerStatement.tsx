@@ -76,7 +76,7 @@ interface PriceListEntry {
 // destination-specific agreed prices on new proformas.
 const LEGACY_PRICE_DESTINATION = "__legacy__";
 
-function priceListUrl(customerId: string, destination: string, articleCode?: string): string {
+function priceListUrl(customerId: string | undefined, destination: string, articleCode?: string): string {
   const base = `/api/factory/customer-price-lists/${customerId}`;
   const path = articleCode ? `${base}/${encodeURIComponent(articleCode)}` : base;
   return destination === LEGACY_PRICE_DESTINATION
