@@ -5,6 +5,8 @@ import puppeteer from "puppeteer";
 
 import { awaitAuthenticatedShell, watchSignInResponses } from "./lib/browser-smoke-signin.mjs";
 import { discoverDuoRouteInventory } from "./lib/iphone-duo-route-inventory.mjs";
+import { resolveFactoryMobileSeeds } from "./lib/factory-mobile-fixture.mjs";
+import { SEEDED_ROUTES, SEED_KEYS } from "./lib/factory-mobile-routes.mjs";
 
 const BASE_URL = (process.env.ERP_SMOKE_BASE_URL || "http://127.0.0.1:5000").replace(/\/$/, "");
 const USERNAME = process.env.ERP_SMOKE_USERNAME || "";
@@ -33,6 +35,7 @@ const VIEWPORTS = [
   { name: "duo-split", width: 393, height: 890, deviceScaleFactor: 3, isMobile: true, hasTouch: true },
 ].filter((x) => (process.env.ERP_DUO_VIEWPORTS || "duo-cover,duo-cover-landscape,duo-inner,duo-inner-landscape,duo-split").split(",").includes(x.name));
 
+if (!LANGUAGES.length || !VIEWPORTS.length) throw new Error("No iPhone Duo language or viewport profiles selected");
 const inventory = await discoverDuoRouteInventory();
 const role = process.env.ERP_DUO_ROLE === "POS" ? "POS" : "Developer";
 const chosen = (process.env.ERP_DUO_WORKSPACES || inventory.groups.filter((group) => group.requiredRole === role)
@@ -55,9 +58,16 @@ const report = {
   unresolvedParameterizedRoutes: inventory.unresolved.filter((item) => chosen.includes(item.workspace)),
   emulationNote: "Chrome CSS-pixel profiles; physical iOS Safari verification still required",
   transitions: [],
+  seededRouteEvidence: [],
   cases: [],
   failures: [],
 };
+
+function matchesPattern(pattern, concreteRoute) {
+  const escape = (value) => value.replace(/[.*+?^$\\{}()|[\\]\\]/g, "\\function fileSafe(value) {");
+  const segments = pattern.split("/").map((segment) => segment.startsWith(":") ? "[^/?]+" : escape(segment));
+  return new RegExp("^" + segments.join("/") + "$").test(concreteRoute.split("?")[0]);
+}
 
 function fileSafe(value) {
   return value.replace(/^\//, "").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "root";
@@ -545,7 +555,23 @@ for (const language of LANGUAGES) {
               report.cases.push({ workspace: group.workspace, classification: "fixture-unavailable", error: message });
               continue;
             }
-            for (const route of group.routes) {
+            const seededDetailRoutes = [];
+            if (group.workspace === "factory" && !routeFilter.length) {
+              try {
+                const ids = await resolveFactoryMobileSeeds(page, {
+                  companyId: selectedWorkspaceCompany.companyId,
+                  createMissing: false,
+                });
+                for (const definition of SEEDED_ROUTES) {
+                  const keys = SEED_KEYS[definition.key] || [definition.key];
+                  if (!keys.every((key) => Number.isInteger(ids[key]) && ids[key] > 0)) continue;
+                  seededDetailRoutes.push(definition.path(ids));
+                }
+              } catch (error) {
+                report.failures.push("Factory dynamic fixture lookup failed: " + String(error));
+              }
+            }
+            for (const route of [...new Set([...group.routes, ...seededDetailRoutes])]) {
               try {
               const status = await openRoute(page, route);
               await applyLanguage(page, language.code);
@@ -583,6 +609,9 @@ for (const language of LANGUAGES) {
                 failures,
               });
               report.failures.push(...failures);
+              if (seededDetailRoutes.includes(route))
+                report.seededRouteEvidence.push({ workspace: group.workspace, route, language: language.code,
+                  viewport: viewport.name, failures });
               await verifyDuoTransitions(page, language, viewport, group, route, state.path);
               } catch (error) {
                 const message = language.name + " " + viewport.name + " " + group.workspace + " " +
@@ -613,9 +642,14 @@ if (REQUIRE_AUTHENTICATED && !AUTHENTICATED) {
 }
 
 report.finishedAt = new Date().toISOString();
+const successfulSeeded = report.seededRouteEvidence
+  .filter((entry) => !entry.failures.length).map((entry) => entry.route);
+report.unresolvedParameterizedRoutes = report.unresolvedParameterizedRoutes.filter((item) =>
+  !successfulSeeded.some((route) => matchesPattern(item.route, route)));
 report.coverage = {
   staticDeclared: WORKSPACE_ROUTE_GROUPS.reduce((n, group) => n + group.routes.length, 0),
-  dynamicWithoutSeeds: WORKSPACE_ROUTE_GROUPS.reduce((n, group) => n + group.parameterized.length, 0),
+  dynamicWithoutSeeds: report.unresolvedParameterizedRoutes.length,
+  seededDetailCases: report.seededRouteEvidence.length,
   auditedCases: report.cases.filter((item) => Boolean(item.workspace) && !item.classification).length,
   transitions: report.transitions.length,
 };
