@@ -89,7 +89,7 @@ describe("Wave 5 Factory backend access certification", () => {
     ).toEqual({
       pageKey: "factory/monthly-production-matrix",
     });
-    for (const endpoint of ["/monthly-production-matrix/workers", "/monthly-production-matrix/bales"]) {
+    for (const endpoint of ["/monthly-production-matrix/workers", "/monthly-production-matrix/bales", "/monthly-production-matrix/export-bales"]) {
       expect(resolveFactoryBackendAccessRequirement(request(endpoint))).toEqual({
         pageKey: "factory/monthly-production-matrix",
       });
@@ -114,6 +114,9 @@ describe("Wave 5 Factory backend access certification", () => {
     ], [
       "/monthly-production-matrix/bales",
       "GET",
+    ], [
+      "/monthly-production-matrix/export-bales",
+      "GET",
     ]] as const) {
       const { res } = response();
       const next = vi.fn();
@@ -134,6 +137,7 @@ describe("Wave 5 Factory backend access certification", () => {
       ["/monthly-production-matrix/order", "PUT"],
       ["/monthly-production-matrix/workers", "GET"],
       ["/monthly-production-matrix/bales", "GET"],
+      ["/monthly-production-matrix/export-bales", "GET"],
     ] as const) {
       const { res, state } = response();
       const next = vi.fn();

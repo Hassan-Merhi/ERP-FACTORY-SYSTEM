@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { moveProductNearItem, moveProductToPosition } from "./monthlyProductionRowOrder";
 import { useToast } from "@/hooks/use-toast";
+import type { MonthlyProductionExportBale } from "./monthlyProductionWorkbookDrilldown";
 import { ArrowDown, ArrowUp, Download, GripVertical, ListOrdered, Plus, RotateCcw, Search, X } from "lucide-react";
 
 type Product = { id: number; name: string; articleCode: string; categoryName: string };
@@ -54,6 +55,7 @@ export default function FactoryMonthlyProductionMatrix() {
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
+  const [exportProgress, setExportProgress] = useState("");
   const [moveItemId, setMoveItemId] = useState<number | null>(null);
   const [moveRowNumber, setMoveRowNumber] = useState("");
   const [moveSearch, setMoveSearch] = useState("");
@@ -210,23 +212,69 @@ export default function FactoryMonthlyProductionMatrix() {
   const exportExcel = async () => {
     if (exportingExcel || months.length === 0 || !data) return;
     setExportingExcel(true);
+    setExportProgress("Collecting bales");
     try {
-      // Load the spreadsheet library only when a formatted workbook is requested.
+      // Export all matching bales, not just one paginated screen page.
+      // The resulting workbook can be navigated completely offline.
+      const bales: MonthlyProductionExportBale[] = [];
+      if (visibleProducts.length > 0) {
+        const params = new URLSearchParams({
+          productIds: visibleProducts.map((product) => String(product.id)).join(","),
+          months: months.join(","),
+        });
+        let page = 1;
+        let hasMore = true;
+        while (hasMore) {
+          if (page > 200) throw new Error("Too many production records for a single Excel export.");
+          params.set("page", String(page));
+          const response = await fetch(
+            "/api/factory/monthly-production-matrix/export-bales?" + params.toString(),
+            { credentials: "include", cache: "no-store" }
+          );
+          if (!response.ok) {
+            const payload = await response.json().catch(() => ({}));
+            throw new Error(payload.message || "Unable to load bale details");
+          }
+          const batch: { bales: MonthlyProductionExportBale[]; hasMore: boolean; page: number } = await response.json();
+          if (!Array.isArray(batch.bales) || typeof batch.hasMore !== "boolean" || batch.page !== page ||
+              (batch.hasMore && batch.bales.length === 0)) {
+            throw new Error("Incomplete production details returned; Excel export cancelled.");
+          }
+          bales.push(...batch.bales);
+          if (bales.length > 250_000) {
+            throw new Error("This export is too large; select fewer months or filter items.");
+          }
+          setExportProgress("Loaded " + bales.length.toLocaleString() + " bales");
+          hasMore = batch.hasMore;
+          page += 1;
+        }
+      }
+
+      // Recompute the matrix counts using the exact exported bale records so
+      // every click, worker total and reference list reconciles in the file.
+      const exportedCounts = new Map<string, number>();
+      for (const bale of bales) {
+        const key = bale.productId + "|" + bale.month;
+        exportedCounts.set(key, (exportedCounts.get(key) ?? 0) + 1);
+      }
+      const rows = visibleProducts.map((product) => ({
+        productId: product.id,
+        name: product.name,
+        articleCode: product.articleCode,
+        categoryName: product.categoryName,
+        values: months.map((month) => exportedCounts.get(product.id + "|" + month) ?? 0),
+      }));
+      setExportProgress("Building Excel sheets");
       const { exportMonthlyProductionExcel } = await import("./monthlyProductionExcelExport");
       await exportMonthlyProductionExcel({
-        rows: visibleProducts.map((product) => ({
-          productId: product.id,
-          name: product.name,
-          articleCode: product.articleCode,
-          categoryName: product.categoryName,
-          values: months.map((month) => byId(product.id, month)),
-        })),
+        rows,
         months,
         monthLabels: months.map(monthLabel),
         category,
         search,
-        appOrigin: window.location.origin,
+        bales,
       });
+      toast({ title: "Excel workbook exported", description: "Click a count to move between the worksheets inside the file." });
     } catch (error) {
       toast({
         title: "Unable to export Excel",
@@ -235,6 +283,7 @@ export default function FactoryMonthlyProductionMatrix() {
       });
     } finally {
       setExportingExcel(false);
+      setExportProgress("");
     }
   };
   const totals = months.map((month) => visibleProducts.reduce((sum, product) => sum + byId(product.id, month), 0));
@@ -250,7 +299,7 @@ export default function FactoryMonthlyProductionMatrix() {
           </Button>
           <Button variant="outline" size="sm" disabled={!data || months.length === 0 || exportingExcel}
             onClick={() => void exportExcel()} data-testid="export-monthly-production-excel">
-            <Download className="mr-2 h-4 w-4" /> {exportingExcel ? "Exporting…" : "Export Excel"}
+            <Download className="mr-2 h-4 w-4" /> {exportingExcel ? (exportProgress || "Exporting…") : "Export Excel"}
           </Button>
           <Button variant="outline" size="sm" disabled={!data || months.length === 0} onClick={exportCsv}
             data-testid="export-monthly-production-csv">
