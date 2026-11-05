@@ -30,8 +30,9 @@ describe("Phase 3 shared interface translations", () => {
     // aggregate that intentionally grows during generation. 598 -> 607 when
     // the 2026-10-16 feature merges (#2298-#2326) added reviewed phrases;
     // 607 -> 665 when the training guides, Daybook and attendance messages
-    // were translated (ca91d6511, 81eba8eea) ahead of the 2026-11-03 merges.
-    expect(reviewedPhase3SharedUiTranslations).toHaveLength(665);
+    // were translated (ca91d6511, 81eba8eea) ahead of the 2026-11-03 merges;
+    // 665 -> 667 for the training video playback fallback (2026-11-05).
+    expect(reviewedPhase3SharedUiTranslations).toHaveLength(667);
     expect(new Set(reviewedPhase3SharedUiTranslations.map((entry) => entry.en)).size).toBe(665);
 
     for (const entry of reviewedPhase3SharedUiTranslations) {
