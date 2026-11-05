@@ -48,6 +48,9 @@ export const intercompanyRelationshipPolicies = pgTable(
     destinationSupplierId: integer("destination_supplier_id").references(() => companyScopedSuppliers.id, {
       onDelete: "restrict",
     }),
+    sourcePurchaseAccountId: integer("source_purchase_account_id").references(() => ledgerAccounts.id, {
+      onDelete: "restrict",
+    }),
     sourceSalesAccountId: integer("source_sales_account_id").references(() => ledgerAccounts.id, {
       onDelete: "restrict",
     }),
