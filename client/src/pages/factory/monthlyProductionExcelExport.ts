@@ -4,6 +4,7 @@
  * require the XLSX format. This module is loaded only when Excel is requested.
  */
 import { ExcelJS, writeFile } from "@/lib/excelHelper";
+import { buildProductionDrilldownSheets, matrixPeriodKey, numericSheetLink, type MonthlyProductionExportBale } from "./monthlyProductionWorkbookDrilldown";
 
 export type MonthlyProductionExcelRow = {
   productId: number;
@@ -19,7 +20,7 @@ export type MonthlyProductionExcelOptions = {
   monthLabels: string[];
   category: string;
   search: string;
-  appOrigin: string;
+  bales: MonthlyProductionExportBale[];
 };
 
 const PALETTE = {
@@ -55,29 +56,6 @@ function columnLetter(column: number): string {
   return letters;
 }
 
-/**
- * Build the same worker drill-down destination used by clicking a quantity
- * on the live Monthly Production Matrix. Workbook links open the signed-in
- * ERP in a browser; the XLSX does not embed or expose employee/bale records.
- */
-export function monthlyProductionDrilldownUrl(appOrigin: string, productId: number, selectedMonths: string[]): string {
-  if (!Number.isSafeInteger(productId) || productId <= 0 ||
-      !selectedMonths.length || selectedMonths.some((month) => !/^\d{4}-(0[1-9]|1[0-2])$/.test(month))) {
-    throw new Error("Invalid monthly production drill-down link");
-  }
-  const origin = new URL(appOrigin);
-  if (!["https:", "http:"].includes(origin.protocol)) throw new Error("Invalid ERP address");
-  const url = new URL("/factory/monthly-production-matrix/" + productId + "/workers", origin.origin);
-  url.searchParams.set("months", selectedMonths.join(","));
-  return url.toString();
-}
-
-function linkedCount(url: string, count: number): ExcelJS.CellFormulaValue {
-  // Numeric friendly_name preserves the value for SUMs and Excel table filters.
-  // ExcelJS stores the precomputed result for a correct display before recalc.
-  return { formula: 'HYPERLINK("' + url.replaceAll('"', '""') + '",' + count + ')', result: count };
-}
-
 /** Same highest/lowest logic as the on-screen Monthly Production Matrix. */
 export function productionMonthTone(values: number[], index: number): "highest" | "lowest" | "normal" {
   if (values.length <= 1) return "normal";
@@ -90,16 +68,35 @@ export function productionMonthTone(values: number[], index: number): "highest" 
 }
 
 export function buildMonthlyProductionExcelWorkbook(options: MonthlyProductionExcelOptions): ExcelJS.Workbook {
-  const { rows, months, monthLabels, category, search, appOrigin } = options;
+  const { rows, months, monthLabels, category, search, bales } = options;
   if (months.length === 0 || months.length !== monthLabels.length) {
     throw new Error("Select at least one valid month before exporting.");
   }
   if (rows.some((row) => row.values.length !== months.length)) {
     throw new Error("Production matrix export contains mismatched month columns.");
   }
-  // Validate the origin before writing hyperlink formulas into any cell.
-  const exportOrigin = new URL(appOrigin);
-  if (!["https:", "http:"].includes(exportOrigin.protocol)) throw new Error("Invalid ERP address");
+  // The exported file must be self-contained: no external ERP links or network requests after download.
+  const validProducts = new Set(rows.map((row) => row.productId));
+  const validMonths = new Set(months);
+  const actualCounts = new Map<string, number>();
+  const seenBales = new Set<string>();
+  for (const bale of bales) {
+    if (!validProducts.has(bale.productId) || !validMonths.has(bale.month)) {
+      throw new Error("Production details fall outside the selected matrix filters.");
+    }
+    const baleKey = bale.productId + "|" + bale.baleId;
+    if (seenBales.has(baleKey)) throw new Error("Duplicate bale found in production export.");
+    seenBales.add(baleKey);
+    const key = matrixPeriodKey(bale.productId, bale.month);
+    actualCounts.set(key, (actualCounts.get(key) ?? 0) + 1);
+  }
+  for (const row of rows) {
+    for (let i = 0; i < months.length; i += 1) {
+      if (row.values[i] !== (actualCounts.get(matrixPeriodKey(row.productId, months[i])) ?? 0)) {
+        throw new Error("Production counts changed during export. Please export again.");
+      }
+    }
+  }
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Business OS Factory";
@@ -137,7 +134,7 @@ export function buildMonthlyProductionExcelWorkbook(options: MonthlyProductionEx
 
   worksheet.mergeCells("A3:" + lastColumn + "3");
   const legendCell = worksheet.getCell("A3");
-  legendCell.value = "GREEN = highest month     |     RED = lowest month     |     CLICK A NONZERO COUNT = open worker details in ERP";
+  legendCell.value = "GREEN = highest month     |     RED = lowest month     |     CLICK COUNTS = explore worksheets inside this Excel file";
   legendCell.font = { name: "Aptos", size: 9, italic: true, color: { argb: PALETTE.subdued } };
   legendCell.alignment = { vertical: "middle", indent: 1 };
   worksheet.getRow(3).height = 22;
@@ -145,7 +142,7 @@ export function buildMonthlyProductionExcelWorkbook(options: MonthlyProductionEx
   worksheet.mergeCells("A4:" + lastColumn + "4");
   worksheet.getRow(4).height = 12;
   worksheet.mergeCells("A5:" + lastColumn + "5");
-  worksheet.getCell("A5").value = "Click a number to open its live worker breakdown in your browser (ERP sign-in required). The export reflects the selected filters.";
+  worksheet.getCell("A5").value = "Offline interactive workbook: Matrix → Worker Breakdown → Daily Summary → Bale References. No ERP browser or connection needed.";
   worksheet.getCell("A5").font = { name: "Aptos", size: 9, color: { argb: PALETTE.subdued } };
   worksheet.getCell("A5").alignment = { vertical: "middle", indent: 1 };
   worksheet.getRow(5).height = 23;
@@ -198,21 +195,11 @@ export function buildMonthlyProductionExcelWorkbook(options: MonthlyProductionEx
         cell.fill = background(PALETTE.redFill);
         cell.font = { name: "Aptos", size: 10, bold: true, color: { argb: PALETTE.redText } };
       }
-      // Zero is not clickable on the web matrix, so leave zero numeric.
-      const value = rows[i].values[monthIndex];
-      if (value > 0) {
-        cell.value = linkedCount(monthlyProductionDrilldownUrl(appOrigin, rows[i].productId, [months[monthIndex]]), value);
-        cell.font = { ...cell.font, underline: true };
-      }
-    }
     const totalCell = dataRow.getCell(totalColumn);
     totalCell.fill = background(PALETTE.totalFill);
     totalCell.font = { name: "Aptos", size: 10, bold: true, color: { argb: PALETTE.totalText } };
     const itemTotal = rows[i].values.reduce((sum, count) => sum + count, 0);
-    totalCell.value = itemTotal > 0
-      ? linkedCount(monthlyProductionDrilldownUrl(appOrigin, rows[i].productId, months), itemTotal)
-      : 0;
-    if (itemTotal > 0) totalCell.font = { ...totalCell.font, underline: true };
+    totalCell.value = itemTotal;
   }
 
   const totalRow = worksheet.getRow(totalRowNumber);
@@ -257,6 +244,29 @@ export function buildMonthlyProductionExcelWorkbook(options: MonthlyProductionEx
     left: 0.25, right: 0.25, top: 0.4, bottom: 0.45, header: 0.2, footer: 0.2,
   };
   worksheet.headerFooter.oddFooter = "&LBusiness OS Factory&CPage &P of &N&RPrinted &D";
+
+  // Build the other three worksheets first to resolve exact internal anchor rows.
+  const anchors = buildProductionDrilldownSheets(workbook, rows, months, monthLabels, bales);
+  for (const [index, product] of rows.entries()) {
+    const matrixRow = worksheet.getRow(firstDataRow + index);
+    for (const [monthIndex, month] of months.entries()) {
+      const count = product.values[monthIndex];
+      if (count <= 0) continue;
+      const anchor = anchors.get(matrixPeriodKey(product.productId, month));
+      if (anchor == null) throw new Error("Monthly worker breakdown is missing.");
+      const cell = matrixRow.getCell(monthStartColumn + monthIndex);
+      cell.value = numericSheetLink("Worker Breakdown", anchor, count);
+      cell.font = { ...cell.font, underline: true };
+    }
+    const itemTotal = product.values.reduce((sum, count) => sum + count, 0);
+    if (itemTotal > 0) {
+      const anchor = anchors.get(matrixPeriodKey(product.productId, "ALL"));
+      if (anchor == null) throw new Error("Item worker breakdown is missing.");
+      const cell = matrixRow.getCell(totalColumn);
+      cell.value = numericSheetLink("Worker Breakdown", anchor, itemTotal);
+      cell.font = { ...cell.font, underline: true };
+    }
+  }
   return workbook;
 }
 
