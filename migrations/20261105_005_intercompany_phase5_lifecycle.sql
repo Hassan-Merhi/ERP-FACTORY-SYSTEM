@@ -79,7 +79,7 @@ BEGIN
   SELECT * INTO v FROM vouchers WHERE id=NEW.receipt_voucher_id;
   SELECT * INTO l FROM locations WHERE id=NEW.location_id;
   SELECT * INTO a FROM ledger_accounts WHERE id=NEW.inventory_account_id;
-  IF NOT FOUND OR t.state<>'active' OR t.relationship_id<>NEW.relationship_id
+  IF t.id IS NULL OR l.id IS NULL OR a.id IS NULL OR v.id IS NULL OR t.state<>'active' OR t.relationship_id<>NEW.relationship_id
      OR t.destination_company_id<>NEW.destination_company_id
      OR p.id IS NULL OR p.destination_git_account_id<>NEW.git_account_id
      OR l.company_id<>NEW.destination_company_id OR l.deleted_at IS NOT NULL
@@ -165,7 +165,7 @@ BEGIN
   SELECT * INTO v1 FROM vouchers WHERE id=NEW.source_sale_reversal_voucher_id;
   SELECT * INTO v2 FROM vouchers WHERE id=NEW.source_cost_reversal_voucher_id;
   SELECT * INTO v3 FROM vouchers WHERE id=NEW.destination_git_reversal_voucher_id;
-  IF t.state<>'active' OR t.version<>NEW.expected_version
+  IF t.id IS NULL OR t.state<>'active' OR t.version<>NEW.expected_version
     OR t.relationship_id<>NEW.relationship_id
     OR t.source_company_id<>NEW.source_company_id OR t.destination_company_id<>NEW.destination_company_id
     OR v1.id IS NULL OR v2.id IS NULL OR v3.id IS NULL
@@ -205,6 +205,132 @@ BEGIN
 END $fn$;
 CREATE TRIGGER ic_phase5_trade_cancel_guard BEFORE UPDATE ON intercompany_trades
 FOR EACH ROW EXECUTE FUNCTION ic_phase5_trade_cancellation_guard();
+
+-- Verify ALL THREE real cancellation journals, not merely their headers.
+-- Source sale: Dr Sales / Cr Receivable. Source cost: Dr Purchases /
+-- Cr COGS. Destination: Dr Properties Supplier / Cr Goods In Transit.
+CREATE OR REPLACE FUNCTION ic_phase5_exact_cancel_journal(
+  vid INTEGER, debit_type TEXT, debit_id INTEGER, credit_type TEXT, credit_id INTEGER, usd NUMERIC)
+RETURNS BOOLEAN LANGUAGE plpgsql STABLE AS $fn$
+BEGIN
+  RETURN (SELECT COUNT(*)=2 FROM voucher_entries WHERE voucher_id=vid)
+    AND EXISTS (SELECT 1 FROM voucher_entries e
+      WHERE e.voucher_id=vid AND e.debit_amount=usd AND COALESCE(e.credit_amount,0)=0
+        AND e.bank_account_id IS NULL
+        AND ((debit_type='ledger' AND e.ledger_account_id=debit_id AND e.supplier_id IS NULL)
+          OR (debit_type='supplier' AND e.supplier_id=debit_id AND e.ledger_account_id IS NULL)))
+    AND EXISTS (SELECT 1 FROM voucher_entries e
+      WHERE e.voucher_id=vid AND e.credit_amount=usd AND COALESCE(e.debit_amount,0)=0
+        AND e.bank_account_id IS NULL
+        AND ((credit_type='ledger' AND e.ledger_account_id=credit_id AND e.supplier_id IS NULL)
+          OR (credit_type='supplier' AND e.supplier_id=credit_id AND e.ledger_account_id IS NULL)));
+END $fn$;
+CREATE OR REPLACE FUNCTION ic_phase5_cancellation_immutable()
+RETURNS TRIGGER LANGUAGE plpgsql AS $fn$
+DECLARE t RECORD; p RECORD; v1 RECORD; v2 RECORD; v3 RECORD;
+BEGIN
+  IF TG_OP<>'INSERT' THEN RAISE EXCEPTION 'Intercompany cancellation evidence cannot be modified'; END IF;
+  SELECT * INTO t FROM intercompany_trades WHERE id=NEW.trade_id;
+  SELECT * INTO p FROM intercompany_relationship_policies WHERE id=NEW.relationship_id;
+  SELECT * INTO v1 FROM vouchers WHERE id=NEW.source_sale_reversal_voucher_id;
+  SELECT * INTO v2 FROM vouchers WHERE id=NEW.source_cost_reversal_voucher_id;
+  SELECT * INTO v3 FROM vouchers WHERE id=NEW.destination_git_reversal_voucher_id;
+  IF t.id IS NULL OR p.id IS NULL OR t.state<>'active' OR t.version<>NEW.expected_version
+    OR t.relationship_id<>NEW.relationship_id
+    OR t.source_company_id<>NEW.source_company_id OR t.destination_company_id<>NEW.destination_company_id
+    OR v1.id IS NULL OR v2.id IS NULL OR v3.id IS NULL
+    OR v1.id=v2.id OR v1.id=v3.id OR v2.id=v3.id
+    OR v1.company_id<>NEW.source_company_id OR v2.company_id<>NEW.source_company_id
+    OR v3.company_id<>NEW.destination_company_id
+    OR v1.voucher_type<>'Journal' OR v2.voucher_type<>'Journal' OR v3.voucher_type<>'Journal'
+    OR v1.deleted_at IS NOT NULL OR v2.deleted_at IS NOT NULL OR v3.deleted_at IS NOT NULL
+    OR v1.total_amount<>NEW.landed_cost OR v2.total_amount<>NEW.landed_cost
+    OR v3.total_amount<>NEW.landed_cost
+    OR p.source_receivable_account_id IS NULL OR p.source_sales_account_id IS NULL
+    OR p.source_cost_account_id IS NULL OR p.source_purchase_account_id IS NULL
+    OR p.destination_git_account_id IS NULL OR p.destination_supplier_id IS NULL THEN
+    RAISE EXCEPTION 'Cancellation requires exact original-pair balanced voucher evidence';
+  END IF;
+  IF NOT ic_phase5_exact_cancel_journal(v1.id,'ledger',p.source_sales_account_id,
+      'ledger',p.source_receivable_account_id,NEW.landed_cost)
+    OR NOT ic_phase5_exact_cancel_journal(v2.id,'ledger',p.source_purchase_account_id,
+      'ledger',p.source_cost_account_id,NEW.landed_cost)
+    OR NOT ic_phase5_exact_cancel_journal(v3.id,'supplier',p.destination_supplier_id,
+      'ledger',p.destination_git_account_id,NEW.landed_cost) THEN
+    RAISE EXCEPTION 'Cancellation reversal journal lines must exactly offset the original pair';
+  END IF;
+  IF EXISTS(SELECT 1 FROM intercompany_destination_receipts WHERE trade_id=NEW.trade_id)
+     OR EXISTS(SELECT 1 FROM intercompany_shared_charge_allocations
+       WHERE trade_id=NEW.trade_id AND amount<>0) THEN
+    RAISE EXCEPTION 'Received stock or unreassigned shared invoice charge prevents cancellation';
+  END IF;
+  RETURN NEW;
+END $fn$;
+
+-- Financial evidence must remain locked even AFTER a trade is canceled.
+-- Phase 3's linked PO trigger deliberately checks active trades only; without
+-- this additional guard a canceled PO could be edited by legacy routes.
+CREATE OR REPLACE FUNCTION ic_phase5_preserve_closed_trade_history()
+RETURNS TRIGGER LANGUAGE plpgsql AS $fn$
+DECLARE pid INTEGER; cid INTEGER; vid INTEGER;
+BEGIN
+  IF TG_TABLE_NAME='purchase_orders' THEN
+    pid:=CASE WHEN TG_OP='INSERT' THEN NEW.id ELSE OLD.id END;
+  ELSIF TG_TABLE_NAME='po_line_items' THEN
+    pid:=CASE WHEN TG_OP='INSERT' THEN NEW.po_id ELSE OLD.po_id END;
+  ELSIF TG_TABLE_NAME='container_charges' THEN
+    cid:=CASE WHEN TG_OP='INSERT' THEN NEW.container_id ELSE OLD.container_id END;
+  ELSIF TG_TABLE_NAME='containers' THEN
+    cid:=OLD.id;
+  ELSIF TG_TABLE_NAME='voucher_entries' THEN
+    vid:=CASE WHEN TG_OP='INSERT' THEN NEW.voucher_id ELSE OLD.voucher_id END;
+  ELSE
+    vid:=CASE WHEN TG_OP='INSERT' THEN NEW.id ELSE OLD.id END;
+  END IF;
+  IF pid IS NOT NULL AND EXISTS (
+    SELECT 1 FROM intercompany_trades t
+    WHERE t.state='canceled' AND (
+      t.destination_po_id=pid OR t.original_supplier_po_id=pid
+      OR EXISTS(SELECT 1 FROM intercompany_trade_source_pos sp WHERE sp.trade_id=t.id AND sp.source_po_id=pid)
+    )
+  ) THEN RAISE EXCEPTION 'Canceled intercompany purchase orders and lines are immutable'; END IF;
+  IF cid IS NOT NULL AND EXISTS (
+    SELECT 1 FROM intercompany_trades t WHERE t.state='canceled' AND t.physical_container_id=cid
+  ) THEN RAISE EXCEPTION 'Canceled intercompany physical container and charge evidence cannot be altered'; END IF;
+  IF vid IS NOT NULL AND EXISTS (
+    SELECT 1 FROM intercompany_trade_cancellations c
+    WHERE vid IN (c.source_sale_reversal_voucher_id,c.source_cost_reversal_voucher_id,c.destination_git_reversal_voucher_id)
+    UNION ALL
+    SELECT 1 FROM intercompany_destination_receipts r WHERE vid=r.receipt_voucher_id
+  ) THEN RAISE EXCEPTION 'Phase 5 posted vouchers and their entries are immutable'; END IF;
+  RETURN CASE WHEN TG_OP='DELETE' THEN OLD ELSE NEW END;
+END $fn$;
+CREATE TRIGGER ic_phase5_canceled_po_lock
+BEFORE UPDATE OR DELETE ON purchase_orders FOR EACH ROW EXECUTE FUNCTION ic_phase5_preserve_closed_trade_history();
+CREATE TRIGGER ic_phase5_canceled_line_lock
+BEFORE INSERT OR UPDATE OR DELETE ON po_line_items FOR EACH ROW EXECUTE FUNCTION ic_phase5_preserve_closed_trade_history();
+CREATE TRIGGER ic_phase5_canceled_charge_lock
+BEFORE INSERT OR UPDATE OR DELETE ON container_charges FOR EACH ROW EXECUTE FUNCTION ic_phase5_preserve_closed_trade_history();
+CREATE TRIGGER ic_phase5_canceled_container_lock
+BEFORE UPDATE OR DELETE ON containers FOR EACH ROW EXECUTE FUNCTION ic_phase5_preserve_closed_trade_history();
+CREATE TRIGGER ic_phase5_evidence_voucher_lock
+BEFORE UPDATE OR DELETE ON vouchers FOR EACH ROW EXECUTE FUNCTION ic_phase5_preserve_closed_trade_history();
+CREATE TRIGGER ic_phase5_evidence_entry_lock
+BEFORE INSERT OR UPDATE OR DELETE ON voucher_entries FOR EACH ROW EXECUTE FUNCTION ic_phase5_preserve_closed_trade_history();
+
+-- A completed ERP destination receipt locks the financial value and quantity
+-- of both linked PO sides. Explicit verified inventory/COGS adjustments are a
+-- later separate workflow, not a backdoor through Phase 3 revisions.
+CREATE OR REPLACE FUNCTION ic_phase5_guard_received_revision()
+RETURNS TRIGGER LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF EXISTS (SELECT 1 FROM intercompany_destination_receipts WHERE trade_id=NEW.trade_id) THEN
+    RAISE EXCEPTION 'ERP stock already received; PO and charge changes need a reviewed inventory/COGS correction';
+  END IF;
+  RETURN NEW;
+END $fn$;
+CREATE TRIGGER ic_phase5_no_reprice_received_trade
+BEFORE INSERT ON intercompany_trade_revisions FOR EACH ROW EXECUTE FUNCTION ic_phase5_guard_received_revision();
 
 -- A received trade may NOT be canceled, and legacy receipt paths still cannot
 -- offload its Properties-owned physical container.
