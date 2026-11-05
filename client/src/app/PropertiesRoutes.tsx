@@ -78,6 +78,9 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       {(user.role === "Owner" || user.role === "Developer") && (
         <Route path="/properties/container-trading" component={PropertiesContainerTrading} />
       )}
+      {(user.role === "Owner" || user.role === "Developer") && (
+        <Route path="/properties/linked-trades" component={LinkedTradesEditor} />
+      )}
       <Route path="/properties/rentals" component={PropertiesRentalsHub} />
       <Route path="/properties/rental/warehouses">{() => <Redirect replace to="/properties/rentals" />}</Route>
       <Route path="/properties/rental/shops">{() => <Redirect replace to="/properties/rentals?tab=shops" />}</Route>
