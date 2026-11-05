@@ -601,7 +601,7 @@ export const intercompanyTradeCancellations = pgTable(
     releasedCredit: decimal("released_credit", { precision: 20, scale: 2 }).notNull().default("0"),
     actorUserId: varchar("actor_user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  })
+  }
 );
 
 export type IntercompanyRelationshipPolicy = typeof intercompanyRelationshipPolicies.$inferSelect;
