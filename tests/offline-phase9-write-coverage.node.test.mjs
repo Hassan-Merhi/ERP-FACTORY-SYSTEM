@@ -39,12 +39,24 @@ const manifest = {
     "PATCH /api/stock-items/:id [business]",
     "POST /api/stock-items [business]",
     "DELETE /api/stock-items/:id [business]",
+    "PUT /api/stock-transfers/:id [business]",
+    "POST /api/stock-transfers/:id/approve [business]",
+    "POST /api/vouchers/:id/finalize [business]",
+    "POST /api/stock-transfers/:transferId/revisions [business]",
+    "POST /api/stock-transfer-revisions/:id/approve [business]",
+    "POST /api/stock-transfer-revisions/:id/reject [business]",
+    "POST /api/stock-transfer-import/parse [business]",
+    "POST /api/stock-transfer-import/validate [business]",
+    "POST /api/stock-transfer-import/import [business]",
+    "POST /api/stock-transfer-import/parse-multi-source [business]",
+    "POST /api/stock-transfer-import/validate-multi-source [business]",
+    "POST /api/stock-transfer-import/import-multi-source [business]",
   ],
 };
 test("every unique API write has explicit capture, session-only or blocked disposition", () => {
   const report = auditPhase9WriteCoverage(manifest);
-  assert.equal(report.summary.uniqueApiWriteRoutes, 31);
-  assert.equal(report.summary.approvedCapture, 24);
+  assert.equal(report.summary.uniqueApiWriteRoutes, 43);
+  assert.equal(report.summary.approvedCapture, 36);
   assert.equal(report.summary.sessionOnly, 1);
   // Phase 10: pause/resume is an operator control on the LAN; the cloud-only
   // decision route stays blocked there.
@@ -67,6 +79,8 @@ test("every unique API write has explicit capture, session-only or blocked dispo
   assert.equal(route("PATCH", "/api/stock-items/:id").policy, "stock.item-edit.v1");
   assert.equal(route("POST", "/api/stock-items").policy, "stock.item-create.v1");
   assert.equal(route("DELETE", "/api/stock-items/:id").policy, "stock.item-delete.v1");
+  assert.equal(route("PUT", "/api/stock-transfers/:id").policy, "stock.transfer-edit.v1");
+  assert.equal(route("POST", "/api/stock-transfer-revisions/:id/reject").policy, "stock.transfer-revision-review.v1");
 });
 test("policy drift from an accidental LAN write bypass fails the audit", () => {
   const unsafeGuard = (config, method, path) =>
@@ -84,7 +98,7 @@ test("missing vetted route, bad manifest and unexpected allowed route are refuse
 test("real route manifest has explicit accounting/stock/POS/factory/attachment gaps", () => {
   const real = JSON.parse(fs.readFileSync(new URL("../config/route-manifest.json", import.meta.url), "utf8"));
   const report = auditPhase9WriteCoverage(real);
-  assert.equal(report.summary.approvedCapture, 24);
+  assert.equal(report.summary.approvedCapture, 36);
   assert.ok(report.summary.blocked > 0);
   assert.ok(report.routes.some((r) => r.module === "retail-pos" && r.disposition === "blocked"));
   assert.ok(report.routes.some((r) => r.module === "factory-production" && r.disposition === "blocked"));

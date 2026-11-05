@@ -79,6 +79,60 @@ const SUPPORTED = new Map([
       "Soft delete only for items with no inventory rows and no stock movements, on the LAN and again " +
       "in the cloud (otherwise reject-only); merge and re-code stay cloud-only",
   }],
+  ["PUT /api/stock-transfers/:id", {
+    policy: "stock.transfer-edit.v1",
+    limitations:
+      "Recorded with the transfer as the factory saw it; applied only while the cloud copy still matches, " +
+      "otherwise held for Admin/Developer approve (factory change wins) or reject",
+  }],
+  ["POST /api/stock-transfers/:id/approve", {
+    policy: "stock.transfer-finalize.v1",
+    limitations: "Same rule as an edit; a transfer the cloud already finalized is a no-op",
+  }],
+  ["POST /api/vouchers/:id/finalize", {
+    policy: "stock.transfer-finalize.v1",
+    limitations: "Stock transfer vouchers only; any other voucher type is refused on the LAN",
+  }],
+  ["POST /api/stock-transfers/:transferId/revisions", {
+    policy: "stock.transfer-revision.v1",
+    limitations: "Replayed through the revision service; a stale revision is held as reject-only",
+  }],
+  ["POST /api/stock-transfer-revisions/:id/approve", {
+    policy: "stock.transfer-revision-review.v1",
+    limitations: "Applied only while the revision is still pending in the cloud; otherwise reject-only",
+  }],
+  ["POST /api/stock-transfer-import/parse", {
+    policy: "stock.transfer.v1",
+    limitations: "Excel import step that only reads the spreadsheet, items and stock; writes nothing",
+  }],
+  ["POST /api/stock-transfer-import/validate", {
+    policy: "stock.transfer.v1",
+    limitations: "Excel import step that only reads the spreadsheet, items and stock; writes nothing",
+  }],
+  ["POST /api/stock-transfer-import/parse-multi-source", {
+    policy: "stock.transfer.v1",
+    limitations: "Excel import step that only reads the spreadsheet, items and stock; writes nothing",
+  }],
+  ["POST /api/stock-transfer-import/validate-multi-source", {
+    policy: "stock.transfer.v1",
+    limitations: "Excel import step that only reads the spreadsheet, items and stock; writes nothing",
+  }],
+  ["POST /api/stock-transfer-import/import", {
+    policy: "stock.transfer.v1",
+    limitations:
+      "On the LAN each import is created through the same code as a hand-typed transfer and recorded as " +
+      "an ordinary offline transfer; a cloud shortfall is held for Admin/Developer approve/reject",
+  }],
+  ["POST /api/stock-transfer-import/import-multi-source", {
+    policy: "stock.transfer.v1",
+    limitations:
+      "On the LAN each import is created through the same code as a hand-typed transfer and recorded as " +
+      "an ordinary offline transfer; a cloud shortfall is held for Admin/Developer approve/reject",
+  }],
+  ["POST /api/stock-transfer-revisions/:id/reject", {
+    policy: "stock.transfer-revision-review.v1",
+    limitations: "Applied only while the revision is still pending in the cloud; otherwise reject-only",
+  }],
   ["POST /api/pos/sales", {
     policy: "pos.sale.v1",
     limitations:

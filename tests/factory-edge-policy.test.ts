@@ -163,6 +163,31 @@ describe("factory LAN edge deployment policy", () => {
       for (const verb of ["PUT", "PATCH", "DELETE"]) {
         expect(edgeBlocksWrite(config, verb, "/api/stock-items")).toBe(true);
       }
+      // Plan batch 3: transfer edit (PUT), finalize/approve, revisions and their review.
+      const open = mode === "read-only";
+      expect(edgeBlocksWrite(config, "PUT", "/api/stock-transfers/42")).toBe(open);
+      expect(edgeBlocksWrite(config, "POST", "/api/stock-transfers/42/approve")).toBe(open);
+      expect(edgeBlocksWrite(config, "POST", "/api/stock-transfers/42/revisions")).toBe(open);
+      expect(edgeBlocksWrite(config, "POST", "/api/stock-transfer-revisions/7/approve")).toBe(open);
+      expect(edgeBlocksWrite(config, "POST", "/api/stock-transfer-revisions/7/reject")).toBe(open);
+      expect(edgeBlocksWrite(config, "POST", "/api/vouchers/9/finalize")).toBe(open);
+      for (const verb of ["POST", "PATCH", "DELETE"]) {
+        expect(edgeBlocksWrite(config, verb, "/api/stock-transfers/42")).toBe(true);
+      }
+      expect(edgeBlocksWrite(config, "DELETE", "/api/stock-transfer-revisions/7")).toBe(true);
+      expect(edgeBlocksWrite(config, "PATCH", "/api/stock-transfer-revisions/7/optional")).toBe(true);
+      expect(edgeBlocksWrite(config, "POST", "/api/vouchers/9/reopen")).toBe(true);
+      for (const step of [
+        "parse",
+        "validate",
+        "import",
+        "parse-multi-source",
+        "validate-multi-source",
+        "import-multi-source",
+      ]) {
+        expect(edgeBlocksWrite(config, "POST", `/api/stock-transfer-import/${step}`)).toBe(open);
+        expect(edgeBlocksWrite(config, "PUT", `/api/stock-transfer-import/${step}`)).toBe(true);
+      }
       for (const path of [
         "/api/factory/pressing-machines/void",
         "/api/pos/retail/sales",
@@ -175,8 +200,6 @@ describe("factory LAN edge deployment policy", () => {
         "/api/stock-items/import",
         "/api/stock-items/bulk-delete",
         "/api/stock-items/42/merge",
-        "/api/stock-transfers/42",
-        "/api/stock-transfer-import/import",
       ]) {
         for (const verb of ["POST", "PUT", "PATCH", "DELETE"]) {
           expect(edgeBlocksWrite(config, verb, path)).toBe(true);

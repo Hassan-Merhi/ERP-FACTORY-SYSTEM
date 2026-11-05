@@ -52,6 +52,17 @@ import {
   phase9AttachmentEnvelope,
 } from "./phase9AttachmentEnvelope.mjs";
 import { PHASE9_PAYMENT_KIND, phase9PaymentEnvelope } from "./phase9PaymentEnvelope.mjs";
+import {
+  PHASE9_STOCK_TRANSFER_CHANGED_CONFLICT,
+  PHASE9_STOCK_TRANSFER_EDIT_KIND,
+  PHASE9_STOCK_TRANSFER_FINALIZE_KIND,
+  PHASE9_STOCK_TRANSFER_REVISION_KIND,
+  PHASE9_STOCK_TRANSFER_REVISION_REVIEW_KIND,
+  phase9StockTransferEditEnvelope,
+  phase9StockTransferFinalizeEnvelope,
+  phase9StockTransferRevisionEnvelope,
+  phase9StockTransferRevisionReviewEnvelope,
+} from "./phase9StockTransferWorkflowEnvelope.mjs";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HASH = /^[0-9a-f]{64}$/;
@@ -266,6 +277,36 @@ const STREAMS = Object.freeze({
       [PHASE9_STOCK_ITEM_DELETE_KIND]: Object.freeze({
         parse: (payload) => rebuiltPayload(payload, PHASE9_STOCK_ITEM_DELETE_KIND, phase9StockItemDeleteEnvelope),
         localRef: (payload) => payload.stockItemId,
+        overridable: Object.freeze([]),
+      }),
+      // Plan batch 3: changes to existing transfers, on the same stream as the
+      // transfers themselves so a change never applies before its transfer.
+      [PHASE9_STOCK_TRANSFER_EDIT_KIND]: Object.freeze({
+        parse: (payload) => rebuiltPayload(payload, PHASE9_STOCK_TRANSFER_EDIT_KIND, phase9StockTransferEditEnvelope),
+        localRef: (payload) => payload.localEditId,
+        overridable: Object.freeze([PHASE9_STOCK_TRANSFER_CHANGED_CONFLICT]),
+      }),
+      [PHASE9_STOCK_TRANSFER_FINALIZE_KIND]: Object.freeze({
+        parse: (payload) =>
+          rebuiltPayload(payload, PHASE9_STOCK_TRANSFER_FINALIZE_KIND, phase9StockTransferFinalizeEnvelope),
+        localRef: (payload) => payload.localEditId,
+        overridable: Object.freeze([PHASE9_STOCK_TRANSFER_CHANGED_CONFLICT]),
+      }),
+      // A stale revision is held but reject-only: the revision service refuses it whatever the decision.
+      [PHASE9_STOCK_TRANSFER_REVISION_KIND]: Object.freeze({
+        parse: (payload) =>
+          rebuiltPayload(payload, PHASE9_STOCK_TRANSFER_REVISION_KIND, phase9StockTransferRevisionEnvelope),
+        localRef: (payload) => payload.localRevisionId,
+        overridable: Object.freeze([]),
+      }),
+      [PHASE9_STOCK_TRANSFER_REVISION_REVIEW_KIND]: Object.freeze({
+        parse: (payload) =>
+          rebuiltPayload(
+            payload,
+            PHASE9_STOCK_TRANSFER_REVISION_REVIEW_KIND,
+            phase9StockTransferRevisionReviewEnvelope
+          ),
+        localRef: (payload) => payload.localEditId,
         overridable: Object.freeze([]),
       }),
     }),

@@ -34,6 +34,18 @@ import { phase9StockTransferApplyHandler } from "./phase9StockTransferApply";
 import { phase9StockItemEditApplyHandler } from "./phase9StockItemEditApply";
 import { phase9StockItemCreateApplyHandler, phase9StockItemDeleteApplyHandler } from "./phase9StockItemLifecycleApply";
 import { PHASE9_STOCK_ITEM_CREATE_KIND, PHASE9_STOCK_ITEM_DELETE_KIND } from "./phase9StockItemLifecycleEnvelope.mjs";
+import {
+  phase9StockTransferEditApplyHandler,
+  phase9StockTransferFinalizeApplyHandler,
+  phase9StockTransferRevisionApplyHandler,
+  phase9StockTransferRevisionReviewApplyHandler,
+} from "./phase9StockTransferWorkflowApply";
+import {
+  PHASE9_STOCK_TRANSFER_EDIT_KIND,
+  PHASE9_STOCK_TRANSFER_FINALIZE_KIND,
+  PHASE9_STOCK_TRANSFER_REVISION_KIND,
+  PHASE9_STOCK_TRANSFER_REVISION_REVIEW_KIND,
+} from "./phase9StockTransferWorkflowEnvelope.mjs";
 import { PHASE9_STOCK_ITEM_EDIT_KIND } from "./phase9StockItemEditEnvelope.mjs";
 import { phase9PosSaleApplyHandler } from "./phase9PosSaleApply";
 import {
@@ -68,6 +80,10 @@ export const PHASE9_HANDLERS = Object.freeze({
   [PHASE9_STOCK_ITEM_EDIT_KIND]: phase9StockItemEditApplyHandler,
   [PHASE9_STOCK_ITEM_CREATE_KIND]: phase9StockItemCreateApplyHandler,
   [PHASE9_STOCK_ITEM_DELETE_KIND]: phase9StockItemDeleteApplyHandler,
+  [PHASE9_STOCK_TRANSFER_EDIT_KIND]: phase9StockTransferEditApplyHandler,
+  [PHASE9_STOCK_TRANSFER_FINALIZE_KIND]: phase9StockTransferFinalizeApplyHandler,
+  [PHASE9_STOCK_TRANSFER_REVISION_KIND]: phase9StockTransferRevisionApplyHandler,
+  [PHASE9_STOCK_TRANSFER_REVISION_REVIEW_KIND]: phase9StockTransferRevisionReviewApplyHandler,
   [PHASE9_POS_SALE_KIND]: phase9PosSaleApplyHandler,
   [PHASE9_POS_SALE_EDIT_KIND]: phase9PosSaleEditApplyHandler,
   [PHASE9_POS_SALE_CANCEL_KIND]: phase9PosSaleCancelApplyHandler,

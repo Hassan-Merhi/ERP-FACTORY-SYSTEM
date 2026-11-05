@@ -129,6 +129,19 @@ export const PHASE9_STOCK_ITEM_EDIT_STATIC_ROUTES = Object.freeze([
   "POST /api/stock-items/import-opening-balances",
 ]);
 export const PHASE9_STOCK_ITEM_CREATE_ROUTE = "POST /api/stock-items";
+// Plan batch 3: changes to existing stock transfers (edit, finalize/approve,
+// revision, revision approve/reject). Each handler records the change for the
+// cloud; the voucher finalize route refuses non-transfer vouchers on the LAN.
+const PHASE9_TRANSFER_ID_PATH = /^\/api\/stock-transfers\/(?:[1-9][0-9]{0,9}|:id)$/;
+const PHASE9_TRANSFER_APPROVE_PATH = /^\/api\/stock-transfers\/(?:[1-9][0-9]{0,9}|:id)\/approve$/;
+const PHASE9_TRANSFER_REVISIONS_PATH = /^\/api\/stock-transfers\/(?:[1-9][0-9]{0,9}|:transferId)\/revisions$/;
+const PHASE9_REVISION_REVIEW_PATH = /^\/api\/stock-transfer-revisions\/(?:[1-9][0-9]{0,9}|:id)\/(approve|reject)$/;
+const PHASE9_TRANSFER_IMPORT_ROUTES = new Set(
+  ["parse", "validate", "import", "parse-multi-source", "validate-multi-source", "import-multi-source"].map(
+    (step) => `/api/stock-transfer-import/${step}`
+  )
+);
+const PHASE9_VOUCHER_FINALIZE_PATH = /^\/api\/vouchers\/(?:[1-9][0-9]{0,9}|:id)\/finalize$/;
 export const PHASE9_STOCK_ITEM_PATH = /^\/api\/stock-items\/(?:[1-9][0-9]{0,9}|:id)$/;
 export const PHASE9_STOCK_ITEM_LOCATION_PRICES_PATH = /^\/api\/stock-items\/(?:[1-9][0-9]{0,9}|:id)\/location-prices$/;
 // A numeric container id, or the manifest template ":id" (which the route itself rejects as invalid).
@@ -184,6 +197,17 @@ export function phase9ApprovedCaptureRoute(method, path) {
   // Plan batch 2: new items and deletes of unused items, recorded for the cloud.
   if (verb === "DELETE" && PHASE9_STOCK_ITEM_PATH.test(path)) return "DELETE /api/stock-items/:id";
   if (key === PHASE9_STOCK_ITEM_CREATE_ROUTE) return key;
+  if (verb === "PUT" && PHASE9_TRANSFER_ID_PATH.test(path)) return "PUT /api/stock-transfers/:id";
+  if (verb === "POST" && PHASE9_TRANSFER_APPROVE_PATH.test(path)) return "POST /api/stock-transfers/:id/approve";
+  if (verb === "POST" && PHASE9_TRANSFER_REVISIONS_PATH.test(path)) {
+    return "POST /api/stock-transfers/:transferId/revisions";
+  }
+  if (verb === "POST" && PHASE9_VOUCHER_FINALIZE_PATH.test(path)) return "POST /api/vouchers/:id/finalize";
+  // Plan batch 3: the Excel transfer import (parse and validate only read the
+  // spreadsheet; import records an ordinary offline transfer).
+  if (verb === "POST" && PHASE9_TRANSFER_IMPORT_ROUTES.has(path)) return key;
+  const review = verb === "POST" ? PHASE9_REVISION_REVIEW_PATH.exec(path) : null;
+  if (review) return `POST /api/stock-transfer-revisions/:id/${review[1]}`;
   if (verb === "POST" && PHASE9_STOCK_ITEM_LOCATION_PRICES_PATH.test(path)) {
     return "POST /api/stock-items/:id/location-prices";
   }

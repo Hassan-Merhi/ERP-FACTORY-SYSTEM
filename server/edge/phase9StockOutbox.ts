@@ -32,6 +32,24 @@ import {
   type Phase9StockItemCreateEvidence,
   type Phase9StockItemDeleteEvidence,
 } from "./phase9StockItemLifecycleEnvelope.mjs";
+import {
+  PHASE9_STOCK_TRANSFER_EDIT_KIND,
+  PHASE9_STOCK_TRANSFER_FINALIZE_KIND,
+  PHASE9_STOCK_TRANSFER_REVISION_KIND,
+  PHASE9_STOCK_TRANSFER_REVISION_REVIEW_KIND,
+  phase9StockTransferEditEnvelope,
+  phase9StockTransferFinalizeEnvelope,
+  phase9StockTransferRevisionEnvelope,
+  phase9StockTransferRevisionReviewEnvelope,
+  phase9TransferSnapshot,
+  type Phase9RevisionRef,
+  type Phase9StockTransferEditEvidence,
+  type Phase9StockTransferFinalizeEvidence,
+  type Phase9StockTransferRevisionEvidence,
+  type Phase9StockTransferRevisionReviewEvidence,
+  type Phase9TransferRef,
+  type Phase9TransferSnapshot,
+} from "./phase9StockTransferWorkflowEnvelope.mjs";
 
 /**
  * local_movement_id is the LAN source row: a canonical stock movement (quick
@@ -44,6 +62,10 @@ const STOCK_OUTBOX_KINDS = [
   "stock.item-edit.v1",
   PHASE9_STOCK_ITEM_CREATE_KIND,
   PHASE9_STOCK_ITEM_DELETE_KIND,
+  PHASE9_STOCK_TRANSFER_EDIT_KIND,
+  PHASE9_STOCK_TRANSFER_FINALIZE_KIND,
+  PHASE9_STOCK_TRANSFER_REVISION_KIND,
+  PHASE9_STOCK_TRANSFER_REVISION_REVIEW_KIND,
 ] as const;
 
 export async function ensurePhase9StockOutboxSchema(queryable: Pick<Pool, "query">): Promise<void> {
@@ -246,4 +268,139 @@ export async function nextPhase9LanStockItemIdTx(tx: DbTransaction): Promise<num
   if (!Number.isSafeInteger(id) || id < PHASE9_LAN_ITEM_ID_BASE)
     throw new EdgeRefusal("PHASE9_LAN_ITEM_ID_RANGE_INVALID");
   return id;
+}
+
+/**
+ * Plan batch 3: a follow-up record whose local reference is its own stream
+ * sequence (the transfer or revision it changes is named in the payload), so
+ * any number of edits of one transfer each get their own record.
+ */
+async function appendStockFollowUpTx<
+  T extends { kind: string; requestId: string; companyId: number; actorUserId: string },
+>(tx: DbTransaction, siteId: string, build: (localEditId: number) => T): Promise<void> {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('factory-edge-stock-outbox-order'))`);
+  const counter = await tx.execute(sql`
+    INSERT INTO factory_edge_stock_counter (site_id, last_sequence)
+    VALUES (${siteId}::uuid, 1)
+    ON CONFLICT (site_id)
+      DO UPDATE SET last_sequence = factory_edge_stock_counter.last_sequence + 1
+    RETURNING last_sequence
+  `);
+  const sequence = Number((counter.rows[0] as { last_sequence: string | number }).last_sequence);
+  const event = build(sequence);
+  await tx.execute(sql`
+    INSERT INTO factory_edge_stock_outbox
+      (site_id, sequence, operation_id, company_id, actor_user_id,
+       local_movement_id, operation_kind, payload, payload_sha256)
+    VALUES (${siteId}::uuid, ${sequence}, ${event.requestId}::uuid,
+            ${event.companyId}, ${event.actorUserId}, ${sequence},
+            ${event.kind}, ${JSON.stringify(event)}::jsonb, ${hashEvidence(event)})
+  `);
+}
+
+function lanSiteId(): string | null {
+  const config = readFactoryEdgeConfiguration();
+  return config.mode === "lan" && config.primary && config.siteId ? String(config.siteId) : null;
+}
+
+/** Was this row created on this LAN server during the outage (recorded on the stock stream)? */
+async function recordedOnLanTx(tx: DbTransaction, siteId: string, kind: string, localRef: number): Promise<boolean> {
+  const found = await tx.execute(sql`
+    SELECT 1 FROM factory_edge_stock_outbox
+     WHERE site_id = ${siteId}::uuid AND operation_kind = ${kind} AND local_movement_id = ${localRef}
+     LIMIT 1
+  `);
+  return found.rows.length > 0;
+}
+
+/** How an offline record names a transfer: by its LAN record if created offline, else by its shared id. */
+export async function phase9TransferRefTx(tx: DbTransaction, transferId: number): Promise<Phase9TransferRef> {
+  const siteId = lanSiteId();
+  if (siteId && (await recordedOnLanTx(tx, siteId, "stock.transfer.v1", transferId))) {
+    return { origin: "lan", localTransferId: transferId };
+  }
+  return { origin: "cloud", transferId };
+}
+
+/** How an offline record names a transfer revision (same rule as transfers). */
+export async function phase9RevisionRefTx(tx: DbTransaction, revisionId: number): Promise<Phase9RevisionRef> {
+  const siteId = lanSiteId();
+  if (siteId && (await recordedOnLanTx(tx, siteId, PHASE9_STOCK_TRANSFER_REVISION_KIND, revisionId))) {
+    return { origin: "lan", localRevisionId: revisionId };
+  }
+  return { origin: "cloud", revisionId };
+}
+
+/** The transfer as it stands, locked for the rest of the transaction; null if it does not exist. */
+export async function phase9TransferSnapshotTx(
+  tx: DbTransaction,
+  transferId: number
+): Promise<Phase9TransferSnapshot | null> {
+  const header = await tx.execute(sql`
+    SELECT t.destination_location_id AS "destinationLocationId", t.source_location_id AS "headerSourceId",
+           t.inventory_applied AS "inventoryApplied", v.optional
+      FROM stock_transfer_vouchers t JOIN vouchers v ON v.id = t.voucher_id
+     WHERE t.id = ${transferId}
+     FOR UPDATE OF t, v
+  `);
+  const row = header.rows[0] as
+    | { destinationLocationId: number; headerSourceId: number | null; inventoryApplied: boolean; optional: boolean }
+    | undefined;
+  if (!row) return null;
+  const lines = await tx.execute(sql`
+    SELECT COALESCE(source_location_id, ${row.headerSourceId}) AS "sourceLocationId",
+           stock_item_id AS "stockItemId", quantity::text AS quantity
+      FROM stock_transfer_items WHERE transfer_id = ${transferId}
+  `);
+  return phase9TransferSnapshot(
+    row,
+    lines.rows as Array<{ sourceLocationId: number; stockItemId: number; quantity: string }>
+  );
+}
+
+/** Plan batch 3: an edit of an existing transfer; no-op off the LAN primary. */
+export async function capturePhase9StockTransferEditTx(
+  tx: DbTransaction,
+  evidence: Omit<Phase9StockTransferEditEvidence, "localEditId">
+): Promise<void> {
+  const siteId = lanSiteId();
+  if (!siteId) return;
+  await appendStockFollowUpTx(tx, siteId, (localEditId) =>
+    phase9StockTransferEditEnvelope({ ...evidence, localEditId })
+  );
+}
+
+/** Plan batch 3: a transfer finalized (approved) on the LAN; no-op off the LAN primary. */
+export async function capturePhase9StockTransferFinalizeTx(
+  tx: DbTransaction,
+  evidence: Omit<Phase9StockTransferFinalizeEvidence, "localEditId">
+): Promise<void> {
+  const siteId = lanSiteId();
+  if (!siteId) return;
+  await appendStockFollowUpTx(tx, siteId, (localEditId) =>
+    phase9StockTransferFinalizeEnvelope({ ...evidence, localEditId })
+  );
+}
+
+/** Plan batch 3: a transfer revision created on the LAN (local reference = the revision id). */
+export async function capturePhase9StockTransferRevisionTx(
+  tx: DbTransaction,
+  evidence: Phase9StockTransferRevisionEvidence
+): Promise<void> {
+  const siteId = lanSiteId();
+  if (!siteId) return;
+  const event = phase9StockTransferRevisionEnvelope(evidence);
+  await appendStockEventTx(tx, siteId, event, event.localRevisionId);
+}
+
+/** Plan batch 3: a transfer revision approved or rejected on the LAN; no-op off the LAN primary. */
+export async function capturePhase9StockTransferRevisionReviewTx(
+  tx: DbTransaction,
+  evidence: Omit<Phase9StockTransferRevisionReviewEvidence, "localEditId">
+): Promise<void> {
+  const siteId = lanSiteId();
+  if (!siteId) return;
+  await appendStockFollowUpTx(tx, siteId, (localEditId) =>
+    phase9StockTransferRevisionReviewEnvelope({ ...evidence, localEditId })
+  );
 }

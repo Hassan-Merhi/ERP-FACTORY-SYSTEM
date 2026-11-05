@@ -283,6 +283,14 @@ export function registerFactoryEdgeBoundary(app: Express): void {
             "POST /api/stock-items/:id/location-prices",
             "POST /api/stock-items",
             "DELETE /api/stock-items/:id",
+            "PUT /api/stock-transfers/:id",
+            "POST /api/stock-transfers/:id/approve",
+            "POST /api/vouchers/:id/finalize",
+            "POST /api/stock-transfers/:transferId/revisions",
+            "POST /api/stock-transfer-revisions/:id/approve",
+            "POST /api/stock-transfer-revisions/:id/reject",
+            "POST /api/stock-transfer-import/import",
+            "POST /api/stock-transfer-import/import-multi-source",
           ].map((route) => [
             route,
             {

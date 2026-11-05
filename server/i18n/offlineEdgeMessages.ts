@@ -19,6 +19,11 @@ const messages = {
     ar: "لا يمكن إلغاء سوى مبيعات نقاط البيع أثناء انقطاع اتصال المصنع.",
     fr: "Seules les ventes au point de vente peuvent être annulées pendant que l’usine est hors ligne.",
   },
+  voucherFinalizeTransfersOnly: {
+    en: "Only stock transfers can be finalized while the factory is offline.",
+    ar: "لا يمكن اعتماد سوى تحويلات المخزون أثناء انقطاع اتصال المصنع.",
+    fr: "Seuls les transferts de stock peuvent être finalisés pendant que l’usine est hors ligne.",
+  },
   stockItemHasMovements: {
     en: "This stock item has stock movements, so it can only be deleted online.",
     ar: "لهذا الصنف حركات مخزون، لذا لا يمكن حذفه إلا عند الاتصال.",
