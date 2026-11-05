@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Switch, Route, Redirect } from "wouter";
 import NotFound from "@/pages/not-found";
+import LinkedTradesEditor from "@/pages/intercompany/LinkedTradesEditor";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 const HelpTraining = lazy(() => import("@/pages/HelpTraining"));
 import { canAccessAnyErpFeature, canAccessErpFeature, type ErpFeatureAccess } from "@/app/erpAccess";
