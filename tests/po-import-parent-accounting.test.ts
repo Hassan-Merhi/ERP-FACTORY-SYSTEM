@@ -256,6 +256,47 @@ describe("PO import parent accounting", () => {
     expect(validation.body).toMatchObject({ valid: true, errors: [] });
   });
 
+  it("resolves a stock item created after the Excel preview was parsed", async () => {
+    const code = `${TEST_PREFIX}-LATE-CREATED`;
+    const payload = importPayload({
+      suffix: "LATE-CREATED-VALIDATE",
+      poNumber: "PO-LATE-CREATED",
+      itemTotal: 25,
+      freight: 0,
+      freightPaidBy: "supplier",
+    });
+    // The user already has this parsed preview open; its item name is blank.
+    payload.preview[0].items[0].barcode = code;
+    payload.preview[0].items[0].itemName = "";
+
+    const before = await agent.post("/api/po-import/validate").send(payload);
+    expect(before.status).toBe(200);
+    expect(before.body.valid).toBe(false);
+    expect(before.body.errors).toContain(`Item not found: code ${code} ()`);
+    expect(before.body.resolvedItems).toEqual([]);
+
+    const [created] = await db
+      .insert(schema.stockItems)
+      .values({
+        companyId: ctx.companyId,
+        code,
+        name: "Newly Saved Stock Item",
+        uom: "PCS",
+        stockGroupId: ctx.stockGroupId,
+        active: true,
+      })
+      .returning();
+
+    // Revalidate the SAME payload; no re-parse, file re-upload or page reload.
+    const after = await agent.post("/api/po-import/validate").send(payload);
+    expect(after.status).toBe(200);
+    expect(after.body.valid).toBe(true);
+    expect(after.body.errors).toEqual([]);
+    expect(after.body.resolvedItems).toEqual([
+      { index: 0, stockItemId: created.id, itemName: "Newly Saved Stock Item" },
+    ]);
+  });
+
   it("keeps SP OTW/Clearing and creates a parent supplier credit for supplier-paid freight", async () => {
     const result = await agent.post("/api/po-import/import").send(
       importPayload({
