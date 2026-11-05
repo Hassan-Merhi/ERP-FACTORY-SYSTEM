@@ -56,9 +56,8 @@ function showForceRefreshNotice(): (seconds: number) => void {
   document.body.appendChild(notice);
 
   return (seconds: number) => {
-    title.textContent = seconds > 0
-      ? `System refresh in ${seconds} second${seconds === 1 ? "" : "s"}`
-      : "Refreshing system…";
+    title.textContent =
+      seconds > 0 ? `System refresh in ${seconds} second${seconds === 1 ? "" : "s"}` : "Refreshing system…";
   };
 }
 
