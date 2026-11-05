@@ -124,7 +124,7 @@ export async function cancelUnreceivedTrade(input: CancelIntercompanyTradeInput,
       // row/pair. This changes NO bank or cash voucher.
       const events = await tx.select().from(intercompanyPaymentAllocations)
         .where(eq(intercompanyPaymentAllocations.tradeId, fresh.id));
-      const net = new Map<number, MoneyDecimal>();
+      const net = new Map<number, ReturnType<typeof cents>>();
       for (const entry of events) {
         net.set(entry.paymentId, (net.get(entry.paymentId) ?? new MoneyDecimal(0)).plus(entry.amount));
       }
