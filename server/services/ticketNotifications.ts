@@ -63,11 +63,23 @@ async function materializeOneEvent():Promise<boolean> {
       [event.company_id,event.ticket_id]
     );
     const actor=typeof event.payload?.actorId==="string"?event.payload.actorId:null;
-    const candidates=ticketEventRecipients({
+    // Supervisors are included for overdue tickets only if their existing company-role
+    // permissions allow viewing all tickets and the Ticket Management page.
+    const supervisors=event.event_type==="ticket_overdue" ? await client.query<{user_id:string}>(`
+      SELECT DISTINCT r.user_id FROM user_company_roles r
+      JOIN users u ON u.id=r.user_id AND u.active=true
+      WHERE r.company_id=$1 AND r.role IN ('Admin','Developer','Owner','Manager')
+       AND (r.role IN ('Admin','Developer') OR NOT EXISTS(
+         SELECT 1 FROM role_feature_permissions p WHERE p.company_id=r.company_id
+          AND p.role=r.role AND p.feature_key IN ('act_ticket_manage_all','page_ticket_management')
+          AND p.enabled=false
+       ))`,[event.company_id]) : {rows:[] as {user_id:string}[]};
+    const supervisorIds=supervisors.rows.map(x=>x.user_id);
+    const candidates=[...new Set([...ticketEventRecipients({
       eventType:event.event_type,createdBy:ticket.created_by,assignedTo:ticket.assigned_to,
       actorId:actor,participantIds:participants.rows.map(p=>p.user_id),
-    });
-    const eligibleSet=new Set([ticket.created_by,ticket.assigned_to,...participants.rows.map(p=>p.user_id)]);
+    }),...supervisorIds].filter(id=>id!==actor))];
+    const eligibleSet=new Set([ticket.created_by,ticket.assigned_to,...participants.rows.map(p=>p.user_id),...supervisorIds]);
     const recipients=candidates.filter(id=>eligibleSet.has(id));
     if(recipients.length) {
       const active=await client.query<{id:string;email:string|null;email_enabled:boolean|null;
@@ -129,6 +141,15 @@ async function claimDelivery(channel:"email"|"whatsapp"):Promise<Delivery|{skipp
       `SELECT 1 WHERE $1=$2 OR $1=$3 OR EXISTS(
         SELECT 1 FROM support_ticket_participants
         WHERE company_id=$4 AND ticket_id=$5 AND user_id=$1
+       ) OR EXISTS(
+        SELECT 1 FROM user_company_roles r
+        WHERE r.user_id=$1 AND r.company_id=$4
+         AND r.role IN ('Admin','Developer','Owner','Manager')
+         AND (r.role IN ('Admin','Developer') OR NOT EXISTS(
+           SELECT 1 FROM role_feature_permissions p WHERE p.company_id=r.company_id
+            AND p.role=r.role AND p.feature_key IN ('act_ticket_manage_all','page_ticket_management')
+            AND p.enabled=false
+         ))
        )`,[d.recipient_user_id,d.created_by,d.assigned_to,d.company_id,d.ticket_id]
     );
     if(!allowed.rowCount || (d.event_type==="ticket_overdue"&&d.status==="finalized") ||
@@ -207,7 +228,14 @@ async function deliverInApp():Promise<boolean>{
     const access=await client.query(
       `SELECT 1 WHERE $1=$2 OR $1=$3 OR EXISTS(
        SELECT 1 FROM support_ticket_participants
-       WHERE company_id=$4 AND ticket_id=$5 AND user_id=$1)`,
+       WHERE company_id=$4 AND ticket_id=$5 AND user_id=$1) OR EXISTS(
+       SELECT 1 FROM user_company_roles r WHERE r.user_id=$1 AND r.company_id=$4
+        AND r.role IN ('Admin','Developer','Owner','Manager')
+        AND (r.role IN ('Admin','Developer') OR NOT EXISTS(
+         SELECT 1 FROM role_feature_permissions p WHERE p.company_id=r.company_id
+          AND p.role=r.role AND p.feature_key IN ('act_ticket_manage_all','page_ticket_management')
+          AND p.enabled=false
+        )))`,
       [d.recipient_user_id,d.created_by,d.assigned_to,d.company_id,d.ticket_id]
     );
     if(!access.rowCount || d.event_type==="ticket_overdue"&&d.status==="finalized"){
