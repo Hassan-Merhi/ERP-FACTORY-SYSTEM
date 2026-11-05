@@ -118,7 +118,11 @@ export function registerFactoryMonthlyProductionDrilldownRoutes(app: Express): v
     if (!period || typeof rawWorker !== "string" || !/^(0|[1-9]\d*)$/.test(rawWorker) ||
         !Number.isSafeInteger(Number(rawWorker)))
       return res.status(400).json({ message: "Invalid product, months or worker" });
+
     const workerId = Number(rawWorker);
+    const view = req.query.view === undefined ? "condensed" : req.query.view;
+    if (view !== "condensed" && view !== "detailed")
+      return res.status(400).json({ message: "Invalid bale view" });
     const page = Math.min(readPage(req.query.page), 100000);
     const limit = 100;
     const offset = (page - 1) * limit;
@@ -127,41 +131,79 @@ export function registerFactoryMonthlyProductionDrilldownRoutes(app: Express): v
       const product = await productFor(companyId, period.productId);
       if (!product) return res.status(404).json({ message: "Item not found" });
       const workerFilter = workerId === 0 ? sql`b.finalized_by IS NULL` : sql`b.finalized_by = ${workerId}`;
-      const [countResult, rowsResult] = await Promise.all([
-        db.execute(sql`SELECT COUNT(*)::int AS total ${productionSource(companyId, period)} AND ${workerFilter}`),
+      // Daily groups are paginated in SQL, not grouped after paginating bales:
+      // otherwise one production day can be split into several partial totals.
+      const dateExpr = sql`COALESCE(b.stock_entry_date::date, b.created_at::date)`;
+      const [totalsResult, rowsResult] = await Promise.all([
         db.execute(sql`
-          SELECT b.id, b.bale_code AS "baleCode", b.reference_number AS "referenceNumber",
-                 b.article_code AS "articleCode", b.product_name AS "productName",
-                 b.weight_kg::text AS "weightKg", b.quantity, b.status,
-                 b.stock_entry_date::text AS "stockEntryDate",
-                 b.finalized_at AS "finalizedAt",
-                 b.category, b.grade, b.worker_name AS "workerName",
-                 l.name AS "locationName"
+          SELECT COUNT(*)::int AS "totalBales",
+                 COUNT(DISTINCT ${dateExpr})::int AS "totalGroups",
+                 COALESCE(SUM(b.weight_kg), 0)::text AS "totalWeightKg"
           ${productionSource(companyId, period)}
           AND ${workerFilter}
-          ORDER BY b.stock_entry_date DESC NULLS LAST, b.created_at DESC, b.id DESC
-          LIMIT ${limit} OFFSET ${offset}
         `),
+        view === "condensed"
+          ? db.execute(sql`
+              SELECT ${dateExpr}::text AS date,
+                     MAX(p.name) AS "productName",
+                     COUNT(*)::int AS quantity,
+                     COALESCE(SUM(b.weight_kg), 0)::text AS "weightKg"
+              ${productionSource(companyId, period)}
+              AND ${workerFilter}
+              GROUP BY ${dateExpr}
+              ORDER BY ${dateExpr} DESC
+              LIMIT ${limit} OFFSET ${offset}
+            `)
+          : db.execute(sql`
+              SELECT b.id, b.bale_code AS "baleCode", b.reference_number AS "referenceNumber",
+                     b.article_code AS "articleCode", b.product_name AS "productName",
+                     b.weight_kg::text AS "weightKg", b.quantity, b.status,
+                     b.stock_entry_date::text AS "stockEntryDate",
+                     b.finalized_at AS "finalizedAt",
+                     b.category, b.grade, b.worker_name AS "workerName",
+                     l.name AS "locationName"
+              ${productionSource(companyId, period)}
+              AND ${workerFilter}
+              ORDER BY b.stock_entry_date DESC NULLS LAST, b.created_at DESC, b.id DESC
+              LIMIT ${limit} OFFSET ${offset}
+            `),
       ]);
-      const totalBales = number(resultRows<Row>(countResult)[0]?.total);
-      const bales = resultRows<Row>(rowsResult).map((row) => ({
-        id: number(row.id),
-        baleCode: String(row.baleCode ?? ""),
-        referenceNumber: String(row.referenceNumber ?? ""),
-        articleCode: String(row.articleCode ?? ""),
-        productName: String(row.productName ?? ""),
-        weightKg: String(row.weightKg ?? "0"),
-        quantity: number(row.quantity),
-        status: String(row.status ?? ""),
-        stockEntryDate: row.stockEntryDate == null ? null : String(row.stockEntryDate),
-        finalizedAt: row.finalizedAt == null ? null : String(row.finalizedAt),
-        category: row.category == null ? null : String(row.category),
-        grade: row.grade == null ? null : String(row.grade),
-        workerName: row.workerName == null ? null : String(row.workerName),
-        locationName: row.locationName == null ? null : String(row.locationName),
-      }));
+      const totals = resultRows<Row>(totalsResult)[0];
+      const totalBales = number(totals?.totalBales);
+      const totalWeightKg = String(totals?.totalWeightKg ?? "0");
+      const totalRows = view === "condensed" ? number(totals?.totalGroups) : totalBales;
+      const rows = resultRows<Row>(rowsResult);
+      const groups = view === "condensed"
+        ? rows.map((row) => ({
+            date: String(row.date),
+            productName: String(row.productName ?? product.name),
+            quantity: number(row.quantity),
+            weightKg: String(row.weightKg ?? "0"),
+          }))
+        : [];
+      const bales = view === "detailed"
+        ? rows.map((row) => ({
+            id: number(row.id),
+            baleCode: String(row.baleCode ?? ""),
+            referenceNumber: String(row.referenceNumber ?? ""),
+            articleCode: String(row.articleCode ?? ""),
+            productName: String(row.productName ?? ""),
+            weightKg: String(row.weightKg ?? "0"),
+            quantity: number(row.quantity),
+            status: String(row.status ?? ""),
+            stockEntryDate: row.stockEntryDate == null ? null : String(row.stockEntryDate),
+            finalizedAt: row.finalizedAt == null ? null : String(row.finalizedAt),
+            category: row.category == null ? null : String(row.category),
+            grade: row.grade == null ? null : String(row.grade),
+            workerName: row.workerName == null ? null : String(row.workerName),
+            locationName: row.locationName == null ? null : String(row.locationName),
+          }))
+        : [];
       res.set("Cache-Control", "private, no-store");
-      return res.json({ product, months: period.months, workerId, page, limit, totalBales, bales });
+      return res.json({
+        product, months: period.months, workerId, view, page, limit,
+        totalBales, totalWeightKg, totalRows, groups, bales,
+      });
     } catch (error: unknown) {
       logger.error("Monthly production bale details failed", { error });
       return res.status(500).json({ message: "Unable to load bale details" });
