@@ -7,8 +7,8 @@ CREATE TABLE IF NOT EXISTS intercompany_relationship_policies (
   source_company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE RESTRICT,
   destination_company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE RESTRICT,
   relationship_type VARCHAR(40) NOT NULL,
-  source_receivable_account_id INTEGER,
-  destination_payable_account_id INTEGER,
+  source_receivable_account_id INTEGER REFERENCES ledger_accounts(id) ON DELETE RESTRICT,
+  destination_payable_account_id INTEGER REFERENCES ledger_accounts(id) ON DELETE RESTRICT,
   base_currency VARCHAR(3) NOT NULL DEFAULT 'USD',
   trade_enabled BOOLEAN NOT NULL DEFAULT FALSE,
   immediate_reconciliation_enabled BOOLEAN NOT NULL DEFAULT FALSE,
@@ -178,11 +178,8 @@ CREATE TABLE IF NOT EXISTS intercompany_permission_grants (
   revoked_by VARCHAR REFERENCES users(id) ON DELETE RESTRICT,
   CONSTRAINT intercompany_grant_revoke_actor CHECK ((revoked_at IS NULL) = (revoked_by IS NULL)),
   CONSTRAINT intercompany_grant_permission CHECK (permission = 'shared_charge_editor'),
-  CONSTRAINT intercompany_grant_scope CHECK (scope IN ('invoice', 'relationship')),
-  CONSTRAINT intercompany_grant_scope_target CHECK (
-    (scope = 'invoice' AND invoice_key IS NOT NULL AND btrim(invoice_key) <> '')
-    OR (scope = 'relationship' AND invoice_key IS NULL)
-  )
+  CONSTRAINT intercompany_grant_scope CHECK (scope = 'invoice'),
+  CONSTRAINT intercompany_grant_scope_target CHECK (invoice_key IS NOT NULL AND btrim(invoice_key) <> '')
 );
 -- Only Owners/Developers with access to an affected company can grant or revoke scoped access.
 CREATE OR REPLACE FUNCTION intercompany_assert_permission_actor()
