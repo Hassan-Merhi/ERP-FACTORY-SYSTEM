@@ -79,9 +79,9 @@ describe("Phase 4 paired payment database protections",()=>{
         expect(error,query).not.toBe("");
         if(fragment)expect(error).toContain(fragment);
       };
-      const paymentColumns="(relationship_id,source_company_id,destination_company_id,request_key,transfer_reference,confirmation_evidence,payment_date,transaction_currency,transaction_amount,historical_rate,base_amount,source_cash_type,source_cash_id,destination_cash_type,destination_cash_id,source_receipt_voucher_id,destination_payment_voucher_id,created_by)";
-      const goodValues="(1,1,2,'phase4-key-001','WIRE-REF-001','Bank receipt and payment verified','2026-11-05','USD',120,1,120,'bank',31,'bank',32,55,56,'owner')";
-      await rejects("INSERT INTO intercompany_container_payments"+paymentColumns+" VALUES (1,1,3,'phase4-wrong-pair','WRONG-001','Both sides verified','2026-11-05','USD',120,1,120,'bank',31,'bank',33,55,56,'owner')","pair");
+      const paymentColumns="(relationship_id,source_company_id,destination_company_id,request_key,request_fingerprint,transfer_reference,confirmation_evidence,payment_date,transaction_currency,transaction_amount,historical_rate,base_amount,source_cash_type,source_cash_id,destination_cash_type,destination_cash_id,source_receipt_voucher_id,destination_payment_voucher_id,created_by)";
+      const goodValues="(1,1,2,'phase4-key-001',repeat('a',64),'WIRE-REF-001','Bank receipt and payment verified','2026-11-05','USD',120,1,120,'bank',31,'bank',32,55,56,'owner')";
+      await rejects("INSERT INTO intercompany_container_payments"+paymentColumns+" VALUES (1,1,3,'phase4-wrong-pair',repeat('a',64),'WRONG-001','Both sides verified','2026-11-05','USD',120,1,120,'bank',31,'bank',33,55,56,'owner')","pair");
       await client.query("INSERT INTO intercompany_container_payments"+paymentColumns+" VALUES "+goodValues);
       await rejects("UPDATE vouchers SET description='tampered' WHERE id=55","Mirrored");
       await rejects("DELETE FROM vouchers WHERE id=56","Mirrored");
@@ -95,7 +95,7 @@ describe("Phase 4 paired payment database protections",()=>{
       // Releasing PO credit is not a second real-world bank event.
       await client.query("INSERT INTO intercompany_payment_allocations(payment_id,trade_id,amount,allocation_kind,request_key,reason) VALUES (1,1,-80,'reversal_release','phase4-reversal-release','Reverse paired money')");
       await client.query("SELECT set_config('erp.ic_payment_reversal','1',true)");
-      await client.query("UPDATE intercompany_container_payments SET status='reversed',reversed_by='owner',reversed_at=now(),reversal_date='2026-11-05',reversal_reason='Bank returned transfer',reversal_key='reversal-key-001',source_reversal_voucher_id=57,destination_reversal_voucher_id=58 WHERE id=1");
+      await client.query("UPDATE intercompany_container_payments SET status='reversed',reversed_by='owner',reversed_at=now(),reversal_date='2026-11-05',reversal_reason='Bank returned transfer',reversal_key='reversal-key-001',reversal_fingerprint=repeat('f',64),source_reversal_voucher_id=57,destination_reversal_voucher_id=58 WHERE id=1");
       await client.query("SELECT set_config('erp.ic_payment_reversal','',true)");
       await client.query("SET CONSTRAINTS ALL IMMEDIATE");
       await rejects("INSERT INTO intercompany_payment_allocations(payment_id,trade_id,amount,allocation_kind,request_key,reason) VALUES (1,1,5,'manual','phase4-after-reversal','Already reversed')","same active company pair");
