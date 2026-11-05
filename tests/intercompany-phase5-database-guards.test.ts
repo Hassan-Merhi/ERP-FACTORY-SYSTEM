@@ -110,9 +110,11 @@ describe("Phase 5 destination inventory and pre-receipt cancellation database gu
       await rejects("UPDATE intercompany_trades SET state='canceled',version=2,canceled_at=now() WHERE id=1","synchronized Phase 5");
       const cancelColumns = "(trade_id,relationship_id,source_company_id,destination_company_id,request_key,request_fingerprint,expected_version,posting_date,landed_cost,source_sale_reversal_voucher_id,source_cost_reversal_voucher_id,destination_git_reversal_voucher_id,reason,cancellation_evidence,released_credit,actor_user_id)";
       await rejects("INSERT INTO intercompany_trade_cancellations"+cancelColumns+" VALUES (1,1,1,2,'phase5-wrong-voucher',repeat('d',64),1,'2026-11-05',100,101,102,104,'No goods arrived','Freight forwarder returned goods',40,'owner')","reversal journal lines");
+      await rejects("INSERT INTO intercompany_payment_allocations(payment_id,trade_id,amount,allocation_kind,request_key,reason) VALUES (1,1,-40,'cancel_release','phase5-unscoped-release','Must be atomic')", "atomic cancellation");
+      await client.query("SELECT set_config('erp.ic_phase5_cancel','1',true)");
       await client.query("INSERT INTO intercompany_payment_allocations(payment_id,trade_id,amount,allocation_kind,request_key,reason) VALUES (1,1,-40,'cancel_release','phase5-credit-return','Return to same original payment')");
       await client.query("INSERT INTO intercompany_trade_cancellations"+cancelColumns+" VALUES (1,1,1,2,'phase5-good-cancel',repeat('d',64),1,'2026-11-05',100,101,102,103,'Goods never arrived','Freight forwarder verified cancellation',40,'owner')");
-      await client.query("SELECT set_config('erp.ic_phase5_cancel','1',true)");
+
       await client.query("UPDATE intercompany_trades SET state='canceled',version=2,canceled_at=now() WHERE id=1");
       await client.query("SELECT set_config('erp.ic_phase5_cancel','',true)");
       await client.query("SET CONSTRAINTS ALL IMMEDIATE");
