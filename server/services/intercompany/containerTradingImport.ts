@@ -18,6 +18,7 @@ import { readExcel, sheetToJson } from "../../excelHelper";
 import { sumMoney, toMoney } from "../../lib/money";
 import { parsePoImportSheetRows, type ParsedContainerPreview } from "../../routes/import/poImportExcelParser";
 import { postErpVoucherTx, type ErpVoucherLine } from "../accounting/erpVoucherPosting";
+import { destinationContainerGitPostingLines } from "./containerDestinationPosting";
 import {
   createTenantDatabaseScope, getDatabaseScopeRuntimeContext,
   runWithDatabaseScopeRuntimeContext,
@@ -446,10 +447,12 @@ export async function postIntercompanyImport(args: {
       const destVoucher = await postErpVoucherTx(tx, {
         companyId:policy.destinationCompanyId, voucherType:"Purchase", voucherDate:input.importDate,
         description:source.name + " linked container purchase - " + plan.containerNumber,
-        lines:[
-          {ledgerAccountId:acct.git,debit:plan.landedTotal,narration:"Goods in transit at confirmed landed cost"},
-          {ledgerAccountId:acct.ap,credit:plan.landedTotal,narration:"Intercompany payable to " + source.name},
-        ],
+        lines:destinationContainerGitPostingLines({
+          goodsInTransitLedgerAccountId:acct.git,
+          propertiesSupplierId:policy.destinationSupplierId!,
+          confirmedLandedCost:plan.landedTotal,
+          sourceCompanyName:source.name,
+        }),
         source:{type:"ic-container-destination",id:batch.id + ":" + physical.id},
         actor:{userId,reason:"Paired at-cost purchase, not an external payment"},
       });
