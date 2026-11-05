@@ -39,6 +39,21 @@ const PALETTE = {
   totalText: "FF1E3A8A",
 };
 
+/** Convert a 1-based worksheet column index to its Excel A1-style letters. */
+function columnLetter(column: number): string {
+  if (!Number.isSafeInteger(column) || column < 1) {
+    throw new RangeError("Excel column index must be a positive integer.");
+  }
+  let remaining = column;
+  let result = "";
+  while (remaining > 0) {
+    remaining -= 1;
+    result = String.fromCharCode(65 + (remaining % 26)) + result;
+    remaining = Math.floor(remaining / 26);
+  }
+  return result;
+}
+
 const background = (color: string): ExcelJS.Fill => ({
   type: "pattern",
   pattern: "solid",
