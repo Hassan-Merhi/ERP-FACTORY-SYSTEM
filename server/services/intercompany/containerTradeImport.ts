@@ -453,7 +453,7 @@ export async function confirmContainerTradeImport(input: ConfirmContainerTradeIm
   if (!input.actorUserId) fail("Signed-in user required.");
   return db.transaction(async (tx) => {
     // One serializable source-company batch at a time, including catalog creation.
-    await tx.execute(sql$SELECT pg_advisory_xact_lock(${IMPORT_LOCK_NAMESPACE}, ${input.sourceCompanyId})$);
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${IMPORT_LOCK_NAMESPACE}, ${input.sourceCompanyId})`);
     const [source] = await tx.select().from(companies).where(eq(companies.id, input.sourceCompanyId));
     if (!source || source.companyType !== "properties" || !source.active) fail("Intercompany container trading requires an active Properties source.");
     const existing = await tx.select({ id: intercompanyImportBatches.id }).from(intercompanyImportBatches)
