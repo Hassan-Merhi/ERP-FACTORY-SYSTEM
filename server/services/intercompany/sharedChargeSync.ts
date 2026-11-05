@@ -1,15 +1,15 @@
 /** Confirmed HP-borne shared invoices: exact proportional allocation and controlled revisions. */
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   containerCharges, intercompanyAuditEvents, intercompanyPermissionGrants,
   intercompanySharedChargeAllocations, intercompanySharedChargeInvoices,
-  intercompanySharedChargePoAllocations, intercompanyTradeRevisions, intercompanyTrades,
+  intercompanySharedChargePoAllocations, intercompanyTrades,
   userCompanyRoles,
 } from "@shared/schema";
 import { db, type DbTransaction } from "../../db";
 import { MoneyDecimal, sumMoney } from "../../lib/money";
 import {
-  applyCostDeltasTx, assertTradeAccess, beginRevisionTx, completeRevisionTx,
+  applyCostDeltasTx, beginRevisionTx, completeRevisionTx,
   type EditIdentity, loadTradeTx, postingDay, rejectEdit, requireUnreceived,
   validateRequestKey, withTradeScope,
 } from "./tradeSync";
@@ -205,7 +205,7 @@ export async function confirmSharedCharge(input:ConfirmSharedChargeInput,identit
       const before=fullPoCost(snap.destination.po);
       const revision=await beginRevisionTx(tx,snap,{
         expectedVersion:snap.trade.version,
-        requestKey:validateRequestKey(input.requestKey)+":"+snap.trade.id,
+        requestKey:"ic-charge:"+invoice.id+":"+snap.trade.id+":"+validateRequestKey(input.requestKey).slice(0,64),
         kind:"shared_invoice_confirm",
         actorUserId:identity.actorUserId,initiatingCompanyId:identity.initiatingCompanyId,
         postingDate:input.postingDate,amountAfter:before.plus(amount).toFixed(2),
@@ -284,7 +284,7 @@ export async function reviseSharedCharge(input:ReviseSharedChargeInput,identity:
     !(await hasSharedChargeGrant(identity,invoice.externalInvoiceKey,relationIds,invoice.sourceCompanyId))){
     rejectEdit("No dedicated shared-charge editing permission for this invoice","IC_CHARGE_FORBIDDEN",403);
   }
-  const values=validateAllocations(input.allocations,cents(invoice.faceAmount));
+  validateAllocations(input.allocations,cents(invoice.faceAmount));
   if(input.allocations.length!==current.length ||
     new Set(input.allocations.map(e=>e.tradeId)).size!==current.length ||
     input.allocations.some(e=>!current.some(old=>old.tradeId===e.tradeId))){
@@ -319,7 +319,7 @@ export async function reviseSharedCharge(input:ReviseSharedChargeInput,identity:
         const delta=next.minus(old);
         const revision=await beginRevisionTx(tx,snap,{
           expectedVersion:item.expectedVersion,
-          requestKey:validateRequestKey(input.requestKey)+":"+snap.trade.id,
+          requestKey:"ic-charge:"+invoice.id+":"+snap.trade.id+":"+validateRequestKey(input.requestKey).slice(0,64),
           kind:"shared_invoice_reallocate",
           actorUserId:identity.actorUserId,initiatingCompanyId:identity.initiatingCompanyId,
           postingDate:input.postingDate,amountAfter:fullPoCost(snap.destination.po).plus(delta).toFixed(2),
@@ -343,8 +343,6 @@ export async function reviseSharedCharge(input:ReviseSharedChargeInput,identity:
           const previous=byPo.get(p.poId);
           if(!previous)rejectEdit("Missing original source PO invoice allocation");
           const change=p.amount.minus(cents(previous.amount));
-          if(!change.isZero())tx.update(intercompanySharedChargePoAllocations)
-            .set({amount:p.amount.toFixed(2)}).where(eq(intercompanySharedChargePoAllocations.id,previous.id));
           return {poId:p.poId,goods:new MoneyDecimal(0),charge:change,
             chargeField:invoice.chargeType as ChargeField};
         });
