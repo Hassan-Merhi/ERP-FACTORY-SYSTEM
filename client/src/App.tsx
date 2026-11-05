@@ -23,7 +23,11 @@ import { AuthenticatedApp } from "@/app/AuthenticatedApp";
 import { AppLoadingState } from "@/app/AppLoadingState";
 import { useAuthenticatedUser } from "@/app/useAuthenticatedUser";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
-import { applyGlobalForceRefresh, resetGlobalForceRefreshBaseline, shouldApplyGlobalForceRefresh } from "@/lib/globalForceRefresh";
+import {
+  applyGlobalForceRefresh,
+  resetGlobalForceRefreshBaseline,
+  shouldApplyGlobalForceRefresh,
+} from "@/lib/globalForceRefresh";
 
 const Login = lazy(() => import("@/pages/Login"));
 const ChatWidget = lazy(() => import("@/components/ChatWidget").then((module) => ({ default: module.ChatWidget })));
@@ -92,7 +96,7 @@ function UpdateBanner() {
           typeof data.forceRefreshToken === "string" &&
           shouldApplyGlobalForceRefresh(
             data.forceRefreshToken,
-            data.refreshAudience === "privileged" ? "privileged" : "regular",
+            data.refreshAudience === "privileged" ? "privileged" : "regular"
           )
         ) {
           void applyGlobalForceRefresh(data.forceRefreshToken);
