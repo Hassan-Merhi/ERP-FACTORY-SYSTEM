@@ -25,7 +25,7 @@ describe("Ticket Management Phase 5 reporting security",()=>{
     });
     const query=ticketReportWhere(12,parsed);
     expect(query.params).toEqual([12,"2026-11-01","2026-11-05","Voucher Error","employee-a"]);
-    expect(query.where).toContain("t.created_at<($3::date + interval '1 day')");
+    expect(query.where).toContain("t.created_at < (($3::date + interval '1 day') AT TIME ZONE 'UTC')");
     expect(query.where).toContain("t.assigned_to=$5");
   });
   it("neutralizes formula injection and escapes CSV special characters",()=>{
