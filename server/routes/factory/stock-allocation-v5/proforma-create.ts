@@ -14,6 +14,7 @@ import { customerProformas, customerProformaLines, customerOrders, customerOrder
 import { eq, sql, and } from "drizzle-orm";
 import { resultRows } from "../../../lib/queryResult";
 import { acquireProformaCapacityTransactionLock } from "../customer-orders/proformaCapacityConcurrency";
+import { normalizeProformaDestination } from "../customer-proformas/destination";
 import { guardProformaOrderCreation } from "../customer-orders/proformaCapacityWriteGuards";
 
 export function registerV5ProformaCreateRoutes(app: Express) {
@@ -24,7 +25,9 @@ export function registerV5ProformaCreateRoutes(app: Express) {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { customerId, name, isActive, lines, sendToLoading, containerNames } = req.body;
+      const { customerId, name, destination: rawDestination, isActive, lines, sendToLoading, containerNames } = req.body;
+      const destination = normalizeProformaDestination(rawDestination);
+      if (!destination) return res.status(400).json({ message: "A destination is required for every new proforma" });
 
       if (!customerId || !name || !Array.isArray(lines) || lines.length === 0) {
         return res.status(400).json({ message: "customerId, name, and at least one line are required" });
@@ -41,7 +44,7 @@ export function registerV5ProformaCreateRoutes(app: Express) {
       const result = await db.transaction(async (tx) => {
         const [proforma] = await tx
           .insert(customerProformas)
-          .values({ companyId, customerId: Number(customerId), name, isActive: isActive ?? false })
+          .values({ companyId, customerId: Number(customerId), name, destination, isActive: isActive ?? false })
           .returning();
 
         const lineValues = validLines.map((l) => ({
@@ -66,6 +69,7 @@ export function registerV5ProformaCreateRoutes(app: Express) {
             orderDate: today,
             proformaIdUsed: proforma.id,
             containerNumber: containerName,
+            destination,
             status: "DRAFT",
             subtotalBales: "0",
             freightAmount: "0",

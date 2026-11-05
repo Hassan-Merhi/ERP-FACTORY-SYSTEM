@@ -29,6 +29,7 @@ export function useFactoryProformasModel() {
   });
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newProformaName, setNewProformaName] = useState("");
+  const [newDestination, setNewDestination] = useState("");
   const [isAddLineOpen, setIsAddLineOpen] = useState(false);
   const [addLineProformaId, setAddLineProformaId] = useState<number | null>(null);
   const [newLine, setNewLine] = useState({ articleCode: "", productName: "", quantity: "", pricePerBale: "" });
@@ -43,6 +44,8 @@ export function useFactoryProformasModel() {
   const [inlineQtyLineId, setInlineQtyLineId] = useState<number | null>(null);
   const [inlineQtyValue, setInlineQtyValue] = useState<string>("");
   const [renamingProforma, setRenamingProforma] = useState<Proforma | null>(null);
+  const [destinationProforma, setDestinationProforma] = useState<Proforma | null>(null);
+  const [destinationValue, setDestinationValue] = useState("");
   const [renameValue, setRenameValue] = useState("");
   const [addLineMode, setAddLineMode] = useState<"manual" | "catalog">("catalog");
   const [catalogSearch, setCatalogSearch] = useState("");
@@ -57,6 +60,7 @@ export function useFactoryProformasModel() {
   // Excel import state
   const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
   const [excelImportName, setExcelImportName] = useState("");
+  const [excelImportDestination, setExcelImportDestination] = useState("");
   const [excelImportLines, setExcelImportLines] = useState<
     { articleCode: string; productName: string; quantity: string; pricePerBale: string }[]
   >([]);
@@ -143,13 +147,21 @@ export function useFactoryProformasModel() {
     refetchOnReconnect: false,
   });
 
-  // Customer price list — used to auto-fill price when adding a new line
-  const { data: customerPriceList = [] } = useQuery<{ articleCode: string; pricePerBale: string }[]>({
-    queryKey: [`/api/factory/customer-price-lists/${customerId}`, customerId],
-    enabled: !!customerId && isAddLineOpen,
+  // The customer may have different agreed prices at each destination.
+  const addLineDestination = proformas.find((p) => p.id === addLineProformaId)?.destination;
+  const { data: customerPriceList = [] } = useQuery<{ article_code: string; price_per_bale: string }[]>({
+    queryKey: ["/api/factory/customer-price-lists", customerId, addLineDestination],
+    queryFn: async () => {
+      const response = await modeApiRequest("GET",
+        `/api/factory/customer-price-lists/${customerId}?destination=${encodeURIComponent(addLineDestination || "")}`
+      );
+      if (!response.ok) throw new Error("Failed to load destination prices");
+      return response.json();
+    },
+    enabled: !!customerId && isAddLineOpen && !!addLineDestination,
   });
 
-  const priceListMap = Object.fromEntries(customerPriceList.map((p) => [p.articleCode, p.pricePerBale]));
+  const priceListMap = Object.fromEntries(customerPriceList.map((p) => [p.article_code, p.price_per_bale]));
 
   const { data: locations = [] } = useQuery<{ id: number; name: string; code: string }[]>({
     queryKey: ["/api/locations"],
@@ -185,7 +197,7 @@ export function useFactoryProformasModel() {
   });
 
   const createProformaMutation = useMutation({
-    mutationFn: async (data: { customerId: number; name: string; isActive: boolean }) => {
+    mutationFn: async (data: { customerId: number; name: string; destination: string; isActive: boolean }) => {
       return await modeApiRequest("POST", "/api/factory/customer-proformas", data);
     },
     onSuccess: () => {
@@ -193,6 +205,7 @@ export function useFactoryProformasModel() {
       invalidateCustomerProformas();
       setIsCreateOpen(false);
       setNewProformaName("");
+      setNewDestination("");
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
@@ -233,6 +246,27 @@ export function useFactoryProformasModel() {
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
       toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Header-only update: linking an older proforma must never save/reprice its lines.
+  const assignDestinationMutation = useMutation({
+    mutationFn: async ({ id, destination }: { id: number; destination: string }) => {
+      const response = await modeApiRequest("PUT", `/api/factory/customer-proformas/${id}`, { destination });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to assign destination");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      invalidateCustomerProformas();
+      toast({ title: "Destination linked", description: "Only the proforma destination was updated. Item prices are unchanged." });
+      setDestinationProforma(null);
+      setDestinationValue("");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to assign destination", description: error.message, variant: "destructive" });
     },
   });
 
@@ -383,7 +417,7 @@ export function useFactoryProformasModel() {
   };
 
   const bulkImportMutation = useMutation({
-    mutationFn: async (data: { customerId: number; name: string; isActive: boolean; lines: unknown[] }) => {
+    mutationFn: async (data: { customerId: number; name: string; destination: string; isActive: boolean; lines: unknown[] }) => {
       const res = await modeApiRequest("POST", "/api/factory/customer-proformas/bulk", data);
       if (!res.ok) {
         const e = await res.json();
@@ -396,6 +430,7 @@ export function useFactoryProformasModel() {
       invalidateCustomerProformas();
       setIsExcelImportOpen(false);
       setExcelImportName("");
+      setExcelImportDestination("");
       setExcelImportLines([]);
       setExcelImportErrors([]);
     },
@@ -514,13 +549,10 @@ export function useFactoryProformasModel() {
     },
     onSuccess: (result) => {
       invalidateCustomerProformas();
-      const backfillNote =
-        result.backfilled > 0
-          ? ` Updated ${result.backfilled} line${result.backfilled !== 1 ? "s" : ""} across all existing proformas.`
-          : "";
+      queryClient.invalidateQueries({ predicate: keyStartsWith("/api/factory/customer-price-lists") });
       toast({
         title: "Agreed prices saved",
-        description: `${result.saved} price${result.saved !== 1 ? "s" : ""} saved.${backfillNote}`,
+        description: `${result.saved} price${result.saved !== 1 ? "s" : ""} saved for destination ${result.destination}. Existing proformas were not changed.`,
       });
     },
     onError: (error: Error) => {
@@ -576,10 +608,11 @@ export function useFactoryProformasModel() {
   });
 
   const handleCreateProforma = () => {
-    if (!newProformaName.trim() || !customerId) return;
+    if (!newProformaName.trim() || !newDestination.trim() || !customerId) return;
     createProformaMutation.mutate({
       customerId,
       name: newProformaName.trim(),
+      destination: newDestination.trim(),
       isActive: false,
     });
   };
@@ -624,6 +657,8 @@ export function useFactoryProformasModel() {
     setIsCreateOpen,
     newProformaName,
     setNewProformaName,
+    newDestination,
+    setNewDestination,
     isAddLineOpen,
     setIsAddLineOpen,
     addLineProformaId,
@@ -642,6 +677,11 @@ export function useFactoryProformasModel() {
     setInlineQtyValue,
     renamingProforma,
     setRenamingProforma,
+    destinationProforma,
+    setDestinationProforma,
+    destinationValue,
+    setDestinationValue,
+    assignDestinationMutation,
     renameValue,
     setRenameValue,
     addLineMode,
@@ -666,6 +706,8 @@ export function useFactoryProformasModel() {
     setIsExcelImportOpen,
     excelImportName,
     setExcelImportName,
+    excelImportDestination,
+    setExcelImportDestination,
     excelImportLines,
     setExcelImportLines,
     excelImportErrors,

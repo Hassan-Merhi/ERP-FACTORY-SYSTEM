@@ -637,6 +637,12 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
       ON account_display_layout(company_id, parent_key, sort_order);
   `);
 
+  // Factory proforma destinations and destination-scoped prices are mandatory
+  // in production as well, where the bulk startup migration pass may be disabled.
+  const { ensureProformaDestinationPricingSchema } =
+    await import("../services/factory/ensureProformaDestinationPricingSchema");
+  await ensureProformaDestinationPricingSchema(pool);
+
   // Scheduled WhatsApp claims are a correctness boundary: production disables
   // the bulk startup migration pass, so these tables must be guaranteed by the
   // always-on pre-listen schema guard.

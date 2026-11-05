@@ -82,6 +82,7 @@ export interface FactoryProformaLine {
 
 export interface CustomerProformaRecord {
   id: number;
+  destination?: string | null;
   lines?: FactoryProformaLine[];
 }
 

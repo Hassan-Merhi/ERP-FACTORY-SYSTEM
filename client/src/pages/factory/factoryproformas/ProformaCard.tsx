@@ -61,6 +61,7 @@ interface ProformaCardProps {
   deleteProformaMutation: ProformaMutationLike<number>;
   renameProforma: (proforma: Proforma, currentName: string) => void;
   transferProforma: (proforma: Proforma) => void;
+  onAssignDestination: (proforma: Proforma) => void;
   setPendingDelete: (action: (() => void) | null) => void;
   // "Add Item" wiring (dialog state lives in the page model)
   onAddLine: () => void;
@@ -98,6 +99,7 @@ export function ProformaCard(props: ProformaCardProps) {
     deleteProformaMutation,
     renameProforma,
     transferProforma,
+    onAssignDestination,
     setPendingDelete,
     onAddLine,
     saveAgreedPricesMutation,
@@ -143,6 +145,9 @@ export function ProformaCard(props: ProformaCardProps) {
             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           )}
           <span className="truncate text-base font-bold tracking-tight sm:text-lg">{proforma.name}</span>
+          <Badge variant="outline" className="shrink-0 text-xs" data-testid={`badge-proforma-destination-${proforma.id}`}>
+            {proforma.destination ? `Destination: ${proforma.destination}` : "Destination not linked"}
+          </Badge>
           {proforma.isActive && (
             <Badge
               className="shrink-0 rounded-full border border-emerald-400/20 bg-emerald-600 px-2.5 text-white no-default-hover-elevate no-default-active-elevate dark:bg-emerald-600/80"
@@ -257,6 +262,17 @@ export function ProformaCard(props: ProformaCardProps) {
           {/* Toolbar */}
           <div className="flex flex-wrap items-center gap-2 border-b border-border/70 bg-gradient-to-r from-violet-500/[0.06] via-card to-card px-4 py-3 dark:from-violet-500/10 sm:px-5">
             {canEdit && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onAssignDestination(proforma)}
+                className="h-9 rounded-xl border-border/70 bg-background/70 px-3 shadow-sm"
+                data-testid={`button-link-proforma-destination-${proforma.id}`}
+              >
+                {proforma.destination ? "Change Destination" : "Assign Destination"}
+              </Button>
+            )}
+            {canEdit && (
               <Button size="sm" className="h-9 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 font-semibold text-white shadow-sm shadow-violet-500/20 hover:from-violet-500 hover:to-indigo-500" onClick={onAddLine} data-testid={`button-add-line-${proforma.id}`}>
                 <Plus className="mr-1.5 h-3.5 w-3.5" />
                 Add Item
@@ -278,10 +294,10 @@ export function ProformaCard(props: ProformaCardProps) {
               size="sm"
               variant="outline"
               onClick={() => saveAgreedPricesMutation.mutate(proforma.id)}
-              disabled={saveAgreedPricesMutation.isPending}
+              disabled={saveAgreedPricesMutation.isPending || !proforma.destination}
               className="h-9 rounded-xl border-border/70 bg-background/70 px-3 shadow-sm"
               data-testid={`button-save-agreed-prices-${proforma.id}`}
-              title="Save these prices as the customer's agreed prices"
+              title={proforma.destination ? `Save these as agreed prices for ${proforma.destination}` : "Assign a destination first"}
             >
               <BookmarkCheck className="mr-1.5 h-3.5 w-3.5" />
               Save as Agreed Prices

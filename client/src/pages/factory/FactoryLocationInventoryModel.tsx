@@ -61,6 +61,7 @@ export function useFactoryLocationInventory() {
   const [finalizeOpen, setFinalizeOpen] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
   const [proformaName, setProformaName] = useState("");
+  const [proformaDestination, setProformaDestination] = useState("");
   const [customerSearch, setCustomerSearch] = useState("");
   const [showCreateCustomer, setShowCreateCustomer] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState("");
@@ -243,6 +244,7 @@ export function useFactoryLocationInventory() {
     mutationFn: async (data: {
       customerId: number;
       name: string;
+      destination: string;
       isActive: boolean;
       lines: FactoryProformaLine[];
     }): Promise<ProformaMutationResult> => {
@@ -362,6 +364,7 @@ export function useFactoryLocationInventory() {
         .then((r) => r.json())
         .then((proformas: CustomerProformaRecord[]) => {
           const found = proformas.find((proforma) => proforma.id === proformaId);
+          setProformaDestination(found?.destination || "");
           if (found?.lines?.length) {
             setEditProformaLines(
               found.lines.map((line) => ({
@@ -689,6 +692,7 @@ export function useFactoryLocationInventory() {
       bulkCreateMutation.mutate({
         customerId: parseInt(selectedCustomerId),
         name: proformaName.trim(),
+        destination: proformaDestination.trim(),
         isActive: false,
         lines,
       });
@@ -702,6 +706,10 @@ export function useFactoryLocationInventory() {
     }
     if (!proformaName.trim()) {
       toast({ title: "Enter a proforma name", variant: "destructive" });
+      return;
+    }
+    if (!editingProformaId && !proformaDestination.trim()) {
+      toast({ title: "Enter a destination", variant: "destructive" });
       return;
     }
     const overloaded = getOverloadedItems();
@@ -762,6 +770,7 @@ export function useFactoryLocationInventory() {
       setSelections(new Map());
       setSavedProformaId(null);
       setProformaName("");
+      setProformaDestination("");
       setSelectedCustomerId("");
     }
   };
@@ -830,6 +839,7 @@ export function useFactoryLocationInventory() {
     proformaAutoSave,
     proformaMode,
     proformaName,
+    proformaDestination,
     regularProducts,
     removeBalesMutation,
     removeFromFinalize,
@@ -867,6 +877,7 @@ export function useFactoryLocationInventory() {
     setProdSortField,
     setProductSearch,
     setProformaName,
+    setProformaDestination,
     setRenameDialogOpen,
     setRenameInput,
     setReprintBales,

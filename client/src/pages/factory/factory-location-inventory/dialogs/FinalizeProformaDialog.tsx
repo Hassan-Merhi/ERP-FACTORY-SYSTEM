@@ -28,6 +28,8 @@ export function FinalizeProformaDialog({
   handleSaveProforma,
   newCustomerName,
   proformaName,
+  proformaDestination,
+  setProformaDestination,
   removeFromFinalize,
   replaceLinesMutation,
   savedProformaId,
@@ -57,6 +59,8 @@ export function FinalizeProformaDialog({
   handleSaveProforma: FactoryLocationInventoryModel["handleSaveProforma"];
   newCustomerName: FactoryLocationInventoryModel["newCustomerName"];
   proformaName: FactoryLocationInventoryModel["proformaName"];
+  proformaDestination: FactoryLocationInventoryModel["proformaDestination"];
+  setProformaDestination: FactoryLocationInventoryModel["setProformaDestination"];
   removeFromFinalize: FactoryLocationInventoryModel["removeFromFinalize"];
   replaceLinesMutation: FactoryLocationInventoryModel["replaceLinesMutation"];
   savedProformaId: FactoryLocationInventoryModel["savedProformaId"];
@@ -98,6 +102,26 @@ export function FinalizeProformaDialog({
               />
             </div>
 
+            {!editingProformaId ? (
+              <div>
+                <label className="text-sm font-medium mb-1 block">Destination <span className="text-destructive">*</span></label>
+                <Input
+                  value={proformaDestination}
+                  onChange={(e) => setProformaDestination(e.target.value)}
+                  placeholder="e.g. L'SHI, MALI, KINSHASA"
+                  list="location-proforma-destinations"
+                />
+                <datalist id="location-proforma-destinations">
+                  <option value="L'SHI" />
+                  <option value="MALI" />
+                  <option value="KINSHASA" />
+                </datalist>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Destination: {proformaDestination || "Not linked"}. To assign or change it, use Edit Proforma in Invoicing.
+              </p>
+            )}
             <div>
               <label className="text-sm font-medium mb-1 block">Customer</label>
               {showCreateCustomer ? (
@@ -251,6 +275,7 @@ export function FinalizeProformaDialog({
                 disabled={
                   !selectedCustomerId ||
                   !proformaName.trim() ||
+                  (!editingProformaId && !proformaDestination.trim()) ||
                   selectedItems.length === 0 ||
                   bulkCreateMutation.isPending ||
                   replaceLinesMutation.isPending
