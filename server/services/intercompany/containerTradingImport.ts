@@ -16,6 +16,7 @@ import {
   intercompanyRelationshipPolicies,
   intercompanyTrades,
   intercompanyTradeSourcePos,
+  intercompanyTradeLineLinks,
   ledgerAccounts,
   poLineItems,
   purchaseOrders,
@@ -650,6 +651,7 @@ export async function postIntercompanyImport(args: {
 
         const sourcePoIds: number[] = [];
         const supplierVoucherIds: number[] = [];
+        const sourceLineIdsByExcelRow = new Map<number, number>();
         for (const [index, group] of plan.sourcePos.entries()) {
           const key = preview.sha256 + ":" + plan.containerNumber + ":" + index;
           let poNumber = group.originalPoNumber || generatedPoNumber("HP-EXT-", plan.containerNumber, key);
@@ -707,7 +709,7 @@ export async function postIntercompanyImport(args: {
               status: "Open",
             })
             .returning();
-          await tx.insert(poLineItems).values(
+          const insertedSourceLines = await tx.insert(poLineItems).values(
             group.lines.map((line) => {
               const stockMatch = items.find((i) => i.line === line)!;
               return {
@@ -719,7 +721,12 @@ export async function postIntercompanyImport(args: {
                 lineTotal: line.lineTotal,
               };
             })
-          );
+          ).returning({ id: poLineItems.id });
+          assert(insertedSourceLines.length === group.lines.length, "Source PO line insertion was incomplete");
+          group.lines.forEach((line, index) => {
+            assert(!sourceLineIdsByExcelRow.has(line.rowNum), "Original Excel row is not uniquely identified");
+            sourceLineIdsByExcelRow.set(line.rowNum, insertedSourceLines[index].id);
+          });
           sourcePoIds.push(sourcePo.id);
           supplierVoucherIds.push(journal.voucher.id);
         }
@@ -762,7 +769,7 @@ export async function postIntercompanyImport(args: {
             status: "Open",
           })
           .returning();
-        await tx.insert(poLineItems).values(
+        const insertedDestinationLines = await tx.insert(poLineItems).values(
           items.map(({ line, destItemId }) => ({
             poId: destPo.id,
             stockItemId: destItemId,
@@ -771,7 +778,8 @@ export async function postIntercompanyImport(args: {
             rate: line.rate,
             lineTotal: line.lineTotal,
           }))
-        );
+        ).returning({ id: poLineItems.id });
+        assert(insertedDestinationLines.length === items.length, "Destination PO lines were incomplete");
 
         const [trade] = await tx
           .insert(intercompanyTrades)
@@ -792,6 +800,18 @@ export async function postIntercompanyImport(args: {
             originalPoNumber: p.originalPoNumber || "(blank in workbook)",
           }))
         );
+        // Immutable row mapping avoids guessing by item names, barcodes or order on later edits.
+        await tx.insert(intercompanyTradeLineLinks).values(items.map(({ line }, index) => {
+          const sourceLineId = sourceLineIdsByExcelRow.get(line.rowNum);
+          assert(sourceLineId && insertedDestinationLines[index]?.id,
+            "Missing verified original-to-destination row link");
+          return {
+            tradeId: trade.id,
+            sourceLineId,
+            destinationLineId: insertedDestinationLines[index].id,
+            originalExcelRow: line.rowNum,
+          };
+        }));
         const saleVoucher = await postErpVoucherTx(tx, {
           companyId: sourceCompanyId,
           voucherType: "Sales",
