@@ -17,6 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useDateFormat } from "@/contexts/DateFormatContext";
+import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { duoMobileText } from "@/i18n/iphoneDuoMobileTranslations";
 import { useToast } from "@/hooks/use-toast";
 import { daysSincePortDeparture, getLocalTodayISO } from "./portDeparture";
 
@@ -191,6 +193,8 @@ function PortDepartureDateCell({
 }
 
 export default function POSContainerTracking({ posUser }: { posUser?: PosUserContext }) {
+  const language = useOptionalApplicationLanguage()?.language ?? "en";
+  const dt = (key: Parameters<typeof duoMobileText>[0]) => duoMobileText(key, language);
   const [, setLocation] = useLocation();
   const { formatDisplayDate } = useDateFormat();
   const [todayISO, setTodayISO] = useState(() => getLocalTodayISO());
@@ -499,16 +503,16 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
       </div>
 
       <section className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-4 md:hidden phone-land:block"
-        aria-label="Containers on the way" data-testid="pos-container-mobile-list">
+        aria-label={dt("containersOnWay")} data-testid="pos-container-mobile-list">
         {isLoading ? Array.from({ length: 4 }, (_, index) => (
           <Skeleton key={index} className="h-32 w-full rounded-xl" />
         )) : isError ? (
           <div role="alert" className="rounded-xl border p-5 text-sm text-destructive">
-            Could not load containers. {error instanceof Error ? error.message : "Please retry."}
+            {dt("cannotLoadContainers")} {error instanceof Error ? error.message : dt("pleaseRetry")}
           </div>
         ) : visibleContainers.length === 0 ? (
           <p className="rounded-xl border bg-card p-6 text-center text-sm text-muted-foreground">
-            No containers match the selected filters.
+            {dt("noMatchingContainers")}
           </p>
         ) : visibleContainers.map((container) => (
           <article key={container.id} className="min-w-0 rounded-xl border bg-card p-3 shadow-sm"
@@ -532,32 +536,32 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
                   <strong>{container.eta ? formatDisplayDate(container.eta) : "—"}</strong></div>
               )}
               {isColumnVisible("daysSinceDeparture") && (
-                <div><span className="block text-muted-foreground">Days since port</span>
+                <div><span className="block text-muted-foreground">{dt("daysSincePort")}</span>
                   <strong className="tabular-nums">{daysSincePortDeparture(container.portDepartureDate, todayISO) ?? "—"}</strong></div>
               )}
               {isColumnVisible("truck") && (
-                <div><span className="block text-muted-foreground">Truck</span>
+                <div><span className="block text-muted-foreground">{dt("truck")}</span>
                   <strong className="break-all">{container.numberPlate || "—"}</strong></div>
               )}
               {isColumnVisible("docs") && (
-                <div><span className="block text-muted-foreground">Documents</span>
-                  <strong>{container.docReceived ? "Received" : "Pending"}</strong></div>
+                <div><span className="block text-muted-foreground">{dt("documents")}</span>
+                  <strong>{dt(container.docReceived ? "received" : "pending")}</strong></div>
               )}
             </div>
             <details className="mt-3 rounded-lg border">
               <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium">
-                More tracking details
+                {dt("moreTrackingDetails")}
               </summary>
               <dl className="space-y-2 border-t p-3 text-xs">
-                {isColumnVisible("location") && <div><dt className="text-muted-foreground">Location</dt><dd className="break-words font-medium">{container.trackingLocation || "—"}</dd></div>}
-                {isColumnVisible("transporter") && <div><dt className="text-muted-foreground">Transporter</dt><dd className="break-words font-medium">{container.transporter || "—"}</dd></div>}
-                {isColumnVisible("agent") && <div><dt className="text-muted-foreground">Agent</dt><dd className="break-words font-medium">{container.agent || "—"}</dd></div>}
-                {isColumnVisible("docsSent") && <div><dt className="text-muted-foreground">Docs sent</dt><dd className="font-medium">{container.docsSentDate ? formatDisplayDate(container.docsSentDate) : container.docReceived ? "Not sent" : "—"}</dd></div>}
+                {isColumnVisible("location") && <div><dt className="text-muted-foreground">{dt("location")}</dt><dd className="break-words font-medium">{container.trackingLocation || "—"}</dd></div>}
+                {isColumnVisible("transporter") && <div><dt className="text-muted-foreground">{dt("transporter")}</dt><dd className="break-words font-medium">{container.transporter || "—"}</dd></div>}
+                {isColumnVisible("agent") && <div><dt className="text-muted-foreground">{dt("agent")}</dt><dd className="break-words font-medium">{container.agent || "—"}</dd></div>}
+                {isColumnVisible("docsSent") && <div><dt className="text-muted-foreground">{dt("docsSent")}</dt><dd className="font-medium">{container.docsSentDate ? formatDisplayDate(container.docsSentDate) : container.docReceived ? dt("notSent") : "—"}</dd></div>}
               </dl>
             </details>
             {isColumnVisible("portDeparture") && (
               <div className="mt-3">
-                <p className="mb-1 text-xs font-medium text-muted-foreground">Left port</p>
+                <p className="mb-1 text-xs font-medium text-muted-foreground">{dt("leftPort")}</p>
                 <PortDepartureDateCell container={container} todayISO={todayISO} mobile {...departureEditorProps(container)} />
               </div>
             )}
