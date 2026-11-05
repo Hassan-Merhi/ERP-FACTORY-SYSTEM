@@ -317,6 +317,8 @@ export default function FactoryProformas() {
         excelImportLines={model.excelImportLines}
         excelImportLoading={model.excelImportLoading}
         excelImportName={model.excelImportName}
+        excelImportDestination={model.excelImportDestination}
+        setExcelImportDestination={model.setExcelImportDestination}
         handleExcelFile={model.handleExcelFile}
         isExcelImportOpen={model.isExcelImportOpen}
         setExcelImportErrors={model.setExcelImportErrors}
