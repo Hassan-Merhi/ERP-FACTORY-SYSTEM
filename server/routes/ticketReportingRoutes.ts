@@ -95,7 +95,7 @@ export function registerTicketReportingRoutes(app:Express):void {
       if(result.rows.length>10000)return res.status(413).json({message:"Export contains more than 10,000 tickets. Narrow your filters."});
       const columns=["Ticket","Title","Category","Status","Priority","Source","Created by","Assigned to","Created UTC","Seen UTC","Finalized UTC","Due UTC","Resolution"];
       const fields:(keyof (typeof result.rows)[number])[]=["ticket_number","title","category","status","priority","source_mode","created_by","assigned_to","created_at","first_seen_at","finalized_at","due_at","resolution_note"];
-      const csv=serializeTicketCsv([columns,...result.rows.map(r=>fields.map(field=>r[field] instanceof Date?(r[field] as Date).toISOString():r[field]))]);
+      const csv=serializeTicketCsv([columns,...result.rows.map(r=>fields.map(field=>{const value:unknown=r[field];return value instanceof Date?value.toISOString():value;}))]);
       res.setHeader("Content-Type","text/csv; charset=utf-8");
       res.setHeader("Content-Disposition",'attachment; filename="ticket-report.csv"');
       res.setHeader("Cache-Control","private, no-store");
