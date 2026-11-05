@@ -485,11 +485,11 @@ export const intercompanyContainerPayments = pgTable(
       .references(() => companyScopedSuppliers.id, { onDelete: "restrict" }),
     sourceReceiptVoucherId: integer("source_receipt_voucher_id")
       .notNull()
-      .unique()
+      .unique("ic_payment_source_receipt_uq")
       .references(() => vouchers.id, { onDelete: "restrict" }),
     destinationPaymentVoucherId: integer("destination_payment_voucher_id")
       .notNull()
-      .unique()
+      .unique("ic_payment_destination_pay_uq")
       .references(() => vouchers.id, { onDelete: "restrict" }),
     status: varchar("status", { length: 12 }).notNull().default("confirmed"),
     createdBy: varchar("created_by")
@@ -503,10 +503,10 @@ export const intercompanyContainerPayments = pgTable(
     reversalKey: varchar("reversal_key", { length: 160 }).unique(),
     reversalFingerprint: varchar("reversal_fingerprint", { length: 64 }),
     sourceReversalVoucherId: integer("source_reversal_voucher_id")
-      .unique()
+      .unique("ic_payment_source_reverse_uq")
       .references(() => vouchers.id, { onDelete: "restrict" }),
     destinationReversalVoucherId: integer("destination_reversal_voucher_id")
-      .unique()
+      .unique("ic_payment_dest_reverse_uq")
       .references(() => vouchers.id, { onDelete: "restrict" }),
   },
   (t) => ({
@@ -549,7 +549,7 @@ export const intercompanyDestinationReceipts = pgTable(
     locationId: integer("location_id").notNull().references(() => locations.id, { onDelete: "restrict" }),
     inventoryAccountId: integer("inventory_account_id").notNull().references(() => ledgerAccounts.id, { onDelete: "restrict" }),
     gitAccountId: integer("git_account_id").notNull().references(() => ledgerAccounts.id, { onDelete: "restrict" }),
-    receiptVoucherId: integer("receipt_voucher_id").notNull().unique().references(() => vouchers.id, { onDelete: "restrict" }),
+    receiptVoucherId: integer("receipt_voucher_id").notNull().unique("ic_receipt_posting_voucher_uq").references(() => vouchers.id, { onDelete: "restrict" }),
     requestKey: varchar("request_key", { length: 128 }).notNull().unique(),
     requestFingerprint: varchar("request_fingerprint", { length: 64 }).notNull(),
     postingDate: date("posting_date").notNull(),
@@ -593,9 +593,9 @@ export const intercompanyTradeCancellations = pgTable(
     expectedVersion: integer("expected_version").notNull(),
     postingDate: date("posting_date").notNull(),
     landedCost: decimal("landed_cost", { precision: 20, scale: 2 }).notNull(),
-    sourceSaleReversalVoucherId: integer("source_sale_reversal_voucher_id").notNull().unique().references(() => vouchers.id, { onDelete: "restrict" }),
-    sourceCostReversalVoucherId: integer("source_cost_reversal_voucher_id").notNull().unique().references(() => vouchers.id, { onDelete: "restrict" }),
-    destinationGitReversalVoucherId: integer("destination_git_reversal_voucher_id").notNull().unique().references(() => vouchers.id, { onDelete: "restrict" }),
+    sourceSaleReversalVoucherId: integer("source_sale_reversal_voucher_id").notNull().unique("ic_cancel_src_sale_voucher_uq").references(() => vouchers.id, { onDelete: "restrict" }),
+    sourceCostReversalVoucherId: integer("source_cost_reversal_voucher_id").notNull().unique("ic_cancel_src_cost_voucher_uq").references(() => vouchers.id, { onDelete: "restrict" }),
+    destinationGitReversalVoucherId: integer("destination_git_reversal_voucher_id").notNull().unique("ic_cancel_dst_git_voucher_uq").references(() => vouchers.id, { onDelete: "restrict" }),
     reason: text("reason").notNull(),
     cancellationEvidence: text("cancellation_evidence").notNull(),
     releasedCredit: decimal("released_credit", { precision: 20, scale: 2 }).notNull().default("0"),
