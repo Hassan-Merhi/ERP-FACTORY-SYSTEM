@@ -6,6 +6,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { pool } from "../server/db";
+import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
 const PREFIX = "p5legacyq";
@@ -31,7 +32,7 @@ beforeAll(async () => {
 }, 120_000);
 
 afterAll(async () => {
-  await pool.query("DELETE FROM audit_log WHERE table_name = 'offline_legacy_queue_entries' AND company_id = $1", [
+  await deleteAuditLogRowsForTests(pool, "table_name = 'offline_legacy_queue_entries' AND company_id = $1", [
     ctx.companyId,
   ]);
   await cleanupTestData(PREFIX);
