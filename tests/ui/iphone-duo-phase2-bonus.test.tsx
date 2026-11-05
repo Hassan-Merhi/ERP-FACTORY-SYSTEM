@@ -43,7 +43,7 @@ describe("iPhone Duo Phase 2 worker bonus cards", () => {
       onToggle={vi.fn()} loading={false} />);
     const card = screen.getByTestId("bonus-mobile-worker-18");
     expect(within(card).getByText("Factory Operator")).toBeInTheDocument();
-    expect(within(card).getByText(/\\$12\\.00/)).toBeInTheDocument();
+    expect(within(card).getByText(/\$12\.00/)).toBeInTheDocument();
     expect(screen.getByTestId("bonus-mobile-summary")).toBeInTheDocument();
   });
 
