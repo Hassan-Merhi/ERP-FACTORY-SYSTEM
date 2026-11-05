@@ -24,7 +24,7 @@ export async function createSupportTicket(
     sourceMode: "erp" | "factory"; title: string; description: string; reportedUserId?: string | null },
 ) {
   assertActor(actor);
-  if (actor.canCreate === false) throw new Error("TICKET_CREATE_DENIED");
+  if (actor.canCreate !== true) throw new Error("TICKET_CREATE_DENIED");
   if (!input.title.trim() || !input.description.trim() || !input.category.trim()) throw new Error("TICKET_FIELDS_REQUIRED");
   return db.transaction(async (tx) => {
     await requireActiveCompanyUser(tx, actor.companyId, actor.userId);
