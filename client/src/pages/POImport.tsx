@@ -74,6 +74,18 @@ interface POValidationResult {
   resolvedItems?: { index: number; stockItemId: number; itemName: string }[];
 }
 
+interface POImportDraft {
+  preview: POImportPreview;
+  selectedSupplier: string;
+  containerNumber: string;
+  importDate: string;
+  freightPaidBy: "supplier" | "parent";
+  freightParentAccountId: string;
+  importCurrency: "" | "USD" | "ZMW";
+}
+
+const draftStorageKey = (companyId: number) => `po-import-draft:${companyId}`;
+
 /** Merge server-resolved names into the parsed file without touching its amounts. */
 function withResolvedStockItems(
   current: POImportPreview | null,
@@ -175,6 +187,7 @@ function ErpPOImport() {
   const { selectedCompany } = useCompany();
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<POImportPreview | null>(null);
+  const [previewCompanyId, setPreviewCompanyId] = useState<number | null>(null);
   const [validationResult, setValidationResult] = useState<POValidationResult | null>(null);
   const [selectedSupplier, setSelectedSupplier] = useState<string>("");
   const [containerNumber, setContainerNumber] = useState<string>("");
@@ -190,6 +203,71 @@ function ErpPOImport() {
     setImportCurrency("");
     setValidationResult(null);
   }, [selectedCompany?.id]);
+
+  // Keep the parsed PO draft across navigation to Stock and back (and a tab
+  // refresh). The uploaded Excel bytes are no longer needed after parsing.
+  // Only restore a draft for the active company, never another company's data.
+  useEffect(() => {
+    const companyId = selectedCompany?.id;
+    if (!companyId) return;
+    setFile(null);
+    setValidationResult(null);
+    try {
+      const saved = window.sessionStorage.getItem(draftStorageKey(companyId));
+      if (saved) {
+        const draft = JSON.parse(saved) as POImportDraft;
+        if (draft.preview && Array.isArray(draft.preview.preview)) {
+          setPreview(draft.preview);
+          setPreviewCompanyId(companyId);
+          setSelectedSupplier(draft.selectedSupplier || "");
+          setContainerNumber(draft.containerNumber || "");
+          setImportDate(draft.importDate || new Date().toLocaleDateString("en-CA"));
+          setFreightPaidBy(draft.freightPaidBy === "parent" ? "parent" : "supplier");
+          setFreightParentAccountId(draft.freightParentAccountId || "");
+          setImportCurrency(draft.importCurrency || "");
+          return;
+        }
+      }
+    } catch {
+      // Storage can be unavailable (private browsing or quota); regular
+      // in-memory imports still work.
+    }
+    setPreview(null);
+    setPreviewCompanyId(companyId);
+    setSelectedSupplier("");
+    setContainerNumber("");
+    setFreightParentAccountId("");
+    setImportCurrency("");
+  }, [selectedCompany?.id]);
+
+  useEffect(() => {
+    const companyId = selectedCompany?.id;
+    if (!companyId || previewCompanyId !== companyId || !preview) return;
+    const draft: POImportDraft = {
+      preview,
+      selectedSupplier,
+      containerNumber,
+      importDate,
+      freightPaidBy,
+      freightParentAccountId,
+      importCurrency,
+    };
+    try {
+      window.sessionStorage.setItem(draftStorageKey(companyId), JSON.stringify(draft));
+    } catch {
+      // Browser storage is optional; the active preview remains intact.
+    }
+  }, [
+    selectedCompany?.id,
+    previewCompanyId,
+    preview,
+    selectedSupplier,
+    containerNumber,
+    importDate,
+    freightPaidBy,
+    freightParentAccountId,
+    importCurrency,
+  ]);
 
   const {
     data: suppliers = [],
@@ -236,6 +314,7 @@ function ErpPOImport() {
     },
     onSuccess: (data) => {
       setPreview(data);
+      setPreviewCompanyId(selectedCompany?.id ?? null);
       setValidationResult(null);
       if (data.preview.length > 0) setContainerNumber(data.preview[0].containerNumber || "");
       toast({
@@ -299,6 +378,13 @@ function ErpPOImport() {
       return await res.json();
     },
     onSuccess: (data) => {
+      if (selectedCompany?.id) {
+        try {
+          window.sessionStorage.removeItem(draftStorageKey(selectedCompany.id));
+        } catch {
+          // The successful server import is authoritative.
+        }
+      }
       toast({
         title: "Import successful",
         description: `Container ${data.containerNumber} imported with ${data.itemsCount} items`,
@@ -318,6 +404,13 @@ function ErpPOImport() {
       setFile(selectedFile);
       setPreview(null);
       setValidationResult(null);
+      if (selectedCompany?.id) {
+        try {
+          window.sessionStorage.removeItem(draftStorageKey(selectedCompany.id));
+        } catch {
+          // Continue parsing if session storage is unavailable.
+        }
+      }
     }
   };
 
@@ -506,6 +599,13 @@ function ErpPOImport() {
   };
 
   const handleCancel = () => {
+    if (selectedCompany?.id) {
+      try {
+        window.sessionStorage.removeItem(draftStorageKey(selectedCompany.id));
+      } catch {
+        // In-memory cancellation still succeeds.
+      }
+    }
     setFile(null);
     setPreview(null);
     setValidationResult(null);
