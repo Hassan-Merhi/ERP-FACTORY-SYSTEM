@@ -328,7 +328,7 @@ jobs:
         run: node scripts/verify-mobile-responsive-phase11-regression.mjs
 
       - name: Focused responsive tests
-        run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/mobile-responsive-*.test.ts tests/ui/factory-mobile-*.test.*
+        run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/mobile-responsive-*.test.ts tests/ui/factory-mobile-*.test.* tests/ui/iphone-duo-phase2-proforma.test.tsx
 
       - name: Upload rendered UX evidence
         if: always()
