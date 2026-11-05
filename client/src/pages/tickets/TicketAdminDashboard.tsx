@@ -25,6 +25,14 @@ export default function TicketAdminDashboard({onBack,onOpenTicket,canExport}:{on
   const [filters,setFilters]=useState<ReportFilters>(initial);
   const [applied,setApplied]=useState<ReportFilters>(initial);
   const [exportError,setExportError]=useState("");
+  const employees=useQuery({
+    queryKey:["ticket-dashboard-users",selectedCompany?.id],enabled:!!selectedCompany?.id,
+    queryFn:async()=>{
+      const res=await fetch("/api/tickets/users",{credentials:"include",cache:"no-store"});
+      if(!res.ok)throw new Error("Unable to load employees");
+      return res.json() as Promise<{users:{id:string;username:string}[]}>;
+    },
+  });
   const qs=useMemo(()=>queryString(applied),[applied]);
   const report=useQuery({
     queryKey:["ticket-admin-dashboard",selectedCompany?.id,qs],
@@ -87,8 +95,11 @@ export default function TicketAdminDashboard({onBack,onOpenTicket,canExport}:{on
         <label className="space-y-1 text-sm">Issue category
           <Input maxLength={80} value={filters.category} onChange={e=>set("category",e.target.value)} placeholder="Exact category"/>
         </label>
-        <label className="space-y-1 text-sm">Assigned employee ID
-          <Input maxLength={100} value={filters.assignedTo} onChange={e=>set("assignedTo",e.target.value)} placeholder="Employee ID"/>
+        <label className="space-y-1 text-sm">Assigned employee
+          <select className="h-10 w-full rounded-md border bg-background px-2" value={filters.assignedTo} onChange={e=>set("assignedTo",e.target.value)}>
+            <option value="">All employees</option>
+            {employees.data?.users.map(user=><option key={user.id} value={user.id}>{user.username}</option>)}
+          </select>
         </label>
       </div>
       <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" onClick={()=>{setFilters(initial);setApplied(initial);}}>Clear</Button><Button type="submit">Apply filters</Button></div>
