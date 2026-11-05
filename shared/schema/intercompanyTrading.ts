@@ -471,6 +471,8 @@ export const intercompanyContainerPayments = pgTable(
     sourceCashId:integer("source_cash_id").notNull(),
     destinationCashType:varchar("destination_cash_type",{length:8}).notNull(),
     destinationCashId:integer("destination_cash_id").notNull(),
+    sourceReceivableAccountId:integer("source_receivable_account_id").notNull().references(()=>ledgerAccounts.id,{onDelete:"restrict"}),
+    destinationSupplierId:integer("destination_supplier_id").notNull().references(()=>companyScopedSuppliers.id,{onDelete:"restrict"}),
     sourceReceiptVoucherId:integer("source_receipt_voucher_id").notNull().unique().references(()=>vouchers.id,{onDelete:"restrict"}),
     destinationPaymentVoucherId:integer("destination_payment_voucher_id").notNull().unique().references(()=>vouchers.id,{onDelete:"restrict"}),
     status:varchar("status",{length:12}).notNull().default("confirmed"),
