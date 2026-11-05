@@ -39,6 +39,8 @@ const REVIEWED_UNGUARDED_ROUTES: Record<string, string> = {
     "Single-bale form of the label print preparation above; same Factory page boundary. Not an invoice print.",
   "POST /api/factory/customer-orders/:id/container-extra-items/import":
     "Admin/Owner/Developer-only upload of validated workbook rows into one customer order's container extra items (same in-handler role gate as its GET/PUT/DELETE siblings); not a bulk company data import.",
+  "GET /api/tickets/export":
+    "Ticket admin CSV export (#2893); the route itself requires the dedicated exp_ticket_export permission through requireExportAccess in ticketReportingRoutes.ts, on top of the ticket page permission.",
   "GET /api/factory/monthly-production-matrix/export-bales":
     "Paged JSON read of the same bale rows the Monthly Production Matrix page already shows (#2892); gated by that page's factory access like its /bales and /workers siblings. The workbook is built client-side, so it is not a server Excel export.",
 };
