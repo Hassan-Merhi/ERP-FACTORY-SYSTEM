@@ -36,6 +36,8 @@ function productionSource(companyId: number, period: Period) {
     JOIN factory_bale_products p
       ON p.company_id = b.company_id AND p.deleted_at IS NULL AND p.active = TRUE
       AND (p.id = b.product_id OR (b.product_id IS NULL AND p.article_code = b.article_code))
+    LEFT JOIN factory_workers fw ON fw.id = b.finalized_by AND fw.company_id = b.company_id
+    LEFT JOIN locations l ON l.id = b.erp_location_id AND l.company_id = b.company_id
     WHERE b.company_id = ${companyId}
       AND p.id = ${period.productId}
       AND b.deleted_at IS NULL
@@ -84,7 +86,6 @@ export function registerFactoryMonthlyProductionDrilldownRoutes(app: Express): v
           COUNT(*)::int AS quantity,
           COALESCE(SUM(b.weight_kg), 0)::text AS "weightKg"
         ${productionSource(companyId, period)}
-        LEFT JOIN factory_workers fw ON fw.id = b.finalized_by AND fw.company_id = b.company_id
         GROUP BY b.finalized_by
         ORDER BY quantity DESC, "workerName" ASC
       `);
@@ -137,7 +138,6 @@ export function registerFactoryMonthlyProductionDrilldownRoutes(app: Express): v
                  b.category, b.grade, b.worker_name AS "workerName",
                  l.name AS "locationName"
           ${productionSource(companyId, period)}
-          LEFT JOIN locations l ON l.id = b.erp_location_id AND l.company_id = b.company_id
           AND ${workerFilter}
           ORDER BY b.stock_entry_date DESC NULLS LAST, b.created_at DESC, b.id DESC
           LIMIT ${limit} OFFSET ${offset}
