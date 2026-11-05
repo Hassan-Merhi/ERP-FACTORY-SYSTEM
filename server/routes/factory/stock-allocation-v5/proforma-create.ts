@@ -25,7 +25,15 @@ export function registerV5ProformaCreateRoutes(app: Express) {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { customerId, name, destination: rawDestination, isActive, lines, sendToLoading, containerNames } = req.body;
+      const {
+        customerId,
+        name,
+        destination: rawDestination,
+        isActive,
+        lines,
+        sendToLoading,
+        containerNames,
+      } = req.body;
       const destination = normalizeProformaDestination(rawDestination);
       if (!destination) return res.status(400).json({ message: "A destination is required for every new proforma" });
 
