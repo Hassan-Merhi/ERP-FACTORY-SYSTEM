@@ -305,6 +305,14 @@ BEGIN
       JOIN intercompany_trades t ON t.id = link.trade_id
       JOIN purchase_orders po ON po.id = link.source_po_id
       WHERE t.state = 'active' AND po.voucher_id = NEW.voucher_id
+    ) OR EXISTS (
+      SELECT 1 FROM intercompany_audit_events audit
+      JOIN intercompany_trades t ON t.id::text = split_part(audit.event_key, ':', 3)
+      WHERE t.state = 'active' AND audit.event_type = 'container-import-confirmed'
+        AND (
+          (audit.payload->>'sourceSaleVoucherId')::integer = NEW.voucher_id OR
+          (audit.payload->>'sourceCostVoucherId')::integer = NEW.voucher_id
+        )
     ) THEN
       RAISE EXCEPTION 'Cannot move voucher lines into a protected intercompany voucher';
     END IF;
