@@ -82,6 +82,7 @@ export function MobileBarcodeScanner({
       decoder?.dispose();
       decoder = null;
       stream?.getTracks().forEach((track) => track.stop());
+      stream = undefined;
       trackRef.current = null;
       if (videoElement) videoElement.srcObject = null;
       setTorchAvailable(false);
@@ -148,7 +149,7 @@ export function MobileBarcodeScanner({
         if (track) {
           trackRef.current = track;
           cameraTrack = track;
-          cameraTrack.addEventListener("ended", onTrackEnded);
+          cameraTrack.addEventListener?.("ended", onTrackEnded);
           try {
             const capabilities = track.getCapabilities?.() as MediaTrackCapabilities & { torch?: boolean };
             setTorchAvailable(capabilities?.torch === true);
@@ -190,8 +191,9 @@ export function MobileBarcodeScanner({
     const release = () => {
       canceled = true;
       if (timeout) clearTimeout(timeout);
-      cameraTrack?.removeEventListener("ended", onTrackEnded);
+      cameraTrack?.removeEventListener?.("ended", onTrackEnded);
       stream?.getTracks().forEach((track) => track.stop());
+      stream = undefined;
       trackRef.current = null;
       if (videoElement) videoElement.srcObject = null;
       decoder?.dispose();
