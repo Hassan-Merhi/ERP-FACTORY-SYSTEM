@@ -113,6 +113,26 @@ CREATE CONSTRAINT TRIGGER ic_payment_pair_totals
   AFTER INSERT OR UPDATE ON intercompany_container_payments
   DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION ic_verify_payment_allocation_totals();
 
+-- A synchronized PO edit may change its confirmed landed cost without directly
+-- touching a payment. The deferred guard still requires any excess paid credit
+-- to be released atomically in that same edit transaction.
+CREATE OR REPLACE FUNCTION ic_check_trade_paid_after_cost()
+RETURNS TRIGGER LANGUAGE plpgsql AS $check$
+DECLARE total_paid NUMERIC(20,2);
+BEGIN
+  IF NEW.trade_id IS NULL THEN RETURN NULL; END IF;
+  SELECT COALESCE(SUM(amount),0) INTO total_paid FROM intercompany_payment_allocations
+  WHERE trade_id=NEW.trade_id;
+  IF total_paid<0 OR (NEW.confirmed_landed_cost IS NOT NULL AND total_paid>NEW.confirmed_landed_cost) THEN
+    RAISE EXCEPTION 'PO cost decrease must atomically release over-allocated original-pair credit';
+  END IF;
+  RETURN NULL;
+END $check$;
+CREATE CONSTRAINT TRIGGER ic_payment_po_cost_guard
+AFTER UPDATE ON intercompany_import_batch_containers
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION ic_check_trade_paid_after_cost();
+
+
 CREATE OR REPLACE FUNCTION ic_validate_payment_allocation_row()
 RETURNS TRIGGER LANGUAGE plpgsql AS $guard$
 DECLARE payment_row RECORD; trade_row RECORD;
