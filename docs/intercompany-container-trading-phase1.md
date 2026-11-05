@@ -58,3 +58,24 @@ Phase 2 adds the dedicated Properties **Container Trading** workflow, without re
 - CI gates: TypeScript type-check, backend/frontend tests, migration registry/startup, formatting, security and build.
 
 **Rollout remains explicit:** this is a development branch with a draft, unmerged PR. No production migration, merge or deployment has been authorized or performed. Historical automatic repairs remain disabled.
+
+## Phase 3 — synchronized linked POs and shared invoices (branch-only)
+
+Status: implemented as feature-branch code; **CI and isolated PostgreSQL certification are required before activation**. Phase 4 payments, Phase 5 offload/cancellation and later historic reconciliation are not enabled here.
+
+- `intercompany_trade_line_links` persists each original Excel row's source/destination PO line identity; editing never infers it by barcode, name or order.
+- Linked edits require the complete line set, an expected version, signed-in authorized company, posting date, request key and reason. The server derives both counterparties from the persisted trade.
+- Original vouchers remain untouched. Accounting corrections are balanced and append-only: source supplier payable, source receivable/revenue, cost reclassification, and destination goods-in-transit/Properties supplier payable. No payment is fabricated.
+- Confirmed shared-charge invoices retain their original external face amount and evidence. A user reviews proportional defaults and may override only if allocations still total the invoice.
+- Existing shared allocations remain unchanged after PO goods price edits. Later redistribution needs an explicit, audited Shared Charge Editor authorization and preserves the invoice face amount.
+- The database requires transaction-local active revision capabilities for linked PO, line, container cost and charge updates. Legacy uncoordinated editing is blocked.
+- Offloaded or non-open POs remain blocked until the separate inventory/COGS-safe workflow exists. Closed accounting periods are enforced by the central posting engine.
+- Shared Charge Editor permission is explicit, invoice- or relationship-scoped, and never granted merely by Admin role. Owners and Developers issue/revoke grants.
+
+### Phase 3 release gates
+
+1. Exact money arithmetic and signed reversal checks: `tests/intercompany-phase3-pricing.test.ts`.
+2. Fresh-schema SQL triggers and immutable invoice totals: `tests/intercompany-phase3-database-guards.test.ts`, with rolled-back test data.
+3. Disposable database end-to-end scenario: import, edit from each involved company, confirm invoice, redistribute, reject stale versions and refuse closed periods.
+4. Green TypeScript, formatting, backend, security, route-manifest, i18n and mobile checks, without regressions to existing ERP.
+5. No merge, production database migration, deployment, or feature activation without the user's approval.
