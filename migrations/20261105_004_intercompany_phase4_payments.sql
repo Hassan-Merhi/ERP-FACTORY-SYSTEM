@@ -96,8 +96,11 @@ RETURNS TRIGGER LANGUAGE plpgsql AS $guard$
 DECLARE pid BIGINT; tid INTEGER; payment_row RECORD; used_payment NUMERIC(20,2);
         used_trade NUMERIC(20,2); used_pair NUMERIC(20,2); trade_cost NUMERIC(20,2);
 BEGIN
-  pid := CASE WHEN TG_TABLE_NAME='intercompany_container_payments' THEN
-       NEW.id ELSE NEW.payment_id END;
+  IF TG_TABLE_NAME='intercompany_container_payments' THEN
+    pid := NEW.id;
+  ELSE
+    pid := NEW.payment_id;
+  END IF;
   SELECT base_amount,status INTO payment_row FROM intercompany_container_payments WHERE id=pid;
   IF FOUND THEN
     SELECT COALESCE(SUM(amount),0) INTO used_payment FROM intercompany_payment_allocations
