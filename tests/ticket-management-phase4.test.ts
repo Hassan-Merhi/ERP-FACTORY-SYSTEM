@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ticketEventCopy, ticketEventRecipients, TICKET_REMINDER_HOURS } from "../server/services/ticketNotificationPolicy";
+import { ticketDestinationUrl, ticketEventCopy, ticketEventRecipients, TICKET_REMINDER_HOURS } from "../server/services/ticketNotificationPolicy";
 
 const base={createdBy:"creator",assignedTo:"assignee",participantIds:["watcher","creator"],actorId:null};
 
@@ -24,6 +24,12 @@ describe("Ticket notification Phase 4 policy",()=>{
     expect(copy.title).toBe("Ticket TKT-2026-000125");
     expect(copy.message).toContain("Open the ERP/Factory Ticket Management");
     expect(copy.message).not.toMatch(/amount|photo|voucher|error committed by/i);
+  });
+  it("uses HTTPS-only authenticated ticket deep links",()=>{
+    expect(ticketDestinationUrl("https://erp.example.test","factory",125)).toBe("https://erp.example.test/factory/tickets?ticketId=125");
+    expect(ticketDestinationUrl("https://erp.example.test","erp",125)).toBe("https://erp.example.test/tickets?ticketId=125");
+    expect(ticketDestinationUrl("http://untrusted.test","erp",125)).toBe(null);
+    expect(ticketDestinationUrl("https://erp.example.test","erp",-1)).toBe(null);
   });
   it("configures the first overdue alert at 24 hours",()=>{
     expect(TICKET_REMINDER_HOURS).toBe(24);
