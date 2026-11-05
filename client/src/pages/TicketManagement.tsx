@@ -112,7 +112,7 @@ export default function TicketManagement({ sourceMode = "erp" }:{sourceMode?:"er
   useEffect(()=>{setPage(1);setTicketId(undefined);setCreating(false);},[selectedCompany?.id]);
   const params=new URLSearchParams({page:String(page),...(q.trim()?{q:q.trim()}:{}),...(status?{status}:{})});
   const users=useQuery({queryKey:["ticket-list-users",selectedCompany?.id],queryFn:()=>fetchJson<{users:User[]}>("/api/tickets/users"),enabled:!!selectedCompany?.id});
-  const names=new Map(users.data?.users.map(u=>[u.id,u.username])??[]);
+  const names=new Map<string,string>((users.data?.users??[]).map(u=>[u.id,u.username] as const));
   const listing=useQuery({queryKey:[...ticketKey(selectedCompany?.id),page,q,status],queryFn:()=>fetchJson<{tickets:Ticket[];hasMore:boolean}>(`/api/tickets?${params}`),enabled:!!selectedCompany?.id});
   const detail=useQuery({queryKey:["ticket-detail",selectedCompany?.id,ticketId],queryFn:()=>fetchJson<{ticket:Ticket;records:{id:number;displayReference:string}[]}>(`/api/tickets/${ticketId}`),enabled:!!ticketId});
   const viewCreate=creating||location.endsWith("/new");
