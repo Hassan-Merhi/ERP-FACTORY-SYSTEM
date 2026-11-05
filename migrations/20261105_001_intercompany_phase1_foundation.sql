@@ -201,8 +201,9 @@ BEGIN
         OLD.scope, OLD.invoice_key, OLD.granted_by, OLD.created_at) THEN
       RAISE EXCEPTION 'Intercompany grants are immutable except for revocation';
     END IF;
-    IF NEW.revoked_at IS DISTINCT FROM OLD.revoked_at AND OLD.revoked_at IS NOT NULL THEN
-      RAISE EXCEPTION 'A revoked intercompany grant cannot be reinstated';
+    IF OLD.revoked_at IS NOT NULL AND
+       (NEW.revoked_at IS DISTINCT FROM OLD.revoked_at OR NEW.revoked_by IS DISTINCT FROM OLD.revoked_by) THEN
+      RAISE EXCEPTION 'A revoked intercompany grant cannot be altered or reinstated';
     END IF;
     IF NEW.revoked_at IS DISTINCT FROM OLD.revoked_at AND
        NOT EXISTS (SELECT 1 FROM user_company_roles
