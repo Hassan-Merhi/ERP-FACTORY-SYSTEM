@@ -247,6 +247,15 @@ export const applicationFrenchTranslations = {
   "edge.readOnly": "Lecture seule",
   "edge.lanPrimary": "Serveur local principal",
   "edge.replicationNotConfigured": "La synchronisation cloud n'est pas configurée.",
+  "offline.legacy.title": "Saisies enregistrées par l'ancienne file hors ligne",
+  "offline.legacy.body":
+    "Ce navigateur contenait encore des saisies enregistrées hors ligne avant la conception actuelle. Elles n'ont jamais été envoyées. Ressaisissez chacune via son formulaire habituel, ou supprimez-la. Les saisies non traitées sont supprimées après 30 jours.",
+  "offline.legacy.reenter": "Ressaisir",
+  "offline.legacy.discard": "Supprimer",
+  "offline.legacy.reenterHelp": "Ressaisissez ceci via son formulaire habituel, puis marquez-le comme ressaisi.",
+  "offline.legacy.markReentered": "Marquer comme ressaisi",
+  "offline.legacy.notRecorded":
+    "Votre choix n'a pas pu être enregistré. Rien n'a changé ; réessayez une fois connecté.",
   "offline.coldStart.banner": "Non connecté au serveur de l'usine : consultation uniquement",
   "offline.coldStart.until": "Les données en cache restent consultables jusqu'au",
   "offline.coldStart.unlockTitle": "Aucune connexion au cloud ni au serveur de l'usine",

@@ -132,6 +132,26 @@ export interface OfflineColdStartTicket {
   sealed: string;
 }
 
+/** Plan batch 5: an entry moved out of an old browser queue, sealed at rest; never sent automatically. */
+export interface LegacyRecoveryEntry {
+  id: string;
+  source: "localStorage" | "indexedDb";
+  companyId: number | null;
+  kind: string;
+  recordedAt: number;
+  amount: string | null;
+  sealed: string;
+  migratedAt: number;
+  expiresAt: number;
+  state: "pending" | "discarded" | "re-entered";
+}
+
+/** The browser's non-extractable key for LegacyRecoveryEntry.sealed. */
+export interface LegacyRecoveryKey {
+  id: string;
+  key: CryptoKey;
+}
+
 export interface OfflineMeta {
   id?: number;
   key: string;
@@ -174,6 +194,8 @@ class ERPDatabase extends Dexie {
   offlineReadSnapshots!: Table<OfflineReadSnapshot, string>;
   offlineReadGrants!: Table<OfflineReadGrant, string>;
   offlineColdStartTickets!: Table<OfflineColdStartTicket, string>;
+  legacyRecoveryEntries!: Table<LegacyRecoveryEntry, string>;
+  legacyRecoveryKeys!: Table<LegacyRecoveryKey, string>;
   syncState!: Table<SyncState, number>;
   syncLogs!: Table<SyncLog, number>;
   conflicts!: Table<Conflict, number>;
@@ -295,6 +317,12 @@ class ERPDatabase extends Dexie {
     // Plan batch 5 (decision 10): sealed cold-start tickets for read-only laptops.
     this.version(9).stores({
       offlineColdStartTickets: "&key, [companyId+userId], verifiedAt, expiresAt",
+    });
+
+    // Plan batch 5: old queue entries moved into an encrypted store for supervised re-entry or discard.
+    this.version(10).stores({
+      legacyRecoveryEntries: "&id, companyId, state, expiresAt",
+      legacyRecoveryKeys: "&id",
     });
   }
 }

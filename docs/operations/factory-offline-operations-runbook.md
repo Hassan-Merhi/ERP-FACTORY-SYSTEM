@@ -83,6 +83,28 @@ Such a laptop is a **read-only viewer**. It never takes a write.
   on disk makes the ticket fail to open
   (`tests/ui/offline-cold-start-read-only.test.ts`).
 
+### Entries left in the old browser queues
+
+Some browsers still hold entries saved offline before the current design
+(localStorage `erp_offline_queue`, IndexedDB `syncQueue`). They were never
+sent, and they never will be automatically.
+
+- **Move.** At the next sign-in on that browser they move into an encrypted
+  store, under a non-extractable key held by that browser. The originals are
+  removed only after the encrypted copies are stored.
+- **Who sees them.** Admin, Owner and Developer users of the company get a
+  list showing date, type and amount. The old entries recorded no user, so
+  they are not shown to other roles. Entries with no known company appear for
+  every company.
+- **Choices.** **Re-enter** shows the entry's full details; the user types it
+  again through the normal form, which goes through the server's checks, then
+  marks it re-entered. **Discard** drops it. The form is not pre-filled.
+- **Log.** Each choice is recorded in the audit log with the user's name
+  (`POST /api/offline/legacy-queue/decisions`, table
+  `offline_legacy_queue_entries`) before it takes effect. If it cannot be
+  recorded, nothing changes.
+- **Retention.** Entries nobody handles are deleted after 30 days.
+
 ### Plan batches stay off until their staging drill is approved
 
 The rows added by the owner-approved plan of 2026-11-05 are:

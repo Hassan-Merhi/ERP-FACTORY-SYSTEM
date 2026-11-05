@@ -8,7 +8,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { ApplicationLanguageProvider, useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { applicationEnglishTranslations } from "@/i18n/applicationTranslations";
 import { coldStartReadOnlyActive } from "@/lib/offline/coldStartState";
 import { OFFLINE_MODE_ENABLED } from "@/lib/featureFlags";
@@ -91,6 +91,15 @@ export function ColdStartUnlockScreen({ onUnlocked }: { onUnlocked: () => void }
         </Button>
       </form>
     </main>
+  );
+}
+
+/** The passphrase screen as the authenticated route shows it, in the user's language. */
+export function ColdStartUnlockRoute({ onUnlocked }: { onUnlocked: () => void }) {
+  return (
+    <ApplicationLanguageProvider>
+      <ColdStartUnlockScreen onUnlocked={onUnlocked} />
+    </ApplicationLanguageProvider>
   );
 }
 

@@ -26,10 +26,11 @@ import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { applyGlobalForceRefresh, shouldApplyGlobalForceRefresh } from "@/lib/globalForceRefresh";
 import {
   ColdStartReadOnlyBanner,
-  ColdStartUnlockScreen,
+  ColdStartUnlockRoute,
   useColdStartTicketAvailable,
 } from "@/components/OfflineColdStartGate";
 import { authenticatedUserQueryKey } from "@/contracts/sessionQueryContracts";
+import { LegacyQueueRecoveryPanel } from "@/components/LegacyQueueRecoveryPanel";
 
 const Login = lazy(() => import("@/pages/Login"));
 const ChatWidget = lazy(() => import("@/components/ChatWidget").then((module) => ({ default: module.ChatWidget })));
@@ -206,11 +207,7 @@ function AuthenticatedRoot() {
   if (!isLoading && !error && user === null) return <Redirect to="/login" />;
   if (error && !user && coldStartAvailable) {
     return (
-      <ApplicationLanguageProvider>
-        <ColdStartUnlockScreen
-          onUnlocked={() => void queryClient.resetQueries({ queryKey: authenticatedUserQueryKey })}
-        />
-      </ApplicationLanguageProvider>
+      <ColdStartUnlockRoute onUnlocked={() => void queryClient.resetQueries({ queryKey: authenticatedUserQueryKey })} />
     );
   }
   if (isLoading || error || !user) {
@@ -226,6 +223,7 @@ function AuthenticatedRoot() {
               <CursorNavProvider>
                 <ServerRestartWatcher />
                 <ColdStartReadOnlyBanner />
+                <LegacyQueueRecoveryPanel />
                 <AuthenticatedApp user={user} handleLogout={handleLogout} />
                 <DeferredAuthenticatedUtilities />
               </CursorNavProvider>
