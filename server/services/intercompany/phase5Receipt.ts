@@ -18,6 +18,7 @@ import { postErpVoucherTx } from "../accounting/erpVoucherPosting";
 import { createDatabaseStockMovementAdapter } from "../inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../inventory/stockMovementIntegrityService";
 import { INTERCOMPANY_PAYMENT_LOCK_NAMESPACE } from "./paymentAllocationCore";
+import { assertPhase5MirroredLines } from "./phase5LinkedLineGuard";
 import { allocateByWeights, cents, exactPositiveQuantity, requireCostEqual } from "./tradeRevisionMath";
 import {
   assertTradeAccess, loadTradeTx, postingDay, rejectEdit, requireUnreceived,
@@ -131,6 +132,7 @@ export async function receiveLinkedTrade(input: ReceiveIntercompanyTradeInput, a
         || input.inventoryAccountId === data.policy.destinationGitAccountId) {
         rejectEdit("Select an existing active ERP INVENTORY asset account distinct from Goods in Transit", "IC_RECEIPT_INVENTORY_ACCOUNT");
       }
+      assertPhase5MirroredLines(data.source.flatMap((group) => group.lines), data.destination.lines, data.links);
       const rows = exactDestinationReceiptPlan(data.destination.lines, data.destination.po.itemsTotal ?? "0",
         data.imported.confirmedLandedCost ?? "0");
       const items = await tx.select().from(stockItems).where(inArray(stockItems.id, rows.map((row) => row.stockItemId)));
