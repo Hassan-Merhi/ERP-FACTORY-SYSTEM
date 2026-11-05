@@ -29,6 +29,7 @@ export function useFactoryProformasModel() {
   });
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newProformaName, setNewProformaName] = useState("");
+  const [newDestination, setNewDestination] = useState("");
   const [isAddLineOpen, setIsAddLineOpen] = useState(false);
   const [addLineProformaId, setAddLineProformaId] = useState<number | null>(null);
   const [newLine, setNewLine] = useState({ articleCode: "", productName: "", quantity: "", pricePerBale: "" });
@@ -143,13 +144,21 @@ export function useFactoryProformasModel() {
     refetchOnReconnect: false,
   });
 
-  // Customer price list — used to auto-fill price when adding a new line
-  const { data: customerPriceList = [] } = useQuery<{ articleCode: string; pricePerBale: string }[]>({
-    queryKey: [`/api/factory/customer-price-lists/${customerId}`, customerId],
-    enabled: !!customerId && isAddLineOpen,
+  // The customer may have different agreed prices at each destination.
+  const addLineDestination = proformas.find((p) => p.id === addLineProformaId)?.destination;
+  const { data: customerPriceList = [] } = useQuery<{ article_code: string; price_per_bale: string }[]>({
+    queryKey: ["/api/factory/customer-price-lists", customerId, addLineDestination],
+    queryFn: async () => {
+      const response = await modeApiRequest("GET",
+        `/api/factory/customer-price-lists/${customerId}?destination=${encodeURIComponent(addLineDestination || "")}`
+      );
+      if (!response.ok) throw new Error("Failed to load destination prices");
+      return response.json();
+    },
+    enabled: !!customerId && isAddLineOpen && !!addLineDestination,
   });
 
-  const priceListMap = Object.fromEntries(customerPriceList.map((p) => [p.articleCode, p.pricePerBale]));
+  const priceListMap = Object.fromEntries(customerPriceList.map((p) => [p.article_code, p.price_per_bale]));
 
   const { data: locations = [] } = useQuery<{ id: number; name: string; code: string }[]>({
     queryKey: ["/api/locations"],
@@ -185,7 +194,7 @@ export function useFactoryProformasModel() {
   });
 
   const createProformaMutation = useMutation({
-    mutationFn: async (data: { customerId: number; name: string; isActive: boolean }) => {
+    mutationFn: async (data: { customerId: number; name: string; destination: string; isActive: boolean }) => {
       return await modeApiRequest("POST", "/api/factory/customer-proformas", data);
     },
     onSuccess: () => {
@@ -193,6 +202,7 @@ export function useFactoryProformasModel() {
       invalidateCustomerProformas();
       setIsCreateOpen(false);
       setNewProformaName("");
+      setNewDestination("");
     },
     onError: (error: Error) => {
       if (error?._handledGlobally) return;
@@ -572,10 +582,11 @@ export function useFactoryProformasModel() {
   });
 
   const handleCreateProforma = () => {
-    if (!newProformaName.trim() || !customerId) return;
+    if (!newProformaName.trim() || !newDestination.trim() || !customerId) return;
     createProformaMutation.mutate({
       customerId,
       name: newProformaName.trim(),
+      destination: newDestination.trim(),
       isActive: false,
     });
   };
@@ -620,6 +631,8 @@ export function useFactoryProformasModel() {
     setIsCreateOpen,
     newProformaName,
     setNewProformaName,
+    newDestination,
+    setNewDestination,
     isAddLineOpen,
     setIsAddLineOpen,
     addLineProformaId,
