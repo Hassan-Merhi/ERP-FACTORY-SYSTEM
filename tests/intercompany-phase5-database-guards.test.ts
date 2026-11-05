@@ -153,7 +153,8 @@ describe("Phase 5 destination inventory and pre-receipt cancellation database gu
       // Earlier cancellation assertions switched constraints to IMMEDIATE.
       // A real receipt inserts its header and stock items as one deferred transaction.
       await client.query("SET CONSTRAINTS ALL DEFERRED");
-      await client.query("INSERT INTO intercompany_destination_receipts"+receiveColumns+" VALUES (2,2,3,302,29,19,201,'phase5-good-receipt',repeat('e',64),'2026-11-05',100,'Signed arrival evidence','Received warehouse','owner')");
+      // Rejected receipt attempts consumed sequence values; pin fixture ID for item rows.
+      await client.query("INSERT INTO intercompany_destination_receipts(id,"+receiveColumns.slice(1)+" VALUES (1,2,2,3,302,29,19,201,'phase5-good-receipt',repeat('e',64),'2026-11-05',100,'Signed arrival evidence','Received warehouse','owner')");
       await rejects("SET CONSTRAINTS ALL IMMEDIATE","received destination item values");
       await client.query("INSERT INTO intercompany_destination_receipt_items(receipt_id,stock_item_id,quantity,landed_value,value_moved,canonical_movement_id) VALUES (1,502,10,100,100,301)");
       // The receipt value balances, but the zero-price bonus item is missing.
