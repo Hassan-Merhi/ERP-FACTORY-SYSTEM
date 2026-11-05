@@ -164,43 +164,6 @@ CREATE CONSTRAINT TRIGGER ic_destination_receipt_item_sum
 AFTER INSERT ON intercompany_destination_receipt_items DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION ic_phase5_receipt_totals();
 
-CREATE OR REPLACE FUNCTION ic_phase5_cancellation_immutable()
-RETURNS TRIGGER LANGUAGE plpgsql AS $fn$
-DECLARE t RECORD; v1 RECORD; v2 RECORD; v3 RECORD; n INTEGER;
-BEGIN
-  IF TG_OP<>'INSERT' THEN RAISE EXCEPTION 'Intercompany cancellation evidence cannot be modified'; END IF;
-  SELECT * INTO t FROM intercompany_trades WHERE id=NEW.trade_id;
-  SELECT * INTO v1 FROM vouchers WHERE id=NEW.source_sale_reversal_voucher_id;
-  SELECT * INTO v2 FROM vouchers WHERE id=NEW.source_cost_reversal_voucher_id;
-  SELECT * INTO v3 FROM vouchers WHERE id=NEW.destination_git_reversal_voucher_id;
-  IF t.id IS NULL OR t.state<>'active' OR t.version<>NEW.expected_version
-    OR t.relationship_id<>NEW.relationship_id
-    OR t.source_company_id<>NEW.source_company_id OR t.destination_company_id<>NEW.destination_company_id
-    OR v1.id IS NULL OR v2.id IS NULL OR v3.id IS NULL
-    OR v1.company_id<>NEW.source_company_id OR v2.company_id<>NEW.source_company_id
-    OR v3.company_id<>NEW.destination_company_id
-    OR v1.deleted_at IS NOT NULL OR v2.deleted_at IS NOT NULL OR v3.deleted_at IS NOT NULL
-    OR v1.total_amount<>NEW.landed_cost OR v2.total_amount<>NEW.landed_cost
-    OR v3.total_amount<>NEW.landed_cost THEN
-    RAISE EXCEPTION 'Cancellation requires exact original-pair balanced voucher evidence';
-  END IF;
-  IF NEW.released_credit IS DISTINCT FROM (
-      SELECT COALESCE(SUM(-a.amount),0)::numeric
-      FROM intercompany_payment_allocations a
-      WHERE a.trade_id=NEW.trade_id AND a.allocation_kind='cancel_release'
-    ) THEN
-    RAISE EXCEPTION 'Canceled trade credit evidence must match original payment releases';
-  END IF;
-  IF EXISTS(SELECT 1 FROM intercompany_destination_receipts WHERE trade_id=NEW.trade_id)
-     OR EXISTS(SELECT 1 FROM intercompany_shared_charge_allocations
-       WHERE trade_id=NEW.trade_id AND amount<>0) THEN
-    RAISE EXCEPTION 'Received stock or unreassigned shared invoice charge prevents cancellation';
-  END IF;
-  RETURN NEW;
-END $fn$;
-CREATE TRIGGER ic_phase5_cancellation_insert_guard BEFORE INSERT OR UPDATE OR DELETE
-ON intercompany_trade_cancellations FOR EACH ROW EXECUTE FUNCTION ic_phase5_cancellation_immutable();
-
 CREATE OR REPLACE FUNCTION ic_phase5_trade_cancellation_guard()
 RETURNS TRIGGER LANGUAGE plpgsql AS $fn$
 BEGIN
@@ -274,6 +237,13 @@ BEGIN
       'ledger',p.destination_git_account_id,NEW.landed_cost) THEN
     RAISE EXCEPTION 'Cancellation reversal journal lines must exactly offset the original pair';
   END IF;
+  IF NEW.released_credit IS DISTINCT FROM (
+      SELECT COALESCE(SUM(-allocation.amount),0)::numeric
+      FROM intercompany_payment_allocations allocation
+      WHERE allocation.trade_id=NEW.trade_id AND allocation.allocation_kind='cancel_release'
+    ) THEN
+    RAISE EXCEPTION 'Cancellation credit evidence must match original pair release rows';
+  END IF;
   IF EXISTS(SELECT 1 FROM intercompany_destination_receipts WHERE trade_id=NEW.trade_id)
      OR EXISTS(SELECT 1 FROM intercompany_shared_charge_allocations
        WHERE trade_id=NEW.trade_id AND amount<>0) THEN
@@ -281,6 +251,9 @@ BEGIN
   END IF;
   RETURN NEW;
 END $fn$;
+
+CREATE TRIGGER ic_phase5_cancellation_insert_guard BEFORE INSERT OR UPDATE OR DELETE
+ON intercompany_trade_cancellations FOR EACH ROW EXECUTE FUNCTION ic_phase5_cancellation_immutable();
 
 -- Financial evidence must remain locked even AFTER a trade is canceled.
 -- Phase 3's linked PO trigger deliberately checks active trades only; without
