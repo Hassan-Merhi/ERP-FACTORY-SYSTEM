@@ -90,7 +90,7 @@ describe("Phase 4 paired payment database protections",()=>{
       // source receivable, even when authentic-looking voucher IDs are supplied.
       await rejects("INSERT INTO intercompany_container_payments"+paymentColumns+" VALUES (1,1,2,'phase4-fake-fx',repeat('a',64),'WIRE-FX-001','Transfer evidence checked','2026-11-05','USD',100,1,120,'bank',31,'bank',32,11,2,55,56,'owner')","ic_payments_fx_consistency");
       await rejects("INSERT INTO intercompany_container_payments"+paymentColumns+" VALUES (1,1,2,'phase4-fake-map',repeat('a',64),'WIRE-MAP-001','Transfer evidence checked','2026-11-05','USD',120,1,120,'bank',31,'bank',32,12,2,55,56,'owner')","verified company-pair");
-      await rejects("INSERT INTO intercompany_container_payments"+paymentColumns+" VALUES (1,1,2,'phase4-fake-usd-rate',repeat('a',64),'WIRE-RATE-001','Transfer evidence checked','2026-11-05','USD',120,2,60,'bank',31,'bank',32,11,2,55,56,'owner')","ic_payments_fx_consistency");
+      await rejects("INSERT INTO intercompany_container_payments"+paymentColumns+" VALUES (1,1,2,'phase4-fake-usd-rate',repeat('a',64),'WIRE-RATE-001','Transfer evidence checked','2026-11-05','USD',120,2,120,'bank',31,'bank',32,11,2,55,56,'owner')","ic_payments_fx_consistency");
       await client.query("SAVEPOINT wrong_supplier_identity");
       await client.query("UPDATE suppliers SET legal_name='Unrelated Vendor' WHERE id=2");
       await rejects("INSERT INTO intercompany_container_payments"+paymentColumns+" VALUES "+goodValues,
