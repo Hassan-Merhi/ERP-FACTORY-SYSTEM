@@ -365,6 +365,7 @@ async function readPageState(page) {
       shell: visibleRect(document.querySelector('[data-slot="sidebar-wrapper"]')),
       sidebar,
       recoveryOverlay: Boolean(document.getElementById("stale-asset-recovery")),
+      notFoundPage: Boolean(document.getElementById("main-content")?.textContent?.includes("404 Page Not Found")),
       ltrViolations,
     };
   });
@@ -420,6 +421,7 @@ function assertPage(state, expectedLanguage, expectedDirection, mode, label) {
     failures.push(`${label}: root horizontal overflow (${state.rootScrollWidth}px > ${state.viewport.width}px)`);
   }
   if (state.recoveryOverlay) failures.push(`${label}: stale-asset recovery overlay is visible`);
+  if (state.notFoundPage) failures.push(`${label}: route rendered a 404 page`);
   if (state.ltrViolations.length > 0) {
     failures.push(`${label}: protected LTR selectors rendered RTL: ${state.ltrViolations.join(", ")}`);
   }
@@ -585,7 +587,8 @@ for (const language of LANGUAGES) {
               const label = `${language.name} ${viewport.name} ${group.workspace} ${route}`;
               const failures = assertPage(state, language.code, language.direction, "app", label);
               if (state.path.startsWith("/login")) failures.push(`${label}: authenticated session returned to login`);
-              if (REQUIRE_EXACT_ROUTES && !state.path.startsWith(route)) {
+              const redirected = state.path.split("?")[0] !== route.split("?")[0];
+              if (REQUIRE_EXACT_ROUTES && redirected) {
                 failures.push(`${label}: redirected to ${state.path}`);
               }
 
@@ -612,10 +615,12 @@ for (const language of LANGUAGES) {
                 languageOnboardingCompleted,
                 skipNavigation,
                 screenshot,
+                classification: redirected ? "redirect" : "rendered",
+                redirectTarget: redirected ? state.path : null,
                 failures,
               });
               report.failures.push(...failures);
-              if (seededDetailRoutes.includes(route))
+              if (seededDetailRoutes.includes(route) && !redirected)
                 report.seededRouteEvidence.push({ workspace: group.workspace, route, language: language.code,
                   viewport: viewport.name, failures });
               await verifyDuoTransitions(page, language, viewport, group, route, state.path);
@@ -656,11 +661,14 @@ report.coverage = {
   staticDeclared: WORKSPACE_ROUTE_GROUPS.reduce((n, group) => n + group.routes.length, 0),
   dynamicWithoutSeeds: report.unresolvedParameterizedRoutes.length,
   seededDetailCases: report.seededRouteEvidence.length,
-  auditedCases: report.cases.filter((item) => Boolean(item.workspace) && !item.classification).length,
+  auditedCases: report.cases.filter((item) => Boolean(item.workspace) && item.classification === "rendered").length,
+  redirectedCases: report.cases.filter((item) => item.classification === "redirect").length,
   transitions: report.transitions.length,
 };
 if (process.env.ERP_DUO_REQUIRE_COMPLETE === "1" && report.coverage.dynamicWithoutSeeds)
   report.failures.push("Parameterized routes require seeded records; see unresolvedParameterizedRoutes.");
+if (process.env.ERP_DUO_REQUIRE_COMPLETE === "1" && report.coverage.redirectedCases)
+  report.failures.push("Full certification blocked: routes redirected; see cases classification.");
 if (process.env.ERP_DUO_REQUIRE_COMPLETE === "1" && !report.coverage.auditedCases)
   report.failures.push("No authenticated page checks were performed.");
 report.failures = [...new Set(report.failures)];
