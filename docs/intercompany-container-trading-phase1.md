@@ -34,3 +34,26 @@ Status: Phase 1 foundation only. **No trading feature, posting route, UI, schedu
 - Migration registry validation, TypeScript checks, backend regression, formatting, lint, and migration startup checks.
 - An isolated PostgreSQL proof of default-off policies, wrong-company account rejection, canonical container uniqueness, grant authorization, immutable audit and held repairs.
 - No branch merge or deployment until user authorizes it.
+
+
+## Phase 2 implementation (same isolated feature branch)
+
+Phase 2 adds the dedicated Properties **Container Trading** workflow, without replacing the existing single-company importer or creating a separate dashboard.
+
+- An authorized Properties Owner/Developer with corresponding destination access explicitly configures the existing source receivable, source Purchases, source sales, source COGS, source accrued-charge liability, destination payable, destination Goods-In-Transit and destination supplier records. Account company ownership and type are validated. The destination supplier must represent the Properties company.
+- The original Excel .xlsx workbook is parsed by the existing reader at both preview and confirmation. The user must select an enabled destination **for every container**. One canonical physical container is created in Properties; the destination PO links to its ID rather than creating duplicate stock.
+- All original supplier PO groups are retained as separate source POs with a join table preserving workbook identifiers. The destination has one linked PO for each physical container. Company stock items must match valid codes/names and unit-of-measure records before posting.
+- Confirmed price is exact: goods plus only explicitly confirmed eligible charges. Unconfirmed spreadsheet estimates remain as evidence, excluded from both sides until the later synchronized-charge workflow. The source resale has zero markup.
+- Posting is atomic per workbook: source supplier Purchase vouchers, source at-cost Sales and cost reclassification vouchers, destination Purchase/GIT vouchers, linked POs, PO lines, trade links, charge evidence, batch deduplication and immutable audit records all commit together or all roll back. No bank or cash entries are generated.
+- Duplicate file hashes and globally unique physical-container numbers prevent re-import. The legacy ERP import log is written once per workbook so the old importer cannot silently import the same original file again.
+- Phase 2 accepts **USD invoices and USD-base companies only**. Historical FX is a later phase.
+- Old standalone edits of linked PO headers/lines, container charges, vouchers and financial lines, and offloading into inventory are deliberately blocked until the Phase 3/5 coordinated workflows exist. This protects cross-company balances during testing.
+- Existing Accounts and Analytics remain authoritative for normal financial information; broader custom reporting follows in Phase 6.
+
+### Phase 2 verification
+
+- tests/intercompany-phase2-container-pricing.test.ts: source PO grouping, charge confirmation, precise cent allocations, no-markup equalities and invalid-input rejection.
+- tests/intercompany-phase2-database-guards.test.ts: isolated PostgreSQL proof of wrong-company configuration prevention, source PO provenance, blocked legacy edits/offloads and isolation of unrelated records.
+- CI gates: TypeScript type-check, backend/frontend tests, migration registry/startup, formatting, security and build.
+
+**Rollout remains explicit:** this is a development branch with a draft, unmerged PR. No production migration, merge or deployment has been authorized or performed. Historical automatic repairs remain disabled.
