@@ -1,4 +1,4 @@
-import { pgTable, bigserial, bigint, integer, varchar, text, timestamp, jsonb, boolean, index, uniqueIndex, check } from "drizzle-orm/pg-core";
+import { pgTable, bigserial, bigint, integer, varchar, text, timestamp, jsonb, index, uniqueIndex, check } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 export const supportTickets = pgTable("support_tickets", {
