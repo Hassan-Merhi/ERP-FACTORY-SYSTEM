@@ -27,6 +27,7 @@ import {
   runWithCompanyRequestRuntimeContext,
 } from "../security/companyRequestRuntimeContext";
 import { cents, fullPoCost, lineTotal, requireCostEqual, signedPair } from "./tradeRevisionMath";
+import { releaseEditOverallocationTx } from "./paymentAllocationCore";
 
 export class IntercompanyEditError extends Error {
   constructor(
@@ -622,6 +623,10 @@ export async function editLinkedTrade(input: LinkedTradeEditInput, identity: Edi
         actorUserId: identity.actorUserId,
         poDeltas,
       });
+      const releasedCredit = await releaseEditOverallocationTx(tx, {
+        tradeId: data.trade.id, newLandedCost: result.amountAfter,
+        actorUserId: identity.actorUserId, revisionId: revision.id,
+      });
       const version = await completeRevisionTx(
         tx,
         data,
@@ -630,7 +635,7 @@ export async function editLinkedTrade(input: LinkedTradeEditInput, identity: Edi
         result.vouchers,
         identity,
         "line_edit",
-        { changedLines: updates.length }
+        { changedLines: updates.length, releasedCredit }
       );
       return {
         tradeId: input.tradeId,
