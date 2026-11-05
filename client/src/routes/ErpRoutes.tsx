@@ -258,7 +258,11 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
         canAccess("containers") && !["POS", "View Only"].includes(effectiveRole),
         LinkedTradesEditor
       )}
-      {R("/intercompany/payments", canAccess("containers") && !["POS","View Only"].includes(effectiveRole), IntercompanyPayments)}
+      {R(
+        "/intercompany/payments",
+        canAccess("containers") && !["POS", "View Only"].includes(effectiveRole),
+        IntercompanyPayments
+      )}
       {R("/ai-validation", isDeveloper, AiValidationPage)}
       {R("/ai-command-center", isDeveloper, AICommandCenter)}
       {G("/pos-import", "pos", POSImport)}
