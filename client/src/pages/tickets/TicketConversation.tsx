@@ -10,7 +10,8 @@ type Detail = { ticket:Ticket; records:{id:number;recordType:string;displayRefer
   capabilities:{seen:boolean;start:boolean;finalize:boolean;reopen:boolean} };
 type Comment = {id:number;authorId:string;body:string;createdAt:string};
 type Attachment = {id:number;fileName:string;mimeType:string;sizeBytes:number;createdAt:string;uploadedBy:string};
-type Conversation = {comments:Comment[];attachments:Attachment[]};
+type TicketEvent = {id:number;actorId:string;eventType:string;reason:string|null;createdAt:string};
+type Conversation = {comments:Comment[];attachments:Attachment[];events:TicketEvent[]};
 
 async function readJson<T>(url:string):Promise<T> {
   const res=await fetch(url,{credentials:"include",cache:"no-store"});
@@ -139,6 +140,16 @@ export default function TicketConversation({ticketId,companyId,onBack,userNames,
             <p className="text-xs text-muted-foreground">{(a.sizeBytes/1024).toFixed(0)} KB · {userNames.get(a.uploadedBy)??"Employee"}</p>
           </div>)}
         </div>
+      </div>
+      <div className="rounded-xl border bg-card p-4 sm:p-6">
+        <h3 className="font-semibold">Case history</h3>
+        <ol className="mt-3 space-y-2 text-sm">
+          {conversation.data?.events.map(event=><li key={event.id} className="rounded-md border-l-2 pl-3">
+            <span className="font-medium">{event.eventType.replaceAll("_"," ")}</span>
+            <span className="ml-2 text-xs text-muted-foreground">{userNames.get(event.actorId)??"Employee"} · {new Date(event.createdAt).toLocaleString()}</span>
+            {event.reason&&<p className="mt-1 whitespace-pre-wrap break-words text-xs">{event.reason}</p>}
+          </li>)}
+        </ol>
       </div>
       <div className="rounded-xl border bg-card p-4 sm:p-6">
         <h3 className="font-semibold">Case conversation</h3>
