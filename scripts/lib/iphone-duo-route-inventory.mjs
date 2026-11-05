@@ -51,13 +51,14 @@ export async function discoverDuoRouteInventory() {
   }
   const retailPos = splitRoutes(routeMatches(sources.pos.slice(posDivider, posSecondTree), routePattern));
   const pos = splitRoutes(routeMatches(sources.pos.slice(posSecondTree), routePattern));
-  // The developer/non-POS retail routes are dispatched directly in AppRoutes.
-  const retailAdmin = splitRoutes([
-    "/retail", "/retail/inventory", "/retail/pos", "/retail/stock-count",
-    "/retail/history", "/retail/reports",
-  ]);
-  const retailAdminDynamic = ["/retail/products/:id"];
-  retailAdmin.parameterized.push(...retailAdminDynamic);
+  // The developer/non-POS retail routes are dispatched through AppRoutes.
+  // Derive them from source so a new retail page cannot escape the inventory.
+  const retiredRetailRoutes = new Set(["/retail/quick-add", "/retail/stock"]);
+  const retailLiteralPaths = routeMatches(sources.app, /location\s*===\s*["'](\/retail[^"']+)["']/g)
+    .filter((route) => !retiredRetailRoutes.has(route));
+  const retailPrefixes = routeMatches(sources.app, /location\.startsWith\(["'](\/retail[^"']+)["']\)/g);
+  const retailAdmin = splitRoutes([...retailLiteralPaths, ...retailPrefixes.filter((route) => !route.endsWith("/"))]);
+  retailAdmin.parameterized.push(...retailPrefixes.filter((route) => route.endsWith("/")).map((route) => route + ":id"));
 
   const groups = [
     { workspace: "erp", companyCode: "PHASE9-ERP", requiredRole: "Developer", ...erp },
