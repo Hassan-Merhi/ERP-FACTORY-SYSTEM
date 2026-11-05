@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import TicketConversation, { uploadInitialTicketEvidence } from "@/pages/tickets/TicketConversation";
 import TicketNotificationSettings from "@/pages/tickets/TicketNotificationSettings";
+import TicketAdminDashboard from "@/pages/tickets/TicketAdminDashboard";
 
 type Ticket = {
   id:number; ticketNumber:string; title:string; category:string; priority:string; status:string;
@@ -136,27 +137,32 @@ export default function TicketManagement({ sourceMode = "erp" }:{sourceMode?:"er
   const [page,setPage]=useState(1);
   const [creating,setCreating]=useState(false);
   const [editingNotifications,setEditingNotifications]=useState(false);
+  const [showingDashboard,setShowingDashboard]=useState(()=>new URLSearchParams(window.location.search).get("dashboard")==="1");
   const [ticketId,setTicketId]=useState<number|undefined>(()=>{
     const id=Number(new URLSearchParams(window.location.search).get("ticketId"));
     return Number.isSafeInteger(id)&&id>0?id:undefined;
   });
   const [evidenceWarning,setEvidenceWarning]=useState<string|undefined>();
   useEffect(()=>{setPage(1);setCreating(false);setEditingNotifications(false);
+    setShowingDashboard(new URLSearchParams(window.location.search).get("dashboard")==="1");
     const id=Number(new URLSearchParams(window.location.search).get("ticketId"));
     setTicketId(Number.isSafeInteger(id)&&id>0?id:undefined);
   },[selectedCompany?.id]);
   const params=new URLSearchParams({page:String(page),...(q.trim()?{q:q.trim()}:{}),...(status?{status}:{})});
+  const adminAccess=useQuery({queryKey:["ticket-admin-access",selectedCompany?.id],queryFn:()=>fetchJson<{canViewDashboard:boolean;canExport:boolean}>("/api/tickets/dashboard-access"),enabled:!!selectedCompany?.id});
   const users=useQuery({queryKey:["ticket-list-users",selectedCompany?.id],queryFn:()=>fetchJson<{users:User[]}>("/api/tickets/users"),enabled:!!selectedCompany?.id});
   const names=new Map<string,string>((users.data?.users??[]).map(u=>[u.id,u.username] as const));
   const listing=useQuery({queryKey:[...ticketKey(selectedCompany?.id),page,q,status],queryFn:()=>fetchJson<{tickets:Ticket[];hasMore:boolean}>(`/api/tickets?${params}`),enabled:!!selectedCompany?.id});
 
   const viewCreate=creating||location.endsWith("/new");
+  if(showingDashboard)return <main className="w-full min-w-0 overflow-x-hidden p-3 sm:p-6"><TicketAdminDashboard onBack={()=>{setShowingDashboard(false);navigate(sourceMode==="factory"?"/factory/tickets":"/tickets");}}/></main>;
   if(editingNotifications)return <main className="w-full min-w-0 overflow-x-hidden p-3 sm:p-6"><TicketNotificationSettings onClose={()=>setEditingNotifications(false)}/></main>;
   if(viewCreate)return <main className="w-full min-w-0 overflow-x-hidden p-3 sm:p-6"><TicketForm sourceMode={sourceMode} onCancel={()=>{setCreating(false);navigate(sourceMode==="factory"?"/factory/tickets":"/tickets");}} onCreated={(id,warning)=>{setCreating(false);setEvidenceWarning(warning);navigate(sourceMode==="factory"?"/factory/tickets":"/tickets");setTicketId(id);navigate(`${sourceMode==="factory"?"/factory/tickets":"/tickets"}?ticketId=${id}`);}}/></main>;
   return <main className="w-full min-w-0 space-y-4 overflow-x-hidden p-3 sm:p-6">
     <header className="flex flex-wrap items-center justify-between gap-3">
       <div><h1 className="text-2xl font-semibold">Ticket Management</h1><p className="text-sm text-muted-foreground">Your tickets and permitted company cases</p></div>
-      <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={()=>setEditingNotifications(true)}>Notification settings</Button><Button onClick={()=>{setCreating(true);setTicketId(undefined);}}>+ Create Ticket</Button></div>
+      <div className="flex flex-wrap gap-2">{adminAccess.data?.canViewDashboard&&<Button variant="outline" onClick={()=>{setShowingDashboard(true);navigate(`${sourceMode==="factory"?"/factory/tickets":"/tickets"}?dashboard=1`);}}>Admin Dashboard</Button>}
+      <Button variant="outline" onClick={()=>setEditingNotifications(true)}>Notification settings</Button><Button onClick={()=>{setCreating(true);setTicketId(undefined);}}>+ Create Ticket</Button></div>
     </header>
     {ticketId ? <>
       {evidenceWarning&&<p role="alert" className="rounded-md border border-destructive p-3 text-sm text-destructive">{evidenceWarning}</p>}
