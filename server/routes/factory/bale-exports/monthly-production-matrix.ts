@@ -6,6 +6,7 @@ import { db } from "../../../db";
 import { resultRows } from "../../../lib/queryResult";
 import { logger } from "../../../lib/logger";
 import { factorySettings } from "@shared/schema";
+import { authorizeFactoryPageAccess, sendFactoryAccessDenied } from "../../../lib/factoryAccessControl";
 
 type DbRow = Record<string, unknown>;
 const number = (value: unknown) => Number(value ?? 0);
@@ -21,6 +22,8 @@ export function registerFactoryMonthlyProductionMatrixRoutes(app: Express) {
   app.get("/api/factory/monthly-production-matrix", requireAuth, async (req: Request, res: Response) => {
     const companyId = companyFor(req);
     if (!validCompany(companyId)) return res.status(400).json({ message: "No company selected" });
+    const access = await authorizeFactoryPageAccess(req, "factory/monthly-production-matrix");
+    if (!access.allowed) return sendFactoryAccessDenied(res, access);
     try {
       const [productsResult, monthlyResult, settings] = await Promise.all([
         db.execute(sql`
@@ -67,6 +70,8 @@ export function registerFactoryMonthlyProductionMatrixRoutes(app: Express) {
   app.put("/api/factory/monthly-production-matrix/order", requireAuth, async (req: Request, res: Response) => {
     const companyId = companyFor(req);
     if (!validCompany(companyId)) return res.status(400).json({ message: "No company selected" });
+    const access = await authorizeFactoryPageAccess(req, "factory/monthly-production-matrix");
+    if (!access.allowed) return sendFactoryAccessDenied(res, access);
     const ids: unknown = req.body?.productIds;
     if (!Array.isArray(ids) || ids.length > 20000 ||
         ids.some((id: unknown) => !Number.isSafeInteger(id) || (id as number) <= 0) ||
