@@ -225,7 +225,8 @@ BEGIN
     SELECT 1 FROM intercompany_audit_events audit
     JOIN intercompany_trades t ON t.id::text = split_part(audit.event_key, ':', 3)
     WHERE t.state = 'active' AND audit.event_type = 'container-import-confirmed'
-      AND (audit.payload->>'sourceSaleVoucherId')::integer = OLD.id
+      AND ((audit.payload->>'sourceSaleVoucherId')::integer = OLD.id OR
+           (audit.payload->>'sourceCostVoucherId')::integer = OLD.id)
   ) THEN
     RAISE EXCEPTION 'Linked intercompany vouchers require a coordinated reversal or update';
   END IF;
