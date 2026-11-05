@@ -78,11 +78,6 @@ function matchesPattern(pattern, concreteRoute) {
     expected.every((segment, index) => segment.startsWith(":") || segment === actual[index]);
 }
 
-function fileSafe(value) {");
-  const segments = pattern.split("/").map((segment) => segment.startsWith(":") ? "[^/?]+" : escape(segment));
-  return new RegExp("^" + segments.join("/") + "$").test(concreteRoute.split("?")[0]);
-}
-
 function fileSafe(value) {
   return value.replace(/^\//, "").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "root";
 }
