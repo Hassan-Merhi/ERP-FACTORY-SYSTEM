@@ -330,6 +330,13 @@
       "when": 1793877300000,
       "tag": "20261105_004_intercompany_phase4_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1793881000000,
+      "tag": "20261105_005_intercompany_phase5_lifecycle",
+      "breakpoints": true
     }
   ]
 }
