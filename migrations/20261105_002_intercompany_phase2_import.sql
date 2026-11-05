@@ -158,17 +158,20 @@ BEGIN
   ELSE
     po_id := OLD.id;
   END IF;
-  IF TG_TABLE_NAME = 'po_line_items' AND TG_OP = 'UPDATE'
-     AND NEW.po_id IS DISTINCT FROM OLD.po_id THEN
-    IF EXISTS (
-      SELECT 1 FROM intercompany_trades t WHERE t.state='active'
-      AND (t.destination_po_id=NEW.po_id OR t.original_supplier_po_id=NEW.po_id)
-    ) OR EXISTS (
-      SELECT 1 FROM intercompany_trade_source_pos sp
-      JOIN intercompany_trades t ON t.id=sp.trade_id
-      WHERE t.state='active' AND sp.source_po_id=NEW.po_id
-    ) THEN
-      RAISE EXCEPTION 'Cannot move PO line into an active intercompany purchase order';
+  IF TG_TABLE_NAME = 'po_line_items' THEN
+    IF TG_OP = 'UPDATE' THEN
+      IF NEW.po_id IS DISTINCT FROM OLD.po_id THEN
+        IF EXISTS (
+          SELECT 1 FROM intercompany_trades t WHERE t.state='active'
+          AND (t.destination_po_id=NEW.po_id OR t.original_supplier_po_id=NEW.po_id)
+        ) OR EXISTS (
+          SELECT 1 FROM intercompany_trade_source_pos sp
+          JOIN intercompany_trades t ON t.id=sp.trade_id
+          WHERE t.state='active' AND sp.source_po_id=NEW.po_id
+        ) THEN
+          RAISE EXCEPTION 'Cannot move PO line into an active intercompany purchase order';
+        END IF;
+      END IF;
     END IF;
   END IF;
   IF EXISTS (
