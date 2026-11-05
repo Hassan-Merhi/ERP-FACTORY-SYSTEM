@@ -191,7 +191,7 @@ export async function eligibleDestinations(sourceCompanyId: number, userId: stri
   const candidates = role === "Developer"
     ? await db.select().from(companies).where(eq(companies.active, true))
     : await db.select().from(companies).where(and(eq(companies.active, true), inArray(companies.id, ids.length ? ids : [-1])));
-  return candidates.filter(c => c.id !== sourceCompanyId && c.companyType !== "properties");
+  return candidates.filter(c => c.id !== sourceCompanyId && c.companyType === "erp" && c.active);
 }
 
 export async function getTradingSetup(sourceCompanyId: number, userId: string, role: string) {
