@@ -1,3 +1,4 @@
+import type Decimal from "decimal.js";
 /** Phase 3: atomically mirror source/destination PO pricing, and append adjustment journals. */
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
@@ -21,9 +22,9 @@ export class IntercompanyEditError extends Error {
     super(message); this.name = "IntercompanyEditError";
   }
 }
-export const rejectEdit = (message: string, code = "IC_EDIT_UNSAFE", status = 409): never => {
+export function rejectEdit(message: string, code = "IC_EDIT_UNSAFE", status = 409): never {
   throw new IntercompanyEditError(code, message, status);
-};
+}
 const IMPORT_LOCK = 741235;
 const REQUEST_KEY = /^[A-Za-z0-9._:-]{8,128}$/;
 
@@ -218,7 +219,7 @@ export async function completeRevisionTx(tx:DbTransaction,data:TradeData,id:numb
 /** Exact source PO deltas, mirrored sale/COGS and destination GIT/supplier payable, without touching old vouchers. */
 export async function applyCostDeltasTx(tx:DbTransaction,data:TradeData,input:{
   revisionId:number;postingDate:string;reason:string;actorUserId:string;
-  poDeltas:{poId:number;goods:MoneyDecimal;charge:MoneyDecimal;
+  poDeltas:{poId:number;goods:Decimal;charge:Decimal;
     chargeField?:"freight"|"surcharge"|"fumigation"|"documentCharges"|"otherCharges"}[];
 }) {
   const p=data.policy,original=new Map(data.source.map(g=>[g.po.id,g.po]));
@@ -336,7 +337,7 @@ export async function editLinkedTrade(input:LinkedTradeEditInput,identity:EditId
     const src=new Map(data.source.flatMap(g=>g.lines.map(l=>[l.id,l] as const)));
     const dst=new Map(data.destination.lines.map(l=>[l.id,l] as const));
     const link=new Map(data.links.map(l=>[l.id,l] as const));
-    const goodsByPo=new Map<number,MoneyDecimal>();
+    const goodsByPo=new Map<number,Decimal>();
     const updates:{sourceId:number;destId:number;quantity:string;rate:string;lineTotal:string;itemName:string}[]=[];
     let changed=false;
     for(const edited of input.lines){
@@ -349,7 +350,7 @@ export async function editLinkedTrade(input:LinkedTradeEditInput,identity:EditId
         rejectEdit("Existing source and destination lines disagree; investigation required");
       }
       if(!edited.itemName?.trim()||edited.itemName.length>300)rejectEdit("Invalid item description","IC_EDIT_INPUT",422);
-      let total:MoneyDecimal;
+      let total:Decimal;
       try{total=lineTotal(edited.quantity,edited.rate);}catch(e){rejectEdit(String(e),"IC_EDIT_INPUT",422);}
       const row={sourceId:a.id,destId:c.id,quantity:String(edited.quantity),
         rate:cents(edited.rate).toFixed(2),lineTotal:total!.toFixed(2),itemName:edited.itemName.trim()};
