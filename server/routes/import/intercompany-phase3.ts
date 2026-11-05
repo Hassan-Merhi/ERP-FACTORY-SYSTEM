@@ -12,6 +12,7 @@ import {
   assertTradeAccess, editLinkedTrade, getTradeDetail, IntercompanyEditError,
   type EditIdentity, withTradeScope,
 } from "../../services/intercompany/tradeSync";
+import { grantSharedChargeEditor, revokeSharedChargeEditor } from "../../services/intercompany/sharedChargePermissions";
 import {
   confirmSharedCharge, previewSharedChargeAllocation, reviseSharedCharge,
   sharedInvoiceDetail,
@@ -41,6 +42,10 @@ const confirm=z.object({
   chargeType:z.enum(["freight","surcharge","fumigation","documentCharges","otherCharges"]),
   faceAmount:cents,evidenceReference:z.string().min(3).max(500),
   postingDate:date,reason,requestKey,allocations:z.array(alloc).min(1).max(100),
+}).strict();
+const grant=z.object({
+  userId:z.string().trim().min(1).max(128),relationshipId:positive,
+  scope:z.enum(["invoice","relationship"]),invoiceKey:z.string().min(3).max(120).optional(),
 }).strict();
 const reallocate=z.object({
   expectedInvoiceVersion:positive,postingDate:date,reason,requestKey,
@@ -131,6 +136,14 @@ export function registerIntercompanyPhase3Routes(app:Express) {
     try{return res.json(await reviseSharedCharge({
       ...reallocate.parse(req.body),invoiceId:idParam(req.params.invoiceId)
     },identity(req)));}
+    catch(error){return failure(res,error);}
+  });
+  app.post("/api/intercompany-container-trading/shared-charge-grants",requireAuth,async(req,res)=>{
+    try{return res.status(201).json(await grantSharedChargeEditor(grant.parse(req.body),identity(req)));}
+    catch(error){return failure(res,error);}
+  });
+  app.post("/api/intercompany-container-trading/shared-charge-grants/:grantId/revoke",requireAuth,async(req,res)=>{
+    try{return res.json(await revokeSharedChargeEditor(idParam(req.params.grantId),identity(req)));}
     catch(error){return failure(res,error);}
   });
 }
