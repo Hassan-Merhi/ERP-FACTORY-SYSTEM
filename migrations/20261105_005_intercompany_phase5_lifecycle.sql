@@ -153,11 +153,24 @@ BEGIN
   ELSE
     receipt_id_to_check := NEW.receipt_id;
   END IF;
-  SELECT landed_cost INTO r FROM intercompany_destination_receipts WHERE id=receipt_id_to_check;
+  SELECT landed_cost, trade_id INTO r FROM intercompany_destination_receipts WHERE id=receipt_id_to_check;
   SELECT COALESCE(SUM(landed_value),0) INTO total
      FROM intercompany_destination_receipt_items WHERE receipt_id=receipt_id_to_check;
   IF r.landed_cost IS NULL OR r.landed_cost<>total THEN
     RAISE EXCEPTION 'All received destination item values must equal confirmed linked GIT cost';
+  END IF;
+  -- Matching the total is insufficient: a missing zero-cost/free PO item
+  -- would otherwise never enter destination stock, even though the GL balances.
+  IF EXISTS (
+    SELECT DISTINCT li.stock_item_id
+    FROM intercompany_trades t
+    JOIN po_line_items li ON li.po_id=t.destination_po_id
+    WHERE t.id=r.trade_id
+    EXCEPT
+    SELECT ri.stock_item_id FROM intercompany_destination_receipt_items ri
+    WHERE ri.receipt_id=receipt_id_to_check
+  ) THEN
+    RAISE EXCEPTION 'Destination receipt items must cover all linked purchase stock items';
   END IF;
   RETURN NULL;
 END $fn$;
@@ -180,8 +193,8 @@ BEGIN
             WHERE c.trade_id=OLD.id AND c.expected_version=OLD.version) THEN
       RAISE EXCEPTION 'Cancel the intercompany trade only through synchronized Phase 5 accounting';
     END IF;
-  ELSIF OLD.state='canceled' AND NEW.state IS DISTINCT FROM OLD.state THEN
-    RAISE EXCEPTION 'Canceled trade is immutable; never restore without a new verified trade';
+  ELSIF OLD.state='canceled' THEN
+    RAISE EXCEPTION 'Canceled trade is immutable; never rewrite status, version or financial evidence';
   END IF;
   RETURN NEW;
 END $fn$;
@@ -238,6 +251,9 @@ RETURNS TRIGGER LANGUAGE plpgsql AS $fn$
 DECLARE t RECORD; p RECORD; v1 RECORD; v2 RECORD; v3 RECORD;
 BEGIN
   IF TG_OP<>'INSERT' THEN RAISE EXCEPTION 'Intercompany cancellation evidence cannot be modified'; END IF;
+  IF current_setting('erp.ic_phase5_cancel',true) IS DISTINCT FROM NEW.trade_id::text THEN
+    RAISE EXCEPTION 'Cancellation evidence requires the same atomic cancellation transaction';
+  END IF;
   SELECT * INTO t FROM intercompany_trades WHERE id=NEW.trade_id;
   SELECT * INTO p FROM intercompany_relationship_policies WHERE id=NEW.relationship_id;
   SELECT * INTO v1 FROM vouchers WHERE id=NEW.source_sale_reversal_voucher_id;
