@@ -7,7 +7,7 @@
 - Both sidebars link to the Help & Training center.
 - Guides cover existing navigation and workflows; the same page never modifies business data.
 - Generic help content is filtered by the current user page permissions.
-- Video players only appear for explicitly published, reviewed media; empty slots explain that no video has been published.
+- Video players appear for every topic the nightly recorder has published; empty slots explain that no video has been recorded yet. The page reads the published list from the authenticated route `/api/training/media`, which the server refreshes from private storage about once a minute, so a new recording needs no deploy.
 
 ## Recording real software, not a generated mock-up
 
@@ -28,16 +28,20 @@ Each completed topic output includes:
 - `guide.md`: workflow documentation.
 - `report.json`: recording status for all selected topics.
 
-### Review and publish permanently
+### Automatic nightly publication
 
-1. Check recording success and confirm the video contains only disposable sample data, no private business details, login screens or credentials.
-2. Check the instructions against the actual current UI and confirm the recorded page is correct.
-3. Approve the selected topic through the protected GitHub `training-publication` environment after reviewing all evidence.
-4. Use **Approve & Publish ERP Training Video** to upload approved WebM, captions and screenshot to the dedicated **private Vercel Blob store** and create a PR updating `shared/publishedTrainingMedia.json` with approved guide steps. GitHub Actions temporary artifacts and ephemeral Render filesystems are not used as permanent storage.
-5. Review/merge that PR, deploy the change, and verify playback and active-company role access; the app routes video, captions and screenshots through its authenticated backend.
-6. Rerecord videos when relevant workflows or screenshots change.
+The **Nightly ERP Training Audit** publishes by itself. After the `record` job uploads its artifact, the `publish` job in the same run:
 
-This is the **initial foundation**. Nightly detection and automated recording have now been added, while private streaming is available only after storage credentials and an approved published manifest are configured. AI-discovered multi-step write simulations and an in-app admin approval console are **not implemented**. Until a reviewed publication PR is merged and deployed, the library marks videos as unpublished.
+1. Downloads that run's own artifact and re-validates every topic captured from the audited `main` commit with `scripts/validate-training-recording.mjs`: report status, source commit, the four files, WebVTT captions, numbered guide steps, and a full decode of the MP4 as H.264/yuv420p with an AAC narration track between 1 and 20 minutes.
+2. Obtains a GitHub OIDC identity in the `training-publication` environment and asks the Vercel gateway for one signed PUT per immutable object (`training/videos/{topic}/{commit}.mp4|.vtt|.png`). No storage token exists in GitHub.
+3. Reads the current manifest (`training/manifest/current.json`) back through the gateway, replaces each re-recorded topic with tonight's recording, keeps every other topic, and overwrites the manifest. Earlier files stay in private storage for rollback.
+4. Opens a GitHub issue listing what was recorded and whether publication succeeded.
+
+The ERP picks the new manifest up within about a minute; no pull request, merge or deploy is involved. Playback still goes through the authenticated `/api/training/media/:topic` routes, which check the active company and page permission before signing a short-lived read.
+
+**Rolling back or publishing one topic by hand:** run **Approve & Publish ERP Training Video** with the recording run ID and one topic. It validates the same way, then uploads that topic and updates the manifest. The `training-publication` environment must have `TRAINING_PUBLICATION_APPROVAL_ENABLED=true`, a `main` branch restriction, and **no required reviewers**, otherwise the nightly publish job waits for a click that never comes.
+
+The build-time file `shared/publishedTrainingMedia.json` is only the fallback used when `TRAINING_MEDIA_PROVIDER` is not `vercel`.
 
 ## Security and reliability
 
