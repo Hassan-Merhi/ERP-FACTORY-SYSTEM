@@ -26,14 +26,27 @@ describe("GitHub token permission boundaries", () => {
     expect(validator).not.toContain("id-token: write");
     expect(validator).toContain("gh run download");
     expect(validator).toContain('--repo "$GITHUB_REPOSITORY"');
-    expect(validator).toContain('audio?.codec_name !== "aac"');
-    expect(validator).toContain("duration < 60 || duration > 1200");
+    expect(validator).toContain("node scripts/validate-training-recording.mjs");
     expect(publisher).toContain("needs: verify-recording");
     expect(publisher).toContain("environment: training-publication");
     expect(publisher).toContain("TRAINING_PUBLICATION_APPROVAL_ENABLED");
-    expect(publisher).toContain("contents: write");
-    expect(publisher).toContain("pull-requests: write");
+    expect(publisher).toContain("contents: read");
+    expect(publisher).not.toContain("contents: write");
+    expect(publisher).not.toContain("pull-requests: write");
     expect(publisher).toContain("id-token: write");
+  });
+
+  it("lets the nightly audit publish with an OIDC identity but no repository write token", () => {
+    const source = workflow("nightly-training-audit");
+    const publisher = job(source, "publish");
+    expect(publisher).toContain("environment: training-publication");
+    expect(publisher).toContain("id-token: write");
+    expect(publisher).toContain("contents: read");
+    expect(publisher).not.toContain("contents: write");
+    expect(publisher).not.toContain("pull-requests: write");
+    expect(publisher).toContain("persist-credentials: false");
+    expect(job(source, "record")).not.toContain("id-token: write");
+    expect(job(source, "plan")).not.toContain("id-token: write");
   });
 
   it("keeps certification status writes separate from application tests", () => {

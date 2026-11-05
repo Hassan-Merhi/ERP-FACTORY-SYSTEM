@@ -24,6 +24,9 @@ export interface PriceListRow {
   masterPrices?: Record<number, string>;
   costPrice?: string | null;
   offloadingCost?: string | null;
+  highestPriceSold?: string | null;
+  lowestPriceSold?: string | null;
+  qtySold?: string;
 }
 
 export interface PriceListItem extends PriceListRow {

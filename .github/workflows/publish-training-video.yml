@@ -1,5 +1,9 @@
 name: Approve & Publish ERP Training Video
 
+# Manual re-publication of ONE topic from an earlier recording run, for
+# example to roll a topic back to a previous night's video. The nightly audit
+# publishes its own recordings automatically; this workflow is the override.
+
 on:
   workflow_dispatch:
     inputs:
@@ -8,7 +12,7 @@ on:
         required: true
         type: string
       topic:
-        description: "ONE reviewed topic ID (not all)"
+        description: "ONE topic ID to publish from that run (not all)"
         required: true
         type: string
 
@@ -35,9 +39,12 @@ jobs:
       SOURCE_RUN: ${{ inputs.source_run_id }}
       TOPIC: ${{ inputs.topic }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.1"
+          node-version: "24.22.2"
       - name: Reject malformed source identifiers before calling GitHub API
         shell: bash
         run: |
@@ -78,57 +85,22 @@ jobs:
           fs.appendFileSync(process.env.GITHUB_ENV, "TRAINING_SOURCE_SHA=" + run.head_sha + "\n");
           fs.appendFileSync(process.env.GITHUB_OUTPUT, "source_sha=" + run.head_sha + "\n");
           NODE
-          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" -n "real-erp-training-$SOURCE_RUN" -D "$RUNNER_TEMP/review"
-      - name: Validate recorded evidence
-        shell: bash
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" -n "real-erp-training-$SOURCE_RUN" -D "$GITHUB_WORKSPACE/.training-review"
+      - name: Install the decoder used to re-verify the recording
         run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE'
-          import fs from "node:fs";
-          import path from "node:path";
-          const root = path.join(process.env.RUNNER_TEMP, "review");
-          const topic = process.env.TOPIC;
-          const report = JSON.parse(fs.readFileSync(path.join(root, "report.json"), "utf8"));
-          if (!Array.isArray(report)) throw new Error("Missing recording report");
-          const entry = report.find((item) => item.topic === topic);
-          if (!entry || entry.sourceSha !== process.env.TRAINING_SOURCE_SHA || entry.status !== "captured" || entry.requiresReview !== true) {
-            throw new Error("The selected video has no successful reviewed-candidate recording");
-          }
-          for (const file of ["screen.mp4", "captions.vtt", "guide.md", "screenshot.png"]) {
-            const full = path.join(root, topic, file);
-            if (!fs.statSync(full).isFile() || fs.statSync(full).size < 16) {
-              throw new Error("Missing or empty recording: " + file);
-            }
-          }
-          if (!fs.readFileSync(path.join(root, topic, "captions.vtt"), "utf8").startsWith("WEBVTT")) {
-            throw new Error("Invalid captions");
-          }
-          NODE
-      - name: Verify H.264 video with AAC narration, browser playback and 1-20 minute duration
-        shell: bash
-        run: |
-          set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg
-          video="$RUNNER_TEMP/review/$TOPIC/screen.mp4"
-          ffprobe -v error -show_entries stream=codec_type,codec_name,pix_fmt:format=duration -of json "$video" > "$RUNNER_TEMP/training-probe.json"
-          node --input-type=module <<'NODE'
-          import fs from "node:fs";
-          const result = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/training-probe.json", "utf8"));
-          const video = result.streams?.find((stream) => stream.codec_type === "video");
-          const audio = result.streams?.find((stream) => stream.codec_type === "audio");
-          const duration = Number(result.format?.duration);
-          if (video?.codec_name !== "h264" || video?.pix_fmt !== "yuv420p" || audio?.codec_name !== "aac" ||
-              !Number.isFinite(duration) || duration < 60 || duration > 1200) {
-            throw new Error("Training recording must decode as a narrated 1-20 minute Windows H.264/yuv420p + AAC MP4");
-          }
-          NODE
-          ffmpeg -hide_banner -v error -xerror -i "$video" -f null -
-      - name: Transfer immutable reviewed candidate to protected publisher
+      - name: Verify the H.264 + AAC narrated recording, captions, guide and 1-20 minute duration
+        env:
+          TRAINING_REVIEW_DIR: ${{ github.workspace }}/.training-review
+          TRAINING_TOPICS: ${{ inputs.topic }}
+          TRAINING_VALIDATION_OUTPUT: ${{ github.workspace }}/.training-review/validated-recordings.json
+        run: node scripts/validate-training-recording.mjs
+      - name: Transfer immutable validated candidate to protected publisher
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vetted-training-publication
-          path: ${{ runner.temp }}/review/
+          path: ${{ github.workspace }}/.training-review/
           if-no-files-found: error
           retention-days: 1
 
@@ -138,26 +110,27 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
       id-token: write
-    # This job alone has both publication approval and publication privileges.
-    # It is never run unless verify-recording finished successfully.
+    # This job alone has both the publication environment and the OIDC identity
+    # the storage gateway trusts. It never runs unless verify-recording passed.
     environment: training-publication
     env:
-      GH_TOKEN: ${{ github.token }}
       TRAINING_PUBLICATION_APPROVAL_ENABLED: ${{ vars.TRAINING_PUBLICATION_APPROVAL_ENABLED }}
       SOURCE_RUN: ${{ inputs.source_run_id }}
       TOPIC: ${{ inputs.topic }}
       TRAINING_SOURCE_SHA: ${{ needs.verify-recording.outputs.source_sha }}
+      TRAINING_REVIEW_DIR: ${{ github.workspace }}/.training-review
+      TRAINING_VALIDATION: ${{ github.workspace }}/.training-review/validated-recordings.json
+      TRAINING_PUBLISHED_BY: ${{ github.actor }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
-          persist-credentials: true
+          persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.1"
+          node-version: "24.22.2"
       - name: Fail closed unless protected approval and storage are configured
         shell: bash
         run: |
@@ -175,28 +148,18 @@ jobs:
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: vetted-training-publication
-          path: ${{ runner.temp }}/review/
-      - name: Upload reviewed videos, captions and screenshots to PRIVATE Vercel Blob
+          path: ${{ github.workspace }}/.training-review/
+      - name: Upload the validated video, captions and screenshot to PRIVATE Vercel Blob and update the runtime manifest
         shell: bash
         run: |
           set -euo pipefail
           node scripts/upload-reviewed-training-vercel.mjs
-      - name: Propose publication for code review and deployment
-        env:
-          TRAINING_PUBLISH_TOPIC: ${{ inputs.topic }}
-          TRAINING_APPROVED_BY: ${{ github.actor }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          export TRAINING_APPROVED_GUIDE_PATH="$RUNNER_TEMP/review/$TOPIC/guide.md"
-          node scripts/register-published-training.mjs
-          branch="training/publish-$SOURCE_RUN-$TOPIC"
-          git config user.name "training-publication[bot]"
-          git config user.email "training-publication@users.noreply.github.com"
-          git checkout -b "$branch"
-          git add shared/publishedTrainingMedia.json
-          git commit -m "Publish reviewed $TOPIC video from $TRAINING_SOURCE_SHA"
-          git push origin "$branch"
-          gh pr create --base main --head "$branch" \
-            --title "Publish approved training: $TOPIC" \
-            --body "Human-approved private training media from recording run $SOURCE_RUN. Original source commit: $TRAINING_SOURCE_SHA. Files reside in a private Vercel Blob store; the ERP streams them only to authenticated users after this PR is merged and deployed. No live accounting or Factory data was modified."
+          echo "Published $TOPIC from $TRAINING_SOURCE_SHA; it is live in Help & Training as soon as the ERP refreshes its manifest (about one minute)."
+      - name: Keep the publication receipt
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: manual-training-publication-${{ inputs.topic }}
+          path: ${{ github.workspace }}/.training-review/published-upload-report.json
+          if-no-files-found: warn
+          retention-days: 30

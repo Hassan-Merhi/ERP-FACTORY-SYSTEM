@@ -1,10 +1,11 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2312,
+  "routeCount": 2315,
   "middlewareMountCount": 139,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
+    "GET /api/training/media [requireAuth > <anonymous>]",
     "GET /api/training/media/:topic [requireAuth > <anonymous>]",
     "GET /api/training/media/:topic/captions [requireAuth > <anonymous>]",
     "GET /api/training/media/:topic/screenshot [requireAuth > <anonymous>]",
@@ -245,6 +246,10 @@
     "PATCH /api/factory/weekly-report-wa-settings [requireAuth > <anonymous>]",
     "POST /api/factory/send-weekly-report-whatsapp [requireAuth > <anonymous>]",
     "GET /api/factory/production-value-report [requireAuth > <anonymous>]",
+    "GET /api/factory/monthly-production-matrix [requireAuth > <anonymous>]",
+    "PUT /api/factory/monthly-production-matrix/order [requireAuth > <anonymous>]",
+    "GET /api/factory/monthly-production-matrix/workers [requireAuth > <anonymous>]",
+    "GET /api/factory/monthly-production-matrix/bales [requireAuth > <anonymous>]",
     "GET /api/factory/fx-rates [requireAuth > <anonymous>]",
     "GET /api/factory/fx-rates/latest/:currencyCode [requireAuth > <anonymous>]",
     "GET /api/factory/fx-rates/:currencyCode/:date [requireAuth > <anonymous>]",

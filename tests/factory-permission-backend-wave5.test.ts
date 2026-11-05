@@ -80,6 +80,69 @@ describe("Wave 5 Factory backend access certification", () => {
     });
   });
 
+  it("maps Monthly Production Matrix reads and shared ordering to the Inventory page", () => {
+    expect(resolveFactoryBackendAccessRequirement(request("/monthly-production-matrix"))).toEqual({
+      pageKey: "factory/monthly-production-matrix",
+    });
+    expect(
+      resolveFactoryBackendAccessRequirement(request("/monthly-production-matrix/order", { method: "PUT" }))
+    ).toEqual({
+      pageKey: "factory/monthly-production-matrix",
+    });
+    for (const endpoint of ["/monthly-production-matrix/workers", "/monthly-production-matrix/bales"]) {
+      expect(resolveFactoryBackendAccessRequirement(request(endpoint))).toEqual({
+        pageKey: "factory/monthly-production-matrix",
+      });
+    }
+  });
+
+  it("requires Monthly Production Matrix permission for reads and shared reordering", async () => {
+    accessMocks.authorizeFactoryPageAccess.mockImplementation(async (_req: unknown, page: string) =>
+      page === "factory/monthly-production-matrix"
+        ? { allowed: true, state: { ...normalState, pageKeys: [page] } }
+        : { allowed: false, code: "FACTORY_PAGE_ACCESS_DENIED", message: "No access" }
+    );
+    for (const [path, method] of [[
+      "/monthly-production-matrix",
+      "GET",
+    ], [
+      "/monthly-production-matrix/order",
+      "PUT",
+    ], [
+      "/monthly-production-matrix/workers",
+      "GET",
+    ], [
+      "/monthly-production-matrix/bales",
+      "GET",
+    ]] as const) {
+      const { res } = response();
+      const next = vi.fn();
+      await enforceFactoryBackendAccess(request(path, { method }), res, next);
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(res.status).not.toHaveBeenCalled();
+    }
+  });
+  it("rejects Monthly Production Matrix API requests without the page grant", async () => {
+    accessMocks.authorizeFactoryPageAccess.mockResolvedValue({
+      allowed: false,
+      code: "FACTORY_PAGE_ACCESS_DENIED",
+      message: "You do not have access to this Factory page.",
+      state: normalState,
+    });
+    for (const [path, method] of [
+      ["/monthly-production-matrix", "GET"],
+      ["/monthly-production-matrix/order", "PUT"],
+      ["/monthly-production-matrix/workers", "GET"],
+      ["/monthly-production-matrix/bales", "GET"],
+    ] as const) {
+      const { res, state } = response();
+      const next = vi.fn();
+      await enforceFactoryBackendAccess(request(path, { method }), res, next);
+      expect(state.status).toBe(403);
+      expect(state.body).toMatchObject({ code: "FACTORY_PAGE_ACCESS_DENIED" });
+      expect(next).not.toHaveBeenCalled();
+    }
+  });
   it("permits scheduled container creation from Invoicing without granting unrelated pages", async () => {
     accessMocks.authorizeFactoryPageAccess.mockImplementation(async (_req: unknown, page: string) => {
       if (page === "factory/invoicing") {

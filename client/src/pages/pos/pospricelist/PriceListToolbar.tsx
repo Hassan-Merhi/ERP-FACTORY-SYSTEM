@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/PageHeader";
+import { PeriodFilter } from "@/components/ui/period-filter";
 import type { PosPriceListModel } from "./usePosPriceListModel";
 
 export function PriceListTitleBar({ model }: { model: PosPriceListModel }) {
@@ -168,6 +169,16 @@ export function PriceListSearchRow({ model }: { model: PosPriceListModel }) {
           onChange={(e) => model.setSearch(e.target.value)}
         />
       </div>
+      {!model.isAllMode && (
+        <div className="flex shrink-0 items-center gap-2" aria-label="Sales history date range">
+          <span className="hidden lg:inline text-xs text-muted-foreground">Sales period</span>
+          <PeriodFilter
+            value={model.salesPeriod}
+            onChange={model.setSalesPeriod}
+            data-testid="filter-price-list-sales-period"
+          />
+        </div>
+      )}
       {stockGroups.length > 0 && !showUnpriced && (
         <Select value={model.groupFilter} onValueChange={model.setGroupFilter}>
           <SelectTrigger data-testid="select-group-filter" className="w-40 h-9">

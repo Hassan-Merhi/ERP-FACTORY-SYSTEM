@@ -1,6 +1,6 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import SpPOImport from "./SpPOImport";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { PageHeader } from "@/components/PageHeader";
@@ -19,7 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useCompany } from "@/contexts/CompanyContext";
-import { Upload, FileSpreadsheet, CheckCircle, XCircle, Download, Check, ChevronsUpDown } from "lucide-react";
+import { Upload, FileSpreadsheet, CheckCircle, XCircle, Download, Check, ChevronsUpDown, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Supplier } from "@shared/schema";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -36,6 +36,8 @@ interface SupplierComboboxProps {
 
 interface POImportItem {
   poNumber: string;
+  barcode?: string | null;
+  stockItemId?: number | null;
   itemName: string;
   quantity: string | number;
   rate: string | number;
@@ -69,6 +71,41 @@ interface POImportPreview {
 
 interface POValidationResult {
   errors: React.ReactNode[];
+  resolvedItems?: { index: number; stockItemId: number; itemName: string }[];
+}
+
+interface POImportDraft {
+  preview: POImportPreview;
+  selectedSupplier: string;
+  containerNumber: string;
+  importDate: string;
+  freightPaidBy: "supplier" | "parent";
+  freightParentAccountId: string;
+  importCurrency: "" | "USD" | "ZMW";
+}
+
+const draftStorageKey = (companyId: number) => `po-import-draft:${companyId}`;
+
+/** Merge server-resolved names into the parsed file without touching its amounts. */
+function withResolvedStockItems(
+  current: POImportPreview | null,
+  payload: POImportPayload,
+  result: POValidationResult
+): POImportPreview | null {
+  if (!current || current.fileHash !== payload.fileHash || !result.resolvedItems?.length) return current;
+  const resolved = new Map(result.resolvedItems.map((item) => [item.index, item]));
+  let changed = false;
+  const containers = current.preview.map((container) => {
+    if (container.containerNumber !== payload.containerNumber) return container;
+    const items = container.items.map((item, index) => {
+      const match = resolved.get(index);
+      if (!match || (item.itemName === match.itemName && item.stockItemId === match.stockItemId)) return item;
+      changed = true;
+      return { ...item, itemName: match.itemName, stockItemId: match.stockItemId };
+    });
+    return changed ? { ...container, items } : container;
+  });
+  return changed ? { ...current, preview: containers } : current;
 }
 
 type POImportPayload = POImportPreview & {
@@ -150,6 +187,7 @@ function ErpPOImport() {
   const { selectedCompany } = useCompany();
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<POImportPreview | null>(null);
+  const [previewCompanyId, setPreviewCompanyId] = useState<number | null>(null);
   const [validationResult, setValidationResult] = useState<POValidationResult | null>(null);
   const [selectedSupplier, setSelectedSupplier] = useState<string>("");
   const [containerNumber, setContainerNumber] = useState<string>("");
@@ -165,6 +203,71 @@ function ErpPOImport() {
     setImportCurrency("");
     setValidationResult(null);
   }, [selectedCompany?.id]);
+
+  // Keep the parsed PO draft across navigation to Stock and back (and a tab
+  // refresh). The uploaded Excel bytes are no longer needed after parsing.
+  // Only restore a draft for the active company, never another company's data.
+  useEffect(() => {
+    const companyId = selectedCompany?.id;
+    if (!companyId) return;
+    setFile(null);
+    setValidationResult(null);
+    try {
+      const saved = window.sessionStorage.getItem(draftStorageKey(companyId));
+      if (saved) {
+        const draft = JSON.parse(saved) as POImportDraft;
+        if (draft.preview && Array.isArray(draft.preview.preview)) {
+          setPreview(draft.preview);
+          setPreviewCompanyId(companyId);
+          setSelectedSupplier(draft.selectedSupplier || "");
+          setContainerNumber(draft.containerNumber || "");
+          setImportDate(draft.importDate || new Date().toLocaleDateString("en-CA"));
+          setFreightPaidBy(draft.freightPaidBy === "parent" ? "parent" : "supplier");
+          setFreightParentAccountId(draft.freightParentAccountId || "");
+          setImportCurrency(draft.importCurrency || "");
+          return;
+        }
+      }
+    } catch {
+      // Storage can be unavailable (private browsing or quota); regular
+      // in-memory imports still work.
+    }
+    setPreview(null);
+    setPreviewCompanyId(companyId);
+    setSelectedSupplier("");
+    setContainerNumber("");
+    setFreightParentAccountId("");
+    setImportCurrency("");
+  }, [selectedCompany?.id]);
+
+  useEffect(() => {
+    const companyId = selectedCompany?.id;
+    if (!companyId || previewCompanyId !== companyId || !preview) return;
+    const draft: POImportDraft = {
+      preview,
+      selectedSupplier,
+      containerNumber,
+      importDate,
+      freightPaidBy,
+      freightParentAccountId,
+      importCurrency,
+    };
+    try {
+      window.sessionStorage.setItem(draftStorageKey(companyId), JSON.stringify(draft));
+    } catch {
+      // Browser storage is optional; the active preview remains intact.
+    }
+  }, [
+    selectedCompany?.id,
+    previewCompanyId,
+    preview,
+    selectedSupplier,
+    containerNumber,
+    importDate,
+    freightPaidBy,
+    freightParentAccountId,
+    importCurrency,
+  ]);
 
   const {
     data: suppliers = [],
@@ -198,6 +301,7 @@ function ErpPOImport() {
     refetchOnWindowFocus: false,
   });
   const [validatedAgainstStockItemsAt, setValidatedAgainstStockItemsAt] = useState(0);
+  const refreshInFlight = useRef(false);
 
   const parseMutation = useMutation({
     mutationFn: async (formData: FormData) => {
@@ -210,6 +314,7 @@ function ErpPOImport() {
     },
     onSuccess: (data) => {
       setPreview(data);
+      setPreviewCompanyId(selectedCompany?.id ?? null);
       setValidationResult(null);
       if (data.preview.length > 0) setContainerNumber(data.preview[0].containerNumber || "");
       toast({
@@ -231,7 +336,8 @@ function ErpPOImport() {
       const res = await apiRequest("POST", "/api/po-import/validate", data);
       return await res.json();
     },
-    onSuccess: (data) => {
+    onSuccess: (data: POValidationResult, payload: POImportPayload) => {
+      setPreview((current) => withResolvedStockItems(current, payload, data));
       setValidationResult(data);
       const errorCount = data.errors?.length || 0;
       toast({
@@ -249,12 +355,36 @@ function ErpPOImport() {
     },
   });
 
+  // Silent refresh: the already-parsed spreadsheet stays in memory while newly
+  // created stock items are resolved against current server data.
+  const refreshStockItemsMutation = useMutation({
+    mutationFn: async (payload: POImportPayload): Promise<POValidationResult> => {
+      const res = await apiRequest("POST", "/api/po-import/validate", payload);
+      return await res.json();
+    },
+    onSuccess: (data, payload) => {
+      setPreview((current) => withResolvedStockItems(current, payload, data));
+      // Don't turn a background lookup into an explicit user validation.
+      setValidationResult((previous) => (previous === null ? null : data));
+    },
+    onSettled: () => {
+      refreshInFlight.current = false;
+    },
+  });
+
   const importMutation = useMutation({
     mutationFn: async (data: POImportPayload) => {
       const res = await apiRequest("POST", "/api/po-import/import", data);
       return await res.json();
     },
     onSuccess: (data) => {
+      if (selectedCompany?.id) {
+        try {
+          window.sessionStorage.removeItem(draftStorageKey(selectedCompany.id));
+        } catch {
+          // The successful server import is authoritative.
+        }
+      }
       toast({
         title: "Import successful",
         description: `Container ${data.containerNumber} imported with ${data.itemsCount} items`,
@@ -274,6 +404,13 @@ function ErpPOImport() {
       setFile(selectedFile);
       setPreview(null);
       setValidationResult(null);
+      if (selectedCompany?.id) {
+        try {
+          window.sessionStorage.removeItem(draftStorageKey(selectedCompany.id));
+        } catch {
+          // Continue parsing if session storage is unavailable.
+        }
+      }
     }
   };
 
@@ -346,20 +483,46 @@ function ErpPOImport() {
     ]
   );
 
+  const refreshStockItemsMutate = refreshStockItemsMutation.mutate;
+  const refreshStockItems = useCallback(() => {
+    if (!preview || refreshInFlight.current) return;
+    refreshInFlight.current = true;
+    refreshStockItemsMutate(buildPayload());
+  }, [preview, refreshStockItemsMutate, buildPayload]);
+
+  const hasUnresolvedItems = Boolean(
+    preview?.preview.some((container) => container.items.some((item) => !item.stockItemId || !item.itemName))
+  );
+
+  // A stock item may have been added by a different tab, where React Query
+  // invalidation in this tab is not delivered. Recheck on return to the tab.
+  useEffect(() => {
+    if (!hasUnresolvedItems) return;
+    const onReturn = () => {
+      if (!document.hidden) refreshStockItems();
+    };
+    window.addEventListener("focus", onReturn);
+    document.addEventListener("visibilitychange", onReturn);
+    return () => {
+      window.removeEventListener("focus", onReturn);
+      document.removeEventListener("visibilitychange", onReturn);
+    };
+  }, [hasUnresolvedItems, refreshStockItems]);
+
+  // StockItemCreateDialog invalidates this key when an item is saved within
+  // the current tab. Handle that signal even before the user first validates.
   useEffect(() => {
     if (
       !preview ||
-      !validationResult?.errors?.length ||
+      !hasUnresolvedItems ||
       !stockItemsUpdatedAt ||
-      stockItemsUpdatedAt <= validatedAgainstStockItemsAt ||
-      validateMutation.isPending
+      stockItemsUpdatedAt <= validatedAgainstStockItemsAt
     ) {
       return;
     }
-
     setValidatedAgainstStockItemsAt(stockItemsUpdatedAt);
-    validateMutation.mutate(buildPayload());
-  }, [preview, validationResult, stockItemsUpdatedAt, validatedAgainstStockItemsAt, validateMutation, buildPayload]);
+    refreshStockItems();
+  }, [preview, hasUnresolvedItems, stockItemsUpdatedAt, validatedAgainstStockItemsAt, refreshStockItems]);
 
   const checkRequiredFields = () => {
     if (requiresImportCurrency && !importCurrency) {
@@ -437,6 +600,13 @@ function ErpPOImport() {
   };
 
   const handleCancel = () => {
+    if (selectedCompany?.id) {
+      try {
+        window.sessionStorage.removeItem(draftStorageKey(selectedCompany.id));
+      } catch {
+        // In-memory cancellation still succeeds.
+      }
+    }
     setFile(null);
     setPreview(null);
     setValidationResult(null);
@@ -632,7 +802,20 @@ function ErpPOImport() {
       {preview && preview.preview.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Preview & Validation</CardTitle>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle>Preview & Validation</CardTitle>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={refreshStockItems}
+                disabled={refreshStockItemsMutation.isPending}
+                data-testid="button-refresh-po-stock-items"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                {refreshStockItemsMutation.isPending ? "Refreshing..." : "Refresh stock items"}
+              </Button>
+            </div>
             <CardDescription>
               Review the data and validate before importing. {preview.preview.length} container(s) found
             </CardDescription>
@@ -690,7 +873,7 @@ function ErpPOImport() {
                       {container.items.map((item: POImportItem, itemIdx: number) => (
                         <TableRow key={itemIdx}>
                           <TableCell>{item.poNumber}</TableCell>
-                          <TableCell>{item.itemName}</TableCell>
+                          <TableCell>{item.itemName || item.barcode || "Unmatched item"}</TableCell>
                           <TableCell className="text-right">{formatCurrency(Number(item.quantity))}</TableCell>
                           <TableCell className="text-right">
                             {priceSymbol}
