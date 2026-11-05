@@ -1,6 +1,4 @@
 export const TICKET_REMINDER_HOURS = 24;
-const MAX_EVENTS_PER_TICK = 40;
-const MAX_DELIVERIES_PER_TICK = 80;
 
 export type TicketEventType =
   | "ticket_created" | "ticket_seen" | "ticket_start" | "ticket_finalize"
