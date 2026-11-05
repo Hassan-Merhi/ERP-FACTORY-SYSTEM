@@ -53,7 +53,7 @@ describe("Phase 3 intercompany linked edit migration guards", () => {
           "CREATE TABLE user_company_roles(user_id varchar,company_id integer,role text);" +
           "CREATE TABLE ledger_accounts(id integer PRIMARY KEY,company_id integer,deleted_at timestamp);" +
           "CREATE TABLE suppliers(id integer PRIMARY KEY,company_id integer,active boolean,deleted_at timestamp);" +
-          "CREATE TABLE containers(id integer PRIMARY KEY,company_id integer,status text,container_number text,offload_date date,items_total numeric,charges_total numeric,grand_total numeric);" +
+          "CREATE TABLE containers(id integer PRIMARY KEY,company_id integer,supplier_id integer,status text,container_number text,offload_date date,items_total numeric,charges_total numeric,grand_total numeric);" +
           "CREATE TABLE vouchers(id integer PRIMARY KEY,description text);" +
           "CREATE TABLE purchase_orders(id integer PRIMARY KEY,company_id integer,container_id integer,voucher_id integer,po_number text,items_total numeric,freight numeric,surcharge numeric,fumigation numeric,document_charges numeric,discount numeric,other_charges numeric,charges_edited boolean);" +
           "CREATE TABLE voucher_entries(id serial PRIMARY KEY,voucher_id integer,debit_amount numeric,credit_amount numeric);" +
