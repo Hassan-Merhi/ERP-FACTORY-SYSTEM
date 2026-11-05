@@ -248,6 +248,8 @@ export default function FactoryProformas() {
         setIsCreateOpen={model.setIsCreateOpen}
         newProformaName={model.newProformaName}
         setNewProformaName={model.setNewProformaName}
+        newDestination={model.newDestination}
+        setNewDestination={model.setNewDestination}
         createProformaMutation={model.createProformaMutation}
         handleCreateProforma={model.handleCreateProforma}
       />
