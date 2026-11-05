@@ -197,6 +197,9 @@ export async function receiveLinkedTrade(input: ReceiveIntercompanyTradeInput, a
           actor: { userId: actor.actorUserId, reason: input.reason.trim() },
           allowNegativeStock: false,
         }, adapter);
+        if (!cents(movement.value).eq(cents(row.value))) {
+          rejectEdit("Canonical stock movement value does not match actual ERP inventory receipt", "IC_RECEIPT_CANONICAL_VALUE");
+        }
         if (movement.idempotent || movement.movements.length !== 1) {
           rejectEdit("Duplicated or incomplete canonical destination stock receipt", "IC_RECEIPT_REPLAY");
         }
