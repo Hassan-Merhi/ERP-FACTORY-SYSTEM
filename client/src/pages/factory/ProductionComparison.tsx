@@ -1,3 +1,4 @@
+import { downloadBlob } from "@/lib/downloadBlob";
 import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -359,12 +360,7 @@ export default function ProductionComparison() {
       return '"' + safe.replace(/"/g, '""') + '"';
     };
     const csv = [header, ...rows].map((row) => row.map(escapeCell).join(",")).join("\r\n");
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "production-supplier-comparison.csv";
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), "production-supplier-comparison.csv");
   }
 
   return (
