@@ -49,11 +49,14 @@ export function registerPoImportRoutes(app: Express) {
 
       const { containerNumber, supplierId, preview, freightPaidBy, freightParentAccountId } = req.body;
 
-      if (!containerNumber || !supplierId || !preview) {
+      // Missing supplier still reports a validation error, but item resolution
+      // remains available while the operator is completing the import form.
+      if (!containerNumber || !preview) {
         return res.status(400).json({ message: "Missing required fields" });
       }
 
       const errors: string[] = [];
+      const resolvedItems: { index: number; stockItemId: number; itemName: string }[] = [];
 
       // Supplier master data may be inherited from the explicitly linked parent
       // company, but the import records remain owned by the active company.
@@ -109,7 +112,12 @@ export function registerPoImportRoutes(app: Express) {
           }))
         );
         errors.push(
-          ...(await collectPreviewItemErrors(containerPreview.items, req.session.currentCompanyId!, allStockItems))
+          ...(await collectPreviewItemErrors(
+            containerPreview.items,
+            req.session.currentCompanyId!,
+            allStockItems,
+            resolvedItems
+          ))
         );
 
         // Validate parent freight account when freight is present and paid by parent
@@ -122,6 +130,7 @@ export function registerPoImportRoutes(app: Express) {
       res.json({
         valid: errors.length === 0,
         errors,
+        resolvedItems,
       });
     } catch (error: unknown) {
       logger.error("PO Import validation error:", { error: error });
