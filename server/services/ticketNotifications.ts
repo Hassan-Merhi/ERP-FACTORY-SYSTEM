@@ -9,6 +9,8 @@ import { logger } from "../lib/logger";
 import { sendWhatsAppTextToChatId } from "./whatsappService";
 
 import { ticketEventRecipients, ticketEventCopy } from "./ticketNotificationPolicy";
+const MAX_EVENTS_PER_TICK = 40;
+const MAX_DELIVERIES_PER_TICK = 80;
 /** Create one overdue event per ticket per 24-hour elapsed period, not per cron tick. */
 export async function enqueueTicketOverdueReminders(now:Date=new Date()):Promise<number> {
   const result=await pool.query(
