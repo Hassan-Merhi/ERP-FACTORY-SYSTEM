@@ -252,6 +252,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       {G("/offloads/:id", "containers", OffloadDetail)}
 
       {G("/po-import", "containers", POImport)}
+      {R("/intercompany/linked-trades", canAccess("containers") && !["POS","View Only"].includes(effectiveRole), LinkedTradesEditor)}
       {R("/ai-validation", isDeveloper, AiValidationPage)}
       {R("/ai-command-center", isDeveloper, AICommandCenter)}
       {G("/pos-import", "pos", POSImport)}
