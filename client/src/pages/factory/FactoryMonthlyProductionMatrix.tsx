@@ -91,6 +91,7 @@ export default function FactoryMonthlyProductionMatrix() {
       return a.name.localeCompare(b.name) || a.id - b.id;
     });
   }, [data?.products, orderedIds]);
+  const rowPositionById = new Map(orderedProducts.map((product, index) => [product.id, index + 1]));
   const visibleProducts = orderedProducts.filter((product) => {
     const q = search.trim().toLowerCase();
     return (!category || product.categoryName === category) &&
@@ -163,8 +164,8 @@ export default function FactoryMonthlyProductionMatrix() {
     }
   };
   const movingProduct = orderedProducts.find((product) => product.id === moveItemId);
-  const currentPosition = movingProduct ? orderedProducts.findIndex((product) => product.id === movingProduct.id) + 1 : 0;
-  const parsedMoveRow = /^\\d+$/.test(moveRowNumber.trim()) ? Number(moveRowNumber) : Number.NaN;
+  const currentPosition = movingProduct ? (rowPositionById.get(movingProduct.id) ?? 0) : 0;
+  const parsedMoveRow = /^\d+$/.test(moveRowNumber.trim()) ? Number(moveRowNumber) : Number.NaN;
   const validMoveRow = Number.isSafeInteger(parsedMoveRow) && parsedMoveRow >= 1 && parsedMoveRow <= orderedProducts.length;
   const moveMatches = moveSearch.trim()
     ? orderedProducts
@@ -268,7 +269,7 @@ export default function FactoryMonthlyProductionMatrix() {
                     <GripVertical className={"h-4 w-4 shrink-0 " + (canReorder ? "cursor-grab text-muted-foreground" : "text-muted-foreground/30")} />
                     <div className="min-w-0 flex-1">
                       <div className="font-medium leading-tight">{product.name}</div>
-                      <div className="text-[11px] text-muted-foreground">#{orderedProducts.findIndex((p) => p.id === product.id) + 1} · {product.articleCode} · {product.categoryName}</div>
+                      <div className="text-[11px] text-muted-foreground">#{rowPositionById.get(product.id)} · {product.articleCode} · {product.categoryName}</div>
                     </div>
                     <Button
                       type="button"
@@ -375,7 +376,7 @@ export default function FactoryMonthlyProductionMatrix() {
                     >
                       <span className="font-medium">{product.name}</span>
                       <span className="ml-2 text-xs text-muted-foreground">
-                        #{orderedProducts.findIndex((p) => p.id === product.id) + 1} · {product.articleCode}
+                        #{rowPositionById.get(product.id)} · {product.articleCode}
                       </span>
                     </button>
                   )) : <p className="p-3 text-sm text-muted-foreground">{t("monthlyProduction.noDestination")}</p>}
