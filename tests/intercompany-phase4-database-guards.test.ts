@@ -38,12 +38,12 @@ describe("Phase 4 paired payment database protections",()=>{
       await client.query("CREATE SCHEMA "+schema);
       await client.query("SET LOCAL search_path TO "+schema);
       await client.query(
-        "CREATE TABLE companies(id integer PRIMARY KEY);"+
+        "CREATE TABLE companies(id integer PRIMARY KEY,name text);"+
         "CREATE TABLE users(id varchar PRIMARY KEY);"+
         "CREATE TABLE user_company_roles(user_id varchar,company_id integer,role text);"+
         "CREATE TABLE ledger_accounts(id integer PRIMARY KEY,company_id integer,account_type text,active boolean,deleted_at timestamp);"+
         "CREATE TABLE bank_accounts(id integer PRIMARY KEY,company_id integer,active boolean,deleted_at timestamp);"+
-        "CREATE TABLE suppliers(id integer PRIMARY KEY,company_id integer,active boolean,deleted_at timestamp);"+
+        "CREATE TABLE suppliers(id integer PRIMARY KEY,company_id integer,active boolean,deleted_at timestamp,legal_name text);"+
         "CREATE TABLE containers(id integer PRIMARY KEY,company_id integer,status text,container_number text,offload_date date,items_total numeric,charges_total numeric,grand_total numeric);"+
         "CREATE TABLE vouchers(id integer PRIMARY KEY,company_id integer,voucher_type text,total_amount numeric,deleted_at timestamp,description text,reversal_of_voucher_id integer);"+
         "CREATE TABLE purchase_orders(id integer PRIMARY KEY,company_id integer,container_id integer,voucher_id integer,po_number text,items_total numeric,freight numeric,surcharge numeric,fumigation numeric,document_charges numeric,discount numeric,other_charges numeric,charges_edited boolean);"+
@@ -53,12 +53,12 @@ describe("Phase 4 paired payment database protections",()=>{
         "CREATE TABLE container_offloads(id serial PRIMARY KEY,container_id integer);"
       );
       for(const script of scripts)await client.query(script);
-      await client.query("INSERT INTO companies(id) VALUES (1),(2),(3)");
+      await client.query("INSERT INTO companies(id,name) VALUES (1,'Hassan Properties'),(2,'HADI LSHI'),(3,'MALI')");
       await client.query("INSERT INTO users(id) VALUES ('owner')");
       await client.query("INSERT INTO user_company_roles(user_id,company_id,role) VALUES ('owner',1,'Owner')");
       await client.query("INSERT INTO ledger_accounts(id,company_id,account_type,active) VALUES (11,1,'Asset',true),(12,1,'Asset',true),(13,1,'Income',true),(14,1,'Expense',true),(15,2,'Liability',true),(16,2,'Asset',true),(17,1,'Liability',true),(18,3,'Liability',true),(19,3,'Asset',true),(20,1,'Cash',true)");
       await client.query("INSERT INTO bank_accounts(id,company_id,active) VALUES (31,1,true),(32,2,true),(33,3,true)");
-      await client.query("INSERT INTO suppliers(id,company_id,active) VALUES (1,1,true),(2,2,true),(3,3,true)");
+      await client.query("INSERT INTO suppliers(id,company_id,active,legal_name) VALUES (1,1,true,'Eurogulf'),(2,2,true,'Hassan Properties'),(3,3,true,'Hassan Properties')");
       await client.query("INSERT INTO containers(id,company_id,status,container_number,items_total,charges_total,grand_total) VALUES (10,1,'OTW','CONT-A',100,0,100),(11,1,'OTW','CONT-B',100,0,100)");
       await client.query("INSERT INTO vouchers(id,company_id,voucher_type,total_amount,description) VALUES (51,1,'Purchase',100,'Original'),(52,2,'Purchase',100,'Destination'),(53,1,'Purchase',100,'Original2'),(54,3,'Purchase',100,'Destination2'),(55,1,'Receipt',120,'Bank received'),(56,2,'Payment',120,'Bank paid'),(57,1,'Payment',120,'Bank returned'),(58,2,'Receipt',120,'Bank refunded')");
       await client.query("INSERT INTO voucher_entries(voucher_id,bank_account_id,ledger_account_id,supplier_id,debit_amount,credit_amount) VALUES (55,31,NULL,NULL,120,0),(55,NULL,11,NULL,0,120),(56,NULL,NULL,2,120,0),(56,32,NULL,NULL,0,120),(57,NULL,11,NULL,120,0),(57,31,NULL,NULL,0,120),(58,32,NULL,NULL,120,0),(58,NULL,NULL,2,0,120)");
@@ -91,7 +91,19 @@ describe("Phase 4 paired payment database protections",()=>{
       await rejects("INSERT INTO intercompany_container_payments"+paymentColumns+" VALUES (1,1,2,'phase4-fake-fx',repeat('a',64),'WIRE-FX-001','Transfer evidence checked','2026-11-05','USD',100,1,120,'bank',31,'bank',32,11,2,55,56,'owner')","ic_payments_fx_consistency");
       await rejects("INSERT INTO intercompany_container_payments"+paymentColumns+" VALUES (1,1,2,'phase4-fake-map',repeat('a',64),'WIRE-MAP-001','Transfer evidence checked','2026-11-05','USD',120,1,120,'bank',31,'bank',32,12,2,55,56,'owner')","verified company-pair");
       await rejects("INSERT INTO intercompany_container_payments"+paymentColumns+" VALUES (1,1,2,'phase4-fake-usd-rate',repeat('a',64),'WIRE-RATE-001','Transfer evidence checked','2026-11-05','USD',120,2,60,'bank',31,'bank',32,11,2,55,56,'owner')","ic_payments_fx_consistency");
+      await client.query("SAVEPOINT wrong_supplier_identity");
+      await client.query("UPDATE suppliers SET legal_name='Unrelated Vendor' WHERE id=2");
+      await rejects("INSERT INTO intercompany_container_payments"+paymentColumns+" VALUES "+goodValues,
+        "Original receivable/supplier identities");
+      await client.query("ROLLBACK TO SAVEPOINT wrong_supplier_identity");
+      await client.query("RELEASE SAVEPOINT wrong_supplier_identity");
       await client.query("INSERT INTO intercompany_container_payments"+paymentColumns+" VALUES "+goodValues);
+      await client.query("INSERT INTO vouchers(id,company_id,voucher_type,total_amount,description) VALUES (62,1,'Receipt',120,'Other bank reference'),(63,2,'Payment',120,'Other supplier reference')");
+      await client.query("INSERT INTO voucher_entries(voucher_id,bank_account_id,ledger_account_id,supplier_id,debit_amount,credit_amount) VALUES (62,31,NULL,NULL,120,0),(62,NULL,11,NULL,0,120),(63,NULL,NULL,2,120,0),(63,32,NULL,NULL,0,120)");
+      await rejects("INSERT INTO intercompany_container_payments"+paymentColumns+
+        " VALUES (1,1,2,'phase4-repeat-reference',repeat('b',64),'wire-ref-001','Proof of second bank statement','2026-11-05','USD',120,1,120,'bank',31,'bank',32,11,2,62,63,'owner')",
+        "ic_payments_pair_transfer_ref");
+
       await rejects("UPDATE vouchers SET description='tampered' WHERE id=55","Mirrored");
       await rejects("DELETE FROM vouchers WHERE id=56","Mirrored");
       await rejects("INSERT INTO vouchers(id,company_id,voucher_type,reversal_of_voucher_id) VALUES (59,1,'Payment',55)","coordinated");
