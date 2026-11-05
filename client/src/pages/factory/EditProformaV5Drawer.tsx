@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertTriangle, Loader2, CheckCircle2, Save, Trash2, BookmarkCheck, FilePenLine, Package, Boxes, Scale, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { V5ProformaMobileLines } from "./V5ProformaMobileLines";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -38,6 +39,7 @@ interface ProformaData {
   name: string;
   isActive: boolean;
   customerId: number;
+  destination?: string | null;
   lines: ExistingLine[];
 }
 
@@ -68,6 +70,7 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
   const qc = useQueryClient();
 
   const [proformaName, setProformaName] = useState("");
+  const [destination, setDestination] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [prices, setPrices] = useState<Record<string, string>>({});
@@ -93,16 +96,20 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
     enabled: open && !!proformaId,
   });
 
-  // Saved prices are scoped to the customer on this proforma, never to the last selected customer.
+  // Price lookup is always scoped to customer + chosen destination.
+  // Linking an old proforma never automatically changes its existing line prices.
   const customerId = proformaQuery.data?.customerId;
   const customerPriceListQuery = useQuery<AgreedPriceRow[]>({
-    queryKey: ["/api/factory/customer-price-lists", customerId, proformaQuery.data?.companyId],
+    queryKey: ["/api/factory/customer-price-lists", customerId, proformaQuery.data?.companyId, destination.trim().toUpperCase()],
     queryFn: async () => {
-      const res = await fetch(`/api/factory/customer-price-lists/${customerId}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to load saved agreed prices");
+      const res = await fetch(
+        `/api/factory/customer-price-lists/${customerId}?destination=${encodeURIComponent(destination.trim())}`,
+        { credentials: "include" }
+      );
+      if (!res.ok) throw new Error("Failed to load destination agreed prices");
       return res.json();
     },
-    enabled: open && !!customerId && !!proformaQuery.data?.companyId,
+    enabled: open && !!customerId && !!proformaQuery.data?.companyId && !!destination.trim(),
   });
 
   const productsQuery = useQuery<BaleProduct[]>({
@@ -129,6 +136,7 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
     if (!proformaQuery.data || initialized) return;
     const pf = proformaQuery.data;
     setProformaName(pf.name);
+    setDestination(pf.destination ?? "");
     setIsActive(pf.isActive ?? true);
     const qtys: Record<string, string> = {};
     const prs: Record<string, string> = {};
@@ -158,6 +166,7 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
       setPricingModes({});
       setKgPrices({});
       setProformaName("");
+      setDestination("");
       setAppliedPrice(null);
       setShowZeroItems(true);
       setHideNonPositive(false);
@@ -181,12 +190,14 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
   const saveMutation = useMutation({
     mutationFn: async () => {
       const pf = proformaQuery.data!;
+      if (!destination.trim()) throw new Error("Select a destination before saving this proforma");
       const lineMap = new Map<string, ExistingLine>();
       for (const l of pf.lines) lineMap.set(l.articleCode, l);
 
       // 1. Update proforma header
       await apiRequest("PUT", `/api/factory/customer-proformas/${proformaId}`, {
         name: proformaName.trim(),
+        destination: destination.trim(),
         isActive,
       });
 
@@ -450,6 +461,30 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
                 />
               </div>
 
+              <div className="flex flex-col gap-1.5 min-w-[190px] flex-1">
+                <Label htmlFor="edit-v5-proforma-destination" className="text-xs font-medium">
+                  Destination <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="edit-v5-proforma-destination"
+                  data-testid="input-edit-v5-proforma-destination"
+                  value={destination}
+                  onChange={(e) => { setDestination(e.target.value); setAppliedPrice(null); }}
+                  placeholder="e.g. L'SHI, MALI, KINSHASA"
+                  list="edit-proforma-destination-suggestions"
+                />
+                <datalist id="edit-proforma-destination-suggestions">
+                  <option value="L'SHI" />
+                  <option value="MALI" />
+                  <option value="KINSHASA" />
+                </datalist>
+                {!proformaQuery.data?.destination && (
+                  <p className="text-xs text-muted-foreground">
+                    Old proforma: assign its destination here. Existing prices are preserved until you explicitly apply destination prices.
+                  </p>
+                )}
+              </div>
+
               <div className="flex flex-col gap-1.5">
                 <Label className="text-xs font-medium">Status</Label>
                 <div className="flex items-center gap-2 h-9">
@@ -579,7 +614,23 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
             </div>
 
             {/* Table */}
-            <div className="mx-3 min-w-0 overflow-x-auto rounded-b-xl border border-t-0 bg-card shadow-sm sm:mx-5">
+            <V5ProformaMobileLines
+               variant="edit"
+               rows={visibleRows}
+               quantities={quantities}
+               prices={prices}
+               kgPrices={kgPrices}
+               pricingModes={pricingModes}
+               onQuantityChange={(code, value) => setQuantities((previous) => ({ ...previous, [code]: value }))}
+               onPriceChange={(code, value) => setPrices((previous) => ({ ...previous, [code]: value }))}
+               onKgPriceChange={(code, value) => setKgPrices((previous) => ({ ...previous, [code]: value }))}
+               onModeChange={(code, value) => setPricingModes((previous) => ({ ...previous, [code]: value }))}
+               weightPerBale={(code) => Number(map.get(code)?.weightPerBaleKg || 0)}
+               shortageCount={(row, qty) => qty > 0 && row.freeToPromise < 0 ? Math.abs(row.freeToPromise) : 0}
+               existingCodes={new Set(proformaQuery.data?.lines.map((line) => line.articleCode) ?? [])}
+               onClear={(code) => setQuantities((previous) => ({ ...previous, [code]: "0" }))}
+             />
+             <div className="mx-3 hidden min-w-0 overflow-x-auto rounded-b-xl border border-t-0 bg-card shadow-sm md:block phone-land:hidden sm:mx-5">
               <table className="w-full min-w-[1120px] table-fixed border-collapse text-sm">
                 <colgroup><col style={{ width: "27%" }} /><col style={{ width: "10%" }} /><col style={{ width: "15%" }} /><col style={{ width: "13%" }} /><col style={{ width: "12%" }} /><col style={{ width: "19%" }} /><col style={{ width: "4%" }} /></colgroup>
                 <thead><tr className="sticky top-0 z-30 bg-slate-100 text-slate-700 dark:bg-slate-800/95 dark:text-slate-200">

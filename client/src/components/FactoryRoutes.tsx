@@ -9,6 +9,7 @@
  *   factoryDefaultPage — computed landing page for this user
  */
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
+const TicketManagement = lazy(() => import("@/pages/TicketManagement"));
 import { Switch, Route, Redirect } from "wouter";
 import type { ShellUser } from "@/app/shellUser";
 import {
@@ -151,6 +152,8 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
 
   return (
     <Switch>
+      <Route path="/factory/tickets/new">{() => <TicketManagement sourceMode="factory" />}</Route>
+      <Route path="/factory/tickets">{() => <TicketManagement sourceMode="factory" />}</Route>
       <Route path="/factory/help-training">
         {() => (
           <HelpTraining

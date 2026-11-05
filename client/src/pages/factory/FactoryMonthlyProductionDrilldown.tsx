@@ -7,6 +7,8 @@ import { companyQueryKey } from "@/lib/companyQueryScope";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { duoMobileText } from "@/i18n/iphoneDuoMobileTranslations";
 
 type Product = { id: number; name: string; articleCode: string };
 type Worker = { workerId: number; workerName: string; quantity: number; weightKg: string; monthlyBales: Record<string, number> };
@@ -63,6 +65,8 @@ function DrilldownBack({ onClick, label }: { onClick: () => void; label: string 
 }
 
 export function FactoryMonthlyProductionWorkers() {
+  const lang = useOptionalApplicationLanguage()?.language ?? "en";
+  const dt = (key: Parameters<typeof duoMobileText>[0]) => duoMobileText(key, lang);
   const [, match] = useRoute("/factory/monthly-production-matrix/:productId/workers");
   const [, navigate] = useLocation();
   const searchParams = new URLSearchParams(useSearch());
@@ -118,7 +122,55 @@ export function FactoryMonthlyProductionWorkers() {
             {" · "}lowest <strong className="text-red-600 dark:text-red-300">red</strong>.
             Click a monthly count to see only that month's bales.
           </p>
-          <div className="overflow-auto rounded-xl border bg-card" style={{ maxHeight: "calc(100dvh - 315px)" }}>
+          <section className="space-y-3 md:hidden phone-land:block" aria-label={dt("productionByMonth")} data-testid="monthly-production-workers-mobile">
+            {filtered.map((worker) => {
+              const values = data.months.map((month) => worker.monthlyBales[month] ?? 0);
+              const min = Math.min(...values);
+              const max = Math.max(...values);
+              const hasRange = values.length > 1 && max !== min;
+              return (
+                <article key={worker.workerId} className="min-w-0 rounded-xl border bg-card p-3 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="break-words text-sm font-semibold">{worker.workerName}</h3>
+                      {worker.workerId === 0 ? <span className="text-xs text-muted-foreground">{dt("noWorkerRecorded")}</span> : null}
+                      <p className="mt-1 text-xs text-muted-foreground">{kg(worker.weightKg)} kg</p>
+                    </div>
+                    <button type="button" className="min-h-11 shrink-0 rounded-lg bg-primary/10 px-3 font-semibold text-primary tabular-nums"
+                      onClick={() => openBales(worker)}
+                      aria-label={`${dt("workerBales")}: ${worker.workerName} · ${worker.quantity}`}
+                      data-testid={`worker-mobile-bales-${worker.workerId}`}>
+                      {format(worker.quantity)} <span className="text-xs font-normal">{dt("bales")}</span>
+                    </button>
+                  </div>
+                  <details className="mt-3 rounded-lg border bg-muted/20">
+                    <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium">{dt("productionByMonth")} · {data.months.length}</summary>
+                    <div className="grid grid-cols-2 gap-2 border-t p-2">
+                      {data.months.map((month, index) => {
+                        const value = values[index];
+                        const accent = hasRange && value === max
+                          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                          : hasRange && value === min
+                            ? "bg-red-500/10 text-red-700 dark:text-red-300" : "bg-background";
+                        return (
+                          <button key={month} type="button" disabled={value === 0}
+                            className={`min-h-11 rounded-lg border p-2 text-left disabled:opacity-60 ${accent}`}
+                            onClick={() => openBales(worker, month)}
+                            aria-label={`${dt("workerBales")}: ${worker.workerName} · ${monthText(month)} · ${value}`}
+                            data-testid={`worker-mobile-month-${worker.workerId}-${month}`}>
+                            <span className="block text-xs">{monthText(month)}</span>
+                            <strong className="text-lg tabular-nums">{format(value)}</strong>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </details>
+                </article>
+              );
+            })}
+            {!filtered.length && <p className="rounded-xl border p-6 text-center text-sm text-muted-foreground">{dt("noMatchingWorkers")}</p>}
+          </section>
+          <div className="hidden overflow-auto rounded-xl border bg-card md:block phone-land:hidden" style={{ maxHeight: "calc(100dvh - 315px)" }}>
             <table className="min-w-max w-full border-separate border-spacing-0 text-sm tabular-nums">
               <thead className="sticky top-0 z-20 bg-muted text-foreground"><tr>
                 <th className="sticky left-0 z-30 min-w-64 border-b border-r bg-muted p-3 text-left">Worker</th>
@@ -180,6 +232,8 @@ export function FactoryMonthlyProductionWorkers() {
 }
 
 export function FactoryMonthlyProductionBales() {
+  const lang = useOptionalApplicationLanguage()?.language ?? "en";
+  const dt = (key: Parameters<typeof duoMobileText>[0]) => duoMobileText(key, lang);
   const [, match] = useRoute("/factory/monthly-production-matrix/:productId/bales/:workerId");
   const [, navigate] = useLocation();
   const query = new URLSearchParams(useSearch());
@@ -240,7 +294,46 @@ export function FactoryMonthlyProductionBales() {
                 onClick={() => changeView("detailed")}>Detailed</Button>
             </div>
           </div>
-          <div className="overflow-x-auto rounded-xl border bg-card">
+          <section className="space-y-3 md:hidden phone-land:block" aria-label={`${dt("produced")} ${dt("bales")}`} data-testid="monthly-production-bales-mobile">
+            {view === "condensed" ? data.groups.map((group) => (
+              <article key={group.date} className="rounded-xl border bg-card p-3 shadow-sm">
+                <span className="text-xs text-muted-foreground">{dateLabel(group.date)}</span>
+                <h3 className="mt-1 break-words text-sm font-semibold">{group.productName}</h3>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                  <div className="rounded-lg bg-muted/30 p-2">
+                    <span className="block text-xs text-muted-foreground">{dt("quantity")}</span>
+                    <strong className="tabular-nums">{format(group.quantity)}</strong>
+                  </div>
+                  <div className="rounded-lg bg-muted/30 p-2">
+                    <span className="block text-xs text-muted-foreground">{dt("weightKg")}</span>
+                    <strong className="tabular-nums">{kg(group.weightKg)}</strong>
+                  </div>
+                </div>
+              </article>
+            )) : data.bales.map((bale) => (
+              <article key={bale.id} className="min-w-0 rounded-xl border bg-card p-3 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <span className="text-xs text-muted-foreground">{dt("referenceNumber")}</span>
+                    <strong className="block break-all font-mono text-sm">{bale.referenceNumber}</strong>
+                    <span className="block break-all text-xs text-muted-foreground">{bale.baleCode}</span>
+                  </div>
+                  <span className="rounded-lg bg-muted px-2 py-1 text-xs">{bale.status.replaceAll("_", " ")}</span>
+                </div>
+                <h3 className="mt-2 break-words text-sm font-medium">{bale.productName || data.product.name}</h3>
+                <p className="break-all text-xs text-muted-foreground">{bale.articleCode || data.product.articleCode}</p>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                  <span>{dt("date")}: {dateLabel(bale.stockEntryDate || bale.finalizedAt)}</span>
+                  <span>{dt("weightKg")}: {kg(bale.weightKg)}</span>
+                  <span>{dt("quantity")}: {format(bale.quantity)}</span>
+                  <span className="break-words">{[bale.category, bale.grade].filter(Boolean).join(" · ") || "—"}</span>
+                  <span className="col-span-2 break-words">{dt("location")}: {bale.locationName || "—"}</span>
+                </div>
+              </article>
+            ))}
+            {data.totalRows === 0 && <p className="rounded-xl border p-6 text-center text-sm text-muted-foreground">{dt("noBales")}</p>}
+          </section>
+          <div className="hidden overflow-x-auto rounded-xl border bg-card md:block phone-land:hidden">
             {view === "condensed" ? (
               <table className="w-full min-w-[420px] text-sm tabular-nums" data-testid="bales-condensed-table">
                 <thead className="bg-muted"><tr>

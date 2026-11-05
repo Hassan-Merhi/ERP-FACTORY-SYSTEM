@@ -85,6 +85,7 @@ const FACTORY_NAV_ICONS: Record<string, typeof Package> = {
   "factory/cost-centers": Layers,
   "factory/daybook": BookOpen,
   "factory/vouchers": FileText,
+  "factory/tickets": ClipboardCheck,
   "factory/stock-entry": ScanLine,
   "factory/raw-materials": Package,
   "factory/waste-dispatch": Trash2,
