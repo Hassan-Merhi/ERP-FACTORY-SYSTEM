@@ -99,7 +99,7 @@ export const intercompanyPermissionGrants = pgTable("intercompany_permission_gra
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
 }, (t) => ({
   userCompanyIdx: index("intercompany_grant_user_company_idx").on(t.userId, t.grantingCompanyId),
-  activeGrantUnique: uniqueIndex("intercompany_grant_active_unique").on(t.userId, t.grantingCompanyId, t.permission, t.scope, t.invoiceKey, t.relationshipId).where(sql.raw("revoked_at IS NULL")),
+  activeGrantUnique: uniqueIndex("intercompany_grant_active_unique").on(t.userId, t.grantingCompanyId, t.permission, t.scope, sql.raw("coalesce(invoice_key, '')"), sql.raw("coalesce(relationship_id, 0)")).where(sql.raw("revoked_at IS NULL")),
 }));
 
 export const intercompanyAuditEvents = pgTable("intercompany_audit_events", {
