@@ -27,6 +27,7 @@ import {
   withTradeScope,
 } from "./tradeSync";
 import { allocateByWeights, cents, fullPoCost } from "./tradeRevisionMath";
+import { releaseEditOverallocationTx } from "./paymentAllocationCore";
 import {
   createTenantDatabaseScope,
   getDatabaseScopeRuntimeContext,
@@ -579,7 +580,7 @@ export async function reviseSharedCharge(input: ReviseSharedChargeInput, identit
             postingDate: input.postingDate,
             amountAfter: fullPoCost(snap.destination.po).plus(delta).toFixed(2),
             reason: input.reason,
-            evidence: { invoiceId: invoice.id, from: old.toFixed(2), to: next.toFixed(2) },
+            evidence: { invoiceId: invoice.id, from: old.toFixed(2), to: next.toFixed(2), releasedCredit },
           });
           if (record.containerChargeId) {
             await tx
@@ -630,6 +631,10 @@ export async function reviseSharedCharge(input: ReviseSharedChargeInput, identit
             actorUserId: identity.actorUserId,
             reason: input.reason,
             poDeltas,
+          });
+          const releasedCredit = await releaseEditOverallocationTx(tx, {
+            tradeId: snap.trade.id, newLandedCost: applied.amountAfter,
+            actorUserId: identity.actorUserId, revisionId: revision.id,
           });
           const version = await completeRevisionTx(
             tx,
