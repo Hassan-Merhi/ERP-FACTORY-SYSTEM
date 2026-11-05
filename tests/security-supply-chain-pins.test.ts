@@ -7,10 +7,10 @@ describe("immutable supply-chain pins for the factory edge and Pullfrog", () => 
   const dockerfile = file("deploy/lan/Dockerfile");
   const pullfrog = file(".github/workflows/pullfrog.yml");
 
-  it("pins both Docker stages to one resolved, full-length Node 24.22.1 manifest digest", () => {
+  it("pins both Docker stages to one resolved, full-length Node 24.22.2 manifest digest", () => {
     const images = [...dockerfile.matchAll(/^FROM (\S+)/gm)].map((match) => match[1]);
     expect(images).toHaveLength(2);
-    expect(images[0]).toMatch(/^node:24\.22\.1-bookworm-slim@sha256:[a-f0-9]{64}$/);
+    expect(images[0]).toMatch(/^node:24\.22\.2-bookworm-slim@sha256:[a-f0-9]{64}$/);
     expect(images[1]).toBe(images[0]);
     expect(dockerfile).not.toContain("FROM node:24-bookworm-slim");
   });
@@ -24,8 +24,8 @@ describe("immutable supply-chain pins for the factory edge and Pullfrog", () => 
     expect(dockerfile).toContain("USER node");
   });
 
-  it("pins Pullfrog to the verified v0.1.101 release commit, never a mutable tag", () => {
-    expect(pullfrog).toContain("uses: pullfrog/pullfrog@ae4145b3d72b3f4aa045e2352dc6b2c7538daeeb # v0.1.101");
+  it("pins Pullfrog to the verified v0.1.117 release commit, never a mutable tag", () => {
+    expect(pullfrog).toContain("uses: pullfrog/pullfrog@a5cc9694d5609b62c1f356ef515889117c44b26c # v0.1.117");
     expect(pullfrog).not.toMatch(/uses:\s*pullfrog\/pullfrog@v(?:\d|$)/m);
     expect(pullfrog).toContain("persist-credentials: false");
   });
