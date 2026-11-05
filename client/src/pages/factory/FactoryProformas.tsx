@@ -14,6 +14,7 @@ import { EditPriceLineDialog } from "./factory-proformas/dialogs/EditPriceLineDi
 import { CreatePendingLoadingDialog } from "./factory-proformas/dialogs/CreatePendingLoadingDialog";
 import { ImportProformaExcelDialog } from "./factory-proformas/dialogs/ImportProformaExcelDialog";
 import { CreateProformaDialog } from "./factory-proformas/dialogs/CreateProformaDialog";
+import { AssignProformaDestinationDialog } from "./factory-proformas/dialogs/AssignProformaDestinationDialog";
 import type { Proforma } from "./factoryproformas/types";
 export default function FactoryProformas() {
   const model = useFactoryProformasModel();
@@ -51,6 +52,11 @@ export default function FactoryProformas() {
   const beginRename = (proforma: Proforma) => {
     model.setRenamingProforma(proforma);
     model.setRenameValue(proforma.name);
+  };
+
+  const beginAssignDestination = (proforma: Proforma) => {
+    model.setDestinationProforma(proforma);
+    model.setDestinationValue(proforma.destination || "");
   };
 
   const beginTransfer = (proforma: Proforma) => {
@@ -215,6 +221,7 @@ export default function FactoryProformas() {
                     deleteProformaMutation={model.deleteProformaMutation}
                     renameProforma={beginRename}
                     transferProforma={beginTransfer}
+                    onAssignDestination={beginAssignDestination}
                     setPendingDelete={setPendingDelete}
                     onAddLine={() => openAddLineFor(proforma.id)}
                     saveAgreedPricesMutation={model.saveAgreedPricesMutation}
@@ -252,6 +259,14 @@ export default function FactoryProformas() {
         setNewDestination={model.setNewDestination}
         createProformaMutation={model.createProformaMutation}
         handleCreateProforma={model.handleCreateProforma}
+      />
+
+      <AssignProformaDestinationDialog
+        destinationProforma={model.destinationProforma}
+        setDestinationProforma={model.setDestinationProforma}
+        destinationValue={model.destinationValue}
+        setDestinationValue={model.setDestinationValue}
+        assignDestinationMutation={model.assignDestinationMutation}
       />
 
       <RenameProformaDialog
