@@ -3,12 +3,12 @@ import { assertPhase5MirroredLines } from "../server/services/intercompany/phase
 
 describe("Phase 5 source/destination goods parity", () => {
   const originals = [
-    { id: 10, quantity: "2.000", rate: "3.25", lineTotal: "6.50" },
-    { id: 11, quantity: "4.000", rate: "9.00", lineTotal: "36.00" },
+    { id: 10, itemName: "Steel", quantity: "2.000", rate: "3.25", lineTotal: "6.50" },
+    { id: 11, itemName: "Timber", quantity: "4.000", rate: "9.00", lineTotal: "36.00" },
   ];
   const incoming = [
-    { id: 20, quantity: "2.000", rate: "3.25", lineTotal: "6.50" },
-    { id: 21, quantity: "4.000", rate: "9.00", lineTotal: "36.00" },
+    { id: 20, itemName: "Steel", quantity: "2.000", rate: "3.25", lineTotal: "6.50" },
+    { id: 21, itemName: "Timber", quantity: "4.000", rate: "9.00", lineTotal: "36.00" },
   ];
   const links = [
     { sourceLineId: 10, destinationLineId: 20 },
@@ -34,6 +34,18 @@ describe("Phase 5 source/destination goods parity", () => {
       { ...incoming[0], rate: "3.26" }, incoming[1],
     ], links)).toThrow(/rate/);
   });
+  it("rejects swapped goods with identical prices despite correct quantity and financial totals", () => {
+    const equalSource = [
+      { ...originals[0], quantity: "2.000", rate: "3.25", lineTotal: "6.50" },
+      { ...originals[1], quantity: "2.000", rate: "3.25", lineTotal: "6.50" },
+    ];
+    const equalDestination = [
+      { ...incoming[0], quantity: "2.000", rate: "3.25", lineTotal: "6.50", itemName: "Timber" },
+      { ...incoming[1], quantity: "2.000", rate: "3.25", lineTotal: "6.50", itemName: "Steel" },
+    ];
+    expect(() => assertPhase5MirroredLines(equalSource, equalDestination, links)).toThrow(/item name/);
+  });
+
   it("refuses swapped, duplicate and incomplete linked rows", () => {
     expect(() => assertPhase5MirroredLines(originals, incoming, [
       { sourceLineId: 10, destinationLineId: 21 },
