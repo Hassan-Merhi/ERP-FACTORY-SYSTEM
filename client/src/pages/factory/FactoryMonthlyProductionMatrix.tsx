@@ -4,6 +4,7 @@ import { useLocation, useSearch } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { duoMobileText } from "@/i18n/iphoneDuoMobileTranslations";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -331,7 +332,7 @@ export default function FactoryMonthlyProductionMatrix() {
         </div>
       </div>
       {!error && !isLoading && data && (
-        <section className="space-y-3 md:hidden phone-land:block" aria-label="Monthly production items" data-testid="monthly-matrix-mobile">
+        <section className="space-y-3 md:hidden phone-land:block" aria-label={t("monthlyProduction.title")} data-testid="monthly-matrix-mobile">
           <div className="flex items-center justify-between rounded-xl border bg-muted/40 px-3 py-2 text-sm">
             <span>{visibleProducts.length} {t("monthlyProduction.items")}</span>
             <strong className="tabular-nums">{overallTotal.toLocaleString()} {t("monthlyProduction.baleUnits")}</strong>
@@ -350,7 +351,7 @@ export default function FactoryMonthlyProductionMatrix() {
                     <p className="mt-1 break-all text-xs text-muted-foreground">{product.articleCode} · {product.categoryName}</p>
                   </div>
                   <button type="button" disabled={total <= 0} onClick={() => openWorkerBreakdown(product.id, months)}
-                    aria-label={`View workers for ${product.name}: ${total} bales`}
+                    aria-label={`${duoMobileText("workerBales", language)}: ${product.name} · ${total} ${duoMobileText("bales", language)}`}
                     className="min-h-11 shrink-0 rounded-lg bg-primary/10 px-3 text-right font-bold text-primary tabular-nums disabled:opacity-50"
                     data-testid={`monthly-matrix-mobile-total-${product.id}`}>
                     {total.toLocaleString()}
@@ -371,7 +372,7 @@ export default function FactoryMonthlyProductionMatrix() {
                       return (
                         <button key={month} type="button" disabled={value <= 0}
                           onClick={() => openWorkerBreakdown(product.id, [month])}
-                          aria-label={`View ${value} bales of ${product.name} for ${monthLabel(month)}`}
+                          aria-label={`${duoMobileText("workerBales", language)}: ${product.name} · ${monthLabel(month)} · ${value} ${duoMobileText("bales", language)}`}
                           className={`min-h-11 rounded-lg border p-2 text-left disabled:opacity-60 ${accent}`}
                           data-testid={`monthly-matrix-mobile-month-${product.id}-${month}`}>
                           <span className="block text-xs">{monthLabel(month)}</span>
