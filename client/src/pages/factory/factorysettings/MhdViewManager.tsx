@@ -59,7 +59,13 @@ export function MhdViewManager() {
       worksheet.getColumn(1).numFmt = "@";
       if (withProducts && data) {
         const existing = new Map(data.rows.map((row) => [normalize(row.articleCode), row.itemName]));
-        for (const product of data.products) {
+        const savedOrder = new Map(data.rows.map((row) => [normalize(row.articleCode), row.sortOrder]));
+        const productsInMhdOrder = [...data.products].sort((a, b) =>
+          (savedOrder.get(normalize(a.articleCode)) ?? Number.MAX_SAFE_INTEGER) -
+            (savedOrder.get(normalize(b.articleCode)) ?? Number.MAX_SAFE_INTEGER) ||
+          a.name.localeCompare(b.name)
+        );
+        for (const product of productsInMhdOrder) {
           worksheet.addRow([product.articleCode, existing.get(normalize(product.articleCode)) || ""]);
         }
       }
