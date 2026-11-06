@@ -18,7 +18,7 @@ import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 import { AlertTriangle, ClipboardList, Copy, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { PaymentsReconciliation, type ReconciliationSnapshot } from "./property-rental/components/PaymentsReconciliation";
-import { cashCents, nonCashCents, paymentHistoryTsv, receiptTotals } from "./property-rental/paymentsReceiptMath";
+import { cashCents, nonCashCents, paymentHistoryTsv, reconciledHistoryTsv, receiptTotals } from "./property-rental/paymentsReceiptMath";
 import {
   HISTORICAL_RENT_COMPANY,
   HISTORICAL_RENT_CUTOFF_LABEL,
@@ -86,9 +86,11 @@ export default function RentalPaymentsLog({
   // Both pages use the same voucher-backed dated rent snapshot. No payment is created.
   const isPropertiesPayments = apiBase === "/api/properties/rental";
   const isHassanProperties = isPropertiesPayments && selectedCompany?.name === HISTORICAL_RENT_COMPANY;
-  const effectiveView = !isHassanProperties && reconciliationView === "HISTORICAL_RENT"
-    ? "ACTIVE_RENT"
-    : reconciliationView;
+  // In HASSAN PROPERTIES the only visible rental payment history is All Records.
+  // Other company/module views retain their existing tabs.
+  const effectiveView = isHassanProperties
+    ? "ALL"
+    : reconciliationView === "HISTORICAL_RENT" ? "ACTIVE_RENT" : reconciliationView;
   const queryKey = [apiBase + "/payments", { companyId: selectedCompany?.id, view: isPropertiesPayments ? "warehouse-reconciliation" : "default" }];
   const { data: warehouseUnits = [], isLoading: warehouseTotalsLoading, isError: warehouseTotalsError } =
     useQuery<Array<{ totalPaid?: number | null }>>({
@@ -149,7 +151,8 @@ export default function RentalPaymentsLog({
   const paymentTotals = receiptTotals(filtered);
   const isFullHistory = isHassanProperties && effectiveView === "ALL" && !search.trim();
   const reconciliationReady = isFullHistory && !isLoading && !paymentsError &&
-    reconciliation?.companyId === selectedCompany?.id && !reconciliation.loading;
+    reconciliation?.companyId === selectedCompany?.id && !reconciliation.loading &&
+    reconciliation.accountSum !== null && reconciliation.aliCashLedgerId !== null;
   const total = isPropertiesPayments
     ? paymentTotals.cash / 100
     : filtered.reduce((sum, payment) => sum + Number(payment.amount), 0);
@@ -162,11 +165,22 @@ export default function RentalPaymentsLog({
       toast({ title: "Could not copy", description: "Please allow clipboard access and try again.", variant: "destructive" });
     }
   };
+  const copyFullHistory = async () => {
+    if (!reconciliationReady || reconciliation?.aliCashLedgerId == null || reconciliation.accountSum == null) return;
+    try {
+      await navigator.clipboard.writeText(reconciledHistoryTsv(payments, {
+        aliCashLedgerId: reconciliation.aliCashLedgerId,
+        threeAccountsTotal: reconciliation.accountSum,
+      }));
+      toast({ title: "Full history copied", description: "Paste into Excel to see all recorded rows and the source-based account reconciliation." });
+    } catch {
+      toast({ title: "Could not copy", description: "Please allow clipboard access and try again.", variant: "destructive" });
+    }
+  };
   const activeWarehouseRentPaid = warehouseUnits.reduce((s, u) => s + Number(u.totalPaid ?? 0), 0);
   const isActiveUnfiltered = isPropertiesPayments && effectiveView === "ACTIVE_RENT" && !search.trim();
   const discrepancy = isActiveUnfiltered && !warehouseTotalsLoading && !warehouseTotalsError
     && !isLoading && Math.abs(total - activeWarehouseRentPaid) > 0.009;
-  const currentViewLabel = RECONCILIATION_VIEWS.find((v) => v.key === effectiveView)?.label ?? "Payments";
 
   return (
     <div
@@ -209,7 +223,12 @@ export default function RentalPaymentsLog({
         </div>
       )}
 
-      {isPropertiesPayments && (
+      {isHassanProperties && (
+        <div className="text-sm font-medium text-muted-foreground" data-testid="properties-all-records-label">
+          All Records ({payments.length})
+        </div>
+      )}
+      {isPropertiesPayments && !isHassanProperties && (
         <div className="flex flex-wrap gap-2" role="group" aria-label="Payment type">
           {RECONCILIATION_VIEWS.filter((view) => isHassanProperties || view.key !== "HISTORICAL_RENT").map((view) => {
             const count = view.key === "ALL"
@@ -259,11 +278,17 @@ export default function RentalPaymentsLog({
         </p>
       )}
 
-      {isHassanProperties && !isFullHistory && (
+      {isHassanProperties && (
         <div className="flex flex-wrap justify-end gap-2">
-          <Button variant="outline" size="sm" disabled={isLoading || paymentsError || !filtered.length || !clipboardIsUsd} onClick={() => void copyHistory()} data-testid="button-properties-copy-payment-history">
-            <Copy className="h-4 w-4 mr-1" /> Copy filtered rows (without full account reconciliation)
-          </Button>
+          {isFullHistory ? (
+            <Button size="sm" disabled={!reconciliationReady || !clipboardIsUsd} onClick={() => void copyFullHistory()} data-testid="button-properties-copy-reconciled-history">
+              <Copy className="h-4 w-4 mr-1" /> Copy full history
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" disabled={isLoading || paymentsError || !filtered.length || !clipboardIsUsd} onClick={() => void copyHistory()} data-testid="button-properties-copy-payment-history">
+              <Copy className="h-4 w-4 mr-1" /> Copy search results
+            </Button>
+          )}
           {!clipboardIsUsd && <span className="text-xs text-amber-600">Non-USD entries need their booked currency conversion before export.</span>}
         </div>
       )}
@@ -274,7 +299,7 @@ export default function RentalPaymentsLog({
       )}
 
       {/* Summary */}
-      <div className={`grid grid-cols-1 ${isHassanProperties ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-3"} gap-3`}>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-xs text-muted-foreground font-normal">TOTAL PAYMENTS</CardTitle>
@@ -290,7 +315,7 @@ export default function RentalPaymentsLog({
             <CardTitle className="text-xs text-muted-foreground font-normal">
               {isHassanProperties && effectiveView === "HISTORICAL_RENT"
                 ? "RENT PAID THROUGH 26 OCT"
-                : isFullHistory ? "HISTORY + ACCOUNT ADJUSTMENT"
+                : isFullHistory ? "TOTAL AMOUNT RECORDED"
                 : isHassanProperties ? "CASH RECEIVED (VOUCHER-BACKED)" : "TOTAL AMOUNT RECEIVED"}
             </CardTitle>
           </CardHeader>
@@ -307,19 +332,6 @@ export default function RentalPaymentsLog({
             </div>
           </CardContent>
         </Card>
-        {isHassanProperties && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-muted-foreground font-normal">NON-CASH ADJUSTMENTS</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-amber-600 dark:text-amber-400" data-testid="stat-prop-rental-non-cash-adjustments">
-                {paymentsError ? "Unavailable" : formatMoneyNumber(paymentTotals.nonCash / 100)}
-              </div>
-              <p className="text-xs text-muted-foreground">Shown in history, not added to cash</p>
-            </CardContent>
-          </Card>
-        )}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-xs text-muted-foreground font-normal">UNIQUE TENANTS</CardTitle>
@@ -445,55 +457,16 @@ export default function RentalPaymentsLog({
                 </tbody>
                 <tfoot className="sticky bottom-0 z-20 border-t-2 bg-muted/30">
                   <tr>
-                    <td className="px-3 py-2 font-semibold" colSpan={3}>
-                      {isPropertiesPayments ? `TOTAL — ${currentViewLabel.toUpperCase()}` : "TOTAL"}
+                    <td className="px-3 py-2 font-bold" colSpan={3}>TOTAL</td>
+                    <td className="px-3 py-2 text-right tabular-nums font-bold text-green-700 dark:text-green-400" data-testid="properties-history-reconciled-footer">
+                      {isFullHistory
+                        ? reconciliationReady && reconciliation?.reconciled != null
+                          ? formatMoneyNumber(reconciliation.reconciled / 100)
+                          : "Verifying…"
+                        : formatMoneyNumber(total)}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums font-bold text-green-700 dark:text-green-400">
-                      {formatMoneyNumber(total)}
-                    </td>
-                    {isHassanProperties && (
-                      <td className="px-3 py-2 text-right tabular-nums font-bold text-amber-600 dark:text-amber-400">
-                        {formatMoneyNumber(paymentTotals.nonCash / 100)}
-                      </td>
-                    )}
-                    <td colSpan={4}></td>
+                    <td colSpan={isHassanProperties ? 5 : 4}></td>
                   </tr>
-                  {isFullHistory && (
-                    <>
-                      <tr className="border-t">
-                        <td colSpan={8} className="px-3 py-2 text-right">Recorded source history (cash + non-cash)</td>
-                        <td className="px-3 py-2 text-right font-semibold tabular-nums">{formatMoneyNumber(paymentTotals.recorded / 100)}</td>
-                      </tr>
-                      <tr>
-                        <td colSpan={8} className="px-3 py-2 text-right">Net account classification adjustment (not a payment)</td>
-                        <td className="px-3 py-2 text-right font-semibold tabular-nums">
-                          {reconciliationReady && reconciliation?.netAdjustment != null
-                            ? formatMoneyNumber(reconciliation.netAdjustment / 100) : "Verifying…"}
-                        </td>
-                      </tr>
-                      <tr className="border-t-2">
-                        <td colSpan={8} className="px-3 py-2 text-right font-bold">RECONCILED HISTORY + ADJUSTMENT</td>
-                        <td className="px-3 py-2 text-right font-bold tabular-nums" data-testid="properties-history-reconciled-footer">
-                          {reconciliationReady && reconciliation?.reconciled != null
-                            ? formatMoneyNumber(reconciliation.reconciled / 100) : "Verifying…"}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td colSpan={8} className="px-3 py-2 text-right">Three-account balance sum</td>
-                        <td className="px-3 py-2 text-right font-semibold tabular-nums">
-                          {reconciliationReady && reconciliation?.accountSum != null
-                            ? formatMoneyNumber(reconciliation.accountSum / 100) : "Verifying…"}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td colSpan={8} className="px-3 py-2 text-right">Unreconciled difference</td>
-                        <td className="px-3 py-2 text-right font-semibold tabular-nums" data-testid="properties-history-reconciliation-difference">
-                          {reconciliationReady && reconciliation?.difference != null
-                            ? formatMoneyNumber(reconciliation.difference / 100) : "Verifying…"}
-                        </td>
-                      </tr>
-                    </>
-                  )}
                 </tfoot>
               </table>
             )}
