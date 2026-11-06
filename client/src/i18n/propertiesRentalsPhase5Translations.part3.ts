@@ -21,6 +21,7 @@ export const propertiesRentalsPhase5TranslationsPart3: readonly Phase5Properties
   },
   { en: "TOTAL AMOUNT RECEIVED", ar: "إجمالي المبلغ المستلم", fr: "MONTANT TOTAL REÇU" },
   { en: "TOTAL GUARANTEE", ar: "إجمالي الضمان", fr: "GARANTIE TOTALE" },
+  { en: "RENT + CASH BALANCES", ar: "الإيجار وأرصدة النقد", fr: "LOYERS ET SOLDES DE TRÉSORERIE" },
   { en: "TOTAL PAID", ar: "إجمالي المدفوع", fr: "TOTAL PAYÉ" },
   { en: "TOTAL PAYMENTS", ar: "إجمالي الدفعات", fr: "TOTAL DES PAIEMENTS" },
   { en: "TOTAL UNITS", ar: "إجمالي الوحدات", fr: "TOTAL DES UNITÉS" },
