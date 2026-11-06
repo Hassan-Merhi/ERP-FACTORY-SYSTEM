@@ -65,7 +65,7 @@
   font-size: clamp(1.38rem, 1.8vw, 1.85rem);
   letter-spacing: -.035em;
 }
-.daybook-hero [data-testid="page-header"] > div.border-l-\\[3px\\] {
+.daybook-hero [data-testid="page-header"] > div[class*="border-l"] {
   border-left-color: #8b5cf6;
 }
 .daybook-hero [data-testid="text-page-title"] > span:first-child {
