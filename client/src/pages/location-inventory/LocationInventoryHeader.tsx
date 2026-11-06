@@ -2,7 +2,7 @@ import { getErrorDetails } from "@shared/errorUtils";
 import { releaseDebtEnglish } from "@/i18n/finalCloseoutTranslations";
 import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, ChevronDown, Loader2, MessageCircle } from "lucide-react";
+import { AlertCircle, ChevronDown, Loader2, MessageCircle, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
 import {
@@ -124,9 +124,11 @@ export function LocationInventoryHeader({
         : `Send stock to ${selectedLocation.whatsappGroupName || "the linked WhatsApp group"}`;
 
   return (
-    <div className="shrink-0 sm:px-6 sm:pt-4">
+    <div className="shrink-0 p-2 sm:px-6 sm:pt-5">
+      <div className="overflow-hidden rounded-2xl border border-violet-200/80 bg-gradient-to-r from-violet-50 via-background to-indigo-50/80 px-4 pt-3 shadow-sm dark:border-violet-500/25 dark:from-[#171035] dark:via-[#111a36] dark:to-[#0c142c] sm:px-5 sm:pt-4 [&_[data-testid=page-header]]:mb-0 [&_[data-testid=page-header]]:border-b-0">
       <PageHeader
         title="Location Inventory"
+        icon={<span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-md shadow-violet-500/20"><MapPin className="h-5 w-5" /></span>}
         meta={
           <span className="min-w-0 truncate">
             {selectedLocation
@@ -144,7 +146,7 @@ export function LocationInventoryHeader({
                     <Button
                       variant="outline"
                       size="sm"
-                      className="gap-2"
+                      className="h-9 gap-2 rounded-xl border-violet-300/60 bg-violet-600 px-3 text-white shadow-sm shadow-violet-500/20 hover:bg-violet-700 hover:text-white dark:border-violet-500/40 dark:bg-violet-600 dark:hover:bg-violet-500"
                       disabled={!whatsappReady || sendMode !== null}
                       title={whatsappButtonTitle}
                       data-testid="button-send-location-stock-whatsapp"
@@ -204,7 +206,7 @@ export function LocationInventoryHeader({
             <Button
               variant={showNegativeStock ? "destructive" : "outline"}
               size="sm"
-              className="gap-2"
+              className="h-9 gap-2 rounded-xl border-violet-200/80 bg-background/80 px-3 shadow-sm dark:border-violet-500/25 dark:bg-slate-950/35"
               onClick={() => setShowNegativeStock(!showNegativeStock)}
               data-testid="button-negative-stock"
             >
@@ -214,6 +216,7 @@ export function LocationInventoryHeader({
           </>
         )}
       </PageHeader>
+      </div>
     </div>
   );
 }
