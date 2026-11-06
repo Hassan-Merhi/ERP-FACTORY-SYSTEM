@@ -41,10 +41,15 @@ function UnitActionDialog({
   const { selectedCompany } = useCompany();
   // Source-module references can read their original contract when the same
   // company is active; a cross-company projection remains read-only.
-  const referenceBase = unit.sourceModule === "ERP" ? "/api/erp/rental"
-    : unit.sourceModule === "FACTORY" ? "/api/factory/rental" : apiBase;
+  const referenceBase =
+    unit.sourceModule === "ERP"
+      ? "/api/erp/rental"
+      : unit.sourceModule === "FACTORY"
+        ? "/api/factory/rental"
+        : apiBase;
   const detailApiBase = unit.isInternalLeaseProjection ? referenceBase : apiBase;
-  const canReadSourceDetail = !unit.isInternalLeaseProjection ||
+  const canReadSourceDetail =
+    !unit.isInternalLeaseProjection ||
     (unit.sourceCompanyId === selectedCompany?.id && Boolean(unit.sourceModule));
   const { data: detail, isLoading } = useQuery<{
     unit: Unit;
