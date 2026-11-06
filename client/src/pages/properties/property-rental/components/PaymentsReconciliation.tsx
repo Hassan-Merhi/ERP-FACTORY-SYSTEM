@@ -17,6 +17,10 @@ export type ReconciliationSnapshot = {
   verified: boolean;
   accountSum: number | null;
   aliCashLedgerId: number | null;
+  cashboxLedgerId: number | null;
+  rentAndCashBalance: number | null;
+  depositBalance: number | null;
+  guaranteeCashOverlap: number | null;
   recorded: number;
   netAdjustment: number | null;
   reconciled: number | null;
@@ -70,6 +74,7 @@ export function PaymentsReconciliation({
   const withdrawal = uniqueAccount((a) => a.name.trim().toUpperCase().startsWith("HP RENTAL WITHDRAWAL"));
   const deposits = uniqueAccount((a) => a.name.trim().toUpperCase() === "TENANT DEPOSITS");
   const ali = uniqueAccount((a) => a.name.trim().toUpperCase() === "ALI KOLWEZI RENT CASH");
+  const cashbox = uniqueAccount((a) => a.name.trim().toUpperCase() === "PROPERTIES RENT CASHBOX");
 
   const { data: withdrawalStatement, isError: withdrawalError, isLoading: withdrawalLoading } = useQuery<LedgerStatement>({
     queryKey: ["/api/accounts/ledger", withdrawal?.id, "transactions", HISTORICAL_RENT_CUTOFF, companyId],
@@ -102,19 +107,35 @@ export function PaymentsReconciliation({
     },
   });
 
+  const { data: cashboxStatement, isError: cashboxError, isLoading: cashboxLoading } = useQuery<LedgerStatement>({
+    queryKey: ["/api/accounts/ledger", cashbox?.id, "transactions", "all", companyId],
+    enabled: !!companyId && !!cashbox,
+    queryFn: async () => {
+      const response = await fetch("/api/accounts/ledger/" + cashbox!.id + "/transactions", { credentials: "include" });
+      if (!response.ok) throw new Error("Cannot load Properties Rent Cashbox statement");
+      return response.json();
+    },
+  });
+
   const totals = useMemo(() => receiptTotals(payments), [payments]);
-  const bridge = useMemo(() => accountBalanceHistoryBridge(payments, ali?.id), [payments, ali?.id]);
+  const bridge = useMemo(() => accountBalanceHistoryBridge(
+    payments, ali ? [ali.id, ...(cashbox ? [cashbox.id] : [])] : null
+  ), [payments, ali?.id, cashbox?.id]);
   const withdrawalAmount = postedMovement(withdrawalStatement, "debit");
   const depositAmount = postedMovement(depositsStatement, "credit");
   const aliAmount = postedMovement(aliStatement, "debit");
-  const accountSum = withdrawalAmount !== null && depositAmount !== null && aliAmount !== null
-    ? withdrawalAmount + depositAmount + aliAmount
-    : null;
+  const cashboxAmount = cashbox ? postedMovement(cashboxStatement, "debit") : 0;
+  // Account-balance presentation: cash may also include guarantee deposits.
+  // Do not label this rent-only or count the result as distinct receipts.
+  const rentAndCashBalance = withdrawalAmount !== null && aliAmount !== null && cashboxAmount !== null
+    ? withdrawalAmount + aliAmount + cashboxAmount : null;
+  const accountSum = rentAndCashBalance !== null && depositAmount !== null
+    ? rentAndCashBalance + depositAmount : null;
   const difference = accountSum !== null && bridge.reconciledTotal !== null
     ? accountSum - bridge.reconciledTotal : null;
   const mixedCurrency = payments.some((row) => row.currency && row.currency.toUpperCase() !== "USD");
-  const loading = isLoading || accountsLoading || withdrawalLoading || depositsLoading || aliLoading;
-  const unavailable = isError || accountsError || withdrawalError || depositsError || aliError ||
+  const loading = isLoading || accountsLoading || withdrawalLoading || depositsLoading || aliLoading || cashboxLoading;
+  const unavailable = isError || accountsError || withdrawalError || depositsError || aliError || cashboxError ||
     !withdrawal || !deposits || !ali || mixedCurrency;
   const verified = !loading && !unavailable && difference === 0;
 
@@ -125,13 +146,18 @@ export function PaymentsReconciliation({
       verified,
       accountSum,
       aliCashLedgerId: ali?.id ?? null,
+      cashboxLedgerId: cashbox?.id ?? null,
+      rentAndCashBalance,
+      depositBalance: depositAmount,
+      guaranteeCashOverlap: bridge.cashAndLiabilityOverlap,
       recorded: totals.recorded,
       netAdjustment: bridge.netAdjustment,
       reconciled: bridge.reconciledTotal,
       difference,
     });
   }, [onReconciliationChange, companyId, loading, unavailable, verified,
-    accountSum, ali?.id, totals.recorded, bridge.netAdjustment, bridge.reconciledTotal, difference]);
+    accountSum, ali?.id, cashbox?.id, rentAndCashBalance, depositAmount,
+    bridge.cashAndLiabilityOverlap, totals.recorded, bridge.netAdjustment, bridge.reconciledTotal, difference]);
 
   return null;
 }
