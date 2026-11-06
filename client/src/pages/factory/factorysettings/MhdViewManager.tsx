@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +18,7 @@ type MhdData = {
   updatedAt: string;
   products: Product[];
   canEdit: boolean;
+  history: Array<{ revision: number; rows: Array<InputRow & { sortOrder: number }>; updatedAt: string }>;
 };
 const normalize = (value: string) => value.trim().toUpperCase();
 
@@ -38,6 +39,7 @@ export function MhdViewManager() {
   const [issues, setIssues] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const queryKey = ["/api/factory/mhd-view", selectedCompany?.id];
+  useEffect(() => { setPreview(null); setIssues([]); }, [selectedCompany?.id]);
   const { data, isLoading, error } = useQuery<MhdData>({
     queryKey,
     enabled: Boolean(selectedCompany?.id),
@@ -176,6 +178,20 @@ export function MhdViewManager() {
           {issues.map((issue, index) => <p key={index}>{issue}</p>)}
           <p className="mt-2">{t("mhd.correctFile")}</p>
         </div>}
+        {!preview && data?.canEdit && Boolean(data.history?.length) && (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy}
+            onClick={() => {
+              const previous = data.history[data.history.length - 1];
+              setIssues([]);
+              setPreview(previous.rows.map((row) => ({ articleCode: row.articleCode, itemName: row.itemName })));
+            }}
+          >
+            {t("mhd.restorePrevious")}
+          </Button>
+        )}
         {preview && (
           <div className="space-y-3">
             <p className="font-semibold">{t("mhd.uploadPreview")} · {preview.length} {t("mhd.rows")} · {issues.length} {t("mhd.errors")}</p>
