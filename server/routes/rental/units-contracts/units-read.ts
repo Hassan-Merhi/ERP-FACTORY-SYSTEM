@@ -271,9 +271,11 @@ export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesCon
               );
           }
 
-          const candidateContracts = [...new Map(
-            [...linkedContracts, ...internalSourceContracts].map((contract) => [contract.id, contract])
-          ).values()].filter((contract) => !(contract.companyId === companyId && contract.module === module));
+          const candidateContracts = [
+            ...new Map(
+              [...linkedContracts, ...internalSourceContracts].map((contract) => [contract.id, contract])
+            ).values(),
+          ].filter((contract) => !(contract.companyId === companyId && contract.module === module));
 
           if (candidateContracts.length > 0) {
             const sharedUnitIds = candidateContracts.map((c) => c.unitId);
@@ -290,133 +292,133 @@ export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesCon
             });
 
             if (sharedContracts.length > 0) {
-            const sharedContractIds = sharedContracts.map((c) => c.id);
-            const sharedOutstanding = new Map<number, number>();
-            const sharedExpected = new Map<number, number>();
-            const sharedPaid = new Map<number, number>();
-            const sharedScheduled = new Map<number, number>();
+              const sharedContractIds = sharedContracts.map((c) => c.id);
+              const sharedOutstanding = new Map<number, number>();
+              const sharedExpected = new Map<number, number>();
+              const sharedPaid = new Map<number, number>();
+              const sharedScheduled = new Map<number, number>();
 
-            // Billing-day-aware expected for shared contracts
-            const sharedLedgerRows = await db
-              .select({
-                contractId: propertyMonthlyLedger.contractId,
-                year: propertyMonthlyLedger.year,
-                month: propertyMonthlyLedger.month,
-                expectedAmount: propertyMonthlyLedger.expectedAmount,
-              })
-              .from(propertyMonthlyLedger)
-              .where(inArray(propertyMonthlyLedger.contractId, sharedContractIds));
+              // Billing-day-aware expected for shared contracts
+              const sharedLedgerRows = await db
+                .select({
+                  contractId: propertyMonthlyLedger.contractId,
+                  year: propertyMonthlyLedger.year,
+                  month: propertyMonthlyLedger.month,
+                  expectedAmount: propertyMonthlyLedger.expectedAmount,
+                })
+                .from(propertyMonthlyLedger)
+                .where(inArray(propertyMonthlyLedger.contractId, sharedContractIds));
 
-            const sharedLedgerByContract = new Map<number, typeof sharedLedgerRows>();
-            for (const row of sharedLedgerRows) {
-              const arr = sharedLedgerByContract.get(row.contractId) ?? [];
-              arr.push(row);
-              sharedLedgerByContract.set(row.contractId, arr);
-            }
-            for (const c of sharedContracts) {
-              const billingDay = getRentalBillingDay(c.startDate as string);
-              const rows = sharedLedgerByContract.get(c.id) ?? [];
-              const expected = sumMoney(
-                rows
-                  .filter((row) => getRentalPeriodDueDate(row.year, row.month, billingDay) <= asOf)
-                  .map((row) => row.expectedAmount as string)
-              );
-              // Will set outstanding after loading paid
-              sharedExpected.set(c.id, expected.toNumber());
-              sharedOutstanding.set(c.id, expected.toNumber());
-            }
-
-            // POSTED rent payments for shared contracts — exclude guarantee deposits/releases.
-            const { rows: sharedPostedRows } = await pool.query<{ contract_id: string; paid: string }>(
-              `SELECT contract_id, COALESCE(SUM(amount::numeric), 0) AS paid
-               FROM property_payments
-               WHERE contract_id = ANY($1) AND posting_status = 'POSTED' AND payment_date <= $2
-                 AND ledger_row_id IS NOT NULL
-               GROUP BY contract_id`,
-              [sharedContractIds, asOf]
-            );
-            sharedPostedRows.forEach((r) => sharedPaid.set(parseInt(r.contract_id), toMoney(r.paid).toNumber()));
-
-            // SCHEDULED for shared
-            const { rows: sharedSchedRows } = await pool.query<{ contract_id: string; scheduled: string }>(
-              `SELECT contract_id, COALESCE(SUM(amount::numeric), 0) AS scheduled
-               FROM property_payments
-               WHERE contract_id = ANY($1) AND posting_status = 'SCHEDULED'
-               GROUP BY contract_id`,
-              [sharedContractIds]
-            );
-            sharedSchedRows.forEach((r) =>
-              sharedScheduled.set(parseInt(r.contract_id), toMoney(r.scheduled).toNumber())
-            );
-
-            // Finalize outstanding = expected - paid
-            for (const c of sharedContracts) {
-              const expected = sharedExpected.get(c.id) ?? 0;
-              const paid = sharedPaid.get(c.id) ?? 0;
-              sharedOutstanding.set(c.id, toMoney(expected).minus(paid).toNumber());
-            }
-
-            // Fetch owner company names
-            const ownerCompanyIds = [...new Set(sharedContracts.map((c) => c.companyId))];
-            const ownerCompanies = await db
-              .select({ id: companies.id, name: companies.name })
-              .from(companies)
-              .where(inArray(companies.id, ownerCompanyIds));
-            const ownerNameMap = new Map(ownerCompanies.map((c) => [c.id, c.name]));
-
-            // Sum [Guarantee applied] payments for shared contracts
-            const sharedGuaranteeApplied = new Map<number, number>();
-            const sharedAppliedRows = await db
-              .select({
-                contractId: propertyPayments.contractId,
-                total: sql<string>`COALESCE(SUM(${propertyPayments.amount}), 0)`,
-              })
-              .from(propertyPayments)
-              .where(
-                and(
-                  inArray(propertyPayments.contractId, sharedContractIds),
-                  sql`${propertyPayments.notes} LIKE '%[Guarantee applied]%'`
-                )
-              )
-              .groupBy(propertyPayments.contractId);
-            sharedAppliedRows.forEach((r) => sharedGuaranteeApplied.set(r.contractId, Number(r.total)));
-
-            sharedResults = sharedContracts
-              .map((c) => {
-                const u = sharedUnitMap.get(c.unitId);
-                if (!u) return null;
-                const appliedAsRent = sharedGuaranteeApplied.get(c.id) ?? 0;
-                const guaranteeRemaining = Math.max(0, toMoney(c.guaranteeAmount).minus(appliedAsRent).toNumber());
-                // FIX #8: separate non-negative outstanding and credit fields for shared contracts
-                const rawOutstanding = sharedOutstanding.get(c.id) ?? 0;
-                const expectedAsOf = sharedExpected.get(c.id) ?? 0;
-                const paidAsOf = sharedPaid.get(c.id) ?? 0;
-                const scheduledAmount = sharedScheduled.get(c.id) ?? 0;
-                const outstanding = Math.max(0, rawOutstanding);
-                const prepaidCredit = rawOutstanding < 0 ? Math.abs(rawOutstanding) : null;
+              const sharedLedgerByContract = new Map<number, typeof sharedLedgerRows>();
+              for (const row of sharedLedgerRows) {
+                const arr = sharedLedgerByContract.get(row.contractId) ?? [];
+                arr.push(row);
+                sharedLedgerByContract.set(row.contractId, arr);
+              }
+              for (const c of sharedContracts) {
                 const billingDay = getRentalBillingDay(c.startDate as string);
-                const nextBillingDate = computeNextBillingDate(billingDay, asOf);
-                return {
-                  ...u,
-                  contract: c,
-                  expectedAsOf,
-                  outstanding,
-                  paidAsOf,
-                  totalPaid: paidAsOf,
-                  scheduledAmount,
-                  prepaidCredit,
-                  billingDay,
-                  nextBillingDate,
-                  guaranteeRemaining,
-                  isShared: true,
-                  // Properties is a read-only reference to ERP/Factory accounting.
-                  isInternalLeaseProjection: isPropertiesInternalSourceReference(module, c),
-                  sourceModule: isPropertiesInternalSourceReference(module, c) ? c.module : null,
-                  sourceCompanyId: isPropertiesInternalSourceReference(module, c) ? c.companyId : null,
-                  ownerCompanyName: ownerNameMap.get(c.companyId) ?? null,
-                };
-              })
-              .filter(Boolean) as typeof ownedResults;
+                const rows = sharedLedgerByContract.get(c.id) ?? [];
+                const expected = sumMoney(
+                  rows
+                    .filter((row) => getRentalPeriodDueDate(row.year, row.month, billingDay) <= asOf)
+                    .map((row) => row.expectedAmount as string)
+                );
+                // Will set outstanding after loading paid
+                sharedExpected.set(c.id, expected.toNumber());
+                sharedOutstanding.set(c.id, expected.toNumber());
+              }
+
+              // POSTED rent payments for shared contracts — exclude guarantee deposits/releases.
+              const { rows: sharedPostedRows } = await pool.query<{ contract_id: string; paid: string }>(
+                `SELECT contract_id, COALESCE(SUM(amount::numeric), 0) AS paid
+                 FROM property_payments
+                 WHERE contract_id = ANY($1) AND posting_status = 'POSTED' AND payment_date <= $2
+                   AND ledger_row_id IS NOT NULL
+                 GROUP BY contract_id`,
+                [sharedContractIds, asOf]
+              );
+              sharedPostedRows.forEach((r) => sharedPaid.set(parseInt(r.contract_id), toMoney(r.paid).toNumber()));
+
+              // SCHEDULED for shared
+              const { rows: sharedSchedRows } = await pool.query<{ contract_id: string; scheduled: string }>(
+                `SELECT contract_id, COALESCE(SUM(amount::numeric), 0) AS scheduled
+                 FROM property_payments
+                 WHERE contract_id = ANY($1) AND posting_status = 'SCHEDULED'
+                 GROUP BY contract_id`,
+                [sharedContractIds]
+              );
+              sharedSchedRows.forEach((r) =>
+                sharedScheduled.set(parseInt(r.contract_id), toMoney(r.scheduled).toNumber())
+              );
+
+              // Finalize outstanding = expected - paid
+              for (const c of sharedContracts) {
+                const expected = sharedExpected.get(c.id) ?? 0;
+                const paid = sharedPaid.get(c.id) ?? 0;
+                sharedOutstanding.set(c.id, toMoney(expected).minus(paid).toNumber());
+              }
+
+              // Fetch owner company names
+              const ownerCompanyIds = [...new Set(sharedContracts.map((c) => c.companyId))];
+              const ownerCompanies = await db
+                .select({ id: companies.id, name: companies.name })
+                .from(companies)
+                .where(inArray(companies.id, ownerCompanyIds));
+              const ownerNameMap = new Map(ownerCompanies.map((c) => [c.id, c.name]));
+
+              // Sum [Guarantee applied] payments for shared contracts
+              const sharedGuaranteeApplied = new Map<number, number>();
+              const sharedAppliedRows = await db
+                .select({
+                  contractId: propertyPayments.contractId,
+                  total: sql<string>`COALESCE(SUM(${propertyPayments.amount}), 0)`,
+                })
+                .from(propertyPayments)
+                .where(
+                  and(
+                    inArray(propertyPayments.contractId, sharedContractIds),
+                    sql`${propertyPayments.notes} LIKE '%[Guarantee applied]%'`
+                  )
+                )
+                .groupBy(propertyPayments.contractId);
+              sharedAppliedRows.forEach((r) => sharedGuaranteeApplied.set(r.contractId, Number(r.total)));
+
+              sharedResults = sharedContracts
+                .map((c) => {
+                  const u = sharedUnitMap.get(c.unitId);
+                  if (!u) return null;
+                  const appliedAsRent = sharedGuaranteeApplied.get(c.id) ?? 0;
+                  const guaranteeRemaining = Math.max(0, toMoney(c.guaranteeAmount).minus(appliedAsRent).toNumber());
+                  // FIX #8: separate non-negative outstanding and credit fields for shared contracts
+                  const rawOutstanding = sharedOutstanding.get(c.id) ?? 0;
+                  const expectedAsOf = sharedExpected.get(c.id) ?? 0;
+                  const paidAsOf = sharedPaid.get(c.id) ?? 0;
+                  const scheduledAmount = sharedScheduled.get(c.id) ?? 0;
+                  const outstanding = Math.max(0, rawOutstanding);
+                  const prepaidCredit = rawOutstanding < 0 ? Math.abs(rawOutstanding) : null;
+                  const billingDay = getRentalBillingDay(c.startDate as string);
+                  const nextBillingDate = computeNextBillingDate(billingDay, asOf);
+                  return {
+                    ...u,
+                    contract: c,
+                    expectedAsOf,
+                    outstanding,
+                    paidAsOf,
+                    totalPaid: paidAsOf,
+                    scheduledAmount,
+                    prepaidCredit,
+                    billingDay,
+                    nextBillingDate,
+                    guaranteeRemaining,
+                    isShared: true,
+                    // Properties is a read-only reference to ERP/Factory accounting.
+                    isInternalLeaseProjection: isPropertiesInternalSourceReference(module, c),
+                    sourceModule: isPropertiesInternalSourceReference(module, c) ? c.module : null,
+                    sourceCompanyId: isPropertiesInternalSourceReference(module, c) ? c.companyId : null,
+                    ownerCompanyName: ownerNameMap.get(c.companyId) ?? null,
+                  };
+                })
+                .filter(Boolean) as typeof ownedResults;
             }
           }
         } // end shared rental tab
