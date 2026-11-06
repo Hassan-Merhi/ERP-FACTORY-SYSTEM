@@ -285,8 +285,7 @@ export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesCon
             const sharedContracts = candidateContracts.filter((contract) => {
               const unit = sharedUnitMap.get(contract.unitId);
               if (!unit) return false;
-              if (module === "PROPERTIES" && contract.companyId === companyId &&
-                  contract.module !== module && !unit.active) return false;
+              if (isPropertiesInternalSourceReference(module, contract) && !unit.active) return false;
               return sharedRentalDisplayTab(module, contract, unit) === unitType;
             });
 
