@@ -260,6 +260,170 @@
 @media (max-width: 420px) {
   .properties-ledger-modern .properties-ledger-metrics { grid-template-columns: 1fr; }
 }
+
+/*
+ * Light theme for the Properties ledger. The app toggles `.dark` on <html>,
+ * so this tracks the existing theme control without a second switch.
+ * Dark-mode rules above remain unchanged; ERP and Factory stay unaffected.
+ */
+html:not(.dark) .properties-ledger-modern {
+  --ledger-ink: #17223b;
+  --ledger-muted: #66758d;
+  --ledger-border: #dde4f1;
+  border-color: #dce3f1;
+  background:
+    radial-gradient(ellipse 58% 260px at 74% -30px, rgba(155, 124, 235, .13), transparent 70%),
+    linear-gradient(135deg, #ffffff 0%, #f9fbff 65%, #f8f7ff 100%);
+  color: var(--ledger-ink);
+  box-shadow: 0 10px 32px rgba(30, 47, 83, .06);
+}
+html:not(.dark) .properties-ledger-modern .properties-ledger-breadcrumb {
+  color: #64748b;
+}
+html:not(.dark) .properties-ledger-modern .properties-ledger-breadcrumb svg {
+  color: #8894aa;
+}
+html:not(.dark) .properties-ledger-modern .properties-ledger-breadcrumb strong {
+  color: #25314a;
+}
+html:not(.dark) .properties-ledger-modern .properties-ledger-heading-title h3 {
+  color: #17213a;
+}
+html:not(.dark) .properties-ledger-modern .properties-ledger-subtitle {
+  color: #7065a5;
+}
+html:not(.dark) .properties-ledger-modern .properties-ledger-account-bar {
+  border-color: var(--ledger-border);
+  background: rgba(255, 255, 255, .89);
+  color: #28354f;
+}
+html:not(.dark) .properties-ledger-modern .properties-ledger-account-bar .text-muted-foreground {
+  color: var(--ledger-muted);
+}
+html:not(.dark) .properties-ledger-modern .properties-ledger-account-bar button:hover {
+  background: #eef0fc;
+  color: #433b8e;
+}
+html:not(.dark) .properties-ledger-modern .properties-ledger-heading-row button,
+html:not(.dark) .properties-ledger-modern .properties-ledger-heading-row [role="combobox"] {
+  border-color: #dce3ef;
+  background: #fff;
+  color: #27334f;
+}
+html:not(.dark) .properties-ledger-modern .properties-ledger-heading-row button:hover,
+html:not(.dark) .properties-ledger-modern .properties-ledger-heading-row [role="combobox"]:hover {
+  background: #f0f2fb;
+}
+html:not(.dark) .properties-ledger-modern .properties-ledger-heading-row button:focus-visible,
+html:not(.dark) .properties-ledger-modern .properties-ledger-heading-row [role="combobox"]:focus-visible,
+html:not(.dark) .properties-ledger-modern .properties-ledger-account-bar button:focus-visible {
+  outline: 2px solid #6858bd;
+  outline-offset: 2px;
+}
+html:not(.dark) .properties-ledger-modern .properties-ledger-stat {
+  border-color: #d8e3f8;
+  background: linear-gradient(115deg, #edf4ff, #f7faff);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .92), 0 7px 18px rgba(42, 67, 118, .045);
+}
+html:not(.dark) .properties-ledger-modern .properties-ledger-stat:nth-child(2) {
+  border-color: #e0d6f8;
+  background: linear-gradient(120deg, #f1ebfd, #f8f5fe);
+}
+html:not(.dark) .properties-ledger-modern .properties-ledger-stat:nth-child(3) {
+  border-color: #cce8e4;
+  background: linear-gradient(120deg, #e8f7f5, #f5fcfb);
+}
+html:not(.dark) .properties-ledger-modern .properties-ledger-stat:nth-child(4) {
+  border-color: #d5bff5;
+  background: linear-gradient(120deg, #eee5fc, #f7f0ff);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .9), 0 8px 20px rgba(99, 71, 161, .08);
+}
+html:not(.dark) .properties-ledger-modern .properties-ledger-stat > svg {
+  color: #3556b5;
+  background: #dbe7ff;
+}
+html:not(.dark) .properties-ledger-modern .properties-ledger-stat:nth-child(2) > svg {
+  color: #7850c4;
+  background: #e5d9fb;
+}
+html:not(.dark) .properties-ledger-modern .properties-ledger-stat:nth-child(3) > svg {
+  color: #167e82;
+  background: #d5f0ed;
+}
+html:not(.dark) .properties-ledger-modern .properties-ledger-stat:nth-child(4) > svg {
+  color: #844ac0;
+  background: #e6d7f7;
+}
+html:not(.dark) .properties-ledger-modern .properties-ledger-stat p:first-child {
+  color: #52627d;
+}
+html:not(.dark) .properties-ledger-modern .properties-ledger-stat p:nth-child(2) {
+  color: #19243d;
+}
+html:not(.dark) .properties-ledger-modern [data-testid="account-statement-scroll-region"] {
+  border-color: #dbe1ee;
+  background: #ffffff;
+  box-shadow: 0 10px 26px rgba(40, 55, 88, .065);
+  scrollbar-color: #b7c0d5 #eef2fa;
+}
+html:not(.dark) .properties-ledger-modern [data-testid="account-statement-scroll-region"] thead tr {
+  background: linear-gradient(100deg, #f0ecfa, #f3f0fb 65%, #f0edfa) !important;
+}
+html:not(.dark) .properties-ledger-modern [data-testid="account-statement-scroll-region"] thead th {
+  color: #46516d;
+  border-bottom-color: #dedaf1;
+}
+html:not(.dark) .properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr[data-testid^="row-voucher-"],
+html:not(.dark) .properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr[data-testid^="row-historical-reference-"] {
+  background: #ffffff;
+  border-color: #e7ecf5;
+}
+html:not(.dark) .properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr[data-testid^="row-voucher-"]:nth-child(odd),
+html:not(.dark) .properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr[data-testid^="row-historical-reference-"]:nth-child(odd) {
+  background: #f7f9fd;
+}
+html:not(.dark) .properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr[data-testid^="row-voucher-"]:hover {
+  background: #edf0fd;
+}
+html:not(.dark) .properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody td {
+  border-color: #e6eaf3;
+}
+html:not(.dark) .properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody td .text-foreground,
+html:not(.dark) .properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody td.font-semibold {
+  color: #1b2942;
+}
+html:not(.dark) .properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody td .text-muted-foreground,
+html:not(.dark) .properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody td.text-muted-foreground {
+  color: #687790;
+}
+html:not(.dark) .properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr:not([data-testid]) {
+  background: #f1f4fa;
+  color: #34405b;
+  border-color: #e3e7f0;
+}
+html:not(.dark) .properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr:last-child {
+  background: linear-gradient(90deg, #e9e2f8, #efebfb) !important;
+  color: #292046;
+}
+html:not(.dark) .properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr:last-child td {
+  border-top-color: #d9ccf2;
+}
+html:not(.dark) .properties-ledger-modern [data-testid="account-statement-scroll-region"] [role="checkbox"] {
+  border-color: #7867bd;
+}
+html:not(.dark) .properties-ledger-modern [data-testid="account-statement-scroll-region"] [role="checkbox"]:focus-visible {
+  outline-color: #6858bd;
+}
+@media (max-width: 767px) {
+  html:not(.dark) .properties-ledger-modern [data-testid="account-statement-phone-header"] > div:first-child {
+    background: #fff;
+    border-color: #dce3f1;
+  }
+  html:not(.dark) .properties-ledger-modern [data-testid="account-statement-cards"] > div {
+    border-color: #dce3f1;
+  }
+}
+
 @media print {
   .properties-ledger-modern { background: white !important; color: black !important; border: 0; padding: 0; }
   .properties-ledger-modern .properties-ledger-breadcrumb,
