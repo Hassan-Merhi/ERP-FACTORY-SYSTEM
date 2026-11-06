@@ -376,6 +376,7 @@ export const applicationEnglishTranslations = {
   "mhd.managerTitle": "MHD View Manager",
   "mhd.managerDescription":
     "Upload article codes in the order you prefer. Item Name is optional; blanks use the original product name. This changes display only, never Factory records.",
+  "mhd.restorePrevious": "Restore previous MHD View",
   "mhd.downloadTemplate": "Download Template",
   "mhd.downloadCurrent": "Download Current Products",
   "mhd.uploadExcel": "Upload Excel",
