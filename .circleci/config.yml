@@ -12,7 +12,7 @@ version: 2.1
 executors:
   node24:
     docker:
-      - image: cimg/node:24.22.1
+      - image: cimg/node:24.22.2
     resource_class: medium
     working_directory: ~/project
 

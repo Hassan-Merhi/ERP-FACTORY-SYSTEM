@@ -8,7 +8,8 @@ export const STATIC_ROUTES = [
   // Production / inventory
   "/factory/production-report",
   "/factory/monthly-production-matrix",
-  "/factory/production-bonuses",
+  // /factory/production-bonuses is Admin/Owner-only in the router and the API, so the
+  // Developer fixture this runner signs in as is redirected away from it by design.
   "/factory/stock-entry",
   "/factory/raw-materials",
   "/factory/raw-stock",

@@ -76,7 +76,7 @@ const exactSourceMarkers = [
   'import { fetchAllV5AllocationData } from "@/lib/v5AllocationPaginationClient";',
   'async function openEditDraft(proformaId: number, proformaName: string, _currentRows: V5Row[]) {',
   'const filtered = exportRows.filter((r) => {',
-  'onClick={() => setLocation(`/factory/stock-allocation-v5/proformas/${proforma.proformaId}/edit`)}',
+  '`/factory/stock-allocation-v5/proformas/${proforma.proformaId}/edit`',
 ];
 const sourceWithModel = `${source}\n${await read("client/src/pages/factory/factorystockallocationv5/useFactoryStockAllocationV5Model.tsx")}`;
 for (const marker of exactSourceMarkers) {
