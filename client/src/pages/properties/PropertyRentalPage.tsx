@@ -734,7 +734,7 @@ export default function PropertyRentalPage({
                                 </td>
                                 <td className="px-3 py-2">
                                   {u.contract ? (
-                                    {u.isInternalLeaseProjection ? (
+                                    u.isInternalLeaseProjection ? (
                                       <span className="text-xs text-muted-foreground">{u.contract.notes || "—"}</span>
                                     ) : (
                                       <NoteCell
@@ -742,7 +742,7 @@ export default function PropertyRentalPage({
                                         note={u.contract.notes}
                                         testId={`unit-${u.id}`}
                                       />
-                                    )}
+                                    )
                                   ) : (
                                     <span className="text-xs text-muted-foreground">—</span>
                                   )}
