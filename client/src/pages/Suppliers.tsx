@@ -415,7 +415,9 @@ export default function Suppliers() {
         dialogTab={dialogTab}
         onDialogTabChange={setDialogTab}
         onClose={handleCloseDialog}
-        onExport={mayExportSupplier.allowed ? handleExportToExcel : undefined}
+        onExport={handleExportToExcel}
+        canExport={mayExportSupplier.allowed}
+        exportUnavailableReason={canDenialMessage(mayExportSupplier.reason)}
         onTransactionClick={handleTransactionClick}
         onPOClick={handlePOClick}
         onContainerClick={handleContainerClick}
