@@ -1,4 +1,5 @@
 import { OfflinePrepPanel } from "@/components/OfflinePrepPanel";
+import { MhdViewManager } from "./MhdViewManager";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -101,6 +102,7 @@ export function FactorySettingsView({ model }: Props) {
         </div>
       </div>
 
+      <MhdViewManager />
       <AutomaticPriorityPrintingCard />
 
       <div className="grid gap-6 md:grid-cols-2">

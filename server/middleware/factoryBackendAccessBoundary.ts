@@ -335,6 +335,25 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     return requirement("factory/settings");
   }
 
+  // MHD product aliases are display-only; reads are available only to Factory
+  // users authorized on at least one product-bearing page. Writes require Settings.
+  if (path === "/mhd-view") {
+    if (isWrite(req)) return requirement("factory/intelligence/mhd-view");
+    return anyOf(
+      requirement("factory/stock-allocation-v5"),
+      requirement("factory/bales-hub"),
+      requirement("factory/location-inventory"),
+      requirement("factory/stock-query"),
+      requirement("factory/price-list"),
+      requirement("factory/monthly-production-matrix"),
+      requirement("factory/stock-bale-list"),
+      requirement("factory/bale-tracking"),
+      requirement("factory/invoicing"),
+      requirement("factory/settings"),
+      requirement("factory/intelligence/mhd-view")
+    );
+  }
+
   // Monthly Production Matrix reads and shared company row-order updates are
   // owned by the dedicated Inventory page, never by general Settings.
   if (hasPrefix(path, "/monthly-production-matrix")) {

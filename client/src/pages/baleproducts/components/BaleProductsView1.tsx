@@ -1,3 +1,4 @@
+import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { ChevronDown, ChevronRight, Pencil, X, EyeOff, Eye, AlertCircle, Palette, Search, Layers3 } from "lucide-react";
 import {
   DropdownMenu,
@@ -95,6 +96,7 @@ function ProductColorPills({
 }
 
 export function BaleProductsView1({ model }: { model: Model }) {
+  const mhd = useFactoryMhdView();
   const {
     setCreateDialogOpen,
     designColors,
@@ -375,7 +377,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {groupedProducts.map((group) => (
+                {mhd.sortRows(groupedProducts, (group) => group.articleCode).map((group) => (
                   <>
                     <TableRow
                       key={group._key}
@@ -397,7 +399,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
                         )}
                       </TableCell>
                       <TableCell className="font-mono font-medium">{group.articleCode || "-"}</TableCell>
-                      <TableCell className="font-medium">{group.name}</TableCell>
+                      <TableCell className="font-medium">{mhd.nameFor(group.articleCode, group.name)}</TableCell>
                       <TableCell className="text-muted-foreground">
                         {group.items[0]?.categoryId ? categoryMap.get(group.items[0].categoryId) || "-" : "-"}
                       </TableCell>
@@ -408,7 +410,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
                       </TableCell>
                     </TableRow>
                     {expandedGroups.has(group._key) &&
-                      group.items.map((product) => (
+                      mhd.sortRows(group.items, (product) => product.articleCode).map((product) => (
                         <TableRow
                           key={product.id}
                           className={`bg-muted/30 ${selectedIds.has(product.id) ? "bg-muted/60" : ""}`}
@@ -425,7 +427,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
                           <TableCell className="font-mono text-muted-foreground text-sm pl-8">
                             {product.articleCode || "-"}
                           </TableCell>
-                          <TableCell className="text-sm">{product.name}</TableCell>
+                          <TableCell className="text-sm">{mhd.nameFor(product.articleCode, product.name)}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {product.categoryId ? categoryMap.get(product.categoryId) || "-" : "-"}
                           </TableCell>
@@ -511,7 +513,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {activeProducts.map((product) => (
+              {mhd.sortRows(activeProducts, (product) => product.articleCode).map((product) => (
                 <TableRow
                   key={product.id}
                   data-testid={`row-product-${product.id}`}
@@ -527,7 +529,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
                   <TableCell className="font-mono font-semibold text-slate-800 dark:text-slate-100">{product.articleCode || "-"}</TableCell>
                   <TableCell className="font-medium">
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                      <span>{product.name}</span>
+                      <span>{mhd.nameFor(product.articleCode, product.name)}</span>
                       <ProductColorPills
                         product={product}
                         designColors={designColors}

@@ -1,3 +1,4 @@
+import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { addDays, format } from "date-fns";
 import {
   Printer,
@@ -60,6 +61,7 @@ import { BalesHistoryDialog4 } from "./baleshistory/components/BalesHistoryDialo
 import { BalesHistoryDialog5 } from "./baleshistory/components/BalesHistoryDialog5";
 
 export default function BalesHistory() {
+  const mhd = useFactoryMhdView();
   const model = useBalesHistoryModel();
   const {
     wrapAdminAction,
@@ -485,7 +487,7 @@ export default function BalesHistory() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {groupedFiltered.map((group) => {
+                {mhd.sortRows(groupedFiltered, (group) => group.articleCode).map((group) => {
                   const isExpanded = expandedGroups.has(group.key);
                   const allGroupSelected = group.rows.every((r) => selectedIds.has(r.bale.id));
                   const someGroupSelected = group.rows.some((r) => selectedIds.has(r.bale.id));
@@ -529,7 +531,7 @@ export default function BalesHistory() {
                           ) : (
                             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                           )}
-                          {group.productName}
+                          {mhd.nameFor(group.articleCode, group.productName)}
                         </button>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{group.articleCode}</TableCell>
@@ -620,7 +622,7 @@ export default function BalesHistory() {
                                     onClick={() => startEditName(bale.id, product?.name || bale.productName || "")}
                                     data-testid={`text-product-name-${bale.id}`}
                                   >
-                                    <span>{product?.name || bale.productName || "-"}</span>
+                                    <span>{mhd.nameFor(product?.articleCode || "", product?.name || bale.productName || "-")}</span>
                                     <Pencil className="h-3 w-3 text-muted-foreground visible md:invisible md:group-hover:visible touch:visible" />
                                   </div>
                                 )}

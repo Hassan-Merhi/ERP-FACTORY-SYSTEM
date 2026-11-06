@@ -8,6 +8,7 @@
 import type { Database } from "../../db";
 import type { Express, RequestHandler } from "express";
 import { registerFactorySettingsRoutes } from "./settings";
+import { registerFactoryMhdViewRoutes } from "./mhd-view";
 import { registerFactoryDashboardWasteRoutes } from "./dashboard-waste";
 import { registerFactoryKpiRoutes } from "./kpis";
 import { registerFactoryProfitabilityRoutes } from "./profitability";
@@ -19,6 +20,7 @@ import { registerFactoryCashflowRoutes } from "./cashflow";
 
 export function registerFactoryIntelligenceRoutes(app: Express, requireAuth: RequestHandler, db: Database) {
   registerFactorySettingsRoutes(app, requireAuth, db);
+  registerFactoryMhdViewRoutes(app, requireAuth, db);
   registerFactoryDashboardWasteRoutes(app, requireAuth, db);
   registerFactoryKpiRoutes(app, requireAuth, db);
   registerFactoryProfitabilityRoutes(app, requireAuth, db);

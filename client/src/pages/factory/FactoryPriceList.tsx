@@ -1,3 +1,4 @@
+import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { downloadBlob } from "@/lib/downloadBlob";
 import { getErrorDetails } from "@shared/errorUtils";
@@ -41,6 +42,7 @@ interface FactoryCategory {
 }
 
 export default function FactoryPriceList() {
+  const mhd = useFactoryMhdView();
   const { toast } = useToast();
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
@@ -254,9 +256,10 @@ export default function FactoryPriceList() {
     }
   };
 
-  const filteredProducts = products.filter((p) => {
+  const filteredProducts = mhd.sortRows(products, (p) => p.articleCode).filter((p) => {
     if (!p.active) return false;
-    const matchSearch = productMatchesSearch(p, search);
+    const matchSearch = productMatchesSearch(p, search) ||
+      (Boolean(search.trim()) && mhd.nameFor(p.articleCode, p.name).toLowerCase().includes(search.trim().toLowerCase()));
     const matchCategory = categoryFilter === "all" || String(p.categoryId) === categoryFilter;
     // Keep a row visible while Enter moves from its selling price to production cost.
     // Otherwise a "Show unpriced" refresh would unmount the second editable cell.
@@ -390,7 +393,7 @@ export default function FactoryPriceList() {
                         {product.articleCode || product.code || "—"}
                       </TableCell>
                       <TableCell className="font-medium" data-testid={`text-product-name-${product.id}`}>
-                        <div>{product.name}</div>
+                        <div>{mhd.nameFor(product.articleCode, product.name)}</div>
                         {/* Mobile-only: show article code + category inline */}
                         <div className="sm:hidden flex flex-wrap items-center gap-1.5 mt-0.5">
                           {(product.articleCode || product.code) && (

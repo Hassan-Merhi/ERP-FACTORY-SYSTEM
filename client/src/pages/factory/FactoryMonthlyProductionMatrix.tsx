@@ -1,3 +1,4 @@
+import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { downloadBlob } from "@/lib/downloadBlob";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
@@ -30,6 +31,7 @@ const prettyMonth = (month: string, locale?: string) => {
 const csvCell = (value: string | number) => '"' + String(value).replace(/"/g, '""') + '"';
 
 export default function FactoryMonthlyProductionMatrix() {
+  const mhd = useFactoryMhdView();
   const { selectedCompany } = useCompany();
   const [, navigate] = useLocation();
   const returnMonths = new URLSearchParams(useSearch()).get("months")?.split(",")
@@ -100,13 +102,14 @@ export default function FactoryMonthlyProductionMatrix() {
       return a.name.localeCompare(b.name) || a.id - b.id;
     });
   }, [data?.products, orderedIds]);
-  const rowPositionById = new Map(orderedProducts.map((product, index) => [product.id, index + 1]));
-  const visibleProducts = orderedProducts.filter((product) => {
+  const mhdOrderedProducts = mhd.sortRows(orderedProducts, (product) => product.articleCode);
+  const rowPositionById = new Map(mhdOrderedProducts.map((product, index) => [product.id, index + 1]));
+  const visibleProducts = mhdOrderedProducts.filter((product) => {
     const q = search.trim().toLowerCase();
     return (!category || product.categoryName === category) &&
-      (!q || [product.name, product.articleCode, product.categoryName].some((v) => v.toLowerCase().includes(q)));
+      (!q || [mhd.nameFor(product.articleCode, product.name), product.articleCode, product.categoryName].some((v) => v.toLowerCase().includes(q)));
   });
-  const canReorder = !search.trim() && !category && !saving;
+  const canReorder = mhd.mode === "standard" && !search.trim() && !category && !saving;
   const byId = (productId: number, month: string) => counts.get(productId)?.get(month) ?? 0;
   const openWorkerBreakdown = (productId: number, selectedMonths: string[]) => {
     if (selectedMonths.length === 0) return;
@@ -185,7 +188,7 @@ export default function FactoryMonthlyProductionMatrix() {
     ? orderedProducts
         .filter((product) =>
           product.id !== moveItemId &&
-          (product.name + " " + product.articleCode + " " + product.categoryName)
+          (mhd.nameFor(product.articleCode, product.name) + " " + product.articleCode + " " + product.categoryName)
             .toLowerCase()
             .includes(moveSearch.trim().toLowerCase())
         )
@@ -256,7 +259,7 @@ export default function FactoryMonthlyProductionMatrix() {
       }
       const rows = visibleProducts.map((product) => ({
         productId: product.id,
-        name: product.name,
+        name: mhd.nameFor(product.articleCode, product.name),
         articleCode: product.articleCode,
         categoryName: product.categoryName,
         values: months.map((month) => exportedCounts.get(product.id + "|" + month) ?? 0),
@@ -347,11 +350,11 @@ export default function FactoryMonthlyProductionMatrix() {
               <article key={product.id} className="min-w-0 rounded-xl border bg-card p-3 shadow-sm" data-testid={`monthly-matrix-mobile-item-${product.id}`}>
                 <div className="flex min-w-0 items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <h2 className="break-words text-sm font-semibold">{product.name}</h2>
+                    <h2 className="break-words text-sm font-semibold">{mhd.nameFor(product.articleCode, product.name)}</h2>
                     <p className="mt-1 break-all text-xs text-muted-foreground">{product.articleCode} · {product.categoryName}</p>
                   </div>
                   <button type="button" disabled={total <= 0} onClick={() => openWorkerBreakdown(product.id, months)}
-                    aria-label={`${duoMobileText("workerBales", language)}: ${product.name} · ${total} ${duoMobileText("bales", language)}`}
+                    aria-label={`${duoMobileText("workerBales", language)}: ${mhd.nameFor(product.articleCode, product.name)} · ${total} ${duoMobileText("bales", language)}`}
                     className="min-h-11 shrink-0 rounded-lg bg-primary/10 px-3 text-right font-bold text-primary tabular-nums disabled:opacity-50"
                     data-testid={`monthly-matrix-mobile-total-${product.id}`}>
                     {total.toLocaleString()}
@@ -372,7 +375,7 @@ export default function FactoryMonthlyProductionMatrix() {
                       return (
                         <button key={month} type="button" disabled={value <= 0}
                           onClick={() => openWorkerBreakdown(product.id, [month])}
-                          aria-label={`${duoMobileText("workerBales", language)}: ${product.name} · ${monthLabel(month)} · ${value} ${duoMobileText("bales", language)}`}
+                          aria-label={`${duoMobileText("workerBales", language)}: ${mhd.nameFor(product.articleCode, product.name)} · ${monthLabel(month)} · ${value} ${duoMobileText("bales", language)}`}
                           className={`min-h-11 rounded-lg border p-2 text-left disabled:opacity-60 ${accent}`}
                           data-testid={`monthly-matrix-mobile-month-${product.id}-${month}`}>
                           <span className="block text-xs">{monthLabel(month)}</span>
@@ -423,7 +426,7 @@ export default function FactoryMonthlyProductionMatrix() {
                   <div className="flex items-center gap-1.5">
                     <GripVertical className={"h-4 w-4 shrink-0 " + (canReorder ? "cursor-grab text-muted-foreground" : "text-muted-foreground/30")} />
                     <div className="min-w-0 flex-1">
-                      <div className="font-medium leading-tight">{product.name}</div>
+                      <div className="font-medium leading-tight">{mhd.nameFor(product.articleCode, product.name)}</div>
                       <div className="text-[11px] text-muted-foreground">#{rowPositionById.get(product.id)} · {product.articleCode} · {product.categoryName}</div>
                     </div>
                     <Button
@@ -433,14 +436,14 @@ export default function FactoryMonthlyProductionMatrix() {
                       className="h-7 shrink-0 gap-1 px-2 text-xs"
                       disabled={saving}
                       onClick={() => openMoveDialog(product.id)}
-                      aria-label={t("monthlyProduction.moveTo") + ": " + product.name}
+                      aria-label={t("monthlyProduction.moveTo") + ": " + mhd.nameFor(product.articleCode, product.name)}
                       data-testid={"move-matrix-item-" + product.id}
                     >
                       <ListOrdered className="h-3.5 w-3.5" /> {t("monthlyProduction.moveTo")}
                     </Button>
                     <div className="flex flex-col">
-                      <button type="button" aria-label={t("monthlyProduction.moveUp") + ": " + product.name} disabled={!canReorder || index === 0} onClick={() => moveOne(product.id, -1)} className="rounded hover:bg-muted disabled:opacity-25"><ArrowUp className="h-3.5 w-3.5" /></button>
-                      <button type="button" aria-label={t("monthlyProduction.moveDown") + ": " + product.name} disabled={!canReorder || index === visibleProducts.length - 1} onClick={() => moveOne(product.id, 1)} className="rounded hover:bg-muted disabled:opacity-25"><ArrowDown className="h-3.5 w-3.5" /></button>
+                      <button type="button" aria-label={t("monthlyProduction.moveUp") + ": " + mhd.nameFor(product.articleCode, product.name)} disabled={!canReorder || index === 0} onClick={() => moveOne(product.id, -1)} className="rounded hover:bg-muted disabled:opacity-25"><ArrowUp className="h-3.5 w-3.5" /></button>
+                      <button type="button" aria-label={t("monthlyProduction.moveDown") + ": " + mhd.nameFor(product.articleCode, product.name)} disabled={!canReorder || index === visibleProducts.length - 1} onClick={() => moveOne(product.id, 1)} className="rounded hover:bg-muted disabled:opacity-25"><ArrowDown className="h-3.5 w-3.5" /></button>
                     </div>
                   </div>
                 </td>
@@ -454,7 +457,7 @@ export default function FactoryMonthlyProductionMatrix() {
                     {value > 0 ? <button type="button" className="font-semibold underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                       onClick={() => openWorkerBreakdown(product.id, [months[i]])}
                       title="View production by worker"
-                      aria-label={"View workers who produced " + value + " bales of " + product.name + " in " + monthLabel(months[i])}
+                      aria-label={"View workers who produced " + value + " bales of " + mhd.nameFor(product.articleCode, product.name) + " in " + monthLabel(months[i])}
                       data-testid={"matrix-worker-drilldown-" + product.id + "-" + months[i]}>{value.toLocaleString()}</button> : value.toLocaleString()}
                   </td>;
                 })}
@@ -462,7 +465,7 @@ export default function FactoryMonthlyProductionMatrix() {
                   {rowTotal(product.id) > 0 ? <button type="button" className="font-semibold underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                     onClick={() => openWorkerBreakdown(product.id, months)}
                     title="View production by worker for selected months"
-                    aria-label={"View workers who produced " + rowTotal(product.id) + " bales of " + product.name + " across selected months"}
+                    aria-label={"View workers who produced " + rowTotal(product.id) + " bales of " + mhd.nameFor(product.articleCode, product.name) + " across selected months"}
                     data-testid={"matrix-total-drilldown-" + product.id}>{rowTotal(product.id).toLocaleString()}</button> : rowTotal(product.id).toLocaleString()}
                 </td>
               </tr>;
@@ -541,7 +544,7 @@ export default function FactoryMonthlyProductionMatrix() {
                       onClick={() => setDestinationId(product.id)}
                       aria-pressed={destinationId === product.id}
                     >
-                      <span className="font-medium">{product.name}</span>
+                      <span className="font-medium">{mhd.nameFor(product.articleCode, product.name)}</span>
                       <span className="ml-2 text-xs text-muted-foreground">
                         #{rowPositionById.get(product.id)} · {product.articleCode}
                       </span>

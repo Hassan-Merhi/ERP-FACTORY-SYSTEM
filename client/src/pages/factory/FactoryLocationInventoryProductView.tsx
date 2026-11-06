@@ -1,4 +1,5 @@
 import "./FactoryLocationInventoryRedesign.css";
+import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,6 +77,7 @@ function BreakdownStatCard({ icon, label, total, regular, special, unit, accent 
 }
 
 export function FactoryLocationInventoryProductView({ inventory }: { inventory: FactoryLocationInventoryModel }) {
+  const mhd = useFactoryMhdView();
   const [categorySearch, setCategorySearch] = useState("");
   const {
     activeInventoryData,
@@ -145,7 +147,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
     totalSellValue,
   } = createFactoryLocationProductMetrics(inventory);
 
-  const { renderProductRow, renderMobileCard } = createFactoryLocationProductRenderers(inventory);
+  const { renderProductRow, renderMobileCard } = createFactoryLocationProductRenderers(inventory, mhd.nameFor);
   const matchingCategoryNames = allCategoryNames.filter((name) =>
     name.toLocaleLowerCase().includes(categorySearch.trim().toLocaleLowerCase())
   );
@@ -570,7 +572,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
               </div>
             ) : (
               <>
-                {regularProducts.map((prod) => renderMobileCard(prod))}
+                {mhd.sortRows(regularProducts, (prod) => prod.articleCode).map((prod) => renderMobileCard(prod))}
                 {regularProducts.length > 0 && (
                   <div className="inventory-mobile-total rounded-xl border p-3 bg-muted/30" data-testid="text-product-totals">
                     <div className="flex items-center justify-between gap-2 font-bold text-sm">
@@ -592,7 +594,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
                     <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide pt-2">
                       Wipers &amp; Garbage
                     </p>
-                    {specialProducts.map((prod) => renderMobileCard(prod, "-sp"))}
+                    {mhd.sortRows(specialProducts, (prod) => prod.articleCode).map((prod) => renderMobileCard(prod, "-sp"))}
                     <div className="inventory-mobile-total rounded-xl border p-3 bg-muted/30" data-testid="text-special-product-totals">
                       <div className="flex items-center justify-between gap-2 font-bold text-sm">
                         <span>
@@ -708,7 +710,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
                     </tr>
                   ) : (
                     <>
-                      {regularProducts.map((prod) => renderProductRow(prod))}
+                      {mhd.sortRows(regularProducts, (prod) => prod.articleCode).map((prod) => renderProductRow(prod))}
                       {regularProducts.length > 0 && (
                         <tr className="inventory-section-total border-t bg-muted/50 h-12 font-bold">
                           {proformaMode && <td></td>}
@@ -823,7 +825,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
                       </tr>
                     </thead>
                     <tbody>
-                      {specialProducts.map((prod) => renderProductRow(prod, "-sp"))}
+                      {mhd.sortRows(specialProducts, (prod) => prod.articleCode).map((prod) => renderProductRow(prod, "-sp"))}
                       <tr className="inventory-section-total border-t bg-muted/50 h-12 font-bold">
                         {proformaMode && <td></td>}
                         <td className="px-3" colSpan={col("category") ? 2 : 1}>
