@@ -89,6 +89,7 @@ const label = "block mb-1.5 text-xs font-semibold text-muted-foreground";
 
 export default function FactoryStockQueryWorkspace() {
   const mhd = useFactoryMhdView();
+  const mhdNameFor = mhd.nameFor;
   const { selectedCompany } = useCompany();
   const { formatDisplayDate } = useDateFormat();
   const [, navigate] = useLocation();
@@ -135,8 +136,7 @@ export default function FactoryStockQueryWorkspace() {
     const q = search.trim().toLowerCase();
     const found = (data?.products ?? []).filter(
       (p) =>
-        (!q ||
-          [p.code, p.name, mhd.nameFor(p.code, p.name), p.categoryName].some((v) => v.toLowerCase().includes(q))) &&
+        (!q || [p.code, p.name, mhdNameFor(p.code, p.name), p.categoryName].some((v) => v.toLowerCase().includes(q))) &&
         (!category || String(p.categoryId ?? 0) === category)
     );
     return [...found].sort((a, b) => {
@@ -145,7 +145,7 @@ export default function FactoryStockQueryWorkspace() {
       if (sort === "sold") return b.soldBales - a.soldBales || a.name.localeCompare(b.name);
       return a.name.localeCompare(b.name);
     });
-  }, [data?.products, search, category, sort, mhd.mode, mhd.revision]);
+  }, [data?.products, search, category, sort, mhdNameFor]);
 
   const displayedProducts = mhd.sortRows(products, (p) => p.code);
 

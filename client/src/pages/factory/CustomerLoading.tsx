@@ -72,6 +72,7 @@ async function readJson<T>(url: string): Promise<T> {
 }
 export default function CustomerLoading() {
   const mhd = useFactoryMhdView();
+  const mhdNameFor = mhd.nameFor;
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [customerId, setCustomerId] = useState("");
@@ -171,7 +172,7 @@ export default function CustomerLoading() {
       if (!needle) return true;
       return [
         product.name,
-        mhd.nameFor(product.articleCode || product.code, product.name),
+        mhdNameFor(product.articleCode || product.code, product.name),
         product.nameAr,
         product.code,
         product.articleCode,
@@ -189,8 +190,7 @@ export default function CustomerLoading() {
     availableNegativeFilter,
     availableStockByCode,
     search,
-    mhd.mode,
-    mhd.revision,
+    mhdNameFor,
   ]);
 
   const displayedProducts = mhd.sortRows(filteredProducts, (product) => product.articleCode || product.code);

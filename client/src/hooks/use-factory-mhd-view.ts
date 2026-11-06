@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useOptionalCompany } from "@/contexts/CompanyContext";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
@@ -37,10 +37,18 @@ export function useFactoryMhdView() {
   });
   const mode: FactoryProductViewMode = prefs?.factoryMhdViewDefault ? "mhd" : "standard";
   const lookup = useMemo(() => factoryMhdLookup(data?.rows ?? []), [data?.rows]);
-  const nameFor = (articleCode: string | null | undefined, originalName: string): string =>
-    factoryMhdName(mode, lookup, articleCode, originalName);
-  const sortRows = <T>(rows: readonly T[], articleCode: (row: T) => string | null | undefined): T[] =>
-    sortFactoryMhdRows(mode, lookup, rows, articleCode);
+  // Stable while the view mode and published mapping are unchanged, so callers
+  // can list them as hook dependencies without recomputing on every render.
+  const nameFor = useCallback(
+    (articleCode: string | null | undefined, originalName: string): string =>
+      factoryMhdName(mode, lookup, articleCode, originalName),
+    [mode, lookup]
+  );
+  const sortRows = useCallback(
+    <T>(rows: readonly T[], articleCode: (row: T) => string | null | undefined): T[] =>
+      sortFactoryMhdRows(mode, lookup, rows, articleCode),
+    [mode, lookup]
+  );
 
   const setMode = async (next: FactoryProductViewMode) => {
     if (saving || next === mode) return;
