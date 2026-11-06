@@ -44,6 +44,24 @@ export function receiptTotals(rows: ReceiptRow[]) {
 }
 
 /**
+ * Build the same balance-based split for Rentals and the Payments Log.
+ * Amounts are signed integer cents from posted ledger statements, not
+ * voucher amounts created or adjusted by this calculation.
+ */
+export function propertiesAccountBalanceSplit(
+  historicalWithdrawal: number | null,
+  tenantDeposits: number | null,
+  aliCash: number | null,
+  propertiesCashbox: number | null = 0,
+) {
+  const rentAndCashBalance = historicalWithdrawal !== null && aliCash !== null && propertiesCashbox !== null
+    ? historicalWithdrawal + aliCash + propertiesCashbox : null;
+  const accountSum = rentAndCashBalance !== null && tenantDeposits !== null
+    ? rentAndCashBalance + tenantDeposits : null;
+  return { rentAndCashBalance, depositBalance: tenantDeposits, accountSum };
+}
+
+/**
  * Bridge a complete, unfiltered Properties payment history to the requested
  * sum of account balances. This is an accounting *presentation*, not cash:
  * the same GUAR voucher posts both a cash debit and a deposit-liability credit.
@@ -53,8 +71,8 @@ export function receiptTotals(rows: ReceiptRow[]) {
  */
 export function accountBalanceHistoryBridge(rows: ReceiptRow[], cashLedgerIds: number | readonly number[] | null | undefined) {
   const history = receiptTotals(rows);
-  const ledgerIds = cashLedgerIds == null ? null : new Set(
-    (Array.isArray(cashLedgerIds) ? cashLedgerIds : [cashLedgerIds]) as number[]
+  const ledgerIds = cashLedgerIds == null ? null : new Set<number>(
+    typeof cashLedgerIds === "number" ? [cashLedgerIds] : cashLedgerIds
   );
   const cashAndLiabilityOverlap = ledgerIds === null
     ? null
