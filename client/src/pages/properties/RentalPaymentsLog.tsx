@@ -259,10 +259,10 @@ export default function RentalPaymentsLog({
         </p>
       )}
 
-      {isHassanProperties && (
+      {isHassanProperties && !isFullHistory && (
         <div className="flex flex-wrap justify-end gap-2">
           <Button variant="outline" size="sm" disabled={isLoading || paymentsError || !filtered.length || !clipboardIsUsd} onClick={() => void copyHistory()} data-testid="button-properties-copy-payment-history">
-            <Copy className="h-4 w-4 mr-1" /> Copy visible rows only
+            <Copy className="h-4 w-4 mr-1" /> Copy filtered rows (without full account reconciliation)
           </Button>
           {!clipboardIsUsd && <span className="text-xs text-amber-600">Non-USD entries need their booked currency conversion before export.</span>}
         </div>
