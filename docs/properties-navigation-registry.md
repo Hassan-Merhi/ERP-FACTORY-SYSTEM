@@ -20,14 +20,20 @@ The audit is navigation-only. It does not change rental, property, voucher, acco
 
 ## Final sidebar structure
 
-### Pinned daily work
+### Reorderable top-level pages
 
 | Label | Route | Permission | Classification |
 | --- | --- | --- | --- |
 | Daybook | `/properties/daybook` | Properties user | Root |
 | Agent Ledger | `/properties/agents` | Properties user | Root |
+| Rentals | `/properties/rentals` | Properties user | Root hub |
+| Accounts | `/properties/accounts` | Properties user | Root |
+| Vouchers | `/properties/vouchers` | Properties user | Root |
+| Analytics | `/properties/analytics` | Properties user | Root |
 
-### Rentals
+All six are displayed together at the top of the Properties sidebar, without redundant Rentals or Accounting collapsible groups. Drag their handles to reorder them. The order is saved in browser storage; when pages are added later, existing choices stay in order and new pages are appended.
+
+### Rentals hub routes
 
 | Label | Canonical route | Permission | Parent |
 | --- | --- | --- | --- |
