@@ -86,7 +86,7 @@ export async function readV2Revision(companyId: number): Promise<{ revision: num
 }
 
 export async function readV2Roles(companyId: number) {
-  const [templates, rules, version] = await Promise.all([
+  const [templates, rules, version, affectedUsers] = await Promise.all([
     pool.query(
       "SELECT role_key AS \"roleKey\", display_name AS \"displayName\", system_managed AS \"systemManaged\" FROM access_role_templates WHERE company_id=$1 ORDER BY role_key",
       [companyId]
@@ -97,8 +97,16 @@ export async function readV2Roles(companyId: number) {
         WHERE r.company_id=$1 ORDER BY t.role_key, r.resource_key, r.action_key`, [companyId]
     ),
     readV2Revision(companyId),
+    pool.query<{ role: string; count: string }>(
+      "SELECT role, COUNT(DISTINCT user_id)::text AS count FROM user_company_roles WHERE company_id=$1 GROUP BY role",
+      [companyId]
+    ),
   ]);
+  const impactCounts = Object.fromEntries(
+    affectedUsers.rows.map((row) => [row.role, Number(row.count)])
+  );
   return {
+    impactCounts,
     mode: version.mode, revision: version.revision,
     editableRoles: V2_EDITABLE_ROLES,
     templates: templates.rows, rules: rules.rows, enforced: false,
