@@ -12,6 +12,7 @@ import { KeyRound, CalendarDays, LayoutPanelLeft } from "lucide-react";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { PageHeader } from "@/components/PageHeader";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
+import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 
 type DateFormatType = "MM/DD/YYYY" | "DD/MM/YYYY";
 
@@ -19,6 +20,7 @@ export default function MySettings() {
   const { toast } = useToast();
   const { dateFormat } = useDateFormat();
   const { prefs, updatePref, isPending: prefsPending } = useUserPreferences();
+  const factoryMhd = useFactoryMhdView();
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -97,6 +99,22 @@ export default function MySettings() {
   return (
     <div className="p-6 max-w-md mx-auto space-y-6">
       <PageHeader title="My Settings" />
+
+      <Card data-testid="settings-factory-mhd-default">
+        <CardHeader>
+          <CardTitle className="text-base">Preferred Factory Product View</CardTitle>
+          <CardDescription>Choose which product names and ordering appear in Factory screens. The MHD catalog is shared; this preference is yours.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Select value={factoryMhd.mode} disabled={factoryMhd.saving} onValueChange={(value) => void factoryMhd.setMode(value as "standard" | "mhd")}>
+            <SelectTrigger data-testid="select-factory-mhd-default"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="standard">Standard View</SelectItem>
+              <SelectItem value="mhd">MHD View</SelectItem>
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
