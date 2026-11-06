@@ -26,7 +26,7 @@ export default function TransactionJournal() {
             </div>
             <div className="min-w-0">
               <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.17em] text-violet-700 dark:text-violet-300">All Daybook</div>
-              <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">Transaction Journal</h1>
+              <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl"><span className="sr-only">All Daybook — </span>Transaction Journal</h1>
               <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300 sm:text-sm">
                 All transactions across companies, vouchers, and operations
               </p>
@@ -35,7 +35,7 @@ export default function TransactionJournal() {
           <Button variant="outline" size="sm" onClick={() => model.refetch()} disabled={model.isFetching}
             className="h-9 gap-2 rounded-xl border-violet-200/80 bg-white/75 shadow-sm hover:bg-violet-50 dark:border-white/15 dark:bg-white/5 dark:hover:bg-white/10"
             data-testid="button-refresh-journal">
-            <RefreshCw className={`h-4 w-4 ${model.isFetching ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-4 w-4 ${model.isFetching ? "animate-spin" : ""}`} data-testid={model.isFetching ? "icon-refreshing" : undefined} />
             Refresh
           </Button>
         </div>
