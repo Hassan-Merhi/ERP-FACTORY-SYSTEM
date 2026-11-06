@@ -1,3 +1,4 @@
+import { downloadBlob } from "@/lib/downloadBlob";
 import { useEffect, useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -395,13 +396,7 @@ function StockInSalesReportSummary() {
     const escape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
     const csv = [headers, ...values].map((row) => row.map(escape).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `stock-in-sales-report-${format(new Date(), "yyyy-MM-dd")}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(link.href);
+    downloadBlob(blob, `stock-in-sales-report-${format(new Date(), "yyyy-MM-dd")}.csv`);
   };
 
   const profitTone = summary.costProfit > 0 ? "positive" : summary.costProfit < 0 ? "negative" : "default";

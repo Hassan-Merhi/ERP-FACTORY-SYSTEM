@@ -7,6 +7,7 @@ import IntercompanyPayments from "@/pages/intercompany/IntercompanyPayments";
 import IntercompanyLifecycle from "@/pages/intercompany/IntercompanyLifecycle";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 const HelpTraining = lazy(() => import("@/pages/HelpTraining"));
+const TicketManagement = lazy(() => import("@/pages/TicketManagement"));
 import { canAccessAnyErpFeature, canAccessErpFeature, type ErpFeatureAccess } from "@/app/erpAccess";
 import type { FeatureKey } from "@shared/schema";
 import SpOverview from "@/pages/sp/SpOverview";
@@ -156,6 +157,8 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
 
   return (
     <Switch>
+      <Route path="/tickets/new">{() => <TicketManagement sourceMode="erp" />}</Route>
+      <Route path="/tickets">{() => <TicketManagement sourceMode="erp" />}</Route>
       <Route path="/">{() => (isAdminOrDev ? <ContainersOTW /> : <Redirect replace to="/tracking" />)}</Route>
       <Route path="/tracking" component={TrackingHub} />
       <Route path="/help-training">

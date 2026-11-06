@@ -76,6 +76,16 @@ BEGIN
       EXECUTE format('GRANT SELECT ON public.%I TO erp_edge_runtime', control_table);
     END IF;
   END LOOP;
+  -- Phase 10 operator buttons write only through these DBA-owned functions,
+  -- which re-check the user's role; the runtime role may call them.
+  IF to_regprocedure('public.factory_edge_operator_sync_control(uuid, integer, text, text, text)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION public.factory_edge_operator_sync_control(uuid, integer, text, text, text)
+      TO erp_edge_runtime;
+  END IF;
+  IF to_regprocedure('public.factory_edge_operator_decide_conflict(uuid, text, bigint, text, text, text)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION public.factory_edge_operator_decide_conflict(uuid, text, bigint, text, text, text)
+      TO erp_edge_runtime;
+  END IF;
 END
 $phase7$;
 GRANT USAGE ON SCHEMA phase7_writer TO erp_edge_runtime;

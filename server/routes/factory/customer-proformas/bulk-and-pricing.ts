@@ -18,8 +18,8 @@ import {
   insertCustomerProformaSchema,
 } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
-import { autoSavePriceToPriceList } from "./_helpers";
 import { toMoney } from "../../../lib/money";
+import { normalizeProformaDestination } from "./destination";
 
 function hasDuplicateNormalizedArticleCodes(lines: Array<{ articleCode?: unknown }>): boolean {
   const seen = new Set<string>();
@@ -40,7 +40,9 @@ export function registerFactoryCustomerProformaBulkPricingRoutes(app: Express) {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { customerId, name, isActive, lines } = req.body;
+      const { customerId, name, destination: rawDestination, isActive, lines } = req.body;
+      const destination = rawDestination === undefined ? null : normalizeProformaDestination(rawDestination);
+      if (rawDestination !== undefined && !destination) return res.status(400).json({ message: "Invalid proforma destination" });
       if (!customerId || !name || !Array.isArray(lines) || lines.length === 0) {
         return res.status(400).json({
           message: `customerId, name, and at least one line are required. Got: customerId=${customerId}, name=${name}, lines=${Array.isArray(lines) ? lines.length : "not array"}`,
@@ -59,7 +61,7 @@ export function registerFactoryCustomerProformaBulkPricingRoutes(app: Express) {
         });
       }
 
-      const parsed = insertCustomerProformaSchema.parse({ companyId, customerId, name, isActive: isActive || false });
+      const parsed = insertCustomerProformaSchema.parse({ companyId, customerId, name, destination, isActive: isActive || false });
 
       const result = await db.transaction(async (tx) => {
         const [proforma] = await tx.insert(customerProformas).values(parsed).returning();
@@ -84,12 +86,8 @@ export function registerFactoryCustomerProformaBulkPricingRoutes(app: Express) {
       // Sync outside transaction — reservations are derived, not transactional
       await syncProformaReservations(db, companyId, result.id);
 
-      // Auto-save all line prices to customer price list
-      for (const l of validLines) {
-        if (l.articleCode && l.pricePerBale) {
-          await autoSavePriceToPriceList(companyId, customerId, l.articleCode, l.pricePerBale).catch(() => {});
-        }
-      }
+      // Creation must not alter the customer's saved agreed prices. Those
+      // prices change only through explicit price-list actions.
 
       res.json(result);
     } catch (error: unknown) {

@@ -26,3 +26,26 @@ export interface Phase9PaymentEnvelope extends Phase9PaymentEvidence {
   kind: "voucher.payment-receipt.v1";
 }
 export function phase9PaymentEnvelope(evidence: Phase9PaymentEvidence): Phase9PaymentEnvelope;
+export const PHASE9_PAYMENT_EDIT_KIND: "voucher.payment-receipt-edit.v1";
+export const PHASE9_PAYMENT_DELETE_KIND: "voucher.payment-receipt-delete.v1";
+export const PHASE9_PAYMENT_CHANGED_CONFLICT: "PHASE9_PAYMENT_CHANGED";
+export type Phase9PaymentVoucherRef =
+  { origin: "lan"; localVoucherId: number } | { origin: "cloud"; voucherId: number };
+export interface Phase9PaymentDeleteEvidence {
+  companyId: number;
+  localVoucherId: number;
+  actorUserId: string;
+  actorUsername: string;
+  requestId: string;
+  voucherRef: Phase9PaymentVoucherRef;
+  beforeSha256: string;
+}
+export interface Phase9PaymentEditEvidence extends Phase9PaymentDeleteEvidence {
+  voucher: Phase9PaymentVoucherInputs;
+}
+export function phase9PaymentEditEnvelope(
+  evidence: Phase9PaymentEditEvidence
+): Phase9PaymentEditEvidence & { kind: "voucher.payment-receipt-edit.v1" };
+export function phase9PaymentDeleteEnvelope(
+  evidence: Phase9PaymentDeleteEvidence
+): Phase9PaymentDeleteEvidence & { kind: "voucher.payment-receipt-delete.v1" };

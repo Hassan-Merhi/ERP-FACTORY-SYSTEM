@@ -31,6 +31,7 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     settingsVisible: false,
     landing: false,
   },
+  { key: "factory/tickets", label: "Ticket Management", group: "Finance", route: "/factory/tickets", aliases: ["/factory/tickets/new"], sidebar: true, landing: false },
   // Pinned / primary
   {
     key: "factory/production-report",
@@ -248,6 +249,14 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     label: "Sheets & Sacks",
     group: "Inventory",
     route: "/factory/sheets-sacks",
+    sidebar: true,
+    landing: true,
+  },
+  {
+    key: "factory/monthly-production-matrix",
+    label: "Monthly Production Matrix",
+    group: "Inventory",
+    route: "/factory/monthly-production-matrix",
     sidebar: true,
     landing: true,
   },

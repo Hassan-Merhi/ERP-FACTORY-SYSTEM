@@ -93,9 +93,14 @@ export const insertPropertyContractSchema = createInsertSchema(propertyContracts
   .extend({
     tenantName: z.string().min(1, "Tenant name required"),
     rentalAmount: z.union([z.string(), z.number()]).transform((v) => String(v)),
+    // The contract form sends an empty string when no guarantee is required.
+    // Normalize it before a numeric INSERT rather than passing '' to Postgres.
     guaranteeAmount: z
       .union([z.string(), z.number()])
-      .transform((v) => String(v))
+      .transform((v) => String(v).trim() || "0")
+      .refine((v) => /^\d+(?:\.\d{1,2})?$/.test(v), {
+        message: "Guarantee amount must be a non-negative number with at most two decimals",
+      })
       .optional(),
     startDate: z.string().min(1, "Start date required"),
     currency: z.string().optional(),

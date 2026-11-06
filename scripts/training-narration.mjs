@@ -73,7 +73,7 @@ const ACTION_RULES = [
   [/^next\b/, (l) => `The "${l}" button moves one period forward.`],
   [/\bvs\b/, (l) => `The "${l}" option compares the two periods named in it, ${l.replace(/\s+vs\s+/i, " against ")}, so you can see what changed.`],
   [/^custom\b/, (l) => `The "${l}" option lets you pick your own date range instead of a preset period.`],
-  [/^(daily|monthly|yearly|weekly)$/, (l) => `The "${l}" option groups the figures by ${l.toLowerCase().replace(/ly$/, "")} so trends are easier to compare.`],
+  [/^(daily|monthly|yearly|weekly)$/, (l) => `The "${l}" option groups the figures by ${l.toLowerCase().replace(/aily$/, "ay").replace(/ly$/, "")} so trends are easier to compare.`],
   [/^(today|yesterday|this week|this month|last month|this year|last year)$/, (l) => `The "${l}" option limits the figures to ${l.toLowerCase()}.`],
   [/\b(date range|period|preset)\b/, (l) => `The "${l}" period selector chooses which dates the figures cover, for example today, this week, this month or a custom range.`],
   [/\b(selling price|cost price)\b/, (l) => `The "${l}" switch changes how values are calculated. "${l}" is the valuation shown now; the figures update immediately without changing any record.`],
@@ -116,6 +116,15 @@ function clean(text) {
     .replace(/[…]/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** "statuses" -> "status", "companies" -> "company", "suppliers" -> "supplier". */
+export function singular(words) {
+  const word = String(words).trim();
+  if (/(s|x|z|ch|sh)es$/.test(word)) return word.replace(/es$/, "");
+  if (/[^aeiou]ies$/.test(word)) return word.replace(/ies$/, "y");
+  if (/[^s]s$/.test(word)) return word.replace(/s$/, "");
+  return word;
 }
 
 export function speakable(text) {
@@ -219,7 +228,7 @@ export function describeControl(control) {
     return `The "${label}" field is where you type the ${subject || "required"} value.`;
   }
   if (tag === "select" || role === "combobox" || testid.startsWith("select-")) {
-    if (/^(all|any)\b/.test(lower)) return `The dropdown currently set to "${label}" narrows the list to one ${lower.replace(/^(all|any)\s+/, "").replace(/s$/, "")} at a time. "${label}" means no filter is applied.${trailing(control)}`;
+    if (/^(all|any)\b/.test(lower)) return `The dropdown currently set to "${label}" narrows the list to one ${singular(lower.replace(/^(all|any)\s+/, ""))} at a time. "${label}" means no filter is applied.${trailing(control)}`;
     if (/\b(today|yesterday|week|month|year|period|range|preset)\b/.test(lower)) return `The dropdown currently set to "${label}" chooses the reporting period, for example today, this week, this month or a custom range.${trailing(control)}`;
     if (/\b(rows|per page)\b/.test(lower)) return `The "${label}" dropdown sets how many rows the table shows on each page.${trailing(control)}`;
     const current = clean(control.value) && clean(control.value) !== label ? ` The current choice is "${clean(control.value)}".` : "";

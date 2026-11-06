@@ -5,7 +5,14 @@
 import type { Express, Request, Response } from "express";
 import { createHash, createHmac } from "node:crypto";
 import { Readable } from "node:stream";
+import { byteWindow, parseByteRange, planMediaResponse } from "./trainingMediaRange";
 import published from "@shared/publishedTrainingMedia.json";
+import {
+  MAX_TRAINING_MANIFEST_BYTES,
+  TRAINING_MANIFEST_KEY,
+  parsePublishedTrainingManifest,
+  type PublishedTrainingManifest,
+} from "@shared/trainingMediaManifest";
 import { requireAuth } from "../auth";
 import { authorizeFactoryPageAccess } from "../lib/factoryAccessControl";
 import { getErpUserPageAccess } from "../storage/auth";
@@ -15,14 +22,61 @@ import { companies } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { db } from "../db";
 
-type PublishedMedia = {
-  videoKey: string;
-  captionsKey?: string;
-  screenshotKey?: string;
-  sourceSha?: string;
-  publishedAt?: string;
-};
-const registry: Record<string, PublishedMedia> = published as Record<string, PublishedMedia>;
+/** Entries baked into the build: the fallback when no runtime manifest exists. */
+const staticRegistry: PublishedTrainingManifest = parsePublishedTrainingManifest(published);
+const MANIFEST_TTL_MS = 60_000;
+const MANIFEST_RETRY_MS = 15_000;
+let cachedRegistry: { registry: PublishedTrainingManifest; expiresAt: number } | null = null;
+let registryInFlight: Promise<PublishedTrainingManifest> | null = null;
+
+async function fetchRuntimeManifest(): Promise<PublishedTrainingManifest> {
+  const request = await authenticatedVercelTrainingObjectRequest(TRAINING_MANIFEST_KEY);
+  if (!request) throw new Error("training_manifest.gateway_unconfigured");
+  const upstream = await fetch(request.url, {
+    headers: request.headers,
+    redirect: "error",
+    signal: AbortSignal.timeout(8000),
+  });
+  // Nothing has been published yet: an empty library, not an error.
+  if (upstream.status === 404) return {};
+  if (!upstream.ok) throw new Error("training_manifest.unavailable");
+  const text = await upstream.text();
+  if (text.length > MAX_TRAINING_MANIFEST_BYTES) throw new Error("training_manifest.too_large");
+  return parsePublishedTrainingManifest(JSON.parse(text));
+}
+
+/**
+ * The nightly audit replaces the manifest in private storage, so the server
+ * re-reads it about once a minute instead of needing a deploy. A failed read
+ * keeps the last good manifest and retries shortly after.
+ */
+export async function loadPublishedTrainingRegistry(): Promise<PublishedTrainingManifest> {
+  if (process.env.TRAINING_MEDIA_PROVIDER !== "vercel") return staticRegistry;
+  if (cachedRegistry && Date.now() < cachedRegistry.expiresAt) return cachedRegistry.registry;
+  if (!registryInFlight) {
+    registryInFlight = fetchRuntimeManifest()
+      .then((registry) => {
+        cachedRegistry = { registry, expiresAt: Date.now() + MANIFEST_TTL_MS };
+        return registry;
+      })
+      .catch(() => {
+        const registry = cachedRegistry?.registry ?? staticRegistry;
+        cachedRegistry = { registry, expiresAt: Date.now() + MANIFEST_RETRY_MS };
+        return registry;
+      })
+      .finally(() => {
+        registryInFlight = null;
+      });
+  }
+  return registryInFlight;
+}
+
+/** Test hook: forget the cached manifest. */
+export function resetPublishedTrainingRegistryCache(): void {
+  cachedRegistry = null;
+  registryInFlight = null;
+  grantCache.clear();
+}
 const OBJECT_KEY = /^training\/videos\/[a-z0-9-]+\/[a-f0-9]{40}\.(?:webm|mp4|vtt|png)$/;
 const TOPIC_ID = /^[a-z0-9-]{1,80}$/;
 const EMPTY_HASH = createHash("sha256").update("").digest("hex");
@@ -74,14 +128,27 @@ async function canStreamTopic(req: Request, topic: string): Promise<boolean> {
  * one signed read per approved immutable media key through the OIDC gateway.
  * Vercel's short-lived object URL is consumed on the server (not sent to users).
  */
+const GRANT_REUSE_MS = 40_000; // the gateway's read URLs live 60 s
+const grantCache = new Map<string, { url: string; expiresAt: number }>();
+
 export async function authenticatedVercelTrainingObjectRequest(
   key: string,
   range?: string
 ): Promise<{ url: string; headers: Record<string, string> } | null> {
+  // A video player issues many byte-range requests per play; reuse a fresh
+  // grant instead of a gateway round trip (about a second) for every one.
+  const cached = key === TRAINING_MANIFEST_KEY ? undefined : grantCache.get(key);
+  if (cached && Date.now() < cached.expiresAt) return { url: cached.url, headers: range ? { range } : {} };
   const gatewayUrl = process.env.TRAINING_MEDIA_GATEWAY_URL || "";
   const secret = process.env.TRAINING_GATEWAY_READ_SECRET || "";
   const approvedGateway = "https://erp-training-storage-access.vercel.app";
-  if (gatewayUrl !== approvedGateway || secret.length < 40 || !OBJECT_KEY.test(key)) return null;
+  if (
+    gatewayUrl !== approvedGateway ||
+    secret.length < 40 ||
+    !(OBJECT_KEY.test(key) || key === TRAINING_MANIFEST_KEY)
+  ) {
+    return null;
+  }
   const time = Date.now().toString();
   const signature = createHmac("sha256", secret)
     .update("GET\n" + key + "\n" + time)
@@ -105,6 +172,10 @@ export async function authenticatedVercelTrainingObjectRequest(
       !url.searchParams.has("vercel-blob-signature")
     )
       return null;
+    if (key !== TRAINING_MANIFEST_KEY) {
+      if (grantCache.size > 200) grantCache.clear();
+      grantCache.set(key, { url: url.toString(), expiresAt: Date.now() + GRANT_REUSE_MS });
+    }
     return { url: url.toString(), headers: range ? { range } : {} };
   } catch {
     return null;
@@ -188,6 +259,7 @@ export function signedTrainingObjectRequest(
 
 async function streamMedia(req: Request, res: Response, kind: "video" | "captions" | "screenshot") {
   const topic = String(req.params.topic || "");
+  const registry = await loadPublishedTrainingRegistry();
   if (!TOPIC_ID.test(topic) || !Object.prototype.hasOwnProperty.call(registry, topic)) {
     res.status(404).json({ message: "Training media not published" });
     return;
@@ -206,20 +278,23 @@ async function streamMedia(req: Request, res: Response, kind: "video" | "caption
   if (
     !key ||
     !OBJECT_KEY.test(key) ||
-    !(kind === "video" ? (key.endsWith(".mp4") || key.endsWith(".webm")) : key.endsWith(kind === "captions" ? ".vtt" : ".png"))
+    !(kind === "video"
+      ? key.endsWith(".mp4") || key.endsWith(".webm")
+      : key.endsWith(kind === "captions" ? ".vtt" : ".png"))
   ) {
     res.status(404).json({ message: "Training media not published" });
     return;
   }
-  const range = req.headers.range;
-  if (range && (kind !== "video" || !/^bytes=\d+-\d*$/.test(range) || range.length > 80)) {
+  const rawRange = req.headers.range;
+  const range = rawRange ? parseByteRange(rawRange) : null;
+  if (rawRange && (kind !== "video" || !range)) {
     res.status(416).end();
     return;
   }
   const request =
     process.env.TRAINING_MEDIA_PROVIDER === "vercel"
-      ? await authenticatedVercelTrainingObjectRequest(key, range)
-      : signedTrainingObjectRequest(key, range);
+      ? await authenticatedVercelTrainingObjectRequest(key, range?.header)
+      : signedTrainingObjectRequest(key, range?.header);
   if (!request) {
     res.status(503).json({ message: "Training media storage is not configured" });
     return;
@@ -230,22 +305,46 @@ async function streamMedia(req: Request, res: Response, kind: "video" | "caption
       redirect: "error",
       signal: AbortSignal.timeout(300_000),
     });
+    if (upstream.status === 416 && range) {
+      const total = /\/(\d+)$/.exec(upstream.headers.get("content-range") || "")?.[1];
+      await upstream.body?.cancel().catch(() => undefined);
+      if (total) res.setHeader("Content-Range", "bytes */" + total);
+      res.status(416).end();
+      return;
+    }
     if (![200, 206].includes(upstream.status) || !upstream.body) {
       res.status(upstream.status === 404 ? 404 : 502).json({ message: "Training media temporarily unavailable" });
       return;
     }
-    res.status(upstream.status);
+    // Whole-file reads (captions, screenshots, non-range players) stream as-is
+    // when storage omits the length; byte ranges must always be exact.
+    const plan =
+      planMediaResponse(range, upstream.status, upstream.headers) ??
+      (!range && upstream.status === 200 ? { status: 200, length: -1, skip: 0, trim: false } : null);
+    if (!plan) {
+      await upstream.body.cancel().catch(() => undefined);
+      res.status(502).json({ message: "Training media temporarily unavailable" });
+      return;
+    }
+    res.status(plan.status);
     res.setHeader(
       "Content-Type",
-      kind === "video" ? (key.endsWith(".mp4") ? "video/mp4" : "video/webm") : kind === "captions" ? "text/vtt; charset=utf-8" : "image/png"
+      kind === "video"
+        ? key.endsWith(".mp4")
+          ? "video/mp4"
+          : "video/webm"
+        : kind === "captions"
+          ? "text/vtt; charset=utf-8"
+          : "image/png"
     );
     res.setHeader("Cache-Control", "private, max-age=300");
     res.setHeader("X-Content-Type-Options", "nosniff");
-    for (const name of ["content-length", "content-range", "accept-ranges"]) {
-      const value = upstream.headers.get(name);
-      if (value) res.setHeader(name, value);
-    }
-    const source = Readable.fromWeb(upstream.body as unknown as import("node:stream/web").ReadableStream);
+    res.setHeader("Accept-Ranges", "bytes");
+    if (plan.length >= 0) res.setHeader("Content-Length", String(plan.length));
+    if (plan.contentRange) res.setHeader("Content-Range", plan.contentRange);
+    const body = Readable.fromWeb(upstream.body as unknown as import("node:stream/web").ReadableStream);
+    const source = plan.skip > 0 || plan.trim ? body.pipe(byteWindow(plan.skip, plan.length)) : body;
+    if (source !== body) body.on("error", (error) => source.destroy(error));
     source.on("error", () => {
       if (!res.headersSent) res.status(502);
       res.destroy();
@@ -258,7 +357,29 @@ async function streamMedia(req: Request, res: Response, kind: "video" | "caption
   }
 }
 
+/** Non-sensitive listing of published topics; playback itself re-checks page access. */
+async function listPublished(_req: Request, res: Response) {
+  const registry = await loadPublishedTrainingRegistry();
+  const topics: Record<string, unknown> = {};
+  for (const [topic, entry] of Object.entries(registry)) {
+    if (!PAGE_FOR_TOPIC[topic]) continue;
+    topics[topic] = {
+      guideSteps: entry.guideSteps ?? [],
+      captions: Boolean(entry.captionsKey),
+      screenshot: Boolean(entry.screenshotKey),
+      sourceSha: entry.sourceSha ?? null,
+      publishedAt: entry.publishedAt ?? null,
+      durationSeconds: entry.durationSeconds ?? null,
+    };
+  }
+  res.setHeader("Cache-Control", "private, max-age=60");
+  res.json({ provider: process.env.TRAINING_MEDIA_PROVIDER === "vercel" ? "vercel" : "static", topics });
+}
+
 export function registerTrainingMediaRoutes(app: Express): void {
+  app.get("/api/training/media", requireAuth, (req, res) => {
+    void listPublished(req, res);
+  });
   app.get("/api/training/media/:topic", requireAuth, (req, res) => {
     void streamMedia(req, res, "video");
   });

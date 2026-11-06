@@ -6,16 +6,11 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translatePressingUiText } from "@/i18n/pressingUiTranslations";
+import { type PressingHourlySnapshot } from "./pressing-scanner/pressingHourlyKpi";
 
 const ENDPOINT = "/api/factory/pressing-machines/report/hourly-targets";
 const ZONE = "Asia/Beirut";
-type Worker = { userId: string; slot: string; name: string; targetKgPerHour: number };
-type HourRow = { hourStart: string; userId: string; kg: string; bales: number };
-type HourlyResponse = {
-  day: string; serverNow: string; canEdit: boolean;
-  workers: Worker[]; hours: HourRow[];
-  hourlyTargetsKg: Record<string, number>;
-};
+type HourlyResponse = PressingHourlySnapshot;
 const formatKg = (value: number) =>
   value.toLocaleString(undefined, { maximumFractionDigits: 3 });
 function localHour(iso: string): number {
@@ -48,16 +43,23 @@ const verdictStyle: Record<Verdict, { label: string; pill: string; bar: string }
 
 /** Confirmed scans only; editable date-scoped hour targets are shared by P1/P2/P3.
  * No active shift schedule exists, so zero-scan completed hours stay neutral. */
-export default function PressingHourlyTargets({ active, companyId, serverToday }: {
+export default function PressingHourlyTargets({ active, companyId, serverToday, selectedDay, onDayChange, onDataChange }: {
   active: boolean; companyId: number; serverToday?: string;
+  selectedDay?: string; onDayChange?: (day: string) => void;
+  onDataChange?: (data: PressingHourlySnapshot | undefined, companyId: number) => void;
 }) {
   const { toast } = useToast();
   const { language } = useApplicationLanguage();
   const t = (key: Parameters<typeof translatePressingUiText>[0]) => translatePressingUiText(key, language);
-  const [day, setDay] = useState(serverToday || "");
+  const [localDay, setLocalDay] = useState(serverToday || "");
+  const day = selectedDay === undefined ? localDay : selectedDay;
+  const setDay = onDayChange ?? setLocalDay;
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [savingHour, setSavingHour] = useState<string | null>(null);
-  useEffect(() => { setDay(serverToday || ""); setDrafts({}); }, [companyId, serverToday]);
+  useEffect(() => {
+    if (selectedDay === undefined) setLocalDay(serverToday || "");
+    setDrafts({});
+  }, [companyId, serverToday, selectedDay]);
   useEffect(() => { setDrafts({}); }, [day]);
   const hourly = useQuery<HourlyResponse>({
     queryKey: [ENDPOINT, companyId, day],
@@ -73,6 +75,7 @@ export default function PressingHourlyTargets({ active, companyId, serverToday }
     refetchOnWindowFocus: false,
   });
   const data = hourly.data;
+  useEffect(() => { onDataChange?.(data, companyId); }, [data, companyId, onDataChange]);
   const serverDate = data?.serverNow
     ? new Intl.DateTimeFormat("en-GB", {
         timeZone: ZONE, year: "numeric", month: "2-digit", day: "2-digit",

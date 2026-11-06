@@ -20,3 +20,5 @@ export * from "./accounts-reservations";
 export * from "./status-reporting";
 export * from "./agents-approvals";
 export * from "./alerts-notifications";
+
+export * from "./support-tickets";

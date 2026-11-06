@@ -23,7 +23,18 @@ import { AuthenticatedApp } from "@/app/AuthenticatedApp";
 import { AppLoadingState } from "@/app/AppLoadingState";
 import { useAuthenticatedUser } from "@/app/useAuthenticatedUser";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
-import { applyGlobalForceRefresh, shouldApplyGlobalForceRefresh } from "@/lib/globalForceRefresh";
+import {
+  ColdStartReadOnlyBanner,
+  ColdStartUnlockRoute,
+  useColdStartTicketAvailable,
+} from "@/components/OfflineColdStartGate";
+import { authenticatedUserQueryKey } from "@/contracts/sessionQueryContracts";
+import { LegacyQueueRecoveryPanel } from "@/components/LegacyQueueRecoveryPanel";
+import {
+  applyGlobalForceRefresh,
+  resetGlobalForceRefreshBaseline,
+  shouldApplyGlobalForceRefresh,
+} from "@/lib/globalForceRefresh";
 
 const Login = lazy(() => import("@/pages/Login"));
 const ChatWidget = lazy(() => import("@/components/ChatWidget").then((module) => ({ default: module.ChatWidget })));
@@ -70,6 +81,11 @@ function UpdateBanner() {
   useEffect(() => {
     if (import.meta.env.DEV) return;
 
+    // The listener only mounts after /api/auth/me confirms the user. Reset
+    // the last-seen token on each mount so login is not a refresh command.
+    resetGlobalForceRefreshBaseline();
+    let active = true;
+
     async function checkVersion() {
       // An unauthenticated login page is not a target of the admin command.
       if (window.location.pathname === "/login" || window.location.pathname.startsWith("/login/")) return;
@@ -79,12 +95,16 @@ function UpdateBanner() {
         const res = await fetch("/api/build-info", { credentials: "same-origin", cache: "no-store" });
         if (!res.ok) return;
         const data = await res.json();
+        if (!active) return;
         // The server provides the current session's role-scoped refresh token
         // (regular users OR admins/owners/developers). Each tab watches only its
         // own group and shows the five-second notice when that token changes.
         if (
           typeof data.forceRefreshToken === "string" &&
-          shouldApplyGlobalForceRefresh(data.forceRefreshToken)
+          shouldApplyGlobalForceRefresh(
+            data.forceRefreshToken,
+            data.refreshAudience === "privileged" ? "privileged" : "regular"
+          )
         ) {
           void applyGlobalForceRefresh(data.forceRefreshToken);
           return;
@@ -150,6 +170,7 @@ function UpdateBanner() {
     window.addEventListener("focus", checkOnResume);
     document.addEventListener("visibilitychange", checkOnResume);
     return () => {
+      active = false;
       clearInterval(id);
       window.removeEventListener("erp:service-worker-updated", handleServiceWorkerUpdate);
       window.removeEventListener("erp:check-build-info", handleServiceWorkerUpdate);
@@ -194,10 +215,18 @@ function DeferredAuthenticatedUtilities() {
 
 function AuthenticatedRoot() {
   const { user, isLoading, error, handleLogout } = useAuthenticatedUser();
+  // Plan batch 5: with no connection at all, a laptop with a cold-start ticket
+  // may open its prepared data read-only instead of waiting to reconnect.
+  const coldStartAvailable = useColdStartTicketAvailable(Boolean(error) && !user);
 
   // fetchAuthenticatedUser returns null only for a confirmed 401. Temporary
   // network/server failures remain errors and must never masquerade as logout.
   if (!isLoading && !error && user === null) return <Redirect to="/login" />;
+  if (error && !user && coldStartAvailable) {
+    return (
+      <ColdStartUnlockRoute onUnlocked={() => void queryClient.resetQueries({ queryKey: authenticatedUserQueryKey })} />
+    );
+  }
   if (isLoading || error || !user) {
     return <AppLoadingState message={error ? "Reconnecting to your session" : undefined} />;
   }
@@ -210,8 +239,11 @@ function AuthenticatedRoot() {
             <CurrencyProvider>
               <CursorNavProvider>
                 <ServerRestartWatcher />
+                <ColdStartReadOnlyBanner />
+                <LegacyQueueRecoveryPanel />
                 <AuthenticatedApp user={user} handleLogout={handleLogout} />
                 <DeferredAuthenticatedUtilities />
+                <UpdateBanner key={`${user.id}:${user.role}`} />
               </CursorNavProvider>
             </CurrencyProvider>
           </DateFormatProvider>
@@ -241,7 +273,6 @@ export default function App() {
             </Switch>
             <Toaster />
             <ConfirmHost />
-            <UpdateBanner />
           </ConnectivityProvider>
         </ThemeProvider>
       </TooltipProvider>

@@ -29,6 +29,8 @@ import {
   type ProvisionalRateBasis,
 } from "./stockTransferImportPosting";
 import { sendBaleMirrorMovementRefusal } from "../services/accounting/perpetualInventory/cutoverRefusal";
+import { isPhase9LanPrimary } from "../edge/phase9PosOutbox";
+import { importStockTransferOnLan } from "../services/inventory/stockTransferImportOfflineCapture";
 
 /** Sends a wave 11/15 refusal (bale mirror, missing source after the cut-over); returns whether it did. */
 /** The lines moved at a provisional cost (wave 17 B), for the response. */
@@ -297,6 +299,23 @@ export function registerStockTransferImportRoutes(app: Express) {
         });
       }
 
+      // Factory LAN server: the import becomes an ordinary offline transfer (same code, recorded for the cloud).
+      if (isPhase9LanPrimary()) {
+        await importStockTransferOnLan(req, {
+          companyId: req.session.currentCompanyId!,
+          destinationLocationId,
+          transferDate,
+          notes,
+          lines: transferItems.map((item) => ({ ...item, sourceLocationId })),
+        });
+        return res.json({
+          success: true,
+          itemsCount: items.length,
+          totalValue: totalValue.toFixed(2),
+          provisionalRates: provisionalRatesOf(transferItems),
+        });
+      }
+
       const voucherNumber = `ST-${Date.now()}`;
       await db.transaction(async (tx) => {
         // Create stock transfer voucher
@@ -310,7 +329,9 @@ export function registerStockTransferImportRoutes(app: Express) {
             voucherNumber,
             voucherType: "Stock Transfer",
             voucherDate: transferDate,
-            description: (typeof notes === "string" ? notes.trim() : "") || formatStockTransferNarration([sourceLocation.name], destLocation.name),
+            description:
+              (typeof notes === "string" ? notes.trim() : "") ||
+              formatStockTransferNarration([sourceLocation.name], destLocation.name),
             totalAmount: totalValue.toFixed(),
           })
           .returning();
@@ -744,6 +765,23 @@ export function registerStockTransferImportRoutes(app: Express) {
         totalValue = totalValue.plus(item.rate.times(item.quantity));
       }
 
+      // Factory LAN server: the import becomes an ordinary offline transfer (same code, recorded for the cloud).
+      if (isPhase9LanPrimary()) {
+        await importStockTransferOnLan(req, {
+          companyId: req.session.currentCompanyId!,
+          destinationLocationId,
+          transferDate: transferDate || getClientDate(req),
+          notes,
+          lines: processedItems,
+        });
+        return res.json({
+          success: true,
+          itemsCount: processedItems.length,
+          totalValue: totalValue.toFixed(2),
+          provisionalRates: provisionalRatesOf(processedItems),
+        });
+      }
+
       // Create the voucher and move the stock in one transaction
       let multiSourceVoucherNumber = "";
       await db.transaction(async (tx) => {
@@ -774,10 +812,12 @@ export function registerStockTransferImportRoutes(app: Express) {
             voucherType: "Stock Transfer",
             voucherNumber,
             voucherDate: transferDate || getClientDate(req),
-            description: (typeof notes === "string" ? notes.trim() : "") || formatStockTransferNarration(
-              processedItems.map((item) => locationsById[item.sourceLocationId]),
-              destLocation.name
-            ),
+            description:
+              (typeof notes === "string" ? notes.trim() : "") ||
+              formatStockTransferNarration(
+                processedItems.map((item) => locationsById[item.sourceLocationId]),
+                destLocation.name
+              ),
             totalAmount: totalValue.toFixed(),
             locationId: destinationLocationId,
             locationName: destLocation.name,

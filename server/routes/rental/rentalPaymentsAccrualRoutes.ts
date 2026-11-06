@@ -20,7 +20,7 @@ import { db, pool } from "../../db";
 import { getRentalBillingDay, getRentalPeriodDueDate } from "../../services/rental/rentalPeriodService";
 import { requireAuth, requireRole } from "../../auth";
 import { z } from "zod";
-import { eq, and, sql, desc, isNull } from "drizzle-orm";
+import { eq, and, or, sql, desc, isNull } from "drizzle-orm";
 import {
   propertyUnits,
   propertyContracts,
@@ -186,6 +186,10 @@ export function registerRentalPaymentsAccrualRoutes(
         }
       }
       if (!contract) return res.status(404).json({ message: "Contract not found" });
+      // A Properties reference must not create a second receipt or payment for Factory rent.
+      if (module === "PROPERTIES" && isSharedPayment && contract.module === "FACTORY" && contract.isInternal) {
+        return res.status(403).json({ message: "Record internal Factory lease payments in Factory Rentals." });
+      }
       const contractCompanyId = isSharedPayment ? contract.companyId : companyId;
 
       const [unit] = await db.select().from(propertyUnits).where(eq(propertyUnits.id, contract.unitId));
@@ -368,6 +372,41 @@ export function registerRentalPaymentsAccrualRoutes(
           and(eq(propertyUnits.id, unitId), eq(propertyUnits.companyId, companyId), eq(propertyUnits.module, module))
         );
 
+      // Same-company internal Factory shops appear in Properties without copying
+      // units, contracts, ledgers or payment rows.
+      if (!unit && module === "PROPERTIES") {
+        const [factoryUnit] = await db
+          .select()
+          .from(propertyUnits)
+          .where(
+            and(
+              eq(propertyUnits.id, unitId),
+              eq(propertyUnits.companyId, companyId),
+              eq(propertyUnits.module, "FACTORY"),
+              eq(propertyUnits.unitType, "SHOP"),
+              eq(propertyUnits.active, true)
+            )
+          );
+        if (factoryUnit) {
+          const [internalContract] = await db
+            .select({ id: propertyContracts.id })
+            .from(propertyContracts)
+            .where(
+              and(
+                eq(propertyContracts.unitId, unitId),
+                eq(propertyContracts.companyId, companyId),
+                eq(propertyContracts.module, "FACTORY"),
+                eq(propertyContracts.status, "ACTIVE"),
+                eq(propertyContracts.isInternal, true)
+              )
+            );
+          if (internalContract) {
+            unit = factoryUnit;
+            isShared = true;
+          }
+        }
+      }
+
       if (!unit) {
         try {
           const [sharedContract] = await db
@@ -398,7 +437,18 @@ export function registerRentalPaymentsAccrualRoutes(
         .from(propertyContracts)
         .where(
           and(
-            isShared ? eq(propertyContracts.linkedCompanyId, companyId) : eq(propertyContracts.companyId, companyId),
+            isShared
+              ? module === "PROPERTIES"
+                ? or(
+                    eq(propertyContracts.linkedCompanyId, companyId),
+                    and(
+                      eq(propertyContracts.companyId, companyId),
+                      eq(propertyContracts.module, "FACTORY"),
+                      eq(propertyContracts.isInternal, true)
+                    )
+                  )
+                : eq(propertyContracts.linkedCompanyId, companyId)
+              : eq(propertyContracts.companyId, companyId),
             ...(isShared ? [] : [eq(propertyContracts.module, module)]),
             eq(propertyContracts.unitId, unitId),
             eq(propertyContracts.status, "ACTIVE")
@@ -661,7 +711,539 @@ export function registerRentalPaymentsAccrualRoutes(
         .where(and(...conditions))
         .orderBy(desc(propertyPayments.paymentDate));
 
-      res.json(payments);
+
+      // Guarantee-to-statement creates a balanced Receipt voucher (Dr cash,
+      // Cr Tenant Deposits) but intentionally does not insert a property_payments
+      // record. Include those real receipts only in the warehouse reconciliation
+      // read model, never by inserting/backfilling a payment or journal.
+      //
+      // Read-only negative IDs cannot collide with property_payments IDs.
+      // Restrict to the GUAR-{sequence}-{contractId} family, its matching
+      // Properties contract and warehouse, and both posted voucher legs.
+      // Exclude voucher IDs already represented in property_payments.
+      let combinedPayments: Array<Record<string, unknown>> = payments;
+      if (warehouseReconciliation && (!statusFilter || statusFilter === "POSTED")) {
+        const receiptResult = await db.execute(sql`
+          WITH guarantee_vouchers AS MATERIALIZED (
+            SELECT id, company_id, voucher_date, voucher_number, currency
+            FROM vouchers
+            WHERE company_id = ${companyId}
+              AND deleted_at IS NULL
+              AND optional = FALSE
+              AND voucher_type = 'Receipt'
+              AND voucher_number ~ '^GUAR-[0-9]+-[0-9]+
+      res.status(500).json({ message: getErrorMessage(e) });
+    }
+  });
+
+  // ── MANUAL MONTHLY ROLLOVER ──
+  // Phase 19 (B), PE2: Admin/Owner, the company's business date, its tenant
+  // scope (monthly rows only, no voucher).
+  app.post(
+    `${urlPrefix}/run-monthly`,
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const asOf = await runInCompanyPostingScope(companyId, async () => {
+          const businessDate = await companyBusinessDate(companyId);
+          await ensureMonthlyForCompany(companyId, module, businessDate);
+          return businessDate;
+        });
+        res.json({ ok: true, asOf });
+      } catch (e: unknown) {
+        res.status(500).json({ message: getErrorMessage(e) });
+      }
+    }
+  );
+
+  // ── ACCRUAL (ERP SHOP only) ────────────────────────────────────────────────
+  // Manually post rent accrual journal vouchers for all unpaid ERP shop months.
+  // Returns { accrued: N } where N = number of newly-posted accrual voucher rows.
+  // Phase 19 (B), PE2: Admin/Owner; dated by the company's business date (it
+  // was the client's), in the company's tenant scope, refused (409) when that
+  // date is in a closed period; each voucher audited with the signed-in user.
+  app.post(`${urlPrefix}/accrue`, requireAuth, requireRole("Admin", "Owner"), async (req: Request, res: Response) => {
+    try {
+      const companyId = getCompanyId(req);
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      const outcome = await runInCompanyPostingScope(companyId, async () => {
+        const asOf = await companyBusinessDate(companyId);
+        const closedThrough = await companyClosedThrough(companyId);
+        if (isDateInClosedPeriod(closedThrough, asOf)) return { closed: true as const, asOf, closedThrough };
+        await ensureMonthlyForCompany(companyId, module, asOf);
+        // Post all due, unaccrued rows as ONE combined journal voucher
+        const result = await postRentAccrualForCompany(
+          companyId,
+          shopExpenseAccountName,
+          module,
+          incomeAccountName,
+          asOf,
+          { actor: requestActor(req), trigger: "route" }
+        );
+        return { closed: false as const, asOf, ...result };
+      });
+      if (outcome.closed) {
+        return res.status(409).json({
+          message: RENTAL_POSTING_PERIOD_CLOSED_MESSAGE,
+          code: "PERIOD_CLOSED",
+          asOf: outcome.asOf,
+          closedThrough: outcome.closedThrough,
+        });
+      }
+      const { accrued, skipped, asOf } = outcome;
+      res.json({ accrued, skipped, asOf });
+    } catch (e: unknown) {
+      logger.error(`${tag} accrue:`, { error: e });
+      res.status(500).json({ message: getErrorMessage(e) });
+    }
+  });
+
+  // ── SCHEDULED PAYMENTS — list ──────────────────────────────────────────────
+  // Returns all SCHEDULED payment groups for this company/module.
+  // Useful for the "pending payments" indicator in the UI.
+  app.get(`${urlPrefix}/payments/scheduled`, requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = getCompanyId(req);
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      const rows = await db
+        .select({
+          id: propertyPayments.id,
+          paymentGroupId: propertyPayments.paymentGroupId,
+          contractId: propertyPayments.contractId,
+          unitId: propertyPayments.unitId,
+          amount: propertyPayments.amount,
+          paymentDate: propertyPayments.paymentDate,
+          forYear: propertyPayments.forYear,
+          forMonth: propertyPayments.forMonth,
+          currency: propertyPayments.currency,
+          notes: propertyPayments.notes,
+          postingStatus: propertyPayments.postingStatus,
+          cashAccountId: propertyPayments.cashAccountId,
+          createdAt: propertyPayments.createdAt,
+        })
+        .from(propertyPayments)
+        .where(
+          and(
+            eq(propertyPayments.companyId, companyId),
+            eq(propertyPayments.module, module),
+            sql`${propertyPayments.postingStatus} = 'SCHEDULED'`
+          )
+        )
+        .orderBy(propertyPayments.paymentDate, propertyPayments.contractId);
+
+      // Group by paymentGroupId
+      const groups = new Map<
+        string,
+        {
+          paymentGroupId: string;
+          contractId: number;
+          unitId: number;
+          paymentDate: string;
+          currency: string;
+          notes: string | null;
+          cashAccountId: number | null;
+          totalAmount: Decimal;
+          allocations: Array<{ id: number; year: number; month: number; amount: string }>;
+        }
+      >();
+
+      for (const row of rows) {
+        const gid = row.paymentGroupId ?? `no-group-${row.id}`;
+        if (!groups.has(gid)) {
+          groups.set(gid, {
+            paymentGroupId: gid,
+            contractId: row.contractId,
+            unitId: row.unitId,
+            paymentDate: String(row.paymentDate),
+            currency: row.currency,
+            notes: row.notes,
+            cashAccountId: row.cashAccountId,
+            totalAmount: new MoneyDecimal(0),
+            allocations: [],
+          });
+        }
+        const g = groups.get(gid)!;
+        g.totalAmount = g.totalAmount.plus(toMoney(row.amount as string));
+        g.allocations.push({ id: row.id, year: row.forYear, month: row.forMonth, amount: row.amount as string });
+      }
+
+      res.json(Array.from(groups.values()).map((g) => ({ ...g, totalAmount: g.totalAmount.toFixed(2) })));
+    } catch (e: unknown) {
+      res.status(500).json({ message: getErrorMessage(e) });
+    }
+  });
+
+  // ── SCHEDULED PAYMENTS — manually trigger posting ─────────────────────────
+  // Admin endpoint to manually post all due SCHEDULED payment groups.
+  // Phase 19 (B), PE2: Admin/Owner; due as of the company's business date (it
+  // was the client's), in the company's tenant scope, a group dated in a
+  // closed period skipped and reported; audited with the signed-in user (it
+  // was audited as the scheduler).
+  app.post(
+    `${urlPrefix}/payments/post-scheduled`,
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const { asOf, result } = await runInCompanyPostingScope(companyId, async () => {
+          const businessDate = await companyBusinessDate(companyId);
+          const closedThrough = await companyClosedThrough(companyId);
+          return {
+            asOf: businessDate,
+            result: await postDueScheduledRentalPaymentsDetailed(
+              companyId,
+              module,
+              businessDate,
+              shopExpenseAccountName,
+              incomeAccountName,
+              { closedThrough, actor: requestActor(req), trigger: "route" }
+            ),
+          };
+        });
+        res.json({ posted: result.posted, failed: result.failed, skipped: result.skipped, asOf });
+      } catch (e: unknown) {
+        res.status(500).json({ message: getErrorMessage(e) });
+      }
+    }
+  );
+
+  // ── CANCEL SCHEDULED PAYMENT GROUP ────────────────────────────────────────
+  app.delete(`${urlPrefix}/payments/scheduled/:groupId`, requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = getCompanyId(req);
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const { groupId } = req.params;
+
+      // Only cancel rows that are still SCHEDULED
+      const deleted = await db
+        .delete(propertyPayments)
+        .where(
+          and(
+            eq(propertyPayments.companyId, companyId),
+            eq(propertyPayments.module, module),
+            sql`${propertyPayments.paymentGroupId} = ${groupId}`,
+            sql`${propertyPayments.postingStatus} = 'SCHEDULED'`
+          )
+        )
+        .returning({ id: propertyPayments.id });
+
+      if (deleted.length === 0)
+        return res.status(404).json({ message: "Scheduled payment group not found or already posted" });
+      res.json({ cancelled: deleted.length, groupId });
+    } catch (e: unknown) {
+      res.status(500).json({ message: getErrorMessage(e) });
+    }
+  });
+
+  // ── RESET + RE-ACCRUE (ERP SHOP only) ────────────────────────────────────
+  // Deletes all existing individual accrual vouchers (where no payment has been
+  // applied yet) and then immediately re-runs the combined accrual so the daybook
+  // shows ONE journal instead of one-per-unit.
+  //
+  // Safe guard: rows where paidAmount > 0 are left alone — their accrual is already
+  // partially settled and reversing it would leave the books inconsistent.
+  //
+  // Returns { reset: N, accrued: M } where:
+  //   reset   = number of old individual vouchers deleted
+  //   accrued = number of rows stamped with the new combined voucher
+}
+
+              AND description LIKE 'Guarantee deposit - %'
+          )
+          SELECT
+            -v.id::integer AS id,
+            v.id::integer AS "voucherId",
+            v.voucher_date::text AS "paymentDate",
+            cash_line.debit_amount::text AS amount,
+            EXTRACT(YEAR FROM v.voucher_date)::integer AS "forYear",
+            EXTRACT(MONTH FROM v.voucher_date)::integer AS "forMonth",
+            'Guarantee deposit (voucher-backed, read-only)'::text AS notes,
+            contract.id::integer AS "contractId",
+            unit.id::integer AS "unitId",
+            COALESCE(v.currency, 'USD')::text AS currency,
+            NULL::numeric AS "exchangeRate",
+            cash_line.ledger_account_id::integer AS "cashAccountId",
+            'POSTED'::text AS "postingStatus",
+            NULL::text AS "paymentGroupId",
+            NULL::timestamptz AS "postedAt",
+            'PROPERTIES'::text AS "sourceModule",
+            contract.status::text AS "contractStatus",
+            NULL::integer AS "ledgerRowId",
+            'GUARANTEE'::text AS "reconciliationCategory",
+            'GUARANTEE_DEPOSIT'::text AS "receiptKind",
+            TRUE AS "readOnly",
+            contract.tenant_name::text AS "tenantName",
+            unit.unit_number::text AS "unitNumber",
+            unit.location_group::text AS "locationGroup"
+          FROM guarantee_vouchers v
+          JOIN property_contracts contract
+            ON contract.id = substring(v.voucher_number FROM '-([0-9]+)
+      res.status(500).json({ message: getErrorMessage(e) });
+    }
+  });
+
+  // ── MANUAL MONTHLY ROLLOVER ──
+  // Phase 19 (B), PE2: Admin/Owner, the company's business date, its tenant
+  // scope (monthly rows only, no voucher).
+  app.post(
+    `${urlPrefix}/run-monthly`,
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const asOf = await runInCompanyPostingScope(companyId, async () => {
+          const businessDate = await companyBusinessDate(companyId);
+          await ensureMonthlyForCompany(companyId, module, businessDate);
+          return businessDate;
+        });
+        res.json({ ok: true, asOf });
+      } catch (e: unknown) {
+        res.status(500).json({ message: getErrorMessage(e) });
+      }
+    }
+  );
+
+  // ── ACCRUAL (ERP SHOP only) ────────────────────────────────────────────────
+  // Manually post rent accrual journal vouchers for all unpaid ERP shop months.
+  // Returns { accrued: N } where N = number of newly-posted accrual voucher rows.
+  // Phase 19 (B), PE2: Admin/Owner; dated by the company's business date (it
+  // was the client's), in the company's tenant scope, refused (409) when that
+  // date is in a closed period; each voucher audited with the signed-in user.
+  app.post(`${urlPrefix}/accrue`, requireAuth, requireRole("Admin", "Owner"), async (req: Request, res: Response) => {
+    try {
+      const companyId = getCompanyId(req);
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      const outcome = await runInCompanyPostingScope(companyId, async () => {
+        const asOf = await companyBusinessDate(companyId);
+        const closedThrough = await companyClosedThrough(companyId);
+        if (isDateInClosedPeriod(closedThrough, asOf)) return { closed: true as const, asOf, closedThrough };
+        await ensureMonthlyForCompany(companyId, module, asOf);
+        // Post all due, unaccrued rows as ONE combined journal voucher
+        const result = await postRentAccrualForCompany(
+          companyId,
+          shopExpenseAccountName,
+          module,
+          incomeAccountName,
+          asOf,
+          { actor: requestActor(req), trigger: "route" }
+        );
+        return { closed: false as const, asOf, ...result };
+      });
+      if (outcome.closed) {
+        return res.status(409).json({
+          message: RENTAL_POSTING_PERIOD_CLOSED_MESSAGE,
+          code: "PERIOD_CLOSED",
+          asOf: outcome.asOf,
+          closedThrough: outcome.closedThrough,
+        });
+      }
+      const { accrued, skipped, asOf } = outcome;
+      res.json({ accrued, skipped, asOf });
+    } catch (e: unknown) {
+      logger.error(`${tag} accrue:`, { error: e });
+      res.status(500).json({ message: getErrorMessage(e) });
+    }
+  });
+
+  // ── SCHEDULED PAYMENTS — list ──────────────────────────────────────────────
+  // Returns all SCHEDULED payment groups for this company/module.
+  // Useful for the "pending payments" indicator in the UI.
+  app.get(`${urlPrefix}/payments/scheduled`, requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = getCompanyId(req);
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      const rows = await db
+        .select({
+          id: propertyPayments.id,
+          paymentGroupId: propertyPayments.paymentGroupId,
+          contractId: propertyPayments.contractId,
+          unitId: propertyPayments.unitId,
+          amount: propertyPayments.amount,
+          paymentDate: propertyPayments.paymentDate,
+          forYear: propertyPayments.forYear,
+          forMonth: propertyPayments.forMonth,
+          currency: propertyPayments.currency,
+          notes: propertyPayments.notes,
+          postingStatus: propertyPayments.postingStatus,
+          cashAccountId: propertyPayments.cashAccountId,
+          createdAt: propertyPayments.createdAt,
+        })
+        .from(propertyPayments)
+        .where(
+          and(
+            eq(propertyPayments.companyId, companyId),
+            eq(propertyPayments.module, module),
+            sql`${propertyPayments.postingStatus} = 'SCHEDULED'`
+          )
+        )
+        .orderBy(propertyPayments.paymentDate, propertyPayments.contractId);
+
+      // Group by paymentGroupId
+      const groups = new Map<
+        string,
+        {
+          paymentGroupId: string;
+          contractId: number;
+          unitId: number;
+          paymentDate: string;
+          currency: string;
+          notes: string | null;
+          cashAccountId: number | null;
+          totalAmount: Decimal;
+          allocations: Array<{ id: number; year: number; month: number; amount: string }>;
+        }
+      >();
+
+      for (const row of rows) {
+        const gid = row.paymentGroupId ?? `no-group-${row.id}`;
+        if (!groups.has(gid)) {
+          groups.set(gid, {
+            paymentGroupId: gid,
+            contractId: row.contractId,
+            unitId: row.unitId,
+            paymentDate: String(row.paymentDate),
+            currency: row.currency,
+            notes: row.notes,
+            cashAccountId: row.cashAccountId,
+            totalAmount: new MoneyDecimal(0),
+            allocations: [],
+          });
+        }
+        const g = groups.get(gid)!;
+        g.totalAmount = g.totalAmount.plus(toMoney(row.amount as string));
+        g.allocations.push({ id: row.id, year: row.forYear, month: row.forMonth, amount: row.amount as string });
+      }
+
+      res.json(Array.from(groups.values()).map((g) => ({ ...g, totalAmount: g.totalAmount.toFixed(2) })));
+    } catch (e: unknown) {
+      res.status(500).json({ message: getErrorMessage(e) });
+    }
+  });
+
+  // ── SCHEDULED PAYMENTS — manually trigger posting ─────────────────────────
+  // Admin endpoint to manually post all due SCHEDULED payment groups.
+  // Phase 19 (B), PE2: Admin/Owner; due as of the company's business date (it
+  // was the client's), in the company's tenant scope, a group dated in a
+  // closed period skipped and reported; audited with the signed-in user (it
+  // was audited as the scheduler).
+  app.post(
+    `${urlPrefix}/payments/post-scheduled`,
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const { asOf, result } = await runInCompanyPostingScope(companyId, async () => {
+          const businessDate = await companyBusinessDate(companyId);
+          const closedThrough = await companyClosedThrough(companyId);
+          return {
+            asOf: businessDate,
+            result: await postDueScheduledRentalPaymentsDetailed(
+              companyId,
+              module,
+              businessDate,
+              shopExpenseAccountName,
+              incomeAccountName,
+              { closedThrough, actor: requestActor(req), trigger: "route" }
+            ),
+          };
+        });
+        res.json({ posted: result.posted, failed: result.failed, skipped: result.skipped, asOf });
+      } catch (e: unknown) {
+        res.status(500).json({ message: getErrorMessage(e) });
+      }
+    }
+  );
+
+  // ── CANCEL SCHEDULED PAYMENT GROUP ────────────────────────────────────────
+  app.delete(`${urlPrefix}/payments/scheduled/:groupId`, requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = getCompanyId(req);
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const { groupId } = req.params;
+
+      // Only cancel rows that are still SCHEDULED
+      const deleted = await db
+        .delete(propertyPayments)
+        .where(
+          and(
+            eq(propertyPayments.companyId, companyId),
+            eq(propertyPayments.module, module),
+            sql`${propertyPayments.paymentGroupId} = ${groupId}`,
+            sql`${propertyPayments.postingStatus} = 'SCHEDULED'`
+          )
+        )
+        .returning({ id: propertyPayments.id });
+
+      if (deleted.length === 0)
+        return res.status(404).json({ message: "Scheduled payment group not found or already posted" });
+      res.json({ cancelled: deleted.length, groupId });
+    } catch (e: unknown) {
+      res.status(500).json({ message: getErrorMessage(e) });
+    }
+  });
+
+  // ── RESET + RE-ACCRUE (ERP SHOP only) ────────────────────────────────────
+  // Deletes all existing individual accrual vouchers (where no payment has been
+  // applied yet) and then immediately re-runs the combined accrual so the daybook
+  // shows ONE journal instead of one-per-unit.
+  //
+  // Safe guard: rows where paidAmount > 0 are left alone — their accrual is already
+  // partially settled and reversing it would leave the books inconsistent.
+  //
+  // Returns { reset: N, accrued: M } where:
+  //   reset   = number of old individual vouchers deleted
+  //   accrued = number of rows stamped with the new combined voucher
+}
+)::integer
+           AND contract.company_id = v.company_id
+           AND contract.module = 'PROPERTIES'
+          JOIN property_units unit
+            ON unit.id = contract.unit_id
+           AND unit.company_id = v.company_id
+           AND unit.module = 'PROPERTIES'
+           AND unit.unit_type = 'WAREHOUSE'
+           AND unit.active = TRUE
+          JOIN voucher_entries cash_line
+            ON cash_line.voucher_id = v.id
+           AND cash_line.company_id = v.company_id
+           AND cash_line.debit_amount > 0
+          JOIN ledger_accounts cash_account
+            ON cash_account.id = cash_line.ledger_account_id
+           AND cash_account.company_id = v.company_id
+           AND cash_account.account_type IN ('Cash', 'Bank', 'Asset')
+          JOIN voucher_entries deposit_line
+            ON deposit_line.voucher_id = v.id
+           AND deposit_line.company_id = v.company_id
+           AND deposit_line.credit_amount = cash_line.debit_amount
+          JOIN ledger_accounts deposit_account
+            ON deposit_account.id = deposit_line.ledger_account_id
+           AND deposit_account.company_id = v.company_id
+           AND deposit_account.account_type = 'Liability'
+           AND deposit_account.name = 'Tenant Deposits'
+        `);
+        const representedVoucherIds = new Set(payments.map((payment) => payment.voucherId));
+        const voucherOnlyReceipts = (receiptResult.rows as Array<Record<string, unknown>>)
+          .filter((receipt) => !representedVoucherIds.has(Number(receipt.voucherId)));
+        combinedPayments = [...payments, ...voucherOnlyReceipts].sort((left, right) =>
+          String(right.paymentDate).localeCompare(String(left.paymentDate)) ||
+          Number(right.id) - Number(left.id)
+        );
+      }
+
+      res.json(combinedPayments);
     } catch (e: unknown) {
       logger.error(`${tag} payments-log:`, { error: e });
       res.status(500).json({ message: getErrorMessage(e) });

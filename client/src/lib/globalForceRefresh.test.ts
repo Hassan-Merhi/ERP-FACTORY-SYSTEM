@@ -22,14 +22,27 @@ describe("global force refresh token", () => {
 
     expect(shouldApplyGlobalForceRefresh("")).toBe(false);
     expect(shouldApplyGlobalForceRefresh("new-epoch-1")).toBe(true);
-    expect(sessionStorage.getItem("erp:global-force-refresh-token")).toBe("new-epoch-1");
+    expect(sessionStorage.getItem("erp:global-force-refresh-token:regular")).toBe("new-epoch-1");
     expect(shouldApplyGlobalForceRefresh("new-epoch-1")).toBe(false);
     expect(shouldApplyGlobalForceRefresh("new-epoch-2")).toBe(true);
   });
 
-  it("does not force a new session to reload when already on the latest version", async () => {
+  it("ignores an old token in Safari sessionStorage when signing in", async () => {
+    sessionStorage.setItem("erp:global-force-refresh-token", "old-login-token");
+    sessionStorage.setItem("erp:global-force-refresh-token:privileged", "old-admin-token");
     const { shouldApplyGlobalForceRefresh } = await import("./globalForceRefresh");
-    expect(shouldApplyGlobalForceRefresh("already-issued")).toBe(false);
-    expect(shouldApplyGlobalForceRefresh("already-issued")).toBe(false);
+    expect(shouldApplyGlobalForceRefresh("current-admin-token", "privileged")).toBe(false);
+    expect(shouldApplyGlobalForceRefresh("current-admin-token", "privileged")).toBe(false);
+    expect(shouldApplyGlobalForceRefresh("clicked-settings-button", "privileged")).toBe(true);
+  });
+
+  it("starts a new baseline on login, logout, or a different refresh audience", async () => {
+    const { shouldApplyGlobalForceRefresh, resetGlobalForceRefreshBaseline } = await import("./globalForceRefresh");
+    expect(shouldApplyGlobalForceRefresh("regular-1", "regular")).toBe(false);
+    expect(shouldApplyGlobalForceRefresh("admin-1", "privileged")).toBe(false);
+    expect(shouldApplyGlobalForceRefresh("admin-2", "privileged")).toBe(true);
+    resetGlobalForceRefreshBaseline();
+    expect(shouldApplyGlobalForceRefresh("admin-2", "privileged")).toBe(false);
+    expect(shouldApplyGlobalForceRefresh("admin-3", "privileged")).toBe(true);
   });
 });

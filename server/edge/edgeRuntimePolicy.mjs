@@ -27,6 +27,18 @@ function parseHostname(value) {
   );
 }
 
+/** Plan batches whose offline routes need an explicit drill approval before the LAN accepts them. */
+export const PHASE9_GATED_PLAN_BATCHES = Object.freeze([2, 3, 4]);
+
+function parsePlanBatches(value) {
+  if (value === undefined || value.trim() === "") return Object.freeze([]);
+  const batches = value.split(",").map((part) => part.trim());
+  if (batches.some((part) => !/^[1-9]$/.test(part) || !PHASE9_GATED_PLAN_BATCHES.includes(Number(part)))) {
+    throw new Error("EDGE_PLAN_BATCHES_INVALID");
+  }
+  return Object.freeze([...new Set(batches.map(Number))].sort());
+}
+
 export function readFactoryEdgeConfiguration(env = process.env) {
   const mode = env.FACTORY_EDGE_MODE || "cloud";
   if (mode !== "cloud" && mode !== "lan") throw new Error("EDGE_MODE_INVALID");
@@ -100,8 +112,14 @@ export function readFactoryEdgeConfiguration(env = process.env) {
     throw new Error("EDGE_PHASE7_EPOCH_WITHOUT_PRIMARY");
   }
 
+  // Owner plan rule (2026-11-05): each plan batch's offline routes stay refused
+  // on the factory server until its staging drill is run and approved, which
+  // the operator records here (for example "2,3").
+  const approvedPlanBatches = parsePlanBatches(env.FACTORY_EDGE_APPROVED_PLAN_BATCHES);
+
   return Object.freeze({
     mode: "lan",
+    approvedPlanBatches,
     siteId: env.FACTORY_EDGE_SITE_ID,
     hostname: env.FACTORY_EDGE_HOSTNAME,
     writeMode,
@@ -128,6 +146,23 @@ export const PHASE9_STOCK_ITEM_EDIT_STATIC_ROUTES = Object.freeze([
   "POST /api/stock-items/import-barcodes",
   "POST /api/stock-items/import-opening-balances",
 ]);
+export const PHASE9_STOCK_ITEM_CREATE_ROUTE = "POST /api/stock-items";
+// Plan batch 3: changes to existing stock transfers (edit, finalize/approve,
+// revision, revision approve/reject). Each handler records the change for the
+// cloud; the voucher finalize route refuses non-transfer vouchers on the LAN.
+const PHASE9_TRANSFER_ID_PATH = /^\/api\/stock-transfers\/(?:[1-9][0-9]{0,9}|:id)$/;
+const PHASE9_TRANSFER_APPROVE_PATH = /^\/api\/stock-transfers\/(?:[1-9][0-9]{0,9}|:id)\/approve$/;
+const PHASE9_TRANSFER_REVISIONS_PATH = /^\/api\/stock-transfers\/(?:[1-9][0-9]{0,9}|:transferId)\/revisions$/;
+const PHASE9_REVISION_REVIEW_PATH = /^\/api\/stock-transfer-revisions\/(?:[1-9][0-9]{0,9}|:id)\/(approve|reject)$/;
+const PHASE9_TRANSFER_IMPORT_ROUTES = new Set(
+  ["parse", "validate", "import", "parse-multi-source", "validate-multi-source", "import-multi-source"].map(
+    (step) => `/api/stock-transfer-import/${step}`
+  )
+);
+const PHASE9_LOCATION_IMPORT_PATH = /^\/api\/locations\/(?:[1-9][0-9]{0,9}|:locationId)\/import-inventory$/;
+const PHASE9_FILE_PATH = /^\/api\/files\/(?:[1-9][0-9]{0,9}|:id)$/;
+const PHASE9_PAYMENT_EDIT_PATH = /^\/api\/vouchers\/(?:[1-9][0-9]{0,9}|:id)\/payment-receipt$/;
+const PHASE9_VOUCHER_FINALIZE_PATH = /^\/api\/vouchers\/(?:[1-9][0-9]{0,9}|:id)\/finalize$/;
 export const PHASE9_STOCK_ITEM_PATH = /^\/api\/stock-items\/(?:[1-9][0-9]{0,9}|:id)$/;
 export const PHASE9_STOCK_ITEM_LOCATION_PRICES_PATH = /^\/api\/stock-items\/(?:[1-9][0-9]{0,9}|:id)\/location-prices$/;
 // A numeric container id, or the manifest template ":id" (which the route itself rejects as invalid).
@@ -180,19 +215,82 @@ export function phase9ApprovedCaptureRoute(method, path) {
   }
   if (verb === "DELETE" && PHASE9_VOUCHER_DELETE_PATH.test(path)) return "DELETE /api/vouchers/:id";
   if (verb === "PATCH" && PHASE9_STOCK_ITEM_PATH.test(path)) return "PATCH /api/stock-items/:id";
+  // Plan batch 2: new items and deletes of unused items, recorded for the cloud.
+  if (verb === "DELETE" && PHASE9_STOCK_ITEM_PATH.test(path)) return "DELETE /api/stock-items/:id";
+  if (key === PHASE9_STOCK_ITEM_CREATE_ROUTE) return key;
+  if (verb === "PUT" && PHASE9_TRANSFER_ID_PATH.test(path)) return "PUT /api/stock-transfers/:id";
+  if (verb === "POST" && PHASE9_TRANSFER_APPROVE_PATH.test(path)) return "POST /api/stock-transfers/:id/approve";
+  if (verb === "POST" && PHASE9_TRANSFER_REVISIONS_PATH.test(path)) {
+    return "POST /api/stock-transfers/:transferId/revisions";
+  }
+  if (verb === "POST" && PHASE9_VOUCHER_FINALIZE_PATH.test(path)) return "POST /api/vouchers/:id/finalize";
+  // Plan batch 3: the Excel transfer import (parse and validate only read the
+  // spreadsheet; import records an ordinary offline transfer).
+  if (verb === "POST" && PHASE9_TRANSFER_IMPORT_ROUTES.has(path)) return key;
+  // Plan batch 3: the inventory import, each row recorded as a quantity change.
+  if (verb === "POST" && PHASE9_LOCATION_IMPORT_PATH.test(path)) {
+    return "POST /api/locations/:locationId/import-inventory";
+  }
+  // Plan batch 4: Payment / Receipt edits (deletes ride DELETE /api/vouchers/:id, gated in its handler).
+  if (verb === "PATCH" && PHASE9_PAYMENT_EDIT_PATH.test(path)) return "PATCH /api/vouchers/:id/payment-receipt";
+  if (verb === "PATCH" && PHASE9_FILE_PATH.test(path)) return "PATCH /api/files/:id";
+  const review = verb === "POST" ? PHASE9_REVISION_REVIEW_PATH.exec(path) : null;
+  if (review) return `POST /api/stock-transfer-revisions/:id/${review[1]}`;
   if (verb === "POST" && PHASE9_STOCK_ITEM_LOCATION_PRICES_PATH.test(path)) {
     return "POST /api/stock-items/:id/location-prices";
   }
   return null;
 }
 
+// Phase 10 operator controls (Admin/Owner pause/resume on the factory server;
+// Admin/Developer conflict decisions on the cloud operator console). Each
+// writes only through a DBA-owned database function that re-checks the user;
+// the route itself refuses unless the server is configured for it.
+export const PHASE10_SYNC_CONTROL_ROUTE = "POST /api/edge/operator/sync-control";
+export const PHASE10_CONFLICT_DECISION_ROUTE = "POST /api/edge/operator/conflicts/decide";
+
+/** The owner-approved plan batch each gated offline route belongs to. */
+export const PHASE9_PLAN_BATCH_ROUTES = Object.freeze(
+  new Map([
+    ["POST /api/stock-items", 2],
+    ["DELETE /api/stock-items/:id", 2],
+    ["PUT /api/stock-transfers/:id", 3],
+    ["POST /api/stock-transfers/:id/approve", 3],
+    ["POST /api/vouchers/:id/finalize", 3],
+    ["POST /api/stock-transfers/:transferId/revisions", 3],
+    ["POST /api/stock-transfer-revisions/:id/approve", 3],
+    ["POST /api/stock-transfer-revisions/:id/reject", 3],
+    ["POST /api/locations/:locationId/import-inventory", 3],
+    ["PATCH /api/vouchers/:id/payment-receipt", 4],
+    ["PATCH /api/files/:id", 4],
+    ...["parse", "validate", "import", "parse-multi-source", "validate-multi-source", "import-multi-source"].map(
+      (step) => [`POST /api/stock-transfer-import/${step}`, 3]
+    ),
+  ])
+);
+
+/** Has the operator recorded this plan batch's staging drill as approved on this server? */
+export function phase9PlanBatchApproved(config, batch) {
+  return config.mode === "lan" && (config.approvedPlanBatches ?? []).includes(batch);
+}
+
+/** Null when the route belongs to no gated batch. */
+export function phase9PlanBatchOf(routeKey) {
+  return PHASE9_PLAN_BATCH_ROUTES.get(routeKey) ?? null;
+}
+
 export function edgeBlocksWrite(config, method, path) {
   const verb = String(method).toUpperCase();
   if (["GET", "HEAD", "OPTIONS"].includes(verb)) return false;
   if (SAFE_SESSION_WRITES.has(`${verb} ${path}`)) return false;
+  if (config.mode === "lan" && `${verb} ${path}` === PHASE10_SYNC_CONTROL_ROUTE) return false;
+  if (config.mode === "cloud" && `${verb} ${path}` === PHASE10_CONFLICT_DECISION_ROUTE) return false;
   if (config.mode === "cloud") return config.writeMode === "fenced";
   if (!config.primary) return true;
-  return phase9ApprovedCaptureRoute(verb, path) === null;
+  const route = phase9ApprovedCaptureRoute(verb, path);
+  if (route === null) return true;
+  const batch = phase9PlanBatchOf(route);
+  return batch !== null && !(config.approvedPlanBatches ?? []).includes(batch);
 }
 
 export function edgeStatusPayload(config, databaseProvisioned = false) {

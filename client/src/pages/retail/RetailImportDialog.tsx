@@ -137,7 +137,11 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             Download template
           </Button>
         </div>
-        <Input type="file" accept=".xlsx,.xls" onChange={(e) => handleFile(e.target.files?.[0])} />
+        <Input type="file" accept=".xlsx,.xls" onChange={(e) => {
+          const file = e.currentTarget.files?.[0];
+          e.currentTarget.value = "";
+          void handleFile(file);
+        }} />
         {fileName && (
           <p className="text-sm">
             {fileName}: <strong>{rows.length}</strong> rows ready

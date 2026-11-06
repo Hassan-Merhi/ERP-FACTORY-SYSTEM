@@ -15,7 +15,11 @@
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve, dirname } from "node:path";
-import { edgeBlocksWrite } from "../../server/edge/edgeRuntimePolicy.mjs";
+import {
+  PHASE9_GATED_PLAN_BATCHES,
+  edgeBlocksWrite,
+  phase9PlanBatchOf,
+} from "../../server/edge/edgeRuntimePolicy.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const MANIFEST = resolve(ROOT, "config/route-manifest.json");
@@ -31,6 +35,9 @@ const STOCK_ITEM_EDIT = Object.freeze({
     "location prices, new barcodes); a field the cloud changed meanwhile is held for an Admin/Developer " +
     "decision; creating, deleting, merging and re-coding items stay cloud-only",
 });
+// Phase 10 operator controls: not business data, written only through a
+// DBA-owned database function that re-checks the user (plan batch 1).
+const OPERATOR_CONTROL_WRITES = new Set(["POST /api/edge/operator/sync-control"]);
 const SUPPORTED = new Map([
   ["POST /api/vouchers/with-entries", {
     policy: "voucher.with-entries.v1",
@@ -64,6 +71,90 @@ const SUPPORTED = new Map([
   ["POST /api/stock-items/import-opening-balances", STOCK_ITEM_EDIT],
   ["POST /api/stock-items/:id/location-prices", STOCK_ITEM_EDIT],
   ["PATCH /api/stock-items/:id", STOCK_ITEM_EDIT],
+  ["POST /api/stock-items", {
+    policy: "stock.item-create.v1",
+    limitations:
+      "Ids from a LAN-only range, mapped to the cloud item on replay; the code the user typed is kept " +
+      "(taken in the cloud = reject-only); a same-name item is held for Admin/Developer approve/reject",
+  }],
+  ["DELETE /api/stock-items/:id", {
+    policy: "stock.item-delete.v1",
+    limitations:
+      "Soft delete only for items with no inventory rows and no stock movements, on the LAN and again " +
+      "in the cloud (otherwise reject-only); merge and re-code stay cloud-only",
+  }],
+  ["PUT /api/stock-transfers/:id", {
+    policy: "stock.transfer-edit.v1",
+    limitations:
+      "Recorded with the transfer as the factory saw it; applied only while the cloud copy still matches, " +
+      "otherwise held for Admin/Developer approve (factory change wins) or reject",
+  }],
+  ["POST /api/stock-transfers/:id/approve", {
+    policy: "stock.transfer-finalize.v1",
+    limitations: "Same rule as an edit; a transfer the cloud already finalized is a no-op",
+  }],
+  ["POST /api/vouchers/:id/finalize", {
+    policy: "stock.transfer-finalize.v1",
+    limitations: "Stock transfer vouchers only; any other voucher type is refused on the LAN",
+  }],
+  ["POST /api/stock-transfers/:transferId/revisions", {
+    policy: "stock.transfer-revision.v1",
+    limitations: "Replayed through the revision service; a stale revision is held as reject-only",
+  }],
+  ["POST /api/stock-transfer-revisions/:id/approve", {
+    policy: "stock.transfer-revision-review.v1",
+    limitations: "Applied only while the revision is still pending in the cloud; otherwise reject-only",
+  }],
+  ["POST /api/stock-transfer-import/parse", {
+    policy: "stock.transfer.v1",
+    limitations: "Excel import step that only reads the spreadsheet, items and stock; writes nothing",
+  }],
+  ["POST /api/stock-transfer-import/validate", {
+    policy: "stock.transfer.v1",
+    limitations: "Excel import step that only reads the spreadsheet, items and stock; writes nothing",
+  }],
+  ["POST /api/stock-transfer-import/parse-multi-source", {
+    policy: "stock.transfer.v1",
+    limitations: "Excel import step that only reads the spreadsheet, items and stock; writes nothing",
+  }],
+  ["POST /api/stock-transfer-import/validate-multi-source", {
+    policy: "stock.transfer.v1",
+    limitations: "Excel import step that only reads the spreadsheet, items and stock; writes nothing",
+  }],
+  ["POST /api/stock-transfer-import/import", {
+    policy: "stock.transfer.v1",
+    limitations:
+      "On the LAN each import is created through the same code as a hand-typed transfer and recorded as " +
+      "an ordinary offline transfer; a cloud shortfall is held for Admin/Developer approve/reject",
+  }],
+  ["POST /api/stock-transfer-import/import-multi-source", {
+    policy: "stock.transfer.v1",
+    limitations:
+      "On the LAN each import is created through the same code as a hand-typed transfer and recorded as " +
+      "an ordinary offline transfer; a cloud shortfall is held for Admin/Developer approve/reject",
+  }],
+  ["POST /api/locations/:locationId/import-inventory", {
+    policy: "stock.quick-adjust.v1",
+    limitations:
+      "Each row is recorded as a quantity change (never an overwritten balance) through the quick-adjust " +
+      "code; unknown codes are reported, not created; below zero is refused on the LAN and held in the cloud",
+  }],
+  ["PATCH /api/files/:id", {
+    policy: "attachment.file-update.v1",
+    limitations:
+      "Rename / move only: applied while the cloud file still has the name and folder the factory saw " +
+      "(otherwise held, approve = factory wins); a missing target folder is reject-only; deletes stay online-only",
+  }],
+  ["PATCH /api/vouchers/:id/payment-receipt", {
+    policy: "voucher.payment-receipt-edit.v1",
+    limitations:
+      "Recorded with a digest of the voucher as the factory saw it; applied only while the cloud voucher " +
+      "still matches (otherwise held, approve = factory wins); reconciled or closed-period vouchers are reject-only",
+  }],
+  ["POST /api/stock-transfer-revisions/:id/reject", {
+    policy: "stock.transfer-revision-review.v1",
+    limitations: "Applied only while the revision is still pending in the cloud; otherwise reject-only",
+  }],
   ["POST /api/pos/sales", {
     policy: "pos.sale.v1",
     limitations:
@@ -123,7 +214,14 @@ function moduleForPath(path) {
 
 export function auditPhase9WriteCoverage(manifest, guard = edgeBlocksWrite) {
   if (!manifest || !Array.isArray(manifest.routes)) throw new Error("PHASE9_MANIFEST_MISSING");
-  const config = { mode: "lan", writeMode: "lan-primary", primary: true };
+  // Every plan batch counted as drill-approved: the audit checks capture readiness;
+  // each route also reports its batch, which the LAN refuses until approved.
+  const config = {
+    mode: "lan",
+    writeMode: "lan-primary",
+    primary: true,
+    approvedPlanBatches: PHASE9_GATED_PLAN_BATCHES,
+  };
   const seen = new Set();
   const routes = [];
   for (const route of manifest.routes) {
@@ -142,18 +240,26 @@ export function auditPhase9WriteCoverage(manifest, guard = edgeBlocksWrite) {
     seen.add(key);
     const supported = SUPPORTED.get(key);
     const sessionExempt = SAFE_SESSION_WRITES.has(key);
+    const operatorControl = OPERATOR_CONTROL_WRITES.has(key);
     const blockedByGuard = guard(config, method, path);
     // The guard must match the reviewed capture map EXACTLY; otherwise a
     // new route could commit locally without a durable cloud apply protocol.
-    if (blockedByGuard === Boolean(supported || sessionExempt)) {
+    if (blockedByGuard === Boolean(supported || sessionExempt || operatorControl)) {
       throw new Error("PHASE9_WRITE_GUARD_DRIFT: " + key);
     }
     routes.push({
       method,
       path,
       module: moduleForPath(path),
-      disposition: supported ? "approved-capture" : sessionExempt ? "session-only" : "blocked",
+      disposition: supported
+        ? "approved-capture"
+        : sessionExempt
+          ? "session-only"
+          : operatorControl
+            ? "operator-control"
+            : "blocked",
       ...(supported ? { policy: supported.policy, limitations: supported.limitations } : {}),
+      ...(phase9PlanBatchOf(key) !== null ? { planBatch: phase9PlanBatchOf(key) } : {}),
     });
   }
   for (const key of SUPPORTED.keys()) {
@@ -172,6 +278,8 @@ export function auditPhase9WriteCoverage(manifest, guard = edgeBlocksWrite) {
     uniqueApiWriteRoutes: routes.length,
     approvedCapture: routes.filter((r) => r.disposition === "approved-capture").length,
     sessionOnly: routes.filter((r) => r.disposition === "session-only").length,
+    operatorControl: routes.filter((r) => r.disposition === "operator-control").length,
+    awaitingDrillApproval: routes.filter((r) => r.planBatch !== undefined).length,
     blocked: routes.filter((r) => r.disposition === "blocked").length,
     byModule,
     productionComplete: routes.every((r) => r.disposition !== "blocked"),

@@ -27,6 +27,7 @@ import {
   summaryFromContinuousMeta,
 } from "./_helpers";
 import { toMoney } from "../../lib/money";
+import { consolidatedHadiRentLedgerPredicate } from "../../services/rental/hadiRentExpenseConsolidation";
 
 export function genericFilteredCte(
   kind: AccountKind,
@@ -47,7 +48,7 @@ export function genericFilteredCte(
     values.push(value);
     return `$${values.length}`;
   };
-  const conditions = [`ve.${column} = $1`, "v.optional = false", "v.deleted_at IS NULL"];
+  const conditions = [consolidatedHadiRentLedgerPredicate(`ve.${column}`, "$1", companyId, kind === "ledger" ? accountId : -1), "v.optional = false", "v.deleted_at IS NULL"];
   // A supplier lists the lines the balance engine attributes to it (wave 13).
   if (kind === "supplier") conditions.push(higherPriorityTargetsAbsent("ve", "supplier_id"));
   if (companyId) conditions.push(`v.company_id = ${bind(companyId)}`);
@@ -145,6 +146,7 @@ export async function loadVoucherPrePeriodNet(options: {
 }): Promise<number> {
   const { accountId, companyId, column, dates } = options;
   if (!dates.rawStart) return 0;
+  const ledgerMatch = consolidatedHadiRentLedgerPredicate(`ve.${column}`, "$1", companyId, column === "ledger_account_id" ? accountId : -1);
   const preValues: unknown[] = [accountId];
   let companyCondition = "";
   if (companyId) {
@@ -159,7 +161,7 @@ export async function loadVoucherPrePeriodNet(options: {
      )::text AS net
      FROM voucher_entries ve
      JOIN vouchers v ON v.id = ve.voucher_id
-     WHERE ve.${column} = $1
+     WHERE ${ledgerMatch}
        AND ${column === "supplier_id" ? higherPriorityTargetsAbsent("ve", "supplier_id") : "TRUE"}
        AND v.optional = false
        AND v.deleted_at IS NULL

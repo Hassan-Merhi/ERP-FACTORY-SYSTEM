@@ -1,4 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
+import { downloadBlob } from "@/lib/downloadBlob";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -201,14 +202,7 @@ export default function FactoryPriceList() {
     const blob = new Blob([buffer as ArrayBuffer], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `factory_price_list_${new Date().toLocaleDateString("en-CA")}.xlsx`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, `factory_price_list_${new Date().toLocaleDateString("en-CA")}.xlsx`);
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

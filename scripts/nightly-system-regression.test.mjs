@@ -104,21 +104,21 @@ test("reviewable training videos narrate every visible control as H.264 + AAC MP
   const tts = read("scripts/training-narration-tts.py");
   assert.ok(tts.includes("from piper import PiperVoice"));
   assert.ok(!/urllib|requests|http/.test(tts), "voice synthesis makes no network calls");
-  const review = read(".github/workflows/publish-training-video.yml");
+  const validator = read("scripts/validate-training-recording.mjs");
   const uploader = read("scripts/upload-reviewed-training-vercel.mjs");
-  const manifest = read("scripts/register-published-training.mjs");
   const api = read("server/routes/trainingMediaRoutes.ts");
   const gateway = read("training/gateway/api/upload-url.js");
   const signer = read("training/gateway/api/sign.js");
-  assert.ok(review.includes('"screen.mp4"'));
-  assert.ok(review.includes('video?.codec_name !== "h264"'));
-  assert.ok(review.includes('audio?.codec_name !== "aac"'), "published videos must carry the narration track");
-  assert.ok(review.includes("duration < 60 || duration > 1200"));
+  assert.ok(validator.includes('"screen.mp4"'));
+  assert.ok(validator.includes('stream?.codec_name !== "h264"'));
+  assert.ok(validator.includes('audio?.codec_name !== "aac"'), "published videos must carry the narration track");
+  assert.ok(validator.includes("MIN_DURATION_SECONDS = 60") && validator.includes("MAX_DURATION_SECONDS = 1200"));
+  assert.ok(validator.includes('"-xerror"'), "every published video is fully decoded first");
   assert.ok(uploader.includes('["screen.mp4", ".mp4", "video/mp4"'));
-  assert.ok(manifest.includes('sha + ".mp4"'));
+  assert.ok(uploader.includes('sha + ".mp4"'));
   assert.ok(gateway.includes("video/mp4"));
   assert.ok(signer.includes("webm|mp4|vtt|png"));
-  assert.ok(api.includes('key.endsWith(".mp4") ? "video/mp4"'));
+  assert.ok(api.includes('key.endsWith(".mp4")') && api.includes('"video/mp4"') && api.includes('"video/webm"'));
 });
 
 test("the recording workflow installs the offline narration voice with pinned checksums", () => {
@@ -131,7 +131,38 @@ test("the recording workflow installs the offline narration voice with pinned ch
   assert.ok(workflow.includes("timeout-minutes: 180"), "sixteen narrated tours need more than the old 40 minutes");
 });
 
-test("training publication still requires protected approval and a successful source recorder job", () => {
+test("nightly publication is automatic but only for validated recordings of the audited main commit", () => {
+  const parent = read(".github/workflows/nightly-training-audit.yml");
+  const publish = parent.slice(parent.indexOf("\n  publish:\n"), parent.indexOf("\n  notify:\n"));
+  assert.ok(publish.includes("needs: [plan, record]"));
+  assert.ok(publish.includes("needs.record.result == 'success' && github.ref == 'refs/heads/main'"));
+  assert.ok(publish.includes("environment: training-publication"));
+  assert.ok(publish.includes("group: training-publisher"));
+  assert.ok(publish.includes("id-token: write") && !publish.includes("contents: write"), "the publisher never needs a repository write token");
+  assert.ok(publish.includes("TRAINING_PUBLICATION_APPROVAL_ENABLED: ${{ vars.TRAINING_PUBLICATION_APPROVAL_ENABLED }}"));
+  assert.ok(publish.includes("TRAINING_SOURCE_SHA: ${{ github.sha }}"), "only this run's own commit can be published");
+  assert.ok(publish.includes("name: real-erp-training-${{ github.run_id }}"), "only this run's own artifact is published");
+  assert.ok(publish.includes("node scripts/validate-training-recording.mjs"));
+  assert.ok(publish.includes("node scripts/upload-reviewed-training-vercel.mjs"));
+  assert.ok(parent.includes("needs: [plan, record, publish]"));
+  const validator = read("scripts/validate-training-recording.mjs");
+  assert.ok(validator.includes('entry.sourceSha !== sha'));
+  assert.ok(validator.includes('entry.status !== "captured"'));
+  assert.ok(validator.includes('["screen.mp4", "captions.vtt", "guide.md", "screenshot.png"]'));
+  assert.ok(validator.includes('startsWith("WEBVTT")'));
+  const uploader = read("scripts/upload-reviewed-training-vercel.mjs");
+  assert.ok(uploader.includes("export function mergeManifest("), "re-recorded topics replace their entry and the rest survive");
+  assert.ok(uploader.includes('"x-allow-overwrite": overwrite ? "1" : "0"'), "only the manifest may be overwritten");
+  const gateway = read("training/gateway/api/upload-url.js");
+  assert.ok(gateway.includes("nightly-training-audit.yml@refs/heads/main"));
+  assert.ok(gateway.includes('payload.environment !== "training-publication"'));
+  assert.ok(gateway.includes("allowOverwrite: overwrite") && gateway.includes("const overwrite = key === manifestKey"));
+  const api = read("server/routes/trainingMediaRoutes.ts");
+  assert.ok(api.includes("export async function loadPublishedTrainingRegistry()") && api.includes("MANIFEST_TTL_MS"), "the ERP re-reads the manifest without a deploy");
+  assert.ok(api.includes('app.get("/api/training/media", requireAuth'));
+});
+
+test("manual re-publication of one topic still validates the source recorder job", () => {
   const workflow = read(".github/workflows/publish-training-video.yml");
   assert.ok(workflow.includes("environment: training-publication"));
   assert.ok(workflow.includes('TRAINING_PUBLICATION_APPROVAL_ENABLED:'));
@@ -139,9 +170,9 @@ test("training publication still requires protected approval and a successful so
   assert.ok(workflow.includes('"push", "schedule", "workflow_dispatch"'));
   assert.ok(workflow.includes('job.name === "record / record-training"'));
   assert.ok(workflow.includes('recorder[0].conclusion !== "success"'));
-  assert.ok(workflow.includes('entry.sourceSha !== process.env.TRAINING_SOURCE_SHA'));
-  assert.ok(workflow.includes('["screen.mp4", "captions.vtt", "guide.md", "screenshot.png"]'));
-  assert.ok(workflow.includes('video?.codec_name !== "h264"'));
+  assert.ok(workflow.includes("node scripts/validate-training-recording.mjs"));
+  assert.ok(workflow.includes("node scripts/upload-reviewed-training-vercel.mjs"));
+  assert.ok(!workflow.includes("gh pr create"), "publication no longer waits for a manifest pull request and deploy");
 });
 
 test("training PR smoke crosses Factory to ERP and only records after verified company switching", () => {

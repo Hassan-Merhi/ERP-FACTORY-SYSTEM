@@ -1,6 +1,9 @@
 import { offlineError } from "./offlineError";
 /**
- * Phase 2 read policy. No auth/session endpoint is ever returned from disk.
+ * Phase 2 read policy. No auth/session endpoint is ever returned from this
+ * snapshot store. The one exception is a read-only cold start (plan batch 5,
+ * decision 10), which answers /api/auth/me, /api/auth/session-company and
+ * /api/user/companies from its passphrase-sealed ticket, never from here.
  * Exact URLs only: query parameters can change access and data meaning.
  */
 const SUPPORTED_READS = new Set([

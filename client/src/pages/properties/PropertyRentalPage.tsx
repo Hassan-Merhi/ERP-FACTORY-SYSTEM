@@ -21,8 +21,11 @@ import {
   Building2,
   UserRound,
   CalendarDays,
+  Pencil,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
 import { useAppMode } from "@/contexts/AppModeContext";
@@ -59,6 +62,8 @@ export default function PropertyRentalPage({
   const [openUnitId, setOpenUnitId] = useState<number | null>(null);
   const [createUnitOpen, setCreateUnitOpen] = useState(false);
   const [confirmDeleteUnitId, setConfirmDeleteUnitId] = useState<number | null>(null);
+  const [renameGroup, setRenameGroup] = useState<{ name: string; unitId: number; count: number } | null>(null);
+  const [newGroupName, setNewGroupName] = useState("");
 
   const { data: units = [], isLoading } = useQuery<Unit[]>({
     queryKey: [apiBase + "/units", { unitType, companyId: selectedCompany?.id }],
@@ -134,6 +139,8 @@ export default function PropertyRentalPage({
       totalPaid = 0,
       totalMonthlyRent = 0;
     units.forEach((u) => {
+      // Factory projections are references, not Properties receivables or deposits.
+      if (u.isInternalLeaseProjection) return;
       if (u.contract) {
         totalGuarantee += Number((u.guaranteeRemaining ?? u.contract.guaranteeAmount) || 0);
         const outstanding = u.outstanding ?? 0;
@@ -198,6 +205,31 @@ export default function PropertyRentalPage({
     },
   });
 
+  const renameLocationGroup = useMutation({
+    mutationFn: ({ unitId, locationGroup }: { unitId: number; locationGroup: string }) =>
+      apiRequest("PATCH", `${apiBase}/units/${unitId}`, { renameGroup: true, locationGroup }),
+    onSuccess: () => {
+      toast({ title: "Location group renamed" });
+      queryClient.invalidateQueries({ queryKey: [apiBase + "/units"] });
+      setRenameGroup(null);
+    },
+    onError: (e: ClientErrorLike) =>
+      toast({ title: "Could not rename location group", description: e.message, variant: "destructive" }),
+  });
+
+  const editableUnitInGroup = (groupUnits: Unit[]) =>
+    groupUnits.find((u) => u.unitType === unitType && !u.isShared && !u.isInternalLeaseProjection);
+  const openRenameGroup = (name: string, groupUnits: Unit[]) => {
+    const unit = editableUnitInGroup(groupUnits);
+    if (!isPropertiesRental || !unit) return;
+    setRenameGroup({
+      name,
+      unitId: unit.id,
+      count: groupUnits.filter((u) => u.unitType === unitType && !u.isShared && !u.isInternalLeaseProjection).length,
+    });
+    setNewGroupName(name);
+  };
+
   const openUnit = units.find((u) => u.id === openUnitId) ?? null;
   const confirmDeleteUnit = confirmDeleteUnitId ? (units.find((u) => u.id === confirmDeleteUnitId) ?? null) : null;
 
@@ -205,7 +237,7 @@ export default function PropertyRentalPage({
   const [selectedContractIds, setSelectedContractIds] = useState<Set<number>>(new Set());
   const [bulkPayOpen, setBulkPayOpen] = useState(false);
 
-  const contractedUnits = useMemo(() => units.filter((u) => u.contract && !u.isShared), [units]);
+  const contractedUnits = useMemo(() => units.filter((u) => u.contract && !u.isShared && !u.isInternalLeaseProjection), [units]);
 
   const toggleSelect = (contractId: number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -376,6 +408,12 @@ export default function PropertyRentalPage({
           </div>
         )}
 
+        {isPropertiesRental && units.some((unit) => unit.isInternalLeaseProjection) && (
+          <p className="text-xs text-muted-foreground" data-testid="properties-factory-internal-lease-note">
+            Internal ERP/Factory leases appear for reference only. They are excluded from Properties rent and balance
+            totals; manage payments and accounting from the originating rental module.
+          </p>
+        )}
         {isPropertiesRental && (
           <p className="text-xs text-muted-foreground" data-testid="properties-rent-cashbox-status">
             {propertiesCashbox
@@ -536,6 +574,8 @@ export default function PropertyRentalPage({
               }
               onOpenUnit={setOpenUnitId}
               onDeleteUnit={setConfirmDeleteUnitId}
+              onRenameGroup={isPropertiesRental ? openRenameGroup : undefined}
+              canRenameGroup={(groupUnits) => !!editableUnitInGroup(groupUnits)}
             />
           )
         ) : (
@@ -624,7 +664,24 @@ export default function PropertyRentalPage({
                                     </span>
                                   </div>
                                 ) : (
-                                  group
+                                  <span className="inline-flex items-center justify-center gap-2">
+                                    <span>{group}</span>
+                                    {isPropertiesRental && editableUnitInGroup(groupUnits) && (
+                                      <button
+                                        type="button"
+                                        className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openRenameGroup(group, groupUnits);
+                                        }}
+                                        title={`Rename ${group}`}
+                                        aria-label={`Rename location group ${group}`}
+                                        data-testid={`button-${testIdPrefix}-rename-group-${gIdx}`}
+                                      >
+                                        <Pencil className="h-3.5 w-3.5" />
+                                      </button>
+                                    )}
+                                  </span>
                                 )}
                               </td>
                             </tr>
@@ -651,7 +708,7 @@ export default function PropertyRentalPage({
                                 data-testid={`row-unit-${u.id}`}
                               >
                                 <td className="px-3 py-2 w-8" onClick={(e) => e.stopPropagation()}>
-                                  {u.contract && !u.isShared && (
+                                  {u.contract && !u.isShared && !u.isInternalLeaseProjection && (
                                     <Checkbox
                                       checked={selectedContractIds.has(u.contract.id)}
                                       onCheckedChange={() =>
@@ -706,7 +763,12 @@ export default function PropertyRentalPage({
                                       {u.contract.isInternal && (
                                         <Badge className="text-xs bg-violet-600 text-white">Internal</Badge>
                                       )}
-                                      {u.isShared && (
+                                      {u.isInternalLeaseProjection && (
+                                        <Badge className="text-xs bg-violet-600 text-white">
+                                          {u.sourceModule === "ERP" ? "ERP reference" : "Factory reference"}
+                                        </Badge>
+                                      )}
+                                      {u.isShared && !u.isInternalLeaseProjection && (
                                         <Badge
                                           className="text-xs bg-sky-600 text-white"
                                           title={u.ownerCompanyName ? `From: ${u.ownerCompanyName}` : undefined}
@@ -723,11 +785,15 @@ export default function PropertyRentalPage({
                                 </td>
                                 <td className="px-3 py-2">
                                   {u.contract ? (
-                                    <NoteCell
-                                      contractId={u.contract.id}
-                                      note={u.contract.notes}
-                                      testId={`unit-${u.id}`}
-                                    />
+                                    u.isInternalLeaseProjection ? (
+                                      <span className="text-xs text-muted-foreground">{u.contract.notes || "—"}</span>
+                                    ) : (
+                                      <NoteCell
+                                        contractId={u.contract.id}
+                                        note={u.contract.notes}
+                                        testId={`unit-${u.id}`}
+                                      />
+                                    )
                                   ) : (
                                     <span className="text-xs text-muted-foreground">—</span>
                                   )}
@@ -802,7 +868,7 @@ export default function PropertyRentalPage({
                                 </td>
                                 <td className="px-2 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                                   <div className="flex items-center justify-end gap-1">
-                                    {!u.isShared && (
+                                    {!u.isShared && !u.isInternalLeaseProjection && (
                                       <Button
                                         size="icon"
                                         variant="ghost"
@@ -854,6 +920,58 @@ export default function PropertyRentalPage({
 
         {createUnitOpen && (
           <CreateUnitDialog unitType={unitType} onClose={() => setCreateUnitOpen(false)} testIdPrefix={testIdPrefix} />
+        )}
+
+        {renameGroup && (
+          <Dialog open onOpenChange={(open) => !open && !renameLocationGroup.isPending && setRenameGroup(null)}>
+            <DialogContent data-testid={`dialog-${testIdPrefix}-rename-group`}>
+              <DialogHeader>
+                <DialogTitle>Rename location group</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-2">
+                <Label htmlFor="rename-rental-location-group">Group name</Label>
+                <Input
+                  id="rename-rental-location-group"
+                  value={newGroupName}
+                  maxLength={120}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (
+                      e.key === "Enter" &&
+                      newGroupName.trim() &&
+                      newGroupName.trim().toUpperCase() !== renameGroup.name.toUpperCase() &&
+                      !renameLocationGroup.isPending
+                    ) {
+                      renameLocationGroup.mutate({ unitId: renameGroup.unitId, locationGroup: newGroupName.trim() });
+                    }
+                  }}
+                  data-testid={`input-${testIdPrefix}-rename-group`}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Renames this location for all its warehouses or shops in this company. Contracts, payments, and
+                  accounting records are unchanged.
+                </p>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setRenameGroup(null)} disabled={renameLocationGroup.isPending}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() =>
+                    renameLocationGroup.mutate({ unitId: renameGroup.unitId, locationGroup: newGroupName.trim() })
+                  }
+                  disabled={
+                    !newGroupName.trim() ||
+                    newGroupName.trim().toUpperCase() === renameGroup.name.toUpperCase() ||
+                    renameLocationGroup.isPending
+                  }
+                  data-testid={`button-${testIdPrefix}-save-group`}
+                >
+                  {renameLocationGroup.isPending ? "Saving…" : `Rename ${renameGroup.count} units`}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         )}
 
         {/* Confirm delete unit dialog */}

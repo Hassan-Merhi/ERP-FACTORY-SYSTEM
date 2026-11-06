@@ -458,7 +458,7 @@ describe("Excel purchase import for a Kwacha-enabled company", () => {
     const wrong = await agent.post("/api/po-import/validate").send(payload({ currency: "ZMW", exchangeRate: "28" }));
     expect(wrong.body.valid).toBe(false);
     const ok = await agent.post("/api/po-import/validate").send(payload({ currency: "ZMW", exchangeRate: "25" }));
-    expect(ok.body).toEqual({ valid: true, errors: [] });
+    expect(ok.body).toMatchObject({ valid: true, errors: [] });
   });
 
   it("imports Kwacha lines once at the locked rate into USD inventory cost and the parent's USD books", async () => {

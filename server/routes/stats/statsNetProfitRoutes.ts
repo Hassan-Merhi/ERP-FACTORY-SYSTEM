@@ -159,6 +159,11 @@ export function registerStatsNetProfitRoutes(app: Express) {
         const code = (a.code || "").toUpperCase();
         if (nameLower.includes("accrued rent") || code === "ACCR-RENT-PAY" || code === "ACCRUED_RENT_PAYABLE") {
           onUsTotal = round2(minusMoney(onUsTotal, a.value));
+          const catKey = `liability_${a.category || a.name}`;
+          if (categoryTotals[catKey] !== undefined) {
+            categoryTotals[catKey] = round2(minusMoney(categoryTotals[catKey], a.value));
+            if (Math.abs(categoryTotals[catKey]) < 0.01) delete categoryTotals[catKey];
+          }
           onUsAccounts.splice(i, 1);
         }
       }
@@ -441,7 +446,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
       // Rental Outstanding (Tenant Receivables) is computed in
       // ./netProfitRentalSection, which returns the two figures rather than
       // reaching into these accumulators.
-      const rental = await computeRentalOutstanding(companyId, toDate, currentCfaRate);
+      const rental = await computeRentalOutstanding(companyId, toDate, currentCfaRate, businessToday);
       if (rental.prepaidRent > 0.005) {
         const val = rental.prepaidRent;
         forUsTotal = round2(plusMoney(forUsTotal, val));

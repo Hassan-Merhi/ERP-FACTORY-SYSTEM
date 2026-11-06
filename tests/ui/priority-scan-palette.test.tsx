@@ -30,7 +30,7 @@ const approved = [
   "#DB7093",
   "#A7FC00",
 ];
-const letters = ["M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W"] as const;
+const letters = ["D", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "C"] as const;
 const clients: QueryClient[] = [];
 const configsUrl = "/api/factory/customer-orders/loading-list/priority-scan-configs";
 function mount(
@@ -64,7 +64,7 @@ describe("Priority Scan fixed palette", () => {
     expect(new Set(PRIORITY_SCAN_COLORS).size).toBe(11);
   });
 
-  it("locks unique M-W letters to fixed HEX values independently of queue priority", () => {
+  it("locks unique display letters to fixed HEX values independently of queue priority", () => {
     expect(Object.keys(PRIORITY_SCAN_COLOR_LETTERS)).toEqual(approved);
     expect(new Set(Object.values(PRIORITY_SCAN_COLOR_LETTERS)).size).toBe(11);
     approved.forEach((hex, index) => {
@@ -101,9 +101,9 @@ describe("Priority Scan fixed palette", () => {
   it("shows fixed letters for saved priorities without changing queue-position controls", () => {
     mount([{ id: 1, orderId: 42, color: "#9400D3", priority: 7, enabled: true }]);
     const button = screen.getByTestId("button-priority-config-42");
-    expect(button).toHaveTextContent("M");
+    expect(button).toHaveTextContent("D");
     expect(button).toHaveTextContent("#7");
-    expect(screen.getByRole("img", { name: "Priority color #9400D3, letter M" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Priority color #9400D3, letter D" })).toBeInTheDocument();
   });
 
   it("accepts only the fixed new palette, not removed selections", () => {

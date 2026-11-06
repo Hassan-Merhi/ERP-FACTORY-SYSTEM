@@ -78,8 +78,10 @@ describe("suppressUnchangedFactoryArabicFallbacks", () => {
 describe("priority scan colours", () => {
   it("letters the approved palette case-insensitively and nothing else", () => {
     expect(DEFAULT_PRIORITY_SCAN_COLOR).toBe("#9400D3");
-    expect(PRIORITY_SCAN_COLORS.map(getPriorityScanLetter).join("")).toBe("MNOPQRSTUVW");
+    expect(PRIORITY_SCAN_COLORS.map(getPriorityScanLetter).join("")).toBe("DNOPQRSTUVC");
     expect(getPriorityScanLetter("#b22222")).toBe("R");
+    expect(getPriorityScanLetter("#9400D3")).toBe("D");
+    expect(getPriorityScanLetter("#A7FC00")).toBe("C");
     expect(getPriorityScanLetter("#123456")).toBeNull();
     expect(getPriorityScanLetter(7)).toBeNull();
     expect(isApprovedPriorityScanColor("#a7fc00")).toBe(true);

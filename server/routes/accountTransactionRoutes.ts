@@ -8,6 +8,7 @@
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { toMoney } from "../lib/money";
+import { consolidatedHadiRentLedgerPredicate } from "../services/rental/hadiRentExpenseConsolidation";
 import { eq, and, isNull } from "drizzle-orm";
 import { db, pool } from "../db";
 import { storage } from "../storage";
@@ -129,7 +130,7 @@ export function registerAccountTransactionRoutes(app: Express) {
           `SELECT COALESCE(SUM(ve.debit_amount::numeric - ve.credit_amount::numeric), 0) AS net
            FROM voucher_entries ve
            JOIN vouchers v ON ve.voucher_id = v.id
-           WHERE ve.ledger_account_id = $1
+           WHERE ${consolidatedHadiRentLedgerPredicate("ve.ledger_account_id", "$1", companyId, ledgerAccountId)}
              AND v.optional = false
              AND v.deleted_at IS NULL
              AND COALESCE(v.effective_date::date, v.voucher_date::date) < $2::date

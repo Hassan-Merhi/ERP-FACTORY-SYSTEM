@@ -49,6 +49,7 @@ export function registerInvoiceRemainingProformaRoutes(app: Express) {
               companyId,
               customerId: inv.customerId,
               name: proformaName,
+              destination: inv.destination,
               isActive: true,
             })
             .returning();

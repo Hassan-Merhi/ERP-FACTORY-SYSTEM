@@ -14,6 +14,7 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
   const draft = loadDraft();
   const [customerId, setCustomerId] = useState(draft?.customerId ?? "");
   const [proformaName, setProformaName] = useState(draft?.proformaName ?? "");
+  const [destination, setDestination] = useState(draft?.destination ?? "");
   const [isActive, setIsActive] = useState(draft?.isActive ?? true);
   const [quantities, setQuantities] = useState<Record<string, string>>(draft?.quantities ?? {});
   const [sellingPrices, setSellingPrices] = useState<Record<string, string>>(draft?.sellingPrices ?? {});
@@ -25,16 +26,20 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
   const [draftStatus, setDraftStatus] = useState<"idle" | "saved">("idle");
   const [appliedPrice, setAppliedPrice] = useState<"sell" | "prod" | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [showZeroItems, setShowZeroItems] = useState(false);
+  const [showZeroItems, setShowZeroItems] = useState(true);
   const [hideNonPositive, setHideNonPositive] = useState(false);
   const [showNegativeOnly, setShowNegativeOnly] = useState(false);
   const [showGarbageWipers, setShowGarbageWipers] = useState(false);
   const [articleSearch, setArticleSearch] = useState("");
   const [catalogFilter, setCatalogFilter] = useState("__all__");
-  const catalogCategories = Array.from(new Set(articleRows.map((r) => r.categoryName?.trim()).filter((v): v is string => Boolean(v)))).sort((a, b) => a.localeCompare(b));
+  const catalogCategories = Array.from(
+    new Set(articleRows.map((r) => r.categoryName?.trim()).filter((v): v is string => Boolean(v)))
+  ).sort((a, b) => a.localeCompare(b));
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const qtyRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const lastPriceScopeRef = useRef<string | null>(null);
+  const lastAgreedScopeRef = useRef<string | null>(null);
 
   // Reset to blank every time the dialog opens
   useEffect(() => {
@@ -42,6 +47,7 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
       clearDraft();
       setCustomerId("");
       setProformaName("");
+      setDestination("");
       setIsActive(true);
       setQuantities({});
       setSellingPrices({});
@@ -52,7 +58,7 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
       setContainerNames(["Container 1"]);
       setAppliedPrice(null);
       setErrors({});
-      setShowZeroItems(false);
+      setShowZeroItems(true);
       setHideNonPositive(false);
       setShowNegativeOnly(false);
       setShowGarbageWipers(false);
@@ -91,22 +97,54 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
     enabled: open,
   });
 
-  // Customer agreed price list — fetched whenever a customer is selected
+  // Price suggestions belong to the selected customer AND destination.
+  // Never fall back to another destination's agreed price list.
   const customerPriceListQuery = useQuery<{ article_code: string; price_per_bale: string }[]>({
-    queryKey: ["/api/factory/customer-price-lists", customerId],
+    queryKey: ["/api/factory/customer-price-lists", customerId, destination.trim().toUpperCase()],
     queryFn: async () => {
-      if (!customerId) return [];
-      const res = await fetch(`/api/factory/customer-price-lists/${customerId}`, { credentials: "include" });
-      if (!res.ok) return [];
+      if (!customerId || !destination.trim()) return [];
+      const res = await fetch(
+        `/api/factory/customer-price-lists/${customerId}?destination=${encodeURIComponent(destination.trim())}`,
+        { credentials: "include" }
+      );
+      if (!res.ok) throw new Error("Failed to fetch destination agreed prices");
       return res.json();
     },
-    enabled: open && !!customerId,
+    enabled: open && !!customerId && !!destination.trim(),
     staleTime: 30_000,
   });
 
-  // Auto-fill customer agreed prices whenever customer changes (without overwriting already-entered prices)
+  // Auto-fill only the chosen customer/destination prices.
+  useEffect(() => {
+    const scope = `${customerId}:${destination.trim().toUpperCase()}`;
+    if (lastPriceScopeRef.current === scope) return;
+    lastPriceScopeRef.current = scope;
+    lastAgreedScopeRef.current = null;
+    if (!customerId || !destination.trim()) return;
+    // Switching destinations must not retain the previous destination's prices.
+    // Start with catalog defaults, then apply the matching destination's rates.
+    const products = productsQuery.data || [];
+    const catalog = new Map<string, string>();
+    for (const product of products) {
+      if (product.sellingPrice && Number(product.sellingPrice) > 0) {
+        catalog.set(product.code, product.sellingPrice);
+        if (product.articleCode) catalog.set(product.articleCode, product.sellingPrice);
+      }
+    }
+    const next: Record<string, string> = {};
+    for (const row of articleRows) {
+      const price = catalog.get(row.articleCode);
+      if (price) next[row.articleCode] = price;
+    }
+    setSellingPrices(next);
+    setAppliedPrice(null);
+  }, [customerId, destination, productsQuery.data, articleRows]);
+
   useEffect(() => {
     if (!customerPriceListQuery.data || customerPriceListQuery.data.length === 0) return;
+    const scope = `${customerId}:${destination.trim().toUpperCase()}`;
+    if (lastAgreedScopeRef.current === scope) return;
+    lastAgreedScopeRef.current = scope;
     const priceMap = new Map(customerPriceListQuery.data.map((r) => [r.article_code, r.price_per_bale]));
     setSellingPrices((prev) => {
       const next = { ...prev };
@@ -117,7 +155,7 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
       return next;
     });
     setAppliedPrice("customer" as React.SetStateAction<"sell" | "prod" | null>);
-  }, [customerPriceListQuery.data, articleRows]);
+  }, [customerPriceListQuery.data, articleRows, customerId, destination]);
 
   const productMap = useCallback((): Map<string, BaleProduct> => {
     const m = new Map<string, BaleProduct>();
@@ -154,7 +192,7 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
     setContainerNames(["Container 1"]);
     setAppliedPrice(null);
     setErrors({});
-    setShowZeroItems(false);
+    setShowZeroItems(true);
     setHideNonPositive(false);
     setShowNegativeOnly(false);
     setShowGarbageWipers(false);
@@ -162,26 +200,8 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
 
   const createMutation = useMutation({
     mutationFn: async (payload: object) => apiRequest("POST", "/api/factory/v5/proforma-with-loading", payload),
-    onSuccess: async () => {
-      // Auto-save any non-zero prices to the customer's price list
-      if (customerId) {
-        const priceLines = Object.entries(sellingPrices)
-          .filter(([, price]) => parseFloat(price) > 0)
-          .map(([articleCode, pricePerBale]) => ({ articleCode, pricePerBale }));
-        if (priceLines.length > 0) {
-          try {
-            await fetch(`/api/factory/customer-price-lists/${customerId}`, {
-              method: "PUT",
-              credentials: "include",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(priceLines),
-            });
-            qc.invalidateQueries({ queryKey: ["/api/factory/customer-price-lists", customerId] });
-          } catch {
-            // Cache invalidation is best-effort; the next fetch corrects it and a failure here is not worth surfacing.
-          }
-        }
-      }
+    onSuccess: () => {
+      // Creating a proforma never rewrites saved agreed-price lists.
       clearDraft();
       resetForm();
       qc.invalidateQueries({ queryKey: ["/api/factory/v5/stock-allocation"], refetchType: "active" });
@@ -222,6 +242,7 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
     triggerAutosave({
       customerId,
       proformaName,
+      destination,
       isActive,
       quantities,
       sellingPrices,
@@ -233,6 +254,7 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
   }, [
     customerId,
     proformaName,
+    destination,
     isActive,
     quantities,
     sellingPrices,
@@ -323,6 +345,7 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
     const errs: Record<string, string> = {};
     if (!customerId) errs.customerId = "Customer is required";
     if (!proformaName.trim()) errs.proformaName = "Proforma name is required";
+    if (!destination.trim()) errs.destination = "Destination is required";
     const hasQty = articleRows.some((r) => {
       const v = quantities[r.articleCode];
       return v && parseInt(v) > 0;
@@ -385,6 +408,7 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
     createMutation.mutate({
       customerId: parseInt(customerId),
       name: proformaName.trim(),
+      destination: destination.trim(),
       isActive,
       lines,
       sendToLoading,
@@ -453,7 +477,8 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
         const q = articleSearch.toLowerCase();
         base = base.filter((r) => r.productName.toLowerCase().includes(q) || r.articleCode.toLowerCase().includes(q));
       }
-      if (catalogFilter !== "__all__") base = base.filter((r) => (r.categoryName?.trim() || "__uncategorized__") === catalogFilter);
+      if (catalogFilter !== "__all__")
+        base = base.filter((r) => (r.categoryName?.trim() || "__uncategorized__") === catalogFilter);
       return base;
     }
     let base = showZeroItems ? articleRows : articleRows.filter((r) => r.stockAvailable > 0 || r.expectedToLoad > 0);
@@ -466,7 +491,8 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
       const q = articleSearch.toLowerCase();
       base = base.filter((r) => r.productName.toLowerCase().includes(q) || r.articleCode.toLowerCase().includes(q));
     }
-    if (catalogFilter !== "__all__") base = base.filter((r) => (r.categoryName?.trim() || "__uncategorized__") === catalogFilter);
+    if (catalogFilter !== "__all__")
+      base = base.filter((r) => (r.categoryName?.trim() || "__uncategorized__") === catalogFilter);
     return base;
   })();
 
@@ -477,6 +503,8 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
     setCustomerId,
     proformaName,
     setProformaName,
+    destination,
+    setDestination,
     isActive,
     setIsActive,
     quantities,

@@ -75,4 +75,36 @@ describe("MobileBarcodeScanner", () => {
     fireEvent.click(screen.getByRole("button", { name: /scan with camera/i }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/HTTPS and a supported browser/);
   });
+  it("releases the live camera immediately when Safari fires pagehide", async () => {
+    render(<MobileBarcodeScanner onScan={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /scan with camera/i }));
+    await waitFor(() => expect(HTMLMediaElement.prototype.play).toHaveBeenCalled());
+    await act(async () => window.dispatchEvent(new Event("pagehide")));
+    expect(stopTrack).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers an explicit retry when iOS ends the camera track during a screen change", async () => {
+    let ended: (() => void) | undefined;
+    const track = {
+      stop: stopTrack,
+      addEventListener: vi.fn((name: string, handler: () => void) => {
+        if (name === "ended") ended = handler;
+      }),
+      removeEventListener: vi.fn(),
+    };
+    const getUserMedia = vi.fn(async () => ({
+      getTracks: () => [track],
+      getVideoTracks: () => [track],
+    }));
+    Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { getUserMedia } });
+    render(<MobileBarcodeScanner onScan={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /scan with camera/i }));
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(ended).toBeTypeOf("function"));
+    await act(async () => ended?.());
+    expect(screen.getByRole("alert")).toHaveTextContent(/Camera interrupted/);
+    fireEvent.click(screen.getByTestId("button-mobile-camera-retry"));
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2));
+  });
+
 });

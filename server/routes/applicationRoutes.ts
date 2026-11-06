@@ -1,6 +1,5 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-
 import { requireAuth } from "../auth";
 import { db } from "../db";
 import { registerAccountRoutes } from "./accounts";
@@ -47,6 +46,7 @@ import { registerLazyRouteModule } from "./lazyRouteRegistrar";
 import { registerLedgerRoutes } from "./ledgerRoutes";
 import { registerLocationRoutes } from "./locationRoutes";
 import { registerNotificationRoutes } from "./notificationRoutes";
+import { registerTicketRoutes } from "./ticketRoutes";
 import { registerPasskeyRoutes } from "./passkeyRoutes";
 import { registerPosRoutes } from "./posRoutes";
 import { registerPropertiesRentalRoutes } from "./propertiesRentalRoutes";
@@ -97,7 +97,6 @@ import { registerIntercompanyPosConfigRoutes } from "./pos/intercompanyPosConfig
 import { registerBandwidthPhase3FactoryReads } from "./performance/bandwidthPhase3FactoryReads";
 import { registerApplicationAiLazyRoutes } from "./applicationAiLazyRoutes";
 import { enforceSharedFactoryAccess } from "../middleware/sharedFactoryAccessBoundary";
-
 export async function registerApplicationRoutes(app: Express): Promise<Server> {
   installRemoteSupportSessionStopAudit();
   registerWriteInvalidationSignal(app);
@@ -214,6 +213,7 @@ export async function registerApplicationRoutes(app: Express): Promise<Server> {
   registerBusinessAlertRoutes(app);
   registerIntercompanyNotificationRoutes(app);
   registerNotificationRoutes(app);
+  registerTicketRoutes(app);
   registerTransporterStatementRoutes(app);
 
   return createServer(app);
