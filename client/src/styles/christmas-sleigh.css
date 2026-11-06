@@ -1,14 +1,16 @@
 /*
  * Personal opt-in Christmas sleigh: translucent festive artwork over the common
  * header, without changing its dimensions, tab order, or pointer targets.
+ * Rendered above workspace overflow containers so Santa cannot be clipped.
  */
 .christmas-sleigh-flight {
-  position: absolute;
-  top: 50%;
-  left: 100%;
+  position: fixed;
+  /* Left and top are measured from the visible header and set inline. */
+  top: 0;
+  left: 0;
   width: 310px;
   height: 68px;
-  z-index: 25;
+  z-index: 45;
   pointer-events: none !important;
   user-select: none;
   isolation: isolate;
