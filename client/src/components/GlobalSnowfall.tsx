@@ -4,7 +4,8 @@
  * One canvas avoids dozens of DOM nodes, CSS animations and re-mounts on
  * ordinary page navigation. It is intentionally separate from login (Phase 4).
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
+import { useSeasonalMotionRestricted } from "@/hooks/useSeasonalMotionRestricted";
 import { useTheme } from "@/components/ThemeProvider";
 
 type Flake = {
@@ -211,21 +212,7 @@ function SnowfallCanvas() {
  * Reduced-motion users never start the canvas animation.
  */
 export function GlobalSnowfall({ enabled }: { enabled: boolean }) {
-  const [reduceMotion, setReduceMotion] = useState(() =>
-    typeof window !== "undefined" && typeof window.matchMedia === "function"
-      ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
-      : false
-  );
-
-  useEffect(() => {
-    if (typeof window.matchMedia !== "function") return;
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const handleChange = (event: MediaQueryListEvent) => setReduceMotion(event.matches);
-    setReduceMotion(media.matches);
-    media.addEventListener("change", handleChange);
-    return () => media.removeEventListener("change", handleChange);
-  }, []);
-
-  if (!enabled || reduceMotion) return null;
+  const motionRestricted = useSeasonalMotionRestricted();
+  if (!enabled || motionRestricted) return null;
   return <SnowfallCanvas />;
 }
