@@ -166,7 +166,7 @@ export function useLocationInventoryQueries({
       return res.json();
     },
     // The overview needs the real negative-stock count; never render a made-up zero.
-    enabled: !posUser && !!companyId && !selectedLocationLocal,
+    enabled: !posUser && !!companyId && !selectedLocationLocal && (showNegativeStock || !showAllStock),
     staleTime: 30000,
   });
 
