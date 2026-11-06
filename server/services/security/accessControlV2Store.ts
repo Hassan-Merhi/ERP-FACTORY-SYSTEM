@@ -113,6 +113,20 @@ export async function readV2Roles(companyId: number) {
   };
 }
 
+/**
+ * Membership directory for the shadow User Access editor.
+ * User IDs and assigned roles come only from canonical company membership.
+ * Do not expose credentials, email addresses, financial data, or other companies.
+ */
+export async function readV2CompanyMembers(companyId: number) {
+  const result = await pool.query<{ userId: string; role: string }>(
+    `SELECT user_id AS "userId", role FROM user_company_roles
+      WHERE company_id=$1 ORDER BY user_id LIMIT 2000`,
+    [companyId]
+  );
+  return result.rows;
+}
+
 export async function readV2Overrides(companyId: number, userId: string) {
   const result = await pool.query(
     `SELECT resource_key AS "resource", action_key AS "action", decision
