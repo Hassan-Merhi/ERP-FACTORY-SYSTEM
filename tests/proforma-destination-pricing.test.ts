@@ -66,14 +66,22 @@ databaseDescribe("destination-scoped proforma prices", () => {
   });
 
   it("requires linking an old proforma before saving its agreed prices", async () => {
-    const response = await call("POST", "/api/factory/customer-price-lists/:customerId/from-proforma/:proformaId", fixture.companyId, {
-      params: { customerId: String(fixture.customerId), proformaId: String(firstId) },
-    });
+    const response = await call(
+      "POST",
+      "/api/factory/customer-price-lists/:customerId/from-proforma/:proformaId",
+      fixture.companyId,
+      {
+        params: { customerId: String(fixture.customerId), proformaId: String(firstId) },
+      }
+    );
     expect(response.statusCode).toBe(400);
   });
 
   it("links old proformas to different destinations without changing either price", async () => {
-    for (const [id, destination] of [[firstId, "LUBUMBASHI"], [secondId, "MALI"]] as const) {
+    for (const [id, destination] of [
+      [firstId, "LUBUMBASHI"],
+      [secondId, "MALI"],
+    ] as const) {
       const response = await call("PUT", "/api/factory/customer-proformas/:id", fixture.companyId, {
         params: { id: String(id) },
         body: { destination },
@@ -103,14 +111,24 @@ databaseDescribe("destination-scoped proforma prices", () => {
   });
 
   it("saving destination agreed prices updates only that destination, not document lines", async () => {
-    const a = await call("POST", "/api/factory/customer-price-lists/:customerId/from-proforma/:proformaId", fixture.companyId, {
-      params: { customerId: String(fixture.customerId), proformaId: String(firstId) },
-    });
+    const a = await call(
+      "POST",
+      "/api/factory/customer-price-lists/:customerId/from-proforma/:proformaId",
+      fixture.companyId,
+      {
+        params: { customerId: String(fixture.customerId), proformaId: String(firstId) },
+      }
+    );
     expect(a.statusCode).toBe(200);
     expect(a.body.backfilled).toBe(0);
-    const b = await call("POST", "/api/factory/customer-price-lists/:customerId/from-proforma/:proformaId", fixture.companyId, {
-      params: { customerId: String(fixture.customerId), proformaId: String(secondId) },
-    });
+    const b = await call(
+      "POST",
+      "/api/factory/customer-price-lists/:customerId/from-proforma/:proformaId",
+      fixture.companyId,
+      {
+        params: { customerId: String(fixture.customerId), proformaId: String(secondId) },
+      }
+    );
     expect(b.statusCode).toBe(200);
     expect(Number(await agreedPrice("LUBUMBASHI"))).toBe(25);
     expect(Number(await agreedPrice("MALI"))).toBe(10);
