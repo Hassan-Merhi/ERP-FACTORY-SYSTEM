@@ -16,6 +16,7 @@ export type ReconciliationSnapshot = {
   loading: boolean;
   verified: boolean;
   accountSum: number | null;
+  aliCashLedgerId: number | null;
   recorded: number;
   netAdjustment: number | null;
   reconciled: number | null;
@@ -176,13 +177,14 @@ export function PaymentsReconciliation({
       loading: loading || unavailable || sums.mixedCurrency,
       verified,
       accountSum,
+      aliCashLedgerId: ali?.id ?? null,
       recorded: sums.recorded,
       netAdjustment: bridge.netAdjustment,
       reconciled: bridge.reconciledTotal,
       difference,
     });
   }, [onReconciliationChange, companyId, loading, unavailable, sums.mixedCurrency, sums.recorded,
-    verified, accountSum, bridge.netAdjustment, bridge.reconciledTotal, difference]);
+    verified, accountSum, ali?.id, bridge.netAdjustment, bridge.reconciledTotal, difference]);
   const canCopy = !loading && !unavailable && !sums.mixedCurrency && accountSum !== null && ali != null;
   const copyReconciledHistory = async () => {
     if (!canCopy || !ali || accountSum === null) return;
