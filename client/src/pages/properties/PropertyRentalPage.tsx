@@ -5,7 +5,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -24,8 +24,6 @@ import {
   Pencil,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
 import { useAppMode } from "@/contexts/AppModeContext";
@@ -40,6 +38,8 @@ import { CreateUnitDialog } from "./property-rental/components/CreateUnitDialog"
 import { UnitActionDialog } from "./property-rental/components/UnitActionDialog";
 import { BulkPaymentDialog } from "./property-rental/components/BulkPaymentDialog";
 import { RentalUnitCards } from "./property-rental/components/RentalUnitCards";
+import { RentalSummaryTiles } from "./property-rental/components/RentalSummaryTiles";
+import { RenameGroupDialog } from "./property-rental/components/RenameGroupDialog";
 import { ErpMobileActionsMenu, ErpMobileSummaryGrid } from "@/components/ui/erp-mobile-records";
 import {
   HISTORICAL_RENT_COMPANY,
@@ -63,7 +63,6 @@ export default function PropertyRentalPage({
   const [createUnitOpen, setCreateUnitOpen] = useState(false);
   const [confirmDeleteUnitId, setConfirmDeleteUnitId] = useState<number | null>(null);
   const [renameGroup, setRenameGroup] = useState<{ name: string; unitId: number; count: number } | null>(null);
-  const [newGroupName, setNewGroupName] = useState("");
 
   const { data: units = [], isLoading } = useQuery<Unit[]>({
     queryKey: [apiBase + "/units", { unitType, companyId: selectedCompany?.id }],
@@ -205,18 +204,6 @@ export default function PropertyRentalPage({
     },
   });
 
-  const renameLocationGroup = useMutation({
-    mutationFn: ({ unitId, locationGroup }: { unitId: number; locationGroup: string }) =>
-      apiRequest("PATCH", `${apiBase}/units/${unitId}`, { renameGroup: true, locationGroup }),
-    onSuccess: () => {
-      toast({ title: "Location group renamed" });
-      queryClient.invalidateQueries({ queryKey: [apiBase + "/units"] });
-      setRenameGroup(null);
-    },
-    onError: (e: ClientErrorLike) =>
-      toast({ title: "Could not rename location group", description: e.message, variant: "destructive" }),
-  });
-
   const editableUnitInGroup = (groupUnits: Unit[]) =>
     groupUnits.find((u) => u.unitType === unitType && !u.isShared && !u.isInternalLeaseProjection);
   const openRenameGroup = (name: string, groupUnits: Unit[]) => {
@@ -227,7 +214,6 @@ export default function PropertyRentalPage({
       unitId: unit.id,
       count: groupUnits.filter((u) => u.unitType === unitType && !u.isShared && !u.isInternalLeaseProjection).length,
     });
-    setNewGroupName(name);
   };
 
   const openUnit = units.find((u) => u.id === openUnitId) ?? null;
@@ -237,7 +223,10 @@ export default function PropertyRentalPage({
   const [selectedContractIds, setSelectedContractIds] = useState<Set<number>>(new Set());
   const [bulkPayOpen, setBulkPayOpen] = useState(false);
 
-  const contractedUnits = useMemo(() => units.filter((u) => u.contract && !u.isShared && !u.isInternalLeaseProjection), [units]);
+  const contractedUnits = useMemo(
+    () => units.filter((u) => u.contract && !u.isShared && !u.isInternalLeaseProjection),
+    [units]
+  );
 
   const toggleSelect = (contractId: number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -455,104 +444,14 @@ export default function PropertyRentalPage({
             ]}
           />
         ) : (
-          /* Summary tiles: six equal tiles; the former Outstanding/Credit pair overflowed its card at
-             tablet widths. */
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2">
-            <Card>
-              <CardHeader className="px-3 pt-3 pb-1">
-                <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">
-                  TOTAL UNITS
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-3 pb-3">
-                <div className="text-lg font-bold" data-testid={`stat-${testIdPrefix}-total-units`}>
-                  {units.length}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="px-3 pt-3 pb-1">
-                <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">
-                  RENT / MONTH
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-3 pb-3">
-                <div
-                  className="text-lg font-bold text-blue-600 dark:text-blue-400"
-                  data-testid={`stat-${testIdPrefix}-monthly-rent`}
-                >
-                  ${fmtMoney(totals.totalMonthlyRent)}
-                </div>
-                <p className="text-[11px] text-muted-foreground mt-0.5">expected from active leases</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="px-3 pt-3 pb-1">
-                <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">
-                  {isPropertiesRental ? "GUARANTEE HELD" : "TOTAL GUARANTEE"}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-3 pb-3">
-                <div
-                  className={`text-lg font-bold ${isPropertiesRental ? "text-red-600 dark:text-red-400" : ""}`}
-                  data-testid={`stat-${testIdPrefix}-total-guarantee`}
-                >
-                  ${fmtMoney(totals.totalGuarantee)}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="px-3 pt-3 pb-1">
-                <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">
-                  {paidLabel}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-3 pb-3">
-                <div
-                  className={`text-lg font-bold ${totals.totalPaid > 0 ? "text-green-600 dark:text-green-400" : ""}`}
-                  data-testid={`stat-${testIdPrefix}-total-paid`}
-                >
-                  {paidValue}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="px-3 pt-3 pb-1">
-                <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">
-                  {isPropertiesRental ? "TO COLLECT" : "OUTSTANDING"}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-3 pb-3">
-                <div
-                  className={`text-lg font-bold ${isPropertiesRental ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
-                  data-testid={`stat-${testIdPrefix}-total-outstanding`}
-                >
-                  ${fmtMoney(totals.totalOwed)}
-                </div>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {isPropertiesRental ? "tenants owe you" : "owed by tenants"}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="px-3 pt-3 pb-1">
-                <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">
-                  {isPropertiesRental ? "OWED TO TENANTS" : "CREDIT"}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-3 pb-3">
-                <div
-                  className={`text-lg font-bold ${isPropertiesRental ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}
-                  data-testid={`stat-${testIdPrefix}-total-credit`}
-                >
-                  ${fmtMoney(totals.totalCredit)}
-                </div>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {isPropertiesRental ? "tenant prepayments / overpayments" : "advance / overpaid"}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+          <RentalSummaryTiles
+            testIdPrefix={testIdPrefix}
+            unitCount={units.length}
+            totals={totals}
+            isPropertiesRental={isPropertiesRental}
+            paidLabel={paidLabel}
+            paidValue={paidValue}
+          />
         )}
 
         {phoneCards ? (
@@ -923,55 +822,12 @@ export default function PropertyRentalPage({
         )}
 
         {renameGroup && (
-          <Dialog open onOpenChange={(open) => !open && !renameLocationGroup.isPending && setRenameGroup(null)}>
-            <DialogContent data-testid={`dialog-${testIdPrefix}-rename-group`}>
-              <DialogHeader>
-                <DialogTitle>Rename location group</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-2">
-                <Label htmlFor="rename-rental-location-group">Group name</Label>
-                <Input
-                  id="rename-rental-location-group"
-                  value={newGroupName}
-                  maxLength={120}
-                  onChange={(e) => setNewGroupName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (
-                      e.key === "Enter" &&
-                      newGroupName.trim() &&
-                      newGroupName.trim().toUpperCase() !== renameGroup.name.toUpperCase() &&
-                      !renameLocationGroup.isPending
-                    ) {
-                      renameLocationGroup.mutate({ unitId: renameGroup.unitId, locationGroup: newGroupName.trim() });
-                    }
-                  }}
-                  data-testid={`input-${testIdPrefix}-rename-group`}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Renames this location for all its warehouses or shops in this company. Contracts, payments, and
-                  accounting records are unchanged.
-                </p>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setRenameGroup(null)} disabled={renameLocationGroup.isPending}>
-                  Cancel
-                </Button>
-                <Button
-                  onClick={() =>
-                    renameLocationGroup.mutate({ unitId: renameGroup.unitId, locationGroup: newGroupName.trim() })
-                  }
-                  disabled={
-                    !newGroupName.trim() ||
-                    newGroupName.trim().toUpperCase() === renameGroup.name.toUpperCase() ||
-                    renameLocationGroup.isPending
-                  }
-                  data-testid={`button-${testIdPrefix}-save-group`}
-                >
-                  {renameLocationGroup.isPending ? "Saving…" : `Rename ${renameGroup.count} units`}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <RenameGroupDialog
+            apiBase={apiBase}
+            testIdPrefix={testIdPrefix}
+            group={renameGroup}
+            onClose={() => setRenameGroup(null)}
+          />
         )}
 
         {/* Confirm delete unit dialog */}
