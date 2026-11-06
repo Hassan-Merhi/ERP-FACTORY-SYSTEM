@@ -137,7 +137,7 @@
   padding-inline: 16px;
   font-weight: 650;
 }
-.properties-rentals-hero-actions button:last-child:not(:first-child) {
+.properties-rentals-hero-actions button[data-testid$="-add-unit"] {
   background: linear-gradient(112deg, #315ed7, #2551c2);
   color: #fff;
   border-color: #6d91f0;
@@ -180,7 +180,7 @@
 .properties-rentals-stat--paid { --stat-accent: #41e6b0; --stat-tint: rgba(16,185,129,0.14); }
 .properties-rentals-stat--collect { --stat-accent: #51dadb; --stat-tint: rgba(20,184,166,0.14); }
 .properties-rentals-stat--owed { --stat-accent: #fa8a95; --stat-tint: rgba(225,78,100,0.12); }
-.properties-rentals-stat > [data-slot="card-header"] {
+.properties-rentals-stat > :first-child {
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -198,7 +198,7 @@
   background: var(--stat-tint);
   border-radius: 12px;
 }
-.properties-rentals-stat [data-slot="card-title"] {
+.properties-rentals-stat h3 {
   flex: 1 1 auto;
   color: var(--rent-muted);
   font-size: 10px;
@@ -206,7 +206,7 @@
   letter-spacing: 0.045em;
   font-weight: 700;
 }
-.properties-rentals-stat > [data-slot="card-content"] {
+.properties-rentals-stat > :nth-child(2) {
   padding: 10px 16px 19px;
 }
 .properties-rentals-stat [data-testid^="stat-"] {
