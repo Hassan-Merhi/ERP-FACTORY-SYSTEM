@@ -1,5 +1,5 @@
 /**
- * A lightweight flyover in the shared ERP/POS top bar every five visible minutes.
+ * Visible soon after activation, then every five minutes, across the shared top bar.
  * Does not capture clicks, run while hidden, or run during camera scanning.
  */
 import { useEffect, useState, type CSSProperties } from "react";
@@ -85,7 +85,7 @@ export function ChristmasSleighFlyover({ enabled }: { enabled: boolean }) {
   const motionRestricted = useSeasonalMotionRestricted();
   const active = enabled && !motionRestricted;
   const [header, setHeader] = useState<HTMLElement | null>(null);
-  const [headerWidth, setHeaderWidth] = useState(0);
+  const [headerRect, setHeaderRect] = useState<DOMRect | null>(null);
   const [flying, setFlying] = useState(false);
 
   // Authenticated shells swap their header on workspace changes.
@@ -105,22 +105,34 @@ export function ChristmasSleighFlyover({ enabled }: { enabled: boolean }) {
 
   useEffect(() => {
     if (!header || !active) return;
-    const measure = () => setHeaderWidth(header.getBoundingClientRect().width);
+    // Position relative to the viewport so clipped workspace shells cannot hide Santa.
+    const measure = () => {
+      const bounds = header.getBoundingClientRect();
+      setHeaderRect((previous) =>
+        previous && Math.abs(previous.right - bounds.right) < 0.5 &&
+        Math.abs(previous.top - bounds.top) < 0.5 &&
+        Math.abs(previous.width - bounds.width) < 0.5 &&
+        Math.abs(previous.height - bounds.height) < 0.5
+          ? previous : bounds
+      );
+    };
     measure();
     const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
     observer?.observe(header);
     window.addEventListener("resize", measure, { passive: true });
+    window.addEventListener("scroll", measure, true);
     return () => {
       observer?.disconnect();
       window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
     };
   }, [header, active]);
 
   // Count only time spent in a visible tab. No animation is queued while hidden.
   useEffect(() => {
     setFlying(false);
-    if (!active) return;
-    let remaining = FLIGHT_INTERVAL_MS;
+    if (!active || !header) return;
+    let remaining = 2500; // show the first flight right after loading the header
     let started = 0;
     let timer: number | undefined;
     let endFlight: number | undefined;
@@ -155,29 +167,46 @@ export function ChristmasSleighFlyover({ enabled }: { enabled: boolean }) {
       pause();
       if (!document.hidden) schedule();
     };
+    const preview = () => {
+      if (document.hidden) return;
+      pause();
+      remaining = FLIGHT_INTERVAL_MS;
+      setFlying(true);
+      endFlight = window.setTimeout(() => {
+        endFlight = undefined;
+        setFlying(false);
+      }, FLIGHT_DURATION_MS);
+      schedule();
+    };
     document.addEventListener("visibilitychange", visibility);
     window.addEventListener("pagehide", pause);
     window.addEventListener("pageshow", visibility);
+    window.addEventListener("christmas:sleigh-preview", preview);
     schedule();
     return () => {
       pause();
       document.removeEventListener("visibilitychange", visibility);
       window.removeEventListener("pagehide", pause);
       window.removeEventListener("pageshow", visibility);
+      window.removeEventListener("christmas:sleigh-preview", preview);
     };
-  }, [active]);
+  }, [active, header]);
 
-  if (!active || !header || !flying) return null;
+  if (!active || !header || !headerRect || !flying) return null;
 
   return createPortal(
     <div
       className="christmas-sleigh-flight"
       data-testid="christmas-sleigh-flyover"
       aria-hidden="true"
-      style={{ "--santa-flight-distance": `${Math.max(headerWidth, 300) + 345}px` } as CSSProperties}
+      style={{
+        left: `${headerRect.right + 12}px`,
+        top: `${headerRect.top + headerRect.height / 2}px`,
+        "--santa-flight-distance": `${Math.max(headerRect.width, 300) + 400}px`,
+      } as CSSProperties}
     >
       <SleighArtwork />
     </div>,
-    header,
+    document.body,
   );
 }
