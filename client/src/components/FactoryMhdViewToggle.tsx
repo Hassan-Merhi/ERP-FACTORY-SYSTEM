@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
-import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translateApplicationText, type ApplicationTranslationKey } from "@/i18n/applicationTranslations";
 
 const affectedPaths = [
   "/factory/stock-allocation-v5",
@@ -20,7 +21,7 @@ const affectedPaths = [
 ];
 
 function MhdToggleInner() {
-  const { t } = useApplicationLanguage();
+  const t = useOptionalApplicationLanguage()?.t ?? ((key: ApplicationTranslationKey) => translateApplicationText(key, "en"));
   const mhd = useFactoryMhdView();
   const [error, setError] = useState("");
   return (
