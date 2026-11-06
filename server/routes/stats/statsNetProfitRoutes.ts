@@ -441,7 +441,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
       // Rental Outstanding (Tenant Receivables) is computed in
       // ./netProfitRentalSection, which returns the two figures rather than
       // reaching into these accumulators.
-      const rental = await computeRentalOutstanding(companyId, toDate, currentCfaRate);
+      const rental = await computeRentalOutstanding(companyId, toDate, currentCfaRate, businessToday);
       if (rental.prepaidRent > 0.005) {
         const val = rental.prepaidRent;
         forUsTotal = round2(plusMoney(forUsTotal, val));
