@@ -91,6 +91,31 @@ export function enumerateScreen(options) {
 }
 
 /** Is an overlay layer (menu, list, dialog) open right now, and of what type? */
+/**
+ * Runs in the page. Counts the data a viewer would see in the workspace:
+ * table body rows, record cards and list rows, and any visible empty-state
+ * message. The recorder refuses to publish a tour of a page with no data.
+ */
+export function measurePageData() {
+  const main = document.querySelector("#main-content");
+  if (!main) return { dataRows: 0, emptyMessages: [] };
+  const visible = (element) => {
+    const rect = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+  };
+  const emptyPattern = /^(no |nothing |there (are|is) no |empty)|\b(no (records|data|results|entries|items|rows|transactions)( found| yet| to show)?)\b/i;
+  const rows = [...main.querySelectorAll("tbody tr, [role=row], [data-testid^=row-], [data-testid^=card-]")].filter(
+    (row) => visible(row) && row.textContent.trim().length > 0 && !emptyPattern.test(row.textContent.trim())
+  );
+  const emptyMessages = [...main.querySelectorAll("p, td, div, span")]
+    .filter((node) => node.children.length === 0 && visible(node))
+    .map((node) => node.textContent.replace(/\s+/g, " ").trim())
+    // "No customer selected" asks the viewer to choose; it is not missing data.
+    .filter((text) => text.length > 3 && text.length < 120 && emptyPattern.test(text) && !/select/i.test(text));
+  return { dataRows: rows.length, emptyMessages: [...new Set(emptyMessages)].slice(0, 5) };
+}
+
 export function openLayerType() {
   const LAYER = "[role=dialog][data-state=open], [data-radix-popper-content-wrapper], [role=menu], [role=listbox], [cmdk-root], [data-state=open][role=menu], [role=alertdialog]";
   const layers = Array.from(document.querySelectorAll(LAYER)).filter((el) => { const r = el.getBoundingClientRect(); return r.width > 4 && r.height > 4; });
