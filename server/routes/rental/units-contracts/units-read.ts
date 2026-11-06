@@ -13,7 +13,7 @@ import { getRentalBillingDay, getRentalPeriodDueDate } from "../../../services/r
 import { getClientDate } from "../../../lib/dateUtils";
 import { db, pool } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, isNull, or } from "drizzle-orm";
 import { propertyUnits, propertyContracts, propertyMonthlyLedger, propertyPayments, companies } from "@shared/schema";
 import { computeNextBillingDate } from "./_helpers";
 import { isPropertiesInternalSourceReference, sharedRentalDisplayTab } from "./internalProjection";
@@ -235,25 +235,35 @@ export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesCon
       // gracefully returns [] so owned units always load.
       let sharedResults: typeof ownedResults = [];
       try {
-        // Properties displays internal ERP/Factory WAREHOUSE references in Warehouses.
-        // Other linked contracts retain their existing Shops presentation.
+        // Properties displays internal Factory occupancy and ERP warehouse
+        // references in Warehouses. Other shared leases stay in Shops.
         if (unitType === "SHOP" || (module === "PROPERTIES" && unitType === "WAREHOUSE")) {
           const linkedContracts = await db
             .select()
             .from(propertyContracts)
             .where(and(eq(propertyContracts.linkedCompanyId, companyId), eq(propertyContracts.status, "ACTIVE")));
 
-          // Internal leases originating in ERP or Factory can be shown in Properties
-          // without inserting a second unit/contract. Same-company source contracts
-          // need no linkedCompanyId; a different Properties company uses that link.
+          // Internal source leases are read-only references, not new contracts.
+          // An unlinked source can automatically appear in Properties only when
+          // there is exactly one active Properties company. With multiple
+          // Properties companies, an explicit linkedCompanyId is required.
           let internalSourceContracts: typeof linkedContracts = [];
           if (module === "PROPERTIES") {
+            const propertiesCompanies = await db
+              .select({ id: companies.id })
+              .from(companies)
+              .where(and(eq(companies.companyType, "properties"), eq(companies.active, true)));
+            const uniquePropertiesCompany =
+              propertiesCompanies.length === 1 && propertiesCompanies[0].id === companyId;
+            const sourceScope = uniquePropertiesCompany
+              ? or(eq(propertyContracts.companyId, companyId), isNull(propertyContracts.linkedCompanyId))
+              : eq(propertyContracts.companyId, companyId);
             internalSourceContracts = await db
               .select()
               .from(propertyContracts)
               .where(
                 and(
-                  eq(propertyContracts.companyId, companyId),
+                  sourceScope,
                   inArray(propertyContracts.module, ["ERP", "FACTORY"]),
                   eq(propertyContracts.status, "ACTIVE"),
                   eq(propertyContracts.isInternal, true)
