@@ -7,6 +7,7 @@
  */
 export const CHRISTMAS_MASTER_KEY = "christmas_mode_enabled";
 export const CHRISTMAS_ALLOWED_USERS_KEY = "christmas_mode_allowed_user_ids";
+export const christmasModeUserPreferenceKey = (userId: string): string => `christmas_mode_user_pref:${userId}`;
 
 export function parseChristmasAllowedUserIds(raw: string | null | undefined): string[] {
   if (!raw) return [];
@@ -25,7 +26,8 @@ export function christmasModeEnabledForUser(
   masterValue: string | null | undefined,
   allowedIdsRaw: string | null | undefined,
   userId: string | null | undefined,
+  preferenceEnabled = true,
 ): boolean {
-  if (masterValue !== "true" || !userId) return false;
+  if (masterValue !== "true" || !userId || !preferenceEnabled) return false;
   return parseChristmasAllowedUserIds(allowedIdsRaw).includes(userId);
 }

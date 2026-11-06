@@ -3,6 +3,7 @@ import {
   CHRISTMAS_ALLOWED_USERS_KEY,
   CHRISTMAS_MASTER_KEY,
   christmasModeEnabledForUser,
+  christmasModeUserPreferenceKey,
   parseChristmasAllowedUserIds,
 } from "./seasonalChristmasAccessPolicy";
 
@@ -22,6 +23,13 @@ describe("Developer-managed Christmas Mode access", () => {
     expect(christmasModeEnabledForUser("true", allowed, "target-user")).toBe(true);
     expect(christmasModeEnabledForUser("true", allowed, "developer-account")).toBe(true);
     expect(christmasModeEnabledForUser("true", allowed, "other-user")).toBe(false);
+  });
+
+  it("does not enable a user who personally opted out, even when allowlisted", () => {
+    expect(christmasModeUserPreferenceKey("my-user-id")).toBe("christmas_mode_user_pref:my-user-id");
+    expect(christmasModeEnabledForUser("true", '["target-user"]', "target-user", false)).toBe(false);
+    expect(christmasModeEnabledForUser("true", '["target-user"]', "target-user", true)).toBe(true);
+    expect(christmasModeEnabledForUser("true", '["target-user"]', "not-allowed", true)).toBe(false);
   });
 
   it("master OFF overrides the allowlist for all accounts", () => {

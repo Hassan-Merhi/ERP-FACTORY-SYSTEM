@@ -12,6 +12,7 @@ import {
   CHRISTMAS_ALLOWED_USERS_KEY,
   CHRISTMAS_MASTER_KEY,
   christmasModeEnabledForUser,
+  christmasModeUserPreferenceKey,
   parseChristmasAllowedUserIds,
 } from "../services/seasonalChristmasAccessPolicy";
 
@@ -21,11 +22,13 @@ const configSchema = z.object({
   userIds: z.array(z.string().trim().min(1).max(128)).max(5000),
 }).strict();
 
-async function loadChristmasConfig() {
+async function loadChristmasConfig(userId?: string | null) {
+  const keys = [CHRISTMAS_MASTER_KEY, CHRISTMAS_ALLOWED_USERS_KEY];
+  if (userId) keys.push(christmasModeUserPreferenceKey(userId));
   const rows = await db
     .select({ key: systemSettings.key, value: systemSettings.value })
     .from(systemSettings)
-    .where(inArray(systemSettings.key, [CHRISTMAS_MASTER_KEY, CHRISTMAS_ALLOWED_USERS_KEY]));
+    .where(inArray(systemSettings.key, keys));
   const settings = new Map(rows.map((row) => [row.key, row.value]));
   const masterValue = settings.get(CHRISTMAS_MASTER_KEY);
   const allowedRaw = settings.get(CHRISTMAS_ALLOWED_USERS_KEY);
@@ -34,6 +37,8 @@ async function loadChristmasConfig() {
     masterValue,
     allowedRaw,
     userIds: parseChristmasAllowedUserIds(allowedRaw),
+    // Existing eligible users keep the experience ON unless they personally opt out.
+    preferenceEnabled: userId ? settings.get(christmasModeUserPreferenceKey(userId)) !== "false" : true,
   };
 }
 
@@ -42,17 +47,53 @@ export function registerSeasonalAppearanceRoutes(app: Express): void {
   // The allowlist and master switch never leak through this endpoint.
   app.get("/api/seasonal/christmas-mode", requireAuth, async (req, res) => {
     try {
-      const config = await loadChristmasConfig();
+      const userId = req.user?.id ?? req.session.userId ?? null;
+      const config = await loadChristmasConfig(userId);
+      const available = Boolean(userId && config.userIds.includes(userId));
       res.setHeader("Cache-Control", "no-store");
       return res.json({
         enabled: christmasModeEnabledForUser(
           config.masterValue,
           config.allowedRaw,
-          req.user?.id ?? req.session.userId ?? null,
+          userId,
+          config.preferenceEnabled,
         ),
+        available,
+        preferenceEnabled: available ? config.preferenceEnabled : false,
       });
     } catch {
       return res.status(500).json({ message: "Unable to load Christmas Mode setting" });
+    }
+  });
+
+  // Each allowlisted user can opt out without changing Developer-granted access.
+  // This per-account choice is shared between all companies and devices.
+  app.put("/api/seasonal/christmas-mode/preference", requireAuth, async (req, res) => {
+    const parsed = enabledSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "enabled must be a boolean" });
+    const userId = req.user?.id ?? req.session.userId ?? null;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const config = await loadChristmasConfig(userId);
+      if (!config.userIds.includes(userId)) {
+        return res.status(403).json({ message: "Christmas Mode is not available for your account" });
+      }
+      const preferenceEnabled = parsed.data.enabled;
+      await db
+        .insert(systemSettings)
+        .values({ key: christmasModeUserPreferenceKey(userId), value: String(preferenceEnabled) })
+        .onConflictDoUpdate({
+          target: systemSettings.key,
+          set: { value: String(preferenceEnabled), updatedAt: new Date() },
+        });
+      res.setHeader("Cache-Control", "no-store");
+      return res.json({
+        available: true,
+        preferenceEnabled,
+        enabled: config.masterEnabled && preferenceEnabled,
+      });
+    } catch {
+      return res.status(500).json({ message: "Unable to save your Christmas Mode preference" });
     }
   });
 
