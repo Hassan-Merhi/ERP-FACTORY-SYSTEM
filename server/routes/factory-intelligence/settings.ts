@@ -15,7 +15,7 @@ import { writeAuditEvent } from "../../services/audit";
 import { PRIORITY_SCAN_LOCK_NAMESPACE } from "../factory/customer-orders/priorityScanQueue";
 import { factorySettings } from "@shared/schema";
 
-const INITIAL_FACTORY_FEATURES = {
+export const INITIAL_FACTORY_FEATURES = {
   dashboardEnabled: true,
   kpisEnabled: true,
   profitabilityEnabled: true,
