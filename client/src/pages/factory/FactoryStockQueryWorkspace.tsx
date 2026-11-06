@@ -90,7 +90,7 @@ export default function FactoryStockQueryWorkspace() {
   const products = useMemo(() => {
     const q = search.trim().toLowerCase();
     const found = (data?.products ?? []).filter((p) =>
-      (!q || [p.code, p.name, p.categoryName].some((v) => v.toLowerCase().includes(q))) &&
+      (!q || [p.code, p.name, mhd.nameFor(p.code, p.name), p.categoryName].some((v) => v.toLowerCase().includes(q))) &&
       (!category || String(p.categoryId ?? 0) === category)
     );
     return [...found].sort((a, b) => {
@@ -99,7 +99,7 @@ export default function FactoryStockQueryWorkspace() {
       if (sort === "sold") return b.soldBales - a.soldBales || a.name.localeCompare(b.name);
       return a.name.localeCompare(b.name);
     });
-  }, [data?.products, search, category, sort]);
+  }, [data?.products, search, category, sort, mhd.mode, mhd.revision]);
 
   const displayedProducts = mhd.sortRows(products, (p) => p.code);
 
