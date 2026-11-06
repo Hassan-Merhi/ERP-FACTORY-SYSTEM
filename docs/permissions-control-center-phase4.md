@@ -20,7 +20,7 @@
 - Saved rules remain shadow-only and do **not** affect current ERP/Factory authorization.
 - The matrix is available only to Admin and Developer; API permission checks are authoritative.
 - It does not implement Phase 5 user-level overrides, role assignment, or the Phase 6 live UI gate.
-- **Impacted-user count and full legacy/effective-policy parity previews are not yet available from the server**. The review dialog shows an exact proposed before/after delta, not a claim of effective access.
+- Impacted-user counts come from company-scoped role assignments. This count is informational; full legacy/effective-policy parity previews are not yet available. The review dialog shows an exact proposed before/after delta, not a claim of effective access.
 - Current branch Phase 3 remains incomplete: do not release Create Only until the handler audit and security checks are finished.
 - All unit tests and browser verification require CI validation; source commits alone are not a completion certificate.
 
