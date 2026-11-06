@@ -15,7 +15,7 @@ export function useFactoryMhdView() {
   const [saving, setSaving] = useState(false);
   const { data, isLoading } = useQuery<MhdResponse>({
     queryKey: ["/api/factory/mhd-view", selectedCompany?.id],
-    enabled: Boolean(selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id && ["factory", "factory_v2"].includes(selectedCompany.companyType ?? "")),
     staleTime: 60_000,
     queryFn: async () => {
       const response = await fetch("/api/factory/mhd-view", { credentials: "include" });
