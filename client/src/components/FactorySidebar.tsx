@@ -24,6 +24,7 @@ import {
   MessageCircle,
   AlertTriangle,
   LayoutGrid,
+  ListOrdered,
   Store,
   TableProperties,
   KeyRound,
@@ -112,6 +113,7 @@ const FACTORY_NAV_ICONS: Record<string, typeof Package> = {
   "factory/intelligence/production-hub": Beaker,
   "factory/intelligence/alerts": Bell,
   "factory/intelligence/settings": Settings,
+  "factory/intelligence/mhd-view": ListOrdered,
 };
 
 // UI grouping only: do not change the canonical registry's permission keys or Settings grouping.
@@ -172,6 +174,10 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
   isAdmin: boolean;
   isDeveloper: boolean;
   isPrivileged: boolean;
+  /** The user's stored Factory tab/cost-field visibility list (hide/grant keys). */
+  hiddenTabFields: readonly string[];
+  /** Admin, Owner, Developer or full access: Factory hubs show every tab. */
+  seesAllTabs: boolean;
 } {
   const { selectedCompany } = useCompany();
   const isDeveloper = user?.role === "Developer";
@@ -287,7 +293,17 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
     .filter((s) => s.items.length > 0);
 
   const isPrivileged = isAdmin || myAccess?.fullAccess === true;
-  return { sections, isPinnedVisible, isHubTabVisible, isAdmin, isDeveloper, isPrivileged };
+  const seesAllTabs = ["Admin", "Owner", "Developer"].includes(user?.role ?? "") || myAccess?.fullAccess === true;
+  return {
+    sections,
+    isPinnedVisible,
+    isHubTabVisible,
+    isAdmin,
+    isDeveloper,
+    isPrivileged,
+    hiddenTabFields: myAccess?.hiddenCostFields ?? [],
+    seesAllTabs,
+  };
 }
 
 export function FactorySidebar({

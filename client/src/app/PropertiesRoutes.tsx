@@ -1,6 +1,11 @@
+import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { Switch, Route, Redirect } from "wouter";
 import PropertiesRentalsHub from "@/pages/properties/PropertiesRentalsHub";
 import { AccountingToolbox } from "@/lazyPages";
+
+const PropertiesHelpTraining = lazy(() =>
+  import("@/pages/HelpTrainingWorkspaces").then((m) => ({ default: m.PropertiesHelpTraining }))
+);
 import type { AuthenticatedUser } from "@/contracts/sessionContracts";
 import {
   AccountGroups,
@@ -52,6 +57,7 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
 
   return (
     <Switch>
+      <Route path="/properties/help-training">{() => <PropertiesHelpTraining user={user} />}</Route>
       <Route path="/properties/dashboard" component={PropertiesDashboard} />
       <Route path="/properties/accounts" component={PropertiesAccounts} />
       {isDeveloper && <Route path="/properties/accounting/toolbox" component={AccountingToolbox} />}

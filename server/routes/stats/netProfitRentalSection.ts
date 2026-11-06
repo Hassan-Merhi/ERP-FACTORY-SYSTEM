@@ -65,7 +65,9 @@ export async function computeRentalOutstanding(
       .where(and(eq(propertyContracts.linkedCompanyId, companyId), eq(propertyContracts.status, "ACTIVE")));
 
     // A contract may be both directly owned and linked; count it only once.
-    const activeContracts = [...new Map([...ownedShops, ...linkedLeases].map((contract) => [contract.id, contract])).values()];
+    const activeContracts = [
+      ...new Map([...ownedShops, ...linkedLeases].map((contract) => [contract.id, contract])).values(),
+    ];
     if (activeContracts.length === 0) return empty;
 
     const asOf = toDate ?? businessToday ?? getUtcTodayString();
@@ -121,9 +123,7 @@ export async function computeRentalOutstanding(
     const cfaRate = toInventoryDecimal(currentCfaRate);
     for (const contract of activeContracts) {
       const net = subtractInventoryValues(paidMap.get(contract.id), expectedMap.get(contract.id) ?? 0);
-      const usd = contract.currency === "CFA" && cfaRate.isPositive()
-        ? divideInventoryValues(net, cfaRate)
-        : net;
+      const usd = contract.currency === "CFA" && cfaRate.isPositive() ? divideInventoryValues(net, cfaRate) : net;
       if (usd.isPositive()) prepaidRent = prepaidRent.plus(usd);
       else if (usd.isNegative()) rentPayable = rentPayable.plus(usd.abs());
     }

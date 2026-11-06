@@ -415,7 +415,9 @@ export default function PropertyRentalPage({
               </span>
               <div className="properties-rentals-hero-text">
                 <span className="properties-rentals-eyebrow">PROPERTIES</span>
-                <h1 className="properties-rentals-heading">{pageTitle.replace(/^Properties\s*[—-]\s*/, "")}</h1>
+                <h1 className="properties-rentals-heading" data-testid="text-page-title">
+                  {pageTitle.replace(/^Properties\s*[—-]\s*/, "")}
+                </h1>
                 <p className="properties-rentals-subheading">
                   Manage warehouse units, payments, rents, guarantees, and contracts in one place.
                 </p>

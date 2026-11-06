@@ -98,11 +98,12 @@ export default function RentalPaymentsLog({
   const isHassanProperties = isPropertiesPayments && selectedCompany?.name === HISTORICAL_RENT_COMPANY;
   // In HASSAN PROPERTIES the only visible rental payment history is All Records.
   // Other company/module views retain their existing tabs.
-  const effectiveView = isPropertiesPayments
-    ? "ALL"
-    : reconciliationView === "HISTORICAL_RENT"
-      ? "ACTIVE_RENT"
-      : reconciliationView;
+  // Widened to the full view union: Properties payments now show only All
+  // Records, so the "HISTORICAL_RENT" branches below are unreachable for now,
+  // and without the widening TypeScript rejects them as impossible comparisons.
+  const effectiveView = (
+    isPropertiesPayments ? "ALL" : reconciliationView === "HISTORICAL_RENT" ? "ACTIVE_RENT" : reconciliationView
+  ) as ReconciliationView;
   const queryKey = [
     apiBase + "/payments",
     { companyId: selectedCompany?.id, view: isPropertiesPayments ? "warehouse-reconciliation" : "default" },

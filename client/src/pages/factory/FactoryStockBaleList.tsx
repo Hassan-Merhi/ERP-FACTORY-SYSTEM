@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +32,7 @@ function fmtDate(val: string | null | undefined): string {
 }
 
 export default function FactoryStockBaleList() {
+  const mhd = useFactoryMhdView();
   const [, navigate] = useLocation();
   const search = useSearch();
   const params = new URLSearchParams(search);
@@ -69,7 +71,7 @@ export default function FactoryStockBaleList() {
   return (
     <PageShell className="max-w-4xl">
       <PageHeader
-        title={`IN_STOCK Bales — ${productName}`}
+        title={`IN_STOCK Bales — ${mhd.nameFor(articleCode, productName)}`}
         subtitle={articleCode !== productName ? articleCode : undefined}
         showBackButton={false}
       >
@@ -153,7 +155,10 @@ export default function FactoryStockBaleList() {
                         Loading
                       </Badge>
                     ) : bale.blockedByOrder ? (
-                      <Badge variant="outline" className="text-[11px] px-1.5 h-5 text-amber-600 dark:text-amber-400 border-amber-500/40">
+                      <Badge
+                        variant="outline"
+                        className="text-[11px] px-1.5 h-5 text-amber-600 dark:text-amber-400 border-amber-500/40"
+                      >
                         Reserved
                       </Badge>
                     ) : (

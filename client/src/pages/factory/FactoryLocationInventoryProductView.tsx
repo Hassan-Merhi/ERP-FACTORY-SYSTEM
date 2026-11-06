@@ -1,4 +1,5 @@
 import "./FactoryLocationInventoryRedesign.css";
+import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,6 +77,7 @@ function BreakdownStatCard({ icon, label, total, regular, special, unit, accent 
 }
 
 export function FactoryLocationInventoryProductView({ inventory }: { inventory: FactoryLocationInventoryModel }) {
+  const mhd = useFactoryMhdView();
   const [categorySearch, setCategorySearch] = useState("");
   const {
     activeInventoryData,
@@ -145,13 +147,15 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
     totalSellValue,
   } = createFactoryLocationProductMetrics(inventory);
 
-  const { renderProductRow, renderMobileCard } = createFactoryLocationProductRenderers(inventory);
+  const { renderProductRow, renderMobileCard } = createFactoryLocationProductRenderers(inventory, mhd.nameFor);
   const matchingCategoryNames = allCategoryNames.filter((name) =>
     name.toLocaleLowerCase().includes(categorySearch.trim().toLocaleLowerCase())
   );
 
   return (
-    <div className={`factory-location-inventory inventory-product-view p-4 md:p-6 w-full space-y-5 ${proformaMode && selections.size > 0 ? "pb-24" : ""}`}>
+    <div
+      className={`factory-location-inventory inventory-product-view p-4 md:p-6 w-full space-y-5 ${proformaMode && selections.size > 0 ? "pb-24" : ""}`}
+    >
       {/* Header */}
       <div className="inventory-detail-header flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -166,7 +170,10 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
           </Button>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="inventory-detail-title text-xl md:text-2xl font-bold tracking-tight" data-testid="text-page-title">
+              <h1
+                className="inventory-detail-title text-xl md:text-2xl font-bold tracking-tight"
+                data-testid="text-page-title"
+              >
                 {selectedLocation.name}
               </h1>
               <Button
@@ -394,7 +401,12 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
               }}
             >
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="inventory-filter-button gap-1.5 h-8" data-testid="button-category-filter">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="inventory-filter-button gap-1.5 h-8"
+                  data-testid="button-category-filter"
+                >
                   <ListFilter className="h-3.5 w-3.5" />
                   {categoryFilter.length === 0
                     ? "All Categories"
@@ -507,7 +519,12 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
             )}
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="inventory-columns-button gap-1.5 ml-auto" data-testid="button-columns">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="inventory-columns-button gap-1.5 ml-auto"
+                  data-testid="button-columns"
+                >
                   <SlidersHorizontal className="h-4 w-4" />
                   Columns
                   {hiddenColumns.size > 0 && (
@@ -570,9 +587,12 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
               </div>
             ) : (
               <>
-                {regularProducts.map((prod) => renderMobileCard(prod))}
+                {mhd.sortRows(regularProducts, (prod) => prod.articleCode).map((prod) => renderMobileCard(prod))}
                 {regularProducts.length > 0 && (
-                  <div className="inventory-mobile-total rounded-xl border p-3 bg-muted/30" data-testid="text-product-totals">
+                  <div
+                    className="inventory-mobile-total rounded-xl border p-3 bg-muted/30"
+                    data-testid="text-product-totals"
+                  >
                     <div className="flex items-center justify-between gap-2 font-bold text-sm">
                       <span>
                         Total ({regularProducts.length} products, {totalBales.toLocaleString()} bales)
@@ -592,8 +612,13 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
                     <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide pt-2">
                       Wipers &amp; Garbage
                     </p>
-                    {specialProducts.map((prod) => renderMobileCard(prod, "-sp"))}
-                    <div className="inventory-mobile-total rounded-xl border p-3 bg-muted/30" data-testid="text-special-product-totals">
+                    {mhd
+                      .sortRows(specialProducts, (prod) => prod.articleCode)
+                      .map((prod) => renderMobileCard(prod, "-sp"))}
+                    <div
+                      className="inventory-mobile-total rounded-xl border p-3 bg-muted/30"
+                      data-testid="text-special-product-totals"
+                    >
                       <div className="flex items-center justify-between gap-2 font-bold text-sm">
                         <span>
                           Total ({specialProducts.length} products, {spTotalBales.toLocaleString()} bales)
@@ -616,7 +641,10 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
         {/* Desktop table */}
         {!inventoryLoading && !(proformaMode && availableLoading) && (
           <div className="hidden md:block space-y-0 w-full">
-            <div data-horizontal-scroll="true" className="inventory-table-frame rounded-md border w-full overflow-x-auto">
+            <div
+              data-horizontal-scroll="true"
+              className="inventory-table-frame rounded-md border w-full overflow-x-auto"
+            >
               <table className="inventory-stock-table table-fixed text-sm" style={{ minWidth: "820px", width: "100%" }}>
                 <colgroup>
                   {proformaMode && <col style={{ width: "36px" }} />}
@@ -708,7 +736,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
                     </tr>
                   ) : (
                     <>
-                      {regularProducts.map((prod) => renderProductRow(prod))}
+                      {mhd.sortRows(regularProducts, (prod) => prod.articleCode).map((prod) => renderProductRow(prod))}
                       {regularProducts.length > 0 && (
                         <tr className="inventory-section-total border-t bg-muted/50 h-12 font-bold">
                           {proformaMode && <td></td>}
@@ -745,7 +773,10 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
                   <Layers className="inventory-special-icon h-4 w-4" /> Wipers &amp; Garbage
                 </p>
                 <div className="inventory-table-frame rounded-md border w-full overflow-auto max-h-[500px]">
-                  <table className="inventory-stock-table table-fixed text-sm" style={{ minWidth: "820px", width: "100%" }}>
+                  <table
+                    className="inventory-stock-table table-fixed text-sm"
+                    style={{ minWidth: "820px", width: "100%" }}
+                  >
                     <colgroup>
                       {proformaMode && <col style={{ width: "36px" }} />}
                       <col style={{ minWidth: "200px" }} />
@@ -823,7 +854,9 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
                       </tr>
                     </thead>
                     <tbody>
-                      {specialProducts.map((prod) => renderProductRow(prod, "-sp"))}
+                      {mhd
+                        .sortRows(specialProducts, (prod) => prod.articleCode)
+                        .map((prod) => renderProductRow(prod, "-sp"))}
                       <tr className="inventory-section-total border-t bg-muted/50 h-12 font-bold">
                         {proformaMode && <td></td>}
                         <td className="px-3" colSpan={col("category") ? 2 : 1}>
