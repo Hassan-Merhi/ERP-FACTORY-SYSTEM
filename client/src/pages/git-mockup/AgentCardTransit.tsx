@@ -1,6 +1,6 @@
 import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 import { useState } from "react";
-import { ChevronUp, ChevronDown, ArrowUp, Filter } from "lucide-react";
+import { ChevronUp, ChevronDown, ArrowUp, Filter, Truck } from "lucide-react";
 import { fmt, fmtD } from "./helpers";
 import type { ApiPreviewRow } from "./types";
 
@@ -45,13 +45,14 @@ export function AgentCardTransit(props: AgentCardTransitProps) {
 
   return (
     <>
-      <div className="flex items-center bg-slate-50 dark:bg-slate-800/40 border-t border-slate-200 dark:border-slate-700">
+      <div className="mx-3 mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-violet-200 bg-gradient-to-r from-violet-100 via-indigo-50 to-violet-100 dark:border-violet-500/35 dark:from-violet-950/80 dark:via-indigo-950/70 dark:to-violet-950/80">
         <button
           onClick={() => setShowActive((v) => !v)}
-          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs hover-elevate"
+          className="flex min-h-11 min-w-0 flex-1 items-center justify-start gap-2 px-3 py-2 text-left text-xs transition-colors hover:text-violet-700 dark:hover:text-violet-200"
           data-testid={`button-toggle-active-${agentName}`}
         >
-          <span className="font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 text-[11px]">
+          <Truck className="h-4 w-4 shrink-0 text-violet-700 dark:text-violet-300" aria-hidden="true" />
+          <span className="font-semibold tracking-wide text-slate-800 dark:text-violet-100 text-[11px] sm:text-xs">
             In Transit — {remainingTransitRows.length} container{remainingTransitRows.length !== 1 ? "s" : ""}
             {prepaidTransitRows.length > 0 && (
               <span className="ml-1 text-emerald-600 dark:text-emerald-400">({prepaidTransitRows.length} prepaid)</span>
@@ -75,7 +76,7 @@ export function AgentCardTransit(props: AgentCardTransitProps) {
             <select
               value={transitTransporterFilter ?? ""}
               onChange={(e) => setTransitTransporterFilter(e.target.value || null)}
-              className="text-[11px] bg-transparent border border-slate-300 dark:border-slate-600 rounded-sm px-1.5 py-0.5 text-slate-600 dark:text-slate-300 focus:outline-hidden cursor-pointer"
+              className="max-w-40 cursor-pointer rounded-lg border border-violet-300 bg-background px-2 py-1.5 text-[11px] text-foreground focus:outline-hidden focus:ring-2 focus:ring-violet-400 dark:border-violet-500/40"
               data-testid={`select-transit-transporter-${agentName}`}
             >
               <option value="">All transporters</option>
@@ -90,12 +91,12 @@ export function AgentCardTransit(props: AgentCardTransitProps) {
       </div>
 
       {showActive && (
-        <div className="overflow-x-auto border-t border-slate-200 dark:border-slate-700">
+        <div className="mx-3 mb-3 overflow-x-auto rounded-xl border border-border/70 dark:border-violet-500/20">
           <table className="w-full text-xs whitespace-nowrap border-collapse" {...tableProps}>
             <thead>
-              <tr className="bg-slate-600 dark:bg-slate-700 text-slate-100 border-b border-slate-500">
+              <tr className="border-b border-violet-500/20 bg-slate-100 text-slate-700 dark:bg-violet-950/60 dark:text-violet-100">
                 {["CONTAINER", "SUPPLIER", "PLATE", "BORDER DATE", "TRANSPORTER", "LOCATION", "DUTY", ""].map((h) => (
-                  <th key={h} className="py-1.5 px-2 font-semibold text-center tracking-wide text-[11px]">
+                  <th key={h} className="px-2.5 py-2.5 text-center text-[10px] font-bold uppercase tracking-wide sm:text-[11px]">
                     {h}
                   </th>
                 ))}
