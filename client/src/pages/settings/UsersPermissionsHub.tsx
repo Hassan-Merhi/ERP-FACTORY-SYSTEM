@@ -1,6 +1,7 @@
 import { Users } from "lucide-react";
 import { RolePermissionMatrix } from "./RolePermissionMatrix";
 import { UserAccessOverrides } from "./UserAccessOverrides";
+import { PermissionChangeAudit } from "./PermissionChangeAudit";
 import { UsersSection } from "./UsersSection";
 
 interface UsersPermissionsHubProps {
@@ -22,6 +23,7 @@ export function UsersPermissionsHub({ appMode, userRole }: UsersPermissionsHubPr
       <UsersSection appMode={appMode} />
       {["Admin", "Developer"].includes(userRole ?? "") && <RolePermissionMatrix />}
       {["Admin", "Developer"].includes(userRole ?? "") && <UserAccessOverrides />}
+      {["Admin", "Developer"].includes(userRole ?? "") && <PermissionChangeAudit />}
     </div>
   );
 }
