@@ -7,6 +7,8 @@ import { queryClient } from "@/lib/queryClient";
 type MhdEntry = { articleCode: string; itemName: string; sortOrder: number };
 type MhdResponse = { revision: number; rows: MhdEntry[]; products: Array<{ id: number; articleCode: string; name: string }> };
 export type FactoryProductViewMode = "standard" | "mhd";
+const MHD_FETCH_ERROR = "Unable to load MHD View";
+const MHD_SAVE_ERROR = "Unable to save your Factory view preference";
 const normalize = (code: string | null | undefined) => String(code ?? "").trim().toUpperCase();
 
 export function useFactoryMhdView() {
@@ -19,7 +21,7 @@ export function useFactoryMhdView() {
     staleTime: 60_000,
     queryFn: async () => {
       const response = await fetch("/api/factory/mhd-view", { credentials: "include" });
-      if (!response.ok) throw new Error("Unable to load MHD View");
+      if (!response.ok) throw new Error(MHD_FETCH_ERROR);
       return response.json();
     },
   });
@@ -54,7 +56,7 @@ export function useFactoryMhdView() {
         method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ factoryMhdViewDefault: next === "mhd" }),
       });
-      if (!response.ok) throw new Error("Unable to save your Factory view preference");
+      if (!response.ok) throw new Error(MHD_SAVE_ERROR);
       await queryClient.invalidateQueries({ queryKey: key });
     } catch (error) {
       queryClient.setQueryData(key, prior);
