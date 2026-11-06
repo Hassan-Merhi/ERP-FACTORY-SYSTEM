@@ -237,7 +237,10 @@ export default function PropertyRentalPage({
   const [selectedContractIds, setSelectedContractIds] = useState<Set<number>>(new Set());
   const [bulkPayOpen, setBulkPayOpen] = useState(false);
 
-  const contractedUnits = useMemo(() => units.filter((u) => u.contract && !u.isShared && !u.isInternalLeaseProjection), [units]);
+  const contractedUnits = useMemo(
+    () => units.filter((u) => u.contract && !u.isShared && !u.isInternalLeaseProjection),
+    [units]
+  );
 
   const toggleSelect = (contractId: number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -410,8 +413,8 @@ export default function PropertyRentalPage({
 
         {isPropertiesRental && unitType === "SHOP" && units.some((unit) => unit.isInternalLeaseProjection) && (
           <p className="text-xs text-muted-foreground" data-testid="properties-factory-internal-lease-note">
-            Internal Factory leases appear for reference only. They are excluded from Properties rent and balance totals;
-            manage payments and accounting from Factory Rentals.
+            Internal Factory leases appear for reference only. They are excluded from Properties rent and balance
+            totals; manage payments and accounting from Factory Rentals.
           </p>
         )}
         {isPropertiesRental && (
@@ -934,17 +937,20 @@ export default function PropertyRentalPage({
                   maxLength={120}
                   onChange={(e) => setNewGroupName(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && newGroupName.trim() &&
-                        newGroupName.trim().toUpperCase() !== renameGroup.name.toUpperCase() &&
-                        !renameLocationGroup.isPending) {
+                    if (
+                      e.key === "Enter" &&
+                      newGroupName.trim() &&
+                      newGroupName.trim().toUpperCase() !== renameGroup.name.toUpperCase() &&
+                      !renameLocationGroup.isPending
+                    ) {
                       renameLocationGroup.mutate({ unitId: renameGroup.unitId, locationGroup: newGroupName.trim() });
                     }
                   }}
                   data-testid={`input-${testIdPrefix}-rename-group`}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Renames this location for all its warehouses or shops in this company.
-                  Contracts, payments, and accounting records are unchanged.
+                  Renames this location for all its warehouses or shops in this company. Contracts, payments, and
+                  accounting records are unchanged.
                 </p>
               </div>
               <DialogFooter>
@@ -952,8 +958,14 @@ export default function PropertyRentalPage({
                   Cancel
                 </Button>
                 <Button
-                  onClick={() => renameLocationGroup.mutate({ unitId: renameGroup.unitId, locationGroup: newGroupName.trim() })}
-                  disabled={!newGroupName.trim() || newGroupName.trim().toUpperCase() === renameGroup.name.toUpperCase() || renameLocationGroup.isPending}
+                  onClick={() =>
+                    renameLocationGroup.mutate({ unitId: renameGroup.unitId, locationGroup: newGroupName.trim() })
+                  }
+                  disabled={
+                    !newGroupName.trim() ||
+                    newGroupName.trim().toUpperCase() === renameGroup.name.toUpperCase() ||
+                    renameLocationGroup.isPending
+                  }
                   data-testid={`button-${testIdPrefix}-save-group`}
                 >
                   {renameLocationGroup.isPending ? "Saving…" : `Rename ${renameGroup.count} units`}
