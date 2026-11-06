@@ -173,7 +173,7 @@ function EditInfoForm({
             />
           </div>
         </div>
-        {unitType === "WAREHOUSE" && (
+        {(unitType === "WAREHOUSE" || (unitType === "SHOP" && apiBase === "/api/factory/rental")) && (
           <div className="flex items-center gap-3 rounded-md border p-3 bg-violet-50 dark:bg-violet-950/20 mt-2">
             <Switch
               id={`switch-edit-${testIdPrefix}-internal`}
@@ -186,7 +186,9 @@ function EditInfoForm({
                 Internal Lease
               </Label>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Toggle on to make this warehouse also appear in Shops Rented as a self-occupied property.
+                {unitType === "SHOP"
+                  ? "Show this Factory shop as a read-only internal lease in Properties → Rentals → Shops. If Properties uses another company, choose it under Share with Company."
+                  : "Toggle on to make this warehouse also appear in Shops Rented as a self-occupied property."}
               </p>
             </div>
           </div>

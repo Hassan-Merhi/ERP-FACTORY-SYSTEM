@@ -238,10 +238,46 @@ export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesCon
         // The owner may classify the unit differently in their system, so we ignore unitType
         // and pin shared units to the SHOP view to avoid them leaking into Warehouses.
         if (unitType === "SHOP") {
-          const sharedContracts = await db
+          const linkedContracts = await db
             .select()
             .from(propertyContracts)
             .where(and(eq(propertyContracts.linkedCompanyId, companyId), eq(propertyContracts.status, "ACTIVE")));
+
+          // Internal Factory shop leases are references in Properties, not new
+          // Properties contracts. Same-company leases need no company link;
+          // linkedCompanyId permits projection to a separate Properties company.
+          let internalFactoryContracts: typeof linkedContracts = [];
+          if (module === "PROPERTIES") {
+            const factoryShops = await db
+              .select({ id: propertyUnits.id })
+              .from(propertyUnits)
+              .where(
+                and(
+                  eq(propertyUnits.companyId, companyId),
+                  eq(propertyUnits.module, "FACTORY"),
+                  eq(propertyUnits.unitType, "SHOP"),
+                  eq(propertyUnits.active, true)
+                )
+              );
+            if (factoryShops.length) {
+              internalFactoryContracts = await db
+                .select()
+                .from(propertyContracts)
+                .where(
+                  and(
+                    eq(propertyContracts.companyId, companyId),
+                    eq(propertyContracts.module, "FACTORY"),
+                    eq(propertyContracts.status, "ACTIVE"),
+                    eq(propertyContracts.isInternal, true),
+                    inArray(propertyContracts.unitId, factoryShops.map((u) => u.id))
+                  )
+                );
+            }
+          }
+
+          const sharedContracts = [...new Map(
+            [...linkedContracts, ...internalFactoryContracts].map((contract) => [contract.id, contract])
+          ).values()].filter((contract) => !(contract.companyId === companyId && contract.module === module));
 
           if (sharedContracts.length > 0) {
             const sharedUnitIds = sharedContracts.map((c) => c.unitId);
@@ -369,6 +405,12 @@ export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesCon
                   nextBillingDate,
                   guaranteeRemaining,
                   isShared: true,
+                  // A Properties projection never owns these Factory accounting entries.
+                  isInternalLeaseProjection:
+                    module === "PROPERTIES" &&
+                    c.module === "FACTORY" &&
+                    c.isInternal &&
+                    u.unitType === "SHOP",
                   ownerCompanyName: ownerNameMap.get(c.companyId) ?? null,
                 };
               })
