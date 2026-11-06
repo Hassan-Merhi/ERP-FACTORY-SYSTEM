@@ -183,9 +183,7 @@ export default function FactoryProformas() {
 
             {proformas
               .filter((p) => p.isActive || showInactive)
-              .filter(
-                (p) => searchAny(proformaSearch, p.name)
-              )
+              .filter((p) => searchAny(proformaSearch, p.name))
               .sort((a, b) => a.name.localeCompare(b.name))
               .map((proforma) => {
                 const isExpanded = expandedProformaIds.has(proforma.id);
