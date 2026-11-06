@@ -1,5 +1,5 @@
 /**
- * Phase 4: a four-second, non-blocking welcome after a genuine successful
+ * Phase 4: a brief non-blocking welcome and ten-second jingle after a genuine successful
  * sign-in. Refreshes and workspace navigation never trigger this animation.
  *
  * The Phase 2 snowfall continues underneath when the welcome finishes.
@@ -38,6 +38,7 @@ export function ChristmasLoginEntrance({ enabled, queryStatus }: Props) {
   const reduceMotion = useSeasonalMotionRestricted();
   const [visibleUntil, setVisibleUntil] = useState(0);
   const [needsTap, setNeedsTap] = useState(false);
+  const [playing, setPlaying] = useState(false);
   const playbackStopRef = useRef<(() => void) | null>(null);
   const playbackAttemptRef = useRef(0);
 
@@ -47,16 +48,18 @@ export function ChristmasLoginEntrance({ enabled, queryStatus }: Props) {
     playbackStopRef.current?.();
     playbackStopRef.current = null;
     setNeedsTap(false);
+    setPlaying(false);
     void startChristmasJingle().then((result) => {
       if (attempt !== playbackAttemptRef.current) {
         result.stop();
         return;
       }
-      if (result.started) playbackStopRef.current = result.stop;
-      else setNeedsTap(true);
+      if (result.started) {
+        playbackStopRef.current = result.stop;
+        setPlaying(true);
+      } else setNeedsTap(true);
     });
   }, []);
-
 
   // Consume only after the master setting has resolved. Even when OFF or when
   // the settings endpoint fails, consume and discard the hint so switching ON
@@ -88,6 +91,7 @@ export function ChristmasLoginEntrance({ enabled, queryStatus }: Props) {
       playbackStopRef.current?.();
       playbackStopRef.current = null;
       setNeedsTap(false);
+      setPlaying(false);
       setVisibleUntil(0);
     }
   }, [enabled, reduceMotion]);
@@ -97,7 +101,6 @@ export function ChristmasLoginEntrance({ enabled, queryStatus }: Props) {
     playbackStopRef.current?.();
     playbackStopRef.current = null;
   }, []);
-
 
   if (!enabled || reduceMotion || visibleUntil === 0) return null;
 
@@ -129,19 +132,26 @@ export function ChristmasLoginEntrance({ enabled, queryStatus }: Props) {
         </div>
         <Sparkles className="christmas-login-greeting-sparkle" aria-hidden="true" />
       </div>
-      {needsTap && (
+      {(needsTap || playing) && (
         <button
           type="button"
           className="christmas-login-play-button"
           onClick={() => {
+            if (playing) {
+              playbackAttemptRef.current += 1;
+              playbackStopRef.current?.();
+              playbackStopRef.current = null;
+              setPlaying(false);
+              return;
+            }
             setVisibleUntil(Date.now() + ENTRANCE_DURATION_MS);
             launchJingle();
           }}
-          aria-label="Play the Christmas Jingle Bells greeting"
+          aria-label={playing ? "Stop the Christmas music" : "Play the Christmas Jingle Bells greeting"}
           data-testid="christmas-login-play-audio"
         >
           <Volume2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-          Tap to hear Jingle Bells
+          {playing ? "Stop Christmas music" : "Tap to hear Jingle Bells"}
         </button>
       )}
     </div>
