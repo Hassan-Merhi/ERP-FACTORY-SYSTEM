@@ -170,6 +170,7 @@ export default function RentalPaymentsLog({
     try {
       await navigator.clipboard.writeText(reconciledHistoryTsv(payments, {
         aliCashLedgerId: reconciliation.aliCashLedgerId,
+        cashboxLedgerId: reconciliation.cashboxLedgerId,
         threeAccountsTotal: reconciliation.accountSum,
       }));
       toast({ title: "Full history copied", description: "Paste into Excel to see all recorded rows and the source-based account reconciliation." });
