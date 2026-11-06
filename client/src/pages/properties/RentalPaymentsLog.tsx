@@ -15,9 +15,10 @@ import { MoneyAmount } from "@/components/MoneyAmount";
 import { formatMoneyNumber } from "@/lib/moneyDisplay";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { useMobileCardTable } from "@/components/ui/mobile-card-table";
-import { AlertTriangle, ClipboardList, Trash2 } from "lucide-react";
+import { AlertTriangle, ClipboardList, Copy, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { PaymentsReconciliation } from "./property-rental/components/PaymentsReconciliation";
+import { cashCents, nonCashCents, paymentHistoryTsv, receiptTotals } from "./property-rental/paymentsReceiptMath";
 import {
   HISTORICAL_RENT_COMPANY,
   HISTORICAL_RENT_CUTOFF_LABEL,
@@ -53,6 +54,8 @@ type PaymentRow = {
   sourceModule?: string;
   reconciliationCategory?: "ACTIVE_RENT" | "GUARANTEE" | "ENDED_RENT" | "SCHEDULED" | "OTHER";
   postingStatus?: string;
+  receiptKind?: string;
+  readOnly?: boolean;
 };
 
 interface Props {
@@ -97,7 +100,7 @@ export default function RentalPaymentsLog({
       enabled: !!selectedCompany && isPropertiesPayments,
     });
 
-  const { data: payments = [], isLoading } = useQuery<PaymentRow[]>({
+  const { data: payments = [], isLoading, isError: paymentsError } = useQuery<PaymentRow[]>({
     queryKey,
     queryFn: async () => {
       const res = await fetch(
@@ -140,9 +143,21 @@ export default function RentalPaymentsLog({
     return viewPayments.filter((p) => searchAny(search, p.tenantName, p.unitNumber, p.locationGroup, p.notes, p.sourceModule));
   }, [viewPayments, search]);
 
-  // All monetary totals are sums of the visible payment records, never an
-  // unrelated KPI substituted into the table footer.
-  const total = filtered.reduce((s, p) => s + Number(p.amount), 0);
+  // Keep recorded billing allocations visible, but do NOT count them as cash.
+  // All amounts come from the visible records and are accumulated in cents.
+  const paymentTotals = receiptTotals(filtered);
+  const total = isPropertiesPayments
+    ? paymentTotals.cash / 100
+    : filtered.reduce((sum, payment) => sum + Number(payment.amount), 0);
+  const clipboardIsUsd = filtered.every((payment) => !payment.currency || payment.currency.toUpperCase() === "USD");
+  const copyHistory = async () => {
+    try {
+      await navigator.clipboard.writeText(paymentHistoryTsv(filtered));
+      toast({ title: "History copied", description: "Paste into Excel; cash receipts and non-cash adjustments have separate numeric columns and totals." });
+    } catch {
+      toast({ title: "Could not copy", description: "Please allow clipboard access and try again.", variant: "destructive" });
+    }
+  };
   const activeWarehouseRentPaid = warehouseUnits.reduce((s, u) => s + Number(u.totalPaid ?? 0), 0);
   const isActiveUnfiltered = isPropertiesPayments && effectiveView === "ACTIVE_RENT" && !search.trim();
   const discrepancy = isActiveUnfiltered && !warehouseTotalsLoading && !warehouseTotalsError
@@ -238,8 +253,22 @@ export default function RentalPaymentsLog({
         </p>
       )}
 
+      {isHassanProperties && (
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="outline" size="sm" disabled={isLoading || paymentsError || !filtered.length || !clipboardIsUsd} onClick={() => void copyHistory()} data-testid="button-properties-copy-payment-history">
+            <Copy className="h-4 w-4 mr-1" /> Copy visible history for Excel
+          </Button>
+          {!clipboardIsUsd && <span className="text-xs text-amber-600">Non-USD entries need their booked currency conversion before export.</span>}
+        </div>
+      )}
+      {paymentsError && (
+        <div className="rounded-md border border-destructive p-3 text-sm text-destructive" role="alert">
+          Could not retrieve the complete payment history. Totals are unavailable; no accounting data has been changed.
+        </div>
+      )}
+
       {/* Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className={`grid grid-cols-1 ${isHassanProperties ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-3"} gap-3`}>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-xs text-muted-foreground font-normal">TOTAL PAYMENTS</CardTitle>
@@ -255,7 +284,7 @@ export default function RentalPaymentsLog({
             <CardTitle className="text-xs text-muted-foreground font-normal">
               {isHassanProperties && effectiveView === "HISTORICAL_RENT"
                 ? "RENT PAID THROUGH 26 OCT"
-                : isHassanProperties ? "TOTAL AMOUNT RECORDED" : "TOTAL AMOUNT RECEIVED"}
+                : isHassanProperties ? "CASH RECEIVED (VOUCHER-BACKED)" : "TOTAL AMOUNT RECEIVED"}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -263,10 +292,23 @@ export default function RentalPaymentsLog({
               className="text-2xl font-bold text-green-600 dark:text-green-400"
               data-testid={`stat-${testIdPrefix}-total-amount`}
             >
-              {formatMoneyNumber(total)}
+              {paymentsError ? "Unavailable" : formatMoneyNumber(total)}
             </div>
           </CardContent>
         </Card>
+        {isHassanProperties && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs text-muted-foreground font-normal">NON-CASH ADJUSTMENTS</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-amber-600 dark:text-amber-400" data-testid="stat-prop-rental-non-cash-adjustments">
+                {paymentsError ? "Unavailable" : formatMoneyNumber(paymentTotals.nonCash / 100)}
+              </div>
+              <p className="text-xs text-muted-foreground">Shown in history, not added to cash</p>
+            </CardContent>
+          </Card>
+        )}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-xs text-muted-foreground font-normal">UNIQUE TENANTS</CardTitle>
@@ -302,7 +344,8 @@ export default function RentalPaymentsLog({
                     <th className="text-left px-3 py-2 font-semibold">Date</th>
                     <th className="text-left px-3 py-2 font-semibold">Client Name</th>
                     <th className="text-left px-3 py-2 font-semibold">Unit</th>
-                    <th className="text-right px-3 py-2 font-semibold">Amount</th>
+                    <th className="text-right px-3 py-2 font-semibold">{isHassanProperties ? "Cash Received" : "Amount"}</th>
+                    {isHassanProperties && <th className="text-right px-3 py-2 font-semibold">Non-cash Adjustment</th>}
                     <th className="text-left px-3 py-2 font-semibold">For Month</th>
                     <th className="text-left px-3 py-2 font-semibold">Notes</th>
                     <th className="text-left px-3 py-2 font-semibold">Daybook</th>
@@ -329,14 +372,26 @@ export default function RentalPaymentsLog({
                         )}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums font-semibold text-green-700 dark:text-green-400">
-                        <MoneyAmount amount={p.amount} currency={p.currency ?? "USD"} />
+                        {!isHassanProperties ? (
+                          <MoneyAmount amount={p.amount} currency={p.currency ?? "USD"} />
+                        ) : cashCents(p) !== 0 ? (
+                          <MoneyAmount amount={cashCents(p) / 100} currency={p.currency ?? "USD"} />
+                        ) : "—"}
                       </td>
+                      {isHassanProperties && (
+                        <td className="px-3 py-2 text-right tabular-nums text-amber-600 dark:text-amber-400">
+                          {nonCashCents(p) !== 0 ? <MoneyAmount amount={nonCashCents(p) / 100} currency={p.currency ?? "USD"} /> : "—"}
+                        </td>
+                      )}
                       <td className="px-3 py-2 text-xs text-muted-foreground">
                         {MONTH_NAMES[p.forMonth]} {p.forYear}
                       </td>
                       <td className="px-3 py-2 text-xs text-muted-foreground">
                         {isPropertiesPayments && p.sourceModule === "ERP" && (
                           <Badge variant="outline" className="mr-2 text-[10px]">ERP source</Badge>
+                        )}
+                        {p.readOnly && (
+                          <Badge variant="outline" className="mr-2 text-[10px]">Voucher-only guarantee receipt</Badge>
                         )}
                         {p.notes ?? ""}
                       </td>
@@ -354,7 +409,9 @@ export default function RentalPaymentsLog({
                         )}
                       </td>
                       <td className="px-2 py-1 text-right">
-                        {isPropertiesPayments && p.sourceModule !== "PROPERTIES" ? (
+                        {p.readOnly ? (
+                          <span className="text-xs text-muted-foreground" title="Original posted guarantee voucher; no editable payment record exists.">Read-only</span>
+                        ) : isPropertiesPayments && p.sourceModule !== "PROPERTIES" ? (
                           <span className="text-xs text-muted-foreground" title="Manage this payment from its original ERP rental module">
                             ERP source
                           </span>
@@ -381,6 +438,11 @@ export default function RentalPaymentsLog({
                     <td className="px-3 py-2 text-right tabular-nums font-bold text-green-700 dark:text-green-400">
                       {formatMoneyNumber(total)}
                     </td>
+                    {isHassanProperties && (
+                      <td className="px-3 py-2 text-right tabular-nums font-bold text-amber-600 dark:text-amber-400">
+                        {formatMoneyNumber(paymentTotals.nonCash / 100)}
+                      </td>
+                    )}
                     <td colSpan={4}></td>
                   </tr>
                 </tfoot>
