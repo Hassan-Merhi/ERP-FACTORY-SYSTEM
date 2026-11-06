@@ -654,6 +654,7 @@ export function factoryPageAllowsRole(page: FactoryPageDefinition, role?: string
   // The bonus checkout route is Admin/Owner-only (not Developer); do not widen it
   // through the general "admin" registry classification.
   if (page.key === "factory/production-bonuses") return role === "Admin" || role === "Owner";
+  if (page.key === "factory/intelligence/mhd-view") return ["Admin", "Owner", "Developer"].includes(role ?? "");
   const level = page.accessLevel ?? "user";
   if (level === "developer") return role === "Developer";
   // Account Groups and Daybook are also accessible to Owners in FactoryRoutes;
