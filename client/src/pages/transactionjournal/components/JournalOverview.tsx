@@ -2,7 +2,7 @@
  * Compact transaction-type filters and clickable per-company summaries.
  * Selection and amounts are sourced from the original journal model.
  */
-import { Building2, Check, Layers3 } from "lucide-react";
+import { Building2, Check } from "lucide-react";
 import { companyColor } from "../utils";
 import type { TransactionJournalModel } from "../useTransactionJournalModel";
 
@@ -58,7 +58,7 @@ export function JournalSummaryCards({ model }: { model: TransactionJournalModel 
             data-testid={`card-company-summary-${id}`}
             className={`relative flex min-h-[106px] w-full items-center gap-3 overflow-hidden rounded-2xl border p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 ${COMPANY_STYLES[index % COMPANY_STYLES.length]} ${selected ? "ring-2 ring-violet-500 ring-offset-2 dark:ring-offset-slate-950" : ""}`}>
             <div aria-hidden="true" className="absolute -bottom-14 -left-5 h-28 w-40 rounded-full bg-current opacity-[0.06] blur-2xl" />
-            <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-current/10">
+            <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/75 shadow-sm dark:bg-white/10">
               <Building2 className="h-5 w-5" aria-hidden="true" />
             </span>
             <div className="relative min-w-0 flex-1">
