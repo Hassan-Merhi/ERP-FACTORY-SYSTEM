@@ -1,5 +1,5 @@
 import { format } from "date-fns";
-import { Trash2 } from "lucide-react";
+import { Trash2, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,6 +15,8 @@ interface RentalUnitCardsProps {
   onToggleSelect: (contractId: number) => void;
   onOpenUnit: (unitId: number) => void;
   onDeleteUnit: (unitId: number) => void;
+  onRenameGroup?: (group: string, groupUnits: Unit[]) => void;
+  canRenameGroup?: (groupUnits: Unit[]) => boolean;
 }
 
 /**
@@ -29,11 +31,34 @@ export function RentalUnitCards({
   onToggleSelect,
   onOpenUnit,
   onDeleteUnit,
+  onRenameGroup,
+  canRenameGroup,
 }: RentalUnitCardsProps) {
   return (
     <div className="space-y-4" data-testid="rental-unit-cards">
       {grouped.map(([group, groupUnits]) => (
-        <ErpMobileRecordGroup key={group} label={group} meta={groupUnits.length} data-testid={`group-units-${group}`}>
+        <ErpMobileRecordGroup
+          key={group}
+          label={
+            <span className="inline-flex items-center gap-2">
+              <span>{group}</span>
+              {onRenameGroup && canRenameGroup?.(groupUnits) && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label={`Rename location group ${group}`}
+                  onClick={() => onRenameGroup(group, groupUnits)}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </span>
+          }
+          meta={groupUnits.length}
+          data-testid={`group-units-${group}`}
+        >
           <ErpMobileRecordList>
             {groupUnits.map((unit) => (
               <RentalUnitCard
@@ -81,13 +106,13 @@ function RentalUnitCard({
       ? null
       : outstanding > 0
         ? {
-            label: unit.isInternalLeaseProjection ? "Factory balance (reference)" : landlordView ? "To collect" : "Outstanding",
+            label: unit.isInternalLeaseProjection ? "Source balance (reference)" : landlordView ? "To collect" : "Outstanding",
             text: fmtMoneyCurrency(outstanding, currency),
             tone: unit.isInternalLeaseProjection ? "text-muted-foreground" : landlordView ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400",
           }
         : credit > 0
           ? {
-              label: unit.isInternalLeaseProjection ? "Factory credit (reference)" : landlordView ? "Owed to tenant" : "Credit",
+              label: unit.isInternalLeaseProjection ? "Source credit (reference)" : landlordView ? "Owed to tenant" : "Credit",
               text: fmtMoneyCurrency(credit, currency),
               tone: unit.isInternalLeaseProjection ? "text-muted-foreground" : landlordView ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400",
             }
@@ -112,7 +137,9 @@ function RentalUnitCard({
           )}
           {contract?.isInternal && <Badge className="bg-violet-600 text-xs text-white">Internal</Badge>}
           {unit.isInternalLeaseProjection ? (
-            <Badge className="bg-violet-600 text-xs text-white">Factory reference</Badge>
+            <Badge className="bg-violet-600 text-xs text-white">
+              {unit.sourceModule === "ERP" ? "ERP reference" : "Factory reference"}
+            </Badge>
           ) : unit.isShared ? <Badge className="bg-sky-600 text-xs text-white">Shared</Badge> : null}
         </>
       }

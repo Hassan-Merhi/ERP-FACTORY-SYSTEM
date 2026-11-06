@@ -5,6 +5,7 @@ import { db, pool } from "../../db";
 import * as schema from "@shared/schema";
 import type { Voucher, InsertVoucher } from "@shared/schema";
 import { higherPriorityTargetsAbsent } from "../../services/accounting/balances/partyLineRules";
+import { consolidatedHadiRentLedgerPredicate } from "../../services/rental/hadiRentExpenseConsolidation";
 
 /**
  * One statement line: a voucher's postings against a single account, already
@@ -79,6 +80,7 @@ export async function getVoucherEntriesByLedger(
   companyId?: number
 ): Promise<AccountStatementEntryRow[]> {
   const params: StatementQueryParams = [ledgerAccountId];
+  const ledgerMatch = consolidatedHadiRentLedgerPredicate("ve.ledger_account_id", "$1", companyId, ledgerAccountId);
   let dateFilters = "";
   if (startDate) {
     params.push(startDate);
@@ -126,7 +128,7 @@ export async function getVoucherEntriesByLedger(
        v.company_id AS "companyId"
      FROM voucher_entries ve
      JOIN vouchers v ON ve.voucher_id = v.id
-     WHERE ve.ledger_account_id = $1
+     WHERE ${ledgerMatch}
        AND v.optional = false
        AND v.deleted_at IS NULL
        ${companyFilter}

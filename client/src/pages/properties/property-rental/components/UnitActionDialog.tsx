@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, DollarSign, FileEdit, Send, XCircle, UserCog } from "lucide-react";
 import type { CashAccount, Contract, LedgerRow, Payment, Unit } from "../types";
 import { useApiBase } from "../shared";
+import { useCompany } from "@/contexts/CompanyContext";
 import { VacantUnitInfoForm } from "./VacantUnitInfoForm";
 import { StartContractForm } from "./StartContractForm";
 import { PaymentForm } from "./PaymentForm";
@@ -37,6 +38,19 @@ function UnitActionDialog({
   testIdPrefix: string;
 }) {
   const apiBase = useApiBase();
+  const { selectedCompany } = useCompany();
+  // Source-module references can read their original contract when the same
+  // company is active; a cross-company projection remains read-only.
+  const referenceBase =
+    unit.sourceModule === "ERP"
+      ? "/api/erp/rental"
+      : unit.sourceModule === "FACTORY"
+        ? "/api/factory/rental"
+        : apiBase;
+  const detailApiBase = unit.isInternalLeaseProjection ? referenceBase : apiBase;
+  const canReadSourceDetail =
+    !unit.isInternalLeaseProjection ||
+    (unit.sourceCompanyId === selectedCompany?.id && Boolean(unit.sourceModule));
   const { data: detail, isLoading } = useQuery<{
     unit: Unit;
     contract: Contract | null;
@@ -47,9 +61,10 @@ function UnitActionDialog({
     pastContracts: Contract[];
     isShared?: boolean;
   }>({
-    queryKey: [apiBase + "/units", unit.id, "detail"],
+    queryKey: [detailApiBase + "/units", unit.id, "detail", selectedCompany?.id],
+    enabled: canReadSourceDetail,
     queryFn: async () => {
-      const res = await fetch(`${apiBase}/units/${unit.id}/detail`, { credentials: "include" });
+      const res = await fetch(`${detailApiBase}/units/${unit.id}/detail`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load unit detail");
       return res.json();
     },
@@ -67,7 +82,9 @@ function UnitActionDialog({
             {contract && <span className="text-base font-normal text-muted-foreground">— {contract.tenantName}</span>}
             {!contract && <Badge variant="secondary">Vacant</Badge>}
             {unit.isInternalLeaseProjection ? (
-              <Badge className="bg-violet-600 text-white text-xs">Internal Factory lease · read only</Badge>
+              <Badge className="bg-violet-600 text-white text-xs">
+                Internal {unit.sourceModule === "ERP" ? "ERP" : "Factory"} lease · read only
+              </Badge>
             ) : isShared ? (
               <Badge className="bg-sky-600 text-white text-xs">
                 Shared from {unit.ownerCompanyName ?? "another company"}
@@ -106,7 +123,8 @@ function UnitActionDialog({
         ) : unit.isInternalLeaseProjection ? (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Reference-only Factory lease. Manage rent, payments and accounting from Factory Rentals.
+              Reference-only {unit.sourceModule === "ERP" ? "ERP" : "Factory"} lease. Manage rent, payments and
+              accounting from {unit.sourceModule === "ERP" ? "ERP" : "Factory"} Rentals.
             </p>
             <LedgerView
               ledger={detail?.ledger ?? []}

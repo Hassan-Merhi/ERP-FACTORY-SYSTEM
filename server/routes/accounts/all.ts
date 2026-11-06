@@ -31,6 +31,7 @@ import { MoneyDecimal, toMoney } from "../../lib/money";
 import { getCustomerLedgerAndMemo, splitBalanceFields } from "../factory/customers-core/customerLedgerSplit";
 import { getMonetaryFxValuation } from "../../services/accounting/monetaryFxValuationService";
 import { applyCurrentAccountsFxOverlay } from "../../services/accounting/monetaryFxReportOverlay";
+import { isArchivedHadiRentExpenseLedger } from "../../services/rental/hadiRentExpenseConsolidation";
 
 export async function serveAccountListForCompany(req: Request, res: Response, companyId: number, attempt = 0): Promise<unknown> {
   try {
@@ -49,7 +50,7 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
     ]);
     const ledgers = ledgersAll.filter(
       (a) => !["sp_stock", "sp_opnbal"].includes(a.subType ?? "") && !isSystemOnlyLedgerAccount(a) &&
-        !isExcludedFromCompany12ManagementReports(companyId, a)
+        !isExcludedFromCompany12ManagementReports(companyId, a) && !isArchivedHadiRentExpenseLedger(a)
     );
     const isFactoryCompany = currentCompany?.companyType === "factory";
     const isPropertiesCompany = currentCompany?.companyType === "properties";
