@@ -7,8 +7,8 @@ import {
 
 describe("Phase 5 Properties and Rentals translations", () => {
   it("covers every reviewed user-facing phrase exactly once", () => {
-    expect(propertiesRentalsPhase5Translations).toHaveLength(217);
-    expect(new Set(propertiesRentalsPhase5Translations.map((entry) => entry.en)).size).toBe(217);
+    expect(propertiesRentalsPhase5Translations).toHaveLength(218);
+    expect(new Set(propertiesRentalsPhase5Translations.map((entry) => entry.en)).size).toBe(218);
 
     for (const entry of propertiesRentalsPhase5Translations) {
       expect(entry.en.trim()).not.toBe("");
