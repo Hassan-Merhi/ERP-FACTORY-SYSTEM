@@ -35,6 +35,7 @@ export function RolePermissionMatrix() {
   const [role, setRole] = useState("Manager");
   const [group, setGroup] = useState("all");
   const [search, setSearch] = useState("");
+  const [bulkAction, setBulkAction] = useState<AccessControlAction | "all">("all");
   const [draft, setDraft] = useState<Map<RoleRuleKey, AccessDecision>>(new Map());
   const [reason, setReason] = useState("");
   const [showReview, setShowReview] = useState(false);
@@ -174,10 +175,17 @@ export function RolePermissionMatrix() {
           <>
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
               <span>Company policy revision <strong>{roles.data.revision}</strong> · {changes.length} unsaved changes · maximum {MAX_BATCH} per save</span>
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={() => bulkSet("deny")} disabled={mutation.isPending}>Deny visible</Button>
-                <Button size="sm" variant="outline" onClick={() => bulkSet("inherit")} disabled={mutation.isPending}>Inherit visible</Button>
-                <Button size="sm" variant="outline" onClick={() => bulkSet("allow")} disabled={mutation.isPending}>Allow safe visible</Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Select value={bulkAction} onValueChange={(value) => setBulkAction(value as AccessControlAction | "all")}>
+                  <SelectTrigger className="w-[180px]" aria-label="Bulk action column"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All actions</SelectItem>
+                    {matrixActions.map((action) => <SelectItem key={action} value={action}>{describeAction(action)}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Button size="sm" variant="outline" onClick={() => bulkSet("deny", bulkAction === "all" ? undefined : bulkAction)} disabled={mutation.isPending}>Deny visible</Button>
+                <Button size="sm" variant="outline" onClick={() => bulkSet("inherit", bulkAction === "all" ? undefined : bulkAction)} disabled={mutation.isPending}>Inherit visible</Button>
+                <Button size="sm" variant="outline" onClick={() => bulkSet("allow", bulkAction === "all" ? undefined : bulkAction)} disabled={mutation.isPending}>Allow safe visible</Button>
                 <Button size="sm" variant="ghost" onClick={() => setDraft(new Map(saved))} disabled={mutation.isPending}>
                   <RotateCcw className="mr-1 h-4 w-4"/> Reset
                 </Button>
