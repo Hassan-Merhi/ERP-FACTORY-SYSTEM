@@ -77,7 +77,7 @@ export function ChristmasModeSettingsCard() {
         </CardTitle>
         <CardDescription>
           Developer-only control for snowfall, festive lights, sidebar ornaments and
-          the Christmas login welcome. Enable it for specific user accounts only.
+          the Christmas login welcome and five-minute Santa sleigh flyovers. Enable it for specific user accounts only.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -113,7 +113,7 @@ export function ChristmasModeSettingsCard() {
                     Users allowed to see Christmas Mode
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Select individual users. New users are not added automatically.
+                    Select individual users. New users are not added automatically. Each selected user can turn off the effects in My Settings.
                   </p>
                 </div>
                 <span className="shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold" data-testid="christmas-selected-count">
