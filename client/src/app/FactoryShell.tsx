@@ -11,6 +11,7 @@ import { DailyRateModal } from "@/components/DailyRateModal";
 import { FactorySidebar } from "@/components/FactorySidebar";
 import { FactoryRoutes } from "@/components/FactoryRoutes";
 import { FactoryCatalogLanguageSwitch } from "@/components/FactoryCatalogLanguageSwitch";
+import { FactoryMhdViewToggle } from "@/components/FactoryMhdViewToggle";
 import { AppTopBar } from "@/components/AppTopBar";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { MODULE_ACCENT } from "@/components/sidebar/sidebarPrimitives";
@@ -132,6 +133,7 @@ export function FactoryShell({
                   className="p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-6"
                 >
                   <FactoryCatalogLanguageSwitch />
+                  <FactoryMhdViewToggle />
                   <Suspense fallback={null}>
                     {language === "fr" ? <FactoryFrenchCatalogManager /> : null}
                     {isBilingualDocumentRoute ? <FactoryBilingualDocumentActions /> : null}

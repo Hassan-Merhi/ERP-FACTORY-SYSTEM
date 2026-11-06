@@ -97,6 +97,7 @@ vi.mock("@/contexts/CurrencyContext", () => ({
   useCurrencyContext: () => ({ formatAmount: (value: unknown) => `$${Number(value).toFixed(2)}` }),
 }));
 vi.mock("@/contexts/CompanyContext", () => ({
+  useOptionalCompany: () => null,
   useCompany: () => ({ selectedCompany: { id: 1, companyType: "factory" } }),
 }));
 vi.mock("@/contexts/AppModeContext", () => ({ useAppMode: () => "factory" }));
