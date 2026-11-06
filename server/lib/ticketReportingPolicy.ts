@@ -56,7 +56,10 @@ export function ticketReportWhere(companyId: number, filters: TicketReportFilter
 }
 
 export function sanitizeTicketCsvCell(value: unknown): string {
-  let cell = String(value ?? "").replace(/\p{Cc}/gu, " ");
+  let cell = Array.from(String(value ?? ""), (ch) => {
+    const code = ch.charCodeAt(0);
+    return code < 0x20 || code === 0x7f ? " " : ch;
+  }).join("");
   // Spreadsheet programs interpret leading +, -, =, @ as a formula; prefix a safe apostrophe.
   if (/^\s*[=+@-]/.test(cell)) cell = "'" + cell;
   return '"' + cell.replace(/"/g, '""') + '"';

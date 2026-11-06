@@ -249,9 +249,6 @@ These current-reference documents are indexed here for audit coverage. Their beh
 | [global-force-refresh-all-users-2026-10-28.md](global-force-refresh-all-users-2026-10-28.md) | Current global force refresh all users 2026 10 28 reference |
 | [one-time-pwa-force-refresh-2026-10-28.md](one-time-pwa-force-refresh-2026-10-28.md) | Current one time pwa force refresh 2026 10 28 reference |
 | [pressing-scan-simple-mode.md](pressing-scan-simple-mode.md) | Current pressing scan simple mode reference |
-| [ticket-management-phase4-operations.md](ticket-management-phase4-operations.md) | Ticket Management Phase 4: delivery operations, contact preferences, alerts, email and WhatsApp reminders |
-| [ticket-management-phase5-reporting.md](ticket-management-phase5-reporting.md) | Ticket Management Phase 5: secure reporting and exports |
-| [ticket-management-phase6-verification.md](ticket-management-phase6-verification.md) | Ticket Management Phase 6: verification and release checks |
 | [production-target-bonus-phase10-category-calculation.md](production-target-bonus-phase10-category-calculation.md) | Current production target bonus phase10 category calculation reference |
 | [production-target-bonus-phase11-category-reviews.md](production-target-bonus-phase11-category-reviews.md) | Current production target bonus phase11 category reviews reference |
 | [production-target-bonus-phase12-weekly-flat-settings.md](production-target-bonus-phase12-weekly-flat-settings.md) | Current production target bonus phase12 weekly flat settings reference |
@@ -272,6 +269,9 @@ These current-reference documents are indexed here for audit coverage. Their beh
 | [historical-supplier-done-voucher-global-daybook-and-transfer-hide-20261102.md](historical-supplier-done-voucher-global-daybook-and-transfer-hide-20261102.md) | Company 12: completed historical supplier catchup entries on the remaining routine screens |
 | [historical-supplier-named-creditor-balance-freeze-20261102.md](historical-supplier-named-creditor-balance-freeze-20261102.md) | Company 12: historical supplier and named-creditor balance freeze |
 | [net-profit-future-dated-historical-imports-live-pnl-cutoff-20261102.md](net-profit-future-dated-historical-imports-live-pnl-cutoff-20261102.md) | Net profit live as-of report: future-dated historical imports cut off |
+| [ticket-management-phase4-operations.md](ticket-management-phase4-operations.md) | Ticket Management Phase 4: delivery operations, case notifications and 24h escalation |
+| [ticket-management-phase5-reporting.md](ticket-management-phase5-reporting.md) | Ticket Management Phase 5: admin reporting and CSV export policy |
+| [ticket-management-phase6-verification.md](ticket-management-phase6-verification.md) | Ticket Management Phase 6: verification and staging release gate |
 
 | [October 2026 salary reconciliation](accounting/october-2026-salary-reconciliation-20261103.md) | Read-only October payroll, paid cash and salary advances reconciliation (no journal edits) |
 | [Factory worker-advance ledger audit](accounting/factory-worker-advance-ledger-audit-2026-11-03.md) | Current worker-advance ledger investigation, safeguards and payment evidence |

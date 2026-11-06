@@ -15,11 +15,14 @@ export function sniffTicketEvidence(bytes: Buffer): TicketEvidenceMime | null {
   if (bytes.subarray(0, 5).toString("ascii") === "%PDF-") return "application/pdf";
   return null;
 }
+/** C0 control characters and DEL; stripped from names that reach headers and disks. */
+function isControlCharacter(ch: string): boolean {
+  const code = ch.charCodeAt(0);
+  return code < 0x20 || code === 0x7f;
+}
+
 export function safeTicketFileName(name: string): string {
-  return (
-    (name.split(/[\\/]/).pop() || "attachment")
-      .replace(/["\\]/g, "_")
-      .replace(/\p{Cc}/gu, "_")
-      .slice(0, 160) || "attachment"
-  );
+  const base = name.split(/[\\/]/).pop() || "attachment";
+  const cleaned = Array.from(base, (ch) => (isControlCharacter(ch) || ch === '"' || ch === "\\" ? "_" : ch)).join("");
+  return cleaned.slice(0, 160) || "attachment";
 }

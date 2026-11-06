@@ -270,7 +270,7 @@ export function FactorySettingsAdminTools({ model }: Props) {
           <div className="space-y-2">
             <Label>Location / Warehouse</Label>
             <Select value={baleImportLocationId} onValueChange={setBaleImportLocationId}>
-              <SelectTrigger className="w-full sm:w-64" data-testid="select-bale-import-location">
+              <SelectTrigger className="w-64" data-testid="select-bale-import-location">
                 <SelectValue placeholder="Select location..." />
               </SelectTrigger>
               <SelectContent>

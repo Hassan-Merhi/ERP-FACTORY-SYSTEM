@@ -155,7 +155,7 @@ export default function FactoryStockAllocationV5() {
             </div>
             <div className="min-w-0">
               <p className="text-xs font-medium text-muted-foreground">Total Products</p>
-              <p className="mt-1 text-2xl font-bold tabular-nums">{(query.data?.rows?.length ?? 0).toLocaleString()}</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums">{(query.data?.rows.length ?? 0).toLocaleString()}</p>
             </div>
           </div>
           <div className="flex min-w-0 items-center gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] p-3.5 shadow-sm">

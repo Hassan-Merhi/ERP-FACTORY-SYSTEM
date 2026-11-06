@@ -295,14 +295,15 @@ describe("wave 4 page interaction sweep", () => {
         await new Promise((resolve) => setTimeout(resolve, 200));
       });
 
-      // A header action rendered as a download link keeps its button test id.
+      // Buttons rendered `asChild` over an anchor (e.g. download links) keep their
+      // button-* test id on the <a>, so the sweep presses those too.
       const buttonIds = Array.from(document.querySelectorAll('button[data-testid], a[data-testid^="button-"]'))
         .map((button) => button.getAttribute("data-testid")!)
         .slice(0, MAX_BUTTONS);
       let pressed = 0;
       for (const id of buttonIds) {
         const button = document.querySelector<HTMLButtonElement | HTMLAnchorElement>(`[data-testid="${id}"]`);
-        if (!button || ("disabled" in button && button.disabled)) continue;
+        if (!button || (button instanceof HTMLButtonElement && button.disabled)) continue;
         await act(async () => {
           fireEvent.click(button);
           await new Promise((resolve) => setTimeout(resolve, 20));

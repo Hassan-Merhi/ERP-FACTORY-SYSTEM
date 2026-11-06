@@ -23,8 +23,6 @@ const listedEntries = (
  * but that deliberately need no operational permission. Each needs a reason.
  */
 const REVIEWED_UNGUARDED_ROUTES: Record<string, string> = {
-  "GET /api/tickets/export":
-    "Ticket export checks the exp_ticket_export role permission inside its handler before streaming the workbook.",
   "GET /api/stats/import-cycle-balance": "Import-cycle balance is a dashboard read, not an import.",
   "GET /api/stats/import-cycle-diagnostics": "Import-cycle diagnostics is a read, not an import.",
   "GET /api/debug/import-cycle": "Import-cycle debug read with its own guard chain; not an import.",
@@ -41,6 +39,10 @@ const REVIEWED_UNGUARDED_ROUTES: Record<string, string> = {
     "Single-bale form of the label print preparation above; same Factory page boundary. Not an invoice print.",
   "POST /api/factory/customer-orders/:id/container-extra-items/import":
     "Admin/Owner/Developer-only upload of validated workbook rows into one customer order's container extra items (same in-handler role gate as its GET/PUT/DELETE siblings); not a bulk company data import.",
+  "GET /api/tickets/export":
+    "Ticket admin CSV export (#2893); the route itself requires the dedicated exp_ticket_export permission through requireExportAccess in ticketReportingRoutes.ts, on top of the ticket page permission.",
+  "GET /api/factory/monthly-production-matrix/export-bales":
+    "Paged JSON read of the same bale rows the Monthly Production Matrix page already shows (#2892); gated by that page's factory access like its /bales and /workers siblings. The workbook is built client-side, so it is not a server Excel export.",
 };
 
 const MUTATION = new Set(["POST", "PUT", "PATCH", "DELETE"]);

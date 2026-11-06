@@ -292,9 +292,9 @@ describe("Import — POS import item validation logic", () => {
 // ── PO validate — item matching logic ─────────────────────────────────────────
 
 describe("Import — PO import validate logic", () => {
-  it("missing supplierId is a validation error, not a 500", async () => {
-    // Since #2873 item resolution stays available while the operator is still
-    // completing the form: a missing supplier is reported in the result body.
+  it("missing supplierId reports a validation error, not a 500", async () => {
+    // Since #2873 a missing supplier is a validation error so item resolution
+    // stays available while the operator completes the import form.
     const res = await agent.post("/api/po-import/validate").send({
       containerNumber: "TEST-CONT-001",
       preview: [],
@@ -302,7 +302,7 @@ describe("Import — PO import validate logic", () => {
     });
     expect(res.status).toBe(200);
     expect(res.body.valid).toBe(false);
-    expect(res.body.errors.some((e: string) => /supplier/i.test(e))).toBe(true);
+    expect(res.body.errors).toContain("Selected supplier not found");
   });
 
   it("valid call with empty preview returns non-500 with validation result", async () => {

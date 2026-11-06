@@ -72,7 +72,7 @@ export function NonBalePriorityManager() {
       <Button
         type="button"
         variant="outline"
-        className="h-auto min-h-9 max-w-full whitespace-normal py-2 text-left"
+        className="h-auto max-w-full whitespace-normal text-center"
         onClick={() => setOpen(true)}
       >
         Manage Non-Bale Priority Items

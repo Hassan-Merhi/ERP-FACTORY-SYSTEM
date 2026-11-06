@@ -458,7 +458,6 @@ describe("Excel purchase import for a Kwacha-enabled company", () => {
     const wrong = await agent.post("/api/po-import/validate").send(payload({ currency: "ZMW", exchangeRate: "28" }));
     expect(wrong.body.valid).toBe(false);
     const ok = await agent.post("/api/po-import/validate").send(payload({ currency: "ZMW", exchangeRate: "25" }));
-    // The validator also returns the resolved stock items alongside the verdict.
     expect(ok.body).toMatchObject({ valid: true, errors: [] });
   });
 

@@ -365,10 +365,7 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/payroll/workers/:id/deductions",
   "POST /api/po-import/backfill",
   "POST /api/po-import/import",
-  // POST /api/po-import/validate left this list when it moved to its own
-  // read-only module (po-import-validate.ts): it only checks an upload and
-  // writes no money or stock tables. Its permission guard is still enforced by
-  // operationalPermissionRoutePolicy.
+  "POST /api/po-import/validate",
   "POST /api/pos-import/import",
   "POST /api/pos-import/parse",
   "POST /api/pos-import/validate",

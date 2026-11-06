@@ -4,13 +4,13 @@ import type { ClientErrorLike } from "@/lib/clientError";
  *
  * Extracted from FactorySettings.tsx during the Phase 4 god-file split.
  */
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { factoryApiRequest } from "@/lib/factoryApi";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Loader2, Wrench } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import {useState} from "react";
+import {useMutation} from "@tanstack/react-query";
+import {factoryApiRequest} from "@/lib/factoryApi";
+import {Card, CardContent, CardHeader, CardTitle, CardDescription} from "@/components/ui/card";
+import {Button} from "@/components/ui/button";
+import {Loader2, Wrench} from "lucide-react";
+import {useToast} from "@/hooks/use-toast";
 
 export function RecalculateBaleCostsCard() {
   const { toast } = useToast();
@@ -47,7 +47,6 @@ export function RecalculateBaleCostsCard() {
           onClick={() => mutation.mutate()}
           disabled={mutation.isPending}
           data-testid="button-recalculate-bale-costs"
-          className="h-auto min-h-9 max-w-full whitespace-normal py-2 text-left"
         >
           {mutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Wrench className="h-4 w-4 mr-2" />}
           Recalculate Bale Costs

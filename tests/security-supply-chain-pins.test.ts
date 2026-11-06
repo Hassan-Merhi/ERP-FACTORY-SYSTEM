@@ -7,10 +7,10 @@ describe("immutable supply-chain pins for the factory edge and Pullfrog", () => 
   const dockerfile = file("deploy/lan/Dockerfile");
   const pullfrog = file(".github/workflows/pullfrog.yml");
 
-  it("pins both Docker stages to one resolved, full-length Node 24.22.1 manifest digest", () => {
+  it("pins both Docker stages to one resolved, full-length Node 24.22.2 manifest digest", () => {
     const images = [...dockerfile.matchAll(/^FROM (\S+)/gm)].map((match) => match[1]);
     expect(images).toHaveLength(2);
-    expect(images[0]).toMatch(/^node:24\.22\.1-bookworm-slim@sha256:[a-f0-9]{64}$/);
+    expect(images[0]).toMatch(/^node:24\.22\.2-bookworm-slim@sha256:[a-f0-9]{64}$/);
     expect(images[1]).toBe(images[0]);
     expect(dockerfile).not.toContain("FROM node:24-bookworm-slim");
   });

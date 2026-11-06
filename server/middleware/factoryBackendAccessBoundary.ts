@@ -4,7 +4,6 @@ import {
   sendFactoryAccessDenied,
   type FactoryAccessDecision,
 } from "../lib/factoryAccessControl";
-import * as tabs from "./factoryBackendAccessBoundaryTabs";
 
 export type FactoryApiAccessRequirement = {
   pageKey?: string;
@@ -47,52 +46,66 @@ function anyOf(...alternatives: FactoryApiAccessRequirement[]): FactoryApiAccess
   return { alternatives };
 }
 
+const PAYROLL_WORKERS = "hide_tab_payrollhub_workers";
+const PAYROLL_EMPLOYEES = "hide_tab_payrollhub_employees";
+const WORKERS_LIST = "hide_tab_workers_workers";
+const WORKERS_PAYROLL = "hide_tab_workers_payroll";
+const WORKERS_ATTENDANCE = "hide_tab_workers_attendance";
+const WORKERS_REPORT = "hide_tab_workers_report";
+const WORKERS_ADVANCES = "hide_tab_workers_advances";
+const EMPLOYEES_LIST = "hide_tab_employees_employees";
+const EMPLOYEES_PAYROLL = "hide_tab_employees_payroll";
+const EMPLOYEES_ATTENDANCE = "hide_tab_employees_attendance";
+const EMPLOYEES_ADVANCES = "hide_tab_employees_advances";
+const EMPLOYEES_BONUSES = "hide_tab_employees_bonuses";
+const EMPLOYEES_WITHDRAWALS = "hide_tab_employees_withdrawals";
+
 function workerRequirement(req: Request, path: string): FactoryApiAccessRequirement {
-  const base = [tabs.PAYROLL_WORKERS];
+  const base = [PAYROLL_WORKERS];
 
   if (req.method === "GET" && path === "/workers" && String(req.query.profile || "") === "picker") {
     return requirement("factory/payroll-hub", base);
   }
   if (/^\/workers\/\d+\/payrolls(?:\/|$)/.test(path) || path === "/workers/amount-due") {
-    return requirement("factory/payroll-hub", [...base, tabs.WORKERS_PAYROLL]);
+    return requirement("factory/payroll-hub", [...base, WORKERS_PAYROLL]);
   }
   if (/^\/workers\/\d+\/(?:advances|deductions|advance-balance|bulk-repay-advances)(?:\/|$)/.test(path)) {
-    return requirement("factory/payroll-hub", [...base, tabs.WORKERS_ADVANCES]);
+    return requirement("factory/payroll-hub", [...base, WORKERS_ADVANCES]);
   }
   if (/^\/workers\/\d+\/statement(?:-pdf)?(?:\/|$)/.test(path)) {
-    return requirement("factory/payroll-hub", [...base, tabs.WORKERS_LIST, "hide_tab_workerdetail_statement"]);
+    return requirement("factory/payroll-hub", [...base, WORKERS_LIST, "hide_tab_workerdetail_statement"]);
   }
   if (/^\/workers\/\d+\/documents(?:\/|$)/.test(path)) {
-    return requirement("factory/payroll-hub", [...base, tabs.WORKERS_LIST, "hide_tab_workerdetail_documents"]);
+    return requirement("factory/payroll-hub", [...base, WORKERS_LIST, "hide_tab_workerdetail_documents"]);
   }
   if (/^\/workers\/\d+\/bales(?:\/|$)/.test(path)) {
-    return requirement("factory/payroll-hub", [...base, tabs.WORKERS_LIST, "hide_tab_workerdetail_bales"]);
+    return requirement("factory/payroll-hub", [...base, WORKERS_LIST, "hide_tab_workerdetail_bales"]);
   }
   if (/^\/workers\/\d+\/stats(?:\/|$)/.test(path) || path === "/workers/attendance-report") {
-    return requirement("factory/payroll-hub", [...base, tabs.WORKERS_REPORT]);
+    return requirement("factory/payroll-hub", [...base, WORKERS_REPORT]);
   }
-  return requirement("factory/payroll-hub", [...base, tabs.WORKERS_LIST]);
+  return requirement("factory/payroll-hub", [...base, WORKERS_LIST]);
 }
 
 function employeeRequirement(path: string): FactoryApiAccessRequirement {
-  const base = [tabs.PAYROLL_EMPLOYEES];
+  const base = [PAYROLL_EMPLOYEES];
   if (/^\/employees\/\d+\/(?:deposit|withdraw)(?:\/|$)/.test(path) || path === "/employees/bulk-withdraw") {
-    return requirement("factory/payroll-hub", [...base, tabs.EMPLOYEES_WITHDRAWALS]);
+    return requirement("factory/payroll-hub", [...base, EMPLOYEES_WITHDRAWALS]);
   }
   if (path === "/employees/bulk-payroll") {
-    return requirement("factory/payroll-hub", [...base, tabs.EMPLOYEES_PAYROLL]);
+    return requirement("factory/payroll-hub", [...base, EMPLOYEES_PAYROLL]);
   }
   if (path.includes("/advances")) {
-    return requirement("factory/payroll-hub", [...base, tabs.EMPLOYEES_ADVANCES]);
+    return requirement("factory/payroll-hub", [...base, EMPLOYEES_ADVANCES]);
   }
   if (path.includes("/bonuses")) {
-    return requirement("factory/payroll-hub", [...base, tabs.EMPLOYEES_BONUSES]);
+    return requirement("factory/payroll-hub", [...base, EMPLOYEES_BONUSES]);
   }
-  return requirement("factory/payroll-hub", [...base, tabs.EMPLOYEES_LIST]);
+  return requirement("factory/payroll-hub", [...base, EMPLOYEES_LIST]);
 }
 
 function attendanceRequirement(): FactoryApiAccessRequirement {
-  return requirement("factory/payroll-hub", [tabs.PAYROLL_WORKERS, tabs.WORKERS_ATTENDANCE]);
+  return requirement("factory/payroll-hub", [PAYROLL_WORKERS, WORKERS_ATTENDANCE]);
 }
 
 function importRequirement(path: string): FactoryApiAccessRequirement {
@@ -234,7 +247,7 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     return requirement("factory/settings");
   }
   if (path === "/repair-orphaned-vouchers") {
-    return requirement("factory/payroll-hub", [tabs.PAYROLL_WORKERS, tabs.WORKERS_PAYROLL, "hide_tab_payroll_records"]);
+    return requirement("factory/payroll-hub", [PAYROLL_WORKERS, WORKERS_PAYROLL, "hide_tab_payroll_records"]);
   }
   if (hasPrefix(path, "/suppliers/fx-diagnostic")) {
     return requirement("factory/parties", ["hide_tab_parties_suppliers"]);
@@ -242,19 +255,19 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
 
   // Employee sub-tabs are separate API families rather than /employees children.
   if (hasPrefix(path, "/employee-payroll-preview")) {
-    return requirement("factory/payroll-hub", [tabs.PAYROLL_EMPLOYEES, tabs.EMPLOYEES_PAYROLL]);
+    return requirement("factory/payroll-hub", [PAYROLL_EMPLOYEES, EMPLOYEES_PAYROLL]);
   }
   if (hasPrefix(path, "/employee-attendance")) {
-    return requirement("factory/payroll-hub", [tabs.PAYROLL_EMPLOYEES, tabs.EMPLOYEES_ATTENDANCE]);
+    return requirement("factory/payroll-hub", [PAYROLL_EMPLOYEES, EMPLOYEES_ATTENDANCE]);
   }
   if (hasPrefix(path, "/employee-advances") || hasPrefix(path, "/employee-advance-repayments")) {
-    return requirement("factory/payroll-hub", [tabs.PAYROLL_EMPLOYEES, tabs.EMPLOYEES_ADVANCES]);
+    return requirement("factory/payroll-hub", [PAYROLL_EMPLOYEES, EMPLOYEES_ADVANCES]);
   }
   if (hasPrefix(path, "/employee-bonuses")) {
-    return requirement("factory/payroll-hub", [tabs.PAYROLL_EMPLOYEES, tabs.EMPLOYEES_BONUSES]);
+    return requirement("factory/payroll-hub", [PAYROLL_EMPLOYEES, EMPLOYEES_BONUSES]);
   }
   if (hasPrefix(path, "/worker-bonuses")) {
-    return requirement("factory/payroll-hub", [tabs.PAYROLL_WORKERS, "hide_tab_workers_bonuses"]);
+    return requirement("factory/payroll-hub", [PAYROLL_WORKERS, "hide_tab_workers_bonuses"]);
   }
 
   // Worker categories/pickers are intentionally shared by Stock Entry,
@@ -264,13 +277,13 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     if (isWrite(req)) {
       return anyOf(
         requirement("factory/stock-entry", ["hide_tab_stockentry_production_targets"]),
-        requirement("factory/payroll-hub", [tabs.PAYROLL_WORKERS, "hide_tab_workers_categories"])
+        requirement("factory/payroll-hub", [PAYROLL_WORKERS, "hide_tab_workers_categories"])
       );
     }
     return anyOf(
       requirement("factory/stock-entry", ["hide_tab_stockentry_entry"]),
       requirement("factory/stock-entry", ["hide_tab_stockentry_production_targets"]),
-      requirement("factory/payroll-hub", [tabs.PAYROLL_WORKERS, "hide_tab_workers_categories"])
+      requirement("factory/payroll-hub", [PAYROLL_WORKERS, "hide_tab_workers_categories"])
     );
   }
 
@@ -520,12 +533,12 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
       requirement("factory/stock-entry", ["hide_tab_stockentry_entry"]),
       requirement("factory/stock-entry", ["hide_tab_stockentry_production_targets"]),
       requirement("factory/stock-entry", ["hide_tab_stockentry_history"]),
-      requirement("factory/payroll-hub", [tabs.PAYROLL_WORKERS])
+      requirement("factory/payroll-hub", [PAYROLL_WORKERS])
     );
   }
   if (hasPrefix(path, "/workers")) return workerRequirement(req, path);
   if (hasPrefix(path, "/payroll") || hasPrefix(path, "/payrolls") || hasPrefix(path, "/cash-accounts")) {
-    return requirement("factory/payroll-hub", [tabs.PAYROLL_WORKERS, tabs.WORKERS_PAYROLL, "hide_tab_payroll_records"]);
+    return requirement("factory/payroll-hub", [PAYROLL_WORKERS, WORKERS_PAYROLL, "hide_tab_payroll_records"]);
   }
   if (
     hasPrefix(path, "/advances") ||
@@ -533,7 +546,7 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     hasPrefix(path, "/worker-deductions") ||
     hasPrefix(path, "/cash-account-balance")
   ) {
-    return requirement("factory/payroll-hub", [tabs.PAYROLL_WORKERS, tabs.WORKERS_ADVANCES]);
+    return requirement("factory/payroll-hub", [PAYROLL_WORKERS, WORKERS_ADVANCES]);
   }
 
   // ── Canonical page ownership fallback ────────────────────────────────────
@@ -600,7 +613,10 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     return requirement("factory/bales-hub", ["hide_tab_bales_history"]);
   }
   if (hasPrefix(path, "/bale-product-detail")) {
-    return anyOf(requirement("factory/bales-hub", ["hide_tab_bales_products"]), requirement("factory/stock-query"));
+    return anyOf(
+      requirement("factory/bales-hub", ["hide_tab_bales_products"]),
+      requirement("factory/stock-query")
+    );
   }
   if (hasPrefix(path, "/bale-product-images")) {
     return requirement("factory/bale-product-images");
@@ -770,7 +786,7 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   }
 
   if (hasPrefix(path, "/monthly-salary-summary")) {
-    return requirement("factory/payroll-hub", [tabs.PAYROLL_WORKERS, tabs.WORKERS_PAYROLL]);
+    return requirement("factory/payroll-hub", [PAYROLL_WORKERS, WORKERS_PAYROLL]);
   }
 
   if (hasPrefix(path, "/waste-dispatch")) {
