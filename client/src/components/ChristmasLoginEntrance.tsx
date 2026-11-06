@@ -4,13 +4,14 @@
  *
  * The Phase 2 snowfall continues underneath when the welcome finishes.
  */
-import { useEffect, useState, type CSSProperties } from "react";
-import { Snowflake, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { Snowflake, Sparkles, Volume2 } from "lucide-react";
 import { consumeChristmasLoginEntrancePending } from "@/lib/christmasLoginEntrance";
 import { useSeasonalMotionRestricted } from "@/hooks/useSeasonalMotionRestricted";
+import { startChristmasJingle, CHRISTMAS_JINGLE_DURATION_MS } from "@/lib/christmasJingle";
 import "@/styles/christmas-login-entrance.css";
 
-const ENTRANCE_DURATION_MS = 4_000;
+const ENTRANCE_DURATION_MS = CHRISTMAS_JINGLE_DURATION_MS;
 
 type Props = {
   enabled: boolean;
@@ -36,6 +37,26 @@ const WELCOME_FLAKES: FallStyle[] = Array.from({ length: 56 }, (_, index) => {
 export function ChristmasLoginEntrance({ enabled, queryStatus }: Props) {
   const reduceMotion = useSeasonalMotionRestricted();
   const [visibleUntil, setVisibleUntil] = useState(0);
+  const [needsTap, setNeedsTap] = useState(false);
+  const playbackStopRef = useRef<(() => void) | null>(null);
+  const playbackAttemptRef = useRef(0);
+
+  const launchJingle = useCallback(() => {
+    // Invalidate any older, unresolved playback attempts.
+    const attempt = ++playbackAttemptRef.current;
+    playbackStopRef.current?.();
+    playbackStopRef.current = null;
+    setNeedsTap(false);
+    void startChristmasJingle().then((result) => {
+      if (attempt !== playbackAttemptRef.current) {
+        result.stop();
+        return;
+      }
+      if (result.started) playbackStopRef.current = result.stop;
+      else setNeedsTap(true);
+    });
+  }, []);
+
 
   // Consume only after the master setting has resolved. Even when OFF or when
   // the settings endpoint fails, consume and discard the hint so switching ON
@@ -45,7 +66,8 @@ export function ChristmasLoginEntrance({ enabled, queryStatus }: Props) {
     const wasFreshLogin = consumeChristmasLoginEntrancePending();
     if (!wasFreshLogin || queryStatus !== "success" || !enabled || reduceMotion || document.hidden) return;
     setVisibleUntil(Date.now() + ENTRANCE_DURATION_MS);
-  }, [queryStatus, enabled, reduceMotion]);
+    launchJingle();
+  }, [queryStatus, enabled, reduceMotion, launchJingle]);
 
   // Use a deadline rather than a timer tied to the first effect. This also
   // survives React Strict Mode's development effect setup/cleanup cycle.
@@ -61,8 +83,21 @@ export function ChristmasLoginEntrance({ enabled, queryStatus }: Props) {
   }, [visibleUntil]);
 
   useEffect(() => {
-    if (!enabled || reduceMotion) setVisibleUntil(0);
+    if (!enabled || reduceMotion) {
+      playbackAttemptRef.current += 1;
+      playbackStopRef.current?.();
+      playbackStopRef.current = null;
+      setNeedsTap(false);
+      setVisibleUntil(0);
+    }
   }, [enabled, reduceMotion]);
+
+  useEffect(() => () => {
+    playbackAttemptRef.current += 1;
+    playbackStopRef.current?.();
+    playbackStopRef.current = null;
+  }, []);
+
 
   if (!enabled || reduceMotion || visibleUntil === 0) return null;
 
@@ -72,7 +107,6 @@ export function ChristmasLoginEntrance({ enabled, queryStatus }: Props) {
       data-testid="christmas-login-entrance"
       data-christmas-login-entrance="true"
       role="presentation"
-      aria-hidden="true"
     >
       <div className="christmas-login-snowfield" aria-hidden="true">
         {WELCOME_FLAKES.map((style, index) => (
@@ -85,7 +119,7 @@ export function ChristmasLoginEntrance({ enabled, queryStatus }: Props) {
           </span>
         ))}
       </div>
-      <div className="christmas-login-greeting">
+      <div className="christmas-login-greeting" aria-hidden="true">
         <span className="christmas-login-greeting-icon">
           <Snowflake aria-hidden="true" />
         </span>
@@ -95,6 +129,21 @@ export function ChristmasLoginEntrance({ enabled, queryStatus }: Props) {
         </div>
         <Sparkles className="christmas-login-greeting-sparkle" aria-hidden="true" />
       </div>
+      {needsTap && (
+        <button
+          type="button"
+          className="christmas-login-play-button"
+          onClick={() => {
+            setVisibleUntil(Date.now() + ENTRANCE_DURATION_MS);
+            launchJingle();
+          }}
+          aria-label="Play the Christmas Jingle Bells greeting"
+          data-testid="christmas-login-play-audio"
+        >
+          <Volume2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+          Tap to hear Jingle Bells
+        </button>
+      )}
     </div>
   );
 }
