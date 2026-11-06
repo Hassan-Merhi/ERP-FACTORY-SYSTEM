@@ -4,12 +4,9 @@
  * Decorations never own business interaction state and disappear on logout.
  */
 import { useEffect } from "react";
-import { useChristmasMode } from "@/hooks/useChristmasMode";
 import "@/styles/christmas-decorations.css";
 
-export function GlobalSeasonalDecorations() {
-  const { settingQuery } = useChristmasMode();
-  const enabled = settingQuery.data?.enabled === true;
+export function GlobalSeasonalDecorations({ enabled }: { enabled: boolean }) {
 
   useEffect(() => {
     const root = document.documentElement;
