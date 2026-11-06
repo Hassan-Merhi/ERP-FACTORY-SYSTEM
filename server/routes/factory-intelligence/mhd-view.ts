@@ -6,6 +6,7 @@ import { requireRole } from "../../auth";
 import { factorySettings } from "@shared/schema";
 import { INITIAL_FACTORY_FEATURES } from "./settings";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { writeAuditEvent } from "../../services/audit";
 
 type ViewRow = { articleCode: string; itemName: string; sortOrder: number };
 type ViewSnapshot = { revision: number; rows: ViewRow[]; updatedAt: string };
@@ -131,9 +132,20 @@ export function registerFactoryMhdViewRoutes(app: Express, requireAuth: AuthMidd
           ? [...prior.history, { revision: prior.revision, rows: prior.rows, updatedAt: prior.updatedAt }].slice(-5)
           : [];
         const next: MhdView = { rows, revision: prior.revision + 1, updatedAt: new Date().toISOString(), history };
-        await tx.update(factorySettings).set({
+        const [updated] = await tx.update(factorySettings).set({
           extraSettings: sql`COALESCE(${factorySettings.extraSettings}, '{}'::jsonb) || ${JSON.stringify({ mhdView: next })}::jsonb`,
-        }).where(eq(factorySettings.companyId, companyId));
+          updatedAt: new Date(),
+        }).where(eq(factorySettings.companyId, companyId)).returning({ id: factorySettings.id });
+        await writeAuditEvent({
+          userId: String(req.session.userId),
+          username: String(req.session.username || req.session.userId),
+          companyId,
+          action: "settings_change",
+          tableName: "factory_settings",
+          recordId: updated.id,
+          recordIdentifier: "mhdView",
+          changes: { mhdView: { old: { revision: prior.revision, rowCount: prior.rows.length }, new: { revision: next.revision, rowCount: next.rows.length } } },
+        }, tx);
         return next;
       });
       if (!result) return res.status(409).json({ message: MHD_ERROR.revisionConflict });
