@@ -177,7 +177,7 @@ function DesktopTable({ model }: { model: TransactionJournalModel }) {
                       </TableCell>
                       <TableCell>
                         <span
-                          className={`inline-block max-w-[140px] truncate rounded-md px-2 py-1 text-xs font-semibold ${companyColor(v.companyId)}`}}
+                          className={`inline-block max-w-[140px] truncate rounded-md px-2 py-1 text-xs font-semibold ${companyColor(v.companyId)}`}
                         >
                           {v.companyName}
                         </span>
@@ -247,7 +247,7 @@ function MobileCards({ model }: { model: TransactionJournalModel }) {
               <Fragment key={`${v.entryType || "voucher"}-${v.id}`}>
                 {newCompany && (
                   <div className="border-t border-violet-200 bg-violet-100/80 px-3 py-2 dark:border-violet-400/20 dark:bg-violet-500/15" data-testid={`card-company-group-${v.companyId}`}>
-                    <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-sm ${companyColor(v.companyId)}`}}>
+                    <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-sm ${companyColor(v.companyId)}`}>
                       {v.companyName}
                     </span>
                   </div>
@@ -277,7 +277,7 @@ function MobileCards({ model }: { model: TransactionJournalModel }) {
                           </Badge>
                         )}
                         <span
-                          className={`inline-block text-xs font-medium px-2 py-0.5 rounded-sm ${companyColor(v.companyId)}`}}
+                          className={`inline-block text-xs font-medium px-2 py-0.5 rounded-sm ${companyColor(v.companyId)}`}
                         >
                           {v.companyName}
                         </span>
