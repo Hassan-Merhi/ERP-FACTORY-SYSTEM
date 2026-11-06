@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient, resetCsrfToken } from "@/lib/queryClient";
 import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import { clearBiometricCredentials } from "@/lib/biometricCredentials";
+import { clearChristmasLoginEntrancePending } from "@/lib/christmasLoginEntrance";
 import { revokeOfflineReadScope, wipeColdStartAccess } from "@/lib/offline/offlineReadCache";
 
 /**
@@ -19,6 +20,7 @@ export function useAuthenticatedUser() {
   const { data: user, isLoading, error } = useQuery(authenticatedUserQueryOptions());
 
   const handleLogout = async (): Promise<void> => {
+    clearChristmasLoginEntrancePending();
     // Plan batch 5: signing out wipes this account's cold-start key on this laptop.
     if (user?.id !== undefined && user?.id !== null) await wipeColdStartAccess(String(user.id));
     revokeOfflineReadScope();
