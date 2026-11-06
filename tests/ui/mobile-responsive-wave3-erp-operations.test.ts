@@ -50,9 +50,11 @@ describe("Mobile Wave 3 ERP operational workflows", () => {
   it("stacks transaction journal filters and search controls on phones", () => {
     const filters = source("client/src/pages/transactionjournal/components/JournalFilters.tsx");
 
-    expect(filters).toContain('className="w-full sm:w-[150px]"');
-    expect(filters).toContain('className="w-full sm:w-[110px]"');
-    expect(filters).toContain('className="w-full sm:w-[130px]"');
+    // Voucher type, currency and status selects are full width on phones and
+    // take a fixed width from sm up (#2973 restyled them; the contract is the same).
+    for (const id of ["voucher-type-tj", "currency-tj", "status-tj"]) {
+      expect(filters).toMatch(new RegExp(`id="${id}" className="[^"]*\\bw-full\\b[^"]*\\bsm:w-\\[\\d+px\\]`));
+    }
     expect(filters).toContain('className="flex flex-col gap-2 sm:flex-row"');
   });
 

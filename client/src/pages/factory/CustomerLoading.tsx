@@ -189,8 +189,7 @@ export default function CustomerLoading() {
     availableNegativeFilter,
     availableStockByCode,
     search,
-    mhd.mode,
-    mhd.revision,
+    mhd,
   ]);
 
   const displayedProducts = mhd.sortRows(filteredProducts, (product) => product.articleCode || product.code);
