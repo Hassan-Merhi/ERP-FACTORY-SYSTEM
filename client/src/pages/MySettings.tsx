@@ -14,12 +14,13 @@ import { PageHeader } from "@/components/PageHeader";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { useCompany } from "@/contexts/CompanyContext";
-import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translateApplicationText, type ApplicationTranslationKey } from "@/i18n/applicationTranslations";
 
 type DateFormatType = "MM/DD/YYYY" | "DD/MM/YYYY";
 
 export default function MySettings() {
-  const { t } = useApplicationLanguage();
+  const t = useOptionalApplicationLanguage()?.t ?? ((key: ApplicationTranslationKey) => translateApplicationText(key, "en"));
   const { toast } = useToast();
   const { dateFormat } = useDateFormat();
   const { prefs, updatePref, isPending: prefsPending } = useUserPreferences();
