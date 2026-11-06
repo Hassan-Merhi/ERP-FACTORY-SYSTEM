@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   accountBalanceHistoryBridge,
+  propertiesAccountBalanceSplit,
   reconciledHistoryTsv,
   cashCents,
   nonCashCents,
@@ -9,11 +10,7 @@ import {
   type ReceiptRow,
 } from "../client/src/pages/properties/property-rental/paymentsReceiptMath";
 
-const receipt = (
-  id: number,
-  amount: number,
-  overrides: Partial<ReceiptRow> = {}
-): ReceiptRow => ({
+const receipt = (id: number, amount: number, overrides: Partial<ReceiptRow> = {}): ReceiptRow => ({
   id,
   amount,
   paymentDate: "2026-10-26",
@@ -59,6 +56,37 @@ describe("Properties read-only payment history reconciliation", () => {
     expect(nonCashCents(rows[4])).toBe(80000);
   });
 
+  it("splits the $353,295 historical account total into $328,195 cash-side and $25,100 deposits", () => {
+    // Withdrawal through 26 Oct + full ALI cash ($6,400 rent + $1,400 guarantee cash).
+    const split = propertiesAccountBalanceSplit(32039500, 2510000, 780000);
+    expect(split).toEqual({
+      rentAndCashBalance: 32819500,
+      depositBalance: 2510000,
+      accountSum: 35329500,
+    });
+    // Neither category is silently rebalanced if an actual ledger differs.
+    expect(propertiesAccountBalanceSplit(32039500, 2510000, 780100).accountSum).toBe(35329600);
+    expect(propertiesAccountBalanceSplit(null, 2510000, 780000).accountSum).toBeNull();
+  });
+
+  it("adds future cashbox entries without treating a guarantee deposit as unique cash twice", () => {
+    const futureRows = [
+      ...rows,
+      receipt(1000, 100, {
+        paymentDate: "2026-11-06",
+        cashAccountId: 5000,
+        receiptKind: "GUARANTEE_DEPOSIT",
+      }),
+      receipt(1001, 50, { paymentDate: "2026-11-06", cashAccountId: 5000 }),
+    ];
+    const bridge = accountBalanceHistoryBridge(futureRows, [4134, 5000]);
+    expect(bridge.cashAndLiabilityOverlap).toBe(150000);
+    expect(bridge.removeNonCashBilling).toBe(80000);
+    expect(bridge.reconciledTotal).toBe(35354500);
+    const split = propertiesAccountBalanceSplit(32039500, 2520000, 780000, 15000);
+    expect(split.accountSum).toBe(35354500);
+  });
+
   it("copies the same cash and noncash columns shown in the table", () => {
     const copied = paymentHistoryTsv(rows);
     const lines = copied.split("\n");
@@ -99,17 +127,21 @@ describe("Properties read-only payment history reconciliation", () => {
     expect(tsv).toContain("ACCOUNT RECONCILIATION: REMOVE NON-CASH BILLING");
     expect(tsv).toContain("NET RECONCILIATION ADJUSTMENT");
     expect(tsv).toContain("RECONCILED HISTORY + ADJUSTMENT");
-    expect(lines.some(line => line.includes("NET RECONCILIATION ADJUSTMENT") && line.endsWith("\t600.00"))).toBe(true);
-    expect(lines.some(line => line.includes("RECONCILED HISTORY + ADJUSTMENT") && line.endsWith("\t353295.00"))).toBe(true);
-    expect(lines.some(line => line.includes("UNRECONCILED DIFFERENCE") && line.endsWith("\t0.00"))).toBe(true);
+    expect(lines.some((line) => line.includes("NET RECONCILIATION ADJUSTMENT") && line.endsWith("\t600.00"))).toBe(
+      true
+    );
+    expect(lines.some((line) => line.includes("RECONCILED HISTORY + ADJUSTMENT") && line.endsWith("\t353295.00"))).toBe(
+      true
+    );
+    expect(lines.some((line) => line.includes("UNRECONCILED DIFFERENCE") && line.endsWith("\t0.00"))).toBe(true);
     expect(JSON.stringify(rows)).toBe(before);
   });
 
   it("reports a residual instead of automatically forcing any arbitrary account total", () => {
     const tsv = reconciledHistoryTsv(rows, { aliCashLedgerId: 4134, threeAccountsTotal: 35379500 });
-    expect(tsv.split("\n").some(line =>
-      line.includes("UNRECONCILED DIFFERENCE") && line.endsWith("\t500.00")
-    )).toBe(true);
+    expect(tsv.split("\n").some((line) => line.includes("UNRECONCILED DIFFERENCE") && line.endsWith("\t500.00"))).toBe(
+      true
+    );
   });
 
   it("escapes spreadsheet formulas in copied tenant names", () => {

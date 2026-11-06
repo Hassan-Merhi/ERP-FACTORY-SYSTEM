@@ -1,4 +1,5 @@
 import { type ReactNode, Suspense, useEffect } from "react";
+import "@/styles/premium-shell-navigation.css";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { useLocation } from "wouter";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
@@ -56,7 +57,7 @@ export function AppTopBar({
   return (
     <header
       data-slot="app-top-bar"
-      className="relative flex min-h-14 flex-nowrap items-center justify-between gap-1.5 px-2.5 sm:gap-3 sm:px-4 no-print"
+      className="premium-shell-topbar relative flex min-h-14 flex-nowrap items-center justify-between gap-1.5 px-2.5 sm:gap-3 sm:px-4 no-print"
     >
       <div
         data-slot="app-top-bar-divider"
@@ -100,10 +101,10 @@ export function AppTopBar({
             onClick={onSearchOpen}
             data-testid="button-open-palette"
             aria-label={t("accessibility.openSearch")}
-            className="hidden h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-muted/40 px-3 text-xs text-muted-foreground transition-colors hover-elevate sm:flex"
+            className="premium-topbar-search hidden h-9 min-w-0 shrink items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-muted/40 px-3 text-xs text-muted-foreground transition-colors hover-elevate sm:flex"
           >
             <Search className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span className="hidden lg:inline">Search</span>
+            <span className="hidden lg:inline">Search modules, transactions, reports...</span>
             <kbd className="inline-flex h-4 items-center rounded-sm border border-border bg-background px-1.5 font-mono text-[11px] leading-none">
               {typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform) ? "⌘ /" : "Ctrl /"}
             </kbd>
