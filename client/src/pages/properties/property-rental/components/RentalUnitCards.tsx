@@ -73,7 +73,7 @@ function RentalUnitCard({
   const outstanding = unit.outstanding ?? 0;
   const credit = unit.prepaidCredit ?? 0;
   const guarantee = unit.guaranteeRemaining ?? contract?.guaranteeAmount;
-  const selectable = !!contract && !unit.isShared;
+  const selectable = !!contract && !unit.isShared && !unit.isInternalLeaseProjection;
   const dimensions = unit.dimensions || unit.size;
 
   const balance =
@@ -81,15 +81,15 @@ function RentalUnitCard({
       ? null
       : outstanding > 0
         ? {
-            label: landlordView ? "To collect" : "Outstanding",
+            label: unit.isInternalLeaseProjection ? "Factory balance (reference)" : landlordView ? "To collect" : "Outstanding",
             text: fmtMoneyCurrency(outstanding, currency),
-            tone: landlordView ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400",
+            tone: unit.isInternalLeaseProjection ? "text-muted-foreground" : landlordView ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400",
           }
         : credit > 0
           ? {
-              label: landlordView ? "Owed to tenant" : "Credit",
+              label: unit.isInternalLeaseProjection ? "Factory credit (reference)" : landlordView ? "Owed to tenant" : "Credit",
               text: fmtMoneyCurrency(credit, currency),
-              tone: landlordView ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400",
+              tone: unit.isInternalLeaseProjection ? "text-muted-foreground" : landlordView ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400",
             }
           : { label: "Outstanding", text: fmtMoneyCurrency(0, currency), tone: "text-muted-foreground" };
 
@@ -111,7 +111,9 @@ function RentalUnitCard({
             </Badge>
           )}
           {contract?.isInternal && <Badge className="bg-violet-600 text-xs text-white">Internal</Badge>}
-          {unit.isShared && <Badge className="bg-sky-600 text-xs text-white">Shared</Badge>}
+          {unit.isInternalLeaseProjection ? (
+            <Badge className="bg-violet-600 text-xs text-white">Factory reference</Badge>
+          ) : unit.isShared ? <Badge className="bg-sky-600 text-xs text-white">Shared</Badge> : null}
         </>
       }
       value={
@@ -164,7 +166,9 @@ function RentalUnitCard({
             >
               Note
             </div>
-            <NoteCell contractId={contract.id} note={contract.notes} testId={`unit-${unit.id}`} />
+            {unit.isInternalLeaseProjection
+              ? <p className="text-sm">{contract.notes || "—"}</p>
+              : <NoteCell contractId={contract.id} note={contract.notes} testId={`unit-${unit.id}`} />}
           </div>
         ) : undefined
       }
