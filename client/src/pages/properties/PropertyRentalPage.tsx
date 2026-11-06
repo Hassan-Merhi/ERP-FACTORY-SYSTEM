@@ -49,7 +49,11 @@ import { BulkPaymentDialog } from "./property-rental/components/BulkPaymentDialo
 import { RentalUnitCards } from "./property-rental/components/RentalUnitCards";
 import { ErpMobileActionsMenu, ErpMobileSummaryGrid } from "@/components/ui/erp-mobile-records";
 import { HISTORICAL_RENT_COMPANY } from "./property-rental/historicalRentSnapshot";
-import { PaymentsReconciliation, type ReconciliationSnapshot, type ReconciliationPayment } from "./property-rental/components/PaymentsReconciliation";
+import {
+  PaymentsReconciliation,
+  type ReconciliationSnapshot,
+  type ReconciliationPayment,
+} from "./property-rental/components/PaymentsReconciliation";
 export default function PropertyRentalPage({
   unitType,
   pageTitle,
@@ -145,28 +149,39 @@ export default function PropertyRentalPage({
     return { totalGuarantee, totalOwed, totalCredit, totalPaid, totalMonthlyRent };
   }, [units]);
 
-  const reconciledAccountTotalsReady = showHistoricalPaid && !historicalLoading && !historicalError &&
-    historyReconciliation?.companyId === selectedCompany?.id && !historyReconciliation.loading &&
-    historyReconciliation.rentAndCashBalance !== null && historyReconciliation.depositBalance !== null &&
+  const reconciledAccountTotalsReady =
+    showHistoricalPaid &&
+    !historicalLoading &&
+    !historicalError &&
+    historyReconciliation?.companyId === selectedCompany?.id &&
+    !historyReconciliation.loading &&
+    historyReconciliation.rentAndCashBalance !== null &&
+    historyReconciliation.depositBalance !== null &&
     historyReconciliation.accountSum !== null;
   // For HASSAN PROPERTIES, the Payments Log uses an account-balance total:
   // withdrawal through 26 Oct + ALI cash + optional Properties cashbox + tenant deposits.
   // Cash accounts may include guarantee deposits, so this is NOT rent-only.
   const summaryPaid = showHistoricalPaid
-    ? (reconciledAccountTotalsReady ? historyReconciliation!.rentAndCashBalance! / 100 : 0)
+    ? reconciledAccountTotalsReady
+      ? historyReconciliation!.rentAndCashBalance! / 100
+      : 0
     : totals.totalPaid;
   const summaryGuarantee = showHistoricalPaid
-    ? (reconciledAccountTotalsReady ? historyReconciliation!.depositBalance! / 100 : 0)
+    ? reconciledAccountTotalsReady
+      ? historyReconciliation!.depositBalance! / 100
+      : 0
     : totals.totalGuarantee;
   const paidLabel = showHistoricalPaid ? "RENT + CASH BALANCES" : "TOTAL PAID";
-  const paidValue = !showHistoricalPaid || reconciledAccountTotalsReady
-    ? "$" + fmtMoney(summaryPaid) : "Unavailable";
-  const guaranteeValue = !showHistoricalPaid || reconciledAccountTotalsReady
-    ? "$" + fmtMoney(summaryGuarantee) : "Unavailable";
-  const historicalAccountMismatch = reconciledAccountTotalsReady &&
-    historyReconciliation!.reconciled !== null && historyReconciliation!.difference !== null &&
+  const paidValue = !showHistoricalPaid || reconciledAccountTotalsReady ? "$" + fmtMoney(summaryPaid) : "Unavailable";
+  const guaranteeValue =
+    !showHistoricalPaid || reconciledAccountTotalsReady ? "$" + fmtMoney(summaryGuarantee) : "Unavailable";
+  const historicalAccountMismatch =
+    reconciledAccountTotalsReady &&
+    historyReconciliation!.reconciled !== null &&
+    historyReconciliation!.difference !== null &&
     Math.abs(historyReconciliation!.difference) > 1;
-  const guaranteeLedgerMismatch = reconciledAccountTotalsReady &&
+  const guaranteeLedgerMismatch =
+    reconciledAccountTotalsReady &&
     Math.abs(historyReconciliation!.depositBalance! - Math.round(totals.totalGuarantee * 100)) > 1;
 
   const runMonthly = useMutation({
@@ -245,7 +260,10 @@ export default function PropertyRentalPage({
   const [selectedContractIds, setSelectedContractIds] = useState<Set<number>>(new Set());
   const [bulkPayOpen, setBulkPayOpen] = useState(false);
 
-  const contractedUnits = useMemo(() => units.filter((u) => u.contract && !u.isShared && !u.isInternalLeaseProjection), [units]);
+  const contractedUnits = useMemo(
+    () => units.filter((u) => u.contract && !u.isShared && !u.isInternalLeaseProjection),
+    [units]
+  );
 
   const toggleSelect = (contractId: number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -292,12 +310,13 @@ export default function PropertyRentalPage({
       <ErpMobileActionsMenu
         data-testid={`button-${testIdPrefix}-actions`}
         actions={[
-          !!paymentsLogUrl && !isPropertiesRental && {
-            label: "Payments Log",
-            icon: ClipboardList,
-            onSelect: () => navigate(paymentsLogUrl),
-            testId: `button-${testIdPrefix}-payments-log`,
-          },
+          !!paymentsLogUrl &&
+            !isPropertiesRental && {
+              label: "Payments Log",
+              icon: ClipboardList,
+              onSelect: () => navigate(paymentsLogUrl),
+              testId: `button-${testIdPrefix}-payments-log`,
+            },
           {
             label: "Run Monthly Update",
             icon: RefreshCw,
@@ -305,13 +324,14 @@ export default function PropertyRentalPage({
             disabled: runMonthly.isPending,
             testId: `button-${testIdPrefix}-run-monthly`,
           },
-          canPostDue && !isPropertiesRental && {
-            label: "Post due accruals now",
-            icon: BookCheck,
-            onSelect: () => postDue.mutate(),
-            disabled: postDue.isPending,
-            testId: `button-${testIdPrefix}-post-due`,
-          },
+          canPostDue &&
+            !isPropertiesRental && {
+              label: "Post due accruals now",
+              icon: BookCheck,
+              onSelect: () => postDue.mutate(),
+              disabled: postDue.isPending,
+              testId: `button-${testIdPrefix}-post-due`,
+            },
           contractedUnits.length > 0 && {
             label: selectedContractIds.size === contractedUnits.length ? "Clear selection" : "Select all",
             onSelect: toggleSelectAll,
@@ -372,7 +392,12 @@ export default function PropertyRentalPage({
 
   return (
     <ApiBaseCtx.Provider value={apiBase}>
-      <div className={isPropertiesRental ? "properties-rentals-premium space-y-5" : isErp ? "space-y-4 sm:p-4" : "p-4 space-y-4"} data-testid={`page-${testIdPrefix}`}>
+      <div
+        className={
+          isPropertiesRental ? "properties-rentals-premium space-y-5" : isErp ? "space-y-4 sm:p-4" : "p-4 space-y-4"
+        }
+        data-testid={`page-${testIdPrefix}`}
+      >
         {showHistoricalPaid && (
           <PaymentsReconciliation
             payments={historicalPayments}
@@ -429,16 +454,25 @@ export default function PropertyRentalPage({
         )}
         {showHistoricalPaid && reconciledAccountTotalsReady && (
           <p className="text-xs text-muted-foreground" data-testid="properties-rent-account-balance-explanation">
-            Combined account balances: <span className="font-semibold tabular-nums">{"$"}{fmtMoney(historyReconciliation!.accountSum! / 100)}</span>
-            {" "} (rent withdrawal, ALI cash, Properties cashbox if present, and tenant deposits).
+            Combined account balances:{" "}
+            <span className="font-semibold tabular-nums">
+              {"$"}
+              {fmtMoney(historyReconciliation!.accountSum! / 100)}
+            </span>{" "}
+            (rent withdrawal, ALI cash, Properties cashbox if present, and tenant deposits).
             {historyReconciliation!.guaranteeCashOverlap != null && historyReconciliation!.guaranteeCashOverlap > 0 && (
-              <> Guarantee cash of {"$"}{fmtMoney(historyReconciliation!.guaranteeCashOverlap / 100)} appears in both a cash account and the deposit liability; these are not unique receipts.</>
+              <>
+                {" "}
+                Guarantee cash of {"$"}
+                {fmtMoney(historyReconciliation!.guaranteeCashOverlap / 100)} appears in both a cash account and the
+                deposit liability; these are not unique receipts.
+              </>
             )}
             {(historicalAccountMismatch || guaranteeLedgerMismatch) && (
               <span className="block text-amber-600 dark:text-amber-400" role="status">
                 {historicalAccountMismatch && " Payments history does not reconcile to the account balances."}
-                {guaranteeLedgerMismatch && " Unit guarantee balances differ from the Tenant Deposits ledger."}
-                {" "}No accounting entries have been changed.
+                {guaranteeLedgerMismatch && " Unit guarantee balances differ from the Tenant Deposits ledger."} No
+                accounting entries have been changed.
               </span>
             )}
           </p>
@@ -479,7 +513,13 @@ export default function PropertyRentalPage({
         ) : (
           /* Summary tiles: six equal tiles; the former Outstanding/Credit pair overflowed its card at
              tablet widths. */
-          <div className={isPropertiesRental ? "properties-rentals-kpis grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6" : "grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2"}>
+          <div
+            className={
+              isPropertiesRental
+                ? "properties-rentals-kpis grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6"
+                : "grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2"
+            }
+          >
             <Card className={isPropertiesRental ? "properties-rentals-stat properties-rentals-stat--units" : undefined}>
               <CardHeader className="px-3 pt-3 pb-1">
                 {isPropertiesRental && (
@@ -518,7 +558,9 @@ export default function PropertyRentalPage({
                 <p className="text-[11px] text-muted-foreground mt-0.5">expected from active leases</p>
               </CardContent>
             </Card>
-            <Card className={isPropertiesRental ? "properties-rentals-stat properties-rentals-stat--guarantee" : undefined}>
+            <Card
+              className={isPropertiesRental ? "properties-rentals-stat properties-rentals-stat--guarantee" : undefined}
+            >
               <CardHeader className="px-3 pt-3 pb-1">
                 {isPropertiesRental && (
                   <span className="properties-rentals-stat-icon" aria-hidden="true">
@@ -558,7 +600,9 @@ export default function PropertyRentalPage({
                 </div>
               </CardContent>
             </Card>
-            <Card className={isPropertiesRental ? "properties-rentals-stat properties-rentals-stat--collect" : undefined}>
+            <Card
+              className={isPropertiesRental ? "properties-rentals-stat properties-rentals-stat--collect" : undefined}
+            >
               <CardHeader className="px-3 pt-3 pb-1">
                 {isPropertiesRental && (
                   <span className="properties-rentals-stat-icon" aria-hidden="true">
@@ -632,7 +676,15 @@ export default function PropertyRentalPage({
           )
         ) : (
           /* Main table */
-          <Card className={isFactoryShopTable ? "factory-rentals-table-shell" : isPropertiesRental ? "properties-rentals-table-shell" : undefined}>
+          <Card
+            className={
+              isFactoryShopTable
+                ? "factory-rentals-table-shell"
+                : isPropertiesRental
+                  ? "properties-rentals-table-shell"
+                  : undefined
+            }
+          >
             <CardContent className={isFactoryShopTable ? "p-2 sm:p-3" : isPropertiesRental ? "p-2 sm:p-4" : "p-0"}>
               <div data-horizontal-scroll="true" className="overflow-x-auto">
                 {isLoading ? (
@@ -644,8 +696,22 @@ export default function PropertyRentalPage({
                       : "No shops yet. Add your first unit above."}
                   </div>
                 ) : (
-                  <table className={isFactoryShopTable ? "factory-rentals-table w-full text-sm" : isPropertiesRental ? "properties-rentals-data-table w-full min-w-[1170px] text-sm" : "w-full text-sm"}>
-                    <thead className={isPropertiesRental ? "properties-rentals-table-head sticky top-0 z-30" : "bg-muted border-b sticky top-0 z-30"}>
+                  <table
+                    className={
+                      isFactoryShopTable
+                        ? "factory-rentals-table w-full text-sm"
+                        : isPropertiesRental
+                          ? "properties-rentals-data-table w-full min-w-[1170px] text-sm"
+                          : "w-full text-sm"
+                    }
+                  >
+                    <thead
+                      className={
+                        isPropertiesRental
+                          ? "properties-rentals-table-head sticky top-0 z-30"
+                          : "bg-muted border-b sticky top-0 z-30"
+                      }
+                    >
                       <tr>
                         <th className="px-3 py-2 w-8" onClick={(e) => e.stopPropagation()}>
                           <Checkbox
@@ -691,7 +757,13 @@ export default function PropertyRentalPage({
                           <Fragment key={group}>
                             <tr
                               key={`grp-${group}`}
-                              className={isFactoryShopTable ? "factory-rentals-location-row" : isPropertiesRental ? "properties-rentals-group-row" : "border-t"}
+                              className={
+                                isFactoryShopTable
+                                  ? "factory-rentals-location-row"
+                                  : isPropertiesRental
+                                    ? "properties-rentals-group-row"
+                                    : "border-t"
+                              }
                             >
                               <td
                                 colSpan={12}
@@ -703,7 +775,9 @@ export default function PropertyRentalPage({
                                       : "px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-center"
                                 }
                                 style={
-                                  isFactoryShopTable || isPropertiesRental ? undefined : { backgroundColor: p.headerBg, color: p.headerText }
+                                  isFactoryShopTable || isPropertiesRental
+                                    ? undefined
+                                    : { backgroundColor: p.headerBg, color: p.headerText }
                                 }
                               >
                                 {isFactoryShopTable ? (
@@ -746,15 +820,20 @@ export default function PropertyRentalPage({
                                 className={
                                   isFactoryShopTable
                                     ? `factory-rentals-unit-row cursor-pointer${u.contract && selectedContractIds.has(u.contract.id) ? " factory-rentals-unit-row-selected" : ""}`
-                                    : isPropertiesRental ? "properties-rentals-unit-row cursor-pointer transition-colors" : "border-t cursor-pointer transition-colors"
+                                    : isPropertiesRental
+                                      ? "properties-rentals-unit-row cursor-pointer transition-colors"
+                                      : "border-t cursor-pointer transition-colors"
                                 }
                                 style={
                                   isFactoryShopTable
                                     ? ({ "--factory-rentals-rgb": `${p.r}, ${p.g}, ${p.b}` } as React.CSSProperties)
-                                    : isPropertiesRental ? undefined : { backgroundColor: uIdx % 2 === 0 ? rowBgEven : rowBgOdd }
+                                    : isPropertiesRental
+                                      ? undefined
+                                      : { backgroundColor: uIdx % 2 === 0 ? rowBgEven : rowBgOdd }
                                 }
                                 onMouseEnter={(e) => {
-                                  if (!isFactoryShopTable && !isPropertiesRental) e.currentTarget.style.filter = "brightness(0.93)";
+                                  if (!isFactoryShopTable && !isPropertiesRental)
+                                    e.currentTarget.style.filter = "brightness(0.93)";
                                 }}
                                 onMouseLeave={(e) => {
                                   if (!isFactoryShopTable && !isPropertiesRental) e.currentTarget.style.filter = "";
@@ -781,13 +860,23 @@ export default function PropertyRentalPage({
                                 <td
                                   className={isFactoryShopTable ? "px-3 py-2" : "px-3 py-2 font-mono text-xs font-bold"}
                                   style={
-                                    isFactoryShopTable || isPropertiesRental ? undefined : { backgroundColor: unitNumBg, color: unitNumColor }
+                                    isFactoryShopTable || isPropertiesRental
+                                      ? undefined
+                                      : { backgroundColor: unitNumBg, color: unitNumColor }
                                   }
                                 >
                                   {isFactoryShopTable || isPropertiesRental ? (
                                     <span
-                                      className={isPropertiesRental ? "properties-rentals-unit-pill" : "factory-rentals-unit-pill"}
-                                      style={isFactoryShopTable ? { color: p.headerBg, backgroundColor: `rgba(${p.r},${p.g},${p.b},0.15)` } : undefined}
+                                      className={
+                                        isPropertiesRental
+                                          ? "properties-rentals-unit-pill"
+                                          : "factory-rentals-unit-pill"
+                                      }
+                                      style={
+                                        isFactoryShopTable
+                                          ? { color: p.headerBg, backgroundColor: `rgba(${p.r},${p.g},${p.b},0.15)` }
+                                          : undefined
+                                      }
                                     >
                                       <Building2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                                       {u.unitNumber}
@@ -871,7 +960,15 @@ export default function PropertyRentalPage({
                                       : "text-muted-foreground"
                                   }`}
                                 >
-                                  <span className={isFactoryShopTable ? "factory-rentals-money-pill" : isPropertiesRental ? "properties-rentals-money-pill" : undefined}>
+                                  <span
+                                    className={
+                                      isFactoryShopTable
+                                        ? "factory-rentals-money-pill"
+                                        : isPropertiesRental
+                                          ? "properties-rentals-money-pill"
+                                          : undefined
+                                    }
+                                  >
                                     {u.contract
                                       ? fmtMoneyCurrency(
                                           (
@@ -887,7 +984,15 @@ export default function PropertyRentalPage({
                                 <td
                                   className={`px-3 py-2 text-right tabular-nums font-semibold ${(u.outstanding ?? 0) > 0 ? (isPropertiesRental ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400") : (u.prepaidCredit ?? 0) > 0 ? (isPropertiesRental ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400") : "text-muted-foreground"}`}
                                 >
-                                  <span className={isFactoryShopTable ? "factory-rentals-money-pill" : isPropertiesRental ? "properties-rentals-money-pill" : undefined}>
+                                  <span
+                                    className={
+                                      isFactoryShopTable
+                                        ? "factory-rentals-money-pill"
+                                        : isPropertiesRental
+                                          ? "properties-rentals-money-pill"
+                                          : undefined
+                                    }
+                                  >
                                     {u.outstanding !== null
                                       ? fmtMoneyCurrency(
                                           (u.outstanding ?? 0) > 0
@@ -906,7 +1011,9 @@ export default function PropertyRentalPage({
                                     : "—"}
                                 </td>
                                 <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
-                                  <span className={isPropertiesRental ? "properties-rentals-date" : "factory-rentals-date"}>
+                                  <span
+                                    className={isPropertiesRental ? "properties-rentals-date" : "factory-rentals-date"}
+                                  >
                                     {(isFactoryShopTable || isPropertiesRental) && (
                                       <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                                     )}
@@ -916,7 +1023,9 @@ export default function PropertyRentalPage({
                                   </span>
                                 </td>
                                 <td className="px-3 py-2 text-xs text-muted-foreground">
-                                  <span className={isPropertiesRental ? "properties-rentals-date" : "factory-rentals-date"}>
+                                  <span
+                                    className={isPropertiesRental ? "properties-rentals-date" : "factory-rentals-date"}
+                                  >
                                     {(isFactoryShopTable || isPropertiesRental) && (
                                       <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                                     )}

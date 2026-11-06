@@ -10,11 +10,7 @@ import {
   type ReceiptRow,
 } from "../client/src/pages/properties/property-rental/paymentsReceiptMath";
 
-const receipt = (
-  id: number,
-  amount: number,
-  overrides: Partial<ReceiptRow> = {}
-): ReceiptRow => ({
+const receipt = (id: number, amount: number, overrides: Partial<ReceiptRow> = {}): ReceiptRow => ({
   id,
   amount,
   paymentDate: "2026-10-26",
@@ -131,17 +127,21 @@ describe("Properties read-only payment history reconciliation", () => {
     expect(tsv).toContain("ACCOUNT RECONCILIATION: REMOVE NON-CASH BILLING");
     expect(tsv).toContain("NET RECONCILIATION ADJUSTMENT");
     expect(tsv).toContain("RECONCILED HISTORY + ADJUSTMENT");
-    expect(lines.some(line => line.includes("NET RECONCILIATION ADJUSTMENT") && line.endsWith("\t600.00"))).toBe(true);
-    expect(lines.some(line => line.includes("RECONCILED HISTORY + ADJUSTMENT") && line.endsWith("\t353295.00"))).toBe(true);
-    expect(lines.some(line => line.includes("UNRECONCILED DIFFERENCE") && line.endsWith("\t0.00"))).toBe(true);
+    expect(lines.some((line) => line.includes("NET RECONCILIATION ADJUSTMENT") && line.endsWith("\t600.00"))).toBe(
+      true
+    );
+    expect(lines.some((line) => line.includes("RECONCILED HISTORY + ADJUSTMENT") && line.endsWith("\t353295.00"))).toBe(
+      true
+    );
+    expect(lines.some((line) => line.includes("UNRECONCILED DIFFERENCE") && line.endsWith("\t0.00"))).toBe(true);
     expect(JSON.stringify(rows)).toBe(before);
   });
 
   it("reports a residual instead of automatically forcing any arbitrary account total", () => {
     const tsv = reconciledHistoryTsv(rows, { aliCashLedgerId: 4134, threeAccountsTotal: 35379500 });
-    expect(tsv.split("\n").some(line =>
-      line.includes("UNRECONCILED DIFFERENCE") && line.endsWith("\t500.00")
-    )).toBe(true);
+    expect(tsv.split("\n").some((line) => line.includes("UNRECONCILED DIFFERENCE") && line.endsWith("\t500.00"))).toBe(
+      true
+    );
   });
 
   it("escapes spreadsheet formulas in copied tenant names", () => {
