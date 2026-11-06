@@ -26,6 +26,18 @@ async function toBuffer(wb: ExcelJS.Workbook): Promise<Buffer> {
   return Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
 }
 
+/**
+ * The exact bytes of a workbook as a standalone ArrayBuffer. Small Node Buffers
+ * share an 8 KB allocation pool, so `buf.buffer` can carry stale bytes of other
+ * workbooks around the real one, and read() then recovers whichever complete
+ * workbook it finds last. The pooled-buffer recovery has its own tests below;
+ * the round-trip tests must hand over only the workbook they wrote.
+ */
+function exactArrayBuffer(buf: ArrayBuffer | Uint8Array): ArrayBuffer {
+  const view = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength) as ArrayBuffer;
+}
+
 // ── utils.book_new ─────────────────────────────────────────────────────────────
 
 describe("utils.book_new()", () => {
@@ -105,8 +117,8 @@ describe("utils.decode_range()", () => {
     const r = utils.decode_range("AA2:AZ10");
     expect(r.s.c).toBe(26); // AA = col 26 (0-indexed)
     expect(r.e.c).toBe(51); // AZ = col 51
-    expect(r.s.r).toBe(1);  // row 2 → index 1
-    expect(r.e.r).toBe(9);  // row 10 → index 9
+    expect(r.s.r).toBe(1); // row 2 → index 1
+    expect(r.e.r).toBe(9); // row 10 → index 9
   });
 
   it("returns {s:{r:0,c:0}, e:{r:0,c:0}} for invalid input", () => {
@@ -127,7 +139,10 @@ describe("encode_range ↔ decode_range round-trip", () => {
 
 describe("utils.json_to_sheet()", () => {
   it("extracts headers from first object's keys", () => {
-    const data = [{ Name: "Alice", Age: 30 }, { Name: "Bob", Age: 25 }];
+    const data = [
+      { Name: "Alice", Age: 30 },
+      { Name: "Bob", Age: 25 },
+    ];
     const sheet = utils.json_to_sheet(data);
     expect(sheet.headers).toEqual(["Name", "Age"]);
     expect(sheet.data).toEqual(data);
@@ -156,7 +171,11 @@ describe("utils.json_to_sheet()", () => {
 
 describe("utils.aoa_to_sheet()", () => {
   it("wraps array-of-arrays into { aoa: [...] }", () => {
-    const data = [["A", "B"], [1, 2], [3, 4]];
+    const data = [
+      ["A", "B"],
+      [1, 2],
+      [3, 4],
+    ];
     const sheet = utils.aoa_to_sheet(data);
     expect(sheet.aoa).toEqual(data);
   });
@@ -227,7 +246,11 @@ describe("utils.book_append_sheet()", () => {
 
   it("appends an AOA sheet with correct cell values", () => {
     const wb = utils.book_new();
-    const sheet = utils.aoa_to_sheet([["X", "Y"], [1, 2], [3, 4]]);
+    const sheet = utils.aoa_to_sheet([
+      ["X", "Y"],
+      [1, 2],
+      [3, 4],
+    ]);
     utils.book_append_sheet(wb, sheet, "AoaSheet");
     const ws = wb.getWorksheet("AoaSheet")!;
     expect(ws.getRow(1).getCell(1).value).toBe("X");
@@ -238,7 +261,10 @@ describe("utils.book_append_sheet()", () => {
 
   it("appends a json_to_sheet with header row first, then data", () => {
     const wb = utils.book_new();
-    const data = [{ Name: "Alice", Score: 95 }, { Name: "Bob", Score: 80 }];
+    const data = [
+      { Name: "Alice", Score: 95 },
+      { Name: "Bob", Score: 80 },
+    ];
     const sheet = utils.json_to_sheet(data);
     utils.book_append_sheet(wb, sheet, "Json");
     const ws = wb.getWorksheet("Json")!;
@@ -391,7 +417,7 @@ describe("readFromBuffer()", () => {
     const src = new ExcelJS.Workbook();
     src.addWorksheet("Sheet1");
     const buf = await toBuffer(src);
-    const wb = await readFromBuffer(buf.buffer as ArrayBuffer);
+    const wb = await readFromBuffer(exactArrayBuffer(buf));
     expect(wb.getWorksheet("Sheet1")).toBeDefined();
   });
 
@@ -401,7 +427,7 @@ describe("readFromBuffer()", () => {
     ws.addRow(["key", "value"]);
     ws.addRow(["foo", "bar"]);
     const buf = await toBuffer(src);
-    const wb = await readFromBuffer(buf.buffer as ArrayBuffer);
+    const wb = await readFromBuffer(exactArrayBuffer(buf));
     const ws2 = wb.getWorksheet("Data")!;
     expect(ws2.getRow(2).getCell(1).value).toBe("foo");
     expect(ws2.getRow(2).getCell(2).value).toBe("bar");
@@ -424,7 +450,7 @@ describe("read()", () => {
     src.addWorksheet("ReadMe");
     src.addWorksheet("Other");
     const buf = await toBuffer(src);
-    const { SheetNames, Sheets } = await read(buf.buffer as ArrayBuffer);
+    const { SheetNames, Sheets } = await read(exactArrayBuffer(buf));
     expect(SheetNames).toContain("ReadMe");
     expect(SheetNames).toContain("Other");
     expect(Sheets["ReadMe"]).toBeDefined();
@@ -435,7 +461,7 @@ describe("read()", () => {
     src.addWorksheet("Alpha");
     src.addWorksheet("Beta");
     const buf = await toBuffer(src);
-    const { SheetNames, Sheets } = await read(buf.buffer as ArrayBuffer);
+    const { SheetNames, Sheets } = await read(exactArrayBuffer(buf));
     expect(SheetNames).toEqual(["Alpha", "Beta"]);
     expect(Object.keys(Sheets).sort()).toEqual(["Alpha", "Beta"]);
   });
@@ -503,7 +529,7 @@ describe("Full round-trip (utils → writeBuffer → read → sheet_to_json)", (
     const sheet = utils.json_to_sheet(data);
     utils.book_append_sheet(wb, sheet, "Products");
     const raw = await wb.xlsx.writeBuffer();
-    const { Sheets } = await read(Buffer.from(raw).buffer as ArrayBuffer);
+    const { Sheets } = await read(exactArrayBuffer(Buffer.from(raw)));
     const rows = utils.sheet_to_json(Sheets["Products"]) as any[];
     expect(rows[0].Product).toBe("Widget");
     expect(rows[0].Price).toBe(9.99);
@@ -512,10 +538,14 @@ describe("Full round-trip (utils → writeBuffer → read → sheet_to_json)", (
 
   it("aoa_to_sheet → book_append_sheet → buffer → readFromBuffer", async () => {
     const wb = utils.book_new();
-    const sheet = utils.aoa_to_sheet([["H1", "H2"], [1, 2], [3, 4]]);
+    const sheet = utils.aoa_to_sheet([
+      ["H1", "H2"],
+      [1, 2],
+      [3, 4],
+    ]);
     utils.book_append_sheet(wb, sheet, "AOA");
     const raw = await wb.xlsx.writeBuffer();
-    const loaded = await readFromBuffer(Buffer.from(raw).buffer as ArrayBuffer);
+    const loaded = await readFromBuffer(exactArrayBuffer(Buffer.from(raw)));
     const ws = loaded.getWorksheet("AOA")!;
     expect(ws.getRow(1).getCell(1).value).toBe("H1");
     expect(ws.getRow(3).getCell(2).value).toBe(4);
@@ -526,7 +556,7 @@ describe("Full round-trip (utils → writeBuffer → read → sheet_to_json)", (
     utils.book_append_sheet(wb, utils.json_to_sheet([{ Col: "S1" }]), "S1");
     utils.book_append_sheet(wb, utils.json_to_sheet([{ Col: "S2" }]), "S2");
     const raw = await wb.xlsx.writeBuffer();
-    const { SheetNames, Sheets } = await read(Buffer.from(raw).buffer as ArrayBuffer);
+    const { SheetNames, Sheets } = await read(exactArrayBuffer(Buffer.from(raw)));
     expect(SheetNames).toContain("S1");
     expect(SheetNames).toContain("S2");
     const rows = utils.sheet_to_json(Sheets["S2"]) as any[];
@@ -539,7 +569,7 @@ describe("Full round-trip (utils → writeBuffer → read → sheet_to_json)", (
     ws.addRow(["Value"]);
     (ws.getRow(2).getCell(1) as any).value = { formula: "=2*3", result: 6 };
     const buf = await toBuffer(src);
-    const loaded = await readFromBuffer(buf.buffer as ArrayBuffer);
+    const loaded = await readFromBuffer(exactArrayBuffer(buf));
     const ws2 = loaded.getWorksheet("Formulas")!;
     const cell = ws2.getRow(2).getCell(1).value as any;
     // ExcelJS stores formula with cached result; sheet_to_json extracts the result
