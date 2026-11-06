@@ -66,6 +66,7 @@ import {
   FactoryFinancialSnapshot,
   FactoryImport,
   FactoryIntelSettings,
+  FactoryMhdViewManagerPage,
   FactoryInvoiceCreate,
   FactoryInvoiceLoadingScan,
   FactoryInvoicing,
@@ -341,6 +342,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       <Route path="/factory/bale-ledger">
         {() => <Redirect replace to="/factory/production-report?tab=product-comparison" />}
       </Route>
+      <Route path="/factory/intelligence/mhd-view" component={FactoryMhdViewManagerPage} />
       <Route path="/factory/intelligence/settings" component={FactoryIntelSettings} />
       {isDeveloper && <Route path="/factory/spreadsheet" component={SpreadsheetEditor} />}
       {isDeveloper && <Route path="/factory/chat" component={Chat} />}
