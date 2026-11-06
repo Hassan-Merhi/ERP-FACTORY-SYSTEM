@@ -170,6 +170,7 @@ export function CompanySelector({ showMobileName = false }: { showMobileName?: b
     <DropdownMenu
       onOpenChange={(open) => {
         if (!open) setSearchTerm("");
+        else window.setTimeout(() => searchInputRef.current?.focus(), 0);
       }}
     >
       <DropdownMenuTrigger asChild>
@@ -196,10 +197,6 @@ export function CompanySelector({ showMobileName = false }: { showMobileName?: b
         sideOffset={10}
         collisionPadding={8}
         data-testid="workspace-switcher-content"
-        onOpenAutoFocus={(event) => {
-          event.preventDefault();
-          searchInputRef.current?.focus();
-        }}
         className="relative isolate flex max-h-[min(39rem,calc(var(--app-viewport-height)-1rem))] w-[min(25rem,calc(100vw-1rem))] flex-col overflow-hidden rounded-[24px] border border-white/80 bg-[linear-gradient(145deg,rgba(237,247,255,.97),rgba(231,234,255,.97)_55%,rgba(247,238,255,.97))] p-0 text-slate-900 shadow-[0_24px_70px_-24px_rgba(41,76,153,.5),0_4px_16px_rgba(40,64,135,.12)] backdrop-blur-2xl dark:border-white/15 dark:bg-[linear-gradient(145deg,rgba(17,31,58,.98),rgba(27,27,62,.98)_55%,rgba(36,23,63,.98))] dark:text-slate-50 dark:shadow-[0_24px_70px_-18px_rgba(0,0,0,.75),0_0_30px_rgba(107,84,230,.1)]"
       >
         <div aria-hidden="true" className="pointer-events-none absolute -top-20 -right-12 -z-10 h-56 w-56 rounded-full bg-violet-300/35 blur-3xl dark:bg-violet-500/15" />
