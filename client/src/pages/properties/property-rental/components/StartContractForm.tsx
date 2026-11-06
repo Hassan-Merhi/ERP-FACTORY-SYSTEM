@@ -4,7 +4,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
  *
  * Extracted from PropertyRentalPage.tsx during the Phase 4 god-file split.
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
@@ -46,6 +46,9 @@ export function StartContractForm({
   });
   const [isInternal, setIsInternal] = useState(false);
   const [linkedCompanyId, setLinkedCompanyId] = useState<number | null>(null);
+  // Keep a single request identity for an exact retry, but never reuse that
+  // identity if the operator changes the contract details after a failure.
+  const pendingCreate = useRef<{ payload: string; requestId: string } | null>(null);
 
   const { data: allCompanies = [] } = useQuery<{ id: number; name: string }[]>({
     queryKey: ["/api/companies"],
@@ -58,16 +61,39 @@ export function StartContractForm({
   });
 
   const start = useMutation({
-    mutationFn: () => apiRequest("POST", apiBase + "/contracts", {
-      ...form, unitId, isInternal,
-      ...(unitType === "SHOP" && apiBase === "/api/factory/rental" && isInternal ? { linkedCompanyId } : {}),
-    }),
+    mutationFn: () => {
+      const payload = {
+        ...form,
+        guaranteeAmount: form.guaranteeAmount.trim() || "0",
+        unitId,
+        isInternal,
+        ...(unitType === "SHOP" && apiBase === "/api/factory/rental" && isInternal ? { linkedCompanyId } : {}),
+      };
+      const fingerprint = JSON.stringify(payload);
+      if (pendingCreate.current?.payload !== fingerprint) {
+        pendingCreate.current = {
+          payload: fingerprint,
+          requestId: globalThis.crypto?.randomUUID?.() ??
+            `rental-contract-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        };
+      }
+      return apiRequest("POST", apiBase + "/contracts", {
+        ...payload,
+        clientRequestId: pendingCreate.current.requestId,
+      });
+    },
     onSuccess: () => {
+      pendingCreate.current = null;
       toast({ title: "Contract started" });
       queryClient.invalidateQueries({ queryKey: [apiBase + "/units"] });
       onClose();
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) => {
+      // A contract insert may have committed before a later ledger-row error.
+      // Refetch the unit so the operator cannot keep working from stale "Vacant" state.
+      queryClient.invalidateQueries({ queryKey: [apiBase + "/units"] });
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    },
   });
 
   return (
