@@ -37,6 +37,8 @@ services:
       FACTORY_EDGE_PRIMARY_ACK: ${EDGE_PRIMARY_ACK:-}
       FACTORY_EDGE_WRITER_EPOCH: ${EDGE_WRITER_EPOCH:-}
       FACTORY_EDGE_BASELINE_SHA256: ${EDGE_BASELINE_SHA256:-}
+      # Offline plan batches whose staging drill the owner approved (for example 2,3); empty = none.
+      FACTORY_EDGE_APPROVED_PLAN_BATCHES: ${EDGE_APPROVED_PLAN_BATCHES:-}
       PGHOST: postgres
       PGPORT: "5432"
       PGUSER: erp_edge

@@ -89,3 +89,88 @@ export function phase9AttachmentEnvelope(evidence) {
     uploadedOn: evidence.uploadedOn,
   };
 }
+
+// ---- Plan batch 4 (owner-approved 2026-11-05): offline file rename / move ----
+//
+// Names the file by the LAN record that uploaded it ({origin: "lan"}) or by
+// its shared pre-outage id ({origin: "cloud"}), with its name and folder as
+// the factory saw them and as the factory left them.
+
+export const PHASE9_ATTACHMENT_UPDATE_KIND = "attachment.file-update.v1";
+/** Overridable: the cloud file was renamed or moved after the factory saw it; approve = the factory's change wins. */
+export const PHASE9_ATTACHMENT_FILE_CHANGED = "PHASE9_ATTACHMENT_FILE_CHANGED";
+
+function placement(value) {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.keys(value).sort().join(",") !== "displayName,folderId" ||
+    !(value.displayName === null || (typeof value.displayName === "string" && value.displayName.length <= 500)) ||
+    !(
+      value.folderId === null ||
+      (Number.isSafeInteger(value.folderId) && value.folderId > 0 && value.folderId <= MAX_REF)
+    )
+  ) {
+    return null;
+  }
+  return { displayName: value.displayName, folderId: value.folderId };
+}
+
+function fileRef(value) {
+  const keys = value && typeof value === "object" && !Array.isArray(value) ? Object.keys(value).sort().join(",") : "";
+  const ref = (n) => Number.isSafeInteger(n) && n > 0 && n <= MAX_REF;
+  if (keys === "localFileId,origin" && value.origin === "lan" && ref(value.localFileId)) {
+    return { origin: "lan", localFileId: value.localFileId };
+  }
+  if (keys === "fileId,origin" && value.origin === "cloud" && ref(value.fileId)) {
+    return { origin: "cloud", fileId: value.fileId };
+  }
+  return null;
+}
+
+export function phase9AttachmentUpdateEnvelope(evidence) {
+  const fields = [
+    "actorUserId",
+    "actorUsername",
+    "after",
+    "before",
+    "companyId",
+    "fileRef",
+    "localFileId",
+    "requestId",
+  ];
+  const ok =
+    evidence &&
+    typeof evidence === "object" &&
+    !Array.isArray(evidence) &&
+    Object.keys(evidence).sort().join(",") === fields.join(",") &&
+    Number.isSafeInteger(evidence.companyId) &&
+    evidence.companyId > 0 &&
+    Number.isSafeInteger(evidence.localFileId) &&
+    evidence.localFileId > 0 &&
+    evidence.localFileId <= MAX_REF &&
+    typeof evidence.actorUserId === "string" &&
+    evidence.actorUserId.length >= 1 &&
+    evidence.actorUserId.length <= 255 &&
+    typeof evidence.actorUsername === "string" &&
+    evidence.actorUsername.length >= 1 &&
+    evidence.actorUsername.length <= 255 &&
+    typeof evidence.requestId === "string" &&
+    UUID.test(evidence.requestId);
+  const target = ok ? fileRef(evidence.fileRef) : null;
+  const before = ok ? placement(evidence.before) : null;
+  const after = ok ? placement(evidence.after) : null;
+  if (!target || !before || !after) throw new Phase9AttachmentRefusal("PHASE9_ATTACHMENT_UPDATE_EVIDENCE_INVALID");
+  return {
+    kind: PHASE9_ATTACHMENT_UPDATE_KIND,
+    requestId: evidence.requestId,
+    companyId: evidence.companyId,
+    actorUserId: evidence.actorUserId,
+    actorUsername: evidence.actorUsername,
+    localFileId: evidence.localFileId,
+    fileRef: target,
+    before,
+    after,
+  };
+}

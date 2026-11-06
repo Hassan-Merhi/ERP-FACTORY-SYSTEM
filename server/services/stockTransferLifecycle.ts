@@ -349,12 +349,20 @@ function headerSourceLocationId(items: StockTransferLifecycleItem[]): number | n
 export async function saveStockTransferLifecycle(
   input: SaveStockTransferLifecycleInput
 ): Promise<StockTransferLifecycleResult> {
+  return db.transaction((tx) => saveStockTransferLifecycleTx(tx, input));
+}
+
+/** saveStockTransferLifecycle on the caller's transaction (offline capture and cloud replay). */
+export async function saveStockTransferLifecycleTx(
+  tx: DbTransaction,
+  input: SaveStockTransferLifecycleInput
+): Promise<StockTransferLifecycleResult> {
   const companyId = positiveInteger(input.companyId, "Company ID");
   const transferId = positiveInteger(input.transferId, "Transfer ID");
   const destinationLocationId = positiveInteger(input.destinationLocationId, "Destination location ID");
   const normalizedItems = normalizeItems(input.items, destinationLocationId);
 
-  return db.transaction(async (tx) => {
+  {
     const locked = await lockTransfer(tx, transferId);
     if (!locked) throw new Error("Stock transfer not found");
     if (Number(locked.company_id) !== companyId) throw new Error("Stock transfer belongs to a different company");
@@ -444,12 +452,14 @@ export async function saveStockTransferLifecycle(
     if (input.voucherDate !== undefined) voucherUpdates.voucherDate = input.voucherDate;
     // User notes override the automatic location narration. Clearing them
     // restores the generated description in every voucher read path.
-    voucherUpdates.description = input.notes.trim() || await stockTransferNarrationTx(
-      tx,
-      companyId,
-      normalizedItems.map((item) => item.sourceLocationId),
-      destinationLocationId
-    );
+    voucherUpdates.description =
+      input.notes.trim() ||
+      (await stockTransferNarrationTx(
+        tx,
+        companyId,
+        normalizedItems.map((item) => item.sourceLocationId),
+        destinationLocationId
+      ));
     await tx.update(vouchers).set(voucherUpdates).where(eq(vouchers.id, voucherId));
 
     return {
@@ -461,7 +471,7 @@ export async function saveStockTransferLifecycle(
       totalAmount: totalAmount.toFixed(2),
       items: savedItems,
     };
-  });
+  }
 }
 
 /**
@@ -472,10 +482,19 @@ export async function finalizeOptionalStockTransfer(
   companyIdInput: number,
   voucherIdInput: number
 ): Promise<StockTransferLifecycleResult> {
+  return db.transaction((tx) => finalizeOptionalStockTransferTx(tx, companyIdInput, voucherIdInput));
+}
+
+/** finalizeOptionalStockTransfer on the caller's transaction (offline capture and cloud replay). */
+export async function finalizeOptionalStockTransferTx(
+  tx: DbTransaction,
+  companyIdInput: number,
+  voucherIdInput: number
+): Promise<StockTransferLifecycleResult> {
   const companyId = positiveInteger(companyIdInput, "Company ID");
   const voucherId = positiveInteger(voucherIdInput, "Voucher ID");
 
-  return db.transaction(async (tx) => {
+  {
     const locked = await lockTransferByVoucher(tx, voucherId);
     if (!locked) throw new Error("Stock transfer not found");
     if (Number(locked.company_id) !== companyId) throw new Error("Stock transfer belongs to a different company");
@@ -557,7 +576,7 @@ export async function finalizeOptionalStockTransfer(
       totalAmount,
       items: persistedRows,
     };
-  });
+  }
 }
 
 export async function finalizeStockTransferByTransferId(companyIdInput: number, transferIdInput: number) {

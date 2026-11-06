@@ -36,6 +36,12 @@ an open cloud epoch.
 | Stock movement: inventory quick adjust (add / subtract at a location) | yes, existing items and locations | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — replayed as a delta; below zero is held for Admin/Developer approve/reject |
 | New stock transfer (`POST /api/stock-transfers`, create-from-scratch form; the existing-voucher form is refused) | yes, existing items and locations | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — replayed through the same transfer code on the LAN request id, with a cloud voucher number; a source the cloud cannot cover is held for Admin/Developer approve/reject |
 | Stock-item master edits: bulk price update, bulk category, bulk rename, bulk unit fix, the update-by-code imports (names, categories, opening balances, barcodes), location prices and single-item edits | yes, existing items only; whitelisted fields (name, unit, selling price, category, group, active, opening balances, location prices, new barcodes) | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — each field applied only while the cloud value still equals what the LAN saw; a field the cloud changed meanwhile is held for Admin/Developer approve (LAN value wins) or reject; a re-coded or missing item, a missing category/group/location or a barcode another item holds is reject-only |
+| New stock item (`POST /api/stock-items`) and stock item delete (`DELETE /api/stock-items/:id`) | yes; the new item gets an id from the reserved LAN range (1,000,000,000 and up) and keeps the code the user typed; delete only for an item with no stock movements | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — the create makes the cloud item and records the LAN-id → cloud-id mapping (`factory_edge_stock_item_map`); every later record naming the LAN id is translated, and waits (no conflict) until the create has applied; a code the cloud already uses is reject-only, an item with the same name is held for Admin/Developer approve/reject; a delete of an item the cloud still holds stock of, or has movements for, is reject-only |
+| Changes to an existing stock transfer: edit (`PUT /api/stock-transfers/:id`), finalize/approve (`POST /api/vouchers/:id/finalize` for transfer vouchers, `POST /api/stock-transfers/:id/approve`), revisions (`POST /api/stock-transfers/:id/revisions`) and revision approve/reject | yes; other voucher types cannot be finalized offline (HTTP 423) | `stock` (Phase 9) | `server/edge/phase9OperatorApply.ts apply stock` — each change carries the transfer as the factory saw it; a transfer created offline is found through its create's receipt; an edit or finalize of a transfer the cloud changed meanwhile is held for Admin/Developer approve (factory change wins) or reject; a stale revision, a revision no longer pending, or a transfer whose offline create was rejected is reject-only |
+| Excel stock-transfer import, single and multi-source (`/api/stock-transfer-import/*`: parse and validate only read; import writes) | yes; each import is created through the same code as a hand-typed transfer | `stock` (Phase 9), as an ordinary `stock.transfer.v1` | replayed like any offline transfer, on its LAN request id; a cloud shortfall is held for Admin/Developer approve/reject |
+| Excel inventory import for a location (`POST /api/locations/:id/import-inventory`) | yes, existing items only; needs the stock-adjustment permission; a row below zero is refused | `stock` (Phase 9), each row an ordinary `stock.quick-adjust.v1` | each row's quantity change is added to the cloud's own figure (never an overwritten balance); below zero is held for Admin/Developer approve/reject. Offline, an unknown code is reported (not created) and rows are valued at the location's average cost |
+| Payment / Receipt edit (`PATCH /api/vouchers/:id/payment-receipt`) and delete (`DELETE /api/vouchers/:id`, Admin) | yes, once batch 4's drill is approved; intercompany transfer legs stay online-only (409) | `payments` (Phase 9), after the payment itself | each record carries a SHA-256 of the voucher (header and every entry) as the factory saw it. A voucher created offline is found through its create's receipt. The change applies through the same code only while the cloud voucher still has that digest. A changed voucher is held for Admin/Developer approve (factory change wins) or reject. A reconciled voucher, an intercompany leg, a closed period or any other posting refusal is reject-only |
+| File rename / move (`PATCH /api/files/:id`) | yes, once batch 4's drill is approved; file deletes stay online-only | `attachments` (Phase 9), after the upload | applied only while the cloud file still has the name and folder the factory saw. A file renamed or moved in the cloud meanwhile is held (approve = factory change wins). A missing target folder is reject-only |
 | POS sale — cash, bank or credit; USD or another currency at the cashier's entered rate (non-supplier-partner company) | yes, numbered `LAN-<site>-000123` | `pos` (Phase 9) | `server/edge/phase9OperatorApply.ts apply pos` — replayed through the sale service on its `clientSaleId`; keeps the offline price; below-zero stock or a changed till account is held for Admin/Developer approve/reject |
 | Supplier receiving: container offload against its existing purchase orders, and offload edits, with duties, charges, cost corrections and agent lines | yes | `receiving` (Phase 9) | `server/edge/phase9OperatorApply.ts apply receiving` — same offload lifecycle on the receipt's transaction; cloud prices apply; changed order quantities are held for Admin/Developer approve/reject |
 | File upload (Files page), up to 10 MB | yes | `attachments` (Phase 9) + signed file upload | `server/edge/phase9OperatorApply.ts apply attachments` — the record syncs first; the relay then uploads the bytes to `/api/edge/sync/files/stage`, accepted only if their SHA-256 matches a staged record; the file is created in the cloud once its bytes arrive; a missing folder is held for approve/reject |
@@ -44,11 +50,87 @@ an open cloud epoch.
 | POS sale cancellation (`DELETE /api/vouchers/:id`, sales vouchers only, Admin) | yes | `pos` (same stream as the sale) | replayed through the same delete code; the operator tool refreshes the intercompany POS mirror for the date afterwards; a missing or already-cancelled sale is reject-only |
 | Login, logout, company switch | yes (session only) | none | n/a |
 | All reads covered by prepared offline reads | yes | n/a | n/a |
-| Everything else (1,155 write routes) | **refused** with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION` | none | n/a |
+| Everything else (1,140 write routes) | **refused** with HTTP 423 `EDGE_SYNC_UNSUPPORTED_OPERATION` | none | n/a |
 
 `node scripts/edge/audit-phase9-write-coverage.mjs` prints the exact current
 inventory and fails if any route becomes writable on the LAN without a reviewed
 capture policy.
+
+### Laptops that reach neither the cloud nor the factory server (decision 10)
+
+Such a laptop is a **read-only viewer**. It never takes a write.
+
+- **Ticket.** While the user is signed in online and has unlocked the
+  encrypted offline cache (Offline panel, passphrase), the browser seals a
+  cold-start ticket with that cache's key. The ticket expires 24 hours after
+  that online check.
+- **No connection after a restart.** The app shows a passphrase screen
+  instead of "Reconnecting". The same passphrase opens the cached data for
+  viewing until the ticket expires, under the banner "Not connected to the
+  factory server: view only".
+- **Writes.** Every write is refused in the browser with HTTP 423
+  `OFFLINE_COLD_START_READ_ONLY`, before it can be sent or queued. Buttons stay
+  visible; whatever they try to save is refused. Signing in again works as
+  soon as a connection returns.
+- **Data window.** An encrypted cache now stays readable for 24 hours after it
+  was prepared. An unencrypted cache keeps 8 hours and never opens on a cold
+  start.
+- **Wipes.** Signing out wipes that account's ticket on the laptop. When the
+  server reports at the next connection that the account was disabled, all
+  its tickets are wiped. When the account was removed from a company, that
+  company's ticket and cached data are wiped.
+- **Proof.** The expiry is bound into the ticket's encryption, so editing it
+  on disk makes the ticket fail to open
+  (`tests/ui/offline-cold-start-read-only.test.ts`).
+
+### Entries left in the old browser queues
+
+Some browsers still hold entries saved offline before the current design
+(localStorage `erp_offline_queue`, IndexedDB `syncQueue`). They were never
+sent, and they never will be automatically.
+
+- **Move.** At the next sign-in on that browser they move into an encrypted
+  store, under a non-extractable key held by that browser. The originals are
+  removed only after the encrypted copies are stored.
+- **Who sees them.** Admin, Owner and Developer users of the company get a
+  list showing date, type and amount. The old entries recorded no user, so
+  they are not shown to other roles. Entries with no known company appear for
+  every company.
+- **Choices.** **Re-enter** shows the entry's full details; the user types it
+  again through the normal form, which goes through the server's checks, then
+  marks it re-entered. **Discard** drops it. The form is not pre-filled.
+- **Log.** Each choice is recorded in the audit log with the user's name
+  (`POST /api/offline/legacy-queue/decisions`, table
+  `offline_legacy_queue_entries`) before it takes effect. If it cannot be
+  recorded, nothing changes.
+- **Retention.** Entries nobody handles are deleted after 30 days.
+
+### Plan batches stay off until their staging drill is approved
+
+The rows added by the owner-approved plan of 2026-11-05 are:
+- batch 2: new stock items and item deletes;
+- batch 3: transfer edits, finalizes and revisions, and the Excel transfer
+  and inventory imports;
+- batch 4: Payment / Receipt edits and deletes, and file renames and moves.
+
+They are refused on the factory server (HTTP 423) until the owner has run
+that batch's staging drill and approved it. Record the approval in
+`deploy/lan/.env` and restart the server:
+
+```
+EDGE_APPROVED_PLAN_BATCHES=2,3
+```
+
+On the factory server, Payment / Receipt creates, edits and deletes are served
+by the payment routes that record them for the cloud, not by the central
+posting routes. They use the same posting code the cloud replays, and the
+same `clientRequestId` keeps a retried create from posting twice.
+
+Leave it empty to keep every plan batch off. An unknown value stops the
+server at startup (`EDGE_PLAN_BATCHES_INVALID`). The coverage audit lists
+each gated route with its `planBatch`. Workflows approved before the plan are
+not gated, and neither is the operator Pause/Resume button, which writes no
+business data.
 
 ### Why the remaining workflows are online-only
 
@@ -59,21 +141,23 @@ conflict detection, and a PostgreSQL reconciliation test. Enabling a route
 without all of that would let the factory record transactions that cannot be
 reconciled safely, which is worse than refusing them.
 
-- **Creating, deleting, merging or re-coding stock items; Excel transfer
-  imports, inventory imports, transfer edits/approvals/revisions; bale
-  lifecycle, production finalisation:** item ids and codes are how every
-  other offline record (sales, transfers, adjustments) finds its item in the
-  cloud, so a new LAN item id could not be matched; the transfer workflow
-  edits and the Excel imports go through separate code that has no replay
-  handler yet. Quick adjustments, new transfers and master edits of existing
-  items are offline (above).
-- **Deletes of non-sales vouchers and payment edits:** each posts
-  money and stock together through the central posting engine with
-  multi-currency, tax and numbering rules. Payment/receipt edits and deletes
-  stay online-only.
-- **Other documents and imports:** offline file upload covers the Files page
-  (`POST /api/files/upload`); renames, moves, deletes, imports and document
-  exports stay online-only.
+- **Merging or re-coding stock items (owner decision 2026-11-05: stays
+  online-only); inventory cost-price imports; legacy
+  transfer line edits (`PATCH /api/stock-transfer-items/:id`), the voucher
+  editor's transfer save (`PATCH /api/vouchers/:id/transfer`) and reopen;
+  bale lifecycle, production finalisation:** a merge or re-code rewrites the
+  identity every other offline record uses to find its item; the cost-price
+  import and the remaining transfer paths go through separate code that has
+  no replay handler yet. Quick adjustments, inventory imports, new and imported transfers,
+  transfer edits, finalizes and revisions, new items, item deletes and master
+  edits of existing items are offline (above).
+- **Deletes and edits of other voucher types:** each posts money and stock
+  together through the central posting engine with multi-currency, tax and
+  numbering rules. Only POS sales and Payment / Receipt vouchers are edited
+  or deleted offline (above). Intercompany transfer legs stay online-only.
+- **Other documents and imports:** offline file upload, rename and move cover
+  the Files page; file deletes, imports and document exports stay
+  online-only.
 - **Pressing voids/corrections and machine assignment changes:** supervisor
   actions on the cloud's view of the same records; they stay cloud-only so a
   void can never race a LAN scan of the same bale.
@@ -197,6 +281,17 @@ no longer matches, or the worker lost access before reconciliation. The apply
 transaction rolls back, the conflict is written to
 `factory_edge_event_conflicts`, and the stream stays blocked at that sequence.
 
+- **On screen (cloud operator console):** start a cloud instance with the same
+  settings as the apply (`FACTORY_SYNC_RECEIVE_ENABLED=1`,
+  `FACTORY_PHASE9_APPLY_ENABLED=1`, the apply acknowledgement, site, company,
+  baseline and cloud epoch, and the database fence settings). An Admin or
+  Developer of the approved company sees **Held offline records** in the
+  Offline panel: each held record with its reason, **Approve** (only where the
+  rules allow it) and **Reject**. Both need the user's password again and a
+  reason of at least 10 characters. The decision is written by the DBA-owned
+  function `factory_edge_operator_decide_conflict`, which re-checks the user.
+  On an ordinary cloud instance the panel does not appear
+  (`EDGE_OPERATOR_CONSOLE_DISABLED`). The command-line steps below do the same.
 - Inspect: `node --import tsx server/edge/phase9OperatorApply.ts status` and the
   conflict row's `code`/`detail`.
 - Decide: `node --import tsx server/edge/phase9OperatorApply.ts reject
@@ -232,10 +327,14 @@ transaction rolls back, the conflict is written to
 
 ### 4.5 Pause and resume delivery
 
-`recordPhase10SyncControl` (`server/edge/phase10SyncControl.mjs`) appends a
-`pause` or `resume` row with the operator's name and reason to
-`factory_edge_sync_control_log`. While paused, both relays transmit nothing;
-evidence is untouched. Use it during cloud incidents, restores or audits.
+On the factory server, an Admin or Owner presses **Pause delivery** (or
+**Resume delivery**) in the Offline panel and gives a reason and their
+password. The DBA-owned function `factory_edge_operator_sync_control` checks the
+user and appends a `pause` or `resume` row, with the user's name and reason, to
+`factory_edge_sync_control_log` (`recordPhase10SyncControl` in
+`server/edge/phase10SyncControl.mjs` remains the DBA path). While paused, both
+relays transmit nothing; evidence is untouched. Use it during cloud incidents,
+restores or audits.
 
 ### 4.6 Backup, restore and disaster recovery
 

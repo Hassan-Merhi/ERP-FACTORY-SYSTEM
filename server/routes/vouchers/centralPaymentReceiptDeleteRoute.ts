@@ -12,6 +12,9 @@ import { requireAuth, requireRole } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
+import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
+import { offlineEdgeText } from "../../i18n/offlineEdgeMessages";
+import { intercompanyTransferOfVoucher } from "../../services/accounting/intercompanyTransferLegGuard";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import { storage } from "../../storage";
 import { applyEmployeeBalanceDeltasTx } from "../../services/accounting/employeeBalancePosting";
@@ -71,6 +74,19 @@ async function deleteActivePaymentReceipt(req: Request, res: Response, next: Nex
       return;
     }
 
+    // Factory LAN server (plan batch 4): the delete route that records the change
+    // for the cloud serves it; an intercompany transfer leg stays online-only.
+    if (isPhase9LanPrimary()) {
+      if (await intercompanyTransferOfVoucher(voucherId)) {
+        res.status(409).json({
+          code: "EDGE_PAYMENT_INTERCOMPANY_ONLINE_ONLY",
+          message: offlineEdgeText("paymentIntercompanyOnlineOnly", req.headers["accept-language"]),
+        });
+        return;
+      }
+      next();
+      return;
+    }
     const salesItemCount = voucher.voucherType === "Receipt" ? await countSalesItems(db, voucherId) : 0;
     if (
       !shouldUseCentralPaymentReceiptDeletion({
@@ -98,9 +114,15 @@ async function deleteActivePaymentReceipt(req: Request, res: Response, next: Nex
         .limit(1);
 
       if (!lockedVoucher) throw new Error("Voucher not found");
-      if (await cancelFxAgentSettlementVoucherTx({
-        tx, companyId, voucherId, actor: sessionRetirementActor(req), asOfDate: getClientDate(req),
-      })) {
+      if (
+        await cancelFxAgentSettlementVoucherTx({
+          tx,
+          companyId,
+          voucherId,
+          actor: sessionRetirementActor(req),
+          asOfDate: getClientDate(req),
+        })
+      ) {
         return { replayed: false, voucher: lockedVoucher, entries: [] };
       }
       if (lockedVoucher.deletedAt) {
