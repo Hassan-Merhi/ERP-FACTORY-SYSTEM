@@ -13,6 +13,7 @@ import { useDateFormat } from "@/contexts/DateFormatContext";
 import { PageHeader } from "@/components/PageHeader";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
+import { ChristmasModePreferenceCard } from "@/pages/settings/ChristmasModePreferenceCard";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translateApplicationText, type ApplicationTranslationKey } from "@/i18n/applicationTranslations";
@@ -105,6 +106,7 @@ export default function MySettings() {
   return (
     <div className="p-6 max-w-md mx-auto space-y-6">
       <PageHeader title="My Settings" />
+      <ChristmasModePreferenceCard />
 
       {["factory", "factory_v2"].includes(selectedCompany?.companyType ?? "") && (
         <Card data-testid="settings-factory-mhd-default">
