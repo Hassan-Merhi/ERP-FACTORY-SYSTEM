@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   accountBalanceHistoryBridge,
+  propertiesAccountBalanceSplit,
   reconciledHistoryTsv,
   cashCents,
   nonCashCents,
@@ -57,6 +58,37 @@ describe("Properties read-only payment history reconciliation", () => {
     expect(cashCents(rows[3])).toBe(140000);
     expect(cashCents(rows[4])).toBe(0);
     expect(nonCashCents(rows[4])).toBe(80000);
+  });
+
+  it("splits the $353,295 historical account total into $328,195 cash-side and $25,100 deposits", () => {
+    // Withdrawal through 26 Oct + full ALI cash ($6,400 rent + $1,400 guarantee cash).
+    const split = propertiesAccountBalanceSplit(32039500, 2510000, 780000);
+    expect(split).toEqual({
+      rentAndCashBalance: 32819500,
+      depositBalance: 2510000,
+      accountSum: 35329500,
+    });
+    // Neither category is silently rebalanced if an actual ledger differs.
+    expect(propertiesAccountBalanceSplit(32039500, 2510000, 780100).accountSum).toBe(35329600);
+    expect(propertiesAccountBalanceSplit(null, 2510000, 780000).accountSum).toBeNull();
+  });
+
+  it("adds future cashbox entries without treating a guarantee deposit as unique cash twice", () => {
+    const futureRows = [
+      ...rows,
+      receipt(1000, 100, {
+        paymentDate: "2026-11-06",
+        cashAccountId: 5000,
+        receiptKind: "GUARANTEE_DEPOSIT",
+      }),
+      receipt(1001, 50, { paymentDate: "2026-11-06", cashAccountId: 5000 }),
+    ];
+    const bridge = accountBalanceHistoryBridge(futureRows, [4134, 5000]);
+    expect(bridge.cashAndLiabilityOverlap).toBe(150000);
+    expect(bridge.removeNonCashBilling).toBe(80000);
+    expect(bridge.reconciledTotal).toBe(35354500);
+    const split = propertiesAccountBalanceSplit(32039500, 2520000, 780000, 15000);
+    expect(split.accountSum).toBe(35354500);
   });
 
   it("copies the same cash and noncash columns shown in the table", () => {
