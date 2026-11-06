@@ -41,7 +41,7 @@ export function GlobalSeasonalDecorations({
   return (
     <div className="seasonal-atmosphere" aria-hidden="true" data-testid="christmas-atmosphere">
       <div className="seasonal-garland-band" aria-hidden="true">
-        <span className="seasonal-garland-bow">🎀</span>
+        <span className="seasonal-garland-bow" />
         <span className="seasonal-garland-ornament seasonal-ornament-red" />
         <span className="seasonal-garland-ornament seasonal-ornament-gold" />
         <span className="seasonal-garland-ornament seasonal-ornament-green" />
