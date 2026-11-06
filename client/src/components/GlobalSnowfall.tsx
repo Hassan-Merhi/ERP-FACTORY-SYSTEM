@@ -61,6 +61,7 @@ function SnowfallCanvas() {
     let frameId: number | null = null;
     let lastDraw = 0;
     let destroyed = false;
+    let printPaused = false;
 
     function resizeCanvas() {
       const nextWidth = Math.max(1, window.innerWidth);
@@ -150,7 +151,7 @@ function SnowfallCanvas() {
     }
 
     function resume() {
-      if (destroyed || document.hidden || frameId !== null) return;
+      if (destroyed || document.hidden || printPaused || frameId !== null) return;
       frameId = window.requestAnimationFrame(render);
     }
 
@@ -159,8 +160,21 @@ function SnowfallCanvas() {
       else resume();
     }
 
+    function onBeforePrint() {
+      printPaused = true;
+      stop();
+      ctx.clearRect(0, 0, width, height);
+    }
+
+    function onAfterPrint() {
+      printPaused = false;
+      resume();
+    }
+
     resizeCanvas();
     window.addEventListener("resize", resizeCanvas, { passive: true });
+    window.addEventListener("beforeprint", onBeforePrint);
+    window.addEventListener("afterprint", onAfterPrint);
     document.addEventListener("visibilitychange", onVisibilityChange);
     window.addEventListener("pagehide", stop);
     window.addEventListener("pageshow", resume);
@@ -170,6 +184,8 @@ function SnowfallCanvas() {
       destroyed = true;
       stop();
       window.removeEventListener("resize", resizeCanvas);
+      window.removeEventListener("beforeprint", onBeforePrint);
+      window.removeEventListener("afterprint", onAfterPrint);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("pagehide", stop);
       window.removeEventListener("pageshow", resume);
