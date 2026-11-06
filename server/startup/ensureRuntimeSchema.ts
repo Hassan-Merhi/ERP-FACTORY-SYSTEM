@@ -385,6 +385,33 @@ export async function ensureRetailStockCountSchema(pool: Pool): Promise<void> {
   logger.info("[startup] ✓ Retail stock-count schema ensured");
 }
 
+/**
+ * Contract creation is used even when the bulk startup migrations are disabled
+ * in production. Older property_contracts tables may predate these fields;
+ * CREATE TABLE IF NOT EXISTS does not add them to an existing table.
+ * Inspect first to avoid taking an unnecessary table DDL lock on every boot.
+ * No contracts, payments, or accounting entries are modified.
+ */
+export async function ensureRentalContractCreateColumns(pool: Pool): Promise<void> {
+  const result = await pool.query<{ column_name: string }>(`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'property_contracts'
+  `);
+  const existing = new Set(result.rows.map((row) => row.column_name));
+  const required = [
+    { name: "statement_note", definition: "TEXT" },
+    { name: "is_internal", definition: "BOOLEAN NOT NULL DEFAULT FALSE" },
+    { name: "linked_company_id", definition: "INTEGER" },
+    { name: "currency", definition: "TEXT NOT NULL DEFAULT 'USD'" },
+  ] as const;
+  for (const column of required) {
+    if (!existing.has(column.name)) {
+      await pool.query(`ALTER TABLE property_contracts ADD COLUMN IF NOT EXISTS ${column.name} ${column.definition}`);
+    }
+  }
+}
+
 export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
   try {
     await pool.query(
@@ -576,6 +603,9 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
   } catch (colErr: unknown) {
     logger.error("[startup] ✗ Could not ensure multi-currency columns:", { error: getErrorMessage(colErr) });
   }
+
+  // Rental contract writes also need these columns when bulk migrations are off.
+  await ensureRentalContractCreateColumns(pool);
 
   try {
     await ensureRetailVariantSchema(pool);
