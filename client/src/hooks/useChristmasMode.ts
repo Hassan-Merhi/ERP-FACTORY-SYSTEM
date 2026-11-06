@@ -4,7 +4,11 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 const CHRISTMAS_MODE_API = "/api/seasonal/christmas-mode";
 export const christmasModeQueryKey = [CHRISTMAS_MODE_API] as const;
 
-export type ChristmasModeSetting = { enabled: boolean };
+export type ChristmasModeSetting = {
+  enabled: boolean;
+  available?: boolean;
+  preferenceEnabled?: boolean;
+};
 
 /**
  * Per-user effective Christmas Mode flag (never exposes who else has access).
@@ -35,7 +39,18 @@ export function useChristmasMode() {
     },
   });
 
-  return { settingQuery, updateSetting };
+  const updatePersonalPreference = useMutation<ChristmasModeSetting, Error, boolean>({
+    mutationFn: async (enabled) => {
+      const response = await apiRequest("PUT", `${CHRISTMAS_MODE_API}/preference`, { enabled });
+      return (await response.json()) as ChristmasModeSetting;
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData(christmasModeQueryKey, result);
+      void queryClient.invalidateQueries({ queryKey: christmasModeQueryKey });
+    },
+  });
+
+  return { settingQuery, updateSetting, updatePersonalPreference };
 }
 
 const CHRISTMAS_MODE_CONFIG_API = "/api/seasonal/christmas-mode/config";
