@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { useCompany } from "@/contexts/CompanyContext";
 
 import { useToast } from "@/hooks/use-toast";
-import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translateApplicationText, type ApplicationTranslationKey } from "@/i18n/applicationTranslations";
 import { Download, FileUp, Loader2, Save } from "lucide-react";
 
 type InputRow = { articleCode: string; itemName: string };
@@ -28,7 +29,7 @@ async function mhdRequest(url: string, options?: RequestInit): Promise<MhdData> 
 }
 
 export function MhdViewManager() {
-  const { t } = useApplicationLanguage();
+  const t = useOptionalApplicationLanguage()?.t ?? ((key: ApplicationTranslationKey) => translateApplicationText(key, "en"));
   const { selectedCompany } = useCompany();
   const client = useQueryClient();
   const { toast } = useToast();
