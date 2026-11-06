@@ -383,7 +383,8 @@ export const applicationFrenchTranslations = {
   "monthlyProduction.placeAbove": "Placer au-dessus",
   "monthlyProduction.placeBelow": "Placer en dessous",
   "mhd.managerTitle": "Gestionnaire de vue MHD",
-  "mhd.managerDescription": "Importez les codes d'article dans l'ordre souhaité. Le nom est facultatif ; un champ vide utilise le nom d'origine. Aucun enregistrement n'est modifié.",
+  "mhd.managerDescription":
+    "Importez les codes d'article dans l'ordre souhaité. Le nom est facultatif ; un champ vide utilise le nom d'origine. Aucun enregistrement n'est modifié.",
   "mhd.downloadTemplate": "Télécharger le modèle",
   "mhd.downloadCurrent": "Télécharger les articles actuels",
   "mhd.uploadExcel": "Importer Excel",
@@ -412,7 +413,8 @@ export const applicationFrenchTranslations = {
   "mhd.view": "Vue MHD",
   "mhd.requireUpload": "Importez d'abord une liste MHD dans les paramètres Intelligence.",
   "mhd.settingsTitle": "Affichage préféré des articles d'usine",
-  "mhd.settingsDescription": "Choisissez les noms et l'ordre des articles affichés. Le catalogue MHD est partagé, mais ce choix est personnel.",
+  "mhd.settingsDescription":
+    "Choisissez les noms et l'ordre des articles affichés. Le catalogue MHD est partagé, mais ce choix est personnel.",
   "mhd.standardView": "Vue standard",
   "mhd.noProductRows": "Aucun article dans le fichier importé.",
   "mhd.maxProducts": "Maximum 10 000 articles par vue MHD.",
