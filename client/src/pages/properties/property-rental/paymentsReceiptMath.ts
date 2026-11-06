@@ -43,6 +43,70 @@ export function receiptTotals(rows: ReceiptRow[]) {
   );
 }
 
+/**
+ * Bridge a complete, unfiltered Properties payment history to the requested
+ * sum of account balances. This is an accounting *presentation*, not cash:
+ * the same GUAR voucher posts both a cash debit and a deposit-liability credit.
+ *
+ * The bridge consists only of independently identifiable source facts.
+ * Never plug the remainder of an account discrepancy into an invented receipt.
+ */
+export function accountBalanceHistoryBridge(rows: ReceiptRow[], aliCashLedgerId: number | null | undefined) {
+  const history = receiptTotals(rows);
+  const cashAndLiabilityOverlap = aliCashLedgerId == null
+    ? null
+    : rows.filter((row) =>
+        row.receiptKind === "GUARANTEE_DEPOSIT" &&
+        row.cashAccountId === aliCashLedgerId &&
+        isCashReceipt(row)
+      ).reduce((sum, row) => sum + cents(row.amount), 0);
+  const removeNonCashBilling = history.nonCash;
+  const netAdjustment = cashAndLiabilityOverlap === null ? null : cashAndLiabilityOverlap - removeNonCashBilling;
+  const reconciledTotal = netAdjustment === null ? null : history.recorded + netAdjustment;
+  return {
+    history,
+    cashAndLiabilityOverlap,
+    removeNonCashBilling,
+    netAdjustment,
+    reconciledTotal,
+  };
+}
+
+export type HistoryReconciliationExport = {
+  aliCashLedgerId: number;
+  threeAccountsTotal: number;
+};
+
+/**
+ * Export source history and separate account-bridge lines. No synthetic receipt
+ * is inserted among dated payments. Three-account total is fetched separately;
+ * the residual must be zero for the history to be fully reconciled.
+ */
+export function reconciledHistoryTsv(rows: ReceiptRow[], snapshot: HistoryReconciliationExport): string {
+  const bridge = accountBalanceHistoryBridge(rows, snapshot.aliCashLedgerId);
+  const base = paymentHistoryTsv(rows);
+  const totals = bridge.history;
+  const fmt = (amount: number | null) => amount === null ? "" : (amount / 100).toFixed(2);
+  const tail = [
+    ["RECORDED HISTORY TOTAL", "", "", "", fmt(totals.cash), fmt(totals.nonCash), "", "Gross history = cash + non-cash", "", ""],
+    ["ACCOUNT RECONCILIATION: GUARANTEE OVERLAP", "", "", "", "", "", "", "Account includes both deposit liability and cash debit, not a second payment", "", fmt(bridge.cashAndLiabilityOverlap)],
+    ["ACCOUNT RECONCILIATION: REMOVE NON-CASH BILLING", "", "", "", "", "", "", "Non-cash allocation already included in recorded history", "", fmt(-bridge.removeNonCashBilling)],
+    ["NET RECONCILIATION ADJUSTMENT", "", "", "", "", "", "", "Source classifications only — no journal posted", "", fmt(bridge.netAdjustment)],
+    ["RECONCILED HISTORY + ADJUSTMENT", "", "", "", "", "", "", "Recorded history plus net reconciliation adjustment", "", fmt(bridge.reconciledTotal)],
+    ["THREE ACCOUNT BALANCES", "", "", "", "", "", "", "HP Rental Withdrawal + Tenant Deposits + ALI KOLWEZI RENT CASH", "", fmt(snapshot.threeAccountsTotal)],
+    ["UNRECONCILED DIFFERENCE", "", "", "", "", "", "", "Three account balances minus reconciled history", "", fmt(bridge.reconciledTotal == null ? null : snapshot.threeAccountsTotal - bridge.reconciledTotal)],
+  ];
+  // Add a separate reconciliation column, so bridge lines never masquerade
+  // as payments or change what the cash/adjustment columns sum to.
+  const lines = base.split("\n");
+  const [header, ...historyLines] = lines;
+  return [
+    header + "\tAccount Reconciliation (USD)",
+    ...historyLines.slice(0, -1).map((line) => line + "\t0.00"),
+    ...tail.map((line) => line.join("\t")),
+  ].join("\n");
+}
+
 const month = (n: number | undefined) => n != null && n >= 1 && n <= 12 ? String(n).padStart(2, "0") : "";
 const excelSafe = (value: unknown): string => {
   const text = String(value ?? "").replace(/[\r\n\t]+/g, " ").trim();
