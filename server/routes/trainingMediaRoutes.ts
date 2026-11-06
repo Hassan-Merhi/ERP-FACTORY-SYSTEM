@@ -357,12 +357,21 @@ async function streamMedia(req: Request, res: Response, kind: "video" | "caption
   }
 }
 
-/** Non-sensitive listing of published topics; playback itself re-checks page access. */
-async function listPublished(_req: Request, res: Response) {
+/**
+ * Published topics this user may open in the active company. The same page
+ * check guards playback, so the listing never advertises a video the user
+ * would be refused.
+ */
+async function listPublished(req: Request, res: Response) {
   const registry = await loadPublishedTrainingRegistry();
   const topics: Record<string, unknown> = {};
   for (const [topic, entry] of Object.entries(registry)) {
     if (!PAGE_FOR_TOPIC[topic]) continue;
+    try {
+      if (!(await canStreamTopic(req, topic))) continue;
+    } catch {
+      continue;
+    }
     topics[topic] = {
       guideSteps: entry.guideSteps ?? [],
       captions: Boolean(entry.captionsKey),
@@ -373,6 +382,7 @@ async function listPublished(_req: Request, res: Response) {
     };
   }
   res.setHeader("Cache-Control", "private, max-age=60");
+  res.setHeader("Vary", "Cookie");
   res.json({ provider: process.env.TRAINING_MEDIA_PROVIDER === "vercel" ? "vercel" : "static", topics });
 }
 

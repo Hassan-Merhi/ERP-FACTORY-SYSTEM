@@ -284,19 +284,16 @@
     min-height: 82px;
   }
 }
-/* Phone drawer and touch screens keep the 44px touch targets that
-   mobile-browser-compat.css sets; that rule sits in a cascade layer, so the
-   unlayered 38px/40px minimums above would otherwise win. */
-[data-sidebar="sidebar"][data-mobile="true"] :is(.premium-nav-link, .premium-nav-section) {
-  min-height: 2.75rem;
-}
-@media (hover: none) and (pointer: coarse) {
-  [data-slot="sidebar"] :is(.premium-nav-link, .premium-nav-section) {
-    min-height: 2.75rem;
-  }
-}
 @media (prefers-reduced-motion: reduce) {
   .premium-nav-link {
     transition: none;
+  }
+}
+/* Phones and touch screens keep the 44px touch target the mobile drawer
+   requires; these unlayered rules would otherwise override its min-h-11. */
+@media (max-width: 767px), (pointer: coarse) {
+  .premium-nav-link,
+  .premium-nav-section {
+    min-height: 44px;
   }
 }

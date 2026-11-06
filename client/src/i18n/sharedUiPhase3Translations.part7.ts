@@ -177,6 +177,16 @@ export const phase3SharedUiTranslationsPart7: readonly Phase3SharedUiEntry[] = [
     fr: "La vidéo du système réel n’est pas encore publiée",
   },
   {
+    en: "Tabs on this page you can open",
+    ar: "علامات التبويب التي يمكنك فتحها في هذه الصفحة",
+    fr: "Onglets de cette page que vous pouvez ouvrir",
+  },
+  {
+    en: "Quick access",
+    ar: "وصول سريع",
+    fr: "Accès rapide",
+  },
+  {
     en: "This video could not be played here",
     ar: "تعذر تشغيل هذا الفيديو هنا",
     fr: "Cette vidéo ne peut pas être lue ici",

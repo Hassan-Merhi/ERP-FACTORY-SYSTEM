@@ -531,7 +531,8 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
     ALTER TABLE user_preferences
       ADD COLUMN IF NOT EXISTS show_chat_widget BOOLEAN NOT NULL DEFAULT true,
       ADD COLUMN IF NOT EXISTS show_notes_panel BOOLEAN NOT NULL DEFAULT true,
-      ADD COLUMN IF NOT EXISTS hidden_transaction_journal_voucher_ids INTEGER[] NOT NULL DEFAULT '{}';
+      ADD COLUMN IF NOT EXISTS hidden_transaction_journal_voucher_ids INTEGER[] NOT NULL DEFAULT '{}',
+      ADD COLUMN IF NOT EXISTS factory_mhd_view_default BOOLEAN NOT NULL DEFAULT false;
 
     ALTER TABLE factory_containers
       ADD COLUMN IF NOT EXISTS otw_note TEXT,
