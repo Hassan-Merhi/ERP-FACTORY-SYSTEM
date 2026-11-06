@@ -46,7 +46,7 @@ describe("Phase 8 signed release readiness prerequisites", () => {
     const hypothetical: Readiness = {
       ...ready, rolloutMode: "active", releaseAuthorized: true,
       lastVerifiedHead: "a".repeat(40),
-      gates: ready.gates.map((gate) => ({ ...gate, status: "verified", evidence: "Approved change and validated staging record" })),
+      gates: ready.gates.map((gate) => ({ ...gate, status: "verified" as const, evidence: "Approved change and validated staging record" })),
     };
     expect(isReleaseReady(hypothetical)).toBe(true);
     expect(isReleaseReady({ ...hypothetical, gates: hypothetical.gates.slice(1) })).toBe(false);
