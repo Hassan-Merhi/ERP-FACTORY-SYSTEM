@@ -137,18 +137,18 @@ export function StockGroupsView({
 
   const groupSearchControls = (
     <div className="flex items-center gap-2 flex-wrap">
-      <div className={isPhone ? "relative w-full" : "relative flex-1 min-w-[200px] max-w-sm"}>
+      <div className={isPhone ? "relative w-full" : "relative min-w-[220px] flex-[1_1_320px] max-w-xl"}>
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Search stock groups by name..."
           value={groupSearchTerm}
           onChange={(e) => setGroupSearchTerm(e.target.value)}
-          className="pl-9"
+          className="h-10 rounded-xl border-violet-200/80 bg-background/90 pl-10 shadow-sm focus-visible:ring-violet-500/30 dark:border-violet-500/25 dark:bg-slate-950/40"
           data-testid="input-group-search"
         />
       </div>
       <Select value={groupCategoryFilter || "all"} onValueChange={(v) => setGroupCategoryFilter(v === "all" ? "" : v)}>
-        <SelectTrigger className={isPhone ? "w-full" : "w-48"} data-testid="select-category-filter">
+        <SelectTrigger className={isPhone ? "h-10 w-full rounded-xl" : "h-10 w-52 rounded-xl border-violet-200/80 bg-background/90 shadow-sm dark:border-violet-500/25 dark:bg-slate-950/40"} data-testid="select-category-filter">
           <SelectValue placeholder="All Categories" />
         </SelectTrigger>
         <SelectContent>
@@ -313,16 +313,17 @@ export function StockGroupsView({
   }
 
   return (
-    <>
-      {/* Location title + action buttons */}
-      <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+    <section className="space-y-4" data-testid="stock-groups-desktop">
+      {/* Location summary — a restrained gradient works in light and dark themes. */}
+      <div className="relative flex flex-col gap-5 overflow-hidden rounded-2xl border border-violet-200/80 bg-gradient-to-r from-violet-50 via-background to-indigo-50/80 p-4 shadow-sm dark:border-violet-500/25 dark:from-[#171035] dark:via-[#111a36] dark:to-[#0c142c] sm:p-5 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-            <Warehouse className="h-5 w-5 text-primary" />
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-500/20">
+            <Warehouse className="h-6 w-6" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <h2 className="text-2xl font-bold truncate">{selectedLocationLocal.name}</h2>
+              <h2 className="truncate text-xl font-bold tracking-tight sm:text-2xl">{selectedLocationLocal.name}</h2>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Stock Groups</span>
               {!posUser && (
                 <Button
                   variant="ghost"
@@ -354,26 +355,26 @@ export function StockGroupsView({
                 </Button>
               )}
             </div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Stock Groups</p>
+            <p className="mt-1 text-xs font-medium tracking-wide text-muted-foreground">Location: {selectedLocationLocal.name}</p>
           </div>
         </div>
 
         {/* Stats pills */}
         {!activeInventoryLoading && (
-          <div className="flex items-center gap-2 flex-wrap text-sm shrink-0">
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-muted text-muted-foreground font-medium text-xs">
-              <Layers className="h-3 w-3" />
+          <div className="flex flex-wrap items-center gap-2 text-xs" data-testid="stock-groups-summary">
+            <span className="inline-flex h-10 items-center gap-2 rounded-xl border border-violet-200/80 bg-background/80 px-3 font-semibold shadow-sm dark:border-white/10 dark:bg-white/5">
+              <Layers className="h-4 w-4 text-violet-600 dark:text-violet-300" />
               {stockGroups.length} {stockGroups.length === 1 ? "Group" : "Groups"}
             </span>
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-muted text-muted-foreground font-medium text-xs">
+            <span className="inline-flex h-10 items-center gap-2 rounded-xl border border-violet-200/80 bg-background/80 px-3 font-semibold shadow-sm dark:border-white/10 dark:bg-white/5">
               <Package className="h-3 w-3" />
               {totalItems} Items
             </span>
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-muted text-muted-foreground font-medium text-xs">
+            <span className="inline-flex h-10 items-center gap-2 rounded-xl border border-violet-200/80 bg-background/80 px-3 font-semibold shadow-sm dark:border-white/10 dark:bg-white/5">
               {Math.floor(totalQty).toLocaleString()} BL total
             </span>
             {canViewCost && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-muted text-muted-foreground font-medium text-xs">
+              <span className="inline-flex h-10 items-center gap-2 rounded-xl border border-violet-200/80 bg-background/80 px-3 font-semibold shadow-sm dark:border-white/10 dark:bg-white/5">
                 {formatAmount(totalValue)} total value
               </span>
             )}
@@ -382,10 +383,10 @@ export function StockGroupsView({
       </div>
 
       {/* Action buttons */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex flex-wrap items-center gap-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1.5" data-testid="button-export-dropdown">
+            <Button variant="outline" size="sm" className="h-10 gap-2 rounded-xl border-violet-200/80 bg-background/80 px-4 shadow-sm dark:border-violet-500/25" data-testid="button-export-dropdown">
               <Download className="h-4 w-4" /> Export <ChevronDown className="h-3 w-3" />
             </Button>
           </DropdownMenuTrigger>
@@ -407,7 +408,7 @@ export function StockGroupsView({
         <Button
           variant="outline"
           size="sm"
-          className="gap-1.5"
+          className="h-10 gap-2 rounded-xl border-violet-200/80 bg-background/80 px-4 shadow-sm dark:border-violet-500/25"
           onClick={() => {
             setViewAllItems(true);
             setItemSearchTerm("");
@@ -418,19 +419,20 @@ export function StockGroupsView({
         </Button>
 
         <Button
-          variant={showZeroStock ? "default" : "outline"}
+          variant="outline"
           size="sm"
-          className="gap-1.5"
+          className={`h-10 gap-2 rounded-xl px-4 shadow-sm ${showZeroStock ? "border-violet-400/60 bg-violet-500/10 text-violet-700 dark:text-violet-200" : "border-violet-200/80 bg-background/80 dark:border-violet-500/25"}`}
+          aria-pressed={showZeroStock}
           onClick={() => setShowZeroStock(!showZeroStock)}
           data-testid="button-show-zero"
         >
-          <Eye className="h-4 w-4" /> Show zero stock
+          <Eye className="h-4 w-4" /> Show Zero Stock <span className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${showZeroStock ? "bg-violet-600" : "bg-slate-300 dark:bg-slate-600"}`} aria-hidden="true"><span className={`h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform ${showZeroStock ? "translate-x-4" : "translate-x-1"}`} /></span>
         </Button>
 
         {!posUser && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5 ml-auto" data-testid="button-location-menu">
+              <Button variant="outline" size="sm" className="ml-auto h-10 gap-2 rounded-xl border-violet-200/80 bg-background/80 px-4 shadow-sm dark:border-violet-500/25" data-testid="button-location-menu">
                 Location <ChevronDown className="h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
@@ -457,22 +459,24 @@ export function StockGroupsView({
       </div>
 
       {/* Search + categories */}
-      {groupSearchControls}
+      <div className="rounded-2xl border border-violet-200/80 bg-gradient-to-r from-violet-50/80 to-background p-3 shadow-sm dark:border-violet-500/20 dark:from-[#10182f] dark:to-[#0d152b] sm:p-4">
+        {groupSearchControls}
+      </div>
 
       {/* Stock groups table */}
       {activeInventoryLoading ? (
         <div className="space-y-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-12 rounded-lg border bg-muted animate-pulse" />
+            <div key={i} className="h-14 animate-pulse rounded-xl border border-violet-200/60 bg-muted/60 dark:border-violet-500/20" />
           ))}
         </div>
       ) : filteredStockGroups.length === 0 ? (
-        <div className="py-16 text-center border-2 border-dashed rounded-lg text-muted-foreground">{emptyMessage}</div>
+        <div className="rounded-2xl border border-dashed border-violet-300/80 bg-violet-50/40 py-16 text-center text-muted-foreground dark:border-violet-500/30 dark:bg-violet-900/10">{emptyMessage}</div>
       ) : (
-        <div className="rounded-lg border overflow-hidden">
-          <table className="w-full text-sm border-collapse">
+        <div className="overflow-x-auto rounded-2xl border border-violet-200/80 bg-card shadow-[0_14px_36px_-24px_rgba(79,70,229,0.55)] dark:border-violet-500/25 dark:bg-[#0a1429]">
+          <table className="w-full min-w-[720px] border-collapse text-sm">
             <thead>
-              <tr className="bg-muted/50 border-b">
+              <tr className="border-b border-violet-200/80 bg-violet-50/80 text-muted-foreground dark:border-violet-500/20 dark:bg-[#172447]">
                 <th className="text-left px-4 py-3 font-medium">Name</th>
                 <th className="text-center px-4 py-3 font-medium">Items</th>
                 <th className="text-right px-4 py-3 font-medium">Total Qty (BL)</th>
@@ -489,13 +493,13 @@ export function StockGroupsView({
               {filteredStockGroups.map((g) => (
                 <tr
                   key={g.groupId}
-                  className="border-b hover-elevate cursor-pointer"
+                  className="group cursor-pointer border-b border-border/70 transition-colors hover:bg-violet-50/70 dark:hover:bg-violet-500/10"
                   onClick={() => openGroup(g)}
                   data-testid={`row-group-${g.groupId}`}
                 >
-                  <td className="px-4 py-3 font-medium">{g.groupName}</td>
+                  <td className="px-4 py-3 font-semibold"><div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-xs font-bold text-white shadow-sm" aria-hidden="true">{g.groupName.trim().slice(0, 2).toUpperCase()}</span><span>{g.groupName}</span></div></td>
                   <td className="px-4 py-3 text-center">
-                    <Badge variant="secondary">{g.itemCount}</Badge>
+                    <Badge variant="secondary" className="rounded-lg border border-violet-200/50 bg-violet-50 px-3 py-1 font-semibold tabular-nums dark:border-violet-500/20 dark:bg-violet-500/15">{g.itemCount}</Badge>
                   </td>
                   <td className="px-4 py-3 text-right font-mono">
                     {Math.floor(g.totalQuantity).toLocaleString()}
@@ -516,8 +520,8 @@ export function StockGroupsView({
               ))}
             </tbody>
             <tfoot>
-              <tr className="bg-muted/50 border-t-2 font-semibold">
-                <td className="px-4 py-3 font-bold">Total</td>
+              <tr className="border-t border-violet-300/60 bg-violet-100/70 font-semibold dark:border-violet-400/25 dark:bg-violet-500/15">
+                <td className="px-4 py-3 font-bold text-violet-800 dark:text-violet-200">Total</td>
                 <td className="px-4 py-3 text-center">
                   <Badge variant="secondary">{filteredStockGroups.reduce((s, g) => s + g.itemCount, 0)}</Badge>
                 </td>
@@ -546,6 +550,6 @@ export function StockGroupsView({
           {stockGroups.length === 1 ? "group" : "groups"}
         </p>
       )}
-    </>
+    </section>
   );
 }

@@ -8,10 +8,8 @@ const harness = vi.hoisted(() => {
       innerJoin: () => query,
       where: () => query,
       groupBy: async () => rows,
-      then: (
-        resolve: (value: unknown[]) => unknown,
-        reject?: (reason: unknown) => unknown
-      ) => Promise.resolve(rows).then(resolve, reject),
+      then: (resolve: (value: unknown[]) => unknown, reject?: (reason: unknown) => unknown) =>
+        Promise.resolve(rows).then(resolve, reject),
     };
     return { from: () => query };
   });
@@ -41,9 +39,25 @@ const linked = [
 ];
 
 const expectedNovember = [
-  [18, 3000], [19, 2000], [20, 1750], [21, 1500], [22, 1500], [23, 4200],
-  [24, 3500], [27, 3500], [2, 2000], [7, 5000], [8, 5000], [29, 3000], [30, 3000],
-].map(([contractId, expectedAmount]) => ({ contractId, expectedAmount: String(expectedAmount), year: 2026, month: 11 }));
+  [18, 3000],
+  [19, 2000],
+  [20, 1750],
+  [21, 1500],
+  [22, 1500],
+  [23, 4200],
+  [24, 3500],
+  [27, 3500],
+  [2, 2000],
+  [7, 5000],
+  [8, 5000],
+  [29, 3000],
+  [30, 3000],
+].map(([contractId, expectedAmount]) => ({
+  contractId,
+  expectedAmount: String(expectedAmount),
+  year: 2026,
+  month: 11,
+}));
 
 describe("ERP Net Position rental payable: owned shops and linked Properties", () => {
   beforeEach(() => {
@@ -52,15 +66,10 @@ describe("ERP Net Position rental payable: owned shops and linked Properties", (
   });
 
   it("reconciles HADI L'SHI's $13,950 owned + $18,000 linked liabilities and $7,000 prepaid", async () => {
-    harness.responses.push(
-      owned,
-      linked,
-      expectedNovember,
-      [
-        { contractId: 24, paid: "7000" },
-        { contractId: 27, paid: "7000" },
-      ]
-    );
+    harness.responses.push(owned, linked, expectedNovember, [
+      { contractId: 24, paid: "7000" },
+      { contractId: 27, paid: "7000" },
+    ]);
 
     const result = await computeRentalOutstanding(1, "2026-11-06", 0);
     expect(result).toEqual({ prepaidRent: 7000, rentPayable: 31950 });

@@ -9,6 +9,7 @@ export interface UserPrefs {
   showChatWidget?: boolean;
   showNotesPanel?: boolean;
   factoryNetPositionValuationMode?: "cost" | "selling";
+  factoryMhdViewDefault?: boolean;
 }
 
 export function useUserPreferences() {
@@ -22,10 +23,8 @@ export function useUserPreferences() {
   });
 
   const mutation = useMutation({
-    mutationFn: (patch: Partial<UserPrefs>) =>
-      apiRequest("PUT", "/api/user-preferences", patch),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["/api/user-preferences"] }),
+    mutationFn: (patch: Partial<UserPrefs>) => apiRequest("PUT", "/api/user-preferences", patch),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/user-preferences"] }),
   });
 
   return {

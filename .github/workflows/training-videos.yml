@@ -6,6 +6,8 @@ on:
   pull_request:
     paths:
       - "scripts/record-training-guides.mjs"
+      - "scripts/training-screen.mjs"
+      - "scripts/seed-training-demo-data.mjs"
       - "scripts/training-narration.mjs"
       - "scripts/training-narration-tts.py"
       - "scripts/nightly-system-regression.test.mjs"
@@ -166,7 +168,11 @@ jobs:
             if [ "$attempt" = 180 ]; then cat artifacts/training-videos/server.log; exit 1; fi
             sleep 1
           done
-          node scripts/record-training-guides.mjs
+          # Fill the disposable companies through the app's own endpoints so the
+          # recordings show real records, then refuse to record empty pages.
+          node scripts/seed-training-demo-data.mjs
+          cp artifacts/training-demo-data/report.json artifacts/training-videos/demo-data-report.json
+          TRAINING_REQUIRE_DATA=1 node scripts/record-training-guides.mjs
       - name: Upload review-only video and guide artifacts
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7

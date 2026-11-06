@@ -27,7 +27,7 @@ import {
   describeControl, describeHeading, introNarration, closingNarration, sharedChromeNarration,
   layerIntro, demoNarration, speakable, parseWav, joinWavClips, vttTimestamp,
 } from "./training-narration.mjs";
-import { enumerateScreen, openLayerType, locateAndScroll, paintOverlay, CURSOR_SVG } from "./training-screen.mjs";
+import { enumerateScreen, measurePageData, openLayerType, locateAndScroll, paintOverlay, CURSOR_SVG } from "./training-screen.mjs";
 
 const base = process.env.TRAINING_BASE_URL || "http://127.0.0.1:5000";
 const username = process.env.ERP_E2E_USERNAME || "";
@@ -503,6 +503,13 @@ async function recordOne(page, id, tour) {
       throw new Error("Training page GET failed (" + http.status + ", " + http.type + ") at " + tour.route);
     }
     const pageDetails = await page.evaluate(enumerateScreen, {});
+    // A training video of an empty screen teaches nothing. With
+    // TRAINING_REQUIRE_DATA=1 (set once the demo data is seeded) a tour of a
+    // page that shows no data fails instead of being published.
+    const data = await page.evaluate(measurePageData);
+    if (process.env.TRAINING_REQUIRE_DATA === "1" && !tour.allowEmpty && data.dataRows === 0 && data.emptyMessages.length > 0) {
+      throw new Error("Page shows no demo data (" + data.emptyMessages.join("; ") + ") at " + tour.route);
+    }
     await page.screenshot({ path: path.join(dir, "screenshot.png"), fullPage: false });
 
     // Pass 1: discover every control (exploring tabs and hidden layers) and write the script.
@@ -628,7 +635,7 @@ async function recordOne(page, id, tour) {
       await fs.writeFile(path.join(dir, "captions.vtt"), captions.join("\n"));
       await fs.writeFile(path.join(dir, "guide.md"), buildGuide(tour, pageDetails, segments, video, plan));
       return {
-        topic: id, route: tour.route, sourceSha: process.env.GITHUB_SHA || null,
+        topic: id, route: tour.route, dataRows: data.dataRows, sourceSha: process.env.GITHUB_SHA || null,
         durationMs: Math.round(video.durationSeconds * 1000), videoFile: "screen.mp4", codec: video.codec,
         resolution: `${video.width}x${video.height}`, narration: "piper-offline", narratedSegments: segments.length,
         explainedControls: segments.filter((segment) => segment.kind === "control").length,

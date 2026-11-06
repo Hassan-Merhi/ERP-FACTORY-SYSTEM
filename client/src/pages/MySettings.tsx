@@ -12,13 +12,22 @@ import { KeyRound, CalendarDays, LayoutPanelLeft } from "lucide-react";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { PageHeader } from "@/components/PageHeader";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
+import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
+import { ChristmasModePreferenceCard } from "@/pages/settings/ChristmasModePreferenceCard";
+import { useCompany } from "@/contexts/CompanyContext";
+import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translateApplicationText, type ApplicationTranslationKey } from "@/i18n/applicationTranslations";
 
 type DateFormatType = "MM/DD/YYYY" | "DD/MM/YYYY";
 
 export default function MySettings() {
+  const t =
+    useOptionalApplicationLanguage()?.t ?? ((key: ApplicationTranslationKey) => translateApplicationText(key, "en"));
   const { toast } = useToast();
   const { dateFormat } = useDateFormat();
   const { prefs, updatePref, isPending: prefsPending } = useUserPreferences();
+  const factoryMhd = useFactoryMhdView();
+  const { selectedCompany } = useCompany();
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -97,6 +106,31 @@ export default function MySettings() {
   return (
     <div className="p-6 max-w-md mx-auto space-y-6">
       <PageHeader title="My Settings" />
+      <ChristmasModePreferenceCard />
+
+      {["factory", "factory_v2"].includes(selectedCompany?.companyType ?? "") && (
+        <Card data-testid="settings-factory-mhd-default">
+          <CardHeader>
+            <CardTitle className="text-base">{t("mhd.settingsTitle")}</CardTitle>
+            <CardDescription>{t("mhd.settingsDescription")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Select
+              value={factoryMhd.mode}
+              disabled={factoryMhd.saving}
+              onValueChange={(value) => void factoryMhd.setMode(value as "standard" | "mhd")}
+            >
+              <SelectTrigger data-testid="select-factory-mhd-default">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="standard">{t("mhd.standardView")}</SelectItem>
+                <SelectItem value="mhd">{t("mhd.view")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

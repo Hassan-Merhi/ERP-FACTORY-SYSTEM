@@ -353,6 +353,11 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/** Optional context for standalone product-table renderers and unit tests. */
+export function useOptionalCompany() {
+  return useContext(CompanyContext);
+}
+
 export function useCompany() {
   const context = useContext(CompanyContext);
   if (context === undefined) {

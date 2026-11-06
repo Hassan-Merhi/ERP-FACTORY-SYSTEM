@@ -1,17 +1,23 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { BookOpen, ChevronRight, CirclePlay, Clapperboard, FileText, Search, ShieldCheck, Video } from "lucide-react";
-import { visibleTrainingTopics, type TrainingMode } from "@/training/trainingCatalog";
+import type { TrainingMode, TrainingTopic } from "@/training/trainingCatalog";
 import { usePublishedTrainingMedia } from "@/training/publishedVideos";
 
 interface Props {
   mode: TrainingMode;
-  role?: string | null;
-  accessKeys?: readonly string[];
-  fullAccess?: boolean;
+  /** Guides for the pages this user can open, built from their own navigation. */
+  topics: readonly TrainingTopic[];
 }
 
-export default function HelpTraining({ mode, role, accessKeys, fullAccess = false }: Props) {
+const WORKSPACE: Record<TrainingMode, { label: string; home: string }> = {
+  erp: { label: "ERP", home: "/tracking" },
+  factory: { label: "Factory", home: "/factory/production-report" },
+  properties: { label: "Properties", home: "/properties/rentals" },
+  pos: { label: "POS", home: "/pos" },
+};
+
+export default function HelpTraining({ mode, topics }: Props) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All topics");
   const {
@@ -20,21 +26,20 @@ export default function HelpTraining({ mode, role, accessKeys, fullAccess = fals
     guides: publishedTrainingGuides,
     screenshots: publishedTrainingScreenshots,
   } = usePublishedTrainingMedia();
-  const visible = useMemo(
-    () => visibleTrainingTopics(mode, role, accessKeys, fullAccess),
-    [mode, role, accessKeys, fullAccess]
-  );
+  const visible = topics;
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return visible.filter((topic) => {
-      const text = [topic.title, topic.description, topic.category, ...(topic.keywords ?? [])].join(" ").toLowerCase();
+      const text = [topic.title, topic.description, topic.category, ...(topic.keywords ?? []), ...(topic.tabs ?? [])]
+        .join(" ")
+        .toLowerCase();
       return (category === "All topics" || category === topic.category) && (!term || text.includes(term));
     });
   }, [visible, search, category]);
   const [selectedId, setSelectedId] = useState("welcome");
   const active = filtered.find((topic) => topic.id === selectedId) ?? filtered[0];
   const categories = ["All topics", ...new Set(visible.map((topic) => topic.category))];
-  const home = mode === "factory" ? "/factory/production-report" : "/tracking";
+  const home = WORKSPACE[mode].home;
   const videoUrl = active ? publishedTrainingVideos[active.id] : undefined;
   const supportedVideo = videoUrl && videoUrl.startsWith("/api/training/media/");
   const [failedVideo, setFailedVideo] = useState<string | null>(null);
@@ -47,12 +52,12 @@ export default function HelpTraining({ mode, role, accessKeys, fullAccess = fals
           <p className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] text-primary">System knowledge base</p>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Help & Training</h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Step-by-step guides for the real {mode === "factory" ? "Factory" : "ERP"} system. Narrated recordings of
-            each screen appear alongside the guide once the nightly recorder has captured it.
+            Step-by-step guides for the {WORKSPACE[mode].label} pages you have access to. Narrated recordings of each
+            screen appear alongside the guide once the nightly recorder has captured it.
           </p>
         </div>
         <Link href={home} className="rounded-lg border px-3 py-2 text-sm hover:bg-muted">
-          Return to {mode === "factory" ? "Factory" : "ERP"}
+          Return to {WORKSPACE[mode].label}
         </Link>
       </div>
 
@@ -206,6 +211,18 @@ export default function HelpTraining({ mode, role, accessKeys, fullAccess = fals
                 ))}
               </ol>
             </div>
+            {active.tabs && active.tabs.length > 0 && (
+              <div className="space-y-2" data-testid="training-tabs">
+                <h3 className="text-base font-semibold">Tabs on this page you can open</h3>
+                <div className="flex flex-wrap gap-2">
+                  {active.tabs.map((tab) => (
+                    <span key={tab} className="rounded-full border bg-muted/40 px-3 py-1 text-xs">
+                      {tab}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
             {publishedTrainingScreenshots[active.id] && (
               <div className="space-y-2">
                 <h3 className="text-base font-semibold">Actual training-system screenshot</h3>

@@ -34,8 +34,8 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
   ].filter(Boolean).length;
 
   const periodControl = (
-    <div className="w-full space-y-2 sm:w-auto">
-      <Label>Period</Label>
+    <div className="w-full space-y-1.5 sm:w-auto">
+      <Label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Period</Label>
       <PeriodFilter value={model.periodFilter} onChange={model.applyPeriodFilter} data-testid="period-filter" />
     </div>
   );
@@ -43,13 +43,13 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
   const advancedControls = (
     <>
       {/* Company multi-select */}
-      <div className="w-full min-w-0 space-y-2 sm:w-auto">
-        <Label>Companies</Label>
+      <div className="w-full min-w-0 space-y-1.5 sm:w-auto">
+        <Label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Companies</Label>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
-              className="h-9 w-full min-w-0 justify-between gap-1.5 px-2.5 sm:w-[138px]"
+              className="h-9 w-full min-w-0 justify-between gap-1.5 rounded-lg border-slate-200 bg-white/85 px-3 shadow-sm hover:border-violet-300 hover:bg-violet-50 dark:border-white/15 dark:bg-white/[0.04] dark:hover:border-violet-400/40 dark:hover:bg-white/10 sm:w-[158px]"
               data-testid="button-company-filter"
             >
               <Building2 className="h-3.5 w-3.5 shrink-0" />
@@ -87,10 +87,10 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
       </div>
 
       {/* Voucher type */}
-      <div className="w-full space-y-2 sm:w-auto">
-        <Label htmlFor="voucher-type-tj">Voucher Type</Label>
+      <div className="w-full space-y-1.5 sm:w-auto">
+        <Label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300" htmlFor="voucher-type-tj">Voucher Type</Label>
         <Select value={model.voucherType} onValueChange={model.applyVoucherType}>
-          <SelectTrigger id="voucher-type-tj" className="w-full sm:w-[150px]" data-testid="select-voucher-type">
+          <SelectTrigger id="voucher-type-tj" className="h-9 w-full rounded-lg border-slate-200 bg-white/85 shadow-sm dark:border-white/15 dark:bg-white/[0.04] sm:w-[150px]" data-testid="select-voucher-type">
             <SelectValue placeholder="All Types" />
           </SelectTrigger>
           <SelectContent>
@@ -106,10 +106,10 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
       </div>
 
       {/* Currency */}
-      <div className="w-full space-y-2 sm:w-auto">
-        <Label htmlFor="currency-tj">Currency</Label>
+      <div className="w-full space-y-1.5 sm:w-auto">
+        <Label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300" htmlFor="currency-tj">Currency</Label>
         <Select value={model.currency} onValueChange={model.applyCurrency}>
-          <SelectTrigger id="currency-tj" className="w-full sm:w-[110px]" data-testid="select-currency">
+          <SelectTrigger id="currency-tj" className="h-9 w-full rounded-lg border-slate-200 bg-white/85 shadow-sm dark:border-white/15 dark:bg-white/[0.04] sm:w-[112px]" data-testid="select-currency">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -121,10 +121,10 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
       </div>
 
       {/* Status */}
-      <div className="w-full space-y-2 sm:w-auto">
-        <Label htmlFor="status-tj">Status</Label>
+      <div className="w-full space-y-1.5 sm:w-auto">
+        <Label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300" htmlFor="status-tj">Status</Label>
         <Select value={model.optionalFilter} onValueChange={model.applyOptionalFilter}>
-          <SelectTrigger id="status-tj" className="w-full sm:w-[130px]" data-testid="select-optional">
+          <SelectTrigger id="status-tj" className="h-9 w-full rounded-lg border-slate-200 bg-white/85 shadow-sm dark:border-white/15 dark:bg-white/[0.04] sm:w-[138px]" data-testid="select-optional">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -136,12 +136,12 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
       </div>
 
       {/* Factory toggle */}
-      <div className="w-full space-y-2 sm:w-auto">
-        <Label>Factory</Label>
+      <div className="w-full space-y-1.5 sm:w-auto">
+        <Label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Factory</Label>
         <div>
           <Button
             variant={model.includeFactory ? "default" : "outline"}
-            className="w-full gap-2 sm:w-auto"
+            className="h-9 w-full gap-2 rounded-lg border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-100 dark:border-violet-400/25 dark:bg-violet-400/10 dark:text-violet-200 dark:hover:bg-violet-400/20 sm:w-auto"
             onClick={model.toggleIncludeFactory}
             data-testid="button-toggle-factory"
           >
@@ -154,8 +154,8 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
   );
 
   const searchControl = (
-    <div className="space-y-2 flex-1 min-w-0 w-full md:min-w-[200px] md:w-auto">
-      <Label htmlFor="search-tj">Search</Label>
+    <div className="space-y-1.5 flex-1 min-w-0 w-full md:min-w-[235px] md:w-auto">
+      <Label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300" htmlFor="search-tj">Search</Label>
       <div className="flex flex-col gap-2 sm:flex-row">
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -165,13 +165,13 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
             onChange={(e) => model.setSearchInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && model.handleSearch()}
             placeholder="Voucher # or narration…"
-            className="pl-8"
+            className="h-9 rounded-lg border-slate-200 bg-white/85 pl-9 shadow-sm focus-visible:ring-violet-500 dark:border-white/15 dark:bg-white/[0.04]"
             data-testid="input-search"
           />
         </div>
         <Button
           variant="default"
-          className="w-full shrink-0 sm:w-auto"
+          className="h-9 w-full shrink-0 rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 px-5 text-white shadow-sm hover:from-violet-700 hover:to-purple-700 sm:w-auto"
           onClick={model.handleSearch}
           data-testid="button-search"
         >
@@ -202,19 +202,19 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
         layout === "sheet" ? (
           <div className="grid gap-3">{advancedControls}</div>
         ) : (
-          <Card>
-            <CardHeader className="pb-3">
+          <Card className="overflow-hidden rounded-2xl border-slate-200/80 bg-white/80 shadow-sm dark:border-violet-400/20 dark:bg-slate-900/60">
+            <CardHeader className="px-4 pb-1.5 pt-3 sm:px-5">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <Filter className="w-5 h-5" />
-                  <CardTitle>Filters</CardTitle>
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-400/15 dark:text-violet-300"><Filter className="h-3.5 w-3.5" /></span>
+                  <CardTitle className="text-sm font-semibold tracking-tight">Filters</CardTitle>
                 </div>
                 {model.hasActiveFilters && (
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="gap-1.5"
+                    className="h-8 gap-1.5 rounded-lg text-xs text-muted-foreground hover:text-violet-700 dark:hover:text-violet-300"
                     onClick={model.resetFilters}
                     data-testid="button-reset-filters"
                   >
@@ -224,8 +224,8 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
                 )}
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap items-end gap-4">
+            <CardContent className="px-4 pb-4 pt-1 sm:px-5">
+              <div className="flex flex-wrap items-end gap-x-3 gap-y-3">
                 {periodControl}
                 {advancedControls}
                 {searchControl}
@@ -253,14 +253,14 @@ function JournalPhoneSearch({ model }: { model: TransactionJournalModel }) {
           placeholder="Voucher # or narration…"
           aria-label={t("mobileFilters.search")}
           enterKeyHint="search"
-          className="pl-8"
+          className="h-9 rounded-lg border-slate-200 bg-white/85 pl-9 shadow-sm dark:border-white/15 dark:bg-white/[0.04]"
           data-testid="input-search"
         />
       </div>
       <Button
         variant="default"
         size="icon"
-        className="shrink-0"
+        className="shrink-0 rounded-lg bg-violet-600 text-white hover:bg-violet-700"
         onClick={model.handleSearch}
         aria-label={t("mobileFilters.search")}
         data-testid="button-search"

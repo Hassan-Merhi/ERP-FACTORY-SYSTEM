@@ -35,10 +35,7 @@ export function AccountSearchResults({ model }: { model: AccountsLegacyModel }) 
             <button
               data-testid={`button-search-account-${acc.accountId}`}
               className="flex flex-1 min-w-0 items-center gap-3 text-left"
-              onClick={() => {
-                model.handleAccountChange(acc.id);
-                model.setSearchTerm("");
-              }}
+              onClick={() => model.handleAccountChange(acc.id)}
             >
               <div className="flex-1 min-w-0 flex items-center gap-2.5">
                 <span className="text-sm font-medium truncate">{acc.name}</span>
