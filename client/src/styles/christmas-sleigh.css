@@ -1,0 +1,51 @@
+/*
+ * Personal opt-in Christmas sleigh: translucent festive artwork over the common
+ * header, without changing its dimensions, tab order, or pointer targets.
+ */
+.christmas-sleigh-flight {
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  width: 310px;
+  height: 68px;
+  z-index: 25;
+  pointer-events: none !important;
+  user-select: none;
+  isolation: isolate;
+  opacity: 0;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 2px 4px rgb(20 25 41 / 0.24))
+          drop-shadow(0 0 9px rgb(255 218 150 / 0.27));
+  animation: christmas-sleigh-sweep 11s linear both;
+}
+.christmas-sleigh-flight svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+@keyframes christmas-sleigh-sweep {
+  0% {
+    transform: translate3d(16px, -50%, 0);
+    opacity: 0;
+  }
+  5% { opacity: 1; }
+  94% { opacity: 1; }
+  100% {
+    transform: translate3d(calc(-1 * var(--santa-flight-distance)), -50%, 0);
+    opacity: 0;
+  }
+}
+@media (max-width: 640px) {
+  .christmas-sleigh-flight { width: 232px; height: 54px; }
+}
+@media print {
+  .christmas-sleigh-flight { display: none !important; animation: none !important; }
+}
+@media (prefers-reduced-motion: reduce), (prefers-reduced-data: reduce) {
+  .christmas-sleigh-flight { display: none !important; animation: none !important; }
+}
+html[data-seasonal-camera-active="true"] .christmas-sleigh-flight {
+  display: none !important;
+  animation: none !important;
+}
