@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -21,7 +22,9 @@ import {
   Download,
   Edit,
   FileSpreadsheet,
+  Grid2X2,
   Layers,
+  List,
   Package,
   Plus,
   Search,
@@ -32,12 +35,14 @@ import {
 } from "lucide-react";
 
 import { PAGE_SIZE } from "./utils";
+import "./StockItemsModern.css";
 import { StockItemsDialogs } from "./StockItemsDialogs";
 import type { useStockItems } from "./useStockItems";
 
 type StockItemsModel = ReturnType<typeof useStockItems>;
 
 export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) {
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const {
     hideStockRates,
     searchTerm,
@@ -92,13 +97,13 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
   } = stockItems;
 
   const searchControl = (
-    <div className="relative min-w-0 flex-1 sm:min-w-48">
+    <div className="stock-items-search relative min-w-0 flex-1 sm:min-w-48">
       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
       <Input
         placeholder="Search by name or code..."
         value={searchTerm}
         onChange={(event) => setSearchTerm(event.target.value)}
-        className="pl-9"
+        className="stock-items-search-input pl-9"
         data-testid="input-search"
       />
     </div>
@@ -109,7 +114,7 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
         value={selectedGroupFilter === null ? "all" : String(selectedGroupFilter)}
         onValueChange={(value) => setSelectedGroupFilter(value === "all" ? null : parseInt(value))}
       >
-        <SelectTrigger className="w-40" data-testid="select-stock-group">
+        <SelectTrigger className="stock-items-select w-40" data-testid="select-stock-group">
           <SelectValue placeholder="All Groups" />
         </SelectTrigger>
         <SelectContent>
@@ -126,7 +131,7 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
           value={selectedGradeFilter === null ? "all" : String(selectedGradeFilter)}
           onValueChange={(value) => setSelectedGradeFilter(value === "all" ? null : parseInt(value))}
         >
-          <SelectTrigger className="w-36" data-testid="select-grade-filter">
+          <SelectTrigger className="stock-items-select w-36" data-testid="select-grade-filter">
             <SelectValue placeholder="All Grades" />
           </SelectTrigger>
           <SelectContent>
@@ -146,7 +151,7 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
             setSelectedCategoryFilter(value === "all" ? null : value === "none" ? "none" : parseInt(value))
           }
         >
-          <SelectTrigger className="w-40" data-testid="select-category-filter">
+          <SelectTrigger className="stock-items-select w-40" data-testid="select-category-filter">
             <SelectValue placeholder="All Categories" />
           </SelectTrigger>
           <SelectContent>
@@ -167,8 +172,10 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
   ).length;
 
   return (
-    <div className="flex flex-col gap-4 sm:p-4 md:p-6">
-      <PageHeader title="Stock Items" subtitle="Manage all stock items in your company">
+    <div className="stock-items-page flex flex-col gap-5 px-2 pb-5 sm:px-4 sm:py-4 md:px-6">
+      <div className="stock-items-hero">
+        <div className="stock-items-hero-art" aria-hidden="true"><Package className="h-24 w-24" strokeWidth={1} /></div>
+      <PageHeader title="Stock Items" subtitle="Manage all stock items in your company" icon={<Package className="h-5 w-5" aria-hidden="true" />}>
         {selectedIds.length > 0 && (
           <>
             <Button
@@ -198,13 +205,13 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
             </Button>
           </>
         )}
-        <Button className="gap-2" onClick={() => setCreateDialogOpen(true)} data-testid="button-add-item">
+        <Button className="stock-items-add-button gap-2" onClick={() => setCreateDialogOpen(true)} data-testid="button-add-item">
           <Plus className="h-4 w-4" />
           Add Item
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="gap-2" data-testid="button-manage-dropdown">
+            <Button variant="outline" className="stock-items-manage-button gap-2" data-testid="button-manage-dropdown">
               <Settings className="h-4 w-4" />
               Manage
               <ChevronDown className="h-4 w-4" />
@@ -259,17 +266,24 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
           </DropdownMenuContent>
         </DropdownMenu>
       </PageHeader>
+      </div>
 
-      <div className="flex flex-wrap gap-3">
-        <div className="rounded-lg border bg-muted/40 px-3 py-2 text-sm flex items-center gap-2">
-          <Package className="h-4 w-4 text-muted-foreground" />
-          <span className="text-muted-foreground">Total</span>
-          <span className="font-semibold">{totalItems.toLocaleString()}</span>
+      <div className="stock-items-metrics" aria-label="Stock items overview">
+        <div className="stock-items-metric stock-items-metric-purple">
+          <span className="stock-items-metric-icon"><Package className="h-6 w-6" aria-hidden="true" /></span>
+          <div className="stock-items-metric-info">
+            <span className="stock-items-metric-label">Total Items</span>
+            <strong className="stock-items-metric-value" data-testid="stock-total-items">{totalItems.toLocaleString()}</strong>
+          </div>
+          <svg className="stock-items-sparkline" viewBox="0 0 160 52" fill="none" aria-hidden="true"><path d="M2 44 C24 42 27 12 51 21 S81 46 101 28 S133 7 158 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
         </div>
-        <div className="rounded-lg border bg-muted/40 px-3 py-2 text-sm flex items-center gap-2">
-          <Layers className="h-4 w-4 text-muted-foreground" />
-          <span className="text-muted-foreground">Categories</span>
-          <span className="font-semibold">{stockCategories.length}</span>
+        <div className="stock-items-metric stock-items-metric-blue">
+          <span className="stock-items-metric-icon"><Layers className="h-6 w-6" aria-hidden="true" /></span>
+          <div className="stock-items-metric-info">
+            <span className="stock-items-metric-label">Categories</span>
+            <strong className="stock-items-metric-value" data-testid="stock-category-count">{stockCategories.length}</strong>
+          </div>
+          <svg className="stock-items-sparkline" viewBox="0 0 160 52" fill="none" aria-hidden="true"><path d="M2 44 C20 37 29 12 53 18 S85 39 110 24 S135 7 158 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
         </div>
       </div>
 
@@ -285,7 +299,7 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
           layout === "sheet" ? (
             selectFilters
           ) : (
-            <div className="flex flex-wrap gap-2">
+            <div className="stock-items-filter-bar flex flex-wrap gap-2">
               {searchControl}
               {selectFilters}
               {hasActiveFilters && (
@@ -294,6 +308,16 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
                   Reset filters
                 </Button>
               )}
+              <div className="stock-items-layout-switch" role="group" aria-label="Stock items layout">
+                <Button type="button" size="icon" variant="ghost" aria-label="List view" aria-pressed={viewMode === "list"}
+                  onClick={() => setViewMode("list")} data-testid="button-stock-list-view" className={viewMode === "list" ? "stock-items-layout-active" : ""}>
+                  <List className="h-4 w-4" />
+                </Button>
+                <Button type="button" size="icon" variant="ghost" aria-label="Grid view" aria-pressed={viewMode === "grid"}
+                  onClick={() => setViewMode("grid")} data-testid="button-stock-grid-view" className={viewMode === "grid" ? "stock-items-layout-active" : ""}>
+                  <Grid2X2 className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           )
         }
