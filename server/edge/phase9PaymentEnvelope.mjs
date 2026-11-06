@@ -129,3 +129,81 @@ export function phase9PaymentEnvelope(evidence) {
     voucher: voucherInputs(evidence.voucher),
   };
 }
+
+// ---- Plan batch 4 (owner-approved 2026-11-05): offline edit and delete ----
+//
+// Each names its voucher by the LAN record that created it ({origin: "lan"})
+// or by its shared pre-outage id ({origin: "cloud"}), and carries the SHA-256
+// of the voucher as the factory saw it (server/edge/phase9PaymentSnapshot.ts).
+
+export const PHASE9_PAYMENT_EDIT_KIND = "voucher.payment-receipt-edit.v1";
+export const PHASE9_PAYMENT_DELETE_KIND = "voucher.payment-receipt-delete.v1";
+/** Overridable: the cloud voucher changed after the factory saw it; approve = the factory's change wins. */
+export const PHASE9_PAYMENT_CHANGED_CONFLICT = "PHASE9_PAYMENT_CHANGED";
+
+const SHA = /^[0-9a-f]{64}$/;
+const FOLLOW_UP_FIELDS = [
+  "actorUserId",
+  "actorUsername",
+  "beforeSha256",
+  "companyId",
+  "localVoucherId",
+  "requestId",
+  "voucherRef",
+];
+
+function voucherRef(value) {
+  if (keys(value, ["localVoucherId", "origin"]) && value.origin === "lan" && ref(value.localVoucherId)) {
+    return { origin: "lan", localVoucherId: value.localVoucherId };
+  }
+  if (keys(value, ["origin", "voucherId"]) && value.origin === "cloud" && ref(value.voucherId)) {
+    return { origin: "cloud", voucherId: value.voucherId };
+  }
+  return null;
+}
+
+function followUp(evidence, fields, code) {
+  if (
+    !keys(evidence, [...fields].sort()) ||
+    !ref(evidence.companyId) ||
+    !ref(evidence.localVoucherId) ||
+    !text(evidence.actorUserId, 255) ||
+    !text(evidence.actorUsername, 255) ||
+    typeof evidence.requestId !== "string" ||
+    !UUID.test(evidence.requestId) ||
+    typeof evidence.beforeSha256 !== "string" ||
+    !SHA.test(evidence.beforeSha256)
+  ) {
+    throw new Phase9PaymentRefusal(code);
+  }
+  const target = voucherRef(evidence.voucherRef);
+  if (!target) throw new Phase9PaymentRefusal(code);
+  return {
+    requestId: evidence.requestId,
+    companyId: evidence.companyId,
+    actorUserId: evidence.actorUserId,
+    actorUsername: evidence.actorUsername,
+    localVoucherId: evidence.localVoucherId,
+    voucherRef: target,
+    beforeSha256: evidence.beforeSha256,
+  };
+}
+
+export function phase9PaymentEditEnvelope(evidence) {
+  const code = "PHASE9_PAYMENT_EDIT_EVIDENCE_INVALID";
+  const base = followUp(evidence, [...FOLLOW_UP_FIELDS, "voucher"], code);
+  let voucher;
+  try {
+    voucher = voucherInputs(evidence.voucher);
+  } catch {
+    throw new Phase9PaymentRefusal(code);
+  }
+  return { kind: PHASE9_PAYMENT_EDIT_KIND, ...base, voucher };
+}
+
+export function phase9PaymentDeleteEnvelope(evidence) {
+  return {
+    kind: PHASE9_PAYMENT_DELETE_KIND,
+    ...followUp(evidence, FOLLOW_UP_FIELDS, "PHASE9_PAYMENT_DELETE_EVIDENCE_INVALID"),
+  };
+}

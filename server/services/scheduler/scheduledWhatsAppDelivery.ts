@@ -136,7 +136,6 @@ async function acquireExistingOccurrence(
           )
           OR (
             o.status = 'claimed'
-            AND o.delivery_started_at IS NULL
             AND o.claim_expires_at < now()
           )
           OR (
@@ -295,7 +294,6 @@ export async function claimRetryableScheduledWhatsAppOccurrence(input: {
             )
             OR (
               o.status = 'claimed'
-              AND o.delivery_started_at IS NULL
               AND o.claim_expires_at < now()
             )
             OR (

@@ -85,6 +85,7 @@ const FACTORY_NAV_ICONS: Record<string, typeof Package> = {
   "factory/cost-centers": Layers,
   "factory/daybook": BookOpen,
   "factory/vouchers": FileText,
+  "factory/tickets": ClipboardCheck,
   "factory/stock-entry": ScanLine,
   "factory/raw-materials": Package,
   "factory/waste-dispatch": Trash2,
@@ -93,6 +94,7 @@ const FACTORY_NAV_ICONS: Record<string, typeof Package> = {
   "factory/invoicing": FileText,
   "factory/location-inventory": MapPin,
   "factory/stock-query": Package,
+  "factory/monthly-production-matrix": TableProperties,
   "factory/containers-hub": Container,
   "factory/stock-allocation-v5": LayoutGrid,
   "factory/sheets-sacks": Layers,
@@ -122,7 +124,6 @@ const FACTORY_SIDEBAR_GROUP_ORDER = [
   "Intelligence",
 ] as const;
 function visibleFactoryGroup(page: (typeof FACTORY_SIDEBAR_PAGES)[number]): string {
-  if (page.key === "factory/bales-hub") return "Inventory";
   return page.group === "Sales" ? "Sales & Loading" : page.group;
 }
 const FACTORY_SIDEBAR_COLORS: Record<string, string> = {
@@ -141,7 +142,7 @@ export const FACTORY_NAV_SECTIONS: FactoryNavSection[] = FACTORY_SIDEBAR_GROUP_O
     color: FACTORY_SIDEBAR_COLORS[label],
     developerOnly: pages.length > 0 && pages.every((page) => page.accessLevel === "developer"),
     items: pages.map((page) => ({
-      title: page.key === "factory/invoicing" ? "Invoicing & Loadings" : page.label,
+      title: page.key === "factory/invoicing" ? "Invoices & Loading" : page.label,
       url: page.route,
       icon: FACTORY_NAV_ICONS[page.key] ?? FileText,
       accessKey: page.key,
@@ -278,27 +279,8 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
         if (!isPinnedVisible({ url: item.url })) return false;
         if (item.hideKey && myAccess?.hiddenCostFields?.includes(item.hideKey)) return false;
 
-        // Relocate lower-traffic specialty pages into their owning workflow.
-        // Keep the standalone link if the user cannot open any parent page.
-        const relatedParentVisible = (url: string) => isPinnedVisible({ url });
-        // Contacts must remain directly reachable when the Parties hub has no
-        // visible tabs; otherwise the hub returns before rendering related links.
-        const partiesHasVisibleTab =
-          !myAccess?.hiddenCostFields?.includes("hide_tab_parties_customers") ||
-          !myAccess?.hiddenCostFields?.includes("hide_tab_parties_suppliers");
-        if (item.accessKey === "factory/contacts" && partiesHasVisibleTab && relatedParentVisible("/factory/parties")) {
-          return false;
-        }
-        if (item.accessKey === "factory/cost-centers" && relatedParentVisible("/factory/accounts")) return false;
-        if (item.accessKey === "factory/sheets-sacks" && relatedParentVisible("/factory/location-inventory")) {
-          return false;
-        }
-        if (
-          item.accessKey === "factory/stock-allocation-v5" &&
-          (relatedParentVisible("/factory/location-inventory") || relatedParentVisible("/factory/containers-hub"))
-        ) {
-          return false;
-        }
+        // Preserve all authorized pages in the sidebar, including those accessible
+        // from a parent hub. Visibility remains controlled by the access registry.
         return true;
       }),
     }))

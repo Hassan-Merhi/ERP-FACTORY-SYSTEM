@@ -103,10 +103,29 @@ async function waitForSettledUi(page) {
 
 async function applyLanguage(page, language) {
   await page.evaluate(
-    ({ storageKey, cookieName, eventName, nextLanguage }) => {
+    async ({ storageKey, cookieName, eventName, nextLanguage }) => {
       window.localStorage.setItem(storageKey, nextLanguage);
       document.cookie = `${cookieName}=${nextLanguage}; Path=/; Max-Age=31536000; SameSite=Lax`;
       window.dispatchEvent(new CustomEvent(eventName, { detail: nextLanguage }));
+      // Choosing a language in the real app also saves it as the account
+      // preference. Without that, the server still answers with the previous
+      // language and any remount of the language provider (a transient auth
+      // refetch under CI load) snaps the document back to it.
+      if (!window.location.pathname.startsWith("/login")) {
+        let csrfToken = null;
+        try {
+          const tokenResponse = await fetch("/api/csrf-token", { credentials: "include", cache: "no-store" });
+          if (tokenResponse.ok) csrfToken = (await tokenResponse.json())?.csrfToken ?? null;
+        } catch {
+          csrfToken = null;
+        }
+        await fetch("/api/language-preference", {
+          method: "PUT",
+          credentials: "include",
+          headers: { "content-type": "application/json", ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}) },
+          body: JSON.stringify({ preferredLanguage: nextLanguage }),
+        }).catch(() => null);
+      }
     },
     {
       storageKey: STORAGE_KEY,

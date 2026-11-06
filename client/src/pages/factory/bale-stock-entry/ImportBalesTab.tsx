@@ -51,6 +51,7 @@ export function ImportBalesTab() {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.currentTarget.value = "";
     setFileName(file.name);
 
     const reader = new FileReader();

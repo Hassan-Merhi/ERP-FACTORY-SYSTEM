@@ -177,6 +177,16 @@ export const phase3SharedUiTranslationsPart7: readonly Phase3SharedUiEntry[] = [
     fr: "La vidéo du système réel n’est pas encore publiée",
   },
   {
+    en: "This video could not be played here",
+    ar: "تعذر تشغيل هذا الفيديو هنا",
+    fr: "Cette vidéo ne peut pas être lue ici",
+  },
+  {
+    en: "Open the video in a new tab",
+    ar: "افتح الفيديو في علامة تبويب جديدة",
+    fr: "Ouvrir la vidéo dans un nouvel onglet",
+  },
+  {
     en: "The written guide is available now. A reviewed recording from the safe training environment can be added here.",
     ar: "الدليل المكتوب متاح الآن. يمكن إضافة تسجيل تمت مراجعته من بيئة التدريب الآمنة هنا.",
     fr: "Le guide écrit est déjà disponible. Une vidéo vérifiée de l’environnement de formation sécurisé pourra être ajoutée ici.",

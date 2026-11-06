@@ -193,15 +193,22 @@ export function findPreviewContainer(preview: unknown, containerNumber: string):
  * within one import, and lines that match no stock item by code/alias or name.
  * Both endpoints ran this identical loop against differently-named error arrays.
  */
+export interface ResolvedPoImportItem {
+  index: number;
+  stockItemId: number;
+  itemName: string;
+}
+
 export async function collectPreviewItemErrors(
   items: readonly PoImportPreviewItem[],
   companyId: number,
-  allStockItems: readonly StockItem[]
+  allStockItems: readonly StockItem[],
+  resolvedItems?: ResolvedPoImportItem[]
 ): Promise<string[]> {
   const errors: string[] = [];
   const seenBarcodes = new Set<string>();
 
-  for (const item of items) {
+  for (const [index, item] of items.entries()) {
     // Check for duplicate barcodes in the import
     if (item.barcode && seenBarcodes.has(item.barcode)) {
       errors.push(`Duplicate barcode in import: ${item.barcode}`);
@@ -218,12 +225,14 @@ export async function collectPreviewItemErrors(
       stockItem = allStockItems.find((si) => si.name === item.itemName);
     }
 
-    if (!stockItem) {
-      if (item.barcode) {
-        errors.push(`Item not found: code ${item.barcode} (${item.itemName})`);
-      } else {
-        errors.push(`Item not found by name: ${item.itemName}`);
-      }
+    if (stockItem) {
+      // Return fresh master-data details to the open preview. This is advisory:
+      // import independently resolves the item again before posting.
+      resolvedItems?.push({ index, stockItemId: stockItem.id, itemName: stockItem.name });
+    } else if (item.barcode) {
+      errors.push(`Item not found: code ${item.barcode} (${item.itemName})`);
+    } else {
+      errors.push(`Item not found by name: ${item.itemName}`);
     }
   }
 

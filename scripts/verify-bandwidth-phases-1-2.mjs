@@ -58,7 +58,7 @@ rejectText(
 );
 requireText(
   screenFeedCaptureEngine,
-  'import("html2canvas")',
+  'import("html2canvas-pro")',
   "html2canvas must load only when capture starts."
 );
 requireText(

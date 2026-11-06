@@ -40,7 +40,22 @@ const PAGES: Array<{
   { name: "NotificationsCenter", load: () => import("@/components/NotificationsCenter") },
   { name: "StockNameUpdateImport", load: () => import("@/components/StockNameUpdateImport") },
   { name: "AccountGroups", load: () => import("@/pages/AccountGroups") },
-  { name: "AccountMigration", load: () => import("@/pages/AccountMigration") },
+  {
+    name: "AccountMigration",
+    load: () => import("@/pages/AccountMigration"),
+    seedRoutes: {
+      "/api/admin/account-migration/pending": () => [
+        {
+          migrationId: "mig-1",
+          srcCompanyId: 1,
+          destCompanyId: 2,
+          accountIds: [11],
+          movedVoucherIds: [21],
+          accounts: [{ accountId: 11, originalCode: "1100", finalCode: "1100-M" }],
+        },
+      ],
+    },
+  },
   { name: "AiValidationPage", load: () => import("@/pages/AiValidationPage") },
   { name: "BaleProductsBilingual", load: () => import("@/pages/BaleProductsBilingual") },
   { name: "BarcodeManager", load: () => import("@/pages/BarcodeManager") },
@@ -280,13 +295,15 @@ describe("wave 4 page interaction sweep", () => {
         await new Promise((resolve) => setTimeout(resolve, 200));
       });
 
-      const buttonIds = Array.from(document.querySelectorAll("button[data-testid]"))
+      // Buttons rendered `asChild` over an anchor (e.g. download links) keep their
+      // button-* test id on the <a>, so the sweep presses those too.
+      const buttonIds = Array.from(document.querySelectorAll('button[data-testid], a[data-testid^="button-"]'))
         .map((button) => button.getAttribute("data-testid")!)
         .slice(0, MAX_BUTTONS);
       let pressed = 0;
       for (const id of buttonIds) {
-        const button = document.querySelector<HTMLButtonElement>(`[data-testid="${id}"]`);
-        if (!button || button.disabled) continue;
+        const button = document.querySelector<HTMLButtonElement | HTMLAnchorElement>(`[data-testid="${id}"]`);
+        if (!button || (button instanceof HTMLButtonElement && button.disabled)) continue;
         await act(async () => {
           fireEvent.click(button);
           await new Promise((resolve) => setTimeout(resolve, 20));

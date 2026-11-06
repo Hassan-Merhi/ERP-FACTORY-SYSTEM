@@ -21,7 +21,9 @@ import { ensurePhase9ReceivingOutboxSchema } from "./phase9ReceivingOutbox";
 import { ensurePhase9AttachmentOutboxSchema } from "./phase9AttachmentOutbox";
 import { ensurePhase9PaymentOutboxSchema } from "./phase9PaymentOutbox";
 import { ensurePhase10SyncControlSchema } from "./phase10SyncControl.mjs";
+import { ensurePhase10ConflictDecisionFunction, ensurePhase10SyncControlFunction } from "./phase10OperatorControls.mjs";
 import { EdgeRefusal } from "./edgeRefusal";
+import { ensurePhase9StockItemMapSchema } from "./phase9StockItemMap.mjs";
 
 export const OFFLINE_SCHEMA_INSTALL_ACK = "DBA_REVIEWED_MAINTENANCE_WINDOW";
 
@@ -40,6 +42,10 @@ export async function installOfflineSchema(target: string, env: NodeJS.ProcessEn
       await ensureCloudEdgeStageSchema(client, true);
       await ensurePhase8ApplySchema(client);
       await ensurePhase9CloudEventSchema(client);
+      // Phase 10: the operator panel's conflict decisions (DBA-owned function).
+      await ensurePhase10ConflictDecisionFunction(client);
+      // Plan batch 2: LAN-created item -> cloud item map.
+      await ensurePhase9StockItemMapSchema(client);
     } else {
       await ensureEdgeVoucherOutboxSchema(client);
       await ensurePhase9PressingOutboxSchema(client);
@@ -49,6 +55,8 @@ export async function installOfflineSchema(target: string, env: NodeJS.ProcessEn
       await ensurePhase9AttachmentOutboxSchema(client);
       await ensurePhase9PaymentOutboxSchema(client);
       await ensurePhase10SyncControlSchema(client);
+      // Phase 10: the operator panel's pause / resume (DBA-owned function).
+      await ensurePhase10SyncControlFunction(client);
     }
     await client.query("COMMIT");
     return { target, installed: true };

@@ -266,7 +266,12 @@ function ItemsTable({ model }: { model: PosPriceListModel }) {
 
               {isAllMode && <TableHead className="text-xs text-right w-32">Total Qty</TableHead>}
 
-              {/* Single-location mode: one Selling Price column */}
+              {/* Actual sales history for the selected location and date range. */}
+              {!isAllMode && <TableHead className="text-xs text-right w-32">Highest Price Sold</TableHead>}
+              {!isAllMode && <TableHead className="text-xs text-right w-32">Lowest Price Sold</TableHead>}
+              {!isAllMode && <TableHead className="text-xs text-right w-28">Qty Sold</TableHead>}
+
+              {/* Single-location mode: one editable Selling Price column */}
               {!isAllMode && <TableHead className="text-xs text-right w-48">Selling Price</TableHead>}
 
               {!isAllMode && (
@@ -325,6 +330,23 @@ function ItemsTable({ model }: { model: PosPriceListModel }) {
                     data-testid={`text-total-qty-${item.stockItemId}`}
                   >
                     {formatQty(item.totalQuantity ?? "0")}
+                  </TableCell>
+                )}
+
+                {/* Read-only historical prices and quantity, before the current editable price. */}
+                {!isAllMode && (
+                  <TableCell className="text-right text-sm tabular-nums" data-testid={`text-highest-sold-${item.stockItemId}`}>
+                    {item.highestPriceSold == null ? "—" : formatAmount(Number(item.highestPriceSold))}
+                  </TableCell>
+                )}
+                {!isAllMode && (
+                  <TableCell className="text-right text-sm tabular-nums" data-testid={`text-lowest-sold-${item.stockItemId}`}>
+                    {item.lowestPriceSold == null ? "—" : formatAmount(Number(item.lowestPriceSold))}
+                  </TableCell>
+                )}
+                {!isAllMode && (
+                  <TableCell className="text-right text-sm tabular-nums" data-testid={`text-qty-sold-${item.stockItemId}`}>
+                    {formatQty(item.qtySold ?? "0")}
                   </TableCell>
                 )}
 

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RemoteMouseControllerOverlay } from "./RemoteMouseControllerOverlay";
 
@@ -162,6 +162,48 @@ describe("RemoteMouseControllerOverlay input wiring", () => {
     controllerState.target = null;
     controllerState.portalHost = null;
     vi.unstubAllGlobals();
+  });
+
+  it("uses one guarded switch to authorize keyboard after mouse is already active", async () => {
+    const { portalHost } = setupViewerDialog();
+    portalHost.dataset.remoteControlPanelMode = "unified";
+    render(<RemoteMouseControllerOverlay />);
+    const toggle = screen.getByTestId("button-toggle-remote-control");
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(controllerState.requestJson).toHaveBeenCalledWith(
+        "/api/screen-feed/control/sessions/session-1/keyboard-authorization",
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+    expect(controllerState.requestJson.mock.calls.some((call) => String(call[0]).endsWith("/mouse-authorization"))).toBe(false);
+  });
+
+  it("stops both keyboard and mouse with the same switch", async () => {
+    const { portalHost } = setupViewerDialog();
+    portalHost.dataset.remoteControlPanelMode = "unified";
+    controllerState.session = {
+      ...controllerState.session,
+      capabilities: { mouse: true, keyboard: true },
+      keyboardAuthorization: { expiresAt: new Date(Date.now() + 4 * 60_000).toISOString() },
+    };
+    render(<RemoteMouseControllerOverlay />);
+    const toggle = screen.getByTestId("button-toggle-remote-control");
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(controllerState.requestJson).toHaveBeenCalledWith(
+        "/api/screen-feed/control/sessions/session-1/keyboard-authorization/revoke",
+        expect.objectContaining({ method: "POST" })
+      );
+      expect(controllerState.requestJson).toHaveBeenCalledWith(
+        "/api/screen-feed/control/sessions/session-1/mouse-authorization/revoke",
+        expect.objectContaining({ method: "POST" })
+      );
+    });
   });
 
   it("sends line-mode wheel deltas as pixels", async () => {

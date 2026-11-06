@@ -1,5 +1,9 @@
 name: Approve & Publish ERP Training Video
 
+# Manual re-publication of ONE topic from an earlier recording run, for
+# example to roll a topic back to a previous night's video. The nightly audit
+# publishes its own recordings automatically; this workflow is the override.
+
 on:
   workflow_dispatch:
     inputs:
@@ -8,40 +12,140 @@ on:
         required: true
         type: string
       topic:
-        description: "ONE reviewed topic ID (not all)"
+        description: "ONE topic ID to publish from that run (not all)"
         required: true
         type: string
 
-permissions:
-  actions: read
-  contents: write
-  pull-requests: write
-  id-token: write
+# A source recorder is read and vetted without any repository write token.
+# Protected publication runs only after validation and environment approval.
+permissions: {}
 
 concurrency:
   group: training-publisher
   cancel-in-progress: false
 
 jobs:
-  publish:
+  verify-recording:
+    name: Validate training recording without publication privileges
     runs-on: ubuntu-26.04
-    timeout-minutes: 20
-    # Maintainer MUST configure required environment reviewers in GitHub
-    # before setting the TRAINING_PUBLICATION_APPROVAL_ENABLED environment variable.
-    environment: training-publication
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      source_sha: ${{ steps.source.outputs.source_sha }}
     env:
       GH_TOKEN: ${{ github.token }}
-      TRAINING_PUBLICATION_APPROVAL_ENABLED: ${{ vars.TRAINING_PUBLICATION_APPROVAL_ENABLED }}
       SOURCE_RUN: ${{ inputs.source_run_id }}
       TOPIC: ${{ inputs.topic }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: main
-          persist-credentials: true
+          persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.1"
+          node-version: "24.22.2"
+      - name: Reject malformed source identifiers before calling GitHub API
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_RUN" =~ ^[0-9]{1,15}$ ]] || exit 1
+          [[ "$TOPIC" =~ ^[a-z0-9-]{1,80}$ ]] || exit 1
+      - name: Fetch vetted completed recorder job (independent of unrelated audit failures)
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" > "$RUNNER_TEMP/source-run.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN/jobs?per_page=100" > "$RUNNER_TEMP/source-jobs.json"
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const root = process.env.RUNNER_TEMP;
+          const run = JSON.parse(fs.readFileSync(root + "/source-run.json", "utf8"));
+          if (run.status !== "completed" || !["success", "failure"].includes(run.conclusion) ||
+              run.head_branch !== "main" || run.repository?.full_name !== process.env.GITHUB_REPOSITORY ||
+              !["push", "schedule", "workflow_dispatch"].includes(run.event)) {
+            throw new Error("Not an eligible completed main-branch recording run");
+          }
+          if (!/^[0-9a-f]{40}$/.test(run.head_sha)) throw new Error("Missing recording source commit");
+          const allowed = ["nightly-training-audit.yml", "training-videos.yml"];
+          if (!allowed.some((value) => String(run.path || "").includes(".github/workflows/" + value))) {
+            throw new Error("Not an approved training recording workflow");
+          }
+          // A nightly audit can fail an unrelated payroll/security/backend test.
+          // Require the actual recording job to have completed successfully, and
+          // separately validate its specific artifact, codec, SHA and duration.
+          const data = JSON.parse(fs.readFileSync(root + "/source-jobs.json", "utf8"));
+          const recorder = (data.jobs || []).filter((job) =>
+            job.name === "record-training" || job.name === "record / record-training");
+          if (recorder.length !== 1 || recorder[0].status !== "completed" ||
+              recorder[0].conclusion !== "success") {
+            throw new Error("The requested run has no successful training recording job");
+          }
+          fs.appendFileSync(process.env.GITHUB_ENV, "TRAINING_SOURCE_SHA=" + run.head_sha + "\n");
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, "source_sha=" + run.head_sha + "\n");
+          NODE
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" -n "real-erp-training-$SOURCE_RUN" -D "$GITHUB_WORKSPACE/.training-review"
+      - name: Install the decoder used to re-verify the recording
+        timeout-minutes: 35
+        run: |
+          # The runner's apt mirror is sometimes very slow (one install took 30
+          # minutes). Give each attempt 15 minutes, skip optional packages, and
+          # retry once against the main Ubuntu archive instead of the mirror.
+          apt_opts=(-o Acquire::Retries=3 -o Acquire::http::Timeout=60)
+          for attempt in 1 2; do
+            if [ "$attempt" = 2 ]; then
+              echo "ffmpeg install attempt 1 failed; retrying against archive.ubuntu.com"
+              sudo sed -i 's#http://azure.archive.ubuntu.com#http://archive.ubuntu.com#g' \
+                /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list 2>/dev/null || true
+            fi
+            if timeout 900 sudo apt-get "${apt_opts[@]}" update -qq &&
+               timeout 900 sudo DEBIAN_FRONTEND=noninteractive apt-get "${apt_opts[@]}" install -y -q --no-install-recommends ffmpeg; then
+              break
+            fi
+            if [ "$attempt" = 2 ]; then echo "::error::ffmpeg could not be installed"; exit 1; fi
+          done
+      - name: Verify the H.264 + AAC narrated recording, captions, guide and 1-20 minute duration
+        env:
+          TRAINING_REVIEW_DIR: ${{ github.workspace }}/.training-review
+          TRAINING_TOPICS: ${{ inputs.topic }}
+          TRAINING_VALIDATION_OUTPUT: ${{ github.workspace }}/.training-review/validated-recordings.json
+        run: node scripts/validate-training-recording.mjs
+      - name: Transfer immutable validated candidate to protected publisher
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: vetted-training-publication
+          path: ${{ github.workspace }}/.training-review/
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Protected publication after successful validation
+    needs: verify-recording
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    # This job alone has both the publication environment and the OIDC identity
+    # the storage gateway trusts. It never runs unless verify-recording passed.
+    environment: training-publication
+    env:
+      TRAINING_PUBLICATION_APPROVAL_ENABLED: ${{ vars.TRAINING_PUBLICATION_APPROVAL_ENABLED }}
+      SOURCE_RUN: ${{ inputs.source_run_id }}
+      TOPIC: ${{ inputs.topic }}
+      TRAINING_SOURCE_SHA: ${{ needs.verify-recording.outputs.source_sha }}
+      TRAINING_REVIEW_DIR: ${{ github.workspace }}/.training-review
+      TRAINING_VALIDATION: ${{ github.workspace }}/.training-review/validated-recordings.json
+      TRAINING_PUBLISHED_BY: ${{ github.actor }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
       - name: Fail closed unless protected approval and storage are configured
         shell: bash
         run: |
@@ -51,76 +155,26 @@ jobs:
           }
           [[ "$SOURCE_RUN" =~ ^[0-9]{1,15}$ ]] || exit 1
           [[ "$TOPIC" =~ ^[a-z0-9-]{1,80}$ ]] || exit 1
+          [[ "$TRAINING_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
           [[ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" && -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]] || {
             echo "::error::Protected GitHub OIDC identity is unavailable"; exit 1;
           }
-      - name: Fetch vetted successful training run
-        shell: bash
-        run: |
-          set -euo pipefail
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" > "$RUNNER_TEMP/source-run.json"
-          node --input-type=module <<'NODE'
-          import fs from "node:fs";
-          const run = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/source-run.json", "utf8"));
-          if (run.status !== "completed" || run.conclusion !== "success" ||
-              run.head_branch !== "main" || run.repository?.full_name !== process.env.GITHUB_REPOSITORY ||
-              !["schedule", "workflow_dispatch"].includes(run.event)) {
-            throw new Error("Not a successful main-branch training run");
-          }
-          if (!/^[0-9a-f]{40}$/.test(run.head_sha)) throw new Error("Missing recording source commit");
-          const allowed = ["nightly-training-audit.yml", "training-videos.yml"];
-          if (!allowed.some((value) => String(run.path || "").includes(".github/workflows/" + value))) {
-            throw new Error("Not an approved training recording workflow");
-          }
-          fs.appendFileSync(process.env.GITHUB_ENV, "TRAINING_SOURCE_SHA=" + run.head_sha + "\n");
-          NODE
-          gh run download "$SOURCE_RUN" -n "real-erp-training-$SOURCE_RUN" -D "$RUNNER_TEMP/review"
-      - name: Validate recorded evidence
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE'
-          import fs from "node:fs";
-          import path from "node:path";
-          const root = path.join(process.env.RUNNER_TEMP, "review");
-          const topic = process.env.TOPIC;
-          const report = JSON.parse(fs.readFileSync(path.join(root, "report.json"), "utf8"));
-          if (!Array.isArray(report)) throw new Error("Missing recording report");
-          const entry = report.find((item) => item.topic === topic);
-          if (!entry || entry.sourceSha !== process.env.TRAINING_SOURCE_SHA || entry.status !== "captured" || entry.requiresReview !== true) {
-            throw new Error("The selected video has no successful reviewed-candidate recording");
-          }
-          for (const file of ["screen.webm", "captions.vtt", "guide.md", "screenshot.png"]) {
-            const full = path.join(root, topic, file);
-            if (!fs.statSync(full).isFile() || fs.statSync(full).size < 16) {
-              throw new Error("Missing or empty recording: " + file);
-            }
-          }
-          if (!fs.readFileSync(path.join(root, topic, "captions.vtt"), "utf8").startsWith("WEBVTT")) {
-            throw new Error("Invalid captions");
-          }
-          NODE
-      - name: Upload reviewed videos, captions and screenshots to PRIVATE Vercel Blob
+      - name: Download exact validated recording (not arbitrary run input)
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: vetted-training-publication
+          path: ${{ github.workspace }}/.training-review/
+      - name: Upload the validated video, captions and screenshot to PRIVATE Vercel Blob and update the runtime manifest
         shell: bash
         run: |
           set -euo pipefail
           node scripts/upload-reviewed-training-vercel.mjs
-      - name: Propose publication for code review and deployment
-        env:
-          TRAINING_PUBLISH_TOPIC: ${{ inputs.topic }}
-          TRAINING_APPROVED_BY: ${{ github.actor }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          export TRAINING_APPROVED_GUIDE_PATH="$RUNNER_TEMP/review/$TOPIC/guide.md"
-          node scripts/register-published-training.mjs
-          branch="training/publish-$SOURCE_RUN-$TOPIC"
-          git config user.name "training-publication[bot]"
-          git config user.email "training-publication@users.noreply.github.com"
-          git checkout -b "$branch"
-          git add shared/publishedTrainingMedia.json
-          git commit -m "Publish reviewed $TOPIC video from $TRAINING_SOURCE_SHA"
-          git push origin "$branch"
-          gh pr create --base main --head "$branch" \
-            --title "Publish approved training: $TOPIC" \
-            --body "Human-approved private training media from recording run $SOURCE_RUN. Original source commit: $TRAINING_SOURCE_SHA. Files reside in a private Vercel Blob store; the ERP streams them only to authenticated users after this PR is merged and deployed. No live accounting or Factory data was modified."
+          echo "Published $TOPIC from $TRAINING_SOURCE_SHA; it is live in Help & Training as soon as the ERP refreshes its manifest (about one minute)."
+      - name: Keep the publication receipt
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: manual-training-publication-${{ inputs.topic }}
+          path: ${{ github.workspace }}/.training-review/published-upload-report.json
+          if-no-files-found: warn
+          retention-days: 30

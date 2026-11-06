@@ -41,7 +41,7 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
     steps:
       - name: Harden Runner (audit mode)
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: audit
 
@@ -159,7 +159,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Harden Runner (audit mode)
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: audit
       - name: Download repository source
@@ -172,10 +172,10 @@ jobs:
             --header "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" |
             tar --extract --gzip --strip-components=1
-      - name: Set up Node.js 24.22.1
+      - name: Set up Node.js 24.22.2
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.1"
+          node-version: "24.22.2"
           cache: npm
       - name: Install dependencies
         id: install
@@ -224,7 +224,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Harden Runner (audit mode)
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: audit
       - name: Download repository source
@@ -233,10 +233,10 @@ jobs:
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" --header "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" | tar --extract --gzip --strip-components=1
-      - name: Set up Node.js 24.22.1
+      - name: Set up Node.js 24.22.2
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.1"
+          node-version: "24.22.2"
           cache: npm
       - name: Install dependencies
         id: install
@@ -264,7 +264,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Harden Runner (audit mode)
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: audit
       - name: Download repository source
@@ -273,10 +273,10 @@ jobs:
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" --header "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" | tar --extract --gzip --strip-components=1
-      - name: Set up Node.js 24.22.1
+      - name: Set up Node.js 24.22.2
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.1"
+          node-version: "24.22.2"
           cache: npm
       - name: Install dependencies
         id: install
@@ -331,7 +331,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Harden Runner (audit mode)
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: audit
       - name: Download repository source
@@ -340,10 +340,10 @@ jobs:
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" --header "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" | tar --extract --gzip --strip-components=1
-      - name: Set up Node.js 24.22.1
+      - name: Set up Node.js 24.22.2
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.1"
+          node-version: "24.22.2"
           cache: npm
       - name: Install dependencies
         id: install
@@ -391,7 +391,7 @@ jobs:
       PORT: "5000"
     steps:
       - name: Harden Runner (audit mode)
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: audit
       - name: Download repository source
@@ -400,10 +400,10 @@ jobs:
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" --header "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" | tar --extract --gzip --strip-components=1
-      - name: Set up Node.js 24.22.1
+      - name: Set up Node.js 24.22.2
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.1"
+          node-version: "24.22.2"
           cache: npm
       - name: Install dependencies
         id: install
@@ -524,7 +524,7 @@ jobs:
     timeout-minutes: 35
     steps:
       - name: Harden Runner (audit mode)
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: audit
       - name: Download repository source
@@ -533,10 +533,10 @@ jobs:
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" --header "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" | tar --extract --gzip --strip-components=1
-      - name: Set up Node.js 24.22.1
+      - name: Set up Node.js 24.22.2
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.1"
+          node-version: "24.22.2"
           cache: npm
       - name: Install dependencies
         id: install
@@ -583,7 +583,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Harden Runner (audit mode)
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: audit
       - name: Download repository source
@@ -592,10 +592,10 @@ jobs:
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" --header "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" | tar --extract --gzip --strip-components=1
-      - name: Set up Node.js 24.22.1
+      - name: Set up Node.js 24.22.2
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.1"
+          node-version: "24.22.2"
           cache: npm
       - name: Install dependencies
         run: npm ci --no-audit --bin-links=true

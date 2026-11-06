@@ -8,12 +8,16 @@ import { db } from "../../db";
 import { stockTransferVouchers, vouchers } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import {
-  finalizeOptionalStockTransfer,
-  finalizeStockTransferByTransferId,
   reopenStockTransferAsDraft,
   saveStockTransferLifecycle,
   type StockTransferLifecycleItem,
 } from "../../services/stockTransferLifecycle";
+import {
+  finalizeStockTransferWithCapture,
+  saveStockTransferWithCapture,
+} from "../../services/inventory/stockTransferWorkflowCapture";
+import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
+import { offlineEdgeText } from "../../i18n/offlineEdgeMessages";
 
 const lifecycleItemSchema = z.object({
   stockItemId: z.coerce.number().int().positive(),
@@ -151,7 +155,8 @@ export function registerStockTransferLifecycleRoutes(app: Express) {
       }
 
       const parsed = putSchema.parse(req.body);
-      const result = await saveStockTransferLifecycle({
+      // On the factory LAN server the edit is recorded for the cloud in the same transaction.
+      const result = await saveStockTransferWithCapture(req, {
         companyId,
         transferId,
         destinationLocationId: parsed.destinationLocationId,
@@ -251,12 +256,20 @@ export function registerStockTransferLifecycleRoutes(app: Express) {
           (voucher.voucherType !== "Stock Transfer" &&
             voucher.voucherType !== "StockTransfer" &&
             voucher.voucherType !== "Transfer")
-        )
+        ) {
+          // The factory LAN server records only transfer finalizes; other vouchers stay online-only.
+          if (isPhase9LanPrimary()) {
+            return res.status(423).json({
+              code: "EDGE_SYNC_UNSUPPORTED_OPERATION",
+              message: offlineEdgeText("voucherFinalizeTransfersOnly", req.headers["accept-language"]),
+            });
+          }
           return next();
+        }
         if (voucher.companyId !== companyId)
           return res.status(403).json({ message: "Voucher belongs to a different company" });
 
-        const result = await finalizeOptionalStockTransfer(companyId, voucherId);
+        const result = await finalizeStockTransferWithCapture(req, companyId, voucherId);
         return res.json({ success: true, ...result });
       } catch (error) {
         return sendError(res, error, "Finalize");
@@ -278,7 +291,13 @@ export function registerStockTransferLifecycleRoutes(app: Express) {
         if (!Number.isInteger(transferId) || transferId <= 0) {
           return res.status(400).json({ message: "Transfer ID is required" });
         }
-        const result = await finalizeStockTransferByTransferId(companyId, transferId);
+        const [transfer] = await db
+          .select({ voucherId: stockTransferVouchers.voucherId })
+          .from(stockTransferVouchers)
+          .where(eq(stockTransferVouchers.id, transferId))
+          .limit(1);
+        if (!transfer) throw new Error("Stock transfer not found");
+        const result = await finalizeStockTransferWithCapture(req, companyId, transfer.voucherId);
         return res.json({ success: true, ...result });
       } catch (error) {
         return sendError(res, error, "Approve");

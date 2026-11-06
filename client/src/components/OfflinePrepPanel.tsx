@@ -40,6 +40,7 @@ import {
 import { getScopedOfflineReadiness, runScopedOfflinePrep } from "@/lib/offline/scopedOfflinePrep";
 import { OfflineWriteStatusPanel } from "@/components/OfflineWriteStatusPanel";
 import { FactoryEdgeOperatorPanel } from "@/components/FactoryEdgeOperatorPanel";
+import { FactoryEdgeConflictsPanel } from "@/components/FactoryEdgeConflictsPanel";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -468,6 +469,8 @@ function OfflinePrepPanelContent() {
       <OfflineWriteStatusPanel />
 
       <FactoryEdgeOperatorPanel />
+
+      <FactoryEdgeConflictsPanel />
 
       {/* Pages that still need server */}
       <Collapsible>

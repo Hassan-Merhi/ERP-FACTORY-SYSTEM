@@ -335,6 +335,12 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     return requirement("factory/settings");
   }
 
+  // Monthly Production Matrix reads and shared company row-order updates are
+  // owned by the dedicated Inventory page, never by general Settings.
+  if (hasPrefix(path, "/monthly-production-matrix")) {
+    return requirement("factory/monthly-production-matrix");
+  }
+
   // Production report detail APIs, including the legacy fallback behind the
   // pre-router SQL accelerator. The shared production-value endpoint is used by
   // multiple Overview surfaces, so bind explicit view requests to their owning

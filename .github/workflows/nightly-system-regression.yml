@@ -1,0 +1,295 @@
+name: Nightly Whole-System Regression (Disposable Only)
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: All backend, database, accounting and factory tests
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: heliumdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d heliumdb"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/heliumdb
+      PGSSLMODE: disable
+      NODE_ENV: test
+      ERP_E2E_DISPOSABLE_DB: "1"
+      TRAINING_SANDBOX_VERIFIED: "1"
+      PORT: "5000"
+      ENABLE_SCHEDULERS: "false"
+      CSRF_ENFORCE: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Build and validate actual application
+        run: |
+          npm run prebuild
+          node --max-old-space-size=4096 node_modules/vite/bin/vite.js build
+          node scripts/build-server.mjs
+          node scripts/verify-server-bundle.mjs
+          node scripts/verify-runtime-dependencies.mjs
+      - name: Set up isolated database
+        run: node node_modules/drizzle-kit/bin.cjs push --force
+      - name: Apply the production startup-schema bridges to the throwaway database
+        shell: bash
+        run: |
+          set -euo pipefail
+          node dist/index.js > "$RUNNER_TEMP/nightly-startup.log" 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 180); do
+            if curl -fsS http://127.0.0.1:5000/api/health/db > "$RUNNER_TEMP/nightly-health.json" 2>/dev/null; then break; fi
+            if ! kill -0 "$app_pid" 2>/dev/null; then cat "$RUNNER_TEMP/nightly-startup.log"; exit 1; fi
+            if [ "$attempt" = 180 ]; then cat "$RUNNER_TEMP/nightly-startup.log"; exit 1; fi
+            sleep 1
+          done
+          node --input-type=module -e "const { ensureCustomerOrderBaleScanAudit } = await import('./server/customerOrderBaleScanAuditBridge.mjs'); await ensureCustomerOrderBaleScanAudit();"
+      - name: Keep Postgres container logs readable
+        # Negative-path suites deliberately provoke constraint errors. Without
+        # this, tens of thousands of ERROR lines bury the vitest summary at the
+        # end of the job log. The statements still fail the same way.
+        shell: bash
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d heliumdb \
+            -c "ALTER SYSTEM SET log_min_messages = 'fatal'" \
+            -c "ALTER SYSTEM SET log_min_error_statement = 'panic'" \
+            -c "SELECT pg_reload_conf()" || echo "::warning::Could not quiet Postgres logging"
+      - name: Run EVERY registered backend suite with actual Postgres and coverage thresholds
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/nightly-whole-system
+          npm run test:backend:coverage -- --maxWorkers=2 2>&1 | tee artifacts/nightly-whole-system/backend-tests.log
+      - name: Summarize failing suites and coverage gates
+        if: failure()
+        shell: bash
+        run: |
+          log=artifacts/nightly-whole-system/backend-tests.log
+          {
+            echo "## Backend suite failures"
+            echo
+            echo '```'
+            sed -E 's/\x1b\[[0-9;]*m//g' "$log" | grep -E "^ (FAIL|×|✗)|^ *(×|✗) |Test Files|Tests  |ERROR: Coverage|does not meet|threshold" | head -120
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          sed -E 's/\x1b\[[0-9;]*m//g' "$log" | grep -E "^ FAIL " | sort -u | head -40 | while read -r line; do echo "::error::$line"; done
+      - name: Preserve result and coverage evidence even when a suite fails
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: nightly-backend-regression
+          path: |
+            artifacts/nightly-whole-system
+            coverage/backend/coverage-summary.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  frontend:
+    name: All frontend, mobile and role-view unit tests
+    runs-on: ubuntu-26.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Run ALL registered frontend suites with coverage thresholds
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/nightly-whole-system
+          npm run test:frontend:coverage 2>&1 | tee artifacts/nightly-whole-system/frontend-tests.log
+      - name: Verify browser offline snapshot and IndexedDB isolation
+        run: npm run test:offline:browser
+      - name: Preserve frontend evidence even on failures
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: nightly-frontend-regression
+          path: |
+            artifacts/nightly-whole-system
+            coverage/frontend/coverage-summary.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  audits:
+    name: Registry, company scope, write safety and testing gaps
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Enforce nightly workflow and production-isolation contracts
+        run: node --test scripts/nightly-system-regression.test.mjs
+      - name: Test deterministic training narration and audio assembly
+        run: node --test scripts/training-narration.test.mjs scripts/plan-nightly-training.test.mjs scripts/upload-reviewed-training-vercel.test.mjs
+      - name: Test Program 6C duplicate-reference handling
+        run: node --test scripts/generate-program6c-inventory-classifications.test.mjs
+      - name: Generate a test inventory showing coverage and known gaps
+        run: node scripts/report-nightly-system-coverage.mjs
+      - name: Validate write routes and tenant/company isolation inventory
+        run: |
+          npm run audit:write-routes
+          npm run audit:write-evidence
+          npm run audit:company-scope
+          # The classification validator requires a human-reviewed JSON document.
+          # Generate real audit evidence and a pending review worksheet; do not
+          # falsely treat an unreviewed template as validated classifications.
+          node scripts/run-program6c-inventory-review.mjs --report=artifacts/nightly-system-coverage/program6c-inventory-report.json
+          node scripts/generate-program6c-inventory-classifications.mjs --report=artifacts/nightly-system-coverage/program6c-inventory-report.json --output=artifacts/nightly-system-coverage/program6c-review-worksheet.json
+          npm run verify:migrations
+      - name: Preserve test coverage inventory even on failures
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: nightly-system-coverage-inventory
+          path: artifacts/nightly-system-coverage
+          if-no-files-found: warn
+          retention-days: 30
+
+  coverage-ratchet:
+    name: Compare measured backend and frontend coverage
+    needs: [backend, frontend]
+    if: needs.backend.result == 'success' && needs.frontend.result == 'success'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Download full backend coverage evidence
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: nightly-backend-regression
+          path: artifacts/combined-backend
+      - name: Download full frontend coverage evidence
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: nightly-frontend-regression
+          path: artifacts/combined-frontend
+      - name: Place measured coverage summaries at canonical paths
+        run: |
+          mkdir -p coverage/backend coverage/frontend
+          cp artifacts/combined-backend/coverage/backend/coverage-summary.json coverage/backend/coverage-summary.json
+          cp artifacts/combined-frontend/coverage/frontend/coverage-summary.json coverage/frontend/coverage-summary.json
+      - name: Enforce shared coverage ratchet
+        run: npm run audit:coverage-ratchet
+
+  rendered-pages:
+    name: Render real ERP / Factory screens on phones and desktops
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: heliumdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres@localhost:5432/heliumdb
+      PGSSLMODE: disable
+      NODE_ENV: test
+      ERP_E2E_DISPOSABLE_DB: "1"
+      TRAINING_SANDBOX_VERIFIED: "1"
+      CSRF_ENFORCE: "0"
+      ENABLE_SCHEDULERS: "false"
+      PORT: "5000"
+      API_RATE_LIMIT_MAX: "100000"
+      API_RATE_LIMIT_ANON_MAX: "100000"
+      LOGIN_RATE_LIMIT_MAX: "100000"
+      ERP_SMOKE_BASE_URL: http://127.0.0.1:5000
+      ERP_SMOKE_USERNAME: system_pages_${{ github.run_id }}
+      ERP_SMOKE_REQUIRE_AUTHENTICATED: "1"
+      ERP_SMOKE_REQUIRE_EXACT_ROUTES: "1"
+      ERP_MOBILE_PROGRAM_OUTPUT_DIR: artifacts/nightly-rendered-pages/erp
+      ERP_FACTORY_MOBILE_OUTPUT_DIR: artifacts/nightly-rendered-pages/factory
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+          cache: npm
+      - name: Generate throwaway credentials
+        shell: bash
+        run: |
+          node <<'NODE'
+          const crypto = require("node:crypto");
+          const fs = require("node:fs");
+          for (const key of ["SESSION_SECRET", "ERP_SMOKE_PASSWORD"]) {
+            fs.appendFileSync(process.env.GITHUB_ENV, key + "=" + crypto.randomBytes(48).toString("hex") + "\n");
+          }
+          NODE
+      - run: npm ci --ignore-scripts
+      - name: Install Chrome and build real application
+        run: |
+          node node_modules/puppeteer/lib/puppeteer/node/cli.js browsers install chrome
+          npm run build
+      - name: Seed fabricated ERP / Factory company with drill-down records
+        run: |
+          node node_modules/drizzle-kit/bin.cjs push --force
+          node scripts/prepare-phase9-browser-smoke-fixture.mjs
+      - name: Visit ERP / Factory registered routes and inspect real layouts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/nightly-rendered-pages
+          npm start > artifacts/nightly-rendered-pages/server.log 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 180); do
+            if curl -fsS http://127.0.0.1:5000/api/health/db >/dev/null 2>&1; then break; fi
+            if ! kill -0 "$app_pid" 2>/dev/null; then cat artifacts/nightly-rendered-pages/server.log; exit 1; fi
+            if [ "$attempt" = 180 ]; then cat artifacts/nightly-rendered-pages/server.log; exit 1; fi
+            sleep 1
+          done
+          node scripts/run-phase9-language-browser-smoke.mjs
+          node scripts/verify-erp-mobile-program.mjs --viewports=phone-393,desktop-1440 --languages=en
+          export ERP_FACTORY_MOBILE_CREATE_SEEDS=1
+          export ERP_FACTORY_MOBILE_REQUIRE_SEEDS=1
+          export ERP_FACTORY_MOBILE_STRICT_TABLES=1
+          export ERP_FACTORY_MOBILE_VIEWPORTS=phone-390,desktop-1440
+          node scripts/verify-factory-mobile-browser.mjs
+      - name: Upload full browser route reports and screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: nightly-rendered-system-pages
+          path: |
+            artifacts/nightly-rendered-pages
+            artifacts/ux-regression-browser
+          if-no-files-found: warn
+          retention-days: 30

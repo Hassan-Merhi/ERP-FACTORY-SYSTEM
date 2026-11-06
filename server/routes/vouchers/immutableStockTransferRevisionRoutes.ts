@@ -16,6 +16,10 @@ import {
 import { sendRevisedTransferWhatsApp } from "../../helpers/sendRevisedTransferWhatsApp";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { sendBaleMirrorMovementRefusal } from "../../services/accounting/perpetualInventory/cutoverRefusal";
+import {
+  captureStockTransferRevisionReviewTx,
+  captureStockTransferRevisionTx,
+} from "../../services/inventory/stockTransferWorkflowCapture";
 
 const revisionSchema = z.object({
   note: z.string().optional().nullable(),
@@ -212,8 +216,22 @@ export function registerImmutableStockTransferRevisionRoutes(app: Express) {
             newQuantity: item.newQuantity,
           })),
         },
-        (tx, written) =>
-          auditRevision(
+        async (tx, written) => {
+          // Factory LAN server: the revision is recorded for the cloud in this transaction.
+          await captureStockTransferRevisionTx(req, tx, written, {
+            note: parsed.note ?? null,
+            pending: parsed.optional,
+            sourceLocationIdLimit: assignedLocationId,
+            items: parsed.items.map((item) => ({
+              stockItemId: item.stockItemId,
+              stockItemName: item.stockItemName,
+              sourceLocationId: item.sourceLocationId,
+              sourceLocationName: item.sourceLocationName ?? null,
+              originalQuantity: item.originalQuantity,
+              newQuantity: item.newQuantity,
+            })),
+          });
+          await auditRevision(
             req,
             companyId,
             written.revisionId,
@@ -230,7 +248,8 @@ export function registerImmutableStockTransferRevisionRoutes(app: Express) {
               items: { new: revisionItemsForAudit(written.items) },
             },
             tx
-          )
+          );
+        }
       );
 
       queueRevisedTransferWhatsApp(result);
@@ -299,28 +318,34 @@ export function registerImmutableStockTransferRevisionRoutes(app: Express) {
         const actorId = userId(req);
         if (!actorId) return res.status(401).json({ message: "User session is required" });
 
-        const result = await approveImmutableStockTransferRevision(companyId, revisionId, actorId, (tx, written) =>
-          auditRevision(
-            req,
-            companyId,
-            revisionId,
-            `transfer-${written.transferId}-revision-${written.revisionNumber}`,
-            "approve",
-            {
-              revisionNumber: { new: written.revisionNumber },
-              status:
-                written.transition === "no-op"
-                  ? { old: "approved", new: "approved" }
-                  : { old: "pending", new: "approved" },
-              changedItemCount: { new: written.changedItemCount },
-              appliedRevisionCount: {
-                new: written.transition === "no-op" ? 0 : (written.appliedRevisionCount ?? 1),
+        const result = await approveImmutableStockTransferRevision(
+          companyId,
+          revisionId,
+          actorId,
+          async (tx, written) => {
+            await captureStockTransferRevisionReviewTx(req, tx, written, "approve", null);
+            await auditRevision(
+              req,
+              companyId,
+              revisionId,
+              `transfer-${written.transferId}-revision-${written.revisionNumber}`,
+              "approve",
+              {
+                revisionNumber: { new: written.revisionNumber },
+                status:
+                  written.transition === "no-op"
+                    ? { old: "approved", new: "approved" }
+                    : { old: "pending", new: "approved" },
+                changedItemCount: { new: written.changedItemCount },
+                appliedRevisionCount: {
+                  new: written.transition === "no-op" ? 0 : (written.appliedRevisionCount ?? 1),
+                },
+                totalAmount: { new: written.totalAmount },
+                items: { new: written.items },
               },
-              totalAmount: { new: written.totalAmount },
-              items: { new: written.items },
-            },
-            tx
-          )
+              tx
+            );
+          }
         );
         return res.json({ success: true, ...result });
       } catch (error) {
@@ -351,8 +376,9 @@ export function registerImmutableStockTransferRevisionRoutes(app: Express) {
           revisionId,
           actorId,
           parsed.reason,
-          (tx, written) =>
-            auditRevision(
+          async (tx, written) => {
+            await captureStockTransferRevisionReviewTx(req, tx, written, "reject", parsed.reason ?? null);
+            await auditRevision(
               req,
               companyId,
               revisionId,
@@ -368,7 +394,8 @@ export function registerImmutableStockTransferRevisionRoutes(app: Express) {
                 items: { new: written.items },
               },
               tx
-            )
+            );
+          }
         );
         return res.json({ success: true, ...result });
       } catch (error) {

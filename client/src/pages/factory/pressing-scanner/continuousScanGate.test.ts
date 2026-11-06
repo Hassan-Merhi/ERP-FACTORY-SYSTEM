@@ -43,4 +43,14 @@ describe("ContinuousScanGate", () => {
     gate.reset();
     expect(gate.frame("REF300208", 1001)).toBe("REF300208");
   });
+  it("retains the recent-code throttle when an iPhone camera session is suspended", () => {
+    const gate = new ContinuousScanGate(1500, 3);
+    expect(gate.frame("REF300208", 10000)).toBe("REF300208");
+    gate.suspend();
+    expect(gate.frame("REF300208", 10100)).toBeNull();
+    expect(gate.frame("REF300209", 10200)).toBe("REF300209");
+    gate.suspend();
+    expect(gate.frame("REF300208", 11600)).toBe("REF300208");
+  });
+
 });

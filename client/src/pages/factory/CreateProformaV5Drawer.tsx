@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { V5ProformaMobileLines } from "./V5ProformaMobileLines";
 
 import type { Props } from "./createproformav5drawer/types";
 import { useCreateProformaV5Model } from "./createproformav5drawer/useCreateProformaV5Model";
@@ -33,6 +34,8 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
     setCustomerId,
     proformaName,
     setProformaName,
+    destination,
+    setDestination,
     isActive,
     setIsActive,
     quantities,
@@ -167,6 +170,30 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                 className={cn(errors.proformaName && "border-destructive")}
               />
               {errors.proformaName && <p className="text-xs text-destructive">{errors.proformaName}</p>}
+            </div>
+
+            <div className="flex flex-col gap-1.5 min-w-[180px] flex-1">
+              <Label htmlFor="v5-proforma-destination" className="text-xs font-medium">
+                Destination <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="v5-proforma-destination"
+                data-testid="input-v5-proforma-destination"
+                value={destination}
+                onChange={(e) => {
+                  setDestination(e.target.value);
+                  setErrors((p) => { const next = { ...p }; delete next.destination; return next; });
+                }}
+                placeholder="e.g. L'SHI, MALI, KINSHASA"
+                list="v5-proforma-destinations"
+                className={cn(errors.destination && "border-destructive")}
+              />
+              <datalist id="v5-proforma-destinations">
+                <option value="L'SHI" />
+                <option value="MALI" />
+                <option value="KINSHASA" />
+              </datalist>
+              {errors.destination && <p className="text-xs text-destructive">{errors.destination}</p>}
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -320,12 +347,12 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
                     });
                     setAppliedPrice("customer" as React.SetStateAction<"sell" | "prod" | null>);
                   }}
-                  disabled={!customerPriceListQuery.data?.length}
+                  disabled={!destination.trim() || !customerPriceListQuery.data?.length}
                   data-testid="button-v5-apply-customer-price"
                   title={
                     customerPriceListQuery.data?.length
-                      ? `Apply ${customerPriceListQuery.data.length} agreed price(s) for this customer`
-                      : "No agreed prices saved for this customer yet"
+                      ? `Apply ${customerPriceListQuery.data.length} agreed price(s) for ${destination}`
+                      : "No agreed prices saved for this destination yet"
                   }
                   className={cn("h-9 rounded-full px-4 text-xs font-semibold", (appliedPrice as string) === "customer" && "ring-2 ring-violet-500/40")}
                 >
@@ -432,8 +459,25 @@ export default function CreateProformaV5Drawer({ open, onClose, articleRows, onS
           </div>
         </div>
 
-        {/* Table */}
-        <div className="mx-3 min-w-0 overflow-x-auto rounded-b-xl border border-t-0 bg-card shadow-sm sm:mx-5">
+        {/* Both views write to the same proforma draft; only one is visible. */}
+        <V5ProformaMobileLines
+          variant="create"
+          rows={visibleRows}
+          quantities={quantities}
+          prices={sellingPrices}
+          kgPrices={kgPrices}
+          pricingModes={pricingModes}
+          onQuantityChange={handleQtyChange}
+          onPriceChange={(code, value) => setSellingPrices((previous) => ({ ...previous, [code]: value }))}
+          onKgPriceChange={(code, value) => setKgPrices((previous) => ({ ...previous, [code]: value }))}
+          onModeChange={(code, value) => setPricingModes((previous) => ({ ...previous, [code]: value }))}
+          weightPerBale={(code) => Number(map.get(code)?.weightPerBaleKg || 0)}
+          shortageCount={(row, qty) => Math.max(0, qty * (sendToLoading && n > 0 ? n : 1) - (row.stockAvailable - row.totalLoaded))}
+          multiplier={sendToLoading && n > 0 ? n : 1}
+          errors={errors}
+        />
+        {/* Desktop table remains unchanged for spreadsheet-style editing. */}
+        <div className="mx-3 hidden min-w-0 overflow-x-auto rounded-b-xl border border-t-0 bg-card shadow-sm md:block phone-land:hidden sm:mx-5">
           <table className="w-full min-w-[1120px] table-fixed border-collapse text-sm">
             <colgroup>
               {sendToLoading && n > 0 ? (<><col style={{ width: "25%" }} /><col style={{ width: "10%" }} /><col style={{ width: "14%" }} /><col style={{ width: "12%" }} /><col style={{ width: "11%" }} /><col style={{ width: "12%" }} /><col style={{ width: "16%" }} /></>) : (<><col style={{ width: "27%" }} /><col style={{ width: "10%" }} /><col style={{ width: "16%" }} /><col style={{ width: "14%" }} /><col style={{ width: "13%" }} /><col style={{ width: "20%" }} /></>)}

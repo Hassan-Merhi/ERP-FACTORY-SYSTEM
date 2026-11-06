@@ -2,7 +2,8 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { issueSignedToken, presignUrl } from "@vercel/blob";
 
 const store = "store_TXyFGTsySrCeQhOj";
-const allowed = /^training\/videos\/[a-z0-9-]{1,80}\/[0-9a-f]{40}\.(?:webm|vtt|png)$/;
+// Immutable media objects plus the one mutable manifest the ERP reads at runtime.
+const allowed = /^training\/(?:videos\/[a-z0-9-]{1,80}\/[0-9a-f]{40}\.(?:webm|mp4|vtt|png)|manifest\/current\.json)$/;
 const host = "txyfgtsysrceqhoj.private.blob.vercel-storage.com";
 
 export default { async fetch(request) {

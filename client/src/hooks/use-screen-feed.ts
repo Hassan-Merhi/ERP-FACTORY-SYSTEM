@@ -1,10 +1,21 @@
 import { useEffect, useRef } from "react";
 import type { ScreenFeedClickEvent, ScreenFeedCursorEvent, ScreenFeedFailureStage } from "./screen-feed-capture-engine";
+import { reportScreenFeedModuleLoadFailure } from "./screen-feed-asset-recovery";
 
 let captureEnginePromise: Promise<typeof import("./screen-feed-capture-engine")> | null = null;
 
 function loadScreenFeedCaptureEngine() {
-  captureEnginePromise ??= import("./screen-feed-capture-engine");
+  captureEnginePromise ??= import("./screen-feed-capture-engine")
+    .then((module) => {
+      window.dispatchEvent(new Event("erp:screen-feed-module-loaded"));
+      return module;
+    })
+    .catch((error: unknown) => {
+      // Do not cache a rejected promise and repeatedly fail every frame.
+      captureEnginePromise = null;
+      reportScreenFeedModuleLoadFailure(error);
+      throw error;
+    });
   return captureEnginePromise;
 }
 import { getRemoteSupportTabId } from "./use-remote-control-session";
@@ -52,9 +63,16 @@ function trimLabel(el: HTMLElement): string {
   return txt.slice(0, 60);
 }
 
-function runWhenIdle(fn: () => void): void {
-  if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(fn, { timeout: 500 });
-  else setTimeout(fn, 0);
+function scheduleCaptureWork(fn: () => void, interactive: boolean): void {
+  if (interactive) {
+    // Once a watched user interacts, do not wait up to 500ms for an idle slot.
+    // Scheduling on the next paint keeps the snapshot current without a busy loop.
+    window.requestAnimationFrame(() => fn());
+  } else if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(fn, { timeout: 500 });
+  } else {
+    setTimeout(fn, 0);
+  }
 }
 
 function cursorsDiffer(previous: ScreenFeedCursorEvent | null, next: ScreenFeedCursorEvent): boolean {
@@ -246,7 +264,8 @@ export function useScreenFeed() {
 
       busyRef.current = true;
       let failed = false;
-      runWhenIdle(() => {
+      const interactive = dirtyRef.current;
+      scheduleCaptureWork(() => {
         if (!watchedRef.current || document.visibilityState !== "visible" || disposed) {
           busyRef.current = false;
           if (watchedRef.current) markDirty({ urgent: true });
@@ -298,7 +317,7 @@ export function useScreenFeed() {
             busyRef.current = false;
             finishSchedulingAfterCapture(failed);
           });
-      });
+      }, interactive);
     }
 
     const onPointerMove = (event: PointerEvent) => {

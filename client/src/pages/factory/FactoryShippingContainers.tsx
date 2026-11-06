@@ -4,36 +4,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Search,
-  Filter,
-  ChevronDown,
-  ChevronRight,
-  MessageCircle,
-  Eye,
-  Trash2,
-  RotateCcw,
-  Check,
-  CheckCircle2,
-  Loader2,
-  SlidersHorizontal,
-  ArrowLeft,
-  ArrowRight,
-} from "lucide-react";
+import { MessageCircle, Trash2, Check, CheckCircle2, Loader2, ArrowLeft, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
@@ -42,7 +14,6 @@ import type { DisplayRow, ShippingRow, TrackingRow } from "./factoryshippingcont
 import {
   INV_LEFT,
   LIST_KEY,
-  SHIPPING_COLS,
   STATUS_ORDER,
   fmtDate,
   statusColor,
@@ -59,6 +30,9 @@ import { ShippingAvailabilityTable } from "./factoryshippingcontainers/component
 import { ScheduledContainersTable } from "./factoryshippingcontainers/components/ScheduledContainersTable";
 import { useShippingColumnVisibility } from "./factoryshippingcontainers/hooks/useShippingColumnVisibility";
 import { FilterPanel, type DocsFilter } from "./factoryshippingcontainers/components/FilterPanel";
+import { ShippingToolbar } from "./factoryshippingcontainers/components/ShippingToolbar";
+import { DoneContainersSection } from "./factoryshippingcontainers/components/DoneContainersSection";
+import { ShippingConfirmDialogs } from "./factoryshippingcontainers/components/ShippingConfirmDialogs";
 import {
   ShippingDashboardOverview,
   isShippingEtaOverdue,
@@ -371,123 +345,28 @@ export default function FactoryShippingContainers() {
           showOrderValue={colVis.containerCost}
         />
         {/* ── Compact search + controls ── */}
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-card p-2.5 shadow-sm dark:bg-[#101c30]">
-          <div className="relative min-w-[200px] flex-[2_1_260px]">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search invoice, client, container, destination…"
-              className="h-9 rounded-lg bg-background/80 pl-8 text-xs"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              data-testid="input-search"
-            />
-          </div>
-          <Select
-            value={filterStatus}
-            onValueChange={(value) => {
-              setFilterStatus(value);
-              setQuickMode("all");
-            }}
-          >
-            <SelectTrigger
-              className="h-9 min-w-[110px] flex-[1_1_110px] rounded-lg text-xs"
-              data-testid="shipping-select-status"
-            >
-              <SelectValue placeholder="All statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="LOADING">Loading</SelectItem>
-              <SelectItem value="VERIFIED">Verified</SelectItem>
-              <SelectItem value="FINALIZED">Finalized</SelectItem>
-              <SelectItem value="DRAFT">Draft</SelectItem>
-              <SelectItem value="CANCELLED">Cancelled</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={destinationFilter} onValueChange={setDestinationFilter}>
-            <SelectTrigger
-              className="h-9 min-w-[125px] flex-[1_1_125px] rounded-lg text-xs"
-              data-testid="shipping-select-destination"
-            >
-              <SelectValue placeholder="All destinations" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All destinations</SelectItem>
-              {destinations.map((value) => (
-                <SelectItem key={value} value={value}>
-                  {value}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={shippingCompanyFilter} onValueChange={setShippingCompanyFilter}>
-            <SelectTrigger
-              className="h-9 min-w-[130px] flex-[1_1_130px] rounded-lg text-xs"
-              data-testid="shipping-select-company"
-            >
-              <SelectValue placeholder="All shipping companies" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All shipping companies</SelectItem>
-              {shippingCompanies.map((value) => (
-                <SelectItem key={value} value={value}>
-                  {value}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            variant={showFilters ? "secondary" : "outline"}
-            className="h-9 rounded-lg text-xs"
-            onClick={() => setShowFilters((v) => !v)}
-            data-testid="button-toggle-filters"
-          >
-            <Filter className="h-4 w-4 mr-1" />
-            Filters
-            {hasActiveFilters && <span className="ml-1 h-2 w-2 rounded-full bg-primary inline-block" />}
-          </Button>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="h-9 rounded-lg text-xs" data-testid="button-toggle-columns">
-                <SlidersHorizontal className="h-4 w-4 mr-1" />
-                Columns
-                {hiddenCount > 0 && (
-                  <span className="ml-1 text-xs bg-primary text-primary-foreground rounded-full px-1.5 py-0.5 leading-none">
-                    {hiddenCount}
-                  </span>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-60 max-h-[min(75vh,540px)] overflow-y-auto p-2">
-              <div className="mb-2 flex items-center justify-between gap-2 px-1">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Show / Hide Columns
-                </p>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 px-2 text-xs"
-                  onClick={showAllCols}
-                  data-testid="button-show-all-columns"
-                >
-                  Show all
-                </Button>
-              </div>
-              <div className="space-y-0.5">
-                {SHIPPING_COLS.map((col) => (
-                  <label
-                    key={col.id}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded-md hover-elevate cursor-pointer text-sm"
-                    data-testid={`col-toggle-${col.id}`}
-                  >
-                    <Checkbox checked={colVis[col.id]} onCheckedChange={() => toggleCol(col.id)} />
-                    {col.label}
-                  </label>
-                ))}
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
+        <ShippingToolbar
+          search={search}
+          onSearch={setSearch}
+          filterStatus={filterStatus}
+          onFilterStatus={(value) => {
+            setFilterStatus(value);
+            setQuickMode("all");
+          }}
+          destinationFilter={destinationFilter}
+          onDestinationFilter={setDestinationFilter}
+          destinations={destinations}
+          shippingCompanyFilter={shippingCompanyFilter}
+          onShippingCompanyFilter={setShippingCompanyFilter}
+          shippingCompanies={shippingCompanies}
+          showFilters={showFilters}
+          onToggleFilters={() => setShowFilters((v) => !v)}
+          hasActiveFilters={hasActiveFilters}
+          colVis={colVis}
+          toggleCol={toggleCol}
+          showAllCols={showAllCols}
+          hiddenCount={hiddenCount}
+        />
 
         {/* ── Filter Panel ── */}
         {showFilters && (
@@ -858,121 +737,19 @@ export default function FactoryShippingContainers() {
         <ShippingAvailabilityTable />
 
         {/* ── Done / Hidden Containers ── */}
-        <div className="shipping-subsection">
-          <button
-            className="shipping-done-toggle w-full flex items-center justify-between px-4 py-3 text-sm font-medium"
-            onClick={() => setDoneExpanded((v) => !v)}
-            data-testid="button-toggle-done"
-          >
-            <span className="flex items-center gap-2">
-              {doneExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-              Done / Hidden Containers
-              <Badge variant="outline" className="text-xs">
-                {doneTotal}
-              </Badge>
-            </span>
-            <span className="text-xs">Collapse to keep workspace clean</span>
-          </button>
-
-          {doneExpanded &&
-            (done.length === 0 ? (
-              <div className="px-4 py-6 text-center text-xs text-muted-foreground">No done containers yet.</div>
-            ) : (
-              <div>
-                <div className="overflow-x-auto">
-                  <Table mobileLayout="cards" className="text-xs">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-xs">Invoice #</TableHead>
-                        <TableHead className="text-xs">Client</TableHead>
-                        <TableHead className="text-xs">Container #</TableHead>
-                        <TableHead className="text-xs">Destination</TableHead>
-                        <TableHead className="text-xs">Done Date</TableHead>
-                        <TableHead className="text-xs">WA Sent</TableHead>
-                        <TableHead className="text-xs">Done By</TableHead>
-                        <TableHead className="w-28" />
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {done.map((r) => (
-                        <TableRow key={r.id} className="opacity-70" data-testid={`row-done-${r.id}`}>
-                          <TableCell className="font-mono">{r.invoiceNumber}</TableCell>
-                          <TableCell>{r.clientName || "—"}</TableCell>
-                          <TableCell className="font-mono">{r.containerNumber || "—"}</TableCell>
-                          <TableCell>{r.destination || "—"}</TableCell>
-                          <TableCell className="whitespace-nowrap">{fmtDate(r.doneAt)}</TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {r.whatsappSentAt ? (
-                              <span className="text-green-700 dark:text-green-400">{fmtDate(r.whatsappSentAt)}</span>
-                            ) : (
-                              <span className="text-muted-foreground italic">—</span>
-                            )}
-                          </TableCell>
-                          <TableCell>{r.doneBy || "—"}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setDocsRowId(r.id)}
-                                data-testid={`button-view-done-${r.id}`}
-                              >
-                                <Eye className="h-3.5 w-3.5 mr-1" /> View
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                disabled={restoreMutation.isPending}
-                                onClick={() => restoreMutation.mutate(r.id)}
-                                data-testid={`button-restore-${r.id}`}
-                              >
-                                <RotateCcw className="h-3.5 w-3.5 mr-1" /> Restore
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => setPendingDeleteId(r.id)}
-                                data-testid={`button-delete-done-${r.id}`}
-                              >
-                                <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-                {doneTotalPages > 1 && (
-                  <div className="flex items-center justify-between border-t px-4 py-2 text-xs text-muted-foreground">
-                    <span>
-                      Page {donePage} of {doneTotalPages} · {doneTotal} completed containers
-                    </span>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={donePage <= 1}
-                        onClick={() => setDonePage((page) => Math.max(1, page - 1))}
-                        data-testid="button-done-prev-page"
-                      >
-                        Previous
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={donePage >= doneTotalPages}
-                        onClick={() => setDonePage((page) => Math.min(doneTotalPages, page + 1))}
-                        data-testid="button-done-next-page"
-                      >
-                        Next
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-        </div>
+        <DoneContainersSection
+          expanded={doneExpanded}
+          onToggleExpanded={() => setDoneExpanded((v) => !v)}
+          done={done}
+          doneTotal={doneTotal}
+          doneTotalPages={doneTotalPages}
+          donePage={donePage}
+          onDonePage={setDonePage}
+          restorePending={restoreMutation.isPending}
+          onView={setDocsRowId}
+          onRestore={(id) => restoreMutation.mutate(id)}
+          onDelete={setPendingDeleteId}
+        />
       </div>
 
       {/* Hidden file input for shipping invoice upload */}
@@ -1000,69 +777,20 @@ export default function FactoryShippingContainers() {
         onMarkDone={(id, markWaSent) => doneMutation.mutate({ id, markWaSent })}
       />
 
-      {/* Confirm delete */}
-      <AlertDialog
-        open={!!pendingDeleteId}
-        onOpenChange={(v) => {
-          if (!v) setPendingDeleteId(null);
+      <ShippingConfirmDialogs
+        pendingDeleteId={pendingDeleteId}
+        onCancelDelete={() => setPendingDeleteId(null)}
+        onConfirmDelete={(id) => {
+          deleteRowMutation.mutate(id);
+          setPendingDeleteId(null);
         }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this record?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete the shipping container record and all its attached documents. This cannot be
-              undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground"
-              onClick={() => {
-                if (pendingDeleteId) {
-                  deleteRowMutation.mutate(pendingDeleteId);
-                  setPendingDeleteId(null);
-                }
-              }}
-              data-testid="button-confirm-delete-row"
-            >
-              Yes, Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Confirm before marking done */}
-      <AlertDialog
-        open={!!pendingDoneId}
-        onOpenChange={(v) => {
-          if (!v) setPendingDoneId(null);
+        pendingDoneId={pendingDoneId}
+        onCancelDone={() => setPendingDoneId(null)}
+        onConfirmDone={(id) => {
+          doneMutation.mutate({ id });
+          setPendingDoneId(null);
         }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Mark as Done?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will move the shipment to the Done / Hidden section. You can restore it later.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (pendingDoneId) {
-                  doneMutation.mutate({ id: pendingDoneId });
-                  setPendingDoneId(null);
-                }
-              }}
-              data-testid="button-confirm-done"
-            >
-              Yes, Mark as Done
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      />
     </>
   );
 }

@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient, resetCsrfToken } from "@/lib/queryClient";
 import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import { clearBiometricCredentials } from "@/lib/biometricCredentials";
-import { revokeOfflineReadScope } from "@/lib/offline/offlineReadCache";
+import { revokeOfflineReadScope, wipeColdStartAccess } from "@/lib/offline/offlineReadCache";
 
 /**
  * Manages the authenticated user session:
@@ -19,6 +19,8 @@ export function useAuthenticatedUser() {
   const { data: user, isLoading, error } = useQuery(authenticatedUserQueryOptions());
 
   const handleLogout = async (): Promise<void> => {
+    // Plan batch 5: signing out wipes this account's cold-start key on this laptop.
+    if (user?.id !== undefined && user?.id !== null) await wipeColdStartAccess(String(user.id));
     revokeOfflineReadScope();
     try {
       localStorage.setItem("erp_offline_logout_broadcast", String(Date.now()));

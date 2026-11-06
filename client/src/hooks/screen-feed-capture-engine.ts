@@ -6,6 +6,7 @@ import {
   shouldPreserveScreenFeedBackground,
 } from "./screen-feed-viewing-quality";
 import { sendScreenFeedBinaryFrame } from "@/lib/screen-feed-binary-transport";
+import { normalizeUnsupportedScreenFeedColors } from "./screen-feed-color-compat";
 
 const CAPTURE_TIMEOUT_MS = 9000;
 const RETRY_CAPTURE_TIMEOUT_MS = 5000;
@@ -14,17 +15,20 @@ const MAX_JPEG_BYTES = 900_000;
 const FAST_MAX_JPEG_BYTES = 420_000;
 const SIGNATURE_WIDTH = 32;
 const SIGNATURE_HEIGHT = 18;
-const MAX_CAPTURE_WIDTH = 1536;
+const FAST_CAPTURE_WIDTH = 1120;
+const STANDARD_CAPTURE_WIDTH = 1440;
 const MIN_CAPTURE_SCALE = 0.4;
 const SCROLL_KEY_ATTRIBUTE = "data-screenfeed-scroll-key";
 
 const isDev = import.meta.env.DEV;
 
-type Html2Canvas = (typeof import("html2canvas"))["default"];
+type Html2Canvas = (typeof import("html2canvas-pro"))["default"];
 type CaptureSource = "dom" | "retry" | "fallback";
 export type ScreenFeedFailureStage = "render" | "encode" | "upload" | "pipeline";
 let html2canvasPromise: Promise<Html2Canvas> | null = null;
 let scrollKeySequence = 0;
+// Once an unsupported CSS color is observed, recover future frames directly.
+let captureNeedsColorCompatibility = false;
 
 export interface ScreenFeedClickEvent {
   x: number;
@@ -72,7 +76,7 @@ interface ScrollSnapshotLease {
 
 async function loadHtml2Canvas(): Promise<Html2Canvas> {
   if (!html2canvasPromise) {
-    html2canvasPromise = import("html2canvas")
+    html2canvasPromise = import("html2canvas-pro")
       .then((module) => module.default)
       .catch((error) => {
         html2canvasPromise = null;
@@ -94,6 +98,10 @@ function errorMessage(error: unknown): string {
 
 function isCaptureTimeout(error: unknown): boolean {
   return error instanceof Error && error.message.startsWith("timeout-");
+}
+
+function isUnsupportedColorFailure(error: unknown): boolean {
+  return /unsupported color function/i.test(errorMessage(error));
 }
 
 async function waitForCaptureReady(): Promise<void> {
@@ -232,9 +240,16 @@ function sanitizeClone(doc: Document, snapshot: Map<string, { top: number; left:
   });
 }
 
-function buildHtml2CanvasOptions(snapshot: Map<string, { top: number; left: number }>) {
+function buildHtml2CanvasOptions(
+  snapshot: Map<string, { top: number; left: number }>,
+  recoverColors: boolean,
+  fast: boolean
+) {
   const nativeScale = getScreenFeedCaptureScale(window.devicePixelRatio);
-  const viewportScale = Math.min(1, MAX_CAPTURE_WIDTH / Math.max(1, window.innerWidth));
+  // Render directly at the final JPEG size instead of rendering extra pixels
+  // and resizing a second canvas on every live frame.
+  const targetWidth = fast ? FAST_CAPTURE_WIDTH : STANDARD_CAPTURE_WIDTH;
+  const viewportScale = Math.min(1, targetWidth / Math.max(1, window.innerWidth));
   const captureScale = Math.max(MIN_CAPTURE_SCALE, Math.min(nativeScale, viewportScale));
 
   return {
@@ -247,7 +262,10 @@ function buildHtml2CanvasOptions(snapshot: Map<string, { top: number; left: numb
     foreignObjectRendering: false,
     imageTimeout: 1800,
     removeContainer: true,
-    onclone: (doc: Document) => sanitizeClone(doc, snapshot),
+    onclone: (doc: Document) => {
+      sanitizeClone(doc, snapshot);
+      if (recoverColors) normalizeUnsupportedScreenFeedColors(doc);
+    },
     ignoreElements: (element: Element) => element.getAttribute("data-screenfeed-ignore") === "true",
   } as const;
 }
@@ -366,7 +384,7 @@ function canvasToJpegBlob(canvas: HTMLCanvasElement, quality: number): Promise<B
 }
 
 async function encodeFrame(canvas: HTMLCanvasElement, fast: boolean): Promise<EncodedFrame | null> {
-  const maxWidth = fast ? 1120 : 1440;
+  const maxWidth = fast ? FAST_CAPTURE_WIDTH : STANDARD_CAPTURE_WIDTH;
   const quality = fast ? 0.56 : 0.7;
   const limit = fast ? FAST_MAX_JPEG_BYTES : MAX_JPEG_BYTES;
   const candidate = resizeCanvas(canvas, maxWidth);
@@ -406,10 +424,15 @@ async function encodeWithFallback(
   return { encoded: null, source: "fallback", failureReason: reason };
 }
 
-async function runCaptureAttempt(scrollElements: Iterable<HTMLElement>, retry: boolean): Promise<HTMLCanvasElement> {
+async function runCaptureAttempt(
+  scrollElements: Iterable<HTMLElement>,
+  retry: boolean,
+  recoverColors: boolean,
+  fast: boolean
+): Promise<HTMLCanvasElement> {
   const lease = prepareScrollableSnapshot(scrollElements);
   try {
-    const options = buildHtml2CanvasOptions(lease.snapshot);
+    const options = buildHtml2CanvasOptions(lease.snapshot, recoverColors, fast);
     if (!retry) return await withSafeCreatePattern(() => tryCapture(options, CAPTURE_TIMEOUT_MS));
     return await withSafeCreatePattern(() =>
       tryCapture(
@@ -427,16 +450,17 @@ async function runCaptureAttempt(scrollElements: Iterable<HTMLElement>, retry: b
   }
 }
 
-async function captureCanvas(scrollElements: Iterable<HTMLElement>): Promise<CaptureCanvasResult> {
+async function captureCanvas(scrollElements: Iterable<HTMLElement>, fast: boolean): Promise<CaptureCanvasResult> {
   trace("capture-start");
   await waitForCaptureReady();
   try {
-    const canvas = await runCaptureAttempt(scrollElements, false);
+    const canvas = await runCaptureAttempt(scrollElements, false, captureNeedsColorCompatibility, fast);
     trace("capture-ok");
     return { canvas, source: "dom" };
   } catch (error) {
     const firstReason = errorMessage(error);
     trace("capture-fail-p1", firstReason);
+    if (isUnsupportedColorFailure(error)) captureNeedsColorCompatibility = true;
 
     if (isCaptureTimeout(error)) {
       trace("capture-fallback-timeout", firstReason);
@@ -444,7 +468,7 @@ async function captureCanvas(scrollElements: Iterable<HTMLElement>): Promise<Cap
     }
 
     try {
-      const canvas = await runCaptureAttempt(scrollElements, true);
+      const canvas = await runCaptureAttempt(scrollElements, true, captureNeedsColorCompatibility, fast);
       trace("capture-ok-retry");
       return { canvas, source: "retry", failureReason: firstReason };
     } catch (retryError) {
@@ -497,8 +521,12 @@ export async function captureAndUploadScreenFrame(input: {
   }
 
   const startedAt = Date.now();
-  const captured = await captureCanvas(input.scrollElements);
-  if (!input.shouldContinue() || document.visibilityState !== "visible" || window.location.href !== input.expectedPath) {
+  const captured = await captureCanvas(input.scrollElements, input.fast);
+  if (
+    !input.shouldContinue() ||
+    document.visibilityState !== "visible" ||
+    window.location.href !== input.expectedPath
+  ) {
     trace("capture-discarded");
     return cancelledResult(input.lastUploadedClickTs, startedAt);
   }

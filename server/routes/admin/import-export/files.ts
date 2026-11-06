@@ -15,7 +15,11 @@ import { storedFiles, fileFolders } from "@shared/schema";
 import { eq, and, desc, asc } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import { isPhase9LanPrimary } from "../../../edge/phase9PosOutbox";
-import { capturePhase9AttachmentTx } from "../../../edge/phase9AttachmentOutbox";
+import {
+  capturePhase9AttachmentTx,
+  capturePhase9AttachmentUpdateTx,
+  phase9AttachmentFileRefTx,
+} from "../../../edge/phase9AttachmentOutbox";
 import { PHASE9_ATTACHMENT_MAX_BYTES } from "../../../edge/phase9AttachmentEnvelope.mjs";
 
 export function registerFileRoutes(app: Express) {
@@ -189,11 +193,35 @@ export function registerFileRoutes(app: Express) {
       if (displayName !== undefined) updates.displayName = displayName || null;
       if (folderId !== undefined) updates.folderId = folderId === null ? null : parseInt(folderId);
       if (Object.keys(updates).length === 0) return res.status(400).json({ message: "Nothing to update" });
-      const [updated] = await db
-        .update(storedFiles)
-        .set(updates)
-        .where(and(eq(storedFiles.id, fileId), eq(storedFiles.companyId, companyId)))
-        .returning({ id: storedFiles.id });
+      // Factory LAN server (plan batch 4): the rename / move and its record for the cloud commit together.
+      const lanCapture = isPhase9LanPrimary();
+      const updated = await db.transaction(async (tx) => {
+        const [before] = lanCapture
+          ? await tx
+              .select({ displayName: storedFiles.displayName, folderId: storedFiles.folderId })
+              .from(storedFiles)
+              .where(and(eq(storedFiles.id, fileId), eq(storedFiles.companyId, companyId)))
+              .for("update")
+          : [];
+        const [row] = await tx
+          .update(storedFiles)
+          .set(updates)
+          .where(and(eq(storedFiles.id, fileId), eq(storedFiles.companyId, companyId)))
+          .returning({ id: storedFiles.id, displayName: storedFiles.displayName, folderId: storedFiles.folderId });
+        if (row && before) {
+          await capturePhase9AttachmentUpdateTx(tx, {
+            companyId,
+            localFileId: fileId,
+            actorUserId: String(req.session.userId),
+            actorUsername: req.session.username || "unknown",
+            requestId: randomUUID(),
+            fileRef: await phase9AttachmentFileRefTx(tx, fileId),
+            before: { displayName: before.displayName ?? null, folderId: before.folderId ?? null },
+            after: { displayName: row.displayName ?? null, folderId: row.folderId ?? null },
+          });
+        }
+        return row;
+      });
       if (!updated) return res.status(404).json({ message: "File not found" });
       res.json({ message: "File updated" });
     } catch (error: unknown) {

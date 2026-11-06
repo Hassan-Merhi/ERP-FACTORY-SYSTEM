@@ -18,8 +18,9 @@ describe("Phase 7 backend-message translations", () => {
     // (#2141), plus the 15 fail-closed post-offload, duty and reversal guards
     // (#2241) and the 2 dedicated freight-payee guards (#2245), plus the 5
     // intercompany parent-journal guards for purchase-order edits (#2261) (750),
-    // plus 8 reviewed entries by October 30 and 5 further translated
-    // messages merged on main by November 3, for a total of 763.
+    // plus 8 reviewed entries (with Arabic/French) merged on main by
+    // 2026-10-30 (758), plus the 5 entries merged on main by 2026-11-03, for a
+    // total of 763.
     expect(backendMessagesPhase7Translations).toHaveLength(763);
     expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(763);
 

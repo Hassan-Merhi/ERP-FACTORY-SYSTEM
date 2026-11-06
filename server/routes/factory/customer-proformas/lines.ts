@@ -21,7 +21,6 @@ import {
   insertCustomerProformaLineSchema,
 } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
-import { autoSavePriceToPriceList } from "./_helpers";
 import { toMoney } from "../../../lib/money";
 
 /** Whether the proforma belongs to the company; lines carry no company of their own. */
@@ -102,17 +101,8 @@ export function registerFactoryCustomerProformaLineRoutes(app: Express) {
       // Sync — new line changes reservedNotYetLoaded for this proforma
       await syncProformaReservations(db, companyId, parsed.proformaId);
 
-      // Auto-save price to customer price list
-      const [proforma] = await db
-        .select({ customerId: customerProformas.customerId })
-        .from(customerProformas)
-        .where(eq(customerProformas.id, parsed.proformaId))
-        .limit(1);
-      if (proforma?.customerId && parsed.articleCode && parsed.pricePerBale) {
-        await autoSavePriceToPriceList(companyId, proforma.customerId, parsed.articleCode, parsed.pricePerBale).catch(
-          () => {}
-        );
-      }
+      // Proforma prices are document-specific. The customer agreed-price
+      // list changes only through explicit price-list actions.
 
       res.json({ ...line, ...(stockWarning ? { stockWarning } : {}) });
     } catch (error: unknown) {
@@ -222,22 +212,8 @@ export function registerFactoryCustomerProformaLineRoutes(app: Express) {
       // Sync — quantity change alters reservedNotYetLoaded
       await syncProformaReservations(db, companyId, existingLine.proformaId);
 
-      // Auto-save price to customer price list if price was part of the update
-      if (updateData.pricePerBale !== undefined && existingLine.articleCode) {
-        const [proforma] = await db
-          .select({ customerId: customerProformas.customerId })
-          .from(customerProformas)
-          .where(eq(customerProformas.id, existingLine.proformaId))
-          .limit(1);
-        if (proforma?.customerId) {
-          await autoSavePriceToPriceList(
-            companyId,
-            proforma.customerId,
-            existingLine.articleCode,
-            updateData.pricePerBale
-          ).catch(() => {});
-        }
-      }
+      // Editing this line must not update the customer's shared agreed-price
+      // list, which can be applied to other proformas explicitly.
 
       // Auto-reprice active orders: when pricingMode or pricePerKg changes on a proforma line,
       // immediately update price_used on all matching bales in LOADING/PENDING_VERIFICATION orders

@@ -17,6 +17,7 @@
  * Handlers MUST use the same client/transaction they are given.
  */
 import { createHash } from "node:crypto";
+import { translatePhase9LanStockItems } from "./phase9StockItemMap.mjs";
 import { validatePhase8OperatorApproval, hasVerifiedCloudWriterAuthority } from "./phase8ApplyStore.mjs";
 import {
   EDGE_EVENT_RECEIPT_PROTOCOL,
@@ -80,9 +81,34 @@ export async function ensurePhase9CloudEventSchema(queryable) {
       payload_sha256 CHAR(64) NOT NULL,
       staged_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
       PRIMARY KEY (site_id, stream, sequence),
-      UNIQUE (site_id, operation_id),
-      UNIQUE (site_id, stream, company_id, local_ref)
+      UNIQUE (site_id, operation_id)
     )
+  `);
+  // local_ref is NOT unique per stream: a follow-up record (a sale edit or
+  // cancellation, a stock item delete, a transfer edit) names the same LAN row
+  // as the record that created it, and a stream may mix kinds whose local
+  // references come from different id spaces. Exactly-once rests on the
+  // (site_id, operation_id) key and the gapless sequence; one LAN row -> one
+  // record is enforced by each LAN outbox. Installs made before 2026-11-05
+  // carry the old constraint, which would refuse such a record and stop the
+  // stream, so it is dropped here.
+  await queryable.query(`
+    DO $$
+    DECLARE c record;
+    BEGIN
+      FOR c IN
+        SELECT con.conname
+          FROM pg_constraint con
+         WHERE con.conrelid = 'public.factory_edge_staged_events'::regclass
+           AND con.contype = 'u'
+           AND (SELECT array_agg(att.attname::text ORDER BY att.attname)
+                  FROM unnest(con.conkey) AS k(attnum)
+                  JOIN pg_attribute att ON att.attrelid = con.conrelid AND att.attnum = k.attnum)
+               = ARRAY['company_id', 'local_ref', 'site_id', 'stream']
+      LOOP
+        EXECUTE format('ALTER TABLE public.factory_edge_staged_events DROP CONSTRAINT %I', c.conname);
+      END LOOP;
+    END $$
   `);
   await queryable.query(`
     CREATE TABLE IF NOT EXISTS factory_edge_event_apply_cursor (
@@ -438,8 +464,11 @@ export async function applyStagedEventOnce(queryable, input, handlers) {
       }
       const handler = Object.prototype.hasOwnProperty.call(handlers, event.kind) ? handlers[event.kind] : null;
       if (!handler) throw new Phase9ApplyRefusal("PHASE9_HANDLER_MISSING");
-      await handler.authorize(queryable, event);
-      result = await handler.apply(queryable, event, Object.freeze({ overrideConflicts, siteId: approved.siteId }));
+      // Plan batch 2: items created on the LAN are named by their LAN id; the
+      // handler sees the cloud item instead (or the apply waits for its create).
+      const handled = await translatePhase9LanStockItems(queryable, approved.siteId, event);
+      await handler.authorize(queryable, handled);
+      result = await handler.apply(queryable, handled, Object.freeze({ overrideConflicts, siteId: approved.siteId }));
       if (
         !result ||
         !["cloud-applied", "already-present"].includes(result.outcome) ||
@@ -450,7 +479,7 @@ export async function applyStagedEventOnce(queryable, input, handlers) {
       ) {
         throw new Phase9ApplyRefusal("PHASE9_APPLY_RESULT_INVALID");
       }
-      if (!(await handler.verify(queryable, event, result))) {
+      if (!(await handler.verify(queryable, handled, result))) {
         throw new Phase9ApplyRefusal("PHASE9_READ_AFTER_APPLY_FAILED");
       }
     }
@@ -615,13 +644,13 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024;
  * Idempotent: the same file sent again is acknowledged without a new row.
  */
 export async function stagePhase9AttachmentFile(queryable, siteId, sha256, bytes) {
-  if (
-    typeof sha256 !== "string" ||
-    !FILE_HASH.test(sha256) ||
-    !Buffer.isBuffer(bytes) ||
-    bytes.length < 1 ||
-    bytes.length > MAX_FILE_BYTES
-  ) {
+  // A signed request may still carry a malformed body. Assert the concrete
+  // Buffer type before reading its size; never trust an arbitrary .length.
+  if (typeof sha256 !== "string" || !FILE_HASH.test(sha256) || !Buffer.isBuffer(bytes)) {
+    throw new Phase9StageConflict("PHASE9_FILE_INVALID");
+  }
+  const byteSize = Buffer.byteLength(bytes);
+  if (byteSize < 1 || byteSize > MAX_FILE_BYTES) {
     throw new Phase9StageConflict("PHASE9_FILE_INVALID");
   }
   if (createHash("sha256").update(bytes).digest("hex") !== sha256) {
@@ -634,13 +663,13 @@ export async function stagePhase9AttachmentFile(queryable, siteId, sha256, bytes
     [siteId, sha256]
   );
   if (!referenced.rows.length) throw new Phase9StageConflict("PHASE9_FILE_NOT_REFERENCED");
-  if (Number(referenced.rows[0].file_size) !== bytes.length) throw new Phase9StageConflict("PHASE9_FILE_SIZE_MISMATCH");
+  if (Number(referenced.rows[0].file_size) !== byteSize) throw new Phase9StageConflict("PHASE9_FILE_SIZE_MISMATCH");
   await queryable.query(
     `INSERT INTO factory_edge_staged_files (site_id, file_sha256, byte_size, content)
      VALUES ($1::uuid, $2, $3, $4) ON CONFLICT (site_id, file_sha256) DO NOTHING`,
-    [siteId, sha256, bytes.length, bytes]
+    [siteId, sha256, byteSize, bytes]
   );
-  return { siteId, sha256, byteSize: bytes.length, state: "file-staged" };
+  return { siteId, sha256, byteSize, state: "file-staged" };
 }
 
 /** The verified bytes for a staged attachment, or null if not yet received. */

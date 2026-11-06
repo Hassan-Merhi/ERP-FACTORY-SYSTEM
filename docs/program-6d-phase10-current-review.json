@@ -1,7 +1,7 @@
 {
   "program": "6D",
-  "baselineHead": "301b35d737a36c46e7f604936a8832af09025eb1",
-  "reviewedAt": "2026-10-14",
+  "baselineHead": "3e8f11bb3cb91b9ea6eecf1f99edd18be5918ba6",
+  "reviewedAt": "2026-11-06",
   "groups": {
     "intentional-full-read": [
       "P6D-a4ef6930012d",
@@ -31,7 +31,10 @@
       "P6D-58c4e5ee98a9",
       "P6D-130ff6e585b8",
       "P6D-f886378d22f6",
-      "P6D-9348f4309ab1"
+      "P6D-9348f4309ab1",
+      "P6D-b8717ee21044",
+      "P6D-aacbb7a00103",
+      "P6D-623dc1472cde"
     ],
     "transaction-order-dependency": [
       "P6D-97f84dd925c0",
@@ -49,8 +52,6 @@
       "P6D-0a13880847dd",
       "P6D-341fd9b92b19",
       "P6D-5c6743a7d2c4",
-      "P6D-46b55c0f12dd",
-      "P6D-4aba5a09b1db",
       "P6D-f6027b563329",
       "P6D-fd6978675a9e",
       "P6D-9bf0b42139ee",
@@ -60,7 +61,14 @@
       "P6D-75d764d27469",
       "P6D-cf2be42d288a",
       "P6D-a6eaa9bf4364",
-      "P6D-937c13ec7021"
+      "P6D-937c13ec7021",
+      "P6D-72bbf06abbf7",
+      "P6D-59723ebc5bd1",
+      "P6D-e36cd780a120",
+      "P6D-1a567f58e457",
+      "P6D-0e0b77211576",
+      "P6D-f96badb95233",
+      "P6D-7830b70593f6"
     ],
     "false-positive": [
       "P6D-94dd2f11ecdd",

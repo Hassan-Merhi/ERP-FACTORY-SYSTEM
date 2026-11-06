@@ -32,6 +32,20 @@ import { phase9PressingApplyHandler } from "./phase9PressingApply";
 import { phase9StockApplyHandler } from "./phase9StockApply";
 import { phase9StockTransferApplyHandler } from "./phase9StockTransferApply";
 import { phase9StockItemEditApplyHandler } from "./phase9StockItemEditApply";
+import { phase9StockItemCreateApplyHandler, phase9StockItemDeleteApplyHandler } from "./phase9StockItemLifecycleApply";
+import { PHASE9_STOCK_ITEM_CREATE_KIND, PHASE9_STOCK_ITEM_DELETE_KIND } from "./phase9StockItemLifecycleEnvelope.mjs";
+import {
+  phase9StockTransferEditApplyHandler,
+  phase9StockTransferFinalizeApplyHandler,
+  phase9StockTransferRevisionApplyHandler,
+  phase9StockTransferRevisionReviewApplyHandler,
+} from "./phase9StockTransferWorkflowApply";
+import {
+  PHASE9_STOCK_TRANSFER_EDIT_KIND,
+  PHASE9_STOCK_TRANSFER_FINALIZE_KIND,
+  PHASE9_STOCK_TRANSFER_REVISION_KIND,
+  PHASE9_STOCK_TRANSFER_REVISION_REVIEW_KIND,
+} from "./phase9StockTransferWorkflowEnvelope.mjs";
 import { PHASE9_STOCK_ITEM_EDIT_KIND } from "./phase9StockItemEditEnvelope.mjs";
 import { phase9PosSaleApplyHandler } from "./phase9PosSaleApply";
 import {
@@ -45,9 +59,11 @@ import { phase9PosSaleEditApplyHandler } from "./phase9PosSaleEditApply";
 import { phase9ReceivingApplyHandler } from "./phase9ReceivingApply";
 import { PHASE9_RECEIVING_KIND } from "./phase9ReceivingEnvelope.mjs";
 import { phase9AttachmentApplyHandler } from "./phase9AttachmentApply";
-import { PHASE9_ATTACHMENT_KIND } from "./phase9AttachmentEnvelope.mjs";
+import { PHASE9_ATTACHMENT_KIND, PHASE9_ATTACHMENT_UPDATE_KIND } from "./phase9AttachmentEnvelope.mjs";
+import { phase9AttachmentUpdateApplyHandler } from "./phase9AttachmentUpdateApply";
 import { phase9PaymentApplyHandler } from "./phase9PaymentApply";
-import { PHASE9_PAYMENT_KIND } from "./phase9PaymentEnvelope.mjs";
+import { phase9PaymentDeleteApplyHandler, phase9PaymentEditApplyHandler } from "./phase9PaymentFollowUpApply";
+import { PHASE9_PAYMENT_DELETE_KIND, PHASE9_PAYMENT_EDIT_KIND, PHASE9_PAYMENT_KIND } from "./phase9PaymentEnvelope.mjs";
 import { PHASE9_STOCK_ADJUST_KIND, PHASE9_STOCK_TRANSFER_KIND } from "./phase9StockEnvelope.mjs";
 import {
   createTenantDatabaseScope,
@@ -64,12 +80,21 @@ export const PHASE9_HANDLERS = Object.freeze({
   [PHASE9_STOCK_ADJUST_KIND]: phase9StockApplyHandler,
   [PHASE9_STOCK_TRANSFER_KIND]: phase9StockTransferApplyHandler,
   [PHASE9_STOCK_ITEM_EDIT_KIND]: phase9StockItemEditApplyHandler,
+  [PHASE9_STOCK_ITEM_CREATE_KIND]: phase9StockItemCreateApplyHandler,
+  [PHASE9_STOCK_ITEM_DELETE_KIND]: phase9StockItemDeleteApplyHandler,
+  [PHASE9_STOCK_TRANSFER_EDIT_KIND]: phase9StockTransferEditApplyHandler,
+  [PHASE9_STOCK_TRANSFER_FINALIZE_KIND]: phase9StockTransferFinalizeApplyHandler,
+  [PHASE9_STOCK_TRANSFER_REVISION_KIND]: phase9StockTransferRevisionApplyHandler,
+  [PHASE9_STOCK_TRANSFER_REVISION_REVIEW_KIND]: phase9StockTransferRevisionReviewApplyHandler,
   [PHASE9_POS_SALE_KIND]: phase9PosSaleApplyHandler,
   [PHASE9_POS_SALE_EDIT_KIND]: phase9PosSaleEditApplyHandler,
   [PHASE9_POS_SALE_CANCEL_KIND]: phase9PosSaleCancelApplyHandler,
   [PHASE9_RECEIVING_KIND]: phase9ReceivingApplyHandler,
   [PHASE9_ATTACHMENT_KIND]: phase9AttachmentApplyHandler,
+  [PHASE9_ATTACHMENT_UPDATE_KIND]: phase9AttachmentUpdateApplyHandler,
   [PHASE9_PAYMENT_KIND]: phase9PaymentApplyHandler,
+  [PHASE9_PAYMENT_EDIT_KIND]: phase9PaymentEditApplyHandler,
+  [PHASE9_PAYMENT_DELETE_KIND]: phase9PaymentDeleteApplyHandler,
 });
 
 const REVIEWER_ROLES = ["Admin", "Developer"];

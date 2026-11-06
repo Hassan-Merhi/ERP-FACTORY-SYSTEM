@@ -35,6 +35,7 @@ import {
 import { EDGE_EVENT_STAGE_PATH, EDGE_FILE_STAGE_PATH } from "../server/edge/phase9EventProtocol.mjs";
 import { phase9AttachmentApplyHandler, type Phase9AttachmentEvent } from "../server/edge/phase9AttachmentApply";
 import { relayAttachmentFilesOnce, relayEventStreamOnce } from "../scripts/edge/relay-event-outbox.mjs";
+import { capturePhase9AttachmentUpdateTx, phase9AttachmentFileRefTx } from "../server/edge/phase9AttachmentOutbox";
 import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,
@@ -100,7 +101,8 @@ async function stagedEvent(localFileId: number): Promise<Phase9AttachmentEvent> 
       `SELECT sequence::text AS sequence, operation_id::text AS operation_id, company_id, actor_user_id,
               local_ref, operation_kind, payload, payload_sha256
          FROM factory_edge_staged_events
-        WHERE site_id = $1::uuid AND stream = 'attachments' AND local_ref = $2`,
+        WHERE site_id = $1::uuid AND stream = 'attachments' AND local_ref = $2
+          AND operation_kind = 'attachment.file.v1'`,
       [SITE, localFileId]
     )
   ).rows[0];
@@ -218,6 +220,46 @@ describe("Phase 9 offline attachments (POST /api/files/upload)", () => {
       ]);
       expect(Buffer.from(stored.rows[0].file_data, "base64").equals(bytes)).toBe(true);
       expect(stored.rows[0].file_name).toBe("delivery-note.pdf");
+    });
+  });
+
+  it("stages a rename of an offline upload after it and still uploads the file's bytes (plan batch 4)", async () => {
+    const bytes = Buffer.from("%PDF-1.4 renamed offline " + randomUUID());
+    const localFileId = await uploadOnLan(bytes, null);
+    edge.config = { mode: "lan", primary: true, siteId: SITE };
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const tx = drizzle(client) as unknown as DbTransaction;
+      await capturePhase9AttachmentUpdateTx(tx, {
+        companyId: ctx.companyId,
+        localFileId,
+        actorUserId: ctx.userId,
+        actorUsername: `${PREFIX}_testuser`,
+        requestId: randomUUID(),
+        fileRef: await phase9AttachmentFileRefTx(tx, localFileId),
+        before: { displayName: null, folderId: null },
+        after: { displayName: "Renamed offline", folderId: null },
+      });
+      await client.query("COMMIT");
+    } finally {
+      client.release();
+      edge.config = { mode: "cloud", primary: false, siteId: null };
+    }
+    const kinds = await pool.query(
+      "SELECT operation_kind, payload->'fileRef' AS ref FROM factory_edge_attachment_outbox WHERE site_id = $1 AND local_file_id = $2 ORDER BY sequence",
+      [SITE, localFileId]
+    );
+    expect(kinds.rows).toEqual([
+      { operation_kind: "attachment.file.v1", ref: null },
+      { operation_kind: "attachment.file-update.v1", ref: { origin: "lan", localFileId } },
+    ]);
+    expect(
+      await relayEventStreamOnce({ client: pool as never, config: relayConfig, stream: "attachments", fetcher })
+    ).toMatchObject({ staged: 2 });
+    expect(await relayAttachmentFilesOnce({ client: pool as never, config: relayConfig, fetcher })).toEqual({
+      paused: false,
+      uploaded: 1,
     });
   });
 

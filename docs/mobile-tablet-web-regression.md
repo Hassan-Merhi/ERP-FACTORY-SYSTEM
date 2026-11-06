@@ -137,3 +137,18 @@ Do not merge the mobile-web compatibility pull request until:
 - Desktop checks pass at both desktop sizes.
 - No service-worker reload loop occurs.
 - The pull request remains conflict-free with `main` at merge time.
+
+## iOS Safari and foldable workflows — Phase 3 (2026-11-05)
+
+The iPhone-specific browser fixes are independent of ERP accounting and role rules:
+
+- **Cameras:** The shared ERP/Factory scanner and Pressing Workers scanner synchronously stop camera tracks on `pagehide`, including Safari back-forward-cache transitions. The pressing scanner responds to `pageshow` and permission/session interruptions; a terminated camera track shows an explicit Retry action. It does not mark any barcode as confirmed locally.
+- **Duplicate scans:** A temporary camera suspension retains the short-lived last-seen barcode cooldown. Server-side lifetime confirmations and offline queue behavior remain authoritative and unchanged.
+- **Downloads:** The common Excel writer and audited CSV/XLSX exports start downloads from mounted native anchors. Blob URLs are not revoked immediately, allowing WebKit time to resolve them into the native Files/download flow. The helper releases the URLs later; preview-only image URLs keep their own shorter lifecycle.
+- **Imports:** ERP PO Import and Supplier Partner PO Import reset the native file picker after capturing the `File`, so choosing the identical spreadsheet again triggers `change`. Templates use a normal authenticated same-origin download link, not a popup that Safari might block.
+- **Keyboard and dialogs:** Existing phone bottom-sheet and `visualViewport` behavior is retained without changing business forms; no new global keyboard handlers are introduced.
+- **Printing/PDF:** Existing direct user-gesture print actions remain in place. Before deployment, verify system print/Save to PDF using Safari's print/share interface and that large PDFs have correct orientation and headers.
+
+Automated coverage: `tests/ui/iphone-duo-phase3-downloads.test.ts`, `MobileBarcodeScanner.test.tsx`, `ContinuousPressingScanner.test.tsx`, and `continuousScanGate.test.ts`. UI Quality runs them together with existing phone/tablet regression tests.
+
+**Physical iOS Safari sign-off remains mandatory.** On the actual device, verify rear-camera permission on first use; camera stop when switching tabs, locking, or opening/closing the device; Retry after a revoked track; barcode duplicate feedback; return from the browser back-forward cache; Excel/CSV opening in Files; repeating the same Excel import; printing and saving PDF; and portrait/landscape keyboard reachability. Automated Chromium and mock-track tests cannot certify real WebKit camera hardware, native Files/Share sheets, or a physical hinge.
