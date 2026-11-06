@@ -9,6 +9,7 @@ export type ChristmasVisualSettings = {
   intensity: "subtle" | "balanced" | "full";
   effects: Record<ChristmasEffectKey, boolean>;
 };
+export type ChristmasIntensity = ChristmasVisualSettings["intensity"];
 export const defaultChristmasVisuals: ChristmasVisualSettings = {
   intensity: "balanced",
   effects: { snowfall: true, santa: true, garlands: true, countdown: true, gifts: true, ambient: true },
