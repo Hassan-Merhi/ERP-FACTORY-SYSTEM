@@ -212,4 +212,25 @@ export const propertiesRentalsPhase5TranslationsPart3: readonly Phase5Properties
     fr: "Impossible de créer la caisse immobilière sans modifier les comptes existants.",
   },
   { en: "Properties Rent Cashbox", ar: "صندوق إيجارات العقارات", fr: "Caisse des loyers immobiliers" },
+
+  { en: "Location group renamed", ar: "تمت إعادة تسمية مجموعة الموقع", fr: "Groupe d’emplacement renommé" },
+  {
+    en: "Could not rename location group",
+    ar: "تعذّرت إعادة تسمية مجموعة الموقع",
+    fr: "Impossible de renommer le groupe d’emplacement",
+  },
+  { en: "Rename location group", ar: "إعادة تسمية مجموعة الموقع", fr: "Renommer le groupe d’emplacement" },
+  { en: "Group name", ar: "اسم المجموعة", fr: "Nom du groupe" },
+  {
+    en: "Renames this location for all its warehouses or shops in this company. Contracts, payments, and accounting records are unchanged.",
+    ar: "يعيد تسمية الموقع لجميع المستودعات أو المتاجر التابعة لهذه الشركة دون تغيير العقود أو المدفوعات أو القيود المحاسبية.",
+    fr: "Renomme cet emplacement pour tous les entrepôts ou magasins de cette société sans modifier les contrats, paiements ou écritures comptables.",
+  },
+  { en: "Rename ${renameGroup.count} units", ar: "إعادة تسمية {0} وحدة", fr: "Renommer {0} unités" },
+  { en: "Rename ${group}", ar: "إعادة تسمية {0}", fr: "Renommer {0}" },
+  {
+    en: "Rename location group ${group}",
+    ar: "إعادة تسمية مجموعة الموقع {0}",
+    fr: "Renommer le groupe d’emplacement {0}",
+  },
 ];
