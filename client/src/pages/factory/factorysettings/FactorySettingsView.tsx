@@ -278,6 +278,7 @@ export function FactorySettingsView({ model }: Props) {
             variant="outline"
             onClick={() => (window.location.href = "/factory/label-banners")}
             data-testid="button-open-label-banners"
+            className="h-auto min-h-9 max-w-full whitespace-normal py-2 text-left"
           >
             <Images className="h-4 w-4 mr-2" />
             Manage Label Banners
@@ -302,6 +303,7 @@ export function FactorySettingsView({ model }: Props) {
             variant="outline"
             onClick={() => (window.location.href = "/factory/bale-product-images")}
             data-testid="button-open-product-images"
+            className="h-auto min-h-9 max-w-full whitespace-normal py-2 text-left"
           >
             <Images className="h-4 w-4 mr-2" />
             Manage Product Images

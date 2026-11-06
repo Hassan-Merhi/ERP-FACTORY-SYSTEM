@@ -69,7 +69,12 @@ export function NonBalePriorityManager() {
 
   return (
     <>
-      <Button type="button" variant="outline" onClick={() => setOpen(true)}>
+      <Button
+        type="button"
+        variant="outline"
+        className="h-auto min-h-9 max-w-full whitespace-normal py-2 text-left"
+        onClick={() => setOpen(true)}
+      >
         Manage Non-Bale Priority Items
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
