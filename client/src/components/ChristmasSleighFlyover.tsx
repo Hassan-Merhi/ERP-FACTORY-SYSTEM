@@ -95,7 +95,11 @@ export function ChristmasSleighFlyover({ enabled }: { enabled: boolean }) {
       return;
     }
     const findHeader = () => {
-      const next = document.querySelector<HTMLElement>(TOP_BAR_SELECTOR);
+      const next = Array.from(document.querySelectorAll<HTMLElement>(TOP_BAR_SELECTOR))
+        .find((candidate) => {
+          const bounds = candidate.getBoundingClientRect();
+          return bounds.width > 120 && bounds.height > 24;
+        }) ?? null;
       setHeader((previous) => previous === next ? previous : next);
     };
     findHeader();
@@ -104,7 +108,10 @@ export function ChristmasSleighFlyover({ enabled }: { enabled: boolean }) {
   }, [active]);
 
   useEffect(() => {
-    if (!header || !active) return;
+    if (!header || !active) {
+      setHeaderRect(null);
+      return;
+    }
     // Position relative to the viewport so clipped workspace shells cannot hide Santa.
     const measure = () => {
       const bounds = header.getBoundingClientRect();
@@ -128,7 +135,8 @@ export function ChristmasSleighFlyover({ enabled }: { enabled: boolean }) {
     };
   }, [header, active]);
 
-  // Count only time spent in a visible tab. No animation is queued while hidden.
+  // First flight is visible shortly after activation. Then run every five
+  // visible minutes; never accumulate animations while the tab is hidden.
   useEffect(() => {
     setFlying(false);
     if (!active || !header) return;
