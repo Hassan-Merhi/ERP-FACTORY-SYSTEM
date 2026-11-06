@@ -343,9 +343,9 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
         <>
           <div
             data-horizontal-scroll="true"
-            className="hidden md:block phone-land:hidden border rounded-xl overflow-x-auto"
+            className="stock-items-table-shell hidden md:block phone-land:hidden border rounded-xl overflow-x-auto"
           >
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[800px] text-sm">
               <thead className="sticky top-0 z-30 bg-muted">
                 <tr className="h-11 bg-muted/40 border-b">
                   <th className="w-10 px-3">
@@ -361,14 +361,14 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
                   {stockCategories.length > 0 && <th className="text-left px-3 font-medium">Category</th>}
                   <th className="text-left px-3 font-medium">Aliases</th>
                   <th className="text-left px-3 font-medium">Status</th>
-                  <th className="w-20 px-3" />
+                  <th className="w-20 px-3 text-right font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {displayItems.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={4 + (stockGrades.length > 0 ? 1 : 0) + (stockCategories.length > 0 ? 1 : 0)}
+                      colSpan={6 + (stockGrades.length > 0 ? 1 : 0) + (stockCategories.length > 0 ? 1 : 0)}
                       className="text-center py-12 text-muted-foreground"
                     >
                       {debouncedSearch ? "No items match your search" : "No stock items found"}
@@ -378,7 +378,7 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
                   displayItems.map((item) => (
                     <tr
                       key={item.id}
-                      className="border-t hover:bg-muted/30 transition-colors cursor-pointer"
+                      className="stock-items-table-row border-t hover:bg-muted/30 transition-colors cursor-pointer"
                       onClick={() => handleStockItemClick(item.id, item.name)}
                       data-testid={`row-stock-item-${item.id}`}
                     >
@@ -390,13 +390,16 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
                         />
                       </td>
                       <td className="px-3 py-3" data-testid={`name-${item.id}`}>
-                        <div className="font-medium leading-tight">{item.name}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">
-                          {item.code} · {item.uom}
+                        <div className="stock-items-name-cell">
+                          <span className="stock-items-row-icon"><Package className="h-4 w-4" aria-hidden="true" /></span>
+                          <div className="min-w-0">
+                            <div className="font-semibold leading-tight">{item.name}</div>
+                            <div className="text-xs text-muted-foreground mt-1">{item.code} · {item.uom}</div>
+                          </div>
                         </div>
                       </td>
                       <td className="px-3 py-3 text-sm text-muted-foreground" data-testid={`group-${item.id}`}>
-                        {getStockGroupName(item.stockGroupId) ?? <span className="text-xs">—</span>}
+                        {getStockGroupName(item.stockGroupId) ? <span className="stock-items-group-pill">{getStockGroupName(item.stockGroupId)}</span> : <span className="text-xs">—</span>}
                       </td>
                       {stockGrades.length > 0 && (
                         <td className="px-3 py-3" data-testid={`grade-${item.id}`}>
@@ -412,7 +415,7 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
                       {stockCategories.length > 0 && (
                         <td className="px-3 py-3" data-testid={`category-${item.id}`}>
                           {getCategoryName(item.categoryId) ? (
-                            <Badge variant="secondary" className="text-xs">
+                            <Badge variant="secondary" className="stock-items-category-pill text-xs">
                               {getCategoryName(item.categoryId)}
                             </Badge>
                           ) : (
@@ -434,7 +437,8 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
                         )}
                       </td>
                       <td className="px-3 py-3" data-testid={`status-${item.id}`}>
-                        <Badge variant={item.active ? "default" : "secondary"} className="text-xs">
+                        <Badge variant="outline" className={item.active ? "stock-items-status stock-items-status-active" : "stock-items-status stock-items-status-inactive"}>
+                          <span className="stock-items-status-dot" aria-hidden="true" />
                           {item.active ? "Active" : "Inactive"}
                         </Badge>
                       </td>
@@ -444,7 +448,7 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
                           variant="ghost"
                           onClick={(event) => handleEditClick(item.id, event)}
                           data-testid={`button-edit-${item.id}`}
-                          className="gap-1.5"
+                          className="stock-items-edit-button gap-1.5"
                         >
                           <Edit className="h-3.5 w-3.5" />
                           Edit
@@ -458,7 +462,7 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
                 <tfoot>
                   <tr className="border-t bg-muted/40">
                     <td
-                      colSpan={5 + (stockGrades.length > 0 ? 1 : 0) + (stockCategories.length > 0 ? 1 : 0)}
+                      colSpan={6 + (stockGrades.length > 0 ? 1 : 0) + (stockCategories.length > 0 ? 1 : 0)}
                       className="px-3 py-2"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
@@ -512,7 +516,7 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
               </div>
             ) : (
               displayItems.map((item) => (
-                <div key={item.id} className="border rounded-xl p-3" data-testid={`card-stock-item-${item.id}`}>
+                <div key={item.id} className="stock-items-mobile-card border rounded-xl p-3" data-testid={`card-stock-item-${item.id}`}>
                   <div className="flex items-start gap-3">
                     <div className="pt-0.5" onClick={(event) => event.stopPropagation()}>
                       <Checkbox
