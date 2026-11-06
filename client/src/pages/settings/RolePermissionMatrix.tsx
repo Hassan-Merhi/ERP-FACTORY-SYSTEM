@@ -26,6 +26,7 @@ function describeAction(action: string): string {
 }
 const groups = ["erp", "factory", "retail", "properties", "system"] as const;
 const MAX_BATCH = 100;
+const EMPTY_RULES: RoleRule[] = [];
 
 /** Phase 4 is a staging editor, not an active authorization screen. */
 export function RolePermissionMatrix() {
@@ -62,7 +63,7 @@ export function RolePermissionMatrix() {
     retry: false,
   });
   const saved = useMemo(
-    () => roleRulesFor(roles.data?.rules ?? [], role),
+    () => roleRulesFor(roles.data?.rules ?? EMPTY_RULES, role),
     [roles.data?.rules, role]
   );
   // A different company, role, or server revision always resets unsaved state.
