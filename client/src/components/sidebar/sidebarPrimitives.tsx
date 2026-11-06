@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { SidebarHeader, SidebarFooter } from "@/components/ui/sidebar";
 import { useConnectivity } from "@/contexts/ConnectivityContext";
 import { reconcilePinnedOrder } from "./pinnedOrder";
+import { SeasonalBrandAccent } from "@/components/SeasonalBrandAccent";
 
 /**
  * A navigation glyph. Every call site passes a lucide-react icon, which is a
@@ -382,6 +383,7 @@ export function ModuleHeader({ icon: Icon, label, tagline, accent }: ModuleHeade
         background: `linear-gradient(135deg, ${accent}30 0%, ${accent}10 55%, transparent 100%)`,
       }}
     >
+      <SeasonalBrandAccent />
       {/* subtle radial glow behind the icon */}
       <div
         className="absolute -top-4 -left-4 h-20 w-20 rounded-full pointer-events-none"

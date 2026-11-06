@@ -35,6 +35,7 @@ import { ArrowLeft, LogOut, Search, ShoppingCart, ChevronDown } from "lucide-rea
 import { usePosNavigationItems } from "./usePosNavigationItems";
 import { canUseAdminSearch, type ShellUser } from "./shellUser";
 import "@/styles/pos-sidebar-modern.css";
+import { SeasonalBrandAccent } from "@/components/SeasonalBrandAccent";
 
 interface PosShellProps {
   user: ShellUser;
@@ -116,6 +117,7 @@ export function PosShell({
           {selectedCompany?.id && <DailyRateModal companyId={selectedCompany.id} />}
           <Sidebar data-pos-sidebar="modern">
             <SidebarHeader data-pos-sidebar-header>
+              <SeasonalBrandAccent />
               <div className="flex items-center gap-2">
                 <Button
                   variant="ghost"
@@ -255,7 +257,7 @@ export function PosShell({
             </SidebarFooter>
           </Sidebar>
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            <header className="no-print flex min-h-14 items-center gap-2 border-b px-2 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:min-h-12 sm:pt-2">
+            <header data-slot="pos-top-bar" className="no-print relative flex min-h-14 items-center gap-2 border-b px-2 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:min-h-12 sm:pt-2">
               <SidebarTrigger
                 className="h-11 w-11 sm:h-9 sm:w-9"
                 aria-label="Toggle point of sale navigation"

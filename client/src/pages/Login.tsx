@@ -16,6 +16,8 @@ import {
   saveBiometricCredentials,
 } from "@/lib/biometricCredentials";
 
+import { markChristmasLoginEntrancePending } from "@/lib/christmasLoginEntrance";
+
 export { clearBiometricCredentials, saveBiometricCredentials };
 
 // Set to true to re-enable passkey registration & login
@@ -114,6 +116,7 @@ export default function Login() {
     resetCsrfToken();
     pendingUserData.current = null;
     pendingCredentials.current = null;
+    markChristmasLoginEntrancePending();
     navigate("/");
   };
 
@@ -131,10 +134,12 @@ export default function Login() {
           setHasSavedCreds(true);
           queryClient.setQueryData(["/api/auth/me"], userData);
           resetCsrfToken();
+          markChristmasLoginEntrancePending();
           navigate("/");
         } else if (optIn === "no") {
           queryClient.setQueryData(["/api/auth/me"], userData);
           resetCsrfToken();
+          markChristmasLoginEntrancePending();
           navigate("/");
         } else {
           pendingUserData.current = userData;
@@ -146,6 +151,7 @@ export default function Login() {
         const snoozed = isPasskeySnoozed(credentials.username);
         if (alreadySaved || snoozed) {
           resetCsrfToken();
+          markChristmasLoginEntrancePending();
           window.location.href = "/";
         } else {
           pendingUserData.current = userData;
@@ -154,6 +160,7 @@ export default function Login() {
         }
       } else {
         resetCsrfToken();
+        markChristmasLoginEntrancePending();
         window.location.href = "/";
       }
     },
@@ -303,6 +310,7 @@ export default function Login() {
       setShowPasskeyRegister(false);
       resetCsrfToken();
       pendingUserData.current = null;
+      markChristmasLoginEntrancePending();
       window.location.href = "/";
     }
   };
@@ -312,6 +320,7 @@ export default function Login() {
     setShowPasskeyRegister(false);
     resetCsrfToken();
     pendingUserData.current = null;
+    markChristmasLoginEntrancePending();
     window.location.href = "/";
   };
 
@@ -330,6 +339,7 @@ export default function Login() {
         throw new Error(err.message || "Passkey verification failed");
       }
       resetCsrfToken();
+      markChristmasLoginEntrancePending();
       window.location.href = "/";
     } catch (err) {
       if (getErrorDetails(err).name === "NotAllowedError") return;
