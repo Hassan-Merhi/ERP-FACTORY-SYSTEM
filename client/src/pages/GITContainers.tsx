@@ -22,6 +22,7 @@ import {
   Building2,
   Globe,
   SlidersHorizontal,
+  X,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { cn } from "@/lib/utils";
