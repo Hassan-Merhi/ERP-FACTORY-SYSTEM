@@ -93,22 +93,22 @@ describe("Properties read-only payment history reconciliation", () => {
   it("exports an auditable bridge and leaves the dated rows unmodified", () => {
     const before = JSON.stringify(rows);
     const tsv = reconciledHistoryTsv(rows, { aliCashLedgerId: 4134, threeAccountsTotal: 35329500 });
-    const lines = tsv.split("\\n");
+    const lines = tsv.split("\n");
     expect(tsv).toContain("Account Reconciliation (USD)");
     expect(tsv).toContain("ACCOUNT RECONCILIATION: GUARANTEE OVERLAP");
     expect(tsv).toContain("ACCOUNT RECONCILIATION: REMOVE NON-CASH BILLING");
     expect(tsv).toContain("NET RECONCILIATION ADJUSTMENT");
     expect(tsv).toContain("RECONCILED HISTORY + ADJUSTMENT");
-    expect(lines.some(line => line.includes("NET RECONCILIATION ADJUSTMENT") && line.endsWith("\\t600.00"))).toBe(true);
-    expect(lines.some(line => line.includes("RECONCILED HISTORY + ADJUSTMENT") && line.endsWith("\\t353295.00"))).toBe(true);
-    expect(lines.some(line => line.includes("UNRECONCILED DIFFERENCE") && line.endsWith("\\t0.00"))).toBe(true);
+    expect(lines.some(line => line.includes("NET RECONCILIATION ADJUSTMENT") && line.endsWith("\t600.00"))).toBe(true);
+    expect(lines.some(line => line.includes("RECONCILED HISTORY + ADJUSTMENT") && line.endsWith("\t353295.00"))).toBe(true);
+    expect(lines.some(line => line.includes("UNRECONCILED DIFFERENCE") && line.endsWith("\t0.00"))).toBe(true);
     expect(JSON.stringify(rows)).toBe(before);
   });
 
   it("reports a residual instead of automatically forcing any arbitrary account total", () => {
     const tsv = reconciledHistoryTsv(rows, { aliCashLedgerId: 4134, threeAccountsTotal: 35379500 });
-    expect(tsv.split("\\n").some(line =>
-      line.includes("UNRECONCILED DIFFERENCE") && line.endsWith("\\t500.00")
+    expect(tsv.split("\n").some(line =>
+      line.includes("UNRECONCILED DIFFERENCE") && line.endsWith("\t500.00")
     )).toBe(true);
   });
 
