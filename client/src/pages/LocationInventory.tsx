@@ -1,7 +1,7 @@
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useLocation as useRoute } from "wouter";
-import { ArrowLeft, Globe, Plus } from "lucide-react";
+import { ArrowLeft, AlertCircle, Globe, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
@@ -141,6 +141,7 @@ export default function LocationInventory({ posUser }: { posUser?: AuthMe } = {}
     allInventoryLoading,
     allNegativeStock,
     negativeStockLoading,
+    negativeStockError,
     categoriesList,
   } = useLocationInventoryQueries({
     waGroupDialogOpen,
@@ -214,6 +215,11 @@ export default function LocationInventory({ posUser }: { posUser?: AuthMe } = {}
         posUser={posUser}
         showNegativeStock={showNegativeStock}
         setShowNegativeStock={setShowNegativeStock}
+        landing={!selectedLocationLocal && !showAllStock}
+        locationsCount={locationsLoading ? null : locations.length}
+        negativeCount={posUser || negativeStockLoading || negativeStockError ? null : allNegativeStock.length}
+        linkedGroupsCount={locationsLoading ? null : locations.filter((loc) => Boolean(loc.whatsappGroupChatId)).length}
+        activeReportsCount={locationsLoading ? null : locations.filter((loc) => Boolean(loc.whatsappGroupChatId && loc.whatsappStockReportsEnabled)).length}
       />
 
       <LocationInventoryMovementFilter
@@ -278,14 +284,26 @@ export default function LocationInventory({ posUser }: { posUser?: AuthMe } = {}
             {/* ── NO LOCATION SELECTED: grid header + cards ───────────────── */}
             {!selectedLocationLocal && (
               <>
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-lg font-semibold sm:text-xl">Locations</h2>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div className="min-w-0 border-l-4 border-violet-500 pl-3">
+                    <h2 className="text-xl font-bold tracking-tight sm:text-2xl">Locations</h2>
+                    <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">Your inventory locations</p>
+                  </div>
                   {!posUser && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        variant={showNegativeStock ? "destructive" : "outline"}
+                        size="sm"
+                        className="h-9 gap-2 rounded-xl border-violet-200 bg-white/85 shadow-sm dark:border-violet-300/25 dark:bg-violet-400/5"
+                        onClick={() => setShowNegativeStock(!showNegativeStock)}
+                        data-testid="button-negative-stock"
+                      >
+                        <AlertCircle className="h-4 w-4" /> Negative Stock
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
-                        className="gap-2"
+                        className="h-9 gap-2 rounded-xl border-violet-200 bg-white/85 shadow-sm dark:border-violet-300/25 dark:bg-violet-400/5"
                         onClick={() => setShowAllStock(true)}
                         data-testid="button-view-all-stock"
                       >
@@ -293,7 +311,7 @@ export default function LocationInventory({ posUser }: { posUser?: AuthMe } = {}
                       </Button>
                       <Button
                         size="sm"
-                        className="gap-2"
+                        className="h-9 gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 font-semibold text-white shadow-[0_5px_18px_-8px_rgba(147,51,234,.85)] hover:from-violet-700 hover:to-fuchsia-700"
                         onClick={() => setCreateLocationOpen(true)}
                         data-testid="button-create-location"
                       >
