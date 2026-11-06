@@ -48,11 +48,8 @@ import { UnitActionDialog } from "./property-rental/components/UnitActionDialog"
 import { BulkPaymentDialog } from "./property-rental/components/BulkPaymentDialog";
 import { RentalUnitCards } from "./property-rental/components/RentalUnitCards";
 import { ErpMobileActionsMenu, ErpMobileSummaryGrid } from "@/components/ui/erp-mobile-records";
-import {
-  HISTORICAL_RENT_COMPANY,
-  type HistoricalRentPayment,
-} from "./property-rental/historicalRentSnapshot";
-import { PaymentsReconciliation, type ReconciliationSnapshot } from "./property-rental/components/PaymentsReconciliation";
+import { HISTORICAL_RENT_COMPANY } from "./property-rental/historicalRentSnapshot";
+import { PaymentsReconciliation, type ReconciliationSnapshot, type ReconciliationPayment } from "./property-rental/components/PaymentsReconciliation";
 export default function PropertyRentalPage({
   unitType,
   pageTitle,
@@ -93,7 +90,7 @@ export default function PropertyRentalPage({
     data: historicalPayments = [],
     isLoading: historicalLoading,
     isError: historicalError,
-  } = useQuery<HistoricalRentPayment[]>({
+  } = useQuery<ReconciliationPayment[]>({
     queryKey: [apiBase + "/payments", { companyId: selectedCompany?.id, view: "warehouse-reconciliation" }],
     queryFn: async () => {
       const res = await fetch(`${apiBase}/payments?view=warehouse-reconciliation`, { credentials: "include" });
