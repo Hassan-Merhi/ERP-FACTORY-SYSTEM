@@ -13,15 +13,18 @@ export function WorkbookLegend() {
         <span className="inline-block h-2.5 w-2.5 rounded-full border border-yellow-400 bg-yellow-300" /> Upcoming ETA, docs
         pending
       </span>
-      <span className="flex items-center gap-1">
+      <span className="flex items-center gap-1.5 rounded-full bg-muted/60 px-2 py-1">
         <span className="inline-block h-2.5 w-2.5 rounded-full border border-rose-400 bg-rose-400" /> At port, docs missing
       </span>
-      <span className="flex items-center gap-1">
+      <span className="flex items-center gap-1.5 rounded-full bg-muted/60 px-2 py-1">
         <span className="inline-block h-2.5 w-2.5 rounded-full border border-amber-400 bg-amber-300" /> Docs ready, not sent
         to truck
       </span>
-      <span className="flex items-center gap-1">
+      <span className="flex items-center gap-1.5 rounded-full bg-muted/60 px-2 py-1">
         <span className="inline-block h-2.5 w-2.5 rounded-full border border-red-500 bg-red-400" /> Offload overdue
+      </span>
+      <span className="flex items-center gap-1.5 rounded-full bg-muted/60 px-2 py-1">
+        <span className="inline-block h-2.5 w-2.5 rounded-full border border-orange-500 bg-orange-400" /> Delayed
       </span>
     </div>
   );
