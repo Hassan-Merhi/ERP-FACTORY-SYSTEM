@@ -5,6 +5,7 @@ import { GlobalSnowfall } from "@/components/GlobalSnowfall";
 import { GlobalSeasonalDecorations } from "@/components/GlobalSeasonalDecorations";
 import { useChristmasMode } from "@/hooks/useChristmasMode";
 import { ChristmasLoginEntrance } from "@/components/ChristmasLoginEntrance";
+import { useSeasonalCameraActivity } from "@/lib/seasonalCameraActivity";
 
 const RemoteSupportRuntime = lazy(() =>
   import("@/components/RemoteSupportRuntime").then((module) => ({
@@ -45,13 +46,15 @@ export function AuthenticatedAppOverlays() {
   const remoteSupportReady = useDeferredRemoteSupport();
   const { settingQuery } = useChristmasMode();
   const christmasModeEnabled = settingQuery.data?.enabled === true;
+  const cameraActive = useSeasonalCameraActivity();
+  const allowSeasonalAnimations = christmasModeEnabled && !cameraActive;
 
   return (
     <>
       <FactoryLanOriginBadge />
       <GlobalSeasonalDecorations enabled={christmasModeEnabled} />
-      <GlobalSnowfall enabled={christmasModeEnabled} />
-      <ChristmasLoginEntrance enabled={christmasModeEnabled} queryStatus={settingQuery.status} />
+      <GlobalSnowfall enabled={allowSeasonalAnimations} />
+      <ChristmasLoginEntrance enabled={allowSeasonalAnimations} queryStatus={settingQuery.status} />
       <Suspense fallback={null}>{remoteSupportReady ? <RemoteSupportRuntime /> : null}</Suspense>
     </>
   );
