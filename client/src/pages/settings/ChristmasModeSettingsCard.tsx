@@ -74,8 +74,8 @@ export function ChristmasModeSettingsCard({ canManage }: Props) {
         <div className="flex items-start gap-2 text-xs text-muted-foreground">
           <Globe2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <span>
-            This setting is shared across all company types. Snowfall and visual
-            decorations are implemented in the next phases, not Phase 1.
+            When ON, gentle snowfall appears across all signed-in workspaces.
+            Additional festive decorations and the special login animation arrive in later phases.
             {!canManage && " Only Admin, Owner and Developer users can change it."}
           </span>
         </div>
