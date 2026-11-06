@@ -66,11 +66,13 @@ function UnitActionDialog({
             <Badge variant="outline">{unit.unitNumber}</Badge>
             {contract && <span className="text-base font-normal text-muted-foreground">— {contract.tenantName}</span>}
             {!contract && <Badge variant="secondary">Vacant</Badge>}
-            {isShared && (
+            {unit.isInternalLeaseProjection ? (
+              <Badge className="bg-violet-600 text-white text-xs">Internal Factory lease · read only</Badge>
+            ) : isShared ? (
               <Badge className="bg-sky-600 text-white text-xs">
                 Shared from {unit.ownerCompanyName ?? "another company"}
               </Badge>
-            )}
+            ) : null}
           </DialogTitle>
         </DialogHeader>
 
@@ -101,6 +103,21 @@ function UnitActionDialog({
               </TabsContent>
             </Tabs>
           )
+        ) : unit.isInternalLeaseProjection ? (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Reference-only Factory lease. Manage rent, payments and accounting from Factory Rentals.
+            </p>
+            <LedgerView
+              ledger={detail?.ledger ?? []}
+              postedPayments={detail?.postedPayments ?? []}
+              scheduledPayments={detail?.scheduledPayments ?? []}
+              guaranteePayments={detail?.guaranteePayments ?? []}
+              contract={contract}
+              unitId={unit.id}
+              readOnly
+            />
+          </div>
         ) : isShared ? (
           <Tabs defaultValue="payment" className="w-full">
             <div className="erp-mobile-scroll-tabs pb-1">
