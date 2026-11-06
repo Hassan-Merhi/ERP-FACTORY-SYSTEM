@@ -54,6 +54,7 @@ function SnowfallCanvas() {
     if (!canvas || !context) return;
 
     const ctx = context;
+    const element = canvas;
     const color = theme === "dark" ? "#e9f6ff" : "#578bac";
     let width = 0;
     let height = 0;
@@ -70,12 +71,15 @@ function SnowfallCanvas() {
       width = nextWidth;
       height = nextHeight;
 
-      // Cap high-density canvas backing pixels, especially on phones.
-      const pixelRatio = Math.min(window.devicePixelRatio || 1, width < 640 ? 1.5 : 2);
-      canvas!.width = Math.round(width * pixelRatio);
-      canvas!.height = Math.round(height * pixelRatio);
-      canvas!.style.width = `${width}px`;
-      canvas!.style.height = `${height}px`;
+      // Keep the backing store under ~3 million pixels even on 4K/HiDPI screens.
+      // A low-resolution transparent particle layer is fine; a 33MP canvas isn't.
+      const deviceRatio = Math.min(window.devicePixelRatio || 1, width < 640 ? 1.5 : 1.75);
+      const areaRatio = Math.sqrt(3_000_000 / (width * height));
+      const pixelRatio = Math.min(deviceRatio, areaRatio);
+      element.width = Math.max(1, Math.round(width * pixelRatio));
+      element.height = Math.max(1, Math.round(height * pixelRatio));
+      element.style.width = `${width}px`;
+      element.style.height = `${height}px`;
       ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
 
       if (previousWidth && previousHeight) {
