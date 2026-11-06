@@ -7,7 +7,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
@@ -36,7 +35,10 @@ function getInitials(name: string) {
 
 function CompanyAvatar({ name, type, size = "sm" }: { name: string; type: CompanyType; size?: "sm" | "md" }) {
   const { color } = getTypeMeta(type);
-  const dim = size === "md" ? "h-10 w-10 rounded-xl text-xs shadow-[0_5px_12px_rgba(22,45,96,0.18)] ring-1 ring-white/50 sm:h-11 sm:w-11 sm:text-sm" : "h-5 w-5 rounded-md text-[11px]";
+  const dim =
+    size === "md"
+      ? "h-10 w-10 rounded-xl text-xs shadow-[0_5px_12px_rgba(22,45,96,0.18)] ring-1 ring-white/50 sm:h-11 sm:w-11 sm:text-sm"
+      : "h-5 w-5 rounded-md text-[11px]";
   return (
     <span
       className={`${dim} relative flex shrink-0 items-center justify-center overflow-hidden font-bold text-white shadow-inner`}
@@ -163,7 +165,11 @@ export function CompanySelector({ showMobileName = false }: { showMobileName?: b
   }
 
   return (
-    <DropdownMenu onOpenChange={(open) => { if (!open) setSearchTerm(""); }}>
+    <DropdownMenu
+      onOpenChange={(open) => {
+        if (!open) setSearchTerm("");
+      }}
+    >
       <DropdownMenuTrigger asChild>
         <Button
           variant="outline"
@@ -200,7 +206,9 @@ export function CompanySelector({ showMobileName = false }: { showMobileName?: b
             <div className="min-w-0 flex-1 text-[13px] font-bold uppercase tracking-[.08em] text-slate-900 dark:text-slate-100 sm:text-sm">
               Switch workspace
             </div>
-            <div className="rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-3 py-1 text-xs font-bold text-white shadow-[0_3px_10px_rgba(86,99,230,.28)]" aria-label={`${companies.length} workspaces`}>
+            <div className="rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-3 py-1 text-xs font-bold text-white shadow-[0_3px_10px_rgba(86,99,230,.28)]"
+              aria-label={`${companies.length} workspaces`}
+            >
               {companies.length}
             </div>
           </div>
@@ -260,7 +268,9 @@ export function CompanySelector({ showMobileName = false }: { showMobileName?: b
                   </span>
                 </div>
                 {isActive && (
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-[0_3px_10px_rgba(59,102,234,.3)] ring-2 ring-white/65 dark:ring-white/20" aria-label="Current workspace">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-[0_3px_10px_rgba(59,102,234,.3)] ring-2 ring-white/65 dark:ring-white/20"
+                    aria-label="Current workspace"
+                  >
                     <Check className="h-4 w-4 stroke-[3]" aria-hidden="true" />
                   </span>
                 )}
