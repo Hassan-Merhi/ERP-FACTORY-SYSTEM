@@ -235,6 +235,7 @@ export function registerUserAccessRoutes(app: Express) {
     }
   });
 
+  const MHD_PREFERENCE_ERROR = "Invalid Factory MHD view preference";
   app.put("/api/user-preferences", requireAuth, async (req, res) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
@@ -261,7 +262,7 @@ export function registerUserAccessRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid factory net position valuation mode" });
       }
       if (factoryMhdViewDefault !== undefined && typeof factoryMhdViewDefault !== "boolean") {
-        return res.status(400).json({ message: "Invalid Factory MHD view preference" });
+        return res.status(400).json({ message: MHD_PREFERENCE_ERROR });
       }
       let normalizedHiddenTransactionJournalVoucherIds: number[] | undefined;
       if (hiddenTransactionJournalVoucherIds !== undefined) {
