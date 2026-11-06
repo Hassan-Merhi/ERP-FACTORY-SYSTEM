@@ -335,7 +335,7 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
               <PageHeader title="Containers OTW" subtitle="Active container logistics and tracking" icon={<Ship className="h-5 w-5 text-violet-600 dark:text-violet-300" />} />
             </div>
           </div>
-        )>
+        )}
         {/* ── Company Mode ── (narrow phones: two equal segments, count underneath) */}
         <div className="flex shrink-0 items-center gap-2 flex-wrap max-sm:grid max-sm:grid-cols-2 max-sm:[&>*:last-child:nth-child(odd)]:col-span-2">
           <button
