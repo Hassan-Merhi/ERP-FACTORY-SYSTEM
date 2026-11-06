@@ -4,6 +4,7 @@ import type { AppDb, AuthMiddleware } from "../routeBoundaryTypes";
 import { eq, sql } from "drizzle-orm";
 import { requireRole } from "../../auth";
 import { factorySettings } from "@shared/schema";
+import { INITIAL_FACTORY_FEATURES } from "./settings";
 import { getErrorMessage } from "../../lib/httpHandlers";
 
 type ViewRow = { articleCode: string; itemName: string; sortOrder: number };
@@ -113,7 +114,7 @@ export function registerFactoryMhdViewRoutes(app: Express, requireAuth: AuthMidd
       }));
       const result = await db.transaction(async (tx) => {
         await tx.execute(sql`SELECT pg_advisory_xact_lock(650741, ${companyId})`);
-        await tx.insert(factorySettings).values({ companyId }).onConflictDoNothing();
+        await tx.insert(factorySettings).values({ companyId, ...INITIAL_FACTORY_FEATURES }).onConflictDoNothing();
         const [current] = await tx.select({ extraSettings: factorySettings.extraSettings })
           .from(factorySettings).where(eq(factorySettings.companyId, companyId)).for("update");
         const prior = readView(current?.extraSettings);
