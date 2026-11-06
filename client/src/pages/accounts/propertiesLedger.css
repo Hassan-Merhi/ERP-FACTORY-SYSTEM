@@ -1,10 +1,9 @@
 /*
- * Modern Properties ledger presentation.
- * Scoped to Properties Accounts statements; ERP and Factory share the
- * underlying statement components but do not inherit this theme.
+ * Shared modern account-statement presentation for ERP, Factory, and Properties.
+ * Light and dark palettes follow the application's existing html.dark class.
  * All amounts, running balances, permissions and actions stay in React.
  */
-.properties-ledger-modern {
+.account-ledger-modern {
   --ledger-ink: #eff2ff;
   --ledger-muted: #a1aaca;
   --ledger-border: rgba(148, 160, 209, .18);
@@ -18,15 +17,15 @@
     linear-gradient(135deg, #12172a 0%, #0f1423 65%, #11152a 100%);
   color: var(--ledger-ink);
 }
-.properties-ledger-modern .properties-ledger-desktop-header {
+.account-ledger-modern .account-ledger-desktop-header {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
-.properties-ledger-modern .properties-ledger-desktop-header > .properties-ledger-breadcrumb { order: 0; }
-.properties-ledger-modern .properties-ledger-desktop-header > .properties-ledger-heading-row { order: 1; }
-.properties-ledger-modern .properties-ledger-desktop-header > .properties-ledger-account-bar { order: 2; }
-.properties-ledger-modern .properties-ledger-breadcrumb {
+.account-ledger-modern .account-ledger-desktop-header > .account-ledger-breadcrumb { order: 0; }
+.account-ledger-modern .account-ledger-desktop-header > .account-ledger-heading-row { order: 1; }
+.account-ledger-modern .account-ledger-desktop-header > .account-ledger-account-bar { order: 2; }
+.account-ledger-modern .account-ledger-breadcrumb {
   display: flex;
   align-items: center;
   gap: .55rem;
@@ -34,9 +33,9 @@
   font-size: 12px;
   font-weight: 500;
 }
-.properties-ledger-modern .properties-ledger-breadcrumb svg { color: #7e87a9; }
-.properties-ledger-modern .properties-ledger-breadcrumb strong { color: #f0f2ff; font-weight: 600; }
-.properties-ledger-modern .properties-ledger-heading-row {
+.account-ledger-modern .account-ledger-breadcrumb svg { color: #7e87a9; }
+.account-ledger-modern .account-ledger-breadcrumb strong { color: #f0f2ff; font-weight: 600; }
+.account-ledger-modern .account-ledger-heading-row {
   display: flex;
   flex-wrap: wrap;
   gap: 14px 18px;
@@ -44,13 +43,13 @@
   align-items: center;
   padding: 2px 0 6px;
 }
-.properties-ledger-modern .properties-ledger-heading-title {
+.account-ledger-modern .account-ledger-heading-title {
   display: flex;
   align-items: center;
   gap: 14px;
   min-width: 0;
 }
-.properties-ledger-modern .properties-ledger-heading-icon {
+.account-ledger-modern .account-ledger-heading-icon {
   width: 50px;
   height: 50px;
   flex-shrink: 0;
@@ -62,7 +61,7 @@
   box-shadow: inset 0 1px rgba(255,255,255,.2), 0 10px 26px rgba(56, 34, 126, .27);
   color: white;
 }
-.properties-ledger-modern .properties-ledger-heading-title h3 {
+.account-ledger-modern .account-ledger-heading-title h3 {
   color: #f7f7ff;
   font-size: clamp(17px, 1.45vw, 22px);
   font-weight: 700;
@@ -70,7 +69,7 @@
   line-height: 1.25;
   overflow-wrap: anywhere;
 }
-.properties-ledger-modern .properties-ledger-subtitle {
+.account-ledger-modern .account-ledger-subtitle {
   color: #aba7d5;
   font-size: 11px;
   font-weight: 600;
@@ -78,7 +77,7 @@
   text-transform: uppercase;
   margin-bottom: 3px;
 }
-.properties-ledger-modern .properties-ledger-account-bar {
+.account-ledger-modern .account-ledger-account-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -90,34 +89,34 @@
   background: rgba(15, 20, 39, .58);
   color: #d6dcf2;
 }
-.properties-ledger-modern .properties-ledger-account-bar .text-muted-foreground {
+.account-ledger-modern .account-ledger-account-bar .text-muted-foreground {
   color: var(--ledger-muted);
 }
-.properties-ledger-modern .properties-ledger-account-bar button {
+.account-ledger-modern .account-ledger-account-bar button {
   border-radius: 9px;
 }
-.properties-ledger-modern .properties-ledger-account-bar button:hover {
+.account-ledger-modern .account-ledger-account-bar button:hover {
   background: rgba(117, 92, 206, .22);
   color: #f8f7ff;
 }
-.properties-ledger-modern .properties-ledger-heading-row button,
-.properties-ledger-modern .properties-ledger-heading-row [role="combobox"] {
+.account-ledger-modern .account-ledger-heading-row button,
+.account-ledger-modern .account-ledger-heading-row [role="combobox"] {
   border-color: rgba(151, 155, 202, .26);
   background: rgba(27, 33, 55, .86);
   color: #f4f2ff;
   border-radius: 11px;
 }
-.properties-ledger-modern .properties-ledger-heading-row button:hover,
-.properties-ledger-modern .properties-ledger-heading-row [role="combobox"]:hover {
+.account-ledger-modern .account-ledger-heading-row button:hover,
+.account-ledger-modern .account-ledger-heading-row [role="combobox"]:hover {
   background: rgba(79, 65, 143, .45);
 }
-.properties-ledger-modern .properties-ledger-metrics {
+.account-ledger-modern .account-ledger-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
   margin: 12px 0 18px;
 }
-.properties-ledger-modern .properties-ledger-stat {
+.account-ledger-modern .account-ledger-stat {
   min-width: 0;
   min-height: 92px;
   display: flex;
@@ -129,20 +128,20 @@
   background: linear-gradient(115deg, rgba(29, 51, 96, .72), rgba(26, 36, 66, .9));
   box-shadow: inset 0 1px rgba(255,255,255,.06), 0 9px 21px rgba(0,0,0,.12);
 }
-.properties-ledger-modern .properties-ledger-stat:nth-child(2) {
+.account-ledger-modern .account-ledger-stat:nth-child(2) {
   border-color: rgba(133, 105, 204, .35);
   background: linear-gradient(120deg, rgba(60, 42, 107, .67), rgba(31, 30, 65, .92));
 }
-.properties-ledger-modern .properties-ledger-stat:nth-child(3) {
+.account-ledger-modern .account-ledger-stat:nth-child(3) {
   border-color: rgba(77, 156, 161, .34);
   background: linear-gradient(120deg, rgba(22, 65, 72, .64), rgba(28, 40, 59, .9));
 }
-.properties-ledger-modern .properties-ledger-stat:nth-child(4) {
+.account-ledger-modern .account-ledger-stat:nth-child(4) {
   border-color: rgba(153, 94, 232, .65);
   background: linear-gradient(120deg, rgba(70, 38, 116, .74), rgba(37, 30, 75, .93));
   box-shadow: inset 0 1px rgba(255,255,255,.08), 0 0 24px rgba(121, 68, 202, .13);
 }
-.properties-ledger-modern .properties-ledger-stat > svg {
+.account-ledger-modern .account-ledger-stat > svg {
   width: 43px;
   height: 43px;
   flex: 0 0 43px;
@@ -151,22 +150,22 @@
   color: #aaafff;
   background: rgba(88, 111, 223, .25);
 }
-.properties-ledger-modern .properties-ledger-stat:nth-child(2) > svg {
+.account-ledger-modern .account-ledger-stat:nth-child(2) > svg {
   color: #bdabff; background: rgba(124, 86, 224, .25);
 }
-.properties-ledger-modern .properties-ledger-stat:nth-child(3) > svg {
+.account-ledger-modern .account-ledger-stat:nth-child(3) > svg {
   color: #72dfda; background: rgba(37, 166, 165, .19);
 }
-.properties-ledger-modern .properties-ledger-stat:nth-child(4) > svg {
+.account-ledger-modern .account-ledger-stat:nth-child(4) > svg {
   color: #d6b5ff; background: rgba(143, 90, 240, .24);
 }
-.properties-ledger-modern .properties-ledger-stat p:first-child {
+.account-ledger-modern .account-ledger-stat p:first-child {
   color: #b8c0dc;
   font-size: 12px;
   font-weight: 500;
   line-height: 1.45;
 }
-.properties-ledger-modern .properties-ledger-stat p:nth-child(2) {
+.account-ledger-modern .account-ledger-stat p:nth-child(2) {
   color: #fbfbff;
   font-size: clamp(17px, 1.5vw, 23px);
   font-weight: 730;
@@ -174,7 +173,7 @@
   white-space: nowrap;
   letter-spacing: -.018em;
 }
-.properties-ledger-modern [data-testid="account-statement-scroll-region"] {
+.account-ledger-modern [data-testid="account-statement-scroll-region"] {
   max-height: 70vh;
   border-radius: 15px;
   border-color: rgba(133, 111, 208, .35);
@@ -182,92 +181,266 @@
   box-shadow: 0 12px 26px rgba(0,0,0,.18);
   scrollbar-color: #5c577e #171a2a;
 }
-.properties-ledger-modern [data-testid="account-statement-scroll-region"] thead tr {
+.account-ledger-modern [data-testid="account-statement-scroll-region"] thead tr {
   background: linear-gradient(100deg, #282346, #282349 65%, #292345) !important;
 }
-.properties-ledger-modern [data-testid="account-statement-scroll-region"] thead th {
+.account-ledger-modern [data-testid="account-statement-scroll-region"] thead th {
   color: #d9daf7;
   font-size: 11px;
   letter-spacing: .085em;
   font-weight: 700;
   border-bottom: 1px solid rgba(139, 115, 211, .25);
 }
-.properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr[data-testid^="row-voucher-"],
-.properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr[data-testid^="row-historical-reference-"] {
+.account-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr[data-testid^="row-voucher-"],
+.account-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr[data-testid^="row-historical-reference-"] {
   background: #111728;
   border-color: rgba(110, 122, 162, .17);
   transition: background 150ms ease;
 }
-.properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr[data-testid^="row-voucher-"]:nth-child(odd),
-.properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr[data-testid^="row-historical-reference-"]:nth-child(odd) {
+.account-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr[data-testid^="row-voucher-"]:nth-child(odd),
+.account-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr[data-testid^="row-historical-reference-"]:nth-child(odd) {
   background: #171d31;
 }
-.properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr[data-testid^="row-voucher-"]:hover {
+.account-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr[data-testid^="row-voucher-"]:hover {
   background: #242244;
 }
-.properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody td {
+.account-ledger-modern [data-testid="account-statement-scroll-region"] tbody td {
   border-color: rgba(128, 139, 176, .14);
 }
-.properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody td .text-foreground,
-.properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody td.font-semibold {
+.account-ledger-modern [data-testid="account-statement-scroll-region"] tbody td .text-foreground,
+.account-ledger-modern [data-testid="account-statement-scroll-region"] tbody td.font-semibold {
   color: #f5f5ff;
 }
-.properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody td .text-muted-foreground,
-.properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody td.text-muted-foreground {
+.account-ledger-modern [data-testid="account-statement-scroll-region"] tbody td .text-muted-foreground,
+.account-ledger-modern [data-testid="account-statement-scroll-region"] tbody td.text-muted-foreground {
   color: #9da9c8;
 }
-.properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody td.font-mono {
+.account-ledger-modern [data-testid="account-statement-scroll-region"] tbody td.font-mono {
   font-variant-numeric: tabular-nums;
 }
-.properties-ledger-modern [data-testid="row-opening-balance"] {
+.account-ledger-modern [data-testid="row-opening-balance"] {
   display: none;
 }
-.properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr:not([data-testid]) {
+.account-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr:not([data-testid]) {
   background: #1b2036;
   color: #e5e7fc;
   border-color: rgba(130, 117, 194, .2);
 }
-.properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr:last-child {
+.account-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr:last-child {
   background: linear-gradient(90deg, #29234e, #34305e) !important;
   color: #fff;
   font-weight: 700;
 }
-.properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr:last-child td {
+.account-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr:last-child td {
   border-top: 1px solid rgba(153, 119, 238, .35);
 }
-.properties-ledger-modern [data-testid="account-statement-scroll-region"] [role="checkbox"] {
+.account-ledger-modern [data-testid="account-statement-scroll-region"] [role="checkbox"] {
   border-color: #9780ea;
 }
-.properties-ledger-modern [data-testid="account-statement-scroll-region"] [role="checkbox"]:focus-visible {
+.account-ledger-modern [data-testid="account-statement-scroll-region"] [role="checkbox"]:focus-visible {
   outline: 2px solid #a894ff;
   outline-offset: 3px;
 }
 @media (max-width: 1180px) {
-  .properties-ledger-modern .properties-ledger-metrics { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .account-ledger-modern .account-ledger-metrics { grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
 @media (max-width: 767px) {
-  .properties-ledger-modern { padding: 12px; border-radius: 16px; }
-  .properties-ledger-modern .properties-ledger-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
-  .properties-ledger-modern [data-testid="account-statement-phone-header"] > div:first-child {
+  .account-ledger-modern { padding: 12px; border-radius: 16px; }
+  .account-ledger-modern .account-ledger-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .account-ledger-modern [data-testid="account-statement-phone-header"] > div:first-child {
     background: rgba(30, 34, 60, .84);
     border-color: rgba(137, 120, 212, .36);
     border-radius: 14px;
   }
-  .properties-ledger-modern [data-testid="account-statement-cards"] > div {
+  .account-ledger-modern [data-testid="account-statement-cards"] > div {
     border-color: rgba(139, 116, 211, .35);
   }
 }
 @media (max-width: 420px) {
-  .properties-ledger-modern .properties-ledger-metrics { grid-template-columns: 1fr; }
+  .account-ledger-modern .account-ledger-metrics { grid-template-columns: 1fr; }
 }
+
+@media screen {
+/*
+ * Light theme for account statements in every company mode. The app toggles `.dark` on <html>,
+ * so this tracks the existing theme control without a second switch.
+ * Dark-mode rules above remain unchanged; ERP and Factory stay unaffected.
+ */
+html:not(.dark) .account-ledger-modern {
+  --ledger-ink: #17223b;
+  --ledger-muted: #66758d;
+  --ledger-border: #dde4f1;
+  border-color: #dce3f1;
+  background:
+    radial-gradient(ellipse 58% 260px at 74% -30px, rgba(155, 124, 235, .13), transparent 70%),
+    linear-gradient(135deg, #ffffff 0%, #f9fbff 65%, #f8f7ff 100%);
+  color: var(--ledger-ink);
+  box-shadow: 0 10px 32px rgba(30, 47, 83, .06);
+}
+html:not(.dark) .account-ledger-modern .account-ledger-breadcrumb {
+  color: #64748b;
+}
+html:not(.dark) .account-ledger-modern .account-ledger-breadcrumb svg {
+  color: #8894aa;
+}
+html:not(.dark) .account-ledger-modern .account-ledger-breadcrumb strong {
+  color: #25314a;
+}
+html:not(.dark) .account-ledger-modern .account-ledger-heading-title h3 {
+  color: #17213a;
+}
+html:not(.dark) .account-ledger-modern .account-ledger-subtitle {
+  color: #7065a5;
+}
+html:not(.dark) .account-ledger-modern .account-ledger-account-bar {
+  border-color: var(--ledger-border);
+  background: rgba(255, 255, 255, .89);
+  color: #28354f;
+}
+html:not(.dark) .account-ledger-modern .account-ledger-account-bar .text-muted-foreground {
+  color: var(--ledger-muted);
+}
+html:not(.dark) .account-ledger-modern .account-ledger-account-bar button:hover {
+  background: #eef0fc;
+  color: #433b8e;
+}
+html:not(.dark) .account-ledger-modern .account-ledger-heading-row button,
+html:not(.dark) .account-ledger-modern .account-ledger-heading-row [role="combobox"] {
+  border-color: #dce3ef;
+  background: #fff;
+  color: #27334f;
+}
+html:not(.dark) .account-ledger-modern .account-ledger-heading-row button:hover,
+html:not(.dark) .account-ledger-modern .account-ledger-heading-row [role="combobox"]:hover {
+  background: #f0f2fb;
+}
+html:not(.dark) .account-ledger-modern .account-ledger-heading-row button:focus-visible,
+html:not(.dark) .account-ledger-modern .account-ledger-heading-row [role="combobox"]:focus-visible,
+html:not(.dark) .account-ledger-modern .account-ledger-account-bar button:focus-visible {
+  outline: 2px solid #6858bd;
+  outline-offset: 2px;
+}
+html:not(.dark) .account-ledger-modern .account-ledger-stat {
+  border-color: #d8e3f8;
+  background: linear-gradient(115deg, #edf4ff, #f7faff);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .92), 0 7px 18px rgba(42, 67, 118, .045);
+}
+html:not(.dark) .account-ledger-modern .account-ledger-stat:nth-child(2) {
+  border-color: #e0d6f8;
+  background: linear-gradient(120deg, #f1ebfd, #f8f5fe);
+}
+html:not(.dark) .account-ledger-modern .account-ledger-stat:nth-child(3) {
+  border-color: #cce8e4;
+  background: linear-gradient(120deg, #e8f7f5, #f5fcfb);
+}
+html:not(.dark) .account-ledger-modern .account-ledger-stat:nth-child(4) {
+  border-color: #d5bff5;
+  background: linear-gradient(120deg, #eee5fc, #f7f0ff);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .9), 0 8px 20px rgba(99, 71, 161, .08);
+}
+html:not(.dark) .account-ledger-modern .account-ledger-stat > svg {
+  color: #3556b5;
+  background: #dbe7ff;
+}
+html:not(.dark) .account-ledger-modern .account-ledger-stat:nth-child(2) > svg {
+  color: #7850c4;
+  background: #e5d9fb;
+}
+html:not(.dark) .account-ledger-modern .account-ledger-stat:nth-child(3) > svg {
+  color: #167e82;
+  background: #d5f0ed;
+}
+html:not(.dark) .account-ledger-modern .account-ledger-stat:nth-child(4) > svg {
+  color: #844ac0;
+  background: #e6d7f7;
+}
+html:not(.dark) .account-ledger-modern .account-ledger-stat p:first-child {
+  color: #52627d;
+}
+html:not(.dark) .account-ledger-modern .account-ledger-stat p:nth-child(2) {
+  color: #19243d;
+}
+html:not(.dark) .account-ledger-modern [data-testid="account-statement-scroll-region"] {
+  border-color: #dbe1ee;
+  background: #ffffff;
+  box-shadow: 0 10px 26px rgba(40, 55, 88, .065);
+  scrollbar-color: #b7c0d5 #eef2fa;
+}
+html:not(.dark) .account-ledger-modern [data-testid="account-statement-scroll-region"] thead tr {
+  background: linear-gradient(100deg, #f0ecfa, #f3f0fb 65%, #f0edfa) !important;
+}
+html:not(.dark) .account-ledger-modern [data-testid="account-statement-scroll-region"] thead th {
+  color: #46516d;
+  border-bottom-color: #dedaf1;
+}
+html:not(.dark) .account-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr[data-testid^="row-voucher-"],
+html:not(.dark) .account-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr[data-testid^="row-historical-reference-"] {
+  background: #ffffff;
+  border-color: #e7ecf5;
+}
+html:not(.dark) .account-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr[data-testid^="row-voucher-"]:nth-child(odd),
+html:not(.dark) .account-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr[data-testid^="row-historical-reference-"]:nth-child(odd) {
+  background: #f7f9fd;
+}
+html:not(.dark) .account-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr[data-testid^="row-voucher-"]:hover {
+  background: #edf0fd;
+}
+html:not(.dark) .account-ledger-modern [data-testid="account-statement-scroll-region"] tbody td {
+  border-color: #e6eaf3;
+}
+html:not(.dark) .account-ledger-modern [data-testid="account-statement-scroll-region"] tbody td .text-foreground,
+html:not(.dark) .account-ledger-modern [data-testid="account-statement-scroll-region"] tbody td.font-semibold {
+  color: #1b2942;
+}
+html:not(.dark) .account-ledger-modern [data-testid="account-statement-scroll-region"] tbody td .text-muted-foreground,
+html:not(.dark) .account-ledger-modern [data-testid="account-statement-scroll-region"] tbody td.text-muted-foreground {
+  color: #687790;
+}
+html:not(.dark) .account-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr:not([data-testid]) {
+  background: #f1f4fa;
+  color: #34405b;
+  border-color: #e3e7f0;
+}
+html:not(.dark) .account-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr:last-child {
+  background: linear-gradient(90deg, #e9e2f8, #efebfb) !important;
+  color: #292046;
+}
+html:not(.dark) .account-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr:last-child td {
+  border-top-color: #d9ccf2;
+}
+html:not(.dark) .account-ledger-modern [data-testid="account-statement-scroll-region"] [role="checkbox"] {
+  border-color: #7867bd;
+}
+html:not(.dark) .account-ledger-modern [data-testid="account-statement-scroll-region"] [role="checkbox"]:focus-visible {
+  outline-color: #6858bd;
+}
+@media (max-width: 767px) {
+  html:not(.dark) .account-ledger-modern [data-testid="account-statement-phone-header"] > div:first-child {
+    background: #fff;
+    border-color: #dce3f1;
+  }
+  html:not(.dark) .account-ledger-modern [data-testid="account-statement-cards"] > div {
+    border-color: #dce3f1;
+  }
+}
+
+}
+
 @media print {
-  .properties-ledger-modern { background: white !important; color: black !important; border: 0; padding: 0; }
-  .properties-ledger-modern .properties-ledger-breadcrumb,
-  .properties-ledger-modern .properties-ledger-account-bar { display: none !important; }
-  .properties-ledger-modern [data-testid="row-opening-balance"] { display: table-row; }
-  .properties-ledger-modern [data-testid="account-statement-scroll-region"] { box-shadow: none; border-color: #999; }
-  .properties-ledger-modern [data-testid="account-statement-scroll-region"] thead tr,
-  .properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr { background: white !important; color: black !important; }
-  .properties-ledger-modern [data-testid="account-statement-scroll-region"] td,
-  .properties-ledger-modern [data-testid="account-statement-scroll-region"] th { color: black !important; }
+  .account-ledger-modern { background: white !important; color: black !important; border: 0; padding: 0; }
+  .account-ledger-modern .account-ledger-breadcrumb,
+  .account-ledger-modern .account-ledger-account-bar { display: none !important; }
+  .account-ledger-modern [data-testid="row-opening-balance"] { display: table-row; }
+  .account-ledger-modern [data-testid="account-statement-scroll-region"] { box-shadow: none; border-color: #999; }
+  .account-ledger-modern [data-testid="account-statement-scroll-region"] thead tr,
+  .account-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr { background: white !important; color: black !important; }
+  .account-ledger-modern [data-testid="account-statement-scroll-region"] td,
+  .account-ledger-modern [data-testid="account-statement-scroll-region"] th { color: black !important; }
+  .account-ledger-modern .account-ledger-heading-title h3,
+  .account-ledger-modern .account-ledger-stat p:first-child,
+  .account-ledger-modern .account-ledger-stat p:nth-child(2) { color: black !important; }
+  .account-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr:last-child {
+    background: white !important;
+    color: black !important;
+  }
 }
