@@ -378,10 +378,10 @@ export default function PropertyRentalPage({
           </div>
         )}
 
-        {isPropertiesRental && unitType === "SHOP" && units.some((unit) => unit.isInternalLeaseProjection) && (
+        {isPropertiesRental && units.some((unit) => unit.isInternalLeaseProjection) && (
           <p className="text-xs text-muted-foreground" data-testid="properties-factory-internal-lease-note">
-            Internal Factory leases appear for reference only. They are excluded from Properties rent and balance totals;
-            manage payments and accounting from Factory Rentals.
+            Internal ERP/Factory leases appear for reference only. They are excluded from Properties rent and balance
+            totals; manage payments and accounting from the originating rental module.
           </p>
         )}
         {isPropertiesRental && (
@@ -715,7 +715,9 @@ export default function PropertyRentalPage({
                                         <Badge className="text-xs bg-violet-600 text-white">Internal</Badge>
                                       )}
                                       {u.isInternalLeaseProjection && (
-                                        <Badge className="text-xs bg-violet-600 text-white">Factory reference</Badge>
+                                        <Badge className="text-xs bg-violet-600 text-white">
+                                          {u.sourceModule === "ERP" ? "ERP reference" : "Factory reference"}
+                                        </Badge>
                                       )}
                                       {u.isShared && !u.isInternalLeaseProjection && (
                                         <Badge
