@@ -72,11 +72,12 @@ export function registerRentalUnitsWriteRoutes(app: Express, ctx: RentalRoutesCo
           return res.status(400).json({ message: "Location group name must be 1-120 characters" });
         }
 
-        const [anchor] = await db.select().from(propertyUnits).where(and(
-          eq(propertyUnits.id, id),
-          eq(propertyUnits.companyId, companyId),
-          eq(propertyUnits.module, module)
-        ));
+        const [anchor] = await db
+          .select()
+          .from(propertyUnits)
+          .where(
+            and(eq(propertyUnits.id, id), eq(propertyUnits.companyId, companyId), eq(propertyUnits.module, module))
+          );
         if (!anchor) return res.status(404).json({ message: "Unit not found" });
         const previousGroup = anchor.locationGroup;
         if (locationGroup === previousGroup) return res.json({ locationGroup, updatedCount: 0 });
@@ -87,25 +88,32 @@ export function registerRentalUnitsWriteRoutes(app: Express, ctx: RentalRoutesCo
             eq(propertyUnits.module, module),
             eq(propertyUnits.unitType, anchor.unitType)
           );
-          const collision = await tx.select({ id: propertyUnits.id }).from(propertyUnits).where(
-            and(scope, eq(propertyUnits.locationGroup, locationGroup))
-          ).limit(1);
+          const collision = await tx
+            .select({ id: propertyUnits.id })
+            .from(propertyUnits)
+            .where(and(scope, eq(propertyUnits.locationGroup, locationGroup)))
+            .limit(1);
           if (collision.length) return { conflict: true as const };
 
-          const updated = await tx.update(propertyUnits).set({ locationGroup }).where(
-            and(scope, eq(propertyUnits.locationGroup, previousGroup))
-          ).returning({ id: propertyUnits.id, unitNumber: propertyUnits.unitNumber });
+          const updated = await tx
+            .update(propertyUnits)
+            .set({ locationGroup })
+            .where(and(scope, eq(propertyUnits.locationGroup, previousGroup)))
+            .returning({ id: propertyUnits.id, unitNumber: propertyUnits.unitNumber });
           for (const unit of updated) {
-            await logAudit({
-              userId: req.session.userId!,
-              username: req.session.username || "unknown",
-              companyId,
-              action: "update",
-              tableName: "property_units",
-              recordId: unit.id,
-              recordIdentifier: unit.unitNumber,
-              changes: { locationGroup: { old: previousGroup, new: locationGroup } },
-            }, tx);
+            await logAudit(
+              {
+                userId: req.session.userId!,
+                username: req.session.username || "unknown",
+                companyId,
+                action: "update",
+                tableName: "property_units",
+                recordId: unit.id,
+                recordIdentifier: unit.unitNumber,
+                changes: { locationGroup: { old: previousGroup, new: locationGroup } },
+              },
+              tx
+            );
           }
           return { conflict: false as const, updatedCount: updated.length };
         });
