@@ -1,3 +1,4 @@
+import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { ArrowLeft } from "lucide-react";
@@ -13,6 +14,7 @@ import type { BaleProductHistoryResponse } from "./types";
 
 // ── Main bale-product history page (monthly overview) ────────────────────────
 export function FactoryBaleProductHistory() {
+  const mhd = useFactoryMhdView();
   const params = useParams();
   const [, navigate] = useLocation();
   useEscapeToParent();
@@ -67,7 +69,7 @@ export function FactoryBaleProductHistory() {
         </Button>
         <div className="min-w-0 flex-1">
           <PageHeader
-            title={product?.name || "Bale Product History"}
+            title={mhd.nameFor(product?.articleCode, product?.name || "Bale Product History")}
             subtitle={`${product?.articleCode || ""} · ${year}`}
           >
             <Button
