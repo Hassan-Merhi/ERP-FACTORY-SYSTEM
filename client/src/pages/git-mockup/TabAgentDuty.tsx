@@ -147,7 +147,7 @@ export function TabAgentDuty() {
       <Button
         size="sm"
         variant={companyMode === "session" ? "default" : "outline"}
-        className="min-h-9 gap-1.5 rounded-xl border border-border/60 px-4 text-xs font-semibold shadow-sm transition-colors data-[state=active]:bg-violet-600"
+        className={`min-h-9 gap-1.5 rounded-xl border px-4 text-xs font-semibold shadow-sm transition-colors ${companyMode === "session" ? "border-violet-600 bg-violet-600 text-white hover:bg-violet-500" : "border-border/60 bg-background hover:bg-violet-50 dark:hover:bg-violet-950/40"}`}
         onClick={() => setCompanyMode("session")}
         data-testid="button-agent-duty-my-company"
       >
@@ -157,7 +157,7 @@ export function TabAgentDuty() {
         <Button
         size="sm"
         variant={companyMode === "all" ? "default" : "outline"}
-        className="min-h-9 gap-1.5 rounded-xl border border-border/60 px-4 text-xs font-semibold shadow-sm transition-colors"
+        className={`min-h-9 gap-1.5 rounded-xl border px-4 text-xs font-semibold shadow-sm transition-colors ${companyMode === "all" ? "border-violet-600 bg-violet-600 text-white hover:bg-violet-500" : "border-border/60 bg-background hover:bg-violet-50 dark:hover:bg-violet-950/40"}`}
         onClick={() => setCompanyMode("all")}
         data-testid="button-agent-duty-all-companies"
       >
