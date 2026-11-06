@@ -135,7 +135,7 @@ export function ChristmasSleighFlyover({ enabled }: { enabled: boolean }) {
         window.clearTimeout(endFlight);
         endFlight = undefined;
       }
-      if (document.hidden) setFlying(false);
+      setFlying(false);
     };
     const schedule = () => {
       if (document.hidden) return;
