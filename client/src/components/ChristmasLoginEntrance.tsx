@@ -66,10 +66,15 @@ export function ChristmasLoginEntrance({ enabled, queryStatus }: Props) {
   // later cannot replay a stale login welcome.
   useEffect(() => {
     if (queryStatus === "pending") return;
-    const wasFreshLogin = consumeChristmasLoginEntrancePending();
-    if (!wasFreshLogin || queryStatus !== "success" || !enabled || reduceMotion || document.hidden) return;
-    setVisibleUntil(Date.now() + ENTRANCE_DURATION_MS);
-    launchJingle();
+    // Defer consumption to the next task. In React Strict Mode the temporary
+    // first effect is cleaned up before it consumes the one-time login hint.
+    const timer = window.setTimeout(() => {
+      const wasFreshLogin = consumeChristmasLoginEntrancePending();
+      if (!wasFreshLogin || queryStatus !== "success" || !enabled || reduceMotion || document.hidden) return;
+      setVisibleUntil(Date.now() + ENTRANCE_DURATION_MS);
+      launchJingle();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [queryStatus, enabled, reduceMotion, launchJingle]);
 
   // Use a deadline rather than a timer tied to the first effect. This also
