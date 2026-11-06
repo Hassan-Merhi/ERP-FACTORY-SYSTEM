@@ -20,7 +20,7 @@ import { db, pool } from "../../db";
 import { getRentalBillingDay, getRentalPeriodDueDate } from "../../services/rental/rentalPeriodService";
 import { requireAuth, requireRole } from "../../auth";
 import { z } from "zod";
-import { eq, and, sql, desc, isNull } from "drizzle-orm";
+import { eq, and, or, sql, desc, isNull } from "drizzle-orm";
 import {
   propertyUnits,
   propertyContracts,
@@ -186,6 +186,10 @@ export function registerRentalPaymentsAccrualRoutes(
         }
       }
       if (!contract) return res.status(404).json({ message: "Contract not found" });
+      // A Properties reference must not create a second receipt or payment for Factory rent.
+      if (module === "PROPERTIES" && isSharedPayment && contract.module === "FACTORY" && contract.isInternal) {
+        return res.status(403).json({ message: "Record internal Factory lease payments in Factory Rentals." });
+      }
       const contractCompanyId = isSharedPayment ? contract.companyId : companyId;
 
       const [unit] = await db.select().from(propertyUnits).where(eq(propertyUnits.id, contract.unitId));
@@ -368,6 +372,41 @@ export function registerRentalPaymentsAccrualRoutes(
           and(eq(propertyUnits.id, unitId), eq(propertyUnits.companyId, companyId), eq(propertyUnits.module, module))
         );
 
+      // Same-company internal Factory shops appear in Properties without copying
+      // units, contracts, ledgers or payment rows.
+      if (!unit && module === "PROPERTIES") {
+        const [factoryUnit] = await db
+          .select()
+          .from(propertyUnits)
+          .where(
+            and(
+              eq(propertyUnits.id, unitId),
+              eq(propertyUnits.companyId, companyId),
+              eq(propertyUnits.module, "FACTORY"),
+              eq(propertyUnits.unitType, "SHOP"),
+              eq(propertyUnits.active, true)
+            )
+          );
+        if (factoryUnit) {
+          const [internalContract] = await db
+            .select({ id: propertyContracts.id })
+            .from(propertyContracts)
+            .where(
+              and(
+                eq(propertyContracts.unitId, unitId),
+                eq(propertyContracts.companyId, companyId),
+                eq(propertyContracts.module, "FACTORY"),
+                eq(propertyContracts.status, "ACTIVE"),
+                eq(propertyContracts.isInternal, true)
+              )
+            );
+          if (internalContract) {
+            unit = factoryUnit;
+            isShared = true;
+          }
+        }
+      }
+
       if (!unit) {
         try {
           const [sharedContract] = await db
@@ -398,7 +437,18 @@ export function registerRentalPaymentsAccrualRoutes(
         .from(propertyContracts)
         .where(
           and(
-            isShared ? eq(propertyContracts.linkedCompanyId, companyId) : eq(propertyContracts.companyId, companyId),
+            isShared
+              ? module === "PROPERTIES"
+                ? or(
+                    eq(propertyContracts.linkedCompanyId, companyId),
+                    and(
+                      eq(propertyContracts.companyId, companyId),
+                      eq(propertyContracts.module, "FACTORY"),
+                      eq(propertyContracts.isInternal, true)
+                    )
+                  )
+                : eq(propertyContracts.linkedCompanyId, companyId)
+              : eq(propertyContracts.companyId, companyId),
             ...(isShared ? [] : [eq(propertyContracts.module, module)]),
             eq(propertyContracts.unitId, unitId),
             eq(propertyContracts.status, "ACTIVE")
