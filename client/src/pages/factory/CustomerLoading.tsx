@@ -156,7 +156,7 @@ export default function CustomerLoading() {
       )
         return false;
       if (!needle) return true;
-      return [product.name, product.nameAr, product.code, product.articleCode, product.categoryName]
+      return [product.name, mhd.nameFor(product.articleCode || product.code, product.name), product.nameAr, product.code, product.articleCode, product.categoryName]
         .filter(Boolean)
         .some((value) => String(value).toLocaleLowerCase().includes(needle));
     });
@@ -169,6 +169,8 @@ export default function CustomerLoading() {
     availableNegativeFilter,
     availableStockByCode,
     search,
+    mhd.mode,
+    mhd.revision,
   ]);
 
   const displayedProducts = mhd.sortRows(filteredProducts, (product) => product.articleCode || product.code);
