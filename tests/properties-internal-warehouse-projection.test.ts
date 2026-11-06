@@ -19,8 +19,12 @@ describe("Properties rental internal source projections", () => {
     expect(sharedRentalDisplayTab("PROPERTIES", factoryWarehouse, { unitType: "WAREHOUSE" })).toBe("WAREHOUSE");
   });
 
-  it("keeps internal Factory shops in the Properties Shops tab", () => {
-    expect(sharedRentalDisplayTab("PROPERTIES", factoryShop, { unitType: "SHOP" })).toBe("SHOP");
+  it("shows Factory internal occupancy in Properties Warehouses even if its source is typed SHOP", () => {
+    expect(sharedRentalDisplayTab("PROPERTIES", factoryShop, { unitType: "SHOP" })).toBe("WAREHOUSE");
+  });
+
+  it("keeps an internal ERP shop under Shops", () => {
+    expect(sharedRentalDisplayTab("PROPERTIES", { module: "ERP", isInternal: true }, { unitType: "SHOP" })).toBe("SHOP");
   });
 
   it("does not move ordinary linked warehouse leases out of Shops", () => {
