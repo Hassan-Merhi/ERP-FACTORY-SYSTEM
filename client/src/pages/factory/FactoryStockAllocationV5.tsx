@@ -1,4 +1,5 @@
 import { Fragment } from "react";
+import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -39,6 +40,7 @@ import { FactoryStockAllocationV5Dialog8 } from "./factorystockallocationv5/comp
 
 export default function FactoryStockAllocationV5() {
   const model = useFactoryStockAllocationV5Model();
+  const mhd = useFactoryMhdView();
   const [, setLocation] = useLocation();
   const {
     focusProformaId,
@@ -76,6 +78,7 @@ export default function FactoryStockAllocationV5() {
     toggleCategory,
     catLabel,
   } = model;
+  const mhdRows = mhd.sortRows(rows, (row) => row.articleCode);
   /* ── Render ───────────────────────────────────────────────────────────── */
   return (
     <div className="flex min-w-0 flex-col pb-6" data-testid="factory-stock-allocation-v5-page">
@@ -451,7 +454,7 @@ export default function FactoryStockAllocationV5() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row, idx) => {
+                {mhdRows.map((row, idx) => {
                   const isExpanded = expandedRows.has(row.articleCode);
                   const isShortage = row.freeToPromise < 0;
 
@@ -471,8 +474,8 @@ export default function FactoryStockAllocationV5() {
                             <span className="flex h-4 w-4 shrink-0 items-center justify-center">
                               {isShortage && <AlertTriangle className="h-4 w-4 text-rose-500" />}
                             </span>
-                            <span className="block truncate text-xs font-semibold sm:text-sm" title={row.productName}>
-                              {row.productName}
+                            <span className="block truncate text-xs font-semibold sm:text-sm" title={mhd.nameFor(row.articleCode, row.productName)}>
+                              {mhd.nameFor(row.articleCode, row.productName)}
                             </span>
                           </div>
                         </td>
