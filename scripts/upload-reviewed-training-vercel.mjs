@@ -39,6 +39,7 @@ export function mergeManifest(current, validated, sha, publishedBy, publishedAt 
       publishedAt,
       publishedBy,
       durationSeconds: Math.round(item.durationSeconds),
+      ...(item.route ? { route: item.route } : {}),
     };
   }
   return Object.fromEntries(Object.entries(next).sort(([a], [b]) => a.localeCompare(b)));

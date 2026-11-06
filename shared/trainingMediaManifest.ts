@@ -10,6 +10,7 @@ export const TRAINING_MANIFEST_KEY = "training/manifest/current.json";
 export const TRAINING_TOPIC_ID = /^[a-z0-9-]{1,80}$/;
 export const TRAINING_OBJECT_KEY = /^training\/videos\/[a-z0-9-]{1,80}\/[a-f0-9]{40}\.(?:webm|mp4|vtt|png)$/;
 export const MAX_TRAINING_MANIFEST_BYTES = 256 * 1024;
+export const TRAINING_ROUTE = /^\/[a-z0-9][a-z0-9/_-]{0,119}$/;
 
 export interface PublishedTrainingMedia {
   videoKey: string;
@@ -20,6 +21,8 @@ export interface PublishedTrainingMedia {
   publishedAt?: string;
   publishedBy?: string;
   durationSeconds?: number;
+  /** Page the recording teaches; playback access follows that page's permission. */
+  route?: string;
 }
 
 export type PublishedTrainingManifest = Record<string, PublishedTrainingMedia>;
@@ -73,8 +76,12 @@ export function parsePublishedTrainingManifest(input: unknown): PublishedTrainin
     ) {
       throw new Error("training_manifest.invalid_duration");
     }
+    const route = entry.route;
+    if (route !== undefined && (typeof route !== "string" || !TRAINING_ROUTE.test(route)))
+      throw new Error("training_manifest.invalid_route");
     result[topic] = {
       videoKey,
+      route: route as string | undefined,
       captionsKey: optionalKey(entry.captionsKey, ".vtt"),
       screenshotKey: optionalKey(entry.screenshotKey, ".png"),
       guideSteps: guideSteps as string[] | undefined,
