@@ -4,12 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useCompany } from "@/contexts/CompanyContext";
-import { downloadBlob } from "@/lib/downloadBlob";
+
 import { useToast } from "@/hooks/use-toast";
 import { Download, FileUp, Loader2, Save } from "lucide-react";
 
 type InputRow = { articleCode: string; itemName: string };
-type Product = InputRow & { id: number; name: string };
+type Product = { id: number; articleCode: string; name: string };
 type MhdData = {
   revision: number;
   rows: Array<InputRow & { sortOrder: number }>;
@@ -61,10 +61,8 @@ export function MhdViewManager() {
         }
       }
       worksheet.views = [{ state: "frozen", ySplit: 1 }];
-      const buffer = await workbook.xlsx.writeBuffer();
-      downloadBlob(new Blob([buffer as BlobPart], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      }), withProducts ? "factory-mhd-products.xlsx" : "factory-mhd-template.xlsx");
+      const { writeFile } = await import("@/lib/excelHelper");
+      await writeFile(workbook, withProducts ? "factory-mhd-products.xlsx" : "factory-mhd-template.xlsx");
     } catch (cause) {
       toast({ title: "Download failed", description: String(cause), variant: "destructive" });
     }
@@ -79,9 +77,8 @@ export function MhdViewManager() {
       if (!/\.xlsx$/i.test(file.name) || file.size > 5 * 1024 * 1024) {
         throw new Error("Choose an .xlsx Excel file smaller than 5 MB.");
       }
-      const { default: ExcelJS } = await import("exceljs");
-      const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.load(await file.arrayBuffer());
+      const { readFile } = await import("@/lib/excelHelper");
+      const workbook = await readFile(file);
       const worksheet = workbook.worksheets[0];
       if (!worksheet || normalize(worksheet.getCell("A1").text) !== "ARTICLE CODE" ||
           normalize(worksheet.getCell("B1").text) !== "ITEM NAME" ||
