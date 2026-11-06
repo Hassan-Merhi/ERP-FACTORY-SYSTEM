@@ -364,6 +364,8 @@ export async function relayAttachmentFilesOnce({ client, config, fetcher = fetch
          ON s.site_id = o.site_id AND s.stream = 'attachments' AND s.sequence = o.sequence
        JOIN stored_files f ON f.id = o.local_file_id AND f.company_id = o.company_id
       WHERE o.site_id = $1::uuid
+        -- Only uploads carry bytes; a rename/move record (plan batch 4) has none.
+        AND o.operation_kind = 'attachment.file.v1'
         AND NOT EXISTS (SELECT 1 FROM factory_edge_attachment_file_receipts r
                          WHERE r.site_id = o.site_id AND r.file_sha256 = o.payload->>'sha256')
       ORDER BY o.payload->>'sha256'

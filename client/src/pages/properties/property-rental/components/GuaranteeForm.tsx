@@ -4,7 +4,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
  *
  * Extracted from PropertyRentalPage.tsx during the Phase 4 god-file split.
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -63,6 +63,13 @@ function GuaranteeForm({
   // ── Move to Cash state ──
   const [moveAmount, setMoveAmount] = useState(remainingGuarantee.toFixed(2));
   const [moveAccountId, setMoveAccountId] = useState<string>("");
+  const defaultCashboxId =
+    apiBase === "/api/properties/rental" ? cashAccounts.find((a) => a.code === "PROP-RENT-CASH")?.id : undefined;
+  useEffect(() => {
+    if (!defaultCashboxId) return;
+    setPostAccountId((old) => old || String(defaultCashboxId));
+    setMoveAccountId((old) => old || String(defaultCashboxId));
+  }, [defaultCashboxId]);
   const [moveDate, setMoveDate] = useState(new Date().toISOString().slice(0, 10));
   const [moveNotes, setMoveNotes] = useState("");
 

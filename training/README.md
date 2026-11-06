@@ -7,7 +7,7 @@
 - Both sidebars link to the Help & Training center.
 - Guides cover existing navigation and workflows; the same page never modifies business data.
 - Generic help content is filtered by the current user page permissions.
-- Video players only appear for explicitly published, reviewed media; empty slots explain that no video has been published.
+- Video players appear for every topic the nightly recorder has published; empty slots explain that no video has been recorded yet. The page reads the published list from the authenticated route `/api/training/media`, which the server refreshes from private storage about once a minute, so a new recording needs no deploy.
 
 ## Recording real software, not a generated mock-up
 
@@ -19,25 +19,29 @@ The recorder **requires the existing Phase 7 disposable Postgres fixture** on 12
 
 ### Run recordings
 
-After merging the implementation, GitHub Actions > **Record Real ERP Training Videos (Disposable Data)** > Run workflow > select a topic or all. The workflow installs Chrome/ffmpeg, builds the app, prepares disposable ERP and Factory companies, records real UI clips, and produces a review artifact. The generated artifact expires after 30 days and is **not** a publishing destination.
+After merging the implementation, GitHub Actions > **Record Real ERP Training Videos (Disposable Data)** > Run workflow > select a topic or all. The workflow installs Chrome, ffmpeg and the offline Piper narration voice (`en_US-lessac-medium`, verified by SHA-256 pins), builds the app, prepares disposable ERP and Factory companies, and records one narrated tour per topic. Each tour walks through **every control** on the page: every tab in the main area (including nested tab strips), every button, dropdown, field and section heading each tab reveals, and the **hidden controls** inside the menus, dropdown lists and dialogs those buttons open, which the recorder opens one by one. The shared top bar and sidebar are explained once, in the overview video of each mode (`factory-overview`, `erp-tracking`), so the other videos do not repeat them. A pointer composited at the full frame rate glides to the control being explained, which is outlined on screen, while a spoken sentence (generated deterministically from the control's real label, role and state by `scripts/training-narration.mjs`, then voiced locally by `scripts/training-narration-tts.py`) explains what it does. Safe demonstrations show what a control does: typing a sample value into a search box, opening a menu or list, and choosing one entry from an opened list (for example an account in a voucher line or a record in an import dialog); every demonstration is undone by clearing the text, closing the layer or reloading the untouched page. Buttons that would print, export, download, delete, save or post are explained but never pressed. Videos are Windows-friendly H.264 + AAC MP4 files between 1 and 20 minutes long, with matching WebVTT captions and a Markdown transcript. The workflow validates their full decode and the duration ceiling, and produces a review artifact. The generated artifact expires after 30 days and is **not** a publishing destination.
 
 Each completed topic output includes:
-- `screen.webm`: actual rendered UI video with instructional on-screen captions.
+- `screen.mp4`: validated H.264/yuv420p video (35–60 seconds) with five on-screen instructional steps, playable in standard Windows players.
 - `screenshot.png`: screenshot from the training session.
 - `captions.vtt`: captions and timing.
 - `guide.md`: workflow documentation.
 - `report.json`: recording status for all selected topics.
 
-### Review and publish permanently
+### Automatic nightly publication
 
-1. Check recording success and confirm the video contains only disposable sample data, no private business details, login screens or credentials.
-2. Check the instructions against the actual current UI and confirm the recorded page is correct.
-3. Approve the selected topic through the protected GitHub `training-publication` environment after reviewing all evidence.
-4. Use **Approve & Publish ERP Training Video** to upload approved WebM, captions and screenshot to the dedicated **private Vercel Blob store** and create a PR updating `shared/publishedTrainingMedia.json` with approved guide steps. GitHub Actions temporary artifacts and ephemeral Render filesystems are not used as permanent storage.
-5. Review/merge that PR, deploy the change, and verify playback and active-company role access; the app routes video, captions and screenshots through its authenticated backend.
-6. Rerecord videos when relevant workflows or screenshots change.
+The **Nightly ERP Training Audit** publishes by itself. After the `record` job uploads its artifact, the `publish` job in the same run:
 
-This is the **initial foundation**. Nightly detection and automated recording have now been added, while private streaming is available only after storage credentials and an approved published manifest are configured. AI-discovered multi-step write simulations, voice narration and an in-app admin approval console are **not implemented**. Until a reviewed publication PR is merged and deployed, the library marks videos as unpublished.
+1. Downloads that run's own artifact and re-validates every topic captured from the audited `main` commit with `scripts/validate-training-recording.mjs`: report status, source commit, the four files, WebVTT captions, numbered guide steps, and a full decode of the MP4 as H.264/yuv420p with an AAC narration track between 1 and 20 minutes.
+2. Obtains a GitHub OIDC identity in the `training-publication` environment and asks the Vercel gateway for one signed PUT per immutable object (`training/videos/{topic}/{commit}.mp4|.vtt|.png`). No storage token exists in GitHub.
+3. Reads the current manifest (`training/manifest/current.json`) back through the gateway, replaces each re-recorded topic with tonight's recording, keeps every other topic, and overwrites the manifest. Earlier files stay in private storage for rollback.
+4. Opens a GitHub issue listing what was recorded and whether publication succeeded.
+
+The ERP picks the new manifest up within about a minute; no pull request, merge or deploy is involved. Playback still goes through the authenticated `/api/training/media/:topic` routes, which check the active company and page permission before signing a short-lived read.
+
+**Rolling back or publishing one topic by hand:** run **Approve & Publish ERP Training Video** with the recording run ID and one topic. It validates the same way, then uploads that topic and updates the manifest. The `training-publication` environment must have `TRAINING_PUBLICATION_APPROVAL_ENABLED=true`, a `main` branch restriction, and **no required reviewers**, otherwise the nightly publish job waits for a click that never comes.
+
+The build-time file `shared/publishedTrainingMedia.json` is only the fallback used when `TRAINING_MEDIA_PROVIDER` is not `vercel`.
 
 ## Security and reliability
 

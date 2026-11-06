@@ -8,6 +8,7 @@
  * recalculate posted wages from a worker's current base salary.
  */
 import { MoneyDecimal, toMoney } from "../../lib/money";
+import { validateAttendanceReportDateRange } from "@shared/attendanceReportDateRange";
 import { calculateFactoryPayroll } from "./factoryPayrollGenerationPolicy";
 
 export interface AttendanceReportPayrollRecord {
@@ -55,6 +56,13 @@ export function selectAttendanceReportPayrolls(
   startDate: string,
   endDate: string
 ): AttendanceReportPayrollRecord[] {
+  if (
+    typeof startDate !== "string" ||
+    typeof endDate !== "string" ||
+    validateAttendanceReportDateRange(startDate, endDate) !== null
+  ) {
+    throw new TypeError("ATTENDANCE_REPORT_INVALID_RANGE");
+  }
   const candidates = payrolls
     .filter((row) => row.periodStart >= startDate && row.periodEnd <= endDate && row.periodStart <= row.periodEnd)
     .sort((a, b) => {
@@ -74,17 +82,28 @@ export function selectAttendanceReportPayrolls(
 }
 
 function estimateUnpostedSalary(input: AttendanceReportSalaryInput) {
+  // Check the runtime types before using date-string methods. API parameters
+  // can be arrays or objects even when TypeScript declares them as strings.
+  const startDate = input.startDate;
+  const endDate = input.endDate;
+  if (
+    typeof startDate !== "string" ||
+    typeof endDate !== "string" ||
+    validateAttendanceReportDateRange(startDate, endDate) !== null
+  ) {
+    throw new TypeError("ATTENDANCE_REPORT_INVALID_RANGE");
+  }
   // Factory payroll generation supports these two attendance-based salary
   // types. Bale/KG earnings require production records, not just attendance.
   if (input.salaryType !== "Monthly" && input.salaryType !== "Daily") return zero();
 
   let result = zero();
-  let cursor = input.startDate;
-  while (cursor <= input.endDate) {
+  let cursor = startDate;
+  while (cursor <= endDate) {
     const [year, month] = cursor.slice(0, 7).split("-").map(Number);
     const calendarDays = new Date(Date.UTC(year, month, 0)).getUTCDate();
     const monthEnd = `${year}-${String(month).padStart(2, "0")}-${String(calendarDays).padStart(2, "0")}`;
-    const segmentEnd = monthEnd < input.endDate ? monthEnd : input.endDate;
+    const segmentEnd = monthEnd < endDate ? monthEnd : endDate;
     const statuses = Object.entries(input.attendance)
       .filter(([date]) => date >= cursor && date <= segmentEnd)
       .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
@@ -114,6 +133,13 @@ function estimateUnpostedSalary(input: AttendanceReportSalaryInput) {
 }
 
 export function reconcileAttendanceReportSalary(input: AttendanceReportSalaryInput): AttendanceReportSalaryResult {
+  if (
+    typeof input.startDate !== "string" ||
+    typeof input.endDate !== "string" ||
+    validateAttendanceReportDateRange(input.startDate, input.endDate) !== null
+  ) {
+    throw new TypeError("ATTENDANCE_REPORT_INVALID_RANGE");
+  }
   const selected = selectAttendanceReportPayrolls(input.payrolls, input.startDate, input.endDate);
   if (selected.length === 0) {
     const expected = estimateUnpostedSalary(input);

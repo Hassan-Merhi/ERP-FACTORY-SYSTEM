@@ -20,6 +20,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useToast } from "@/hooks/use-toast";
+import { getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
 import type {
   Location,
   MasterItem,
@@ -44,6 +45,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
   const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [groupFilter, setGroupFilter] = useState<string>("all");
+  const [salesPeriod, setSalesPeriod] = useState<PeriodFilterValue>(() => getDefaultPeriodValue("all_time"));
   const [editingItem, setEditingItem] = useState<{ stockItemId: number; locationId: number; value: string } | null>(
     null
   );
@@ -101,9 +103,12 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     isError: priceListError,
     error: priceListErrorObj,
   } = useQuery<PriceListItem[]>({
-    queryKey: ["/api/pos/price-list", selectedLocationId],
+    queryKey: ["/api/pos/price-list", selectedLocationId, salesPeriod.fromDate, salesPeriod.toDate],
     queryFn: async () => {
-      const res = await fetch(`/api/pos/price-list?locationId=${selectedLocationId}`, {
+      const params = new URLSearchParams({ locationId: String(selectedLocationId) });
+      if (salesPeriod.fromDate) params.set("fromDate", salesPeriod.fromDate);
+      if (salesPeriod.toDate) params.set("toDate", salesPeriod.toDate);
+      const res = await fetch(`/api/pos/price-list?${params.toString()}`, {
         credentials: "include",
       });
       if (!res.ok) {
@@ -606,6 +611,9 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
             row[m.name] = price && parseFloat(price) > 0 ? parseFloat(price) : "";
           }
         } else {
+          row["Highest Price Sold"] = item.highestPriceSold == null ? "" : Number(item.highestPriceSold);
+          row["Lowest Price Sold"] = item.lowestPriceSold == null ? "" : Number(item.lowestPriceSold);
+          row["Qty Sold"] = Number(item.qtySold ?? 0);
           row["Selling Price"] =
             item.sellingPrice && parseFloat(item.sellingPrice) > 0
               ? parseFloat(item.sellingPrice)
@@ -654,6 +662,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     setHideZeroQty(false);
     setShowZeroQty(false);
     setHiddenUnpricedGroups(new Set());
+    setSalesPeriod(getDefaultPeriodValue("all_time"));
   };
 
   const toggleUnpriced = () => {
@@ -711,6 +720,8 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     setSearch,
     groupFilter,
     setGroupFilter,
+    salesPeriod,
+    setSalesPeriod,
     showUnpriced,
     toggleUnpriced,
     hideZeroQty,

@@ -215,15 +215,20 @@ let migrationsDone = false;
 
   // Build info endpoint for frontend version checking (must be before registerRoutes)
   app.get("/api/build-info", async (req, res) => {
+    // The login page and unauthenticated tabs may check build metadata, but
+    // must never receive or compare a logged-in user's refresh signal.
+    if (!req.session?.userId) {
+      res.json({ version: BUILD_VERSION });
+      return;
+    }
     try {
       // The server selects the signal using the authenticated session's
       // effective role. Never trust a client-provided role for this decision.
-      const target =
-        req.session?.userId && ["Admin", "Owner", "Developer"].includes(req.session.currentRole ?? "")
-          ? "privileged"
-          : "regular";
+      const target = ["Admin", "Owner", "Developer"].includes(req.session.currentRole ?? "")
+        ? "privileged"
+        : "regular";
       const forceRefreshToken = await readGlobalForceRefreshToken(target);
-      res.json({ version: BUILD_VERSION, forceRefreshToken });
+      res.json({ version: BUILD_VERSION, forceRefreshToken, refreshAudience: target });
     } catch (error) {
       logger.warn("[GlobalForceRefresh] Build info token unavailable", { error });
       // Keep normal build update detection working during a transient DB issue.

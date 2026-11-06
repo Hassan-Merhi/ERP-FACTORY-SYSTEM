@@ -26,6 +26,8 @@ type CentralPaymentReceiptBody = Omit<
   "companyId" | "voucherNumber" | "actor" | "resolveTarget"
 > & { optional?: unknown };
 import { checkAccountWhatsAppRule } from "../factoryWhatsappRoutes";
+import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
+import { offlineEdgeText } from "../../i18n/offlineEdgeMessages";
 import {
   assertVoucherEditableTx,
   recordVoucherEditAuditTx,
@@ -163,10 +165,18 @@ async function updateIntercompanyPaymentReceiptAccounts(params: {
     const debit = oldEntries.find((line) => new Decimal(line.debitAmount || "0").gt(0));
     const credit = oldEntries.find((line) => new Decimal(line.creditAmount || "0").gt(0));
     if (
-      !debit || !credit || debit.id === credit.id ||
-      oldEntries.some((line) =>
-        !line.ledgerAccountId || line.bankAccountId || line.customerId ||
-        line.supplierId || line.factorySupplierId || line.employeeId || line.fixedAssetId
+      !debit ||
+      !credit ||
+      debit.id === credit.id ||
+      oldEntries.some(
+        (line) =>
+          !line.ledgerAccountId ||
+          line.bankAccountId ||
+          line.customerId ||
+          line.supplierId ||
+          line.factorySupplierId ||
+          line.employeeId ||
+          line.fixedAssetId
       )
     ) {
       refuse();
@@ -176,15 +186,14 @@ async function updateIntercompanyPaymentReceiptAccounts(params: {
     const originalAmount = new Decimal(
       contraLine.transactionCurrency
         ? (lockedVoucher.voucherType === "Receipt"
-          ? contraLine.transactionCreditAmount
-          : contraLine.transactionDebitAmount) || "0"
-        : (lockedVoucher.voucherType === "Receipt"
-          ? contraLine.creditAmount
-          : contraLine.debitAmount) || "0"
+            ? contraLine.transactionCreditAmount
+            : contraLine.transactionDebitAmount) || "0"
+        : (lockedVoucher.voucherType === "Receipt" ? contraLine.creditAmount : contraLine.debitAmount) || "0"
     );
     const submittedAmount = safePositiveMoney(body.entries[0]?.amount);
     if (
-      !submittedAmount || !originalAmount.gt(0) ||
+      !submittedAmount ||
+      !originalAmount.gt(0) ||
       !submittedAmount.eq(originalAmount) ||
       !new Decimal(debit!.debitAmount || "0").eq(credit!.creditAmount || "0")
     ) {
@@ -193,9 +202,12 @@ async function updateIntercompanyPaymentReceiptAccounts(params: {
     const cashAccountId = Number(body.paymentAccountId);
     const contraAccountId = Number(body.entries[0]!.accountId);
     if (
-      !Number.isSafeInteger(cashAccountId) || cashAccountId <= 0 ||
-      !Number.isSafeInteger(contraAccountId) || contraAccountId <= 0
-    ) refuse();
+      !Number.isSafeInteger(cashAccountId) ||
+      cashAccountId <= 0 ||
+      !Number.isSafeInteger(contraAccountId) ||
+      contraAccountId <= 0
+    )
+      refuse();
     const changes = [
       { line: cashLine, newId: cashAccountId },
       { line: contraLine, newId: contraAccountId },
@@ -227,9 +239,15 @@ async function updateIntercompanyPaymentReceiptAccounts(params: {
     // transfer listings; synchronize it only when the cash side was changed.
     if (cashAccountId !== cashLine.ledgerAccountId) {
       if (transfer.fromVoucherId === voucherId && transfer.fromLedgerAccountId === cashLine.ledgerAccountId) {
-        await tx.update(interCompanyTransfers).set({ fromLedgerAccountId: cashAccountId }).where(eq(interCompanyTransfers.id, transfer.id));
+        await tx
+          .update(interCompanyTransfers)
+          .set({ fromLedgerAccountId: cashAccountId })
+          .where(eq(interCompanyTransfers.id, transfer.id));
       } else if (transfer.toVoucherId === voucherId && transfer.toLedgerAccountId === cashLine.ledgerAccountId) {
-        await tx.update(interCompanyTransfers).set({ toLedgerAccountId: cashAccountId }).where(eq(interCompanyTransfers.id, transfer.id));
+        await tx
+          .update(interCompanyTransfers)
+          .set({ toLedgerAccountId: cashAccountId })
+          .where(eq(interCompanyTransfers.id, transfer.id));
       }
     }
     const audited = await recordVoucherEditAuditTx(tx, {
@@ -276,6 +294,19 @@ async function updateActivePaymentReceipt(req: Request, res: Response, next: Nex
 
     const body = req.body as CentralPaymentReceiptBody;
     const linkedTransfer = await intercompanyTransferOfVoucher(voucherId);
+    // Factory LAN server (plan batch 4): the edit route that records the change
+    // for the cloud serves it; an intercompany transfer leg stays online-only.
+    if (isPhase9LanPrimary()) {
+      if (linkedTransfer) {
+        res.status(409).json({
+          code: "EDGE_PAYMENT_INTERCOMPANY_ONLINE_ONLY",
+          message: offlineEdgeText("paymentIntercompanyOnlineOnly", req.headers["accept-language"]),
+        });
+        return;
+      }
+      next();
+      return;
+    }
     if (linkedTransfer) {
       // Only a same-amount, same-date ledger-account correction is permitted
       // for a linked transfer. Every other generic mutation remains a 409.

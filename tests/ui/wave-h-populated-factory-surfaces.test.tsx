@@ -174,7 +174,7 @@ describe("Wave H populated factory surfaces", () => {
       <TooltipProvider>
         <FactoryStockAllocationV5 />
       </TooltipProvider>,
-      { seedQueries: [[["/api/factory/v5/stock-allocation", true, undefined], data]] }
+      { seedQueries: [[["/api/factory/v5/stock-allocation", false, undefined], data]] }
     );
 
     expect(await screen.findAllByText("Alpha Bale")).not.toHaveLength(0);

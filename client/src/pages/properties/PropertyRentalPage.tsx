@@ -9,8 +9,23 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, ChevronRight, RefreshCw, Trash2, ClipboardList, CreditCard, BookCheck, MapPin, Building2, UserRound, CalendarDays } from "lucide-react";
+import {
+  Plus,
+  ChevronRight,
+  RefreshCw,
+  Trash2,
+  ClipboardList,
+  CreditCard,
+  BookCheck,
+  MapPin,
+  Building2,
+  UserRound,
+  CalendarDays,
+  Pencil,
+} from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
 import { useAppMode } from "@/contexts/AppModeContext";
@@ -40,12 +55,15 @@ export default function PropertyRentalPage({
   paymentsLogUrl,
 }: Props) {
   const { selectedCompany } = useCompany();
+  const isPropertiesRental = apiBase === "/api/properties/rental";
   const { toast } = useToast();
   const appMode = useAppMode();
   const [, navigate] = useLocation();
   const [openUnitId, setOpenUnitId] = useState<number | null>(null);
   const [createUnitOpen, setCreateUnitOpen] = useState(false);
   const [confirmDeleteUnitId, setConfirmDeleteUnitId] = useState<number | null>(null);
+  const [renameGroup, setRenameGroup] = useState<{ name: string; unitId: number; count: number } | null>(null);
+  const [newGroupName, setNewGroupName] = useState("");
 
   const { data: units = [], isLoading } = useQuery<Unit[]>({
     queryKey: [apiBase + "/units", { unitType, companyId: selectedCompany?.id }],
@@ -58,18 +76,23 @@ export default function PropertyRentalPage({
   });
 
   // Dated, voucher-backed actual rent; no synthetic payment or ledger adjustment.
-  const showHistoricalPaid = apiBase === "/api/properties/rental" &&
-    unitType === "WAREHOUSE" && selectedCompany?.name === HISTORICAL_RENT_COMPANY;
-  const { data: historicalPayments = [], isLoading: historicalLoading, isError: historicalError } =
-    useQuery<HistoricalRentPayment[]>({
-      queryKey: [apiBase + "/payments", { companyId: selectedCompany?.id, view: "warehouse-reconciliation" }],
-      queryFn: async () => {
-        const res = await fetch(`${apiBase}/payments?view=warehouse-reconciliation`, { credentials: "include" });
-        if (!res.ok) throw new Error("Failed to load historical warehouse rent");
-        return res.json();
-      },
-      enabled: !!selectedCompany && showHistoricalPaid,
-    });
+  const showHistoricalPaid =
+    apiBase === "/api/properties/rental" &&
+    unitType === "WAREHOUSE" &&
+    selectedCompany?.name === HISTORICAL_RENT_COMPANY;
+  const {
+    data: historicalPayments = [],
+    isLoading: historicalLoading,
+    isError: historicalError,
+  } = useQuery<HistoricalRentPayment[]>({
+    queryKey: [apiBase + "/payments", { companyId: selectedCompany?.id, view: "warehouse-reconciliation" }],
+    queryFn: async () => {
+      const res = await fetch(`${apiBase}/payments?view=warehouse-reconciliation`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load historical warehouse rent");
+      return res.json();
+    },
+    enabled: !!selectedCompany && showHistoricalPaid,
+  });
 
   const { data: cashAccounts = [] } = useQuery<CashAccount[]>({
     queryKey: [apiBase + "/cash-accounts", selectedCompany?.id],
@@ -79,6 +102,22 @@ export default function PropertyRentalPage({
       return res.json();
     },
     enabled: !!selectedCompany,
+  });
+
+  const propertiesCashbox = isPropertiesRental
+    ? cashAccounts.find((account) => account.code === "PROP-RENT-CASH")
+    : undefined;
+  const ensureCashbox = useMutation({
+    mutationFn: () => apiRequest("POST", apiBase + "/cashbox/ensure", {}),
+    onSuccess: () => {
+      toast({
+        title: "Properties cashbox ready",
+        description: "The new cashbox starts at zero. Historical balances remain unchanged.",
+      });
+      queryClient.invalidateQueries({ queryKey: [apiBase + "/cash-accounts", selectedCompany?.id] });
+    },
+    onError: (e: ClientErrorLike) =>
+      toast({ title: "Cashbox setup failed", description: e.message, variant: "destructive" }),
   });
 
   const grouped = useMemo(() => {
@@ -100,6 +139,8 @@ export default function PropertyRentalPage({
       totalPaid = 0,
       totalMonthlyRent = 0;
     units.forEach((u) => {
+      // Factory projections are references, not Properties receivables or deposits.
+      if (u.isInternalLeaseProjection) return;
       if (u.contract) {
         totalGuarantee += Number((u.guaranteeRemaining ?? u.contract.guaranteeAmount) || 0);
         const outstanding = u.outstanding ?? 0;
@@ -114,15 +155,11 @@ export default function PropertyRentalPage({
     return { totalGuarantee, totalOwed, totalCredit, totalPaid, totalMonthlyRent };
   }, [units]);
 
-  const datedHistoricalPaid = useMemo(
-    () => historicalRentSnapshotTotal(historicalPayments),
-    [historicalPayments],
-  );
+  const datedHistoricalPaid = useMemo(() => historicalRentSnapshotTotal(historicalPayments), [historicalPayments]);
   const summaryPaid = showHistoricalPaid ? datedHistoricalPaid : totals.totalPaid;
   const paidLabel = showHistoricalPaid ? "TOTAL PAID THROUGH 26 OCT" : "TOTAL PAID";
-  const paidValue = showHistoricalPaid && (historicalLoading || historicalError)
-    ? "Unavailable"
-    : "$" + fmtMoney(summaryPaid);
+  const paidValue =
+    showHistoricalPaid && (historicalLoading || historicalError) ? "Unavailable" : "$" + fmtMoney(summaryPaid);
 
   const runMonthly = useMutation({
     mutationFn: () => apiRequest("POST", apiBase + "/run-monthly"),
@@ -168,6 +205,31 @@ export default function PropertyRentalPage({
     },
   });
 
+  const renameLocationGroup = useMutation({
+    mutationFn: ({ unitId, locationGroup }: { unitId: number; locationGroup: string }) =>
+      apiRequest("PATCH", `${apiBase}/units/${unitId}`, { renameGroup: true, locationGroup }),
+    onSuccess: () => {
+      toast({ title: "Location group renamed" });
+      queryClient.invalidateQueries({ queryKey: [apiBase + "/units"] });
+      setRenameGroup(null);
+    },
+    onError: (e: ClientErrorLike) =>
+      toast({ title: "Could not rename location group", description: e.message, variant: "destructive" }),
+  });
+
+  const editableUnitInGroup = (groupUnits: Unit[]) =>
+    groupUnits.find((u) => u.unitType === unitType && !u.isShared && !u.isInternalLeaseProjection);
+  const openRenameGroup = (name: string, groupUnits: Unit[]) => {
+    const unit = editableUnitInGroup(groupUnits);
+    if (!isPropertiesRental || !unit) return;
+    setRenameGroup({
+      name,
+      unitId: unit.id,
+      count: groupUnits.filter((u) => u.unitType === unitType && !u.isShared && !u.isInternalLeaseProjection).length,
+    });
+    setNewGroupName(name);
+  };
+
   const openUnit = units.find((u) => u.id === openUnitId) ?? null;
   const confirmDeleteUnit = confirmDeleteUnitId ? (units.find((u) => u.id === confirmDeleteUnitId) ?? null) : null;
 
@@ -175,7 +237,7 @@ export default function PropertyRentalPage({
   const [selectedContractIds, setSelectedContractIds] = useState<Set<number>>(new Set());
   const [bulkPayOpen, setBulkPayOpen] = useState(false);
 
-  const contractedUnits = useMemo(() => units.filter((u) => u.contract && !u.isShared), [units]);
+  const contractedUnits = useMemo(() => units.filter((u) => u.contract && !u.isShared && !u.isInternalLeaseProjection), [units]);
 
   const toggleSelect = (contractId: number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -235,6 +297,15 @@ export default function PropertyRentalPage({
             disabled: runMonthly.isPending,
             testId: `button-${testIdPrefix}-run-monthly`,
           },
+          isPropertiesRental &&
+            canPostDue &&
+            !propertiesCashbox && {
+              label: "Create Properties Cashbox",
+              icon: Plus,
+              onSelect: () => ensureCashbox.mutate(),
+              disabled: ensureCashbox.isPending,
+              testId: `button-${testIdPrefix}-create-cashbox`,
+            },
           canPostDue && {
             label: "Post due accruals now",
             icon: BookCheck,
@@ -254,6 +325,17 @@ export default function PropertyRentalPage({
   );
   const headerActions = (
     <>
+      {isPropertiesRental && canPostDue && !propertiesCashbox && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => ensureCashbox.mutate()}
+          disabled={ensureCashbox.isPending}
+          data-testid={`button-${testIdPrefix}-create-cashbox`}
+        >
+          <Plus className="h-4 w-4 mr-1" /> Create Properties Cashbox
+        </Button>
+      )}
       {selectedContractIds.size > 0 && (
         <Button size="sm" onClick={() => setBulkPayOpen(true)} data-testid={`button-${testIdPrefix}-bulk-pay`}>
           <CreditCard className="h-4 w-4 mr-1" />
@@ -326,6 +408,20 @@ export default function PropertyRentalPage({
           </div>
         )}
 
+        {isPropertiesRental && units.some((unit) => unit.isInternalLeaseProjection) && (
+          <p className="text-xs text-muted-foreground" data-testid="properties-factory-internal-lease-note">
+            Internal ERP/Factory leases appear for reference only. They are excluded from Properties rent and balance
+            totals; manage payments and accounting from the originating rental module.
+          </p>
+        )}
+        {isPropertiesRental && (
+          <p className="text-xs text-muted-foreground" data-testid="properties-rent-cashbox-status">
+            {propertiesCashbox
+              ? "New receipts can be posted to Properties Rent Cashbox. Historical balances and transfers stay as recorded; no automatic intercompany movement."
+              : "Set up a zero-opening Properties cashbox for new receipts; historical balances are not changed."}
+          </p>
+        )}
+
         {phoneCards ? (
           <ErpMobileSummaryGrid
             data-testid={`summary-${testIdPrefix}`}
@@ -337,16 +433,24 @@ export default function PropertyRentalPage({
                 valueClassName: "text-blue-600 dark:text-blue-400",
               },
               {
-                label: "OUTSTANDING",
+                label: isPropertiesRental ? "TO COLLECT" : "OUTSTANDING",
                 value: `$${fmtMoney(totals.totalOwed)}`,
-                valueClassName: "text-red-600 dark:text-red-400",
+                valueClassName: isPropertiesRental
+                  ? "text-green-600 dark:text-green-400"
+                  : "text-red-600 dark:text-red-400",
               },
               {
-                label: "CREDIT",
+                label: isPropertiesRental ? "OWED TO TENANTS" : "CREDIT",
                 value: `$${fmtMoney(totals.totalCredit)}`,
-                valueClassName: "text-green-600 dark:text-green-400",
+                valueClassName: isPropertiesRental
+                  ? "text-red-600 dark:text-red-400"
+                  : "text-green-600 dark:text-green-400",
               },
-              { label: "TOTAL GUARANTEE", value: `$${fmtMoney(totals.totalGuarantee)}` },
+              {
+                label: isPropertiesRental ? "GUARANTEE HELD" : "TOTAL GUARANTEE",
+                value: `$${fmtMoney(totals.totalGuarantee)}`,
+                valueClassName: isPropertiesRental ? "text-red-600 dark:text-red-400" : undefined,
+              },
               { label: paidLabel, value: paidValue },
             ]}
           />
@@ -385,11 +489,14 @@ export default function PropertyRentalPage({
             <Card>
               <CardHeader className="px-3 pt-3 pb-1">
                 <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">
-                  TOTAL GUARANTEE
+                  {isPropertiesRental ? "GUARANTEE HELD" : "TOTAL GUARANTEE"}
                 </CardTitle>
               </CardHeader>
               <CardContent className="px-3 pb-3">
-                <div className="text-lg font-bold" data-testid={`stat-${testIdPrefix}-total-guarantee`}>
+                <div
+                  className={`text-lg font-bold ${isPropertiesRental ? "text-red-600 dark:text-red-400" : ""}`}
+                  data-testid={`stat-${testIdPrefix}-total-guarantee`}
+                >
                   ${fmtMoney(totals.totalGuarantee)}
                 </div>
               </CardContent>
@@ -412,31 +519,37 @@ export default function PropertyRentalPage({
             <Card>
               <CardHeader className="px-3 pt-3 pb-1">
                 <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">
-                  OUTSTANDING
+                  {isPropertiesRental ? "TO COLLECT" : "OUTSTANDING"}
                 </CardTitle>
               </CardHeader>
               <CardContent className="px-3 pb-3">
                 <div
-                  className="text-lg font-bold text-red-600 dark:text-red-400"
+                  className={`text-lg font-bold ${isPropertiesRental ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
                   data-testid={`stat-${testIdPrefix}-total-outstanding`}
                 >
                   ${fmtMoney(totals.totalOwed)}
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-0.5">owed by tenants</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {isPropertiesRental ? "tenants owe you" : "owed by tenants"}
+                </p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="px-3 pt-3 pb-1">
-                <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">CREDIT</CardTitle>
+                <CardTitle className="text-[11px] text-muted-foreground font-normal tracking-wide">
+                  {isPropertiesRental ? "OWED TO TENANTS" : "CREDIT"}
+                </CardTitle>
               </CardHeader>
               <CardContent className="px-3 pb-3">
                 <div
-                  className="text-lg font-bold text-green-600 dark:text-green-400"
+                  className={`text-lg font-bold ${isPropertiesRental ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}
                   data-testid={`stat-${testIdPrefix}-total-credit`}
                 >
                   ${fmtMoney(totals.totalCredit)}
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-0.5">advance / overpaid</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {isPropertiesRental ? "tenant prepayments / overpayments" : "advance / overpaid"}
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -453,6 +566,7 @@ export default function PropertyRentalPage({
             </div>
           ) : (
             <RentalUnitCards
+              landlordView={isPropertiesRental}
               grouped={grouped}
               selectedContractIds={selectedContractIds}
               onToggleSelect={(contractId) =>
@@ -460,6 +574,8 @@ export default function PropertyRentalPage({
               }
               onOpenUnit={setOpenUnitId}
               onDeleteUnit={setConfirmDeleteUnitId}
+              onRenameGroup={isPropertiesRental ? openRenameGroup : undefined}
+              canRenameGroup={(groupUnits) => !!editableUnitInGroup(groupUnits)}
             />
           )
         ) : (
@@ -493,7 +609,9 @@ export default function PropertyRentalPage({
                         <th className="text-left px-3 py-2 font-semibold">Note</th>
                         <th className="text-right px-3 py-2 font-semibold">Monthly Rent</th>
                         <th className="text-right px-3 py-2 font-semibold">Guarantee</th>
-                        <th className="text-right px-3 py-2 font-semibold">Outstanding</th>
+                        <th className="text-right px-3 py-2 font-semibold">
+                          {isPropertiesRental ? "Tenant Balance" : "Outstanding"}
+                        </th>
                         <th className="text-right px-3 py-2 font-semibold text-muted-foreground">Scheduled</th>
                         <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Next Billing</th>
                         <th className="text-left px-3 py-2 font-semibold">Start</th>
@@ -519,34 +637,78 @@ export default function PropertyRentalPage({
                         const unitNumColor = p.headerBg;
                         return (
                           <Fragment key={group}>
-                            <tr key={`grp-${group}`} className={isFactoryShopTable ? "factory-rentals-location-row" : "border-t"}>
-                              <td colSpan={12}
-                                className={isFactoryShopTable ? "factory-rentals-location-cell" : "px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-center"}
-                                style={isFactoryShopTable ? undefined : { backgroundColor: p.headerBg, color: p.headerText }}
+                            <tr
+                              key={`grp-${group}`}
+                              className={isFactoryShopTable ? "factory-rentals-location-row" : "border-t"}
+                            >
+                              <td
+                                colSpan={12}
+                                className={
+                                  isFactoryShopTable
+                                    ? "factory-rentals-location-cell"
+                                    : "px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-center"
+                                }
+                                style={
+                                  isFactoryShopTable ? undefined : { backgroundColor: p.headerBg, color: p.headerText }
+                                }
                               >
                                 {isFactoryShopTable ? (
-                                  <div className="factory-rentals-location-bar" style={{ background: `linear-gradient(110deg, ${p.headerBg}, ${p.headerBg}df)` }}>
+                                  <div
+                                    className="factory-rentals-location-bar"
+                                    style={{ background: `linear-gradient(110deg, ${p.headerBg}, ${p.headerBg}df)` }}
+                                  >
                                     <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
                                     <span>{group}</span>
-                                    <span className="factory-rentals-location-count">{groupUnits.length} {groupUnits.length === 1 ? "unit" : "units"}</span>
+                                    <span className="factory-rentals-location-count">
+                                      {groupUnits.length} {groupUnits.length === 1 ? "unit" : "units"}
+                                    </span>
                                   </div>
-                                ) : group}
+                                ) : (
+                                  <span className="inline-flex items-center justify-center gap-2">
+                                    <span>{group}</span>
+                                    {isPropertiesRental && editableUnitInGroup(groupUnits) && (
+                                      <button
+                                        type="button"
+                                        className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openRenameGroup(group, groupUnits);
+                                        }}
+                                        title={`Rename ${group}`}
+                                        aria-label={`Rename location group ${group}`}
+                                        data-testid={`button-${testIdPrefix}-rename-group-${gIdx}`}
+                                      >
+                                        <Pencil className="h-3.5 w-3.5" />
+                                      </button>
+                                    )}
+                                  </span>
+                                )}
                               </td>
                             </tr>
                             {groupUnits.map((u, uIdx) => (
                               <tr
                                 key={u.id}
-                                className={isFactoryShopTable ? `factory-rentals-unit-row cursor-pointer${u.contract && selectedContractIds.has(u.contract.id) ? " factory-rentals-unit-row-selected" : ""}` : "border-t cursor-pointer transition-colors"}
-                                style={isFactoryShopTable
-                                  ? { "--factory-rentals-rgb": `${p.r}, ${p.g}, ${p.b}` } as React.CSSProperties
-                                  : { backgroundColor: uIdx % 2 === 0 ? rowBgEven : rowBgOdd }}
-                                onMouseEnter={(e) => { if (!isFactoryShopTable) e.currentTarget.style.filter = "brightness(0.93)"; }}
-                                onMouseLeave={(e) => { if (!isFactoryShopTable) e.currentTarget.style.filter = ""; }}
+                                className={
+                                  isFactoryShopTable
+                                    ? `factory-rentals-unit-row cursor-pointer${u.contract && selectedContractIds.has(u.contract.id) ? " factory-rentals-unit-row-selected" : ""}`
+                                    : "border-t cursor-pointer transition-colors"
+                                }
+                                style={
+                                  isFactoryShopTable
+                                    ? ({ "--factory-rentals-rgb": `${p.r}, ${p.g}, ${p.b}` } as React.CSSProperties)
+                                    : { backgroundColor: uIdx % 2 === 0 ? rowBgEven : rowBgOdd }
+                                }
+                                onMouseEnter={(e) => {
+                                  if (!isFactoryShopTable) e.currentTarget.style.filter = "brightness(0.93)";
+                                }}
+                                onMouseLeave={(e) => {
+                                  if (!isFactoryShopTable) e.currentTarget.style.filter = "";
+                                }}
                                 onClick={() => setOpenUnitId(u.id)}
                                 data-testid={`row-unit-${u.id}`}
                               >
                                 <td className="px-3 py-2 w-8" onClick={(e) => e.stopPropagation()}>
-                                  {u.contract && !u.isShared && (
+                                  {u.contract && !u.isShared && !u.isInternalLeaseProjection && (
                                     <Checkbox
                                       checked={selectedContractIds.has(u.contract.id)}
                                       onCheckedChange={() =>
@@ -561,15 +723,24 @@ export default function PropertyRentalPage({
                                     />
                                   )}
                                 </td>
-                                <td className={isFactoryShopTable ? "px-3 py-2" : "px-3 py-2 font-mono text-xs font-bold"}
-                                   style={isFactoryShopTable ? undefined : { backgroundColor: unitNumBg, color: unitNumColor }}>
-                                   {isFactoryShopTable ? (
-                                     <span className="factory-rentals-unit-pill" style={{ color: p.headerBg, backgroundColor: `rgba(${p.r},${p.g},${p.b},0.15)` }}>
-                                       <Building2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                                       {u.unitNumber}
-                                     </span>
-                                   ) : u.unitNumber}
-                                 </td>
+                                <td
+                                  className={isFactoryShopTable ? "px-3 py-2" : "px-3 py-2 font-mono text-xs font-bold"}
+                                  style={
+                                    isFactoryShopTable ? undefined : { backgroundColor: unitNumBg, color: unitNumColor }
+                                  }
+                                >
+                                  {isFactoryShopTable ? (
+                                    <span
+                                      className="factory-rentals-unit-pill"
+                                      style={{ color: p.headerBg, backgroundColor: `rgba(${p.r},${p.g},${p.b},0.15)` }}
+                                    >
+                                      <Building2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                                      {u.unitNumber}
+                                    </span>
+                                  ) : (
+                                    u.unitNumber
+                                  )}
+                                </td>
                                 <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
                                   {u.dimensions ? (
                                     <span className="font-medium text-foreground">{u.dimensions}</span>
@@ -582,12 +753,22 @@ export default function PropertyRentalPage({
                                 <td className="px-3 py-2">
                                   {u.contract ? (
                                     <span className="font-medium flex items-center gap-1.5 flex-wrap">
-                                       {isFactoryShopTable && <UserRound className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />}
-                                       {u.contract.tenantName}
+                                      {isFactoryShopTable && (
+                                        <UserRound
+                                          className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                                          aria-hidden="true"
+                                        />
+                                      )}
+                                      {u.contract.tenantName}
                                       {u.contract.isInternal && (
                                         <Badge className="text-xs bg-violet-600 text-white">Internal</Badge>
                                       )}
-                                      {u.isShared && (
+                                      {u.isInternalLeaseProjection && (
+                                        <Badge className="text-xs bg-violet-600 text-white">
+                                          {u.sourceModule === "ERP" ? "ERP reference" : "Factory reference"}
+                                        </Badge>
+                                      )}
+                                      {u.isShared && !u.isInternalLeaseProjection && (
                                         <Badge
                                           className="text-xs bg-sky-600 text-white"
                                           title={u.ownerCompanyName ? `From: ${u.ownerCompanyName}` : undefined}
@@ -604,11 +785,15 @@ export default function PropertyRentalPage({
                                 </td>
                                 <td className="px-3 py-2">
                                   {u.contract ? (
-                                    <NoteCell
-                                      contractId={u.contract.id}
-                                      note={u.contract.notes}
-                                      testId={`unit-${u.id}`}
-                                    />
+                                    u.isInternalLeaseProjection ? (
+                                      <span className="text-xs text-muted-foreground">{u.contract.notes || "—"}</span>
+                                    ) : (
+                                      <NoteCell
+                                        contractId={u.contract.id}
+                                        note={u.contract.notes}
+                                        testId={`unit-${u.id}`}
+                                      />
+                                    )
                                   ) : (
                                     <span className="text-xs text-muted-foreground">—</span>
                                   )}
@@ -620,39 +805,43 @@ export default function PropertyRentalPage({
                                   className={`px-3 py-2 text-right tabular-nums font-semibold ${
                                     u.contract && Number(u.contract.guaranteeAmount) > 0
                                       ? u.contract.guaranteePostedToStatement
-                                        ? "text-green-600 dark:text-green-400"
-                                        : "text-red-600 dark:text-red-400"
+                                        ? isPropertiesRental
+                                          ? "text-red-600 dark:text-red-400"
+                                          : "text-green-600 dark:text-green-400"
+                                        : isPropertiesRental
+                                          ? "text-amber-600 dark:text-amber-400"
+                                          : "text-red-600 dark:text-red-400"
                                       : "text-muted-foreground"
                                   }`}
                                 >
                                   <span className={isFactoryShopTable ? "factory-rentals-money-pill" : undefined}>
-                                     {u.contract
-                                    ? fmtMoneyCurrency(
-                                        (
-                                          u as unknown as Unit & {
-                                            guaranteeRemaining: string | number | null | undefined;
-                                          }
-                                        ).guaranteeRemaining ?? u.contract.guaranteeAmount,
-                                        u.contract.currency
-                                      )
-                                    : "—"}
-                                   </span>
+                                    {u.contract
+                                      ? fmtMoneyCurrency(
+                                          (
+                                            u as unknown as Unit & {
+                                              guaranteeRemaining: string | number | null | undefined;
+                                            }
+                                          ).guaranteeRemaining ?? u.contract.guaranteeAmount,
+                                          u.contract.currency
+                                        )
+                                      : "—"}
+                                  </span>
                                 </td>
                                 <td
-                                  className={`px-3 py-2 text-right tabular-nums font-semibold ${(u.outstanding ?? 0) > 0 ? "text-red-600 dark:text-red-400" : (u as { prepaidCredit: 0 }).prepaidCredit > 0 ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}
+                                  className={`px-3 py-2 text-right tabular-nums font-semibold ${(u.outstanding ?? 0) > 0 ? (isPropertiesRental ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400") : (u.prepaidCredit ?? 0) > 0 ? (isPropertiesRental ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400") : "text-muted-foreground"}`}
                                 >
                                   <span className={isFactoryShopTable ? "factory-rentals-money-pill" : undefined}>
-                                     {u.outstanding !== null
-                                    ? fmtMoneyCurrency(
-                                        (u.outstanding ?? 0) > 0
-                                          ? u.outstanding!
-                                          : (u as { prepaidCredit: 0 }).prepaidCredit > 0
-                                            ? u.prepaidCredit
-                                            : 0,
-                                        u.contract?.currency
-                                      )
-                                    : "—"}
-                                   </span>
+                                    {u.outstanding !== null
+                                      ? fmtMoneyCurrency(
+                                          (u.outstanding ?? 0) > 0
+                                            ? u.outstanding!
+                                            : (u as { prepaidCredit: 0 }).prepaidCredit > 0
+                                              ? u.prepaidCredit
+                                              : 0,
+                                          u.contract?.currency
+                                        )
+                                      : "—"}
+                                  </span>
                                 </td>
                                 <td className="px-3 py-2 text-right tabular-nums text-muted-foreground text-xs">
                                   {(u as { scheduledAmount: 0 }).scheduledAmount > 0
@@ -660,20 +849,26 @@ export default function PropertyRentalPage({
                                     : "—"}
                                 </td>
                                 <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
-                                   <span className="factory-rentals-date">
-                                     {isFactoryShopTable && <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
-                                     {u.nextBillingDate ? format(new Date(u.nextBillingDate + "T00:00:00Z"), "dd MMM") : "—"}
-                                   </span>
-                                 </td>
+                                  <span className="factory-rentals-date">
+                                    {isFactoryShopTable && (
+                                      <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                                    )}
+                                    {u.nextBillingDate
+                                      ? format(new Date(u.nextBillingDate + "T00:00:00Z"), "dd MMM")
+                                      : "—"}
+                                  </span>
+                                </td>
                                 <td className="px-3 py-2 text-xs text-muted-foreground">
-                                   <span className="factory-rentals-date">
-                                     {isFactoryShopTable && <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
-                                     {u.contract ? format(new Date(u.contract.startDate), "dd MMM yyyy") : "—"}
-                                   </span>
-                                 </td>
+                                  <span className="factory-rentals-date">
+                                    {isFactoryShopTable && (
+                                      <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                                    )}
+                                    {u.contract ? format(new Date(u.contract.startDate), "dd MMM yyyy") : "—"}
+                                  </span>
+                                </td>
                                 <td className="px-2 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                                   <div className="flex items-center justify-end gap-1">
-                                    {!u.isShared && (
+                                    {!u.isShared && !u.isInternalLeaseProjection && (
                                       <Button
                                         size="icon"
                                         variant="ghost"
@@ -725,6 +920,58 @@ export default function PropertyRentalPage({
 
         {createUnitOpen && (
           <CreateUnitDialog unitType={unitType} onClose={() => setCreateUnitOpen(false)} testIdPrefix={testIdPrefix} />
+        )}
+
+        {renameGroup && (
+          <Dialog open onOpenChange={(open) => !open && !renameLocationGroup.isPending && setRenameGroup(null)}>
+            <DialogContent data-testid={`dialog-${testIdPrefix}-rename-group`}>
+              <DialogHeader>
+                <DialogTitle>Rename location group</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-2">
+                <Label htmlFor="rename-rental-location-group">Group name</Label>
+                <Input
+                  id="rename-rental-location-group"
+                  value={newGroupName}
+                  maxLength={120}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (
+                      e.key === "Enter" &&
+                      newGroupName.trim() &&
+                      newGroupName.trim().toUpperCase() !== renameGroup.name.toUpperCase() &&
+                      !renameLocationGroup.isPending
+                    ) {
+                      renameLocationGroup.mutate({ unitId: renameGroup.unitId, locationGroup: newGroupName.trim() });
+                    }
+                  }}
+                  data-testid={`input-${testIdPrefix}-rename-group`}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Renames this location for all its warehouses or shops in this company. Contracts, payments, and
+                  accounting records are unchanged.
+                </p>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setRenameGroup(null)} disabled={renameLocationGroup.isPending}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() =>
+                    renameLocationGroup.mutate({ unitId: renameGroup.unitId, locationGroup: newGroupName.trim() })
+                  }
+                  disabled={
+                    !newGroupName.trim() ||
+                    newGroupName.trim().toUpperCase() === renameGroup.name.toUpperCase() ||
+                    renameLocationGroup.isPending
+                  }
+                  data-testid={`button-${testIdPrefix}-save-group`}
+                >
+                  {renameLocationGroup.isPending ? "Saving…" : `Rename ${renameGroup.count} units`}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         )}
 
         {/* Confirm delete unit dialog */}

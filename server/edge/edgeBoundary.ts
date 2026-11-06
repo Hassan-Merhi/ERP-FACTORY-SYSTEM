@@ -25,6 +25,7 @@ import { hasVerifiedPhase7WriterAuthority } from "./phase7WriterGate.mjs";
 import { supportsPhase8LanVoucherCapture } from "./phase8CapturePolicy.mjs";
 import { Phase9StatusRefusal, readPhase9OperationStatus } from "./phase9OperationStatus.mjs";
 import { registerCloudEdgeSyncReceiver } from "./edgeSyncReceiver";
+import { registerPhase10OperatorRoutes } from "./phase10OperatorRoutes";
 import { edgeStatusRateLimit } from "./edgeRateLimit";
 import { summarizeLanEvidence } from "./phase10Handover.mjs";
 import {
@@ -215,6 +216,8 @@ export function registerFactoryEdgeBoundary(app: Express): void {
       }
     });
   }
+  // Phase 10 operator buttons (pause/resume on the LAN, conflict decisions on the cloud console).
+  registerPhase10OperatorRoutes(app, config);
   registerCloudEdgeSyncReceiver(app);
   let pressingCheck: { value: boolean; at: number } | null = null;
   async function pressingCaptureInstalled(): Promise<boolean> {
@@ -269,6 +272,10 @@ export function registerFactoryEdgeBoundary(app: Express): void {
           installed: outboxInstalled("factory_edge_stock_outbox"),
           code: "EDGE_PHASE9_STOCK_CAPTURE_NOT_INSTALLED",
         },
+        "POST /api/locations/:locationId/import-inventory": {
+          installed: outboxInstalled("factory_edge_stock_outbox"),
+          code: "EDGE_PHASE9_STOCK_CAPTURE_NOT_INSTALLED",
+        },
         [PHASE9_STOCK_TRANSFER_ROUTE]: {
           installed: outboxInstalled("factory_edge_stock_outbox"),
           code: "EDGE_PHASE9_STOCK_CAPTURE_NOT_INSTALLED",
@@ -278,6 +285,16 @@ export function registerFactoryEdgeBoundary(app: Express): void {
             ...PHASE9_STOCK_ITEM_EDIT_STATIC_ROUTES,
             "PATCH /api/stock-items/:id",
             "POST /api/stock-items/:id/location-prices",
+            "POST /api/stock-items",
+            "DELETE /api/stock-items/:id",
+            "PUT /api/stock-transfers/:id",
+            "POST /api/stock-transfers/:id/approve",
+            "POST /api/vouchers/:id/finalize",
+            "POST /api/stock-transfers/:transferId/revisions",
+            "POST /api/stock-transfer-revisions/:id/approve",
+            "POST /api/stock-transfer-revisions/:id/reject",
+            "POST /api/stock-transfer-import/import",
+            "POST /api/stock-transfer-import/import-multi-source",
           ].map((route) => [
             route,
             {
@@ -302,9 +319,17 @@ export function registerFactoryEdgeBoundary(app: Express): void {
           installed: outboxInstalled("factory_edge_pos_outbox"),
           code: "EDGE_PHASE9_POS_CAPTURE_NOT_INSTALLED",
         },
+        "PATCH /api/vouchers/:id/payment-receipt": {
+          installed: outboxInstalled("factory_edge_payment_outbox"),
+          code: "EDGE_PHASE9_PAYMENT_CAPTURE_NOT_INSTALLED",
+        },
         [PHASE9_PAYMENT_RECEIPT_ROUTE]: {
           installed: outboxInstalled("factory_edge_payment_outbox"),
           code: "EDGE_PHASE9_PAYMENT_CAPTURE_NOT_INSTALLED",
+        },
+        "PATCH /api/files/:id": {
+          installed: outboxInstalled("factory_edge_attachment_outbox"),
+          code: "EDGE_PHASE9_ATTACHMENT_CAPTURE_NOT_INSTALLED",
         },
         [PHASE9_ATTACHMENT_UPLOAD_ROUTE]: {
           installed: outboxInstalled("factory_edge_attachment_outbox"),

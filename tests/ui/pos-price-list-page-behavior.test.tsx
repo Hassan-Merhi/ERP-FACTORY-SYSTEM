@@ -147,6 +147,14 @@ vi.mock("@/pages/location-inventory/StockMovementDialog", () => ({
       </div>
     ) : null,
 }));
+vi.mock("@/components/ui/period-filter", () => ({
+  PeriodFilter: ({ onChange }: any) => (
+    <button type="button" onClick={() => onChange({ fromDate: "", toDate: "", preset: "all_time" })}>
+      Set sales period
+    </button>
+  ),
+  getDefaultPeriodValue: (preset: string = "all_time") => ({ fromDate: "", toDate: "", preset }),
+}));
 vi.mock("@/contexts/CurrencyContext", () => ({
   useCurrencyContext: () => ({ formatAmount: (v: number) => `$${v.toFixed(2)}` }),
 }));

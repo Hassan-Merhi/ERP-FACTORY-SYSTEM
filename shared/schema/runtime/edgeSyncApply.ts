@@ -10,6 +10,7 @@
  */
 import { sql } from "drizzle-orm";
 import {
+  uniqueIndex,
   bigint,
   bigserial,
   char,
@@ -26,6 +27,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { vouchers } from "../erp/vouchers";
+import { stockItems } from "../inventory";
 import { factoryPressingConfirmations } from "../factory/pressing-machine-tracking";
 import { containerOffloads } from "../containers";
 import { storedFiles } from "../erp/documents";
@@ -254,7 +256,10 @@ export const factoryEdgeAttachmentOutbox = pgTable(
   (t) => [
     primaryKey({ columns: [t.siteId, t.sequence] }),
     unique().on(t.siteId, t.operationId),
-    unique().on(t.siteId, t.localFileId),
+    // Plan batch 4: renames and moves name the same file, so only the upload is one-per-file.
+    uniqueIndex("factory_edge_attachment_outbox_upload_once")
+      .on(t.siteId, t.localFileId)
+      .where(sql`operation_kind = 'attachment.file.v1'`),
     foreignKey({
       name: "factory_edge_attachment_source_fk",
       columns: [t.localFileId],
@@ -277,6 +282,29 @@ export const factoryEdgeAttachmentFileReceipts = pgTable(
 );
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
+
+// Cloud: which cloud stock item each LAN-created item became (plan batch 2,
+// server/edge/phase9StockItemMap.mjs). The id CHECK, uniques and the
+// immutability trigger are installed by the runtime DDL.
+export const factoryEdgeStockItemMap = pgTable(
+  "factory_edge_stock_item_map",
+  {
+    siteId: uuid("site_id").notNull(),
+    lanItemId: integer("lan_item_id").notNull(),
+    cloudItemId: integer("cloud_item_id")
+      .notNull()
+      .references(() => stockItems.id, { onDelete: "restrict" }),
+    operationId: uuid("operation_id").notNull(),
+    mappedAt: timestamp("mapped_at", { withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (t) => [
+    primaryKey({ columns: [t.siteId, t.lanItemId] }),
+    unique().on(t.cloudItemId),
+    unique().on(t.siteId, t.operationId),
+  ]
+);
 
 // Cloud: verified attachment bytes (server/edge/phase9CloudEventStore.mjs).
 export const factoryEdgeStagedFiles = pgTable(
@@ -318,7 +346,10 @@ export const factoryEdgePaymentOutbox = pgTable(
   (t) => [
     primaryKey({ columns: [t.siteId, t.sequence] }),
     unique().on(t.siteId, t.operationId),
-    unique().on(t.siteId, t.localVoucherId),
+    // Plan batch 4: edits and deletes name the same voucher, so only the create is one-per-voucher.
+    uniqueIndex("factory_edge_payment_outbox_create_once")
+      .on(t.siteId, t.localVoucherId)
+      .where(sql`operation_kind = 'voucher.payment-receipt.v1'`),
     foreignKey({
       name: "factory_edge_payment_source_fk",
       columns: [t.localVoucherId],
@@ -397,7 +428,8 @@ export const factoryEdgeStagedEvents = pgTable(
   (t) => [
     primaryKey({ columns: [t.siteId, t.stream, t.sequence] }),
     unique().on(t.siteId, t.operationId),
-    unique().on(t.siteId, t.stream, t.companyId, t.localRef),
+    // No unique local_ref: follow-up records (an edit, a cancellation, a
+    // delete) name the same LAN row as the record that created it.
   ]
 );
 

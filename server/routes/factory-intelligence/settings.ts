@@ -241,6 +241,9 @@ export function registerFactorySettingsRoutes(app: Express, requireAuth: AuthMid
       if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "automaticPriorityPrintingEnabled")) {
         return res.status(403).json({ message: "Use the protected Automatic Priority Mode endpoint." });
       }
+      if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "monthlyProductionRowOrder")) {
+        return res.status(403).json({ message: "Use the Monthly Production Matrix order endpoint." });
+      }
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
       const {

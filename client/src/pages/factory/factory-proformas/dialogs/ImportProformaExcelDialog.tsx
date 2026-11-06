@@ -26,6 +26,8 @@ export function ImportProformaExcelDialog({
   excelImportLines,
   excelImportLoading,
   excelImportName,
+  excelImportDestination,
+  setExcelImportDestination,
   handleExcelFile,
   isExcelImportOpen,
   setExcelImportErrors,
@@ -42,6 +44,8 @@ export function ImportProformaExcelDialog({
   excelImportLines: { articleCode: string; productName: string; quantity: string; pricePerBale: string }[];
   excelImportLoading: boolean;
   excelImportName: string;
+  excelImportDestination: string;
+  setExcelImportDestination: FactoryProformasModel["setExcelImportDestination"];
   handleExcelFile: (file: File) => Promise<void>;
   isExcelImportOpen: boolean;
   setExcelImportErrors: React.Dispatch<React.SetStateAction<string[]>>;
@@ -95,6 +99,21 @@ export function ImportProformaExcelDialog({
             />
           </div>
 
+          <div>
+            <Label className="text-sm font-medium mb-1 block">Destination <span className="text-destructive">*</span></Label>
+            <Input
+              value={excelImportDestination}
+              onChange={(e) => setExcelImportDestination(e.target.value)}
+              placeholder="e.g. L'SHI, MALI, KINSHASA"
+              list="excel-proforma-destinations"
+              data-testid="input-excel-import-destination"
+            />
+            <datalist id="excel-proforma-destinations">
+              <option value="L'SHI" />
+              <option value="MALI" />
+              <option value="KINSHASA" />
+            </datalist>
+          </div>
           {/* File upload */}
           <div>
             <div className="flex items-center justify-between mb-1">
@@ -134,6 +153,7 @@ export function ImportProformaExcelDialog({
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) handleExcelFile(f);
+                e.currentTarget.value = "";
               }}
               data-testid="input-file-excel"
             />
@@ -207,15 +227,16 @@ export function ImportProformaExcelDialog({
           </Button>
           <Button
             onClick={() => {
-              if (!customerId || !excelImportName.trim() || excelImportLines.length === 0) return;
+              if (!customerId || !excelImportName.trim() || !excelImportDestination.trim() || excelImportLines.length === 0) return;
               bulkImportMutation.mutate({
                 customerId,
                 name: excelImportName.trim(),
+                destination: excelImportDestination.trim(),
                 isActive: false,
                 lines: excelImportLines,
               });
             }}
-            disabled={!excelImportName.trim() || excelImportLines.length === 0 || bulkImportMutation.isPending}
+            disabled={!excelImportName.trim() || !excelImportDestination.trim() || excelImportLines.length === 0 || bulkImportMutation.isPending}
             data-testid="button-confirm-excel-import"
           >
             {bulkImportMutation.isPending ? "Creating…" : `Create Proforma (${excelImportLines.length} lines)`}

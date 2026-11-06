@@ -702,5 +702,10 @@ export async function runSyntheticRouteBucket(
     vi.unstubAllGlobals();
     vi.doUnmock("../../server/db");
     vi.resetModules();
+    // Probed handlers keep logging asynchronously after their responses are
+    // sent. A console log forwarded to the runner after the file ends fails the
+    // shard with EnvironmentTeardownError ("Closing rpc while onUserConsoleLog
+    // was pending"), so let that RPC drain before the bucket returns.
+    await new Promise((resolve) => setTimeout(resolve, 250));
   }
 }

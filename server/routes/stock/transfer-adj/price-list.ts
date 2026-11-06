@@ -32,6 +32,9 @@ type PriceListRow = {
   quantity: string;
   costPrice?: string | null;
   offloadingCost?: string | null;
+  highestPriceSold?: string | null;
+  lowestPriceSold?: string | null;
+  qtySold?: string;
 };
 
 export function registerPosPriceListRoutes(app: Express) {
@@ -54,6 +57,13 @@ export function registerPosPriceListRoutes(app: Express) {
 
       const isPOS = req.user?.role === "POS";
       const isPrivileged = ["Admin", "Owner", "Manager", "Developer"].includes(req.user?.role || "");
+      const fromDate = typeof req.query.fromDate === "string" ? req.query.fromDate : "";
+      const toDate = typeof req.query.toDate === "string" ? req.query.toDate : "";
+      const validDate = (value: string) =>
+        !value || (/^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)));
+      if (!validDate(fromDate) || !validDate(toDate) || (fromDate && toDate && fromDate > toDate)) {
+        return res.status(400).json({ message: "Invalid sales date range" });
+      }
 
       if (showAll && isPOS) {
         return res.status(403).json({ message: "Forbidden" });
@@ -183,6 +193,47 @@ export function registerPosPriceListRoutes(app: Express) {
           costPrice: dubaiMap.get(row.stockItemId) ?? null,
           offloadingCost: offloadMap.get(row.stockItemId) ?? null,
         }));
+      }
+
+      // Actual posted POS sales (not list prices or inventory movements).
+      // Reversed, deleted and optional vouchers must not affect sale history.
+      // Aggregate once per request rather than issuing a query per item.
+      if (!showAll && rows.length > 0) {
+        const salesResult = await db.execute(sql`
+          SELECT
+            si.stock_item_id AS "stockItemId",
+            MAX(si.selling_price::numeric)::text AS "highestPriceSold",
+            MIN(si.selling_price::numeric)::text AS "lowestPriceSold",
+            COALESCE(SUM(si.quantity::numeric), 0)::text AS "qtySold"
+          FROM sales_items si
+          JOIN vouchers v ON v.id = si.voucher_id
+          WHERE v.company_id = ${companyId}
+            AND v.location_id = ${locationId}
+            AND v.voucher_type = 'Sales'
+            AND v.optional = FALSE
+            AND v.deleted_at IS NULL
+            AND v.reversal_of_voucher_id IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM vouchers reversal
+              WHERE reversal.reversal_of_voucher_id = v.id
+                AND reversal.deleted_at IS NULL
+            )
+            ${fromDate ? sql`AND v.voucher_date >= ${fromDate}::date` : sql``}
+            ${toDate ? sql`AND v.voucher_date <= ${toDate}::date` : sql``}
+          GROUP BY si.stock_item_id
+        `);
+        const salesByItem = new Map(
+          salesResult.rows.map((sale) => [Number(sale.stockItemId), sale])
+        );
+        rows = rows.map((row) => {
+          const sold = salesByItem.get(row.stockItemId);
+          return {
+            ...row,
+            highestPriceSold: sold?.highestPriceSold == null ? null : String(sold.highestPriceSold),
+            lowestPriceSold: sold?.lowestPriceSold == null ? null : String(sold.lowestPriceSold),
+            qtySold: String(sold?.qtySold ?? "0"),
+          };
+        });
       }
 
       res.json(rows);

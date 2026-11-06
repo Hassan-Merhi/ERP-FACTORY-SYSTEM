@@ -4,6 +4,10 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
+import { offlineEdgeText } from "../../../i18n/offlineEdgeMessages";
+import { isPhase9LanPrimary } from "../../../edge/phase9PosOutbox";
+import { capturePhase9StockItemDeleteTx } from "../../../edge/phase9StockOutbox";
+import { stockItemDeleteEvidence } from "../../../services/inventory/stockItemLifecycleCapture";
 import type { Express } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
@@ -191,9 +195,25 @@ export function registerStockItemWriteRoutes(app: Express) {
         });
       }
 
+      // Plan batch 2: on the factory LAN server an item is deleted offline only
+      // when it has no stock movements either, and the delete is recorded.
+      const lanCapture = isPhase9LanPrimary();
+      if (lanCapture) {
+        const movements = await db.execute<RawQueryRow<{ count: string | number }>>(
+          sql`SELECT COUNT(*) AS count FROM canonical_stock_movements WHERE stock_item_id = ${stockItemId}`
+        );
+        if ((toFiniteNumber(movements.rows[0]?.count) ?? 0) > 0) {
+          return res.status(409).json({
+            code: "EDGE_PHASE9_STOCK_ITEM_HAS_MOVEMENTS",
+            message: offlineEdgeText("stockItemHasMovements", req.headers["accept-language"]),
+          });
+        }
+      }
+
       // Phase 21 (B): the write and its audit commit together.
       await db.transaction(async (tx) => {
         await storage.deleteStockItem(stockItemId, tx);
+        if (lanCapture) await capturePhase9StockItemDeleteTx(tx, stockItemDeleteEvidence(req, existingItem));
         await logAudit(
           {
             userId: req.session.userId!,

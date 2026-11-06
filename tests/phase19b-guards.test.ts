@@ -20,6 +20,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { db, pool } from "../server/db";
 import { companyBusinessDate } from "../server/services/accounting/companyBusinessDate";
+import { findOrCreateLedgerAccount } from "../server/routes/rental/shared/ledger";
 import { ensureClosedPeriodGuard } from "../server/services/accounting/closedPeriodGuard";
 import { runAccountingIntegrityDiagnostic } from "../server/services/accounting/integrity/accountingIntegrityDiagnostic";
 import {
@@ -516,7 +517,7 @@ describe("C5: the account tree", () => {
 });
 
 describe("C6: reserved codes and system accounts", () => {
-  it("refuses a reserved code on create, a rename and a delete of a system account; delete is Admin/Owner", async () => {
+  it("reserves system codes but allows an audited Admin/Owner rename without changing the code", async () => {
     await db.transaction((tx) => ensureSystemAccounts(tx, ctx.companyId, ["RETAINED_EARNINGS"]));
     const created = await agent.post("/api/ledger-accounts").send({
       companyId: ctx.companyId,
@@ -524,22 +525,48 @@ describe("C6: reserved codes and system accounts", () => {
       name: `${PREFIX} fake RE`,
       accountType: "Equity",
     });
-    expect(created.body).toMatchObject({ code: "SYSTEM_ACCOUNT_CODE_RESERVED" });
     expect(created.status).toBe(409);
     expect(created.body.code).toBe("SYSTEM_ACCOUNT_CODE_RESERVED");
+
     const { rows } = await pool.query(
-      `SELECT id, name FROM ledger_accounts WHERE company_id = $1 AND code = 'RETAINED_EARNINGS' AND deleted_at IS NULL`,
+      `SELECT id, code, name FROM ledger_accounts WHERE company_id = $1 AND code = 'RETAINED_EARNINGS' AND deleted_at IS NULL`,
       [ctx.companyId]
     );
     expect(rows).toHaveLength(1);
-    const renamed = await agent.put(`/api/ledger-accounts/${rows[0].id}`).send({ name: `${PREFIX} renamed` });
-    expect(renamed.body).toMatchObject({ code: "SYSTEM_ACCOUNT_RENAME_REFUSED" });
-    expect(renamed.status).toBe(409);
-    expect(renamed.body.code).toBe("SYSTEM_ACCOUNT_RENAME_REFUSED");
-    // The global delete policy (canDelete) keeps account deletes to Admins.
+    const id = rows[0].id as number;
+    const originalName = rows[0].name as string;
+    const renamedTo = `${PREFIX} renamed retained earnings`;
+    try {
+      const renamed = await agent.put(`/api/ledger-accounts/${id}`).send({ name: renamedTo });
+      expect(renamed.status).toBe(200);
+      const persisted = await pool.query("SELECT name, code FROM ledger_accounts WHERE id = $1", [id]);
+      expect(persisted.rows[0]).toMatchObject({ name: renamedTo, code: "RETAINED_EARNINGS" });
+      expect((await auditRows("ledger_accounts", id)).at(-1)?.changes.name).toEqual({
+        old: originalName,
+        new: renamedTo,
+      });
+
+      const duplicateId = await ledger("RENAMECLASH", "Equity");
+      const duplicate = await agent
+        .put(`/api/ledger-accounts/${id}`)
+        .send({ name: `${PREFIX}-RENAMECLASH` });
+      expect(duplicate.status).toBe(400);
+      expect(duplicate.body.message).toMatch(/Duplicate ledger/);
+      expect(duplicateId).toBeGreaterThan(0);
+
+      await setRole("Manager");
+      const forbidden = await agent.put(`/api/ledger-accounts/${id}`).send({ name: `${PREFIX} denied` });
+      expect(forbidden.status).toBe(403);
+      expect(forbidden.body.code).toBe("SYSTEM_ACCOUNT_RENAME_FORBIDDEN");
+    } finally {
+      await setRole("Owner");
+      const restored = await agent.put(`/api/ledger-accounts/${id}`).send({ name: originalName });
+      expect(restored.status).toBe(200);
+    }
+
+    // System accounts still cannot be deleted.
     await setRole("Admin");
-    const deleted = await agent.delete(`/api/ledger-accounts/${rows[0].id}`);
-    expect(deleted.body).toMatchObject({ code: "SYSTEM_ACCOUNT_DELETE_REFUSED" });
+    const deleted = await agent.delete(`/api/ledger-accounts/${id}`);
     expect(deleted.status).toBe(409);
     expect(deleted.body.code).toBe("SYSTEM_ACCOUNT_DELETE_REFUSED");
 
@@ -549,6 +576,31 @@ describe("C6: reserved codes and system accounts", () => {
     await setRole("Admin");
     expect((await agent.delete(`/api/ledger-accounts/${plain}`)).status).toBe(200);
     await setRole("Owner");
+  });
+
+  it("reuses a renamed accrued rent control account instead of creating another one", async () => {
+    const code = `ACCR-RENT-PAY-${Date.now()}-${++sequence}`;
+    const name = "Accrued Rent Payable";
+    const renamedTo = `${PREFIX} rent due renamed`;
+    const { rows } = await pool.query(
+      `INSERT INTO ledger_accounts (company_id, code, name, account_type)
+       VALUES ($1, $2, $3, 'Liability') RETURNING id`,
+      [ctx.companyId, code, name]
+    );
+    const id = rows[0].id as number;
+    try {
+      const renamed = await agent.put(`/api/ledger-accounts/${id}`).send({ name: renamedTo });
+      expect(renamed.status).toBe(200);
+      // Legacy ACC- prefix and current ACCR- prefix must resolve the same row.
+      const resolvedId = await db.transaction((tx) =>
+        findOrCreateLedgerAccount(tx, ctx.companyId, name, "Liability", "ACC-RENT-PAY")
+      );
+      expect(resolvedId).toBe(id);
+      const lookup = await pool.query("SELECT name, code FROM ledger_accounts WHERE id = $1", [id]);
+      expect(lookup.rows[0]).toEqual({ name: renamedTo, code });
+    } finally {
+      await pool.query("DELETE FROM ledger_accounts WHERE id = $1", [id]);
+    }
   });
 });
 

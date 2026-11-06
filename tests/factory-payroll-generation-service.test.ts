@@ -142,6 +142,8 @@ describe("factory payroll batch generation", () => {
     harness.selectResults.push(
       workers,
       [existing],
+      // Overlap guard: no other payroll covers the missing workers' period.
+      [],
       [
         { finalizedBy: 2, weightKg: "80" },
         { finalizedBy: 2, weightKg: "90" },

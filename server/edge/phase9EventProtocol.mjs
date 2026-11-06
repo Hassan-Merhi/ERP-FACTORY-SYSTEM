@@ -11,6 +11,13 @@
  * Registering a kind is the review gate for a new offline write workflow.
  */
 import {
+  PHASE9_STOCK_ITEM_CREATE_KIND,
+  PHASE9_STOCK_ITEM_DELETE_KIND,
+  PHASE9_STOCK_ITEM_NAME_EXISTS_CONFLICT,
+  phase9StockItemCreateEnvelope,
+  phase9StockItemDeleteEnvelope,
+} from "./phase9StockItemLifecycleEnvelope.mjs";
+import {
   PHASE9_STOCK_ITEM_CHANGED_CONFLICT,
   PHASE9_STOCK_ITEM_EDIT_KIND,
   phase9StockItemEditEnvelope,
@@ -40,11 +47,33 @@ import {
   phase9ReceivingEnvelope,
 } from "./phase9ReceivingEnvelope.mjs";
 import {
+  PHASE9_ATTACHMENT_FILE_CHANGED,
   PHASE9_ATTACHMENT_FOLDER_MISSING,
   PHASE9_ATTACHMENT_KIND,
+  PHASE9_ATTACHMENT_UPDATE_KIND,
   phase9AttachmentEnvelope,
+  phase9AttachmentUpdateEnvelope,
 } from "./phase9AttachmentEnvelope.mjs";
-import { PHASE9_PAYMENT_KIND, phase9PaymentEnvelope } from "./phase9PaymentEnvelope.mjs";
+import {
+  PHASE9_PAYMENT_CHANGED_CONFLICT,
+  PHASE9_PAYMENT_DELETE_KIND,
+  PHASE9_PAYMENT_EDIT_KIND,
+  PHASE9_PAYMENT_KIND,
+  phase9PaymentDeleteEnvelope,
+  phase9PaymentEditEnvelope,
+  phase9PaymentEnvelope,
+} from "./phase9PaymentEnvelope.mjs";
+import {
+  PHASE9_STOCK_TRANSFER_CHANGED_CONFLICT,
+  PHASE9_STOCK_TRANSFER_EDIT_KIND,
+  PHASE9_STOCK_TRANSFER_FINALIZE_KIND,
+  PHASE9_STOCK_TRANSFER_REVISION_KIND,
+  PHASE9_STOCK_TRANSFER_REVISION_REVIEW_KIND,
+  phase9StockTransferEditEnvelope,
+  phase9StockTransferFinalizeEnvelope,
+  phase9StockTransferRevisionEnvelope,
+  phase9StockTransferRevisionReviewEnvelope,
+} from "./phase9StockTransferWorkflowEnvelope.mjs";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HASH = /^[0-9a-f]{64}$/;
@@ -120,6 +149,19 @@ function stockItemEditPayload(payload) {
   let rebuilt;
   try {
     rebuilt = phase9StockItemEditEnvelope(evidence);
+  } catch {
+    return null;
+  }
+  return stableEqual(rebuilt, payload) ? rebuilt : null;
+}
+
+function rebuiltPayload(payload, kind, envelope) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (payload.kind !== kind) return null;
+  const { kind: _kind, ...evidence } = payload;
+  let rebuilt;
+  try {
+    rebuilt = envelope(evidence);
   } catch {
     return null;
   }
@@ -236,6 +278,48 @@ const STREAMS = Object.freeze({
         localRef: (payload) => payload.localEditId,
         overridable: Object.freeze([PHASE9_STOCK_ITEM_CHANGED_CONFLICT]),
       }),
+      // Plan batch 2: items created / deleted on the LAN, on the same stream
+      // so a create always applies before the records that use the item.
+      [PHASE9_STOCK_ITEM_CREATE_KIND]: Object.freeze({
+        parse: (payload) => rebuiltPayload(payload, PHASE9_STOCK_ITEM_CREATE_KIND, phase9StockItemCreateEnvelope),
+        localRef: (payload) => payload.localStockItemId,
+        overridable: Object.freeze([PHASE9_STOCK_ITEM_NAME_EXISTS_CONFLICT]),
+      }),
+      [PHASE9_STOCK_ITEM_DELETE_KIND]: Object.freeze({
+        parse: (payload) => rebuiltPayload(payload, PHASE9_STOCK_ITEM_DELETE_KIND, phase9StockItemDeleteEnvelope),
+        localRef: (payload) => payload.stockItemId,
+        overridable: Object.freeze([]),
+      }),
+      // Plan batch 3: changes to existing transfers, on the same stream as the
+      // transfers themselves so a change never applies before its transfer.
+      [PHASE9_STOCK_TRANSFER_EDIT_KIND]: Object.freeze({
+        parse: (payload) => rebuiltPayload(payload, PHASE9_STOCK_TRANSFER_EDIT_KIND, phase9StockTransferEditEnvelope),
+        localRef: (payload) => payload.localEditId,
+        overridable: Object.freeze([PHASE9_STOCK_TRANSFER_CHANGED_CONFLICT]),
+      }),
+      [PHASE9_STOCK_TRANSFER_FINALIZE_KIND]: Object.freeze({
+        parse: (payload) =>
+          rebuiltPayload(payload, PHASE9_STOCK_TRANSFER_FINALIZE_KIND, phase9StockTransferFinalizeEnvelope),
+        localRef: (payload) => payload.localEditId,
+        overridable: Object.freeze([PHASE9_STOCK_TRANSFER_CHANGED_CONFLICT]),
+      }),
+      // A stale revision is held but reject-only: the revision service refuses it whatever the decision.
+      [PHASE9_STOCK_TRANSFER_REVISION_KIND]: Object.freeze({
+        parse: (payload) =>
+          rebuiltPayload(payload, PHASE9_STOCK_TRANSFER_REVISION_KIND, phase9StockTransferRevisionEnvelope),
+        localRef: (payload) => payload.localRevisionId,
+        overridable: Object.freeze([]),
+      }),
+      [PHASE9_STOCK_TRANSFER_REVISION_REVIEW_KIND]: Object.freeze({
+        parse: (payload) =>
+          rebuiltPayload(
+            payload,
+            PHASE9_STOCK_TRANSFER_REVISION_REVIEW_KIND,
+            phase9StockTransferRevisionReviewEnvelope
+          ),
+        localRef: (payload) => payload.localEditId,
+        overridable: Object.freeze([]),
+      }),
     }),
   }),
   pos: Object.freeze({
@@ -274,6 +358,12 @@ const STREAMS = Object.freeze({
         localRef: (payload) => payload.localFileId,
         overridable: Object.freeze([PHASE9_ATTACHMENT_FOLDER_MISSING]),
       }),
+      // Plan batch 4: renames and moves, after the upload on the same stream.
+      [PHASE9_ATTACHMENT_UPDATE_KIND]: Object.freeze({
+        parse: (payload) => rebuiltPayload(payload, PHASE9_ATTACHMENT_UPDATE_KIND, phase9AttachmentUpdateEnvelope),
+        localRef: (payload) => payload.localFileId,
+        overridable: Object.freeze([PHASE9_ATTACHMENT_FILE_CHANGED]),
+      }),
     }),
   }),
   payments: Object.freeze({
@@ -282,6 +372,17 @@ const STREAMS = Object.freeze({
         parse: paymentPayload,
         localRef: (payload) => payload.localVoucherId,
         overridable: Object.freeze([]),
+      }),
+      // Plan batch 4: edits and deletes, on the same stream as the payment itself.
+      [PHASE9_PAYMENT_EDIT_KIND]: Object.freeze({
+        parse: (payload) => rebuiltPayload(payload, PHASE9_PAYMENT_EDIT_KIND, phase9PaymentEditEnvelope),
+        localRef: (payload) => payload.localVoucherId,
+        overridable: Object.freeze([PHASE9_PAYMENT_CHANGED_CONFLICT]),
+      }),
+      [PHASE9_PAYMENT_DELETE_KIND]: Object.freeze({
+        parse: (payload) => rebuiltPayload(payload, PHASE9_PAYMENT_DELETE_KIND, phase9PaymentDeleteEnvelope),
+        localRef: (payload) => payload.localVoucherId,
+        overridable: Object.freeze([PHASE9_PAYMENT_CHANGED_CONFLICT]),
       }),
     }),
   }),

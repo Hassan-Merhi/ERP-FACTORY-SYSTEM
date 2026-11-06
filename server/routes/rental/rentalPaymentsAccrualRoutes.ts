@@ -20,7 +20,7 @@ import { db, pool } from "../../db";
 import { getRentalBillingDay, getRentalPeriodDueDate } from "../../services/rental/rentalPeriodService";
 import { requireAuth, requireRole } from "../../auth";
 import { z } from "zod";
-import { eq, and, sql, desc, isNull } from "drizzle-orm";
+import { eq, and, or, sql, desc, isNull } from "drizzle-orm";
 import {
   propertyUnits,
   propertyContracts,
@@ -32,6 +32,11 @@ import { parseId } from "../../lib/parseId";
 import { getClientDate } from "../../lib/dateUtils";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../lib/money";
+import {
+  PROPERTIES_RENT_CASH_CODE,
+  isPropertiesReceiptAccountType,
+  propertiesRentCashboxSetupValues,
+} from "../../services/rental/rentalCashboxPolicy";
 
 export const RENTAL_POSTING_PERIOD_CLOSED_MESSAGE =
   "The books are closed through this date, so rent cannot be accrued on it.";
@@ -44,6 +49,36 @@ function requestActor(req: Request): { userId: string; username: string } {
   };
 }
 
+/**
+ * New Properties rent money belongs to a company-local cash ledger account.
+ * Existing rental balances and past voucher entries are never migrated.
+ */
+async function validatePropertiesReceiptAccount(
+  companyId: number,
+  cashAccountId: number | null | undefined
+): Promise<string | null> {
+  if (!cashAccountId) return "Choose a Properties cashbox or cash/bank account before receiving rent.";
+  const [account] = await db
+    .select({
+      id: ledgerAccounts.id,
+      accountType: ledgerAccounts.accountType,
+    })
+    .from(ledgerAccounts)
+    .where(
+      and(
+        eq(ledgerAccounts.id, cashAccountId),
+        eq(ledgerAccounts.companyId, companyId),
+        eq(ledgerAccounts.active, true),
+        isNull(ledgerAccounts.deletedAt)
+      )
+    )
+    .limit(1);
+  if (!account || !isPropertiesReceiptAccountType(account.accountType)) {
+    return "Choose an active cash/bank asset account belonging to the current Properties company.";
+  }
+  return null;
+}
+
 export function registerRentalPaymentsAccrualRoutes(
   app: Express,
   module: RentalModule,
@@ -52,6 +87,43 @@ export function registerRentalPaymentsAccrualRoutes(
   shopExpenseAccountName: string = "Rent Expense - Shops"
 ) {
   const tag = `[${module}/rental]`;
+
+  // Explicit, zero-balance setup; never repost or reallocate historical rental receipts.
+  // The endpoint is scoped to the selected Properties company and is idempotent by code.
+  if (module === "PROPERTIES") {
+    app.post(
+      `${urlPrefix}/cashbox/ensure`,
+      requireAuth,
+      requireRole("Admin", "Owner", "Developer"),
+      async (req: Request, res: Response) => {
+        try {
+          const companyId = getCompanyId(req);
+          if (!companyId) return res.status(400).json({ message: "No company selected" });
+          await db
+            .insert(ledgerAccounts)
+            .values(propertiesRentCashboxSetupValues(companyId))
+            .onConflictDoNothing({ target: [ledgerAccounts.companyId, ledgerAccounts.code] });
+          const [account] = await db
+            .select()
+            .from(ledgerAccounts)
+            .where(and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.code, PROPERTIES_RENT_CASH_CODE)))
+            .limit(1);
+          if (!account || account.deletedAt || !account.active || account.accountType !== "Cash") {
+            return res.status(409).json({
+              message:
+                "The Properties cashbox code is already held by a deleted or incompatible account. Restore or correct it before continuing.",
+            });
+          }
+          return res.json({ id: account.id, code: account.code, name: account.name, accountType: account.accountType });
+        } catch (e: unknown) {
+          logger.error("[PROPERTIES/rental] cashbox setup:", { error: e });
+          return res
+            .status(500)
+            .json({ message: "Could not create the Properties cashbox without changing existing accounts." });
+        }
+      }
+    );
+  }
 
   app.post(`${urlPrefix}/payments`, requireAuth, async (req: Request, res: Response) => {
     try {
@@ -79,6 +151,11 @@ export function registerRentalPaymentsAccrualRoutes(
             .optional(),
         })
         .parse(req.body);
+
+      if (module === "PROPERTIES") {
+        const error = await validatePropertiesReceiptAccount(companyId, data.cashAccountId);
+        if (error) return res.status(400).json({ message: error });
+      }
 
       let isSharedPayment = false;
       let [contract] = await db
@@ -109,6 +186,10 @@ export function registerRentalPaymentsAccrualRoutes(
         }
       }
       if (!contract) return res.status(404).json({ message: "Contract not found" });
+      // A Properties reference must not create a second receipt or payment for Factory rent.
+      if (module === "PROPERTIES" && isSharedPayment && contract.module === "FACTORY" && contract.isInternal) {
+        return res.status(403).json({ message: "Record internal Factory lease payments in Factory Rentals." });
+      }
       const contractCompanyId = isSharedPayment ? contract.companyId : companyId;
 
       const [unit] = await db.select().from(propertyUnits).where(eq(propertyUnits.id, contract.unitId));
@@ -197,6 +278,14 @@ export function registerRentalPaymentsAccrualRoutes(
         .parse(Array.isArray(req.body) ? req.body : req.body?.items);
 
       const clientDate = getClientDate(req);
+      // Validate the shared receipt account once before any bulk line is posted,
+      // so an invalid account cannot silently create balance-only payment rows.
+      if (module === "PROPERTIES") {
+        for (const item of items) {
+          const error = await validatePropertiesReceiptAccount(companyId, item.cashAccountId);
+          if (error) return res.status(400).json({ message: error });
+        }
+      }
       type RentalBulkPaymentResult =
         | { contractId: number; error: string }
         | { contractId: number; scheduled: boolean; paymentGroupId: string; paymentsCreated: number };
@@ -283,6 +372,41 @@ export function registerRentalPaymentsAccrualRoutes(
           and(eq(propertyUnits.id, unitId), eq(propertyUnits.companyId, companyId), eq(propertyUnits.module, module))
         );
 
+      // Same-company internal Factory shops appear in Properties without copying
+      // units, contracts, ledgers or payment rows.
+      if (!unit && module === "PROPERTIES") {
+        const [factoryUnit] = await db
+          .select()
+          .from(propertyUnits)
+          .where(
+            and(
+              eq(propertyUnits.id, unitId),
+              eq(propertyUnits.companyId, companyId),
+              eq(propertyUnits.module, "FACTORY"),
+              eq(propertyUnits.unitType, "SHOP"),
+              eq(propertyUnits.active, true)
+            )
+          );
+        if (factoryUnit) {
+          const [internalContract] = await db
+            .select({ id: propertyContracts.id })
+            .from(propertyContracts)
+            .where(
+              and(
+                eq(propertyContracts.unitId, unitId),
+                eq(propertyContracts.companyId, companyId),
+                eq(propertyContracts.module, "FACTORY"),
+                eq(propertyContracts.status, "ACTIVE"),
+                eq(propertyContracts.isInternal, true)
+              )
+            );
+          if (internalContract) {
+            unit = factoryUnit;
+            isShared = true;
+          }
+        }
+      }
+
       if (!unit) {
         try {
           const [sharedContract] = await db
@@ -313,7 +437,18 @@ export function registerRentalPaymentsAccrualRoutes(
         .from(propertyContracts)
         .where(
           and(
-            isShared ? eq(propertyContracts.linkedCompanyId, companyId) : eq(propertyContracts.companyId, companyId),
+            isShared
+              ? module === "PROPERTIES"
+                ? or(
+                    eq(propertyContracts.linkedCompanyId, companyId),
+                    and(
+                      eq(propertyContracts.companyId, companyId),
+                      eq(propertyContracts.module, "FACTORY"),
+                      eq(propertyContracts.isInternal, true)
+                    )
+                  )
+                : eq(propertyContracts.linkedCompanyId, companyId)
+              : eq(propertyContracts.companyId, companyId),
             ...(isShared ? [] : [eq(propertyContracts.module, module)]),
             eq(propertyContracts.unitId, unitId),
             eq(propertyContracts.status, "ACTIVE")
@@ -498,7 +633,11 @@ export function registerRentalPaymentsAccrualRoutes(
             isNull(ledgerAccounts.deletedAt)
           )
         );
-      res.json(accts.sort((a, b) => a.name.localeCompare(b.name)));
+      const receiptAccounts =
+        module === "PROPERTIES"
+          ? accts.filter((a) => isPropertiesReceiptAccountType(a.accountType))
+          : accts;
+      res.json(receiptAccounts.sort((a, b) => a.name.localeCompare(b.name)));
     } catch (e: unknown) {
       res.status(500).json({ message: getErrorMessage(e) });
     }

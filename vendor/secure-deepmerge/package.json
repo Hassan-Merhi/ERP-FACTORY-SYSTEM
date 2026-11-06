@@ -1,0 +1,8 @@
+{
+  "name": "@hmd-internal/secure-deepmerge",
+  "version": "1.0.0",
+  "description": "Locally patched deepmerge 4.x API for Puppeteer Extra (prototype poisoning mitigated)",
+  "private": true,
+  "license": "MIT",
+  "main": "index.cjs"
+}

@@ -9,10 +9,10 @@ permissions:
   contents: read
 
 jobs:
-  janitor:
-    name: Safe repository cleanup
+  cleanup:
+    name: Delete only confirmed merged branch refs
     runs-on: ubuntu-26.04
-    # Deleting merged branch refs needs contents: write; scoped to this job only.
+    # The single mutation job needs write only to delete exact verified branch refs.
     permissions:
       contents: write
       pull-requests: read
@@ -45,6 +45,14 @@ jobs:
                 fi
               done
 
+
+  report:
+    name: Read-only stale-branch audit
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
       - name: Report stale unmerged branches without deleting them
         env:
           GH_TOKEN: ${{ github.token }}

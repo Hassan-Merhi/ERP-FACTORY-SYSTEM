@@ -85,6 +85,7 @@ const FACTORY_NAV_ICONS: Record<string, typeof Package> = {
   "factory/cost-centers": Layers,
   "factory/daybook": BookOpen,
   "factory/vouchers": FileText,
+  "factory/tickets": ClipboardCheck,
   "factory/stock-entry": ScanLine,
   "factory/raw-materials": Package,
   "factory/waste-dispatch": Trash2,
@@ -93,6 +94,7 @@ const FACTORY_NAV_ICONS: Record<string, typeof Package> = {
   "factory/invoicing": FileText,
   "factory/location-inventory": MapPin,
   "factory/stock-query": Package,
+  "factory/monthly-production-matrix": TableProperties,
   "factory/containers-hub": Container,
   "factory/stock-allocation-v5": LayoutGrid,
   "factory/sheets-sacks": Layers,
@@ -122,7 +124,6 @@ const FACTORY_SIDEBAR_GROUP_ORDER = [
   "Intelligence",
 ] as const;
 function visibleFactoryGroup(page: (typeof FACTORY_SIDEBAR_PAGES)[number]): string {
-  if (page.key === "factory/bales-hub") return "Inventory";
   return page.group === "Sales" ? "Sales & Loading" : page.group;
 }
 const FACTORY_SIDEBAR_COLORS: Record<string, string> = {
@@ -141,7 +142,7 @@ export const FACTORY_NAV_SECTIONS: FactoryNavSection[] = FACTORY_SIDEBAR_GROUP_O
     color: FACTORY_SIDEBAR_COLORS[label],
     developerOnly: pages.length > 0 && pages.every((page) => page.accessLevel === "developer"),
     items: pages.map((page) => ({
-      title: page.key === "factory/invoicing" ? "Invoicing & Loadings" : page.label,
+      title: page.key === "factory/invoicing" ? "Invoices & Loading" : page.label,
       url: page.route,
       icon: FACTORY_NAV_ICONS[page.key] ?? FileText,
       accessKey: page.key,

@@ -1,4 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { apiRequestPrivileged } from "@/lib/queryClient";
+import { FactoryEdgeOperatorConfirmDialog, operatorErrorCode } from "@/components/FactoryEdgeOperatorConfirmDialog";
 import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { applicationEnglishTranslations } from "@/i18n/applicationTranslations";
 import { parseEdgeOperatorStatus, type EdgeOperatorStatus } from "@/lib/offline/edgeOperatorStatus";
@@ -9,11 +12,17 @@ const REFRESH_MS = 15_000;
  * Phase 10 read-only operator view on the factory LAN server: pending,
  * staged, applied and operator-rejected events per stream, relay pause state
  * and whether handover back to the cloud is safe. It renders nothing on the
- * cloud, for non-Admin/Owner users or when the report is unavailable. Pause,
- * resume and conflict decisions stay with the audited CLI/DBA tools.
+ * cloud, for non-Admin/Owner users or when the report is unavailable. Pause
+ * and resume need the user's password and a reason (plan batch 1); conflict
+ * decisions are made on the cloud operator console (FactoryEdgeConflictsPanel).
  */
 export function FactoryEdgeOperatorPanel() {
   const [status, setStatus] = useState<EdgeOperatorStatus | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const reload = useCallback(() => setReloadKey((key) => key + 1), []);
   const language = useOptionalApplicationLanguage();
   const t = language?.t ?? ((key: keyof typeof applicationEnglishTranslations) => applicationEnglishTranslations[key]);
 
@@ -46,9 +55,24 @@ export function FactoryEdgeOperatorPanel() {
       window.clearInterval(timer);
       controller?.abort();
     };
-  }, []);
+  }, [reloadKey]);
 
   if (!status) return null;
+
+  const action = status.relayPaused ? "resume" : "pause";
+  const control = async ({ reason, password }: { reason: string; password: string }) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await apiRequestPrivileged("POST", "/api/edge/operator/sync-control", { action, reason, password });
+      setConfirming(false);
+      reload();
+    } catch (failure) {
+      setError(operatorErrorCode(failure));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <section
@@ -72,11 +96,16 @@ export function FactoryEdgeOperatorPanel() {
           {status.handoverReady ? t("edge.operator.handoverReady") : t("edge.operator.handoverBlocked")}
         </span>
       </div>
-      <p className="text-xs text-muted-foreground" data-testid="factory-edge-relay-state">
-        {status.relayPaused ? t("edge.operator.relayPaused") : t("edge.operator.relayRunning")}
-        {status.relayPaused && status.pausedBy ? ` · ${status.pausedBy}` : ""}
-        {status.relayPaused && status.pausedReason ? ` · ${status.pausedReason}` : ""}
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground" data-testid="factory-edge-relay-state">
+          {status.relayPaused ? t("edge.operator.relayPaused") : t("edge.operator.relayRunning")}
+          {status.relayPaused && status.pausedBy ? ` · ${status.pausedBy}` : ""}
+          {status.relayPaused && status.pausedReason ? ` · ${status.pausedReason}` : ""}
+        </p>
+        <Button size="sm" variant="outline" onClick={() => setConfirming(true)} data-testid="button-edge-relay-toggle">
+          {status.relayPaused ? t("edge.operator.resume") : t("edge.operator.pause")}
+        </Button>
+      </div>
       <p className="text-xs">
         {t("edge.operator.pendingTotal")}:{" "}
         <strong data-testid="factory-edge-pending-total">{status.pendingTotal}</strong>
@@ -112,6 +141,18 @@ export function FactoryEdgeOperatorPanel() {
         </tbody>
       </table>
       <p className="text-[11px] text-muted-foreground">{t("edge.operator.changesViaTools")}</p>
+      <FactoryEdgeOperatorConfirmDialog
+        open={confirming}
+        title={status.relayPaused ? t("edge.operator.resume") : t("edge.operator.pause")}
+        description={t("edge.operator.changesViaTools")}
+        pending={busy}
+        error={error}
+        onCancel={() => {
+          setConfirming(false);
+          setError(null);
+        }}
+        onConfirm={(input) => void control(input)}
+      />
     </section>
   );
 }

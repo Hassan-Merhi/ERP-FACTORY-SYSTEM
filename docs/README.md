@@ -105,7 +105,9 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [dead-code-prevention.md](dead-code-prevention.md) | Route, export, retirement and dependency rules that keep dead code out, and `npm run report:dead-code` |
 | [dead-code-cleanup-final-report.md](dead-code-cleanup-final-report.md) | 2026-10 dead-code cleanup: results, retained code, open decisions and required validation |
 | [ci/branch-protection.md](ci/branch-protection.md) | Required checks on `main` |
+| [security/phase4-main-ruleset-hardening.md](security/phase4-main-ruleset-hardening.md) | Current main ruleset security gaps, immutable dependency pinning and required administrative verification |
 | [mobile-tablet-web-regression.md](mobile-tablet-web-regression.md) | Browser regression checklist |
+| [iphone-duo-phase1-mobile-regression.md](iphone-duo-phase1-mobile-regression.md) | Full-system iPhone Duo route inventory, viewport tests, evidence, and remaining certification gates |
 | [erp-mobile-program.md](erp-mobile-program.md) | ERP phone contracts, route certification and phase status |
 | [factory-mobile-audit.md](factory-mobile-audit.md) | Factory mode phone layouts and mobile audit status |
 | [universal-responsive-pill-tabs.md](universal-responsive-pill-tabs.md) | Shared pill tab component standard, migration map and verification status |
@@ -164,6 +166,7 @@ These describe work in progress and carry live figures bound to their sources.
 | [erp-navigation-registry.md](erp-navigation-registry.md) | Canonical ERP routes |
 | [factory-navigation-registry.md](factory-navigation-registry.md) | Factory routes |
 | [properties-navigation-registry.md](properties-navigation-registry.md) | Properties routes |
+| [properties-rent-cashbox-rollout.md](properties-rent-cashbox-rollout.md) | Properties-only cashbox changeover, tenant-balance colors and historical accounting safeguards |
 | [supplier-partner-navigation-registry.md](supplier-partner-navigation-registry.md) | Supplier Partner routes |
 | [i18n/README.md](i18n/README.md) | Interface language support |
 | [i18n/phases-1-4-global-language-foundation.md](i18n/phases-1-4-global-language-foundation.md) | Current global language foundation and rollout contract |
@@ -266,6 +269,9 @@ These current-reference documents are indexed here for audit coverage. Their beh
 | [historical-supplier-done-voucher-global-daybook-and-transfer-hide-20261102.md](historical-supplier-done-voucher-global-daybook-and-transfer-hide-20261102.md) | Company 12: completed historical supplier catchup entries on the remaining routine screens |
 | [historical-supplier-named-creditor-balance-freeze-20261102.md](historical-supplier-named-creditor-balance-freeze-20261102.md) | Company 12: historical supplier and named-creditor balance freeze |
 | [net-profit-future-dated-historical-imports-live-pnl-cutoff-20261102.md](net-profit-future-dated-historical-imports-live-pnl-cutoff-20261102.md) | Net profit live as-of report: future-dated historical imports cut off |
+| [ticket-management-phase4-operations.md](ticket-management-phase4-operations.md) | Ticket Management Phase 4: delivery operations, case notifications and 24h escalation |
+| [ticket-management-phase5-reporting.md](ticket-management-phase5-reporting.md) | Ticket Management Phase 5: admin reporting and CSV export policy |
+| [ticket-management-phase6-verification.md](ticket-management-phase6-verification.md) | Ticket Management Phase 6: verification and staging release gate |
 
 | [October 2026 salary reconciliation](accounting/october-2026-salary-reconciliation-20261103.md) | Read-only October payroll, paid cash and salary advances reconciliation (no journal edits) |
 | [Factory worker-advance ledger audit](accounting/factory-worker-advance-ledger-audit-2026-11-03.md) | Current worker-advance ledger investigation, safeguards and payment evidence |

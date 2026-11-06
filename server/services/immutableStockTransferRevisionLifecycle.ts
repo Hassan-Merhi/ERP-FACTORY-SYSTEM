@@ -213,7 +213,8 @@ async function assertSubmittedBaseline(
 
 export async function createImmutableStockTransferRevision(
   input: CreateImmutableRevisionInput,
-  auditTx?: AuditTxHook<ImmutableRevisionResult>
+  auditTx?: AuditTxHook<ImmutableRevisionResult>,
+  existingTx?: Parameters<Parameters<typeof db.transaction>[0]>[0]
 ): Promise<ImmutableRevisionResult> {
   const companyId = positiveInteger(input.companyId, "Company ID");
   const transferId = positiveInteger(input.transferId, "Transfer ID");
@@ -223,7 +224,7 @@ export async function createImmutableStockTransferRevision(
   const normalized = normalizeImmutableRevisionItems(input.items);
   const hash = immutableRevisionPayloadHash(normalized, note);
 
-  return db.transaction(async (tx) => {
+  const run = async (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => {
     const finish = finishWithAudit(tx, auditTx);
     const transfer = await lockTransfer(tx, transferId);
     assertTransfer(transfer, companyId);
@@ -365,7 +366,8 @@ export async function createImmutableStockTransferRevision(
       destinationLocationName: String(transfer.destination_location_name || "Unknown"),
       items: savedItems,
     });
-  });
+  };
+  return existingTx ? run(existingTx) : db.transaction(run);
 }
 
 /**
@@ -793,7 +795,8 @@ export async function rejectImmutableStockTransferRevision(
   revisionIdInput: number,
   reviewerIdInput: string,
   reasonInput?: string | null,
-  auditTx?: AuditTxHook<ReviewImmutableRevisionResult>
+  auditTx?: AuditTxHook<ReviewImmutableRevisionResult>,
+  existingTx?: Parameters<Parameters<typeof db.transaction>[0]>[0]
 ): Promise<ReviewImmutableRevisionResult> {
   const companyId = positiveInteger(companyIdInput, "Company ID");
   const revisionId = positiveInteger(revisionIdInput, "Revision ID");
@@ -801,7 +804,7 @@ export async function rejectImmutableStockTransferRevision(
   if (!reviewerId) throw new Error("Reviewer ID is required");
   const reason = reasonInput?.trim() || null;
 
-  return db.transaction(async (tx) => {
+  const run = async (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => {
     const finish = finishWithAudit(tx, auditTx);
     const requested = await lockedRevision(tx, revisionId);
     if (!requested) throw new Error("Revision not found");
@@ -870,5 +873,6 @@ export async function rejectImmutableStockTransferRevision(
         .toFixed(2),
       items: toRevisionAuditItems(rejectedRevisionItems),
     });
-  });
+  };
+  return existingTx ? run(existingTx) : db.transaction(run);
 }

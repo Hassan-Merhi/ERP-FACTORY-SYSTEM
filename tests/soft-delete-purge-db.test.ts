@@ -248,7 +248,8 @@ describe("purgeOldSoftDeletes", () => {
         "[Purge] Isolated purge unit failed; retained its rows and continuing.",
         expect.objectContaining({
           label: "locations",
-          dbErrorCode: "23503",
+          // PostgreSQL reports 23001 for RESTRICT and 23503 for other FK violations.
+          dbErrorCode: expect.stringMatching(/^(23001|23503)$/),
           dbTable: expect.any(String),
           dbConstraint: expect.any(String),
         })

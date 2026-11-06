@@ -53,6 +53,7 @@ export function FactoryLocationInventoryProductFooterDialogs({
     proformaAutoSave,
     proformaMode,
     proformaName,
+    proformaDestination,
     removeBalesMutation,
     removeFromFinalize,
     renameDialogOpen,
@@ -81,6 +82,7 @@ export function FactoryLocationInventoryProductFooterDialogs({
     setNewCustomerName,
     setOverloadWarning,
     setProformaName,
+    setProformaDestination,
     setRenameDialogOpen,
     setRenameInput,
     setReprintBales,
@@ -144,6 +146,8 @@ export function FactoryLocationInventoryProductFooterDialogs({
         handleSaveProforma={handleSaveProforma}
         newCustomerName={newCustomerName}
         proformaName={proformaName}
+        proformaDestination={proformaDestination}
+        setProformaDestination={setProformaDestination}
         removeFromFinalize={removeFromFinalize}
         replaceLinesMutation={replaceLinesMutation}
         savedProformaId={savedProformaId}

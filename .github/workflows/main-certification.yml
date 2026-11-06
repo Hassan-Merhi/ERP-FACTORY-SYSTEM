@@ -16,9 +16,9 @@ jobs:
   certify:
     name: Application Certification
     runs-on: ubuntu-26.04
+    # Status publication lives in a separate, minimal-privilege job.
     permissions:
       contents: read
-      statuses: write
     # The full sequential suite is the long pole: twelve backend shards plain,
     # then twelve under coverage, then the frontend passes and the remaining
     # gates. 120 left no margin once the shard budget stopped aborting the run
@@ -112,7 +112,7 @@ jobs:
         continue-on-error: true
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.1"
+          node-version: "24.22.2"
           cache: npm
 
       - name: Normalize package registry URLs

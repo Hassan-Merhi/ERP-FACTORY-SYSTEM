@@ -61,6 +61,16 @@ export function startScheduler(): void {
   );
   cron.schedule("* * * * *", customMessageTick);
 
+  // Ticket dispatch, retries of unconfigured channels, and 24-hour overdue reminders.
+  // Environment-gated until migrations and recipient opt-ins are configured.
+  const ticketTick = createSchedulerTick("ticketNotifications", async () => {
+    const { runTicketNotificationTick } = await import("../ticketNotifications");
+    await runTicketNotificationTick();
+  }, { quiet: true });
+  if (process.env.TICKET_NOTIFICATIONS_ENABLED === "true") {
+    cron.schedule("* * * * *", ticketTick);
+  }
+
   // Perpetual inventory (wave 8.4): the factory stock journal, every evening (UTC),
   // for each company whose cut-over is applied.
   const factoryStockTick = createSchedulerTick("factoryStockJournal", async () => {

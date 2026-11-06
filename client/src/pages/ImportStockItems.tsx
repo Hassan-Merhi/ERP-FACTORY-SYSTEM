@@ -66,6 +66,7 @@ function NewItemsTab() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
+    e.currentTarget.value = "";
     setFile(selectedFile);
     setErrors([]);
     setPreviewData([]);
@@ -334,6 +335,7 @@ function BarcodesTab() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
+    e.currentTarget.value = "";
     setFile(f);
     setResult(null);
     try {
