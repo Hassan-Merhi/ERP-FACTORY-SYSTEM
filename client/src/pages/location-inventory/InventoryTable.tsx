@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown } from "lucide-react";
+import { Home, Package, Snowflake, Sun, TrendingUp, TrendingDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import type { StockGroupSummary } from "./locationInventoryTypes";
@@ -51,11 +51,11 @@ export function InventoryTable({
 }: InventoryTableProps) {
   const mobileCards = useMobileCardTable();
   return (
-    <Card className="border-none shadow-none bg-transparent">
-      <div>
-        <table {...mobileCards.tableProps} className="w-full text-sm border-collapse">
-          <thead className="sticky top-0 z-10 bg-background">
-            <tr className="bg-muted/50 text-muted-foreground h-10">
+    <Card className="overflow-hidden rounded-2xl border border-violet-200/60 bg-card shadow-sm dark:border-violet-400/20">
+      <div className="overflow-x-auto">
+        <table {...mobileCards.tableProps} className="w-full border-collapse text-sm sm:min-w-[620px]">
+          <thead className="sticky top-0 z-10 bg-violet-50/90 dark:bg-violet-950/40">
+            <tr className="h-11 border-b border-violet-200/60 text-muted-foreground dark:border-violet-400/20">
               <th className="text-left px-3 font-medium">Item</th>
               {showMovement ? (
                 <>
@@ -95,18 +95,21 @@ export function InventoryTable({
                 const movement = closingQty - openingQty;
                 const isNegative = closingQty < 0;
                 const isMovementNeg = movement < 0;
+                const category = (item.categoryName || "").toLowerCase();
+                const isWinter = category.includes("winter");
+                const isSummer = category.includes("summer");
                 return (
                   <tr
                     key={item.inventoryId ?? `si-${item.stockItemId}`}
                     data-testid={`row-item-desktop-${item.stockItemId}`}
-                    className={`border-t h-12 ${
+                    className={`h-12 cursor-pointer border-t border-border/60 transition-colors ${
                       index === selectedRowIndex
                         ? isNegative
-                          ? "bg-red-200 dark:bg-red-800/50 ring-2 ring-primary"
-                          : "bg-accent"
+                          ? "bg-rose-100 ring-1 ring-inset ring-rose-400/50 dark:bg-rose-950/50"
+                          : "bg-violet-100/90 ring-1 ring-inset ring-violet-400/50 dark:bg-violet-500/20"
                         : isNegative
-                          ? "bg-rose-50 dark:bg-rose-950/30"
-                          : "hover-elevate"
+                          ? "bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/25 dark:hover:bg-rose-900/30"
+                          : "even:bg-violet-50/40 hover:bg-violet-100/70 dark:even:bg-violet-400/[0.035] dark:hover:bg-violet-400/10"
                     }`}
                     onClick={() => setSelectedRowIndex(index)}
                   >
@@ -119,8 +122,9 @@ export function InventoryTable({
                         className="text-left text-primary hover:underline cursor-pointer w-full min-w-0"
                         data-testid={`link-item-desktop-${item.stockItemId}`}
                       >
-                        <span className="flex items-center gap-2 min-w-0">
-                          <span className="truncate">{item.stockItemName}</span>
+                        <span className="flex items-center gap-2.5 min-w-0">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-violet-200/60 bg-violet-500/10 text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/15 dark:text-violet-200"><Package className="h-4 w-4" aria-hidden="true" /></span>
+                           <span className="truncate font-semibold text-foreground hover:text-violet-700 dark:hover:text-violet-300">{item.stockItemName}</span>
                           {/* The code is a column on desktop search; phone cards show it under the name. */}
                           <span className="hidden font-mono text-xs font-normal text-muted-foreground in-data-[mobile-cards=true]:inline">
                             {item.stockItemCode}
@@ -135,8 +139,13 @@ export function InventoryTable({
                     </td>
                     <td className="px-3">
                       {item.categoryName ? (
-                        <Badge variant="secondary" className="text-xs font-normal">
-                          {item.categoryName}
+                        <Badge variant="secondary" className={isWinter
+                           ? "inline-flex gap-1 rounded-lg border border-violet-200 bg-violet-100/90 px-2 py-1 text-[11px] font-medium text-violet-800 dark:border-violet-400/25 dark:bg-violet-500/20 dark:text-violet-200"
+                           : isSummer
+                             ? "inline-flex gap-1 rounded-lg border border-amber-200 bg-amber-100/90 px-2 py-1 text-[11px] font-medium text-amber-800 dark:border-amber-400/25 dark:bg-amber-500/20 dark:text-amber-200"
+                             : "inline-flex gap-1 rounded-lg border border-blue-200 bg-blue-100/90 px-2 py-1 text-[11px] font-medium text-blue-800 dark:border-blue-400/25 dark:bg-blue-500/20 dark:text-blue-200"}>
+                          {isWinter ? <Snowflake className="h-3 w-3" aria-hidden="true" /> : isSummer ? <Sun className="h-3 w-3" aria-hidden="true" /> : <Home className="h-3 w-3" aria-hidden="true" />}
+                           {item.categoryName}
                         </Badge>
                       ) : (
                         <span className="text-muted-foreground text-xs">—</span>
@@ -189,7 +198,7 @@ export function InventoryTable({
             )}
           </tbody>
           {filteredStockItems.length > 0 && (
-            <tfoot className="bg-muted/50 border-t-2 font-semibold">
+            <tfoot className="border-t-2 border-violet-200/60 bg-violet-50/70 font-semibold dark:border-violet-400/20 dark:bg-violet-950/30">
               <tr className="h-12">
                 <td className="px-3 font-bold">Total</td>
                 <td className="px-3"></td>
@@ -248,7 +257,7 @@ export function InventoryTable({
         </table>
       </div>
       {filteredStockItems.length > 0 && selectedGroup && (
-        <div className="mt-4 text-sm text-muted-foreground">
+        <div className="border-t border-border/60 px-4 py-3 text-xs text-muted-foreground">
           Showing {filteredStockItems.length} of{" "}
           {inventory.filter((i) => i.stockGroupId === selectedGroup.groupId).length} items
         </div>
