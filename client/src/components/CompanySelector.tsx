@@ -1,7 +1,7 @@
 import { useCompany, type Company } from "@/contexts/CompanyContext";
 import type { CompanyType } from "@/contracts/sessionContracts";
 import { AlertTriangle, Check, ChevronDown, Layers, Search, WifiOff } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -59,6 +59,8 @@ export function CompanySelector({ showMobileName = false }: { showMobileName?: b
   const { t } = useApplicationLanguage();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const firstOptionRef = useRef<HTMLDivElement>(null);
   const mobileStatusLabelClassName = showMobileName ? "max-w-28 truncate text-xs sm:max-w-36" : "hidden sm:inline";
   const singleCompanyLabelClassName = showMobileName
     ? "max-w-28 truncate text-xs sm:max-w-[120px]"
@@ -194,6 +196,10 @@ export function CompanySelector({ showMobileName = false }: { showMobileName?: b
         sideOffset={10}
         collisionPadding={8}
         data-testid="workspace-switcher-content"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          searchInputRef.current?.focus();
+        }}
         className="relative isolate flex max-h-[min(39rem,calc(var(--app-viewport-height)-1rem))] w-[min(25rem,calc(100vw-1rem))] flex-col overflow-hidden rounded-[24px] border border-white/80 bg-[linear-gradient(145deg,rgba(237,247,255,.97),rgba(231,234,255,.97)_55%,rgba(247,238,255,.97))] p-0 text-slate-900 shadow-[0_24px_70px_-24px_rgba(41,76,153,.5),0_4px_16px_rgba(40,64,135,.12)] backdrop-blur-2xl dark:border-white/15 dark:bg-[linear-gradient(145deg,rgba(17,31,58,.98),rgba(27,27,62,.98)_55%,rgba(36,23,63,.98))] dark:text-slate-50 dark:shadow-[0_24px_70px_-18px_rgba(0,0,0,.75),0_0_30px_rgba(107,84,230,.1)]"
       >
         <div aria-hidden="true" className="pointer-events-none absolute -top-20 -right-12 -z-10 h-56 w-56 rounded-full bg-violet-300/35 blur-3xl dark:bg-violet-500/15" />
@@ -216,13 +222,23 @@ export function CompanySelector({ showMobileName = false }: { showMobileName?: b
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500 dark:text-slate-400" aria-hidden="true" />
             <input
               type="search"
+              ref={searchInputRef}
               data-testid="workspace-switcher-search"
               aria-label="Search workspaces"
               autoComplete="off"
               placeholder="Search workspace..."
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              onKeyDown={(event) => event.stopPropagation()}
+              onKeyDown={(event) => {
+                if (["ArrowDown", "ArrowUp", "Enter"].includes(event.key) && filteredCompanies.length) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  firstOptionRef.current?.focus();
+                } else if (event.key !== "Escape" && event.key !== "Tab") {
+                  // Keep Radix menu typeahead from intercepting search input text.
+                  event.stopPropagation();
+                }
+              }}
               className="h-11 w-full rounded-2xl border border-white/80 bg-white/55 pl-10 pr-3 text-sm text-slate-900 outline-none shadow-[inset_0_1px_3px_rgba(62,78,150,.07)] placeholder:text-slate-500 focus-visible:border-blue-400 focus-visible:ring-2 focus-visible:ring-blue-400/30 dark:border-white/15 dark:bg-white/10 dark:text-white dark:placeholder:text-slate-400 dark:focus-visible:border-blue-400"
             />
           </div>
@@ -244,14 +260,22 @@ export function CompanySelector({ showMobileName = false }: { showMobileName?: b
               No matching workspaces
             </div>
           )}
-          {filteredCompanies.map((company) => {
+          {filteredCompanies.map((company, index) => {
             const { color, label } = getTypeMeta(company.companyType);
             const isActive = company.id === selectedCompany.id;
 
             return (
               <DropdownMenuItem
                 key={company.id}
+                ref={index === 0 ? firstOptionRef : undefined}
                 onClick={() => void handleCompanyChange(company)}
+                onKeyDown={(event) => {
+                  if (index === 0 && event.key === "ArrowUp") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    searchInputRef.current?.focus();
+                  }
+                }}
                 data-testid={`company-option-${company.id}`}
                 aria-current={isActive ? "true" : undefined}
                 className={`relative min-h-[60px] cursor-pointer gap-3 rounded-2xl border px-3 py-2.5 outline-none transition-[background-color,border-color,box-shadow,transform] duration-150 focus:translate-x-0.5 focus:bg-blue-100/85 focus:text-slate-950 dark:focus:bg-white/15 dark:focus:text-white sm:min-h-[64px] ${
