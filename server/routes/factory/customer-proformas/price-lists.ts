@@ -166,9 +166,8 @@ export function registerFactoryCustomerPriceListRoutes(app: Express) {
         if (!Array.isArray(lines)) return res.status(400).json({ message: "Body must be an array" });
         // Optional destination enables explicit manual pricing for a route.
         // No destination keeps the legacy customer-wide price-list contract.
-        const destination = req.query.destination === undefined
-          ? null
-          : normalizeProformaDestination(req.query.destination);
+        const destination =
+          req.query.destination === undefined ? null : normalizeProformaDestination(req.query.destination);
         if (req.query.destination !== undefined && !destination) {
           return res.status(400).json({ message: "Valid destination is required" });
         }
