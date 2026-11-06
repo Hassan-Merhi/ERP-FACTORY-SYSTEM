@@ -103,7 +103,7 @@ export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogo
   const testIdFor = (i: NavItem) => `link-properties-${i.url.split("/").pop()}`;
 
   return (
-    <Sidebar>
+    <Sidebar className="premium-shell-sidebar">
       <ModuleHeader
         icon={Building2}
         label="Business OS"
@@ -111,7 +111,7 @@ export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogo
         accent={MODULE_ACCENT.properties}
       />
 
-      <SidebarContent className="px-3 py-2 overflow-y-auto">
+      <SidebarContent className="premium-nav-scroll px-3 py-2 overflow-y-auto">
         <PinnedNavList items={pinnedItems} color={NAV_COLOR.pinned} onReorder={reorderPinned} testIdFor={testIdFor} />
 
         <div className="space-y-1">
