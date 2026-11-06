@@ -15,7 +15,7 @@ import {
 import type { AccessControlAction, AccessControlResource, AccessDecision } from "@shared/accessControlV2";
 
 type Catalog = { companyId: number; editableRoles: string[]; mode: string; enforced: boolean };
-type RoleResponse = { companyId: number; revision: number; mode: string; enforced: boolean; rules: RoleRule[] };
+type RoleResponse = { companyId: number; revision: number; mode: string; enforced: boolean; rules: RoleRule[]; impactCounts: Record<string, number> };
 type SaveResponse = { revision: number; applied: number; mode: string };
 
 function errorText(error: unknown): string {
@@ -174,7 +174,7 @@ export function RolePermissionMatrix() {
         {roles.data && companyMatches && (
           <>
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
-              <span>Company policy revision <strong>{roles.data.revision}</strong> · {changes.length} unsaved changes · maximum {MAX_BATCH} per save</span>
+              <span>Company policy revision <strong>{roles.data.revision}</strong> · {roles.data.impactCounts?.[role] ?? 0} assigned users · {changes.length} unsaved changes · maximum {MAX_BATCH} per save</span>
               <div className="flex flex-wrap items-center gap-2">
                 <Select value={bulkAction} onValueChange={(value) => setBulkAction(value as AccessControlAction | "all")}>
                   <SelectTrigger className="w-[180px]" aria-label="Bulk action column"><SelectValue /></SelectTrigger>
@@ -249,7 +249,7 @@ export function RolePermissionMatrix() {
               </div>)}
             </div>
             <p className="text-xs text-muted-foreground">
-              Impacted user count is not yet available from the server. Do not interpret this preview as effective access or production authorization.
+              {roles.data?.impactCounts?.[role] ?? 0} company users are currently assigned this role. This is a role impact estimate, not a calculation of effective access or production authorization.
             </p>
             <p className="text-xs text-muted-foreground">Reason: {reason}</p>
             <DialogFooter>
