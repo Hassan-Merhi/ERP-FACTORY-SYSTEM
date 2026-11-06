@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { accountBalanceHistoryBridge, cents, receiptTotals, type ReceiptRow } from "../paymentsReceiptMath";
+import { accountBalanceHistoryBridge, propertiesAccountBalanceSplit, cents, receiptTotals, type ReceiptRow } from "../paymentsReceiptMath";
 import { HISTORICAL_RENT_CUTOFF } from "../historicalRentSnapshot";
 
 /**
@@ -127,10 +127,8 @@ export function PaymentsReconciliation({
   const cashboxAmount = cashbox ? postedMovement(cashboxStatement, "debit") : 0;
   // Account-balance presentation: cash may also include guarantee deposits.
   // Do not label this rent-only or count the result as distinct receipts.
-  const rentAndCashBalance = withdrawalAmount !== null && aliAmount !== null && cashboxAmount !== null
-    ? withdrawalAmount + aliAmount + cashboxAmount : null;
-  const accountSum = rentAndCashBalance !== null && depositAmount !== null
-    ? rentAndCashBalance + depositAmount : null;
+  const { rentAndCashBalance, accountSum } =
+    propertiesAccountBalanceSplit(withdrawalAmount, depositAmount, aliAmount, cashboxAmount);
   const difference = accountSum !== null && bridge.reconciledTotal !== null
     ? accountSum - bridge.reconciledTotal : null;
   const mixedCurrency = payments.some((row) => row.currency && row.currency.toUpperCase() !== "USD");
