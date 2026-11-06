@@ -17,6 +17,27 @@ export function runPostStartupJobs(): void {
   if (installed) return;
   installed = true;
 
+  // Owner-authorized HADI L'SHI shop prepaid rent *opening* reclassification.
+  // No journals/vouchers. Balances are changed only if exact live evidence still
+  // matches the reviewed November snapshot and the opposite opening stays
+  // balanced. Disabled by default, production-only and idempotent.
+  if (
+    process.env.ERP_REPAIR_HADI_LSHI_PREPAID_OPENING_20261106 ===
+    "approved-company1-prepaid1022-balanced-opening24500"
+  ) {
+    const hadiLshiOpeningTimer = setTimeout(async () => {
+      try {
+        const { runApprovedHadiLshiPrepaidOpeningRepair } = await import("./runApprovedHadiLshiPrepaidOpeningRepair");
+        await runApprovedHadiLshiPrepaidOpeningRepair();
+      } catch (error: unknown) {
+        logger.error("[HadiLshiPrepaidOpeningRepair] Refused; opening changes rolled back", {
+          error: getErrorMessage(error),
+        });
+      }
+    }, 3000);
+    unrefTimer(hadiLshiOpeningTimer);
+  }
+
   // Owner-approved, backend-only rent reconciliation for Factory contract 34.
   // Does not change the rental UI or original payment. Disabled unless the
   // exact production opt-in is enabled; fully guarded and idempotent.
