@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { evaluateAccessControl } from "../shared/accessControlV2";
 
 describe("Phase 3 business action safety contract", () => {
