@@ -731,7 +731,78 @@ export function registerRentalPaymentsAccrualRoutes(
               AND deleted_at IS NULL
               AND optional = FALSE
               AND voucher_type = 'Receipt'
-              AND voucher_number ~ '^GUAR-[0-9]+-[0-9]+
+              AND voucher_number ~ ('^GUAR-[0-9]+-[0-9]+' || chr(36))
+              AND description LIKE 'Guarantee deposit - %'
+          )
+          SELECT DISTINCT ON (v.id)
+            -v.id::integer AS id,
+            v.id::integer AS "voucherId",
+            v.voucher_date::text AS "paymentDate",
+            cash_line.debit_amount::text AS amount,
+            EXTRACT(YEAR FROM v.voucher_date)::integer AS "forYear",
+            EXTRACT(MONTH FROM v.voucher_date)::integer AS "forMonth",
+            'Guarantee deposit (voucher-backed, read-only)'::text AS notes,
+            contract.id::integer AS "contractId",
+            unit.id::integer AS "unitId",
+            COALESCE(v.currency, 'USD')::text AS currency,
+            NULL::numeric AS "exchangeRate",
+            cash_line.ledger_account_id::integer AS "cashAccountId",
+            'POSTED'::text AS "postingStatus",
+            NULL::text AS "paymentGroupId",
+            NULL::timestamptz AS "postedAt",
+            'PROPERTIES'::text AS "sourceModule",
+            contract.status::text AS "contractStatus",
+            NULL::integer AS "ledgerRowId",
+            'GUARANTEE'::text AS "reconciliationCategory",
+            'GUARANTEE_DEPOSIT'::text AS "receiptKind",
+            TRUE AS "readOnly",
+            contract.tenant_name::text AS "tenantName",
+            unit.unit_number::text AS "unitNumber",
+            unit.location_group::text AS "locationGroup"
+          FROM guarantee_vouchers v
+          JOIN property_contracts contract
+            ON contract.id = split_part(v.voucher_number, '-', 3)::integer
+           AND contract.company_id = v.company_id
+           AND contract.module = 'PROPERTIES'
+          JOIN property_units unit
+            ON unit.id = contract.unit_id
+           AND unit.company_id = v.company_id
+           AND unit.module = 'PROPERTIES'
+           AND unit.unit_type = 'WAREHOUSE'
+           AND unit.active = TRUE
+          JOIN voucher_entries cash_line
+            ON cash_line.voucher_id = v.id
+           AND cash_line.company_id = v.company_id
+           AND cash_line.debit_amount > 0
+          JOIN ledger_accounts cash_account
+            ON cash_account.id = cash_line.ledger_account_id
+           AND cash_account.company_id = v.company_id
+           AND cash_account.account_type IN ('Cash', 'Bank', 'Asset')
+          JOIN voucher_entries deposit_line
+            ON deposit_line.voucher_id = v.id
+           AND deposit_line.company_id = v.company_id
+           AND deposit_line.credit_amount = cash_line.debit_amount
+          JOIN ledger_accounts deposit_account
+            ON deposit_account.id = deposit_line.ledger_account_id
+           AND deposit_account.company_id = v.company_id
+           AND deposit_account.account_type = 'Liability'
+           AND deposit_account.name = 'Tenant Deposits'
+          WHERE NOT EXISTS (
+            SELECT 1 FROM property_payments previous
+            WHERE previous.company_id = v.company_id
+              AND previous.voucher_id = v.id
+          )
+          ORDER BY v.id, cash_line.ledger_account_id
+        `);
+        const receiptRows = receiptResult.rows as Array<Record<string, unknown>>;
+        combinedPayments = [...payments, ...receiptRows].sort((left, right) =>
+          String(right.paymentDate).localeCompare(String(left.paymentDate)) ||
+          Number(right.id) - Number(left.id)
+        );
+      }
+      res.json(combinedPayments);
+    } catch (e: unknown) {
+      logger.error(`${tag} payments-log:`, { error: e });
       res.status(500).json({ message: getErrorMessage(e) });
     }
   });
