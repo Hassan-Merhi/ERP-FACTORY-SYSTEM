@@ -64,14 +64,22 @@ export function useFactoryMhdView() {
       setSaving(false);
     }
   };
-  return {
-    mode,
-    setMode,
-    saving,
-    isLoading,
-    nameFor,
-    sortRows,
-    hasMhdView: lookup.size > 0,
-    revision: data?.revision ?? 0,
-  };
+  const revision = data?.revision ?? 0;
+  // One stable object per (mode, names, save state), so callers can list `mhd`
+  // as a memo dependency without recomputing on every render.
+  return useMemo(
+    () => ({
+      mode,
+      setMode,
+      saving,
+      isLoading,
+      nameFor,
+      sortRows,
+      hasMhdView: lookup.size > 0,
+      revision,
+    }),
+    // nameFor, sortRows and setMode only close over mode, lookup and saving.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mode, lookup, saving, isLoading, revision]
+  );
 }

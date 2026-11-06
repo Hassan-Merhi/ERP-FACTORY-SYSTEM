@@ -145,7 +145,7 @@ export default function FactoryStockQueryWorkspace() {
       if (sort === "sold") return b.soldBales - a.soldBales || a.name.localeCompare(b.name);
       return a.name.localeCompare(b.name);
     });
-  }, [data?.products, search, category, sort, mhd.mode, mhd.revision]);
+  }, [data?.products, search, category, sort, mhd]);
 
   const displayedProducts = mhd.sortRows(products, (p) => p.code);
 
