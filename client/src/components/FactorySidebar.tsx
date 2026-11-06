@@ -112,6 +112,7 @@ const FACTORY_NAV_ICONS: Record<string, typeof Package> = {
   "factory/intelligence/production-hub": Beaker,
   "factory/intelligence/alerts": Bell,
   "factory/intelligence/settings": Settings,
+  "factory/intelligence/mhd-view": ListOrdered,
 };
 
 // UI grouping only: do not change the canonical registry's permission keys or Settings grouping.
