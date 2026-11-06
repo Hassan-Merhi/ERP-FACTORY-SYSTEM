@@ -73,8 +73,12 @@ export default { async fetch(request) {
       pathname: key, operations: ["put"], validUntil: Date.now() + 12 * 60000,
       allowedContentTypes: [type], maximumSizeInBytes: size, allowOverwrite: overwrite,
     });
+    // The overwrite permission must be on the presigned URL as well as the
+    // token: storage reads it from the signed vercel-blob-allow-overwrite
+    // query parameter and otherwise refuses to replace the manifest.
     const result = await presignUrl(token, {
       pathname: key, operation: "put", access: "private", validUntil: Date.now() + 10 * 60000,
+      ...(overwrite ? { allowOverwrite: true } : {}),
     });
     const url = new URL(result.presignedUrl);
     // Signed PUT uses Vercel's control-plane /api/blob/ endpoint rather than
