@@ -3,6 +3,7 @@ import type { Request } from "express";
 import { ledgerAccounts } from "@shared/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
 import { logger } from "../../../lib/logger";
+import { canonicalHadiRentExpenseName } from "../../../services/rental/hadiRentExpenseConsolidation";
 
 export type RentalModule = "PROPERTIES" | "ERP" | "FACTORY";
 
@@ -26,6 +27,8 @@ export async function findOrCreateLedgerAccount(
   codePrefix: string,
   subType?: string
 ): Promise<number> {
+  // An archived company-1 Lubumbashi rent account is never revived by a late posting.
+  name = canonicalHadiRentExpenseName(companyId, name, codePrefix);
   // Race-safe: INSERT ... ON CONFLICT DO NOTHING, then SELECT.
   // The unique index uq_ledger_accounts_company_name_active prevents duplicates
   // even when multiple transactions run in parallel.
