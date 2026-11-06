@@ -301,12 +301,10 @@
   font-weight: 550;
   color: var(--rent-muted);
 }
-.properties-rentals-data-table .text-red-600 .properties-rentals-money-pill,
-.properties-rentals-data-table .dark\\:text-red-400 .properties-rentals-money-pill {
+.properties-rentals-data-table .text-red-600 .properties-rentals-money-pill {
   background: rgba(233, 78, 108, 0.14);
 }
-.properties-rentals-data-table .text-green-600 .properties-rentals-money-pill,
-.properties-rentals-data-table .dark\\:text-green-400 .properties-rentals-money-pill {
+.properties-rentals-data-table .text-green-600 .properties-rentals-money-pill {
   background: rgba(25, 186, 129, 0.14);
 }
 
