@@ -403,6 +403,7 @@ export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesCon
                   // Properties is a read-only reference to ERP/Factory accounting.
                   isInternalLeaseProjection: isPropertiesInternalSourceReference(module, c),
                   sourceModule: isPropertiesInternalSourceReference(module, c) ? c.module : null,
+                  sourceCompanyId: isPropertiesInternalSourceReference(module, c) ? c.companyId : null,
                   ownerCompanyName: ownerNameMap.get(c.companyId) ?? null,
                 };
               })
