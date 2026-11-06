@@ -58,6 +58,7 @@ import {
 } from "../../factory/netPositionAsOf";
 import { loadPartyMemoLines, memoTotal, type PartyBalanceMemoLine, type MemoPartyKind } from "./unpostedMemo";
 import { notFiscalClosingVoucher } from "./periodReportRules";
+import { HADI_ERP_RENT_MERGE } from "../../rental/hadiRentExpenseConsolidation";
 
 export { openingSideOf, signedMasterOpening } from "./openingSide";
 
@@ -186,6 +187,22 @@ async function loadLines(executor: DatabaseOrTransaction, scope: BalanceScope) {
            AND ${netPositionVoucherEntryKnown(sql`ve.created_at`, sql`ve.voucher_id`, scope.knownAt)}
            AND (v.deleted_at IS NULL OR NOT ${netPositionRecordedThrough(sql`v.deleted_at`, scope.knownAt, "utc-naive-timestamp")})`
     : liveVouchersOf(companyId, scope.asOf);
+  // Fold intact old voucher lines into the surviving rent expense only after
+  // account #881 is retired. This keeps financial views consistent without
+  // rewriting immutable posted voucher history.
+  const mergedHadiRentTarget =
+    companyId === HADI_ERP_RENT_MERGE.companyId
+      ? sql`WHEN p.ledger_account_id = ${HADI_ERP_RENT_MERGE.legacyLedgerId}
+           AND EXISTS (
+             SELECT 1 FROM ledger_accounts rent_alias
+             WHERE rent_alias.id = ${HADI_ERP_RENT_MERGE.legacyLedgerId}
+               AND rent_alias.company_id = ${companyId}
+               AND rent_alias.active = false AND rent_alias.is_hidden = true
+               AND rent_alias.deleted_at IS NULL
+               AND COALESCE(rent_alias.opening_balance, 0) = 0
+           )
+           THEN ${HADI_ERP_RENT_MERGE.targetLedgerId}`
+      : sql``;
   const result = await executor.execute<RawLineRow & Record<string, unknown>>(sql`
     WITH ${customerLinksCte(companyId)},
     posted AS (
@@ -214,6 +231,7 @@ async function loadLines(executor: DatabaseOrTransaction, scope: BalanceScope) {
         END AS kind,
         CASE
           WHEN cl.customer_id IS NOT NULL THEN cl.customer_id
+          ${mergedHadiRentTarget}
           ELSE COALESCE(p.ledger_account_id, p.bank_account_id, p.fixed_asset_id, p.supplier_id, p.employee_id,
                         p.factory_supplier_id, p.customer_id)
         END AS target_id,
