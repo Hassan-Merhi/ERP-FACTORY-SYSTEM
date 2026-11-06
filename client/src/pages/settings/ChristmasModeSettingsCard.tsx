@@ -77,7 +77,7 @@ export function ChristmasModeSettingsCard() {
         </CardTitle>
         <CardDescription>
           Developer-only control for snowfall, festive lights, sidebar ornaments and
-          the Christmas login welcome and five-minute Santa sleigh flyovers. Enable it for specific user accounts only.
+          the 10-second Jingle Bells login welcome with a Santa ho-ho-ho, plus Santa's sleigh every five minutes. Enable it for specific user accounts only.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
