@@ -17,7 +17,7 @@ import { useAppMode } from "@/contexts/AppModeContext";
 import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 import { AlertTriangle, ClipboardList, Copy, Trash2 } from "lucide-react";
 import { format } from "date-fns";
-import { PaymentsReconciliation } from "./property-rental/components/PaymentsReconciliation";
+import { PaymentsReconciliation, type ReconciliationSnapshot } from "./property-rental/components/PaymentsReconciliation";
 import { cashCents, nonCashCents, paymentHistoryTsv, receiptTotals } from "./property-rental/paymentsReceiptMath";
 import {
   HISTORICAL_RENT_COMPANY,
@@ -81,6 +81,7 @@ export default function RentalPaymentsLog({
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<PaymentRow | null>(null);
   const [reconciliationView, setReconciliationView] = useState<ReconciliationView>("HISTORICAL_RENT");
+  const [reconciliation, setReconciliation] = useState<ReconciliationSnapshot | null>(null);
 
   // Both pages use the same voucher-backed dated rent snapshot. No payment is created.
   const isPropertiesPayments = apiBase === "/api/properties/rental";
@@ -146,6 +147,9 @@ export default function RentalPaymentsLog({
   // Keep recorded billing allocations visible, but do NOT count them as cash.
   // All amounts come from the visible records and are accumulated in cents.
   const paymentTotals = receiptTotals(filtered);
+  const isFullHistory = isHassanProperties && effectiveView === "ALL" && !search.trim();
+  const reconciliationReady = isFullHistory && !isLoading && !paymentsError &&
+    reconciliation?.companyId === selectedCompany?.id && !reconciliation.loading;
   const total = isPropertiesPayments
     ? paymentTotals.cash / 100
     : filtered.reduce((sum, payment) => sum + Number(payment.amount), 0);
@@ -236,6 +240,8 @@ export default function RentalPaymentsLog({
           payments={payments}
           companyId={selectedCompany?.id}
           isLoading={isLoading}
+          isError={paymentsError}
+          onReconciliationChange={setReconciliation}
         />
       )}
 
@@ -256,7 +262,7 @@ export default function RentalPaymentsLog({
       {isHassanProperties && (
         <div className="flex flex-wrap justify-end gap-2">
           <Button variant="outline" size="sm" disabled={isLoading || paymentsError || !filtered.length || !clipboardIsUsd} onClick={() => void copyHistory()} data-testid="button-properties-copy-payment-history">
-            <Copy className="h-4 w-4 mr-1" /> Copy visible history for Excel
+            <Copy className="h-4 w-4 mr-1" /> Copy visible rows only
           </Button>
           {!clipboardIsUsd && <span className="text-xs text-amber-600">Non-USD entries need their booked currency conversion before export.</span>}
         </div>
@@ -284,6 +290,7 @@ export default function RentalPaymentsLog({
             <CardTitle className="text-xs text-muted-foreground font-normal">
               {isHassanProperties && effectiveView === "HISTORICAL_RENT"
                 ? "RENT PAID THROUGH 26 OCT"
+                : isFullHistory ? "HISTORY + ACCOUNT ADJUSTMENT"
                 : isHassanProperties ? "CASH RECEIVED (VOUCHER-BACKED)" : "TOTAL AMOUNT RECEIVED"}
             </CardTitle>
           </CardHeader>
@@ -292,7 +299,11 @@ export default function RentalPaymentsLog({
               className="text-2xl font-bold text-green-600 dark:text-green-400"
               data-testid={`stat-${testIdPrefix}-total-amount`}
             >
-              {paymentsError ? "Unavailable" : formatMoneyNumber(total)}
+              {paymentsError ? "Unavailable" : isFullHistory
+                ? reconciliationReady && reconciliation?.reconciled != null
+                  ? formatMoneyNumber(reconciliation.reconciled / 100)
+                  : "Verifying…"
+                : formatMoneyNumber(total)}
             </div>
           </CardContent>
         </Card>
@@ -447,6 +458,42 @@ export default function RentalPaymentsLog({
                     )}
                     <td colSpan={4}></td>
                   </tr>
+                  {isFullHistory && (
+                    <>
+                      <tr className="border-t">
+                        <td colSpan={8} className="px-3 py-2 text-right">Recorded source history (cash + non-cash)</td>
+                        <td className="px-3 py-2 text-right font-semibold tabular-nums">{formatMoneyNumber(paymentTotals.recorded / 100)}</td>
+                      </tr>
+                      <tr>
+                        <td colSpan={8} className="px-3 py-2 text-right">Net account classification adjustment (not a payment)</td>
+                        <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                          {reconciliationReady && reconciliation?.netAdjustment != null
+                            ? formatMoneyNumber(reconciliation.netAdjustment / 100) : "Verifying…"}
+                        </td>
+                      </tr>
+                      <tr className="border-t-2">
+                        <td colSpan={8} className="px-3 py-2 text-right font-bold">RECONCILED HISTORY + ADJUSTMENT</td>
+                        <td className="px-3 py-2 text-right font-bold tabular-nums" data-testid="properties-history-reconciled-footer">
+                          {reconciliationReady && reconciliation?.reconciled != null
+                            ? formatMoneyNumber(reconciliation.reconciled / 100) : "Verifying…"}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td colSpan={8} className="px-3 py-2 text-right">Three-account balance sum</td>
+                        <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                          {reconciliationReady && reconciliation?.accountSum != null
+                            ? formatMoneyNumber(reconciliation.accountSum / 100) : "Verifying…"}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td colSpan={8} className="px-3 py-2 text-right">Unreconciled difference</td>
+                        <td className="px-3 py-2 text-right font-semibold tabular-nums" data-testid="properties-history-reconciliation-difference">
+                          {reconciliationReady && reconciliation?.difference != null
+                            ? formatMoneyNumber(reconciliation.difference / 100) : "Verifying…"}
+                        </td>
+                      </tr>
+                    </>
+                  )}
                 </tfoot>
               </table>
             )}
