@@ -10,6 +10,7 @@ import type { FactorySettingsData } from "./types";
 import { FactorySettingsAdminTools } from "./FactorySettingsAdminTools";
 import { AutomaticPriorityPrintingCard } from "./AutomaticPriorityPrintingCard";
 import { RecalculateBaleCostsCard } from "./components/RecalculateBaleCostsCard";
+import { DeveloperChristmasModePanel } from "@/pages/settings/DeveloperChristmasModePanel";
 import type { useFactorySettingsModel } from "./useFactorySettingsModel";
 
 type Props = {
@@ -100,6 +101,8 @@ export function FactorySettingsView({ model }: Props) {
           </Button>
         </div>
       </div>
+
+      <DeveloperChristmasModePanel />
 
       <AutomaticPriorityPrintingCard />
 
