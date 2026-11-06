@@ -16,6 +16,7 @@ import { requireAuth } from "../../../auth";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { propertyUnits, propertyContracts, propertyMonthlyLedger, propertyPayments, companies } from "@shared/schema";
 import { computeNextBillingDate } from "./_helpers";
+import { isPropertiesInternalSourceReference, sharedRentalDisplayTab } from "./internalProjection";
 import { sumMoney, toMoney } from "../../../lib/money";
 
 export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesContext) {
@@ -234,58 +235,52 @@ export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesCon
       // gracefully returns [] so owned units always load.
       let sharedResults: typeof ownedResults = [];
       try {
-        // Shared contracts (rented FROM another company) always appear in the Shops view only.
-        // The owner may classify the unit differently in their system, so we ignore unitType
-        // and pin shared units to the SHOP view to avoid them leaking into Warehouses.
-        if (unitType === "SHOP") {
+        // Properties displays internal ERP/Factory WAREHOUSE references in Warehouses.
+        // Other linked contracts retain their existing Shops presentation.
+        if (unitType === "SHOP" || (module === "PROPERTIES" && unitType === "WAREHOUSE")) {
           const linkedContracts = await db
             .select()
             .from(propertyContracts)
             .where(and(eq(propertyContracts.linkedCompanyId, companyId), eq(propertyContracts.status, "ACTIVE")));
 
-          // Internal Factory shop leases are references in Properties, not new
-          // Properties contracts. Same-company leases need no company link;
-          // linkedCompanyId permits projection to a separate Properties company.
-          let internalFactoryContracts: typeof linkedContracts = [];
+          // Internal leases originating in ERP or Factory can be shown in Properties
+          // without inserting a second unit/contract. Same-company source contracts
+          // need no linkedCompanyId; a different Properties company uses that link.
+          let internalSourceContracts: typeof linkedContracts = [];
           if (module === "PROPERTIES") {
-            const factoryShops = await db
-              .select({ id: propertyUnits.id })
-              .from(propertyUnits)
+            internalSourceContracts = await db
+              .select()
+              .from(propertyContracts)
               .where(
                 and(
-                  eq(propertyUnits.companyId, companyId),
-                  eq(propertyUnits.module, "FACTORY"),
-                  eq(propertyUnits.unitType, "SHOP"),
-                  eq(propertyUnits.active, true)
+                  eq(propertyContracts.companyId, companyId),
+                  inArray(propertyContracts.module, ["ERP", "FACTORY"]),
+                  eq(propertyContracts.status, "ACTIVE"),
+                  eq(propertyContracts.isInternal, true)
                 )
               );
-            if (factoryShops.length) {
-              internalFactoryContracts = await db
-                .select()
-                .from(propertyContracts)
-                .where(
-                  and(
-                    eq(propertyContracts.companyId, companyId),
-                    eq(propertyContracts.module, "FACTORY"),
-                    eq(propertyContracts.status, "ACTIVE"),
-                    eq(propertyContracts.isInternal, true),
-                    inArray(propertyContracts.unitId, factoryShops.map((u) => u.id))
-                  )
-                );
-            }
           }
 
-          const sharedContracts = [...new Map(
-            [...linkedContracts, ...internalFactoryContracts].map((contract) => [contract.id, contract])
+          const candidateContracts = [...new Map(
+            [...linkedContracts, ...internalSourceContracts].map((contract) => [contract.id, contract])
           ).values()].filter((contract) => !(contract.companyId === companyId && contract.module === module));
 
-          if (sharedContracts.length > 0) {
-            const sharedUnitIds = sharedContracts.map((c) => c.unitId);
-            // No unitType filter — show all shared contracts in the Shops view regardless of
-            // how the owner classified the unit in their own system.
+          if (candidateContracts.length > 0) {
+            const sharedUnitIds = candidateContracts.map((c) => c.unitId);
             const sharedUnits = await db.select().from(propertyUnits).where(inArray(propertyUnits.id, sharedUnitIds));
             const sharedUnitMap = new Map(sharedUnits.map((u) => [u.id, u]));
 
+            // Filter only the displayed references; keep their original module,
+            // contract and ledger ownership unchanged.
+            const sharedContracts = candidateContracts.filter((contract) => {
+              const unit = sharedUnitMap.get(contract.unitId);
+              if (!unit) return false;
+              if (module === "PROPERTIES" && contract.companyId === companyId &&
+                  contract.module !== module && !unit.active) return false;
+              return sharedRentalDisplayTab(module, contract, unit) === unitType;
+            });
+
+            if (sharedContracts.length > 0) {
             const sharedContractIds = sharedContracts.map((c) => c.id);
             const sharedOutstanding = new Map<number, number>();
             const sharedExpected = new Map<number, number>();
@@ -405,18 +400,16 @@ export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesCon
                   nextBillingDate,
                   guaranteeRemaining,
                   isShared: true,
-                  // A Properties projection never owns these Factory accounting entries.
-                  isInternalLeaseProjection:
-                    module === "PROPERTIES" &&
-                    c.module === "FACTORY" &&
-                    c.isInternal &&
-                    u.unitType === "SHOP",
+                  // Properties is a read-only reference to ERP/Factory accounting.
+                  isInternalLeaseProjection: isPropertiesInternalSourceReference(module, c),
+                  sourceModule: isPropertiesInternalSourceReference(module, c) ? c.module : null,
                   ownerCompanyName: ownerNameMap.get(c.companyId) ?? null,
                 };
               })
               .filter(Boolean) as typeof ownedResults;
+            }
           }
-        } // end if (unitType === "SHOP")
+        } // end shared rental tab
       } catch (sharedErr: unknown) {
         // Column may not exist yet in production — owned units still load fine
         logger.warn(`${tag} shared-units skipped:`, { error: getErrorMessage(sharedErr).split("\n")[0] });
