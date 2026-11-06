@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -49,6 +50,7 @@ const cell = "whitespace-nowrap px-3 py-2.5 text-sm";
 const label = "block mb-1.5 text-xs font-semibold text-muted-foreground";
 
 export default function FactoryStockQueryWorkspace() {
+  const mhd = useFactoryMhdView();
   const { selectedCompany } = useCompany();
   const { formatDisplayDate } = useDateFormat();
   const [, navigate] = useLocation();
@@ -98,6 +100,8 @@ export default function FactoryStockQueryWorkspace() {
       return a.name.localeCompare(b.name);
     });
   }, [data?.products, search, category, sort]);
+
+  const displayedProducts = mhd.sortRows(products, (p) => p.code);
 
   useEffect(() => {
     if (selectedId != null && products.some((p) => p.id === selectedId)) return;
@@ -260,13 +264,13 @@ export default function FactoryStockQueryWorkspace() {
                     </tr>
                   </thead>
                   <tbody>
-                    {products.map((p) => (
+                    {displayedProducts.map((p) => (
                       <tr key={p.id} onClick={() => setSelectedId(p.id)}
                         onKeyDown={(e) => { if (e.key === "Enter") setSelectedId(p.id); }}
                         tabIndex={0} aria-selected={selectedId === p.id}
                         data-testid={`row-stock-item-${p.id}`}
                         className={`cursor-pointer border-t transition-colors hover:bg-muted/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${selectedId === p.id ? "bg-blue-50 dark:bg-blue-950/35" : ""}`}>
-                        <td className={cell}><span className="block font-medium">{p.name}</span><span className="font-mono text-xs text-muted-foreground">{p.code}</span></td>
+                        <td className={cell}><span className="block font-medium">{mhd.nameFor(p.code, p.name)}</span><span className="font-mono text-xs text-muted-foreground">{p.code}</span></td>
                         {visible.category && <td className={cell}><span className="rounded-md bg-muted px-2 py-1 text-xs">{p.categoryName}</span></td>}
                         {visible.bales && <td className={cell + " text-right tabular-nums"}>{fmt(p.bales)}</td>}
                         {visible.kg && <td className={cell + " text-right font-semibold tabular-nums"}>{fmt(p.kg)}</td>}
@@ -323,7 +327,7 @@ export default function FactoryStockQueryWorkspace() {
             <section className="space-y-4 rounded-2xl border bg-card p-4 shadow-sm" data-testid="factory-stock-selected-item">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div><div className="flex items-center gap-2"><Boxes className="h-5 w-5 text-primary" />
-                  <h2 className="text-lg font-bold">{selected.name}</h2></div>
+                  <h2 className="text-lg font-bold">{mhd.nameFor(selected.code, selected.name)}</h2></div>
                   <p className="mt-1 text-xs text-muted-foreground">{selected.code} · {selected.categoryName}</p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => navigate(`/factory/stock-query/${selected.id}`)}>
