@@ -177,7 +177,7 @@ function DesktopTable({ model }: { model: TransactionJournalModel }) {
                       </TableCell>
                       <TableCell>
                         <span
-                          className={`inline-block max-w-[140px] truncate rounded-md px-2 py-1 text-xs font-semibold ${companyColor(v.companyId)}`}}
+                          className={`inline-block max-w-[140px] truncate rounded-md px-2 py-1 text-xs font-semibold ${companyColor(v.companyId)}`}
                         >
                           {v.companyName}
                         </span>
@@ -277,7 +277,7 @@ function MobileCards({ model }: { model: TransactionJournalModel }) {
                           </Badge>
                         )}
                         <span
-                          className={`inline-block text-xs font-medium px-2 py-0.5 rounded-sm ${companyColor(v.companyId)}`}}
+                          className={`inline-block text-xs font-medium px-2 py-0.5 rounded-sm ${companyColor(v.companyId)}`}
                         >
                           {v.companyName}
                         </span>
