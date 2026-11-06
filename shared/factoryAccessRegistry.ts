@@ -461,6 +461,16 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     featureFlag: "alertsEnabled",
   },
   {
+    key: "factory/intelligence/mhd-view",
+    label: "MHD View",
+    group: "Intelligence",
+    route: "/factory/intelligence/mhd-view",
+    sidebar: true,
+    settingsVisible: false,
+    accessLevel: "admin",
+    landing: false,
+  },
+  {
     key: "factory/intelligence/settings",
     label: "Intel Settings",
     group: "Intelligence",
