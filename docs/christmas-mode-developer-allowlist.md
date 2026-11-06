@@ -8,15 +8,18 @@ This update **supersedes the original global/all-users behavior** described in e
 - The Developer sees a master ON/OFF switch and a searchable checklist of active user accounts, plus an explicit **Save changes** button.
 - Turning the master switch ON is **not enough**: a user must also be individually checked and saved. New users are never automatically selected, and Developer accounts are not automatically exempt.
 - Selected users see snowfall, header lights, sidebar Christmas ornaments, extra festive corner ambience, and a one-time post-login greeting with an approximately 10-second original bell arrangement of the public-domain Jingle Bells chorus plus a Santa-like synthesized \"Ho! Ho! Ho!\" in **all their accessible company workspaces**, including POS and Factory. The sound plays only on actual sign-in, never on refresh; browser autoplay restrictions may require tapping a small Play control. A Stop control can mute playback. Other users never see decorations or hear the sound.
+- Santa's sleigh crosses the shared top bar **every five visible minutes** in every company type. The flyover is silent, pointer-transparent, does not shift header layout, and pauses in hidden tabs, reduced-motion/data mode or during barcode camera scanning.
+- A selected user may turn Christmas effects OFF or ON **only for their own account** using **My Settings → Christmas Mode**. This switch is hidden unless Developer has allowlisted the account. Their choice persists across companies and logins; it defaults to ON when first selected.
 - Unselected users see **no Christmas UI** and cannot access the administration controls. Admin, Owner, Manager, View Only, POS and ERP Tester cannot change the configuration even if they call the API directly.
-- The master switch and allowlist are stored as two independent entries in the existing `system_settings` table. Missing, malformed or legacy allowlist settings mean **no eligible users**. This avoids unexpectedly turning Christmas Mode on for everybody after deploying the update.
+- The master switch and allowlist are stored as two independent entries in the existing `system_settings` table. Personal switches are stored using `christmas_mode_user_pref:<userId>` in the same table (`false` means personal opt-out; missing means ON). Missing, malformed or legacy allowlist settings mean **no eligible users**. This avoids unexpectedly turning Christmas Mode on for everybody after deploying the update.
 - Changes propagate immediately to the Developer's shared Query cache and to other signed-in users through the existing active-tab query polling (about 30 seconds) / focus refresh.
 
 ## Security and API
 
 | Endpoint | Allowed roles | Data |
 | --- | --- | --- |
-| `GET /api/seasonal/christmas-mode` | Any authenticated user | `{ enabled }` **for the caller only**; never returns master status, usernames or allowlist |
+| `GET /api/seasonal/christmas-mode` | Any authenticated user | `{ enabled, available, preferenceEnabled }` **for the caller only**; never returns master status, usernames or allowlist |
+| `PUT /api/seasonal/christmas-mode/preference` | Allowlisted authenticated user only | Changes caller's own Christmas Mode preference; cannot grant access or change the master switch |
 | `GET /api/seasonal/christmas-mode/config` | Developer only | Master status, active usernames and selected IDs |
 | `PUT /api/seasonal/christmas-mode/config` | Developer only | Atomically saves `{ enabled, userIds }` after validating selected users exist and are active |
 | `PUT /api/seasonal/christmas-mode` | Developer only (older API retained) | Changes master status only; cannot grant new user eligibility |
@@ -37,9 +40,10 @@ In Factory: **Factory Settings → Christmas Mode** (Developer only).
 3. Select **Save changes**.
 4. Turn the master switch OFF to instantly disable eligibility for everybody; their saved individual selections remain available for the next seasonal activation.
 5. Uncheck a user and save to revoke their effect without affecting other selected users.
+6. A selected account can independently turn off Christmas effects under **My Settings → Christmas Mode**, without changing any other account.
 
 ## Verification
 
-- Added `server/services/seasonalChristmasAccessPolicy.test.ts` for default OFF, selected vs unselected users, master OFF, malformed data, and duplicate IDs.
+- Extended `server/services/seasonalChristmasAccessPolicy.test.ts` with personal opt-out while preserving default OFF, selected vs unselected users, master OFF, malformed data and duplicate-ID coverage.
 - Source-level integration reviewed. **No CI checks, builds, automated test execution, live browser validation or Render deployment were performed**, per the user's no-CI preference.
 - The change remains on `feature/global-christmas-mode`, not merged to `main`.

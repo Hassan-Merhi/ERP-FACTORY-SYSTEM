@@ -185,14 +185,15 @@ import { factoryPressingHistoryReportIndexes } from "../server/startup-schema/03
  * (ten on purchase_orders, two on po_line_items) and the NOT VALID check
  * constraint behind the existing 034/035 stages, taking the count from 1429 to
  * 1442. The pre-034 baseline hash is unchanged; nothing moved.
+ *
+ * Re-pinned for the per-user Factory MHD view preference (19a34f5, #2957): one
+ * ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS
+ * factory_mhd_view_default, added to 001-core-tables-and-columns next to the
+ * other user columns (as the hidden All Daybook rows column was), taking the
+ * count from 1480 to 1481 and changing the pre-034 baseline hash. The
+ * statement is idempotent and nothing else moved.
  */
-/*
- * Re-pinned when 001-core-tables-and-columns gained the idempotent
- * user_preferences.factory_mhd_view_default ADD COLUMN (per-user Factory MHD
- * view preference), taking the count from 1480 to 1481. It sits beside the
- * table's other ADD COLUMNs; no existing statement changed.
- */
-const EXPECTED_STATEMENT_COUNT = 1481; // 1443 existing + 37 Phase 1 + 1 Phase 6 index
+const EXPECTED_STATEMENT_COUNT = 1481; // 1442 existing + 37 Phase 1 + 1 Phase 6 index + 1 MHD view preference
 const EXPECTED_CONTENT_HASH = "83932076dfc1f98fad41c163f700041aedbc3d69fb74d735a2e98a2de7bead2b";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
