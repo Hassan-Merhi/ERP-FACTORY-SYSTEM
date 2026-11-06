@@ -145,21 +145,27 @@ export function ChristmasModeSettingsCard() {
                   </p>
                 ) : (
                   filteredUsers.map((user) => (
-                    <label
+                    <div
                       key={user.id}
-                      className="flex cursor-pointer items-center gap-3 px-3 py-3 text-sm hover:bg-muted/40"
+                      className="flex items-center gap-3 px-3 py-3 text-sm hover:bg-muted/40"
                     >
                       <Checkbox
+                        id={`christmas-user-${user.id}`}
                         checked={selectedSet.has(user.id)}
                         disabled={saving}
                         onCheckedChange={(checked) => toggleUser(user.id, checked === true)}
                         aria-label={`Allow Christmas Mode for ${user.username}`}
                       />
-                      <span className="min-w-0 flex-1 truncate font-medium">{user.username}</span>
+                      <label
+                        htmlFor={`christmas-user-${user.id}`}
+                        className="min-w-0 flex-1 cursor-pointer truncate font-medium"
+                      >
+                        {user.username}
+                      </label>
                       <span className="text-xs text-muted-foreground">
                         {selectedSet.has(user.id) ? "Allowed" : "Off"}
                       </span>
-                    </label>
+                    </div>
                   ))
                 )}
               </div>
