@@ -14,9 +14,7 @@
     "server/routes/pos/retailPosRoutes.ts": 903,
     "server/routes/rental/rentalPaymentsAccrualRoutes.ts": 1026
   },
-  "routeManifestAdditions": [
-    "POST /api/offline/legacy-queue/decisions [requireAuth > <anonymous>]"
-  ],
+  "routeManifestAdditions": [],
   "routeManifestMountAdditions": [],
   "routeManifestReplacements": [],
   "sourceTextAssertionDelta": {

@@ -1,25 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  Camera,
-  CameraOff,
-  Flashlight,
-  FlashlightOff,
-  Keyboard,
-  RotateCcw,
-  Volume2,
-  VolumeX,
-  Vibrate,
-} from "lucide-react";
+import { Camera, CameraOff, Flashlight, FlashlightOff, Keyboard, RotateCcw, Volume2, VolumeX, Vibrate } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  createCameraDecoder,
-  hasCameraAccess,
-  type CameraBarcodeDecoder,
-  type CameraDecoderEngine,
-} from "./pressing-scanner/cameraDecoder";
+import { createCameraDecoder, hasCameraAccess, type CameraBarcodeDecoder, type CameraDecoderEngine } from "./pressing-scanner/cameraDecoder";
 import { ContinuousScanGate } from "./pressing-scanner/continuousScanGate";
 import { PRESSING_TIME_ZONE } from "@shared/pressingTimeZone";
 import { pauseSeasonalEffectsForCamera } from "@/lib/seasonalCameraActivity";
@@ -66,10 +51,7 @@ function capturedTime(iso: string): string {
   const date = new Date(iso);
   if (!Number.isFinite(date.getTime())) return "—";
   return date.toLocaleTimeString("en-GB", {
-    hourCycle: "h23",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
+    hourCycle: "h23", hour: "2-digit", minute: "2-digit", second: "2-digit",
     timeZone: PRESSING_TIME_ZONE,
   });
 }
@@ -77,12 +59,10 @@ function capturedDate(iso: string): string {
   const date = new Date(iso);
   if (!Number.isFinite(date.getTime())) return "—";
   const parts = new Intl.DateTimeFormat("en-GB", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
+    year: "numeric", month: "2-digit", day: "2-digit",
     timeZone: PRESSING_TIME_ZONE,
   }).formatToParts(date);
-  const value = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  const value = (type: string) => parts.find(part => part.type === type)?.value ?? "";
   return [value("year"), value("month"), value("day")].join("-");
 }
 function cameraErrorMessage(error: unknown): string {
@@ -100,10 +80,7 @@ function cameraErrorMessage(error: unknown): string {
 }
 
 export function ContinuousPressingScanner({
-  assignment,
-  active,
-  onBarcode,
-  simpleControls = false,
+  assignment, active, onBarcode, simpleControls = false,
 }: {
   assignment: PressingScannerAssignment | null;
   active: boolean;
@@ -118,18 +95,9 @@ export function ContinuousPressingScanner({
   const [status, setStatus] = useState<ScannerStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [last, setLast] = useState<{
-    barcode: string;
-    at: string;
-    outcome: ScanFeedback;
-    message: string;
-    intervalSeconds: number | null;
-    confirmedAt?: string;
-    timezoneName?: string;
-    weightKg?: string;
-    machineName?: string;
-    confirmationId?: number;
-    productionDate?: string;
-    scannedBy?: string;
+    barcode: string; at: string; outcome: ScanFeedback; message: string; intervalSeconds: number | null;
+    confirmedAt?: string; timezoneName?: string; weightKg?: string; machineName?: string;
+    confirmationId?: number; productionDate?: string; scannedBy?: string;
   } | null>(null);
   const [manualCode, setManualCode] = useState("");
   const [sound, setSound] = useState(true);
@@ -193,9 +161,7 @@ export function ContinuousPressingScanner({
       const context = new Ctor();
       audioRef.current = context;
       void context.resume().catch(() => {});
-    } catch {
-      /* Visual feedback remains available. */
-    }
+    } catch { /* Visual feedback remains available. */ }
   };
   const feedback = useCallback((kind: PressingScanOutcome["kind"]) => {
     const frequency = kind === "confirmed" ? 880 : kind === "duplicate" || kind === "rejected" ? 240 : 530;
@@ -213,90 +179,61 @@ export function ContinuousPressingScanner({
         gain.connect(context.destination);
         tone.start();
         tone.stop(context.currentTime + 0.14);
-      } catch {
-        /* Audio feedback is optional. */
-      }
+      } catch { /* Audio feedback is optional. */ }
     }
     if (vibrationRef.current && typeof navigator.vibrate === "function") {
-      try {
-        navigator.vibrate(kind === "duplicate" || kind === "rejected" ? [90, 70, 100] : [45]);
-      } catch {
-        /* Vibration is not available on all mobile browsers. */
-      }
+      try { navigator.vibrate(kind === "duplicate" || kind === "rejected" ? [90, 70, 100] : [45]); }
+      catch { /* Vibration is not available on all mobile browsers. */ }
     }
   }, []);
 
-  useEffect(
-    () => () => {
-      // Closing the tab or unmounting must not leave an AudioContext running.
-      void audioRef.current?.close().catch(() => {});
-      audioRef.current = null;
-    },
-    []
-  );
+  useEffect(() => () => {
+    // Closing the tab or unmounting must not leave an AudioContext running.
+    void audioRef.current?.close().catch(() => {});
+    audioRef.current = null;
+  }, []);
 
-  const handleRead = useCallback(
-    async (barcode: string, machine: PressingScannerAssignment) => {
-      // Cap work in progress to avoid unlimited promise growth on a damaged network.
-      // A rejected capacity warning is never presented as a saved or queued scan.
-      if (inFlightRef.current >= 32) {
-        setLast({
-          barcode,
-          at: new Date().toISOString(),
-          outcome: "rejected",
-          message: "Too many reads in progress. Re-present this barcode after pending captures settle.",
-          intervalSeconds: null,
-        });
-        feedback("rejected");
-        return;
-      }
-      inFlightRef.current += 1;
-      const sequence = ++latestCaptureRef.current;
-      const deviceCapturedAt = new Date().toISOString();
-      const now = Date.parse(deviceCapturedAt);
-      const intervalSeconds =
-        lastCapturedMsRef.current === null ? null : Math.max(0, Math.round((now - lastCapturedMsRef.current) / 1000));
-      lastCapturedMsRef.current = now;
-      setLast({ barcode, at: deviceCapturedAt, outcome: "processing", message: "Checking barcode…", intervalSeconds });
-      try {
-        const result = await onBarcodeRef.current({
-          barcode,
-          deviceCapturedAt,
-          assignmentId: machine.assignmentId,
-          machineId: machine.machineId,
-        });
-        if (sequence === latestCaptureRef.current)
-          setLast({
-            barcode,
-            at: deviceCapturedAt,
-            outcome: result.kind,
-            message: result.message,
-            intervalSeconds,
-            confirmedAt: result.confirmedAt,
-            timezoneName: result.timezoneName,
-            weightKg: result.weightKg,
-            machineName: result.machineName,
-            confirmationId: result.confirmationId,
-            productionDate: result.productionDate,
-            scannedBy: result.scannedBy,
-          });
-        feedback(result.kind);
-      } catch {
-        if (sequence === latestCaptureRef.current)
-          setLast({
-            barcode,
-            at: deviceCapturedAt,
-            outcome: "rejected",
-            message: "Unable to validate barcode. This item has NOT been confirmed.",
-            intervalSeconds,
-          });
-        feedback("rejected");
-      } finally {
-        inFlightRef.current -= 1;
-      }
-    },
-    [feedback]
-  );
+  const handleRead = useCallback(async (barcode: string, machine: PressingScannerAssignment) => {
+    // Cap work in progress to avoid unlimited promise growth on a damaged network.
+    // A rejected capacity warning is never presented as a saved or queued scan.
+    if (inFlightRef.current >= 32) {
+      setLast({
+        barcode, at: new Date().toISOString(), outcome: "rejected",
+        message: "Too many reads in progress. Re-present this barcode after pending captures settle.",
+        intervalSeconds: null,
+      });
+      feedback("rejected");
+      return;
+    }
+    inFlightRef.current += 1;
+    const sequence = ++latestCaptureRef.current;
+    const deviceCapturedAt = new Date().toISOString();
+    const now = Date.parse(deviceCapturedAt);
+    const intervalSeconds = lastCapturedMsRef.current === null ? null
+      : Math.max(0, Math.round((now - lastCapturedMsRef.current) / 1000));
+    lastCapturedMsRef.current = now;
+    setLast({ barcode, at: deviceCapturedAt, outcome: "processing", message: "Checking barcode…", intervalSeconds });
+    try {
+      const result = await onBarcodeRef.current({
+        barcode, deviceCapturedAt, assignmentId: machine.assignmentId, machineId: machine.machineId,
+      });
+      if (sequence === latestCaptureRef.current) setLast({
+        barcode, at: deviceCapturedAt, outcome: result.kind, message: result.message, intervalSeconds,
+        confirmedAt: result.confirmedAt, timezoneName: result.timezoneName, weightKg: result.weightKg,
+        machineName: result.machineName, confirmationId: result.confirmationId,
+        productionDate: result.productionDate, scannedBy: result.scannedBy,
+      });
+      feedback(result.kind);
+    } catch {
+      if (sequence === latestCaptureRef.current) setLast({
+        barcode, at: deviceCapturedAt, outcome: "rejected",
+        message: "Unable to validate barcode. This item has NOT been confirmed.", intervalSeconds,
+      });
+      feedback("rejected");
+    } finally {
+      inFlightRef.current -= 1;
+    }
+  }, [feedback]);
 
   useEffect(() => {
     // The assignment is read through a ref: the effect re-runs only when the
@@ -360,12 +297,10 @@ export function ContinuousPressingScanner({
         try {
           const matches = await detector.detect(video);
           if (canceled) return;
-          const value = matches.find((match) => match.rawValue?.trim())?.rawValue ?? null;
+          const value = matches.find(match => match.rawValue?.trim())?.rawValue ?? null;
           const next = gateRef.current.frame(value, Date.now());
           if (next) void handleRead(next, currentAssignment);
-        } catch {
-          /* A transient bad frame is not a fatal camera error. */
-        }
+        } catch { /* A transient bad frame is not a fatal camera error. */ }
       }
       if (!canceled) timer = setTimeout(() => void tick(detector), SCAN_POLL_MS[detector.engine]);
     };
@@ -373,9 +308,7 @@ export function ContinuousPressingScanner({
     const start = async () => {
       if (!hasCameraAccess()) {
         setStatus("manual");
-        setError(
-          "Camera access requires a supported browser and a secure (HTTPS) connection. Manual entry stays available."
-        );
+        setError("Camera access requires a supported browser and a secure (HTTPS) connection. Manual entry stays available.");
         return;
       }
       try {
@@ -386,7 +319,7 @@ export function ContinuousPressingScanner({
           audio: false,
         });
         if (canceled) {
-          stream.getTracks().forEach((track) => track.stop());
+          stream.getTracks().forEach(track => track.stop());
           return;
         }
         resumeSeasonalEffects = pauseSeasonalEffectsForCamera();
@@ -402,21 +335,16 @@ export function ContinuousPressingScanner({
           const capabilities = videoTrack.getCapabilities?.() as TorchCapabilities | undefined;
           setTorchAvailable(Boolean(capabilities?.torch));
           if (capabilities?.focusMode?.includes("continuous")) {
-            void videoTrack
-              .applyConstraints({
-                advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet],
-              })
-              .catch(() => {});
+            void videoTrack.applyConstraints({
+              advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet],
+            }).catch(() => {});
           }
         }
         // Native BarcodeDetector when supported, bundled ZXing on iOS.
         decoder = await createCameraDecoder();
-        if (canceled) {
-          decoder?.dispose();
-          return;
-        }
+        if (canceled) { decoder?.dispose(); return; }
         if (!decoder) {
-          stream?.getTracks().forEach((track) => track.stop());
+          stream?.getTracks().forEach(track => track.stop());
           stream = null;
           resumeSeasonalEffects?.();
           resumeSeasonalEffects = null;
@@ -431,17 +359,14 @@ export function ContinuousPressingScanner({
         // Browsers may refuse this request; it is never required for scanning.
         const wakeLock = (navigator as ScreenWakeLockNavigator).wakeLock;
         if (wakeLock && !document.hidden) {
-          void wakeLock
-            .request("screen")
-            .then((lock) => {
-              if (canceled) void lock.release().catch(() => {});
-              else screenLock = lock;
-            })
-            .catch(() => {});
+          void wakeLock.request("screen").then(lock => {
+            if (canceled) void lock.release().catch(() => {});
+            else screenLock = lock;
+          }).catch(() => {});
         }
         void tick(decoder);
       } catch (cause) {
-        stream?.getTracks().forEach((track) => track.stop());
+        stream?.getTracks().forEach(track => track.stop());
         stream = null;
         resumeSeasonalEffects?.();
         resumeSeasonalEffects = null;
@@ -458,8 +383,8 @@ export function ContinuousPressingScanner({
       releaseCamera();
       setEngine(null);
     };
-    // Restart only on assignment, explicit start/stop, tab or browser visibility.
-    // Callback is read through a ref so status updates never restart the stream.
+  // Restart only on assignment, explicit start/stop, tab or browser visibility.
+  // Callback is read through a ref so status updates never restart the stream.
   }, [running, assignment?.assignmentId, handleRead, retryAttempt]);
 
   const toggleTorch = async () => {
@@ -484,12 +409,10 @@ export function ContinuousPressingScanner({
   };
 
   const activeStatus = running ? status : "idle";
-  const badgeColor =
-    last?.outcome === "confirmed"
-      ? "bg-emerald-100 text-emerald-900 border-emerald-400"
-      : last?.outcome === "rejected" || last?.outcome === "duplicate"
-        ? "bg-red-100 text-red-900 border-red-400"
-        : "bg-slate-100 text-slate-900 border-slate-400 dark:bg-slate-800 dark:text-slate-100";
+  const badgeColor = last?.outcome === "confirmed" ? "bg-emerald-100 text-emerald-900 border-emerald-400"
+    : last?.outcome === "rejected" || last?.outcome === "duplicate"
+      ? "bg-red-100 text-red-900 border-red-400"
+      : "bg-slate-100 text-slate-900 border-slate-400 dark:bg-slate-800 dark:text-slate-100";
 
   return (
     <Card className="overflow-hidden" data-testid="continuous-pressing-scanner">
@@ -499,47 +422,27 @@ export function ContinuousPressingScanner({
             <Camera className="h-5 w-5" /> Continuous Camera Scanner
           </CardTitle>
           <Badge variant={activeStatus === "scanning" ? "default" : "secondary"}>
-            {activeStatus === "scanning"
-              ? "Camera live"
-              : activeStatus === "starting"
-                ? "Starting"
-                : activeStatus === "manual"
-                  ? "Manual mode"
-                  : requested && !visible
-                    ? "Paused in background"
-                    : "Camera stopped"}
+            {activeStatus === "scanning" ? "Camera live" : activeStatus === "starting" ? "Starting" :
+              activeStatus === "manual" ? "Manual mode" : requested && !visible ? "Paused in background" : "Camera stopped"}
           </Badge>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
         {!usable && (
           <p className="rounded-md border border-amber-400/50 bg-amber-500/10 p-3 text-sm" role="status">
-            {assignment?.machineActive === false
-              ? "Pressing access is inactive."
-              : "Open Pressing Scan with an authorized Factory account."}
+            {assignment?.machineActive === false ? "Pressing access is inactive." :
+              "Open Pressing Scan with an authorized Factory account."}
           </p>
         )}
         {running && activeStatus !== "manual" && activeStatus !== "error" && (
           <div className="relative overflow-hidden rounded-xl bg-black">
-            <video
-              ref={videoRef}
-              muted
-              playsInline
-              autoPlay
+            <video ref={videoRef} muted playsInline autoPlay
               aria-label="Rear camera barcode preview"
-              className="aspect-[4/3] max-h-[440px] w-full object-cover"
-            />
-            <div
-              className={
-                "pointer-events-none absolute inset-[16%] rounded-md border-2 " +
-                (last?.outcome === "confirmed"
-                  ? "border-emerald-400"
-                  : last?.outcome === "duplicate" || last?.outcome === "rejected"
-                    ? "border-red-500"
-                    : "border-white/70")
-              }
-              aria-hidden="true"
-            >
+              className="aspect-[4/3] max-h-[440px] w-full object-cover" />
+            <div className={"pointer-events-none absolute inset-[16%] rounded-md border-2 " +
+              (last?.outcome === "confirmed" ? "border-emerald-400" :
+                last?.outcome === "duplicate" || last?.outcome === "rejected" ? "border-red-500" : "border-white/70")}
+              aria-hidden="true">
               <div className="absolute left-0 right-0 top-1/2 border-t border-white/50" />
             </div>
             {activeStatus === "starting" && (
@@ -549,115 +452,73 @@ export function ContinuousPressingScanner({
             )}
           </div>
         )}
-        {error && running && (
-          <p role="alert" className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
-            {simpleControls && activeStatus === "manual"
-              ? "Camera scanning is unavailable on this device. Close and reopen the camera, or allow camera access in your browser."
-              : error}
-          </p>
-        )}
+        {error && running && <p role="alert" className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">{simpleControls && activeStatus === "manual" ? "Camera scanning is unavailable on this device. Close and reopen the camera, or allow camera access in your browser." : error}</p>}
         {simpleControls && requested && running && (activeStatus === "error" || activeStatus === "manual") && (
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-11"
+          <Button type="button" variant="outline" className="min-h-11"
             onClick={() => setRetryAttempt((attempt) => attempt + 1)}
-            data-testid="button-pressing-simple-camera-retry"
-          >
+            data-testid="button-pressing-simple-camera-retry">
             <RotateCcw className="mr-2 h-4 w-4" /> Retry camera
           </Button>
         )}
         {!simpleControls && running && (
           <form onSubmit={submitManual} className="flex flex-wrap items-center gap-2">
             <Keyboard className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <Input
-              aria-label="Manual item barcode"
-              placeholder="Manual barcode entry"
-              autoComplete="off"
-              className="min-w-[150px] flex-1"
-              maxLength={120}
-              value={manualCode}
-              onChange={(event) => setManualCode(event.target.value)}
-            />
+            <Input aria-label="Manual item barcode" placeholder="Manual barcode entry" autoComplete="off"
+              className="min-w-[150px] flex-1" maxLength={120}
+              value={manualCode} onChange={event => setManualCode(event.target.value)} />
             <Button type="submit" variant="secondary" disabled={!manualCode.trim()}>
               Read barcode
             </Button>
           </form>
         )}
-        {!simpleControls && (
-          <div className="flex flex-wrap gap-2">
-            {!requested ? (
-              <Button
-                type="button"
-                disabled={!usable}
-                onClick={() => {
-                  unlockAudio();
-                  setLast(null);
-                  setRequested(true);
-                }}
-              >
-                <Camera className="mr-2 h-4 w-4" />
-                Start scanner
-              </Button>
-            ) : (
-              <Button type="button" variant="destructive" onClick={() => setRequested(false)}>
-                <CameraOff className="mr-2 h-4 w-4" />
-                Stop scanner
-              </Button>
-            )}
-            {requested && (activeStatus === "error" || activeStatus === "manual") && (
-              <Button type="button" variant="outline" onClick={() => setRetryAttempt((n) => n + 1)}>
-                <RotateCcw className="mr-2 h-4 w-4" />
-                Retry camera
-              </Button>
-            )}
-            {requested && torchAvailable && (
-              <Button type="button" variant="outline" onClick={() => void toggleTorch()}>
-                {torchOn ? <FlashlightOff className="mr-2 h-4 w-4" /> : <Flashlight className="mr-2 h-4 w-4" />}
-                {torchOn ? "Light off" : "Light on"}
-              </Button>
-            )}
-            <Button
-              type="button"
-              variant="outline"
-              aria-label={sound ? "Disable scanner sound" : "Enable scanner sound"}
-              onClick={() => {
-                if (!sound) unlockAudio();
-                setSound((v) => !v);
-              }}
-            >
-              {sound ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+        {!simpleControls && <div className="flex flex-wrap gap-2">
+          {!requested ? (
+            <Button type="button" disabled={!usable} onClick={() => {
+              unlockAudio();
+              setLast(null);
+              setRequested(true);
+            }}><Camera className="mr-2 h-4 w-4" />Start scanner</Button>
+          ) : (
+            <Button type="button" variant="destructive" onClick={() => setRequested(false)}>
+              <CameraOff className="mr-2 h-4 w-4" />Stop scanner
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              aria-label={vibration ? "Disable scanner vibration" : "Enable scanner vibration"}
-              onClick={() => setVibration((v) => !v)}
-            >
-              <Vibrate className={vibration ? "h-4 w-4" : "h-4 w-4 opacity-40"} />
+          )}
+          {requested && (activeStatus === "error" || activeStatus === "manual") && (
+            <Button type="button" variant="outline" onClick={() => setRetryAttempt(n => n + 1)}>
+              <RotateCcw className="mr-2 h-4 w-4" />Retry camera
             </Button>
-          </div>
-        )}
+          )}
+          {requested && torchAvailable && (
+            <Button type="button" variant="outline" onClick={() => void toggleTorch()}>
+              {torchOn ? <FlashlightOff className="mr-2 h-4 w-4" /> : <Flashlight className="mr-2 h-4 w-4" />}
+              {torchOn ? "Light off" : "Light on"}
+            </Button>
+          )}
+          <Button type="button" variant="outline" aria-label={sound ? "Disable scanner sound" : "Enable scanner sound"}
+            onClick={() => { if (!sound) unlockAudio(); setSound(v => !v); }}>
+            {sound ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+          </Button>
+          <Button type="button" variant="outline" aria-label={vibration ? "Disable scanner vibration" : "Enable scanner vibration"}
+            onClick={() => setVibration(v => !v)}>
+            <Vibrate className={vibration ? "h-4 w-4" : "h-4 w-4 opacity-40"} />
+          </Button>
+        </div>}
         {last && (
           <div role="status" aria-live="polite" className={`rounded-lg border p-3 ${badgeColor}`}>
             <div className="flex flex-wrap justify-between gap-1">
               <strong className="break-all">{last.barcode}</strong>
               <span className="font-mono text-sm" title={"Time in " + PRESSING_TIME_ZONE}>
-                {last.confirmedAt ? capturedTime(last.confirmedAt) : capturedTime(last.at)}
+                {last.confirmedAt
+                  ? capturedTime(last.confirmedAt)
+                  : capturedTime(last.at)}
               </span>
             </div>
             <p className="text-base font-bold" data-testid="pressing-camera-scan-status">
-              {last.outcome === "duplicate"
-                ? "ALREADY SCANNED"
-                : last.outcome === "confirmed"
-                  ? "SCAN CONFIRMED"
-                  : last.outcome === "queued"
-                    ? "WAITING FOR SERVER"
-                    : last.outcome === "processing"
-                      ? "CHECKING…"
-                      : last.outcome === "rejected"
-                        ? "SCAN REJECTED"
-                        : "SCAN PREVIEW"}
+              {last.outcome === "duplicate" ? "ALREADY SCANNED" :
+                last.outcome === "confirmed" ? "SCAN CONFIRMED" :
+                last.outcome === "queued" ? "WAITING FOR SERVER" :
+                last.outcome === "processing" ? "CHECKING…" :
+                last.outcome === "rejected" ? "SCAN REJECTED" : "SCAN PREVIEW"}
             </p>
             {last.outcome === "duplicate" && last.scannedBy && (
               <p className="text-base font-semibold" data-testid="pressing-duplicate-user">
@@ -665,12 +526,15 @@ export function ContinuousPressingScanner({
               </p>
             )}
             {last.outcome !== "duplicate" && <p className="text-sm">{last.message}</p>}
-            {last.outcome === "duplicate" && !last.scannedBy && <p className="text-sm">{last.message}</p>}
+            {last.outcome === "duplicate" && !last.scannedBy && (
+              <p className="text-sm">{last.message}</p>
+            )}
             {last.confirmedAt && (
               <p className="text-xs">
                 Server confirmed: {capturedDate(last.confirmedAt)} {capturedTime(last.confirmedAt)}
                 {" (" + PRESSING_TIME_ZONE + ")"}
                 {last.weightKg ? " · " + last.weightKg + " KG" : ""}
+                
                 {last.confirmationId ? " · Record #" + last.confirmationId : ""}
               </p>
             )}

@@ -186,8 +186,14 @@ import { factoryPressingHistoryReportIndexes } from "../server/startup-schema/03
  * constraint behind the existing 034/035 stages, taking the count from 1429 to
  * 1442. The pre-034 baseline hash is unchanged; nothing moved.
  */
-const EXPECTED_STATEMENT_COUNT = 1480; // 1442 existing + 37 Phase 1 + 1 Phase 6 index
-const EXPECTED_CONTENT_HASH = "29546605193be3d475c6e26253b6667ad850dbc706bb4815be71b1e383a0bf2d";
+/*
+ * Re-pinned when 001-core-tables-and-columns gained the idempotent
+ * user_preferences.factory_mhd_view_default ADD COLUMN (per-user Factory MHD
+ * view preference), taking the count from 1480 to 1481. It sits beside the
+ * table's other ADD COLUMNs; no existing statement changed.
+ */
+const EXPECTED_STATEMENT_COUNT = 1481; // 1443 existing + 37 Phase 1 + 1 Phase 6 index
+const EXPECTED_CONTENT_HASH = "83932076dfc1f98fad41c163f700041aedbc3d69fb74d735a2e98a2de7bead2b";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *
@@ -310,7 +316,8 @@ describe("startup schema integrity", () => {
             supplierTrackingShopDutyDefaultsSchema.length +
             posPortDepartureDateSchema.length +
             zambiaHistoricalPurchaseCostSchema.length +
-            factoryPressingMachineTrackingSchema.length + factoryPressingHistoryReportIndexes.length
+            factoryPressingMachineTrackingSchema.length +
+            factoryPressingHistoryReportIndexes.length
           )
         )
       ),
@@ -325,7 +332,8 @@ describe("startup schema integrity", () => {
       supplierTrackingShopDutyDefaultsSchema.length +
       posPortDepartureDateSchema.length +
       zambiaHistoricalPurchaseCostSchema.length +
-      factoryPressingMachineTrackingSchema.length + factoryPressingHistoryReportIndexes.length;
+      factoryPressingMachineTrackingSchema.length +
+      factoryPressingHistoryReportIndexes.length;
     expect(startupMigrations.slice(-tail, -tail + supplierTrackingShopDutyDefaultsSchema.length)).toEqual(
       supplierTrackingShopDutyDefaultsSchema
     );
@@ -343,20 +351,27 @@ describe("startup schema integrity", () => {
     ]);
     expect(
       startupMigrations.slice(
-        -1 - zambiaHistoricalPurchaseCostSchema.length - factoryPressingMachineTrackingSchema.length - factoryPressingHistoryReportIndexes.length,
-        -zambiaHistoricalPurchaseCostSchema.length - factoryPressingMachineTrackingSchema.length - factoryPressingHistoryReportIndexes.length
+        -1 -
+          zambiaHistoricalPurchaseCostSchema.length -
+          factoryPressingMachineTrackingSchema.length -
+          factoryPressingHistoryReportIndexes.length,
+        -zambiaHistoricalPurchaseCostSchema.length -
+          factoryPressingMachineTrackingSchema.length -
+          factoryPressingHistoryReportIndexes.length
       )
     ).toEqual(posPortDepartureDateSchema);
   });
 
   it("preserves the Zambia native-Kwacha purchase columns before stage 037, additive and idempotent", () => {
     expect(zambiaHistoricalPurchaseCostSchema).toHaveLength(13);
-    expect(startupMigrations.slice(
-      -zambiaHistoricalPurchaseCostSchema.length - factoryPressingMachineTrackingSchema.length - factoryPressingHistoryReportIndexes.length,
-      -factoryPressingMachineTrackingSchema.length - factoryPressingHistoryReportIndexes.length
-    )).toEqual(
-      zambiaHistoricalPurchaseCostSchema
-    );
+    expect(
+      startupMigrations.slice(
+        -zambiaHistoricalPurchaseCostSchema.length -
+          factoryPressingMachineTrackingSchema.length -
+          factoryPressingHistoryReportIndexes.length,
+        -factoryPressingMachineTrackingSchema.length - factoryPressingHistoryReportIndexes.length
+      )
+    ).toEqual(zambiaHistoricalPurchaseCostSchema);
     // Every column statement is an idempotent ADD COLUMN IF NOT EXISTS on one
     // of the two purchase tables, so a re-run against production is a no-op.
     const idempotentColumnStatement = /^ALTER TABLE (purchase_orders|po_line_items) ADD COLUMN IF NOT EXISTS /;
@@ -375,12 +390,12 @@ describe("startup schema integrity", () => {
 
   it("appends the pressing-machine stage 037 after all prior stages", () => {
     expect(factoryPressingMachineTrackingSchema).toHaveLength(37);
-    expect(startupMigrations.slice(
-      -factoryPressingMachineTrackingSchema.length - factoryPressingHistoryReportIndexes.length,
-      -factoryPressingHistoryReportIndexes.length
-    )).toEqual(
-      factoryPressingMachineTrackingSchema
-    );
+    expect(
+      startupMigrations.slice(
+        -factoryPressingMachineTrackingSchema.length - factoryPressingHistoryReportIndexes.length,
+        -factoryPressingHistoryReportIndexes.length
+      )
+    ).toEqual(factoryPressingMachineTrackingSchema);
     const ddl = factoryPressingMachineTrackingSchema.join("; ");
     expect(ddl).toContain("factory_pressing_confirmations_one_active_bale_uk");
     expect(ddl).toContain("WHERE voided_at IS NULL");
