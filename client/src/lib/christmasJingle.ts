@@ -68,7 +68,7 @@ function scheduleSantaHoHoHo(): { stop: () => void } {
       typeof SpeechSynthesisUtterance === "undefined") {
     return { stop: () => undefined };
   }
-  const voice = new SpeechSynthesisUtterance("Ho! Ho! Ho! Merry Christmas!");
+  const voice = new SpeechSynthesisUtterance("Ho! Ho! Ho!");
   voice.lang = "en-US";
   voice.rate = 0.95;
   voice.pitch = 0.58;
@@ -138,9 +138,16 @@ export async function startChristmasJingle(): Promise<ChristmasJinglePlayback> {
     disposed = true;
     if (hoTimer !== undefined) window.clearTimeout(hoTimer);
     if (endTimer !== undefined) window.clearTimeout(endTimer);
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    window.removeEventListener("pagehide", stop);
     santaVoice?.stop();
     void context.close().catch(() => undefined);
   };
+  const onVisibilityChange = () => {
+    if (document.hidden) stop();
+  };
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  window.addEventListener("pagehide", stop);
 
   try {
     const master = context.createGain();
