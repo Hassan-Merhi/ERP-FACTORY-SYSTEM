@@ -1,4 +1,4 @@
-import { AlertTriangle, Building2, CalendarDays, CheckCircle2, ClipboardList, Coins, Copy, Ellipsis, ReceiptText, Search, Trash2, UsersRound, Wallet } from "lucide-react";
+import { AlertTriangle, Building2, CalendarDays, CheckCircle2, Coins, Copy, Ellipsis, ReceiptText, Search, Trash2, UsersRound, Wallet } from "lucide-react";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -222,7 +222,7 @@ export function PropertiesPaymentsPremium({
               </thead>
               <tbody>
                 {payments.map((p) => {
-                  const readOnly = Boolean(p.readOnly || (p.sourceModule && p.sourceModule !== "PROPERTIES"));
+                  const readOnly = Boolean(p.readOnly || p.sourceModule !== "PROPERTIES");
                   return (
                     <tr key={p.id} data-testid={`row-payment-${p.id}`}>
                       <td data-label="Date"><span className="properties-payments-date"><CalendarDays className="h-4 w-4" aria-hidden="true" />{format(new Date(p.paymentDate), "dd MMM yyyy")}</span></td>
