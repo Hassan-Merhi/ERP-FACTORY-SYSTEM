@@ -278,6 +278,7 @@ These current-reference documents are indexed here for audit coverage. Their beh
 | [christmas-mode-phase4.md](christmas-mode-phase4.md) | Global Christmas Mode Phase 4: one-time post-login entrance |
 | [christmas-mode-phase5.md](christmas-mode-phase5.md) | Global Christmas Mode Phase 5: performance, scanner and accessibility hardening |
 | [christmas-mode-developer-allowlist.md](christmas-mode-developer-allowlist.md) | Christmas Mode: Developer-only access and per-user rollout |
+| [christmas-mode-v2.md](christmas-mode-v2.md) | Christmas Mode 2.0: balanced seasonal experience, six effects and intensity |
 
 | [October 2026 salary reconciliation](accounting/october-2026-salary-reconciliation-20261103.md) | Read-only October payroll, paid cash and salary advances reconciliation (no journal edits) |
 | [Factory worker-advance ledger audit](accounting/factory-worker-advance-ledger-audit-2026-11-03.md) | Current worker-advance ledger investigation, safeguards and payment evidence |
