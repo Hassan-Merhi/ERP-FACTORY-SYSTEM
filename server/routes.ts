@@ -5,6 +5,7 @@ import { registerApplicationRoutes } from "./routes/applicationRoutes";
 import { registerOperationalMonitoringRoutes } from "./routes/admin/operationalMonitoringRoutes";
 import { registerTrainingMediaRoutes } from "./routes/trainingMediaRoutes";
 import { registerLegacyQueueDecisionRoutes } from "./routes/offline/legacyQueueDecisionRoutes";
+import { registerSeasonalAppearanceRoutes } from "./routes/seasonalAppearanceRoutes";
 import { registerTenantIsolationBoundary } from "./routes/tenantBoundaryRegistrar";
 import { registerOperationalVoucherRequestBoundary } from "./services/accounting/operationalVoucherRequestBoundary";
 import { registerVoucherPathPhase5to6Boundary } from "./services/accounting/voucherPathPhase5to6Boundary";
@@ -16,5 +17,6 @@ export function registerRoutes(app: Express): Promise<Server> {
   registerOperationalMonitoringRoutes(app);
   registerTrainingMediaRoutes(app);
   registerLegacyQueueDecisionRoutes(app);
+  registerSeasonalAppearanceRoutes(app);
   return registerApplicationRoutes(app);
 }
