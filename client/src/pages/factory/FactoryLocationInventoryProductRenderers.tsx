@@ -9,7 +9,7 @@ import type { useFactoryLocationInventory } from "./FactoryLocationInventoryMode
 
 type FactoryLocationInventoryModel = ReturnType<typeof useFactoryLocationInventory>;
 
-export function createFactoryLocationProductRenderers(inventory: FactoryLocationInventoryModel) {
+export function createFactoryLocationProductRenderers(inventory: FactoryLocationInventoryModel, nameFor: (articleCode: string | null | undefined, originalName: string) => string) {
   const {
     fmt,
     formatAmount,
@@ -57,7 +57,7 @@ export function createFactoryLocationProductRenderers(inventory: FactoryLocation
               className={`text-left font-medium leading-snug ${proformaMode ? "" : "hover:underline cursor-pointer"}`}
               data-testid={`link-product${testIdSuffix}-${prod.productId}`}
             >
-              {prod.productName}
+              {nameFor(prod.articleCode, prod.productName)}
             </button>
             {prod.isInactive && (
               <Badge variant="outline" className="text-xs text-muted-foreground no-default-active-elevate">
