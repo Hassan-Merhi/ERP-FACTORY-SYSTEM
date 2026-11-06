@@ -19,7 +19,7 @@ export function ChristmasModeSettingsCard() {
 
   const config = configQuery.data;
   const enabled = draft?.enabled ?? config?.enabled ?? false;
-  const selectedIds = draft?.userIds ?? config?.userIds ?? [];
+  const selectedIds = useMemo(() => draft?.userIds ?? config?.userIds ?? [], [draft?.userIds, config?.userIds]);
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const filteredUsers = useMemo(
     () => (config?.users ?? []).filter((user) => user.username.toLowerCase().includes(search.trim().toLowerCase())),
@@ -76,8 +76,8 @@ export function ChristmasModeSettingsCard() {
           Christmas Mode
         </CardTitle>
         <CardDescription>
-          Developer-only control for snowfall, festive lights, sidebar ornaments and
-          the Christmas login welcome. Enable it for specific user accounts only.
+          Developer-only control for snowfall, festive lights, sidebar ornaments and the Christmas login welcome. Enable
+          it for specific user accounts only.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -116,12 +116,18 @@ export function ChristmasModeSettingsCard() {
                     Select individual users. New users are not added automatically.
                   </p>
                 </div>
-                <span className="shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold" data-testid="christmas-selected-count">
+                <span
+                  className="shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold"
+                  data-testid="christmas-selected-count"
+                >
                   {selectedIds.length} selected
                 </span>
               </div>
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
                 <Input
                   aria-label="Search Christmas Mode users"
                   placeholder="Search users by username..."
@@ -145,10 +151,7 @@ export function ChristmasModeSettingsCard() {
                   </p>
                 ) : (
                   filteredUsers.map((user) => (
-                    <div
-                      key={user.id}
-                      className="flex items-center gap-3 px-3 py-3 text-sm hover:bg-muted/40"
-                    >
+                    <div key={user.id} className="flex items-center gap-3 px-3 py-3 text-sm hover:bg-muted/40">
                       <Checkbox
                         id={`christmas-user-${user.id}`}
                         checked={selectedSet.has(user.id)}
@@ -191,9 +194,9 @@ export function ChristmasModeSettingsCard() {
             <p className="flex items-start gap-2 text-xs text-muted-foreground" role="status">
               <Globe2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>
-                Access is per user across every company they can open. The master switch is OFF by default;
-                everyone not selected remains excluded, including Admin and Owner accounts.
-                Changes to other users' sessions appear on their next settings refresh.
+                Access is per user across every company they can open. The master switch is OFF by default; everyone not
+                selected remains excluded, including Admin and Owner accounts. Changes to other users' sessions appear
+                on their next settings refresh.
               </span>
             </p>
           </>

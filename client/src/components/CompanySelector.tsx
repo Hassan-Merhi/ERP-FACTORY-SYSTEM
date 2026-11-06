@@ -293,7 +293,9 @@ export function CompanySelector({ showMobileName = false }: { showMobileName?: b
               >
                 <CompanyAvatar name={company.name} type={company.companyType} size="md" />
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="truncate text-[12px] font-semibold leading-tight sm:text-[13px]">{company.name}</span>
+                  <span className="truncate text-[12px] font-semibold leading-tight sm:text-[13px]">
+                    {company.name}
+                  </span>
                   <span className="text-[10px] font-medium leading-tight dark:brightness-125" style={{ color }}>
                     {label}
                   </span>
