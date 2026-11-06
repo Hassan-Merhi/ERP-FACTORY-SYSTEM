@@ -28,6 +28,7 @@ import {
   Printer,
   Images,
   Clock,
+  Snowflake,
 } from "lucide-react";
 
 import { FxRatesCard } from "./settings/FxRatesCard";
@@ -35,6 +36,7 @@ import { CompanyTimezoneCard } from "./settings/CompanyTimezoneCard";
 import { CompaniesTab } from "./settings/CompaniesTab";
 import { SystemToolsTab } from "./settings/SystemToolsTab";
 import { PreferencesTab } from "./settings/PreferencesTab";
+import { ChristmasModeSettingsCard } from "./settings/ChristmasModeSettingsCard";
 import { EditLogTab } from "./settings/EditLogTab";
 import { SessionsHub } from "./settings/SessionsHub";
 import { DataToolsTab } from "./settings/DataToolsTab";
@@ -116,6 +118,7 @@ export default function Settings() {
 
   const canManageCompanyTimezone = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
   const canManageSessions = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
+  const canManageChristmasMode = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
 
   const sidebarGroups = [
     {
@@ -123,6 +126,7 @@ export default function Settings() {
       items: [
         { key: "companies", label: "Companies", icon: Building2 },
         { key: "floating-widgets", label: "Floating Widgets", icon: LayoutPanelLeft },
+        { key: "appearance-seasonal", label: "Appearance & Seasonal", icon: Snowflake },
         { key: "preferences", label: "Preferences", icon: Settings2, devOnly: true },
       ],
     },
@@ -253,6 +257,9 @@ export default function Settings() {
 
         <div className="flex-1 sm:overflow-y-auto py-3 sm:p-6">
           {activeSection === "companies" && <CompaniesTab />}
+          {activeSection === "appearance-seasonal" && (
+            <ChristmasModeSettingsCard canManage={canManageChristmasMode} />
+          )}
           {activeSection === "floating-widgets" && (
             <div className="space-y-5 max-w-2xl">
               <div>
