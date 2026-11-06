@@ -22,3 +22,23 @@ export interface Phase9AttachmentEnvelope extends Phase9AttachmentEvidence {
   kind: "attachment.file.v1";
 }
 export function phase9AttachmentEnvelope(evidence: Phase9AttachmentEvidence): Phase9AttachmentEnvelope;
+export const PHASE9_ATTACHMENT_UPDATE_KIND: "attachment.file-update.v1";
+export const PHASE9_ATTACHMENT_FILE_CHANGED: "PHASE9_ATTACHMENT_FILE_CHANGED";
+export type Phase9AttachmentFileRef = { origin: "lan"; localFileId: number } | { origin: "cloud"; fileId: number };
+export interface Phase9AttachmentPlacement {
+  displayName: string | null;
+  folderId: number | null;
+}
+export interface Phase9AttachmentUpdateEvidence {
+  companyId: number;
+  localFileId: number;
+  actorUserId: string;
+  actorUsername: string;
+  requestId: string;
+  fileRef: Phase9AttachmentFileRef;
+  before: Phase9AttachmentPlacement;
+  after: Phase9AttachmentPlacement;
+}
+export function phase9AttachmentUpdateEnvelope(
+  evidence: Phase9AttachmentUpdateEvidence
+): Phase9AttachmentUpdateEvidence & { kind: "attachment.file-update.v1" };

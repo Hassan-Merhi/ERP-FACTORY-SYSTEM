@@ -22,6 +22,7 @@ type CentralPaymentReceiptBody = Omit<
 import { triggerIntercompanyNotifications } from "../intercompanyNotificationRoutes";
 import { buildVoucherChangesForCreate, logAudit, snapshotVoucherEntries } from "../_helpers";
 import { checkAccountWhatsAppRule } from "../factoryWhatsappRoutes";
+import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
 import type { FactoryDaybookVoucherLike } from "../../services/accounting/daybookConvergence";
 
 const postingDependencies = createDatabasePostingDependencies();
@@ -129,7 +130,9 @@ async function writeFactoryDaybookCompatibilityTx(input: {
 }
 
 async function createCentralPaymentReceipt(req: Request, res: Response, next: NextFunction): Promise<void> {
-  if (!supportsCentralPaymentReceipt(req.body)) {
+  // Factory LAN server: the payment route that records it for the cloud (with the
+  // same posting code the cloud replays) serves it, keyed on the same clientRequestId.
+  if (!supportsCentralPaymentReceipt(req.body) || isPhase9LanPrimary()) {
     next();
     return;
   }

@@ -1,7 +1,7 @@
 {
   "program": "6D",
-  "baselineHead": "a05939c001df9ce3f9f5e54442b19f805f1c7aee",
-  "reviewedAt": "2026-11-03",
+  "baselineHead": "3e8f11bb3cb91b9ea6eecf1f99edd18be5918ba6",
+  "reviewedAt": "2026-11-06",
   "groups": {
     "intentional-full-read": [
       "P6D-a4ef6930012d",
@@ -33,7 +33,8 @@
       "P6D-f886378d22f6",
       "P6D-9348f4309ab1",
       "P6D-b8717ee21044",
-      "P6D-aacbb7a00103"
+      "P6D-aacbb7a00103",
+      "P6D-623dc1472cde"
     ],
     "transaction-order-dependency": [
       "P6D-97f84dd925c0",

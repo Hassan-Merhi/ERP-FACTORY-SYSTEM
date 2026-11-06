@@ -108,6 +108,8 @@ describe("factory LAN edge deployment policy", () => {
               FACTORY_EDGE_PRIMARY_ACK: "CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED",
               FACTORY_EDGE_WRITER_EPOCH: "2",
               FACTORY_EDGE_BASELINE_SHA256: "a".repeat(64),
+              // The plan batches below have had their staging drill approved.
+              FACTORY_EDGE_APPROVED_PLAN_BATCHES: "2, 3, 4",
             }
           : {}),
       };
@@ -149,10 +151,55 @@ describe("factory LAN edge deployment policy", () => {
       // POS sale cancellation: DELETE of a voucher (the route itself refuses non-sales).
       expect(edgeBlocksWrite(config, "DELETE", "/api/vouchers/42")).toBe(mode === "read-only");
       expect(edgeBlocksWrite(config, "PUT", "/api/vouchers/42")).toBe(true);
-      // Single stock item edit: PATCH only (create, delete and merge stay cloud-only).
+      // Phase 10 operator buttons: pause/resume on any LAN server; decisions only on the cloud.
+      expect(edgeBlocksWrite(config, "POST", "/api/edge/operator/sync-control")).toBe(false);
+      expect(edgeBlocksWrite(config, "POST", "/api/edge/operator/conflicts/decide")).toBe(true);
+      expect(edgeBlocksWrite(config, "PUT", "/api/edge/operator/sync-control")).toBe(true);
+      // Single stock item: edit (PATCH), delete and create are captured; merge stays cloud-only.
       expect(edgeBlocksWrite(config, "PATCH", "/api/stock-items/42")).toBe(mode === "read-only");
-      for (const verb of ["POST", "PUT", "DELETE"]) {
+      expect(edgeBlocksWrite(config, "DELETE", "/api/stock-items/42")).toBe(mode === "read-only");
+      expect(edgeBlocksWrite(config, "POST", "/api/stock-items")).toBe(mode === "read-only");
+      for (const verb of ["POST", "PUT"]) {
         expect(edgeBlocksWrite(config, verb, "/api/stock-items/42")).toBe(true);
+      }
+      for (const verb of ["PUT", "PATCH", "DELETE"]) {
+        expect(edgeBlocksWrite(config, verb, "/api/stock-items")).toBe(true);
+      }
+      // Plan batch 3: transfer edit (PUT), finalize/approve, revisions and their review.
+      const open = mode === "read-only";
+      expect(edgeBlocksWrite(config, "PUT", "/api/stock-transfers/42")).toBe(open);
+      expect(edgeBlocksWrite(config, "POST", "/api/stock-transfers/42/approve")).toBe(open);
+      expect(edgeBlocksWrite(config, "POST", "/api/stock-transfers/42/revisions")).toBe(open);
+      expect(edgeBlocksWrite(config, "POST", "/api/stock-transfer-revisions/7/approve")).toBe(open);
+      expect(edgeBlocksWrite(config, "POST", "/api/stock-transfer-revisions/7/reject")).toBe(open);
+      expect(edgeBlocksWrite(config, "POST", "/api/vouchers/9/finalize")).toBe(open);
+      for (const verb of ["POST", "PATCH", "DELETE"]) {
+        expect(edgeBlocksWrite(config, verb, "/api/stock-transfers/42")).toBe(true);
+      }
+      expect(edgeBlocksWrite(config, "DELETE", "/api/stock-transfer-revisions/7")).toBe(true);
+      expect(edgeBlocksWrite(config, "PATCH", "/api/stock-transfer-revisions/7/optional")).toBe(true);
+      expect(edgeBlocksWrite(config, "POST", "/api/vouchers/9/reopen")).toBe(true);
+      for (const step of [
+        "parse",
+        "validate",
+        "import",
+        "parse-multi-source",
+        "validate-multi-source",
+        "import-multi-source",
+      ]) {
+        expect(edgeBlocksWrite(config, "POST", `/api/stock-transfer-import/${step}`)).toBe(open);
+        expect(edgeBlocksWrite(config, "PUT", `/api/stock-transfer-import/${step}`)).toBe(true);
+      }
+      expect(edgeBlocksWrite(config, "POST", "/api/locations/12/import-inventory")).toBe(open);
+      expect(edgeBlocksWrite(config, "POST", "/api/locations/12/import-cost-prices")).toBe(true);
+      expect(edgeBlocksWrite(config, "PUT", "/api/locations/12/import-inventory")).toBe(true);
+      // Plan batch 4: Payment / Receipt edits (deletes ride DELETE /api/vouchers/:id).
+      expect(edgeBlocksWrite(config, "PATCH", "/api/vouchers/9/payment-receipt")).toBe(open);
+      expect(edgeBlocksWrite(config, "PUT", "/api/vouchers/9/payment-receipt")).toBe(true);
+      // Plan batch 4: file rename / move (PATCH); file delete stays cloud-only.
+      expect(edgeBlocksWrite(config, "PATCH", "/api/files/42")).toBe(open);
+      for (const verb of ["POST", "PUT", "DELETE"]) {
+        expect(edgeBlocksWrite(config, verb, "/api/files/42")).toBe(true);
       }
       for (const path of [
         "/api/factory/pressing-machines/void",
@@ -161,20 +208,52 @@ describe("factory LAN edge deployment policy", () => {
         "/api/containers/abc/offload",
         "/api/inventory/silent-transfer/apply",
         "/api/attachments",
-        "/api/files/42",
         "/api/payments",
-        "/api/stock-items",
         "/api/stock-items/import",
         "/api/stock-items/bulk-delete",
         "/api/stock-items/42/merge",
-        "/api/stock-transfers/42",
-        "/api/stock-transfer-import/import",
       ]) {
         for (const verb of ["POST", "PUT", "PATCH", "DELETE"]) {
           expect(edgeBlocksWrite(config, verb, path)).toBe(true);
         }
       }
     }
+  });
+  it("refuses each plan batch's offline routes on the LAN until its staging drill is approved", () => {
+    const primary = {
+      ...safe,
+      FACTORY_EDGE_WRITE_MODE: "lan-primary",
+      FACTORY_EDGE_PRIMARY_ACK: "CLOUD_WRITES_FENCED_AND_EDGE_DATA_APPROVED",
+      FACTORY_EDGE_WRITER_EPOCH: "2",
+      FACTORY_EDGE_BASELINE_SHA256: "a".repeat(64),
+    };
+    const none = readFactoryEdgeConfiguration(primary);
+    expect(none).toMatchObject({ approvedPlanBatches: [] });
+    expect(edgeBlocksWrite(none, "POST", "/api/stock-items")).toBe(true);
+    expect(edgeBlocksWrite(none, "PUT", "/api/stock-transfers/42")).toBe(true);
+    expect(edgeBlocksWrite(none, "POST", "/api/locations/12/import-inventory")).toBe(true);
+    expect(edgeBlocksWrite(none, "PATCH", "/api/vouchers/9/payment-receipt")).toBe(true);
+    expect(edgeBlocksWrite(none, "PATCH", "/api/files/42")).toBe(true);
+    // Workflows approved before the plan, and the operator pause button, are not gated.
+    expect(edgeBlocksWrite(none, "POST", "/api/stock-transfers")).toBe(false);
+    expect(edgeBlocksWrite(none, "PATCH", "/api/stock-items/42")).toBe(false);
+    expect(edgeBlocksWrite(none, "POST", "/api/edge/operator/sync-control")).toBe(false);
+
+    const onlyTwo = readFactoryEdgeConfiguration({ ...primary, FACTORY_EDGE_APPROVED_PLAN_BATCHES: "2" });
+    expect(edgeBlocksWrite(onlyTwo, "DELETE", "/api/stock-items/42")).toBe(false);
+    expect(edgeBlocksWrite(onlyTwo, "POST", "/api/stock-transfer-import/import")).toBe(true);
+
+    for (const value of ["1", "5", "2;3", "two", "2,9"]) {
+      expect(() => readFactoryEdgeConfiguration({ ...primary, FACTORY_EDGE_APPROVED_PLAN_BATCHES: value })).toThrow(
+        "EDGE_PLAN_BATCHES_INVALID"
+      );
+    }
+  });
+  it("lets only the conflict decision route through a fenced cloud", () => {
+    const fenced = { mode: "cloud", primary: false, siteId: null, writeMode: "fenced" } as never;
+    expect(edgeBlocksWrite(fenced, "POST", "/api/edge/operator/conflicts/decide")).toBe(false);
+    expect(edgeBlocksWrite(fenced, "POST", "/api/edge/operator/sync-control")).toBe(true);
+    expect(edgeBlocksWrite(fenced, "POST", "/api/vouchers/with-entries")).toBe(true);
   });
   it("never claims cloud sync", () => {
     const p = readFactoryEdgeConfiguration(safe);

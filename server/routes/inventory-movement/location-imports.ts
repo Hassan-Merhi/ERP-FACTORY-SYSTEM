@@ -22,11 +22,21 @@ import {
 } from "../../services/accounting/perpetualInventory/cutoverRefusal";
 import { applyPostedLocationImport, planLocationImport, type PostedImportRow } from "./locationImportJournal";
 import { parseMoneyInput, toMoney } from "../../lib/money";
+import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
+import { offlineEdgeText } from "../../i18n/offlineEdgeMessages";
+import {
+  importLocationInventoryOnLan,
+  lanCanImportInventory,
+} from "../../services/inventory/locationImportOfflineCapture";
 
 const locationImportBudget = privilegedRequestBudget({
   maxBodyBytes: 1024 * 1024,
   maxCollectionItems: 2_000,
 });
+function importSummary(results: { created: unknown[]; updated: unknown[]; skipped: unknown[]; errors: unknown[] }) {
+  return `Import completed: ${results.created.length} created, ${results.updated.length} updated, ${results.skipped.length} skipped, ${results.errors.length} errors`;
+}
+
 const locationImportConcurrency = privilegedConcurrencyLimit({ scope: "location-import" });
 
 export function registerLocationImportRoutes(app: Express) {
@@ -127,6 +137,22 @@ export function registerLocationImportRoutes(app: Express) {
           role: req.user?.role,
         });
         if ("refusal" in importPlan) return res.status(importPlan.refusal.status).json(importPlan.refusal.body);
+
+        // Factory LAN server: each row becomes a recorded quantity change (plan batch 3).
+        if (isPhase9LanPrimary()) {
+          if (!(await lanCanImportInventory(req, req.session.currentCompanyId))) {
+            return res.status(403).json({
+              code: "EDGE_INVENTORY_IMPORT_NEEDS_ADJUST_RIGHT",
+              message: offlineEdgeText("inventoryImportNeedsAdjustRight", req.headers["accept-language"]),
+            });
+          }
+          const offline = await importLocationInventoryOnLan(req, {
+            companyId: req.session.currentCompanyId,
+            location: { id: location.id, name: location.name },
+            items,
+          });
+          return res.json({ message: importSummary(offline), results: offline });
+        }
         const postedRows: PostedImportRow[] = [];
 
         // Get all stock items and stock groups for code matching
@@ -309,10 +335,7 @@ export function registerLocationImportRoutes(app: Express) {
           results.updated.push(...applied.updated);
         }
 
-        res.json({
-          message: `Import completed: ${results.created.length} created, ${results.updated.length} updated, ${results.skipped.length} skipped, ${results.errors.length} errors`,
-          results,
-        });
+        res.json({ message: importSummary(results), results });
       } catch (error: unknown) {
         if (sendInventoryCutoverRefusal(res, error)) return;
         res.status(500).json({ message: getErrorMessage(error) });

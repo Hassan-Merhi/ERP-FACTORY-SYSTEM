@@ -415,7 +415,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/vouchers/:id/finalize",
   "POST /api/vouchers/bulk-delete",
   "POST /api/vouchers/journal",
-  "POST /api/vouchers/payment-receipt",
   "POST /api/vouchers/with-entries",
   "PUT /api/factory/daybook/:entryId",
   "PUT /api/factory/pos/sales/:id",
@@ -480,11 +479,18 @@ afterAll(() => {
  * registrations that always served these paths hand their writes to the
  * migration services and the immutable revision lifecycle.
  *
+ * POST /api/vouchers/payment-receipt joined them in offline plan batch 4
+ * (2026-11-05): the Payment / Receipt edit moved, unchanged, to
+ * services/accounting/paymentReceiptVoucherEdit.ts so the factory LAN capture
+ * and the cloud replay share it, and the route file no longer names the
+ * voucher-entries table; the route still posts vouchers and their entries.
+ *
  * POST /api/factory/fx-agent-wallets/:id/reverse-conversion (#2392) moves FX
  * wallet money by appending a reversal row to factory_fx_agent_wallet_operations,
  * a table the coverage audit does not list as sensitive, so it is swept here.
  */
 const DELEGATED_WRITE_ROUTES = [
+  "POST /api/vouchers/payment-receipt",
   "POST /api/factory/fx-agent-wallets/:id/reverse-conversion",
   "DELETE /api/factory/v3/loads/:id/bales/:baleId",
   "PATCH /api/factory/v3/loads/:id/cancel",

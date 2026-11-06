@@ -24,6 +24,13 @@ import { AppLoadingState } from "@/app/AppLoadingState";
 import { useAuthenticatedUser } from "@/app/useAuthenticatedUser";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import {
+  ColdStartReadOnlyBanner,
+  ColdStartUnlockRoute,
+  useColdStartTicketAvailable,
+} from "@/components/OfflineColdStartGate";
+import { authenticatedUserQueryKey } from "@/contracts/sessionQueryContracts";
+import { LegacyQueueRecoveryPanel } from "@/components/LegacyQueueRecoveryPanel";
+import {
   applyGlobalForceRefresh,
   resetGlobalForceRefreshBaseline,
   shouldApplyGlobalForceRefresh,
@@ -208,10 +215,18 @@ function DeferredAuthenticatedUtilities() {
 
 function AuthenticatedRoot() {
   const { user, isLoading, error, handleLogout } = useAuthenticatedUser();
+  // Plan batch 5: with no connection at all, a laptop with a cold-start ticket
+  // may open its prepared data read-only instead of waiting to reconnect.
+  const coldStartAvailable = useColdStartTicketAvailable(Boolean(error) && !user);
 
   // fetchAuthenticatedUser returns null only for a confirmed 401. Temporary
   // network/server failures remain errors and must never masquerade as logout.
   if (!isLoading && !error && user === null) return <Redirect to="/login" />;
+  if (error && !user && coldStartAvailable) {
+    return (
+      <ColdStartUnlockRoute onUnlocked={() => void queryClient.resetQueries({ queryKey: authenticatedUserQueryKey })} />
+    );
+  }
   if (isLoading || error || !user) {
     return <AppLoadingState message={error ? "Reconnecting to your session" : undefined} />;
   }
@@ -224,6 +239,8 @@ function AuthenticatedRoot() {
             <CurrencyProvider>
               <CursorNavProvider>
                 <ServerRestartWatcher />
+                <ColdStartReadOnlyBanner />
+                <LegacyQueueRecoveryPanel />
                 <AuthenticatedApp user={user} handleLogout={handleLogout} />
                 <DeferredAuthenticatedUtilities />
                 <UpdateBanner key={`${user.id}:${user.role}`} />

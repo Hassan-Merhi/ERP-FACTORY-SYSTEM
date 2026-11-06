@@ -17,6 +17,10 @@ import { applyReferenceMutationResponse } from "./referenceMutationCache";
 import { isAbortError } from "./abortError";
 import { getRealtimeClientId } from "./realtimeClientIdentity";
 import { factoryPageOwnsAccountsAllRead, factoryPageOwnsSharedAccountingRead } from "./factoryClientAccess";
+import { coldStartReadOnlyActive, coldStartReadOnlyResponse } from "./offline/coldStartState";
+
+/** Session writes a read-only cold-start viewer may still make (sign in / out). */
+const COLD_START_ALLOWED_WRITES = new Set(["/api/auth/login", "/api/auth/logout", "/api/csrf-token"]);
 
 /* ── Timezone-aware date utility ───────────────────────────────────────────── */
 // Stores the configured timezone for the current company.
@@ -261,6 +265,20 @@ if (
       return expiredSessionResponse();
     }
 
+    // Plan batch 5 (decision 10): a laptop that reaches neither the cloud nor
+    // the factory server is a read-only viewer. Every write is refused here,
+    // before it can be sent or queued anywhere. Signing in again is allowed.
+    if (
+      OFFLINE_MODE_ENABLED &&
+      coldStartReadOnlyActive() &&
+      !["GET", "HEAD", "OPTIONS"].includes(method) &&
+      !!pathname &&
+      pathname.startsWith("/api/") &&
+      !COLD_START_ALLOWED_WRITES.has(pathname)
+    ) {
+      return coldStartReadOnlyResponse();
+    }
+
     // Factory pages reuse a small set of shared ERP accounting/inventory APIs.
     // Mark every API request made while the browser is on a Factory route,
     // including raw fetch() calls, so the server can enforce the Factory page/tab
@@ -362,8 +380,9 @@ if (
     const exactReadUrl = method === "GET" && typeof input === "string" && input.startsWith("/api/") ? input : null;
     const fromOfflineRead = async (): Promise<Response | null> => {
       if (!OFFLINE_MODE_ENABLED || !exactReadUrl || effectiveInit?.signal?.aborted) return null;
-      const { readPreparedOfflineResponse } = await import("./offline/offlineReadCache");
-      return readPreparedOfflineResponse(method, exactReadUrl);
+      const { readColdStartIdentityResponse, readPreparedOfflineResponse } = await import("./offline/offlineReadCache");
+      // A read-only cold start (plan batch 5) also answers the identity reads from its sealed ticket.
+      return readColdStartIdentityResponse(method, exactReadUrl) ?? readPreparedOfflineResponse(method, exactReadUrl);
     };
     let fallbackRes: Response;
     try {

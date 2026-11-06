@@ -5,26 +5,16 @@
  * also proves the accounting facts (voucher lines, voucher count) are
  * untouched — cost centers classify recognized expense, they never post it.
  */
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import ExcelJS from "exceljs";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { pool } from "../server/db";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
+import { applyCostCenterMigrations } from "./helpers/costCenterMigrations";
 
 const PREFIX = "costctrlife";
 const DATE = "2026-09-11";
-const MIGRATIONS = [
-  "20261021_001_cost_centers_phase1",
-  "20261021_002_cost_centers_phase2_integrity",
-  "20261021_003_cost_centers_phase5_automation",
-  "20261021_004_cost_centers_phase6_budgets",
-  "20261021_005_cost_centers_phase7_history",
-  "20261021_006_cost_centers_phase8_hardening",
-  "20261021_007_cost_centers_historical_batch_size",
-];
 const BASE = "/api/cost-centers";
 const REPORT_WINDOW = "fromDate=2026-09-01&toDate=2026-09-30";
 
@@ -119,9 +109,7 @@ function center(report: Awaited<ReturnType<typeof summary>>, id: number) {
 
 beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
-  for (const tag of MIGRATIONS) {
-    await pool.query(readFileSync(path.join(__dirname, `../migrations/${tag}.sql`), "utf8"));
-  }
+  await applyCostCenterMigrations(pool);
   agent = request.agent(ctx.app) as request.SuperAgentTest;
   const login = await agent
     .post("/api/auth/login")
