@@ -310,6 +310,33 @@
   background: rgba(25, 186, 129, 0.14);
 }
 
+.properties-rentals-mobile-stats { gap: 10px; }
+.properties-rentals-mobile-stats > div {
+  min-height: 104px;
+  padding: 15px;
+  border-radius: 14px;
+  border: 1px solid var(--rent-border);
+  background: linear-gradient(135deg, var(--rent-surface), var(--mobile-stat-tint, rgba(129,140,248,0.08)));
+  box-shadow: 0 5px 16px rgba(8,18,49,0.05);
+}
+.properties-rentals-mobile-stats > div:nth-child(1) { --mobile-stat-tint: rgba(135,156,209,0.12); }
+.properties-rentals-mobile-stats > div:nth-child(2) { --mobile-stat-tint: rgba(47,114,238,0.14); }
+.properties-rentals-mobile-stats > div:nth-child(3) { --mobile-stat-tint: rgba(16,185,129,0.13); }
+.properties-rentals-mobile-stats > div:nth-child(4) { --mobile-stat-tint: rgba(225,78,100,0.13); }
+.properties-rentals-mobile-stats > div:nth-child(5) { --mobile-stat-tint: rgba(221,75,97,0.13); }
+.properties-rentals-mobile-stats > div:nth-child(6) { --mobile-stat-tint: rgba(16,185,129,0.14); }
+.properties-rentals-mobile-stats dt {
+  color: var(--rent-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+.properties-rentals-mobile-stats dd {
+  margin-top: 11px;
+  font-size: clamp(18px, 5vw, 24px);
+  font-weight: 780;
+  letter-spacing: -0.025em;
+}
+
 @media (max-width: 1150px) {
   .properties-rentals-hero { align-items: flex-start; }
   .properties-rentals-hero-actions { justify-content: flex-start; width: 100%; }
