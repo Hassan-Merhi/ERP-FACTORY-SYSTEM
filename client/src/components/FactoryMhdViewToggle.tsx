@@ -41,4 +41,9 @@ function MhdToggleInner() {
     </div>
   );
 }
-\nexport function FactoryMhdViewToggle() {\n  const [location] = useLocation();\n  if (!affectedPaths.some((path) => location === path || location.startsWith(path + "/"))) return null;\n  return <MhdToggleInner />;\n}\n
+
+export function FactoryMhdViewToggle() {
+  const [location] = useLocation();
+  if (!affectedPaths.some((path) => location === path || location.startsWith(path + "/"))) return null;
+  return <MhdToggleInner />;
+}
