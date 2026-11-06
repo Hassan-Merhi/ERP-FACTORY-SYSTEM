@@ -323,14 +323,25 @@ export function SummaryCard({
   icon: React.ReactNode;
   accent?: string;
 }) {
+  const tone =
+    label === "Delayed" || label === "Offload Overdue"
+      ? "border-rose-200/70 from-rose-50 to-card dark:border-rose-500/30 dark:from-rose-500/15"
+      : label === "Container Cost"
+        ? "border-emerald-200/70 from-emerald-50 to-card dark:border-emerald-500/30 dark:from-emerald-500/15"
+        : label === "Transport + Duty"
+          ? "border-amber-200/70 from-amber-50 to-card dark:border-amber-500/30 dark:from-amber-500/15"
+          : label === "At Sea / OTW" || label === "In Transit"
+            ? "border-sky-200/70 from-sky-50 to-card dark:border-sky-500/30 dark:from-sky-500/15"
+            : "border-violet-200/70 from-violet-50 to-card dark:border-violet-500/30 dark:from-violet-500/15";
+
   return (
-    <div className="flex flex-nowrap! items-center gap-3 rounded-lg border bg-card px-3 py-2.5 min-w-0 sm:px-4 sm:py-3">
-      <div className={cn("flex items-center justify-center h-9 w-9 rounded-md shrink-0", accent ?? "bg-muted")}>
+    <div className={cn("flex min-w-0 items-center gap-3 rounded-xl border bg-gradient-to-br px-3 py-3 shadow-sm transition-colors dark:to-card sm:px-4 sm:py-4", tone)}>
+      <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg", accent ?? "bg-muted")}>
         {icon}
       </div>
       <div className="min-w-0">
-        <p className="text-xs text-muted-foreground font-medium leading-none mb-1 truncate">{label}</p>
-        <p className="text-xl font-bold leading-none tracking-tight whitespace-nowrap">{value}</p>
+        <p className="mb-1 truncate text-xs font-medium text-muted-foreground">{label}</p>
+        <p className="truncate text-lg font-bold leading-none tracking-tight tabular-nums sm:text-xl" title={String(value)}>{value}</p>
       </div>
     </div>
   );
