@@ -18,6 +18,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 
 | Doc | What it covers |
 |---|---|
+| [permissions-control-center-phase6.md](permissions-control-center-phase6.md) | Phase 6 shared frontend permission bridge and UI integration plan |
 | [permissions-control-center-phase5.md](permissions-control-center-phase5.md) | Phase 5 company-scoped user overrides and shadow access preview |
 | [permissions-control-center-phase4.md](permissions-control-center-phase4.md) | Phase 4 shadow role permissions matrix and release gates |
 | [permissions-control-center-phase3.md](permissions-control-center-phase3.md) | Permissions Phase 3: fail-closed Create Only writes, reviewed supplier creation and remaining route audits |
