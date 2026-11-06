@@ -8,7 +8,10 @@ import { Gift, Snowflake, Sparkles, Star, TreePine } from "lucide-react";
 import "@/styles/christmas-decorations.css";
 
 export function GlobalSeasonalDecorations({
-  enabled, garlands = true, snowCaps = true, intensity = "balanced",
+  enabled,
+  garlands = true,
+  snowCaps = true,
+  intensity = "balanced",
 }: {
   enabled: boolean;
   garlands?: boolean;

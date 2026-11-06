@@ -36,8 +36,7 @@ export function useChristmasMode() {
     staleTime: 15_000,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
-    refetchInterval: () =>
-      typeof document === "undefined" || document.visibilityState === "visible" ? 30_000 : false,
+    refetchInterval: () => (typeof document === "undefined" || document.visibilityState === "visible" ? 30_000 : false),
   });
 
   const updateSetting = useMutation<ChristmasModeSetting, Error, boolean>({
