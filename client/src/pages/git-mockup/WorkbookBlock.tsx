@@ -1,5 +1,5 @@
 import { Fragment } from "react";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { CheckCircle2, XCircle, Building2, Layers3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmt, fmtD, parseNum, getRealRowBg, groupBySupplier } from "./helpers";
 import type { EnrichedContainerApi } from "./types";
@@ -7,21 +7,21 @@ import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 
 export function WorkbookLegend() {
   return (
-    <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground px-1">
-      <span className="font-medium">Row colour:</span>
-      <span className="flex items-center gap-1">
-        <span className="inline-block w-3 h-3 rounded-xs bg-yellow-200 border border-yellow-400" /> Upcoming ETA, docs
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-card/70 px-3 py-2 text-[11px] text-muted-foreground shadow-sm">
+      <span className="mr-1 font-semibold text-foreground/80">Row status</span>
+      <span className="flex items-center gap-1.5 rounded-full bg-muted/60 px-2 py-1">
+        <span className="inline-block h-2.5 w-2.5 rounded-full border border-yellow-400 bg-yellow-300" /> Upcoming ETA, docs
         pending
       </span>
       <span className="flex items-center gap-1">
-        <span className="inline-block w-3 h-3 rounded-xs bg-rose-200 border border-rose-400" /> At port, docs missing
+        <span className="inline-block h-2.5 w-2.5 rounded-full border border-rose-400 bg-rose-400" /> At port, docs missing
       </span>
       <span className="flex items-center gap-1">
-        <span className="inline-block w-3 h-3 rounded-xs bg-amber-100 border border-amber-300" /> Docs ready, not sent
+        <span className="inline-block h-2.5 w-2.5 rounded-full border border-amber-400 bg-amber-300" /> Docs ready, not sent
         to truck
       </span>
       <span className="flex items-center gap-1">
-        <span className="inline-block w-3 h-3 rounded-xs bg-red-200 border border-red-400" /> Offload overdue
+        <span className="inline-block h-2.5 w-2.5 rounded-full border border-red-500 bg-red-400" /> Offload overdue
       </span>
     </div>
   );
@@ -31,7 +31,7 @@ const WORKBOOK_COLS = 14;
 
 function WorkbookDataRow({ r }: { r: EnrichedContainerApi }) {
   return (
-    <tr className={cn("border-b last:border-b-0", getRealRowBg(r))}>
+    <tr className={cn("border-b border-border/40 transition-colors last:border-b-0 hover:bg-violet-500/10", getRealRowBg(r))}>
       <td className="py-0.5 px-2 font-mono font-bold">{r.containerNumber}</td>
       <td className="py-0.5 px-2">{r.supplierCode ?? "—"}</td>
       <td className="py-0.5 px-2 text-right font-semibold">${fmt(parseNum(r.grandTotal), 2)}</td>
@@ -65,7 +65,7 @@ function WorkbookDataRow({ r }: { r: EnrichedContainerApi }) {
 function WorkbookTable({ children }: { children: React.ReactNode }) {
   const { tableProps } = useMobileCardTable();
   return (
-    <table {...tableProps} className="w-full text-xs whitespace-nowrap border-collapse">
+    <table {...tableProps} className="w-full border-collapse whitespace-nowrap text-xs [&_th]:sticky [&_th]:top-0 [&_th]:z-10">
       {children}
     </table>
   );
@@ -85,10 +85,10 @@ function SupplierGroupedRows({ rows }: { rows: EnrichedContainerApi[] }) {
     <>
       {groups.map(({ name, rows: sRows }) => (
         <Fragment key={`sup-${name}`}>
-          <tr className="bg-muted/40 border-t border-border">
+          <tr className="border-t border-violet-200/50 bg-violet-50/70 dark:border-violet-500/20 dark:bg-violet-400/10">
             <td
               colSpan={WORKBOOK_COLS}
-              className="py-0.5 px-2 text-center text-[11px] font-bold uppercase tracking-widest text-muted-foreground"
+              className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-widest text-violet-800 dark:text-violet-200"
             >
               {name} — {sRows.length}
             </td>
@@ -130,7 +130,7 @@ export function RealWorkbookBlock({
   const hasShops = shopGroups.length > 1;
 
   const columnHeaders = (
-    <tr className="bg-muted/60 border-b text-muted-foreground">
+    <tr className="border-b border-border/70 bg-muted/75 text-muted-foreground">
       <th className="py-1 px-2 font-semibold text-center">CTR #</th>
       <th className="py-1 px-2 font-semibold text-center">SUPPLIER</th>
       <th className="py-1 px-2 font-semibold text-center">AMOUNT</th>
@@ -149,16 +149,19 @@ export function RealWorkbookBlock({
   );
 
   return (
-    <div className="rounded-md border overflow-hidden">
-      <div className={cn("flex items-center justify-center gap-3 px-3 py-1.5", headerBg, headerText)}>
-        <span className="text-sm font-bold tracking-wide">{companyName}</span>
-        <span className="text-xs font-semibold opacity-90">
+    <div className="overflow-hidden rounded-2xl border border-border/70 bg-card/90 shadow-sm dark:shadow-black/20">
+      <div className={cn("flex flex-wrap items-center justify-between gap-2 px-4 py-3 shadow-sm", headerBg, headerText)}>
+        <div className="flex items-center gap-2">
+          <Building2 className="h-4 w-4 opacity-80" aria-hidden="true" />
+          <span className="text-sm font-bold tracking-wide">{companyName}</span>
+        </div>
+        <span className="rounded-full bg-black/10 px-3 py-1 text-xs font-bold tabular-nums dark:bg-white/10">
           {rows.length} containers — ${fmt(total.amount, 2)}
         </span>
       </div>
 
       {hasShops ? (
-        <div className="divide-y">
+        <div className="divide-y divide-border/60">
           {shopGroups.map(({ name, rows: shopRows }) => {
             const st = {
               amount: shopRows.reduce((s, r) => s + parseNum(r.grandTotal), 0),
@@ -167,11 +170,12 @@ export function RealWorkbookBlock({
             };
             return (
               <div key={name}>
-                <div className="flex items-center justify-center gap-3 px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 border-b border-yellow-300 dark:border-yellow-700">
-                  <span className="text-xs font-bold uppercase tracking-wide text-yellow-900 dark:text-yellow-300">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-violet-200/75 bg-violet-50 px-4 py-2.5 dark:border-violet-500/25 dark:bg-violet-500/15">
+                  <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-violet-900 dark:text-violet-200">
+                    <Layers3 className="h-3.5 w-3.5" aria-hidden="true" />
                     {name}
                   </span>
-                  <span className="text-xs text-yellow-800 dark:text-yellow-400">
+                  <span className="rounded-full border border-violet-200/70 bg-background/60 px-2.5 py-1 text-xs font-semibold tabular-nums text-violet-800 dark:border-violet-400/20 dark:text-violet-200">
                     {shopRows.length} container{shopRows.length !== 1 ? "s" : ""} — ${fmt(st.amount, 2)}
                   </span>
                 </div>
@@ -180,7 +184,7 @@ export function RealWorkbookBlock({
                     <thead>{columnHeaders}</thead>
                     <tbody>
                       <SupplierGroupedRows rows={shopRows} />
-                      <tr className="bg-yellow-50 dark:bg-yellow-900/10 border-t border-yellow-200 dark:border-yellow-800 text-xs font-semibold text-yellow-900 dark:text-yellow-300">
+                      <tr className="border-t border-violet-200 bg-violet-50/70 text-xs font-semibold text-violet-900 dark:border-violet-500/25 dark:bg-violet-500/10 dark:text-violet-200">
                         <td className="py-1 px-2">SUB-TOTAL — {shopRows.length} CTR</td>
                         <td />
                         <td className="py-1 px-2 text-right">${fmt(st.amount, 2)}</td>
@@ -196,9 +200,9 @@ export function RealWorkbookBlock({
               </div>
             );
           })}
-          <div className={cn("px-3 py-1.5 flex items-center justify-between text-xs font-bold", headerBg, headerText)}>
+          <div className={cn("flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-xs font-bold", headerBg, headerText)}>
             <span>TOTAL — {rows.length} CTR</span>
-            <div className="flex gap-4">
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
               <span>${fmt(total.amount, 2)}</span>
               {total.fee > 0 && <span>TRANSPORT: ${fmt(total.fee, 0)}</span>}
               {total.duty > 0 && <span>DUTY: ${fmt(total.duty, 0)}</span>}
