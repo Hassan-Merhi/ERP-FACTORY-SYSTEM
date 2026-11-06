@@ -60,6 +60,61 @@ export function registerRentalUnitsWriteRoutes(app: Express, ctx: RentalRoutesCo
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const id = parseId(req.params.id);
       if (id === null) return res.status(400).json({ message: "Invalid id" });
+      // A location heading is stored on units, not in a separate group table.
+      // Rename every matching unit atomically; never modify leases, ledgers, or vouchers.
+      if (req.body?.renameGroup === true) {
+        const requestedName = req.body.locationGroup;
+        if (typeof requestedName !== "string") {
+          return res.status(400).json({ message: "A location group name is required" });
+        }
+        const locationGroup = requestedName.trim().toUpperCase();
+        if (!locationGroup || locationGroup.length > 120) {
+          return res.status(400).json({ message: "Location group name must be 1-120 characters" });
+        }
+
+        const [anchor] = await db.select().from(propertyUnits).where(and(
+          eq(propertyUnits.id, id),
+          eq(propertyUnits.companyId, companyId),
+          eq(propertyUnits.module, module)
+        ));
+        if (!anchor) return res.status(404).json({ message: "Unit not found" });
+        const previousGroup = anchor.locationGroup;
+        if (locationGroup === previousGroup) return res.json({ locationGroup, updatedCount: 0 });
+
+        const result = await db.transaction(async (tx) => {
+          const scope = and(
+            eq(propertyUnits.companyId, companyId),
+            eq(propertyUnits.module, module),
+            eq(propertyUnits.unitType, anchor.unitType)
+          );
+          const collision = await tx.select({ id: propertyUnits.id }).from(propertyUnits).where(
+            and(scope, eq(propertyUnits.locationGroup, locationGroup))
+          ).limit(1);
+          if (collision.length) return { conflict: true as const };
+
+          const updated = await tx.update(propertyUnits).set({ locationGroup }).where(
+            and(scope, eq(propertyUnits.locationGroup, previousGroup))
+          ).returning({ id: propertyUnits.id, unitNumber: propertyUnits.unitNumber });
+          for (const unit of updated) {
+            await logAudit({
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "update",
+              tableName: "property_units",
+              recordId: unit.id,
+              recordIdentifier: unit.unitNumber,
+              changes: { locationGroup: { old: previousGroup, new: locationGroup } },
+            }, tx);
+          }
+          return { conflict: false as const, updatedCount: updated.length };
+        });
+        if (result.conflict) {
+          return res.status(409).json({ message: "This location group already exists. Choose another name." });
+        }
+        return res.json({ locationGroup, updatedCount: result.updatedCount });
+      }
+
       const allowed = ["unitNumber", "size", "dimensions", "locationGroup", "notes", "sortOrder", "active"];
       const updates: Partial<typeof propertyUnits.$inferInsert> = {};
       for (const k of allowed) if (k in req.body) Object.assign(updates, { [k]: req.body[k] });
