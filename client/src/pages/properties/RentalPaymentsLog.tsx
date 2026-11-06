@@ -17,6 +17,7 @@ import { useAppMode } from "@/contexts/AppModeContext";
 import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 import { AlertTriangle, ClipboardList, Trash2 } from "lucide-react";
 import { format } from "date-fns";
+import { PaymentsReconciliation } from "./property-rental/components/PaymentsReconciliation";
 import {
   HISTORICAL_RENT_COMPANY,
   HISTORICAL_RENT_CUTOFF_LABEL,
@@ -213,6 +214,14 @@ export default function RentalPaymentsLog({
             );
           })}
         </div>
+      )}
+
+      {isHassanProperties && (
+        <PaymentsReconciliation
+          payments={payments}
+          companyId={selectedCompany?.id}
+          isLoading={isLoading}
+        />
       )}
 
       {isHassanProperties && effectiveView === "HISTORICAL_RENT" && (
