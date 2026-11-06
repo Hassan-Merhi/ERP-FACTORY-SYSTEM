@@ -275,7 +275,7 @@ export default function RentalPaymentsLog({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold" data-testid={`stat-${testIdPrefix}-total-payments`}>
-              {filtered.length}
+              {paymentsError ? "Unavailable" : filtered.length}
             </div>
           </CardContent>
         </Card>
@@ -314,7 +314,7 @@ export default function RentalPaymentsLog({
             <CardTitle className="text-xs text-muted-foreground font-normal">UNIQUE TENANTS</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{new Set(filtered.map((p) => p.tenantName).filter(Boolean)).size}</div>
+            <div className="text-2xl font-bold">{paymentsError ? "Unavailable" : new Set(filtered.map((p) => p.tenantName).filter(Boolean)).size}</div>
           </CardContent>
         </Card>
       </div>
@@ -333,6 +333,8 @@ export default function RentalPaymentsLog({
           <div className="table-responsive">
             {isLoading ? (
               <div className="p-8 text-center text-muted-foreground">Loading payments…</div>
+            ) : paymentsError ? (
+              <div className="p-8 text-center text-destructive">Payment history could not be loaded. Please retry.</div>
             ) : filtered.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">
                 {payments.length === 0 ? "No payments recorded yet." : "No payments match the selected type or search."}
