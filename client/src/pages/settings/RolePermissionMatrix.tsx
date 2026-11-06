@@ -81,7 +81,8 @@ export function RolePermissionMatrix() {
     ),
     [group, search]
   );
-  const canSave = changes.length > 0 && changes.length <= MAX_BATCH && reason.trim().length >= 10 &&
+  const companyMatches = !!companyId && catalog.data?.companyId === companyId && roles.data?.companyId === companyId;
+  const canSave = companyMatches && changes.length > 0 && changes.length <= MAX_BATCH && reason.trim().length >= 10 &&
     reason.trim().length <= 500 && roles.data?.mode === "shadow" && !roles.data.enforced;
 
   const mutation = useMutation<SaveResponse, Error, { changes: RoleChange[]; expectedRevision: number; reason: string }>({
@@ -139,6 +140,7 @@ export function RolePermissionMatrix() {
         {roles.isError && <p role="alert" className="text-sm text-destructive">
           {errorText(roles.error)}. The separate database migration must be reviewed and applied before this editor can load.
         </p>}
+        {roles.data && catalog.data && !companyMatches && <p role="alert" className="text-sm text-destructive">Active company mismatch. Switch companies again before editing permissions.</p>}
         {notice && <p role="status" className="rounded-md border p-3 text-sm">{notice}</p>}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <label className="space-y-1 text-sm font-medium">Role template
@@ -168,7 +170,7 @@ export function RolePermissionMatrix() {
             </span>
           </label>
         </div>
-        {roles.data && (
+        {roles.data && companyMatches && (
           <>
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
               <span>Company policy revision <strong>{roles.data.revision}</strong> · {changes.length} unsaved changes · maximum {MAX_BATCH} per save</span>
