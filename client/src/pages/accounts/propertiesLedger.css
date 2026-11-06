@@ -18,6 +18,14 @@
     linear-gradient(135deg, #12172a 0%, #0f1423 65%, #11152a 100%);
   color: var(--ledger-ink);
 }
+.properties-ledger-modern .properties-ledger-desktop-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.properties-ledger-modern .properties-ledger-desktop-header > .properties-ledger-breadcrumb { order: 0; }
+.properties-ledger-modern .properties-ledger-desktop-header > .properties-ledger-heading-row { order: 1; }
+.properties-ledger-modern .properties-ledger-desktop-header > .properties-ledger-account-bar { order: 2; }
 .properties-ledger-modern .properties-ledger-breadcrumb {
   display: flex;
   align-items: center;
