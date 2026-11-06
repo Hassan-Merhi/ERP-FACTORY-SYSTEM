@@ -1,6 +1,7 @@
 import { Snowflake } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
 import { useChristmasMode } from "@/hooks/useChristmasMode";
 import { useToast } from "@/hooks/use-toast";
 
@@ -56,6 +57,18 @@ export function ChristmasModePreferenceCard() {
             }
           />
         </div>
+        {setting.enabled && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-3"
+            data-testid="button-preview-christmas-santa"
+            onClick={() => window.dispatchEvent(new Event("christmas:sleigh-preview"))}
+          >
+            Preview Santa now
+          </Button>
+        )}
         {!setting.enabled && setting.preferenceEnabled && (
           <p className="mt-2 text-xs text-muted-foreground" role="status">
             Your preference is on. Decorations will appear when the Developer activates Christmas Mode.
