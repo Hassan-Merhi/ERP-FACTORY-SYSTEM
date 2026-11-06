@@ -20,7 +20,8 @@ import { translateApplicationText, type ApplicationTranslationKey } from "@/i18n
 type DateFormatType = "MM/DD/YYYY" | "DD/MM/YYYY";
 
 export default function MySettings() {
-  const t = useOptionalApplicationLanguage()?.t ?? ((key: ApplicationTranslationKey) => translateApplicationText(key, "en"));
+  const t =
+    useOptionalApplicationLanguage()?.t ?? ((key: ApplicationTranslationKey) => translateApplicationText(key, "en"));
   const { toast } = useToast();
   const { dateFormat } = useDateFormat();
   const { prefs, updatePref, isPending: prefsPending } = useUserPreferences();
@@ -105,21 +106,29 @@ export default function MySettings() {
     <div className="p-6 max-w-md mx-auto space-y-6">
       <PageHeader title="My Settings" />
 
-      {["factory", "factory_v2"].includes(selectedCompany?.companyType ?? "") && <Card data-testid="settings-factory-mhd-default">
-        <CardHeader>
-          <CardTitle className="text-base">{t("mhd.settingsTitle")}</CardTitle>
-          <CardDescription>{t("mhd.settingsDescription")}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Select value={factoryMhd.mode} disabled={factoryMhd.saving} onValueChange={(value) => void factoryMhd.setMode(value as "standard" | "mhd")}>
-            <SelectTrigger data-testid="select-factory-mhd-default"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="standard">{t("mhd.standardView")}</SelectItem>
-              <SelectItem value="mhd">{t("mhd.view")}</SelectItem>
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>}
+      {["factory", "factory_v2"].includes(selectedCompany?.companyType ?? "") && (
+        <Card data-testid="settings-factory-mhd-default">
+          <CardHeader>
+            <CardTitle className="text-base">{t("mhd.settingsTitle")}</CardTitle>
+            <CardDescription>{t("mhd.settingsDescription")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Select
+              value={factoryMhd.mode}
+              disabled={factoryMhd.saving}
+              onValueChange={(value) => void factoryMhd.setMode(value as "standard" | "mhd")}
+            >
+              <SelectTrigger data-testid="select-factory-mhd-default">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="standard">{t("mhd.standardView")}</SelectItem>
+                <SelectItem value="mhd">{t("mhd.view")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

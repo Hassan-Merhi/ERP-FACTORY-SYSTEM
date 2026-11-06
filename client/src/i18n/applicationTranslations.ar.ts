@@ -403,8 +403,7 @@ export const applicationArabicTranslations = {
   "mhd.view": "عرض MHD",
   "mhd.requireUpload": "ارفع قائمة MHD من إعدادات الذكاء أولاً.",
   "mhd.settingsTitle": "عرض أصناف المصنع المفضل",
-  "mhd.settingsDescription":
-    "اختر أسماء الأصناف وترتيبها في المصنع. قائمة MHD مشتركة لكن هذا التفضيل شخصي.",
+  "mhd.settingsDescription": "اختر أسماء الأصناف وترتيبها في المصنع. قائمة MHD مشتركة لكن هذا التفضيل شخصي.",
   "mhd.standardView": "العرض العادي",
   "mhd.noProductRows": "لم يتم العثور على أصناف في الملف المرفوع.",
   "mhd.maxProducts": "الحد الأقصى 10000 صنف في عرض MHD.",

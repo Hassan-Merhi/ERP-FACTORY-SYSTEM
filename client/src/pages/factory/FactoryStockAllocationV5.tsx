@@ -474,7 +474,10 @@ export default function FactoryStockAllocationV5() {
                             <span className="flex h-4 w-4 shrink-0 items-center justify-center">
                               {isShortage && <AlertTriangle className="h-4 w-4 text-rose-500" />}
                             </span>
-                            <span className="block truncate text-xs font-semibold sm:text-sm" title={mhd.nameFor(row.articleCode, row.productName)}>
+                            <span
+                              className="block truncate text-xs font-semibold sm:text-sm"
+                              title={mhd.nameFor(row.articleCode, row.productName)}
+                            >
                               {mhd.nameFor(row.articleCode, row.productName)}
                             </span>
                           </div>

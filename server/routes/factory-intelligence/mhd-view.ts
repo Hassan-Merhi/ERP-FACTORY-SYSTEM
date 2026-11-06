@@ -29,12 +29,26 @@ const companyFor = (req: Request) => Number(req.session.factoryCompanyId || req.
 function readView(extra: unknown): MhdView {
   const raw = isObject(extra) ? extra.mhdView : null;
   if (!isObject(raw)) return { revision: 0, rows: [], updatedAt: "", history: [] };
-  const rows = Array.isArray(raw.rows) ? raw.rows.filter((item): item is ViewRow =>
-    isObject(item) && typeof item.articleCode === "string" &&
-    typeof item.itemName === "string" && Number.isSafeInteger(item.sortOrder)) : [];
-  const history = Array.isArray(raw.history) ? raw.history.filter((item): item is ViewSnapshot =>
-    isObject(item) && Number.isSafeInteger(item.revision) &&
-    typeof item.updatedAt === "string" && Array.isArray(item.rows)).slice(-5) : [];
+  const rows = Array.isArray(raw.rows)
+    ? raw.rows.filter(
+        (item): item is ViewRow =>
+          isObject(item) &&
+          typeof item.articleCode === "string" &&
+          typeof item.itemName === "string" &&
+          Number.isSafeInteger(item.sortOrder)
+      )
+    : [];
+  const history = Array.isArray(raw.history)
+    ? raw.history
+        .filter(
+          (item): item is ViewSnapshot =>
+            isObject(item) &&
+            Number.isSafeInteger(item.revision) &&
+            typeof item.updatedAt === "string" &&
+            Array.isArray(item.rows)
+        )
+        .slice(-5)
+    : [];
   return {
     revision: Number.isSafeInteger(raw.revision) ? Number(raw.revision) : 0,
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : "",
@@ -51,21 +65,27 @@ async function companyProducts(db: AppDb, companyId: number): Promise<ProductRow
      ORDER BY name, id
   `);
   const rows = (Array.isArray(raw) ? raw : (raw as { rows: unknown[] }).rows) as Array<Record<string, unknown>>;
-  return rows.filter((row) => typeof row.articleCode === "string" && String(row.articleCode).trim()).map((row) => ({
-    id: Number(row.id),
-    articleCode: String(row.articleCode).trim(),
-    name: String(row.name ?? ""),
-  }));
+  return rows
+    .filter((row) => typeof row.articleCode === "string" && String(row.articleCode).trim())
+    .map((row) => ({
+      id: Number(row.id),
+      articleCode: String(row.articleCode).trim(),
+      name: String(row.name ?? ""),
+    }));
 }
 
 export function registerFactoryMhdViewRoutes(app: Express, requireAuth: AuthMiddleware, db: AppDb) {
   app.get("/api/factory/mhd-view", requireAuth, async (req: Request, res: Response) => {
     const companyId = companyFor(req);
-    if (!Number.isSafeInteger(companyId) || companyId <= 0) return res.status(400).json({ message: MHD_ERROR.missingCompany });
+    if (!Number.isSafeInteger(companyId) || companyId <= 0)
+      return res.status(400).json({ message: MHD_ERROR.missingCompany });
     try {
       const [settings, products] = await Promise.all([
-        db.select({ extraSettings: factorySettings.extraSettings }).from(factorySettings)
-          .where(eq(factorySettings.companyId, companyId)).limit(1),
+        db
+          .select({ extraSettings: factorySettings.extraSettings })
+          .from(factorySettings)
+          .where(eq(factorySettings.companyId, companyId))
+          .limit(1),
         companyProducts(db, companyId),
       ]);
       res.set("Cache-Control", "private, no-store");
@@ -81,7 +101,8 @@ export function registerFactoryMhdViewRoutes(app: Express, requireAuth: AuthMidd
 
   app.put("/api/factory/mhd-view", requireAuth, requireRole("Admin", "Owner"), async (req: Request, res: Response) => {
     const companyId = companyFor(req);
-    if (!Number.isSafeInteger(companyId) || companyId <= 0) return res.status(400).json({ message: MHD_ERROR.missingCompany });
+    if (!Number.isSafeInteger(companyId) || companyId <= 0)
+      return res.status(400).json({ message: MHD_ERROR.missingCompany });
     const input: unknown = req.body?.rows;
     const expectedRevision: unknown = req.body?.expectedRevision;
     if (!Array.isArray(input) || input.length > 10000 || !Number.isSafeInteger(expectedRevision)) {
@@ -91,9 +112,14 @@ export function registerFactoryMhdViewRoutes(app: Express, requireAuth: AuthMidd
     const seen = new Set<string>();
     const requested: Array<{ articleCode: string; itemName: string }> = [];
     for (const item of input) {
-      if (!isObject(item) || typeof item.articleCode !== "string" ||
-          typeof item.itemName !== "string" || item.itemName.length > 250 ||
-          !item.articleCode.trim() || item.articleCode.length > 150) {
+      if (
+        !isObject(item) ||
+        typeof item.articleCode !== "string" ||
+        typeof item.itemName !== "string" ||
+        item.itemName.length > 250 ||
+        !item.articleCode.trim() ||
+        item.articleCode.length > 150
+      ) {
         return res.status(400).json({ message: MHD_ERROR.invalidItem });
       }
       const code = normalizeCode(item.articleCode);
@@ -112,10 +138,11 @@ export function registerFactoryMhdViewRoutes(app: Express, requireAuth: AuthMidd
         else known.set(code, product);
       }
       const unknown = requested.filter((row) => !known.has(row.articleCode) || ambiguous.has(row.articleCode));
-      if (unknown.length) return res.status(400).json({
-        message: MHD_ERROR.unknownCode,
-        articleCodes: unknown.slice(0, 50).map((row) => row.articleCode),
-      });
+      if (unknown.length)
+        return res.status(400).json({
+          message: MHD_ERROR.unknownCode,
+          articleCodes: unknown.slice(0, 50).map((row) => row.articleCode),
+        });
       const rows: ViewRow[] = requested.map((item, index) => ({
         articleCode: known.get(item.articleCode)!.articleCode,
         itemName: item.itemName,
@@ -123,29 +150,48 @@ export function registerFactoryMhdViewRoutes(app: Express, requireAuth: AuthMidd
       }));
       const result = await db.transaction(async (tx) => {
         await tx.execute(sql`SELECT pg_advisory_xact_lock(650741, ${companyId})`);
-        await tx.insert(factorySettings).values({ companyId, ...INITIAL_FACTORY_FEATURES }).onConflictDoNothing();
-        const [current] = await tx.select({ extraSettings: factorySettings.extraSettings })
-          .from(factorySettings).where(eq(factorySettings.companyId, companyId)).for("update");
+        await tx
+          .insert(factorySettings)
+          .values({ companyId, ...INITIAL_FACTORY_FEATURES })
+          .onConflictDoNothing();
+        const [current] = await tx
+          .select({ extraSettings: factorySettings.extraSettings })
+          .from(factorySettings)
+          .where(eq(factorySettings.companyId, companyId))
+          .for("update");
         const prior = readView(current?.extraSettings);
         if (prior.revision !== expectedRevision) return null;
-        const history = prior.revision > 0
-          ? [...prior.history, { revision: prior.revision, rows: prior.rows, updatedAt: prior.updatedAt }].slice(-5)
-          : [];
+        const history =
+          prior.revision > 0
+            ? [...prior.history, { revision: prior.revision, rows: prior.rows, updatedAt: prior.updatedAt }].slice(-5)
+            : [];
         const next: MhdView = { rows, revision: prior.revision + 1, updatedAt: new Date().toISOString(), history };
-        const [updated] = await tx.update(factorySettings).set({
-          extraSettings: sql`COALESCE(${factorySettings.extraSettings}, '{}'::jsonb) || ${JSON.stringify({ mhdView: next })}::jsonb`,
-          updatedAt: new Date(),
-        }).where(eq(factorySettings.companyId, companyId)).returning({ id: factorySettings.id });
-        await writeAuditEvent({
-          userId: String(req.session.userId),
-          username: String(req.session.username || req.session.userId),
-          companyId,
-          action: "settings_change",
-          tableName: "factory_settings",
-          recordId: updated.id,
-          recordIdentifier: "mhdView",
-          changes: { mhdView: { old: { revision: prior.revision, rowCount: prior.rows.length }, new: { revision: next.revision, rowCount: next.rows.length } } },
-        }, tx);
+        const [updated] = await tx
+          .update(factorySettings)
+          .set({
+            extraSettings: sql`COALESCE(${factorySettings.extraSettings}, '{}'::jsonb) || ${JSON.stringify({ mhdView: next })}::jsonb`,
+            updatedAt: new Date(),
+          })
+          .where(eq(factorySettings.companyId, companyId))
+          .returning({ id: factorySettings.id });
+        await writeAuditEvent(
+          {
+            userId: String(req.session.userId),
+            username: String(req.session.username || req.session.userId),
+            companyId,
+            action: "settings_change",
+            tableName: "factory_settings",
+            recordId: updated.id,
+            recordIdentifier: "mhdView",
+            changes: {
+              mhdView: {
+                old: { revision: prior.revision, rowCount: prior.rows.length },
+                new: { revision: next.revision, rowCount: next.rows.length },
+              },
+            },
+          },
+          tx
+        );
         return next;
       });
       if (!result) return res.status(409).json({ message: MHD_ERROR.revisionConflict });

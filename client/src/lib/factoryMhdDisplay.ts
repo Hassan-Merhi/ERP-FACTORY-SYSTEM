@@ -3,7 +3,9 @@ export type FactoryMhdDisplayMode = "standard" | "mhd";
 export type FactoryMhdEntry = { articleCode: string; itemName: string; sortOrder: number };
 
 export const normalizeFactoryMhdCode = (code: string | null | undefined): string =>
-  String(code ?? "").trim().toUpperCase();
+  String(code ?? "")
+    .trim()
+    .toUpperCase();
 
 export function factoryMhdLookup(rows: readonly FactoryMhdEntry[]): ReadonlyMap<string, FactoryMhdEntry> {
   const lookup = new Map<string, FactoryMhdEntry>();
@@ -15,7 +17,7 @@ export function factoryMhdName(
   mode: FactoryMhdDisplayMode,
   lookup: ReadonlyMap<string, FactoryMhdEntry>,
   articleCode: string | null | undefined,
-  originalName: string,
+  originalName: string
 ): string {
   if (mode !== "mhd") return originalName;
   return lookup.get(normalizeFactoryMhdCode(articleCode))?.itemName.trim() || originalName;
@@ -25,12 +27,15 @@ export function sortFactoryMhdRows<T>(
   mode: FactoryMhdDisplayMode,
   lookup: ReadonlyMap<string, FactoryMhdEntry>,
   rows: readonly T[],
-  getArticleCode: (row: T) => string | null | undefined,
+  getArticleCode: (row: T) => string | null | undefined
 ): T[] {
   if (mode !== "mhd" || !lookup.size) return [...rows];
-  return rows.map((row, index) => ({ row, index })).sort((a, b) => {
-    const aOrder = lookup.get(normalizeFactoryMhdCode(getArticleCode(a.row)))?.sortOrder ?? Number.MAX_SAFE_INTEGER;
-    const bOrder = lookup.get(normalizeFactoryMhdCode(getArticleCode(b.row)))?.sortOrder ?? Number.MAX_SAFE_INTEGER;
-    return aOrder - bOrder || a.index - b.index;
-  }).map(({ row }) => row);
+  return rows
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => {
+      const aOrder = lookup.get(normalizeFactoryMhdCode(getArticleCode(a.row)))?.sortOrder ?? Number.MAX_SAFE_INTEGER;
+      const bOrder = lookup.get(normalizeFactoryMhdCode(getArticleCode(b.row)))?.sortOrder ?? Number.MAX_SAFE_INTEGER;
+      return aOrder - bOrder || a.index - b.index;
+    })
+    .map(({ row }) => row);
 }

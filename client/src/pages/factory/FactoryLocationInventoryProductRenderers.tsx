@@ -9,7 +9,10 @@ import type { useFactoryLocationInventory } from "./FactoryLocationInventoryMode
 
 type FactoryLocationInventoryModel = ReturnType<typeof useFactoryLocationInventory>;
 
-export function createFactoryLocationProductRenderers(inventory: FactoryLocationInventoryModel, nameFor: (articleCode: string | null | undefined, originalName: string) => string) {
+export function createFactoryLocationProductRenderers(
+  inventory: FactoryLocationInventoryModel,
+  nameFor: (articleCode: string | null | undefined, originalName: string) => string
+) {
   const {
     fmt,
     formatAmount,

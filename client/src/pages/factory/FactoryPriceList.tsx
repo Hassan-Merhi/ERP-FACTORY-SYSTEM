@@ -256,16 +256,20 @@ export default function FactoryPriceList() {
     }
   };
 
-  const filteredProducts = mhd.sortRows(products, (p) => p.articleCode).filter((p) => {
-    if (!p.active) return false;
-    const matchSearch = productMatchesSearch(p, search) ||
-      (Boolean(search.trim()) && mhd.nameFor(p.articleCode, p.name).toLowerCase().includes(search.trim().toLowerCase()));
-    const matchCategory = categoryFilter === "all" || String(p.categoryId) === categoryFilter;
-    // Keep a row visible while Enter moves from its selling price to production cost.
-    // Otherwise a "Show unpriced" refresh would unmount the second editable cell.
-    const matchZeroOnly = !showZeroOnly || parseFloat(p.sellingPrice || "0") === 0 || editingCell?.productId === p.id;
-    return matchSearch && matchCategory && matchZeroOnly;
-  });
+  const filteredProducts = mhd
+    .sortRows(products, (p) => p.articleCode)
+    .filter((p) => {
+      if (!p.active) return false;
+      const matchSearch =
+        productMatchesSearch(p, search) ||
+        (Boolean(search.trim()) &&
+          mhd.nameFor(p.articleCode, p.name).toLowerCase().includes(search.trim().toLowerCase()));
+      const matchCategory = categoryFilter === "all" || String(p.categoryId) === categoryFilter;
+      // Keep a row visible while Enter moves from its selling price to production cost.
+      // Otherwise a "Show unpriced" refresh would unmount the second editable cell.
+      const matchZeroOnly = !showZeroOnly || parseFloat(p.sellingPrice || "0") === 0 || editingCell?.productId === p.id;
+      return matchSearch && matchCategory && matchZeroOnly;
+    });
 
   const categoryMap = new Map(categories.map((c) => [c.id, c.name]));
 

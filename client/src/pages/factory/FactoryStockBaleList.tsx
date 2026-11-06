@@ -155,7 +155,10 @@ export default function FactoryStockBaleList() {
                         Loading
                       </Badge>
                     ) : bale.blockedByOrder ? (
-                      <Badge variant="outline" className="text-[11px] px-1.5 h-5 text-amber-600 dark:text-amber-400 border-amber-500/40">
+                      <Badge
+                        variant="outline"
+                        className="text-[11px] px-1.5 h-5 text-amber-600 dark:text-amber-400 border-amber-500/40"
+                      >
                         Reserved
                       </Badge>
                     ) : (

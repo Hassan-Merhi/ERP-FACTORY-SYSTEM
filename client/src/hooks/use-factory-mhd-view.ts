@@ -3,10 +3,20 @@ import { useQuery } from "@tanstack/react-query";
 import { useOptionalCompany } from "@/contexts/CompanyContext";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { queryClient } from "@/lib/queryClient";
-import { factoryMhdLookup, factoryMhdName, sortFactoryMhdRows, type FactoryMhdDisplayMode, type FactoryMhdEntry } from "@/lib/factoryMhdDisplay";
+import {
+  factoryMhdLookup,
+  factoryMhdName,
+  sortFactoryMhdRows,
+  type FactoryMhdDisplayMode,
+  type FactoryMhdEntry,
+} from "@/lib/factoryMhdDisplay";
 
 type MhdEntry = FactoryMhdEntry;
-type MhdResponse = { revision: number; rows: MhdEntry[]; products: Array<{ id: number; articleCode: string; name: string }> };
+type MhdResponse = {
+  revision: number;
+  rows: MhdEntry[];
+  products: Array<{ id: number; articleCode: string; name: string }>;
+};
 export type FactoryProductViewMode = FactoryMhdDisplayMode;
 const MHD_FETCH_ERROR = "Unable to load MHD View";
 const MHD_SAVE_ERROR = "Unable to save your Factory view preference";
@@ -29,7 +39,7 @@ export function useFactoryMhdView() {
   const lookup = useMemo(() => factoryMhdLookup(data?.rows ?? []), [data?.rows]);
   const nameFor = (articleCode: string | null | undefined, originalName: string): string =>
     factoryMhdName(mode, lookup, articleCode, originalName);
-  const sortRows = <T,>(rows: readonly T[], articleCode: (row: T) => string | null | undefined): T[] =>
+  const sortRows = <T>(rows: readonly T[], articleCode: (row: T) => string | null | undefined): T[] =>
     sortFactoryMhdRows(mode, lookup, rows, articleCode);
 
   const setMode = async (next: FactoryProductViewMode) => {
@@ -40,7 +50,9 @@ export function useFactoryMhdView() {
     setSaving(true);
     try {
       const response = await fetch("/api/user-preferences", {
-        method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" },
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ factoryMhdViewDefault: next === "mhd" }),
       });
       if (!response.ok) throw new Error(MHD_SAVE_ERROR);
@@ -52,5 +64,14 @@ export function useFactoryMhdView() {
       setSaving(false);
     }
   };
-  return { mode, setMode, saving, isLoading, nameFor, sortRows, hasMhdView: lookup.size > 0, revision: data?.revision ?? 0 };
+  return {
+    mode,
+    setMode,
+    saving,
+    isLoading,
+    nameFor,
+    sortRows,
+    hasMhdView: lookup.size > 0,
+    revision: data?.revision ?? 0,
+  };
 }

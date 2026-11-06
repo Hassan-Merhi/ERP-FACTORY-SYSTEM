@@ -1,7 +1,20 @@
 import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Columns3, History, Loader2, Package, Search, ShoppingCart, SlidersHorizontal, Truck, UserRound, UsersRound } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Columns3,
+  History,
+  Loader2,
+  Package,
+  Search,
+  ShoppingCart,
+  SlidersHorizontal,
+  Truck,
+  UserRound,
+  UsersRound,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -156,7 +169,14 @@ export default function CustomerLoading() {
       )
         return false;
       if (!needle) return true;
-      return [product.name, mhd.nameFor(product.articleCode || product.code, product.name), product.nameAr, product.code, product.articleCode, product.categoryName]
+      return [
+        product.name,
+        mhd.nameFor(product.articleCode || product.code, product.name),
+        product.nameAr,
+        product.code,
+        product.articleCode,
+        product.categoryName,
+      ]
         .filter(Boolean)
         .some((value) => String(value).toLocaleLowerCase().includes(needle));
     });
@@ -329,8 +349,14 @@ export default function CustomerLoading() {
       data-testid="customer-loading-page"
     >
       <section className="relative isolate overflow-hidden rounded-2xl border border-indigo-200/80 bg-gradient-to-r from-slate-50 via-blue-50/70 to-indigo-100/70 p-5 shadow-sm dark:border-indigo-400/25 dark:from-[#101b30] dark:via-[#142644] dark:to-[#172b4b] sm:p-6">
-        <div className="pointer-events-none absolute -right-8 -top-20 h-64 w-64 rounded-full bg-indigo-400/10 blur-3xl dark:bg-indigo-400/15" aria-hidden="true" />
-        <div className="pointer-events-none absolute bottom-0 right-12 hidden text-indigo-400/15 dark:text-blue-200/10 lg:block" aria-hidden="true">
+        <div
+          className="pointer-events-none absolute -right-8 -top-20 h-64 w-64 rounded-full bg-indigo-400/10 blur-3xl dark:bg-indigo-400/15"
+          aria-hidden="true"
+        />
+        <div
+          className="pointer-events-none absolute bottom-0 right-12 hidden text-indigo-400/15 dark:text-blue-200/10 lg:block"
+          aria-hidden="true"
+        >
           <Package className="h-40 w-40 -rotate-12" strokeWidth={1} />
         </div>
         <div className="relative flex items-center gap-4">
@@ -493,7 +519,10 @@ export default function CustomerLoading() {
                     setPage(1);
                   }}
                 >
-                  <SelectTrigger className="h-10 min-w-0 border-slate-300 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-900/60" data-testid="customer-loading-status-filter">
+                  <SelectTrigger
+                    className="h-10 min-w-0 border-slate-300 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-900/60"
+                    data-testid="customer-loading-status-filter"
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -547,7 +576,10 @@ export default function CustomerLoading() {
                     setPage(1);
                   }}
                 >
-                  <SelectTrigger className="h-10 min-w-0 border-slate-300 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-900/60" data-testid="customer-loading-zero-stock-filter">
+                  <SelectTrigger
+                    className="h-10 min-w-0 border-slate-300 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-900/60"
+                    data-testid="customer-loading-zero-stock-filter"
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -562,7 +594,10 @@ export default function CustomerLoading() {
                     setPage(1);
                   }}
                 >
-                  <SelectTrigger className="h-10 min-w-0 border-slate-300 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-900/60" data-testid="customer-loading-negative-stock-filter">
+                  <SelectTrigger
+                    className="h-10 min-w-0 border-slate-300 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-900/60"
+                    data-testid="customer-loading-negative-stock-filter"
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -643,14 +678,22 @@ export default function CustomerLoading() {
                             {product.articleCode || product.code}
                           </td>
                         )}
-                        {isColumnVisible("product") && <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100">{mhd.nameFor(product.articleCode || product.code, product.name)}</td>}
+                        {isColumnVisible("product") && (
+                          <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100">
+                            {mhd.nameFor(product.articleCode || product.code, product.name)}
+                          </td>
+                        )}
                         {isColumnVisible("arabicName") && (
                           <td className="px-4 py-3 text-right" dir="rtl">
                             {product.nameAr || "—"}
                           </td>
                         )}
                         {isColumnVisible("category") && (
-                          <td className="px-4 py-3"><span className="inline-flex rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-800 dark:border-blue-400/25 dark:bg-blue-400/10 dark:text-blue-200">{product.categoryName || "—"}</span></td>
+                          <td className="px-4 py-3">
+                            <span className="inline-flex rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-800 dark:border-blue-400/25 dark:bg-blue-400/10 dark:text-blue-200">
+                              {product.categoryName || "—"}
+                            </span>
+                          </td>
                         )}
                         {isColumnVisible("weight") && (
                           <td className="px-4 py-3 text-right tabular-nums">
@@ -694,11 +737,19 @@ export default function CustomerLoading() {
                               disabled={product.loadingStatus !== "LOADED"}
                             >
                               {product.loadingStatus === "LOADED" ? (
-                                <Badge variant="secondary" className="cursor-pointer border border-emerald-200 bg-emerald-100 font-semibold text-emerald-800 hover:bg-emerald-200 dark:border-emerald-400/30 dark:bg-emerald-400/15 dark:text-emerald-200 dark:hover:bg-emerald-400/25">
+                                <Badge
+                                  variant="secondary"
+                                  className="cursor-pointer border border-emerald-200 bg-emerald-100 font-semibold text-emerald-800 hover:bg-emerald-200 dark:border-emerald-400/30 dark:bg-emerald-400/15 dark:text-emerald-200 dark:hover:bg-emerald-400/25"
+                                >
                                   Loaded · {product.loadingCount}
                                 </Badge>
                               ) : (
-                                <Badge variant="outline" className="border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700/40 dark:text-slate-300">Never loaded</Badge>
+                                <Badge
+                                  variant="outline"
+                                  className="border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700/40 dark:text-slate-300"
+                                >
+                                  Never loaded
+                                </Badge>
                               )}
                             </button>
                           </td>

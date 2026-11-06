@@ -199,8 +199,14 @@ export function CompanySelector({ showMobileName = false }: { showMobileName?: b
         data-testid="workspace-switcher-content"
         className="relative isolate flex max-h-[min(39rem,calc(var(--app-viewport-height)-1rem))] w-[min(25rem,calc(100vw-1rem))] flex-col overflow-hidden rounded-[24px] border border-white/80 bg-[linear-gradient(145deg,rgba(237,247,255,.97),rgba(231,234,255,.97)_55%,rgba(247,238,255,.97))] p-0 text-slate-900 shadow-[0_24px_70px_-24px_rgba(41,76,153,.5),0_4px_16px_rgba(40,64,135,.12)] backdrop-blur-2xl dark:border-white/15 dark:bg-[linear-gradient(145deg,rgba(17,31,58,.98),rgba(27,27,62,.98)_55%,rgba(36,23,63,.98))] dark:text-slate-50 dark:shadow-[0_24px_70px_-18px_rgba(0,0,0,.75),0_0_30px_rgba(107,84,230,.1)]"
       >
-        <div aria-hidden="true" className="pointer-events-none absolute -top-20 -right-12 -z-10 h-56 w-56 rounded-full bg-violet-300/35 blur-3xl dark:bg-violet-500/15" />
-        <div aria-hidden="true" className="pointer-events-none absolute -left-20 top-24 -z-10 h-52 w-52 rounded-full bg-sky-300/35 blur-3xl dark:bg-blue-500/15" />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -top-20 -right-12 -z-10 h-56 w-56 rounded-full bg-violet-300/35 blur-3xl dark:bg-violet-500/15"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -left-20 top-24 -z-10 h-52 w-52 rounded-full bg-sky-300/35 blur-3xl dark:bg-blue-500/15"
+        />
         <div className="relative shrink-0 border-b border-white/50 px-4 pb-3 pt-4 dark:border-white/10 sm:px-5">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] border border-white/80 bg-[linear-gradient(135deg,#fff,#dce7ff_60%,#e8ddff)] text-blue-600 shadow-[0_4px_12px_rgba(74,100,174,.15)] dark:border-white/20 dark:bg-[linear-gradient(135deg,#34466f,#252a5d)] dark:text-blue-300">
@@ -209,14 +215,18 @@ export function CompanySelector({ showMobileName = false }: { showMobileName?: b
             <div className="min-w-0 flex-1 text-[13px] font-bold uppercase tracking-[.08em] text-slate-900 dark:text-slate-100 sm:text-sm">
               Switch workspace
             </div>
-            <div className="rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-3 py-1 text-xs font-bold text-white shadow-[0_3px_10px_rgba(86,99,230,.28)]"
+            <div
+              className="rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-3 py-1 text-xs font-bold text-white shadow-[0_3px_10px_rgba(86,99,230,.28)]"
               aria-label={`${companies.length} workspaces`}
             >
               {companies.length}
             </div>
           </div>
           <div className="relative mt-3">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500 dark:text-slate-400" aria-hidden="true" />
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500 dark:text-slate-400"
+              aria-hidden="true"
+            />
             <input
               type="search"
               ref={searchInputRef}
@@ -289,7 +299,8 @@ export function CompanySelector({ showMobileName = false }: { showMobileName?: b
                   </span>
                 </div>
                 {isActive && (
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-[0_3px_10px_rgba(59,102,234,.3)] ring-2 ring-white/65 dark:ring-white/20"
+                  <span
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-[0_3px_10px_rgba(59,102,234,.3)] ring-2 ring-white/65 dark:ring-white/20"
                     aria-label="Current workspace"
                   >
                     <Check className="h-4 w-4 stroke-[3]" aria-hidden="true" />

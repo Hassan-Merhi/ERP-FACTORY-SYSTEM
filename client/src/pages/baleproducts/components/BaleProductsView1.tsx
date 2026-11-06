@@ -36,7 +36,10 @@ function ProductColorPills({
 
   if (!canEdit) {
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" title={selectedColor?.label ?? product.labelDesignColor ?? "No Design"}>
+      <span
+        className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+        title={selectedColor?.label ?? product.labelDesignColor ?? "No Design"}
+      >
         <span
           className="h-4 w-4 rounded-full border border-foreground/30"
           style={selectedColor ? { backgroundColor: selectedColor.color } : undefined}
@@ -142,7 +145,9 @@ export function BaleProductsView1({ model }: { model: Model }) {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 bg-gradient-to-r from-slate-50 via-white to-blue-50/60 px-4 py-4 dark:border-blue-300/15 dark:from-[#142444] dark:via-[#111e36] dark:to-[#101b31]">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="flex items-center gap-2.5 text-base font-bold tracking-tight text-slate-900 dark:text-white">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400"><Layers3 className="h-5 w-5" /></span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400">
+              <Layers3 className="h-5 w-5" />
+            </span>
             Product List
           </span>
           {selectedIds.size > 0 && (
@@ -217,7 +222,10 @@ export function BaleProductsView1({ model }: { model: Model }) {
                 setSelectedIds(new Set());
               }}
             >
-              <SelectTrigger className="h-9 w-40 rounded-xl border-slate-300 bg-white/90 text-sm shadow-sm dark:border-blue-300/20 dark:bg-[#0d192c]" data-testid="select-filter-category">
+              <SelectTrigger
+                className="h-9 w-40 rounded-xl border-slate-300 bg-white/90 text-sm shadow-sm dark:border-blue-300/20 dark:bg-[#0d192c]"
+                data-testid="select-filter-category"
+              >
                 <SelectValue placeholder="All categories" />
               </SelectTrigger>
               <SelectContent>
@@ -238,7 +246,10 @@ export function BaleProductsView1({ model }: { model: Model }) {
                 setSelectedIds(new Set());
               }}
             >
-              <SelectTrigger className="h-9 w-32 rounded-xl border-slate-300 bg-white/90 text-sm shadow-sm dark:border-blue-300/20 dark:bg-[#0d192c]" data-testid="select-filter-weight">
+              <SelectTrigger
+                className="h-9 w-32 rounded-xl border-slate-300 bg-white/90 text-sm shadow-sm dark:border-blue-300/20 dark:bg-[#0d192c]"
+                data-testid="select-filter-weight"
+              >
                 <SelectValue placeholder="All weights" />
               </SelectTrigger>
               <SelectContent>
@@ -343,7 +354,11 @@ export function BaleProductsView1({ model }: { model: Model }) {
           </div>
         ) : condensedView ? (
           groupedProducts.length > 0 ? (
-            <Table mobileLayout="cards" wrapperClassName="rounded-none border-x-0 border-b-0 border-t-0 shadow-inner shadow-slate-200/20 dark:shadow-blue-400/5" className="[&_tbody_tr:hover]:bg-blue-50/70 dark:[&_tbody_tr:hover]:bg-blue-500/10 [&_td]:border-slate-200/70 dark:[&_td]:border-blue-200/10 [&_th]:border-slate-200/80 dark:[&_th]:border-blue-200/10">
+            <Table
+              mobileLayout="cards"
+              wrapperClassName="rounded-none border-x-0 border-b-0 border-t-0 shadow-inner shadow-slate-200/20 dark:shadow-blue-400/5"
+              className="[&_tbody_tr:hover]:bg-blue-50/70 dark:[&_tbody_tr:hover]:bg-blue-500/10 [&_td]:border-slate-200/70 dark:[&_td]:border-blue-200/10 [&_th]:border-slate-200/80 dark:[&_th]:border-blue-200/10"
+            >
               <TableHeader className="sticky top-0 z-30 bg-slate-100 dark:bg-[#1b2c4d]">
                 <TableRow className="border-b border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-100 dark:border-blue-300/20 dark:bg-[#1b2c4d] dark:text-blue-100 dark:hover:bg-[#1b2c4d]">
                   <TableHead className="w-8"></TableHead>
@@ -377,104 +392,114 @@ export function BaleProductsView1({ model }: { model: Model }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {mhd.sortRows(groupedProducts, (group) => group.articleCode).map((group) => (
-                  <>
-                    <TableRow
-                      key={group._key}
-                      className="cursor-pointer hover-elevate"
-                      onClick={() => toggleGroup(group._key)}
-                      data-testid={`row-group-${group._key}`}
-                    >
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={group.items.length > 0 && group.items.every((p) => selectedIds.has(p.id))}
-                          onCheckedChange={() => toggleSelectAll(group.items)}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        {expandedGroups.has(group._key) ? (
-                          <ChevronDown className="h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4" />
-                        )}
-                      </TableCell>
-                      <TableCell className="font-mono font-medium">{group.articleCode || "-"}</TableCell>
-                      <TableCell className="font-medium">{mhd.nameFor(group.articleCode, group.name)}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {group.items[0]?.categoryId ? categoryMap.get(group.items[0].categoryId) || "-" : "-"}
-                      </TableCell>
-                      {!hideAvgRate && <TableCell></TableCell>}
-                      {!hideSellingPriceBP && <TableCell></TableCell>}
-                      <TableCell className="text-right">
-                        <Badge variant="secondary">{group.count}</Badge>
-                      </TableCell>
-                    </TableRow>
-                    {expandedGroups.has(group._key) &&
-                      mhd.sortRows(group.items, (product) => product.articleCode).map((product) => (
-                        <TableRow
-                          key={product.id}
-                          className={`bg-muted/30 ${selectedIds.has(product.id) ? "bg-muted/60" : ""}`}
-                          data-testid={`row-product-${product.id}`}
-                        >
-                          <TableCell onClick={(e) => e.stopPropagation()}>
-                            <Checkbox
-                              checked={selectedIds.has(product.id)}
-                              onCheckedChange={() => toggleSelectId(product.id)}
-                              data-testid={`checkbox-product-${product.id}`}
-                            />
-                          </TableCell>
-                          <TableCell></TableCell>
-                          <TableCell className="font-mono text-muted-foreground text-sm pl-8">
-                            {product.articleCode || "-"}
-                          </TableCell>
-                          <TableCell className="text-sm">{mhd.nameFor(product.articleCode, product.name)}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {product.categoryId ? categoryMap.get(product.categoryId) || "-" : "-"}
-                          </TableCell>
-                          <TableCell className="text-right text-sm text-muted-foreground">
-                            {product.weightPerBaleKg ? `${product.weightPerBaleKg} kg` : "-"}
-                          </TableCell>
-                          {!hideAvgRate && (
-                            <TableCell className="text-right text-sm font-mono text-muted-foreground">
-                              {product.productionPrice && parseFloat(product.productionPrice) > 0
-                                ? parseFloat(product.productionPrice).toLocaleString()
-                                : "—"}
-                            </TableCell>
+                {mhd
+                  .sortRows(groupedProducts, (group) => group.articleCode)
+                  .map((group) => (
+                    <>
+                      <TableRow
+                        key={group._key}
+                        className="cursor-pointer hover-elevate"
+                        onClick={() => toggleGroup(group._key)}
+                        data-testid={`row-group-${group._key}`}
+                      >
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={group.items.length > 0 && group.items.every((p) => selectedIds.has(p.id))}
+                            onCheckedChange={() => toggleSelectAll(group.items)}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {expandedGroups.has(group._key) ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
                           )}
-                          {!hideSellingPriceBP && (
-                            <TableCell className="text-right text-sm font-mono text-muted-foreground">
-                              {product.sellingPrice && parseFloat(product.sellingPrice) > 0
-                                ? parseFloat(product.sellingPrice).toLocaleString()
-                                : "—"}
-                            </TableCell>
-                          )}
-                          <TableCell></TableCell>
-                          <TableCell>
-                            {isAdmin && (
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setEditingProduct(product);
-                                }}
-                                data-testid={`button-edit-product-${product.id}`}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                  </>
-                ))}
+                        </TableCell>
+                        <TableCell className="font-mono font-medium">{group.articleCode || "-"}</TableCell>
+                        <TableCell className="font-medium">{mhd.nameFor(group.articleCode, group.name)}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {group.items[0]?.categoryId ? categoryMap.get(group.items[0].categoryId) || "-" : "-"}
+                        </TableCell>
+                        {!hideAvgRate && <TableCell></TableCell>}
+                        {!hideSellingPriceBP && <TableCell></TableCell>}
+                        <TableCell className="text-right">
+                          <Badge variant="secondary">{group.count}</Badge>
+                        </TableCell>
+                      </TableRow>
+                      {expandedGroups.has(group._key) &&
+                        mhd
+                          .sortRows(group.items, (product) => product.articleCode)
+                          .map((product) => (
+                            <TableRow
+                              key={product.id}
+                              className={`bg-muted/30 ${selectedIds.has(product.id) ? "bg-muted/60" : ""}`}
+                              data-testid={`row-product-${product.id}`}
+                            >
+                              <TableCell onClick={(e) => e.stopPropagation()}>
+                                <Checkbox
+                                  checked={selectedIds.has(product.id)}
+                                  onCheckedChange={() => toggleSelectId(product.id)}
+                                  data-testid={`checkbox-product-${product.id}`}
+                                />
+                              </TableCell>
+                              <TableCell></TableCell>
+                              <TableCell className="font-mono text-muted-foreground text-sm pl-8">
+                                {product.articleCode || "-"}
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {mhd.nameFor(product.articleCode, product.name)}
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {product.categoryId ? categoryMap.get(product.categoryId) || "-" : "-"}
+                              </TableCell>
+                              <TableCell className="text-right text-sm text-muted-foreground">
+                                {product.weightPerBaleKg ? `${product.weightPerBaleKg} kg` : "-"}
+                              </TableCell>
+                              {!hideAvgRate && (
+                                <TableCell className="text-right text-sm font-mono text-muted-foreground">
+                                  {product.productionPrice && parseFloat(product.productionPrice) > 0
+                                    ? parseFloat(product.productionPrice).toLocaleString()
+                                    : "—"}
+                                </TableCell>
+                              )}
+                              {!hideSellingPriceBP && (
+                                <TableCell className="text-right text-sm font-mono text-muted-foreground">
+                                  {product.sellingPrice && parseFloat(product.sellingPrice) > 0
+                                    ? parseFloat(product.sellingPrice).toLocaleString()
+                                    : "—"}
+                                </TableCell>
+                              )}
+                              <TableCell></TableCell>
+                              <TableCell>
+                                {isAdmin && (
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingProduct(product);
+                                    }}
+                                    data-testid={`button-edit-product-${product.id}`}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                    </>
+                  ))}
               </TableBody>
             </Table>
           ) : (
             <EmptyState onCreateClick={() => setCreateDialogOpen(true)} />
           )
         ) : activeProducts && activeProducts.length > 0 ? (
-          <Table mobileLayout="cards" wrapperClassName="rounded-none border-x-0 border-b-0 border-t-0 shadow-inner shadow-slate-200/20 dark:shadow-blue-400/5" className="[&_tbody_tr:hover]:bg-blue-50/70 dark:[&_tbody_tr:hover]:bg-blue-500/10 [&_td]:border-slate-200/70 dark:[&_td]:border-blue-200/10 [&_th]:border-slate-200/80 dark:[&_th]:border-blue-200/10">
+          <Table
+            mobileLayout="cards"
+            wrapperClassName="rounded-none border-x-0 border-b-0 border-t-0 shadow-inner shadow-slate-200/20 dark:shadow-blue-400/5"
+            className="[&_tbody_tr:hover]:bg-blue-50/70 dark:[&_tbody_tr:hover]:bg-blue-500/10 [&_td]:border-slate-200/70 dark:[&_td]:border-blue-200/10 [&_th]:border-slate-200/80 dark:[&_th]:border-blue-200/10"
+          >
             <TableHeader className="sticky top-0 z-30 bg-slate-100 dark:bg-[#1b2c4d]">
               <TableRow className="border-b border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-100 dark:border-blue-300/20 dark:bg-[#1b2c4d] dark:text-blue-100 dark:hover:bg-[#1b2c4d]">
                 <TableHead className="w-8">
@@ -513,68 +538,78 @@ export function BaleProductsView1({ model }: { model: Model }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {mhd.sortRows(activeProducts, (product) => product.articleCode).map((product) => (
-                <TableRow
-                  key={product.id}
-                  data-testid={`row-product-${product.id}`}
-                  className={selectedIds.has(product.id) ? "bg-blue-50/80 dark:bg-blue-500/15" : ""}
-                >
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <Checkbox
-                      checked={selectedIds.has(product.id)}
-                      onCheckedChange={() => toggleSelectId(product.id)}
-                      data-testid={`checkbox-product-${product.id}`}
-                    />
-                  </TableCell>
-                  <TableCell className="font-mono font-semibold text-slate-800 dark:text-slate-100">{product.articleCode || "-"}</TableCell>
-                  <TableCell className="font-medium">
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                      <span>{mhd.nameFor(product.articleCode, product.name)}</span>
-                      <ProductColorPills
-                        product={product}
-                        designColors={designColors}
-                        colorUpdateMutation={colorUpdateMutation}
-                        canEdit={isAdmin}
+              {mhd
+                .sortRows(activeProducts, (product) => product.articleCode)
+                .map((product) => (
+                  <TableRow
+                    key={product.id}
+                    data-testid={`row-product-${product.id}`}
+                    className={selectedIds.has(product.id) ? "bg-blue-50/80 dark:bg-blue-500/15" : ""}
+                  >
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedIds.has(product.id)}
+                        onCheckedChange={() => toggleSelectId(product.id)}
+                        data-testid={`checkbox-product-${product.id}`}
                       />
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right font-medium text-slate-700 dark:text-slate-200" dir="rtl" lang="ar">
-                    {product.nameAr || "—"}
-                  </TableCell>
-                  <TableCell>
-                    <span className="inline-flex max-w-48 items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 dark:border-blue-400/25 dark:bg-blue-500/15 dark:text-blue-200">
-                      {product.categoryId ? categoryMap.get(product.categoryId) || "Uncategorized" : "Uncategorized"}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right font-mono font-semibold text-slate-800 dark:text-slate-100">{product.weightPerBaleKg || "-"}</TableCell>
-                  {!hideAvgRate && (
-                    <TableCell className="text-right font-mono font-semibold text-slate-800 dark:text-slate-100">
-                      {product.productionPrice && parseFloat(product.productionPrice) > 0
-                        ? parseFloat(product.productionPrice).toLocaleString()
-                        : "—"}
                     </TableCell>
-                  )}
-                  {!hideSellingPriceBP && (
-                    <TableCell className="text-right font-mono font-semibold text-slate-800 dark:text-slate-100">
-                      {product.sellingPrice && parseFloat(product.sellingPrice) > 0
-                        ? parseFloat(product.sellingPrice).toLocaleString()
-                        : "—"}
+                    <TableCell className="font-mono font-semibold text-slate-800 dark:text-slate-100">
+                      {product.articleCode || "-"}
                     </TableCell>
-                  )}
-                  <TableCell>
-                    {isAdmin && (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => setEditingProduct(product)}
-                        data-testid={`button-edit-product-${product.id}`}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
+                    <TableCell className="font-medium">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                        <span>{mhd.nameFor(product.articleCode, product.name)}</span>
+                        <ProductColorPills
+                          product={product}
+                          designColors={designColors}
+                          colorUpdateMutation={colorUpdateMutation}
+                          canEdit={isAdmin}
+                        />
+                      </div>
+                    </TableCell>
+                    <TableCell
+                      className="text-right font-medium text-slate-700 dark:text-slate-200"
+                      dir="rtl"
+                      lang="ar"
+                    >
+                      {product.nameAr || "—"}
+                    </TableCell>
+                    <TableCell>
+                      <span className="inline-flex max-w-48 items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 dark:border-blue-400/25 dark:bg-blue-500/15 dark:text-blue-200">
+                        {product.categoryId ? categoryMap.get(product.categoryId) || "Uncategorized" : "Uncategorized"}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-semibold text-slate-800 dark:text-slate-100">
+                      {product.weightPerBaleKg || "-"}
+                    </TableCell>
+                    {!hideAvgRate && (
+                      <TableCell className="text-right font-mono font-semibold text-slate-800 dark:text-slate-100">
+                        {product.productionPrice && parseFloat(product.productionPrice) > 0
+                          ? parseFloat(product.productionPrice).toLocaleString()
+                          : "—"}
+                      </TableCell>
                     )}
-                  </TableCell>
-                </TableRow>
-              ))}
+                    {!hideSellingPriceBP && (
+                      <TableCell className="text-right font-mono font-semibold text-slate-800 dark:text-slate-100">
+                        {product.sellingPrice && parseFloat(product.sellingPrice) > 0
+                          ? parseFloat(product.sellingPrice).toLocaleString()
+                          : "—"}
+                      </TableCell>
+                    )}
+                    <TableCell>
+                      {isAdmin && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => setEditingProduct(product)}
+                          data-testid={`button-edit-product-${product.id}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
             </TableBody>
           </Table>
         ) : (
@@ -589,7 +624,11 @@ export function BaleProductsView1({ model }: { model: Model }) {
                 Hidden Products ({hiddenProducts.length})
               </span>
             </div>
-            <Table mobileLayout="cards" wrapperClassName="max-h-[400px] overflow-auto rounded-none border-x-0 border-b-0 dark:border-blue-400/10" className="[&_td]:border-slate-200/70 dark:[&_td]:border-blue-200/10">
+            <Table
+              mobileLayout="cards"
+              wrapperClassName="max-h-[400px] overflow-auto rounded-none border-x-0 border-b-0 dark:border-blue-400/10"
+              className="[&_td]:border-slate-200/70 dark:[&_td]:border-blue-200/10"
+            >
               <TableHeader className="sticky top-0 z-30 bg-slate-100 dark:bg-[#1b2c4d]">
                 <TableRow className="border-b border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-100 dark:border-blue-300/20 dark:bg-[#1b2c4d] dark:text-blue-100 dark:hover:bg-[#1b2c4d]">
                   <TableHead className="w-8">

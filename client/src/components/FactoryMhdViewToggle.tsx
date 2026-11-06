@@ -21,18 +21,25 @@ const affectedPaths = [
 ];
 
 function MhdToggleInner() {
-  const t = useOptionalApplicationLanguage()?.t ?? ((key: ApplicationTranslationKey) => translateApplicationText(key, "en"));
+  const t =
+    useOptionalApplicationLanguage()?.t ?? ((key: ApplicationTranslationKey) => translateApplicationText(key, "en"));
   const mhd = useFactoryMhdView();
   const [error, setError] = useState("");
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border bg-card p-2 text-sm" data-testid="factory-mhd-view-toggle">
+    <div
+      className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border bg-card p-2 text-sm"
+      data-testid="factory-mhd-view-toggle"
+    >
       <span className="mr-1 font-medium">{t("mhd.viewLabel")}</span>
       {(["standard", "mhd"] as const).map((mode) => (
         <button
           key={mode}
           type="button"
           disabled={mhd.saving || (mode === "mhd" && (!mhd.hasMhdView || mhd.isLoading))}
-          onClick={() => { setError(""); void mhd.setMode(mode).catch((cause) => setError(String(cause))); }}
+          onClick={() => {
+            setError("");
+            void mhd.setMode(mode).catch((cause) => setError(String(cause)));
+          }}
           aria-pressed={mhd.mode === mode}
           className={`rounded-md border px-3 py-1.5 font-medium transition-colors disabled:opacity-50 ${mhd.mode === mode ? "border-primary bg-primary text-primary-foreground" : "border-border hover:bg-muted"}`}
         >
@@ -40,7 +47,11 @@ function MhdToggleInner() {
         </button>
       ))}
       {!mhd.hasMhdView && !mhd.isLoading && <span className="text-muted-foreground">{t("mhd.requireUpload")}</span>}
-      {error && <span role="alert" className="text-destructive">{error}</span>}
+      {error && (
+        <span role="alert" className="text-destructive">
+          {error}
+        </span>
+      )}
     </div>
   );
 }

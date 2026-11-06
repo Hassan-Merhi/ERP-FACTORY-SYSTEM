@@ -632,10 +632,7 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     return requirement("factory/bales-hub", ["hide_tab_bales_history"]);
   }
   if (hasPrefix(path, "/bale-product-detail")) {
-    return anyOf(
-      requirement("factory/bales-hub", ["hide_tab_bales_products"]),
-      requirement("factory/stock-query")
-    );
+    return anyOf(requirement("factory/bales-hub", ["hide_tab_bales_products"]), requirement("factory/stock-query"));
   }
   if (hasPrefix(path, "/bale-product-images")) {
     return requirement("factory/bale-product-images");
