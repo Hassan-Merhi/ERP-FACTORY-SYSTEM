@@ -77,6 +77,8 @@ export function resolveAuthenticatedAppRoute({
     decision = { kind: "redirect", to: fallback };
   } else if (isPropertiesCompany && currentLocation === "/my-settings") {
     decision = { kind: "redirect", to: "/properties/my-settings" };
+  } else if (isPropertiesCompany && currentLocation === "/help-training") {
+    decision = { kind: "redirect", to: "/properties/help-training" };
   } else if (isPropertiesCompany && currentLocation === "/balance-repair") {
     decision = { kind: "redirect", to: "/properties/balance-repair" };
   } else if (isPropertiesCompany && !isPropertiesRoute) {

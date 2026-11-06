@@ -23,6 +23,9 @@ import type { AuthMe } from "@shared/apiTypes";
 import { useCompany } from "@/contexts/CompanyContext";
 
 const RetailStockCount = lazy(() => import("@/pages/retail/RetailStockCount"));
+const PosHelpTraining = lazy(() =>
+  import("@/pages/HelpTrainingWorkspaces").then((m) => ({ default: m.PosHelpTraining }))
+);
 
 interface PosRoutesProps {
   user: AuthMe;
@@ -45,6 +48,9 @@ export function PosRoutes({ user, posImportEnabled }: PosRoutesProps) {
         <Route path="/retail/pos">{() => <RetailPOS />}</Route>
         <Route path="/retail/stock-count">{() => <RetailStockCount />}</Route>
         <Route path="/my-settings" component={MySettings} />
+        <Route path="/help-training">
+          {() => <PosHelpTraining user={user} posImportEnabled={!!posImportEnabled} />}
+        </Route>
         <Route>{() => <Redirect to="/" />}</Route>
       </Switch>
     );
@@ -74,6 +80,7 @@ export function PosRoutes({ user, posImportEnabled }: PosRoutesProps) {
       <Route path="/pos-price-list">{() => <POSPriceList posUser={user} />}</Route>
       <Route path="/pos-transfer-orders">{() => <PosTransferOrders posUser={user} />}</Route>
       <Route path="/my-settings" component={MySettings} />
+      <Route path="/help-training">{() => <PosHelpTraining user={user} posImportEnabled={!!posImportEnabled} />}</Route>
       <Route>{() => <Redirect to="/" />}</Route>
     </Switch>
   );
