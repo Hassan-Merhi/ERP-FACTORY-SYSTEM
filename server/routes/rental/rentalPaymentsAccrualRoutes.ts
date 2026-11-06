@@ -634,7 +634,9 @@ export function registerRentalPaymentsAccrualRoutes(
           )
         );
       const receiptAccounts =
-        module === "PROPERTIES" ? accts.filter((a) => isPropertiesReceiptAccountType(a.accountType)) : accts;
+        module === "PROPERTIES"
+          ? accts.filter((a) => isPropertiesReceiptAccountType(a.accountType))
+          : accts;
       res.json(receiptAccounts.sort((a, b) => a.name.localeCompare(b.name)));
     } catch (e: unknown) {
       res.status(500).json({ message: getErrorMessage(e) });
@@ -792,9 +794,9 @@ export function registerRentalPaymentsAccrualRoutes(
           ORDER BY v.id, cash_line.ledger_account_id
         `);
         const receiptRows = receiptResult.rows as Array<Record<string, unknown>>;
-        combinedPayments = [...payments, ...receiptRows].sort(
-          (left, right) =>
-            String(right.paymentDate).localeCompare(String(left.paymentDate)) || Number(right.id) - Number(left.id)
+        combinedPayments = [...payments, ...receiptRows].sort((left, right) =>
+          String(right.paymentDate).localeCompare(String(left.paymentDate)) ||
+          Number(right.id) - Number(left.id)
         );
       }
       res.json(combinedPayments);
