@@ -132,3 +132,20 @@ html[data-christmas-mode="on"] [data-pos-sidebar-header] [data-seasonal-brand-ac
     animation: none !important;
   }
 }
+
+/* Camera decoding has priority over decorative lighting animation. The tree
+   and bulbs remain visible but stop pulsing until the video stream closes. */
+html[data-christmas-mode="on"][data-seasonal-camera-active="true"] [data-slot="app-top-bar"]::after,
+html[data-christmas-mode="on"][data-seasonal-camera-active="true"] [data-slot="pos-top-bar"]::after,
+html[data-christmas-mode="on"][data-seasonal-camera-active="true"] [data-seasonal-brand-accent] .seasonal-brand-sparkle {
+  animation: none !important;
+}
+
+/* Conserve battery/bandwidth when the OS/browser explicitly requests it. */
+@media (prefers-reduced-data: reduce) {
+  html[data-christmas-mode="on"] [data-slot="app-top-bar"]::after,
+  html[data-christmas-mode="on"] [data-slot="pos-top-bar"]::after,
+  html[data-christmas-mode="on"] [data-seasonal-brand-accent] .seasonal-brand-sparkle {
+    animation: none !important;
+  }
+}
