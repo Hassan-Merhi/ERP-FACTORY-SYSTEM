@@ -12,6 +12,14 @@
 - Failed company context checks are denied; internal errors do not fall through to business writes.
 - Added contract tests; execution and live integration validation are pending.
 
+## Continued Phase 3 integration
+
+- Installed the global `blockUnverifiedCreateOnlyWrites` guard before business route registration, leaving existing roles unchanged.
+- Added an exact-method/path deny-by-default policy. All unknown Create Only writes fail with 403; explicit authentication and presence transport exceptions are preserved.
+- Reviewed `POST /api/suppliers`: it creates a company-scoped supplier and transactional audit record. It is the first exact route allowed through the outer guard and protected by a handler-specific canonical-company action guard. Create Only is denied if its payload requests a non-zero opening balance.
+- Added direct API and bulk-route boundary contract tests. CI execution and security validation are still pending.
+- This is a narrow verified handler, NOT verification of the entire Phase 1 candidate inventory.
+
 ## Open blocking work
 
 1. Audit the remaining potentially mutating route registrations against the current `main` route manifest. The Phase 1 baseline counted 1,092 unreviewed write registrations.
