@@ -60,6 +60,7 @@ function SnowfallCanvas() {
     let height = 0;
     let flakes: Flake[] = [];
     let frameId: number | null = null;
+    let resizeFrameId: number | null = null;
     let lastDraw = 0;
     let destroyed = false;
     let printPaused = false;
@@ -161,6 +162,16 @@ function SnowfallCanvas() {
       else resume();
     }
 
+    function scheduleResize() {
+      // Mobile keyboards and fold/rotation changes can dispatch many resize
+      // events in one frame. Recreate the canvas backing store only once.
+      if (resizeFrameId !== null) return;
+      resizeFrameId = window.requestAnimationFrame(() => {
+        resizeFrameId = null;
+        if (!destroyed) resizeCanvas();
+      });
+    }
+
     function onBeforePrint() {
       printPaused = true;
       stop();
@@ -173,7 +184,7 @@ function SnowfallCanvas() {
     }
 
     resizeCanvas();
-    window.addEventListener("resize", resizeCanvas, { passive: true });
+    window.addEventListener("resize", scheduleResize, { passive: true });
     window.addEventListener("beforeprint", onBeforePrint);
     window.addEventListener("afterprint", onAfterPrint);
     document.addEventListener("visibilitychange", onVisibilityChange);
@@ -184,7 +195,9 @@ function SnowfallCanvas() {
     return () => {
       destroyed = true;
       stop();
-      window.removeEventListener("resize", resizeCanvas);
+      window.removeEventListener("resize", scheduleResize);
+      if (resizeFrameId !== null) window.cancelAnimationFrame(resizeFrameId);
+      resizeFrameId = null;
       window.removeEventListener("beforeprint", onBeforePrint);
       window.removeEventListener("afterprint", onAfterPrint);
       document.removeEventListener("visibilitychange", onVisibilityChange);
