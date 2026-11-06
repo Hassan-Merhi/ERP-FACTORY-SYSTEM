@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from "react";
+import { useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { CalendarDays, LayoutGrid, SlidersHorizontal, Truck, X } from "lucide-react";
@@ -51,8 +51,6 @@ interface FilterBarProps {
 }
 
 /** True when the bar renders inside the phone filter sheet. */
-const SheetLayoutContext = createContext(false);
-
 function Lbl({ children }: { children: React.ReactNode }) {
   return (
     <span className="block text-[11px] font-medium text-muted-foreground/70 uppercase tracking-wide mb-1 leading-none">
@@ -61,8 +59,7 @@ function Lbl({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Col({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
-  useContext(SheetLayoutContext);
+function Col({ label, children }: { label: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={cn("flex flex-col min-w-0", "w-full")}>
       <Lbl>{label}</Lbl>
@@ -84,6 +81,7 @@ export function countGitContainerFilters({
   freightFilter,
   etaFilter,
   notesFilter,
+  sortOrder,
 }: Pick<
   FilterBarProps,
   | "companyFilter"
@@ -98,6 +96,7 @@ export function countGitContainerFilters({
   | "freightFilter"
   | "etaFilter"
   | "notesFilter"
+  | "sortOrder"
 >): number {
   return [
     companyFilter !== "ALL" ? 1 : 0,
@@ -112,6 +111,7 @@ export function countGitContainerFilters({
     freightFilter !== "ALL" ? 1 : 0,
     etaFilter !== "ALL" ? 1 : 0,
     notesFilter !== "ALL" ? 1 : 0,
+    sortOrder !== "DEFAULT" ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 }
 
@@ -164,7 +164,7 @@ export function FilterBar({
   const activeCount = countGitContainerFilters({
     companyFilter, containerFilters, supplierFilters, transporterFilters,
     agentFilters, truckFilters, locationFilters, docsFilter, delayedFilter,
-    freightFilter, etaFilter, notesFilter,
+    freightFilter, etaFilter, notesFilter, sortOrder,
   });
   const categoryTabs = [
     { id: "general" as const, title: "General", icon: LayoutGrid, count: Number(companyFilter !== "ALL") + containerFilters.length + supplierFilters.length },
@@ -175,9 +175,10 @@ export function FilterBar({
   const sx = inSheet ? "h-11 text-sm w-full" : "h-9 text-sm w-full";
 
   return (
-    <SheetLayoutContext.Provider value={inSheet}>
+    <>
       <section
         aria-label="Advanced container filters"
+        id="otw-filter-panel"
         data-testid="otw-advanced-filter-panel"
         className={cn(
           "min-w-0 overflow-hidden rounded-xl border border-border/70 bg-card text-card-foreground shadow-sm",
@@ -419,6 +420,6 @@ export function FilterBar({
           </div>
         )}
       </section>
-    </SheetLayoutContext.Provider>
+    </>
   );
 }
