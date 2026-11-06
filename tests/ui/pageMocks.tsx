@@ -57,6 +57,7 @@ export const appModeMock = {
 };
 
 export const companyMock = {
+  useOptionalCompany: () => null,
   useCompany: () => ({
     selectedCompany: {
       id: 1,
