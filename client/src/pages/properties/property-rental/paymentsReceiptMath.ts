@@ -87,14 +87,32 @@ export function reconciledHistoryTsv(rows: ReceiptRow[], snapshot: HistoryReconc
   const base = paymentHistoryTsv(rows);
   const totals = bridge.history;
   const fmt = (amount: number | null) => amount === null ? "" : (amount / 100).toFixed(2);
+  const bridgeLine = (label: string, description: string, amount: number | null) =>
+    [label, "", "", "", "", "", "", description, "", "", fmt(amount)];
+  const historyLine = [
+    "RECORDED HISTORY TOTAL", "", "", "", fmt(totals.cash), fmt(totals.nonCash), "",
+    "Gross history = cash + non-cash", "", "", "",
+  ];
   const tail = [
-    ["RECORDED HISTORY TOTAL", "", "", "", fmt(totals.cash), fmt(totals.nonCash), "", "Gross history = cash + non-cash", "", ""],
-    ["ACCOUNT RECONCILIATION: GUARANTEE OVERLAP", "", "", "", "", "", "", "Account includes both deposit liability and cash debit, not a second payment", "", fmt(bridge.cashAndLiabilityOverlap)],
-    ["ACCOUNT RECONCILIATION: REMOVE NON-CASH BILLING", "", "", "", "", "", "", "Non-cash allocation already included in recorded history", "", fmt(-bridge.removeNonCashBilling)],
-    ["NET RECONCILIATION ADJUSTMENT", "", "", "", "", "", "", "Source classifications only — no journal posted", "", fmt(bridge.netAdjustment)],
-    ["RECONCILED HISTORY + ADJUSTMENT", "", "", "", "", "", "", "Recorded history plus net reconciliation adjustment", "", fmt(bridge.reconciledTotal)],
-    ["THREE ACCOUNT BALANCES", "", "", "", "", "", "", "HP Rental Withdrawal + Tenant Deposits + ALI KOLWEZI RENT CASH", "", fmt(snapshot.threeAccountsTotal)],
-    ["UNRECONCILED DIFFERENCE", "", "", "", "", "", "", "Three account balances minus reconciled history", "", fmt(bridge.reconciledTotal == null ? null : snapshot.threeAccountsTotal - bridge.reconciledTotal)],
+    historyLine,
+    bridgeLine("ACCOUNT RECONCILIATION: GUARANTEE OVERLAP",
+      "Cash debit and deposit liability credit of the same voucher; not another payment",
+      bridge.cashAndLiabilityOverlap),
+    bridgeLine("ACCOUNT RECONCILIATION: REMOVE NON-CASH BILLING",
+      "Billing allocation already included in history; not new cash",
+      -bridge.removeNonCashBilling),
+    bridgeLine("NET RECONCILIATION ADJUSTMENT",
+      "Source classifications only; no journal posted",
+      bridge.netAdjustment),
+    bridgeLine("RECONCILED HISTORY + ADJUSTMENT",
+      "Recorded history plus net reconciliation adjustment",
+      bridge.reconciledTotal),
+    bridgeLine("THREE ACCOUNT BALANCES",
+      "HP Rental Withdrawal + Tenant Deposits + ALI KOLWEZI RENT CASH",
+      snapshot.threeAccountsTotal),
+    bridgeLine("UNRECONCILED DIFFERENCE",
+      "Three account balances minus reconciled history",
+      bridge.reconciledTotal === null ? null : snapshot.threeAccountsTotal - bridge.reconciledTotal),
   ];
   // Add a separate reconciliation column, so bridge lines never masquerade
   // as payments or change what the cash/adjustment columns sum to.
