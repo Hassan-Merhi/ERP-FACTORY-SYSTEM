@@ -16,12 +16,36 @@ export type ChristmasJinglePlayback = {
 type BellEvent = readonly [midi: number | null, seconds: number];
 
 const NOTES: readonly BellEvent[] = [
-  [76, 0.26], [76, 0.26], [76, 0.53], [null, 0.12],
-  [76, 0.26], [76, 0.26], [76, 0.53], [null, 0.12],
-  [76, 0.27], [79, 0.27], [72, 0.27], [74, 0.27], [76, 0.59], [null, 0.12],
-  [77, 0.27], [77, 0.27], [77, 0.27], [77, 0.55], [null, 0.10],
-  [77, 0.27], [76, 0.27], [76, 0.27], [76, 0.47], [null, 0.10],
-  [76, 0.27], [74, 0.27], [74, 0.27], [76, 0.27], [74, 0.27], [79, 0.65],
+  [76, 0.26],
+  [76, 0.26],
+  [76, 0.53],
+  [null, 0.12],
+  [76, 0.26],
+  [76, 0.26],
+  [76, 0.53],
+  [null, 0.12],
+  [76, 0.27],
+  [79, 0.27],
+  [72, 0.27],
+  [74, 0.27],
+  [76, 0.59],
+  [null, 0.12],
+  [77, 0.27],
+  [77, 0.27],
+  [77, 0.27],
+  [77, 0.55],
+  [null, 0.1],
+  [77, 0.27],
+  [76, 0.27],
+  [76, 0.27],
+  [76, 0.47],
+  [null, 0.1],
+  [76, 0.27],
+  [74, 0.27],
+  [74, 0.27],
+  [76, 0.27],
+  [74, 0.27],
+  [79, 0.65],
 ];
 
 export function christmasJingleNoteEvents(): readonly BellEvent[] {
@@ -32,13 +56,7 @@ function bellFrequency(midi: number) {
   return 440 * 2 ** ((midi - 69) / 12);
 }
 
-function scheduleBell(
-  context: AudioContext,
-  output: AudioNode,
-  midi: number,
-  start: number,
-  duration: number,
-) {
+function scheduleBell(context: AudioContext, output: AudioNode, midi: number, start: number, duration: number) {
   const frequency = bellFrequency(midi);
   // Three very short decaying harmonics create a warm chime/sleigh-bell tone,
   // not the harsh sound of a continuous oscillator.
@@ -64,8 +82,11 @@ function scheduleBell(
 }
 
 function scheduleSantaHoHoHo(): { stop: () => void } {
-  if (typeof window === "undefined" || !("speechSynthesis" in window) ||
-      typeof SpeechSynthesisUtterance === "undefined") {
+  if (
+    typeof window === "undefined" ||
+    !("speechSynthesis" in window) ||
+    typeof SpeechSynthesisUtterance === "undefined"
+  ) {
     return { stop: () => undefined };
   }
   const voice = new SpeechSynthesisUtterance("Ho! Ho! Ho!");
@@ -82,7 +103,11 @@ function scheduleSantaHoHoHo(): { stop: () => void } {
     stop: () => {
       // Only cancel when this exact greeting is still active.
       if (window.speechSynthesis.speaking) {
-        try { window.speechSynthesis.cancel(); } catch { /* unsupported */ }
+        try {
+          window.speechSynthesis.cancel();
+        } catch {
+          /* unsupported */
+        }
       }
     },
   };
@@ -95,8 +120,8 @@ function scheduleSantaHoHoHo(): { stop: () => void } {
 export async function startChristmasJingle(): Promise<ChristmasJinglePlayback> {
   const silent = { started: false, stop: () => undefined };
   if (typeof window === "undefined" || typeof document === "undefined" || document.hidden) return silent;
-  const AudioCtor = window.AudioContext ??
-    (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  const AudioCtor =
+    window.AudioContext ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!AudioCtor) return silent;
 
   let context: AudioContext;
@@ -112,10 +137,13 @@ export async function startChristmasJingle(): Promise<ChristmasJinglePlayback> {
   const timeout = new Promise<boolean>((resolve) => {
     timeoutId = window.setTimeout(() => resolve(false), 600);
   });
-  let resumed = false;
+  let resumed: boolean;
   try {
     resumed = await Promise.race([
-      context.resume().then(() => context.state === "running").catch(() => false),
+      context
+        .resume()
+        .then(() => context.state === "running")
+        .catch(() => false),
       timeout,
     ]);
   } catch {
