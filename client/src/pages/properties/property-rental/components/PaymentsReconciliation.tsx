@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Scale } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Copy, Scale } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { formatMoneyNumber } from "@/lib/moneyDisplay";
-import { cashCents, cents, receiptTotals, type ReceiptRow } from "../paymentsReceiptMath";
+import { accountBalanceHistoryBridge, cashCents, cents, receiptTotals, reconciledHistoryTsv, type ReceiptRow } from "../paymentsReceiptMath";
 import {
   HISTORICAL_RENT_CUTOFF,
   HISTORICAL_RENT_CUTOFF_LABEL,
@@ -58,12 +59,15 @@ export function PaymentsReconciliation({
   payments,
   companyId,
   isLoading,
+  isError = false,
 }: {
   payments: ReconciliationPayment[];
   companyId: number | undefined;
   isLoading: boolean;
+  isError?: boolean;
 }) {
   const [showDetails, setShowDetails] = useState(false);
+  const { toast } = useToast();
   const sums = useMemo(() => {
     const historical = payments.filter(belongsToHistoricalRentSnapshot);
     const excluded = payments.filter((row) => !belongsToHistoricalRentSnapshot(row));
@@ -139,26 +143,39 @@ export function PaymentsReconciliation({
   const withdrawalAmount = postedMovement(withdrawalStatement, "debit");
   const depositsAmount = postedMovement(depositsStatement, "credit");
   const aliAmount = postedMovement(aliStatement, "debit");
-  const overlap = ali
-    ? payments
-        .filter((row) => row.reconciliationCategory === "GUARANTEE" && row.cashAccountId === ali.id)
-        .reduce((sum, row) => sum + cashCents(row), 0)
-    : null;
-
+  // Reconcile the user's actual account-balance sum, not a cash-only subtotal.
+  // The bridge is sourced from the GUAR deposit voucher and the non-cash
+  // adjustment, never calculated as a plug to force a zero residual.
+  const bridge = useMemo(() => accountBalanceHistoryBridge(payments, ali?.id), [payments, ali?.id]);
   const accountSum = withdrawalAmount !== null && depositsAmount !== null && aliAmount !== null
     ? withdrawalAmount + depositsAmount + aliAmount
     : null;
-  const adjustedAccountTotal = accountSum !== null && overlap !== null ? accountSum - overlap : null;
-  const difference = adjustedAccountTotal !== null ? adjustedAccountTotal - sums.cash : null;
+  const difference = accountSum !== null && bridge.reconciledTotal !== null
+    ? accountSum - bridge.reconciledTotal
+    : null;
   const loading = isLoading || accountsLoading || withdrawalLoading || depositsLoading || aliLoading;
-  const unavailable = accountsError || withdrawalError || depositsError || aliError ||
+  const unavailable = isError || accountsError || withdrawalError || depositsError || aliError ||
     withdrawalMatches.length !== 1 || depositsMatches.length !== 1 || aliMatches.length !== 1;
   const verified = !loading && !unavailable && !sums.mixedCurrency && difference === 0;
+  const canCopy = !loading && !unavailable && !sums.mixedCurrency && accountSum !== null && ali != null;
+  const copyReconciledHistory = async () => {
+    if (!canCopy || !ali || accountSum === null) return;
+    try {
+      const tsv = reconciledHistoryTsv(payments, { aliCashLedgerId: ali.id, threeAccountsTotal: accountSum });
+      await navigator.clipboard.writeText(tsv);
+      toast({
+        title: "Full payment history and reconciliation copied",
+        description: "Paste into Excel. Original receipts, guarantee overlap, non-cash adjustment, account total, and any residual are identified separately.",
+      });
+    } catch {
+      toast({ title: "Copy failed", description: "Please enable clipboard permission and retry.", variant: "destructive" });
+    }
+  };
   const figures = [
-    { label: "Historical rent through 26 Oct", amount: sums.historical, hint: "Posted rent with linked vouchers" },
-    { label: "Guarantee cash receipts", amount: sums.guarantee, hint: "Includes voucher-only deposits" },
-    { label: "Rent received after 26 Oct", amount: sums.postCutoffRent, hint: "Newer posted rent" },
-    { label: "Total cash received", amount: sums.cash, hint: "Actual voucher-backed receipts" },
+    { label: "Recorded history (all amounts)", amount: sums.recorded, hint: "Includes non-cash billing adjustment" },
+    { label: "Net account classification adjustment", amount: bridge.netAdjustment, hint: "Guarantee cash/liability overlap less non-cash billing" },
+    { label: "History + reconciliation adjustment", amount: bridge.reconciledTotal, hint: "Account-balance comparison basis" },
+    { label: "Three-account balance sum", amount: accountSum, hint: "HP Rental Withdrawal + Tenant Deposits + ALI rent cash" },
   ];
 
   return (
@@ -170,16 +187,21 @@ export function PaymentsReconciliation({
             Historical cutoff {HISTORICAL_RENT_CUTOFF_LABEL}; account movements current. Read-only: no journals or balances changed.
           </p>
         </div>
-        <Button size="sm" variant="outline" onClick={() => setShowDetails((previous) => !previous)}>
-          {showDetails ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
-          {showDetails ? "Hide breakdown" : "Inspect transactions (" + sums.excludedRows.length + ")"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="default" disabled={!canCopy} onClick={() => void copyReconciledHistory()} data-testid="button-properties-copy-reconciled-history">
+            <Copy className="h-4 w-4 mr-1" /> Copy full history + reconciliation
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setShowDetails((previous) => !previous)}>
+            {showDetails ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
+            {showDetails ? "Hide breakdown" : "Inspect transactions (" + sums.excludedRows.length + ")"}
+          </Button>
+        </div>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
         {figures.map((figure) => (
           <div className="rounded-md bg-muted/50 p-3" key={figure.label}>
             <p className="text-xs text-muted-foreground">{figure.label}</p>
-            <p className="text-xl font-bold tabular-nums">{isLoading ? "…" : money(figure.amount)}</p>
+            <p className="text-xl font-bold tabular-nums">{loading ? "…" : unavailable || figure.amount === null ? "Unavailable" : money(figure.amount)}</p>
             <p className="text-xs text-muted-foreground">{figure.hint}</p>
           </div>
         ))}
@@ -198,15 +220,17 @@ export function PaymentsReconciliation({
             </div>
           ))}
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <span>Sum of three account balances: <strong>{!loading && !unavailable && accountSum !== null ? money(accountSum) : "Unavailable"}</strong></span>
-          <span>Less overlapping deposit/cash receipt: <strong>{!loading && !unavailable && overlap !== null ? "−" + money(overlap) : "Unavailable"}</strong></span>
-          <span>Adjusted cash total: <strong>{!loading && !unavailable && adjustedAccountTotal !== null ? money(adjustedAccountTotal) : "Unavailable"}</strong></span>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          <span>Recorded history: <strong>{money(sums.recorded)}</strong></span>
+          <span>+ Cash / liability guarantee overlap: <strong>{bridge.cashAndLiabilityOverlap === null ? "Unavailable" : money(bridge.cashAndLiabilityOverlap)}</strong></span>
+          <span>− Non-cash billing: <strong>{money(bridge.removeNonCashBilling)}</strong></span>
+          <span>Net adjustment: <strong>{bridge.netAdjustment === null ? "Unavailable" : money(bridge.netAdjustment)}</strong></span>
+          <span>Three-account total: <strong>{accountSum === null || unavailable || loading ? "Unavailable" : money(accountSum)}</strong></span>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           {verified ? (
             <span className="inline-flex items-center gap-1 text-green-600 dark:text-green-400" role="status">
-              <CheckCircle2 className="h-4 w-4" /> Cash receipts reconcile — difference $0
+              <CheckCircle2 className="h-4 w-4" /> Recorded history plus classified adjustment matches all three accounts — difference $0
             </span>
           ) : (
             <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400" role="status">
@@ -218,9 +242,10 @@ export function PaymentsReconciliation({
         </div>
       </div>
       <p className="text-xs text-muted-foreground">
-        Payment history contains {money(sums.recorded)} in recorded allocations.
-        {money(sums.nonCash)} is non-cash billing/adjustments, leaving {money(sums.cash)} in voucher-backed cash.
-        {sums.voucherOnlyGuarantees.length} guarantee voucher(s) have no original payment row; they are shown read-only.
+        Source history {money(sums.recorded)} includes {money(sums.nonCash)} of non-cash billing; voucher-backed cash is {money(sums.cash)}.
+        The same guarantee is recorded in the cash asset and deposit liability accounts. Its account classification
+        overlap is displayed separately rather than added as another payment.
+        {sums.voucherOnlyGuarantees.length} guarantee voucher(s) have no original payment row and appear read-only.
       </p>
       {unavailable && !loading && (
         <p className="text-xs text-amber-600 dark:text-amber-400">
