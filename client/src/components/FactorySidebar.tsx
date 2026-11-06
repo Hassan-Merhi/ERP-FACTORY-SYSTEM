@@ -24,6 +24,7 @@ import {
   MessageCircle,
   AlertTriangle,
   LayoutGrid,
+  ListOrdered,
   Store,
   TableProperties,
   KeyRound,
