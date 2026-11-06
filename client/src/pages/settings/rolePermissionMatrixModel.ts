@@ -25,18 +25,32 @@ export function ruleKey(resource: AccessControlResource, action: AccessControlAc
 }
 export function roleRulesFor(rules: RoleRule[], role: string): Map<RoleRuleKey, AccessDecision> {
   return new Map(
-    rules.filter((entry) => entry.roleKey === role).map((entry) => [ruleKey(entry.resource, entry.action), entry.decision])
+    rules
+      .filter((entry) => entry.roleKey === role)
+      .map((entry) => [ruleKey(entry.resource, entry.action), entry.decision])
   );
 }
 /** UI and server share the same immutable baseline. Backend remains authoritative. */
-export function canStageRoleDecision(role: string, resource: AccessControlResource, action: AccessControlAction, decision: AccessDecision): boolean {
+export function canStageRoleDecision(
+  role: string,
+  resource: AccessControlResource,
+  action: AccessControlAction,
+  decision: AccessDecision
+): boolean {
   if (decision !== "allow") return true;
   if (resource.startsWith("system.")) return false;
   if (action === "manage_settings" || action === "manage_users" || action === "repair") return false;
-  if (role === CREATE_ONLY_ROLE && ["edit", "delete", "approve", "finalize", "void", "reverse", "import"].includes(action)) return false;
+  if (
+    role === CREATE_ONLY_ROLE &&
+    ["edit", "delete", "approve", "finalize", "void", "reverse", "import"].includes(action)
+  )
+    return false;
   return true;
 }
-export function pendingRoleChanges(saved: Map<RoleRuleKey, AccessDecision>, edited: Map<RoleRuleKey, AccessDecision>): RoleChange[] {
+export function pendingRoleChanges(
+  saved: Map<RoleRuleKey, AccessDecision>,
+  edited: Map<RoleRuleKey, AccessDecision>
+): RoleChange[] {
   const result: RoleChange[] = [];
   for (const resource of matrixResources) {
     for (const action of matrixActions) {
@@ -49,5 +63,8 @@ export function pendingRoleChanges(saved: Map<RoleRuleKey, AccessDecision>, edit
   return result;
 }
 export function readableResource(resource: string): string {
-  return resource.split(".")[1].replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return resource
+    .split(".")[1]
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

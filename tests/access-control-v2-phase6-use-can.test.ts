@@ -14,7 +14,9 @@ const base = {
 describe("Phase 6 frontend permission adapter", () => {
   it("does not turn shadow grants into live access", () => {
     expect(decideLegacyCan({ ...base, legacyAllowed: false }).allowed).toBe(false);
-    expect(decideLegacyCan({ ...base, permissions: [{ featureKey: "exp_excel", enabled: false }] }).allowed).toBe(false);
+    expect(decideLegacyCan({ ...base, permissions: [{ featureKey: "exp_excel", enabled: false }] }).allowed).toBe(
+      false
+    );
   });
   it("fails closed when legacy permissions are still loading or failed", () => {
     expect(decideLegacyCan({ ...base, permissionsReady: false }).reason).toBe("loading");
@@ -26,20 +28,34 @@ describe("Phase 6 frontend permission adapter", () => {
     expect(decideLegacyCan({ ...base, permissions: [] }).allowed).toBe(true);
     expect(decideLegacyCan({ ...base, role: "Normal User", permissions: [] }).allowed).toBe(false);
     expect(decideLegacyCan({ ...base, role: "Normal User" }).allowed).toBe(true);
-    expect(decideLegacyCan({ ...base, role: "Admin", permissions: undefined, permissionsReady: false }).allowed).toBe(true);
+    expect(decideLegacyCan({ ...base, role: "Admin", permissions: undefined, permissionsReady: false }).allowed).toBe(
+      true
+    );
   });
   it("never permits View Only business writes or Create Only unverified writes", () => {
     expect(decideLegacyCan({ ...base, role: "View Only", action: "delete" }).reason).toBe("view_only");
     expect(decideLegacyCan({ ...base, role: "Create Only", action: "create" }).allowed).toBe(false);
-    expect(decideLegacyCan({
-      ...base, role: "Create Only", action: "create", verifiedCreateOnly: true,
-    }).allowed).toBe(true);
-    expect(decideLegacyCan({
-      ...base, role: "Create Only", action: "reverse", verifiedCreateOnly: true,
-    }).allowed).toBe(false);
+    expect(
+      decideLegacyCan({
+        ...base,
+        role: "Create Only",
+        action: "create",
+        verifiedCreateOnly: true,
+      }).allowed
+    ).toBe(true);
+    expect(
+      decideLegacyCan({
+        ...base,
+        role: "Create Only",
+        action: "reverse",
+        verifiedCreateOnly: true,
+      }).allowed
+    ).toBe(false);
   });
   it("blocks system actions for ERP Tester and offers readable feedback", () => {
-    expect(decideLegacyCan({ ...base, role: "ERP Tester", resource: "system.settings", action: "view" }).reason).toBe("tester_settings");
+    expect(decideLegacyCan({ ...base, role: "ERP Tester", resource: "system.settings", action: "view" }).reason).toBe(
+      "tester_settings"
+    );
     expect(canDenialMessage("permission_unavailable")).toMatch(/Permissions could not be verified/);
   });
 });

@@ -33,7 +33,8 @@ describe("Phase 3 business action safety contract", () => {
 
   it("does not change legacy-role decisions", () => {
     expect(evaluate({ role: "Owner", action: "edit", legacyAllowed: true })).toEqual({
-      allowed: true, reason: "legacy_policy",
+      allowed: true,
+      reason: "legacy_policy",
     });
   });
 });

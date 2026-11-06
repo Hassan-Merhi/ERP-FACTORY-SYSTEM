@@ -39,3 +39,17 @@ Previously observed PR run at commit `99e30f35b74e1dc906fcfd9f43c06e138eeee9df` 
 - If unexpected denials, cross-company exposure or stock/ledger differences occur, disable V2 activation, preserve logs, return to previously verified deployment, and conduct an incident review. Never rewrite posted financial history merely to mask a discrepancy.
 
 **No migration execution, merge, Render deployment, or active policy modification is claimed here.**
+
+## Shadow-only merge to main (2026-11-06)
+
+The repository owner approved merging this branch into `main` as a **shadow-only** increment. That approval covers the merge only. It does not apply the SQL migration, switch `rolloutMode` to `active`, or assign the Create Only role, and every gate in `config/permissions-v2-release-readiness.json` stays blocked.
+
+Work done to make the branch mergeable:
+
+- Merged current `main`, kept the eight reviewed `/api/permissions-v2/*` route allowances, and corrected the route-manifest count that a `main` commit left one short.
+- Added Arabic and French translations for every new Permissions Control Center string, so the untranslated-text ratchet no longer grows.
+- Exposed `scripts/audit-access-control-v2-routes.mjs` as `npm run audit:access-control-v2-routes`.
+- Fixed the audit viewer accepting records when no company is selected, and hardened the User Access panel so a malformed members response cannot crash the Settings page.
+- Formatted all branch source files with Prettier and made the route-contract tests whitespace-insensitive.
+
+Until the API's migration is applied, the new endpoints answer `503 ACCESS_POLICY_SCHEMA_REQUIRED` and live authorization is unchanged.

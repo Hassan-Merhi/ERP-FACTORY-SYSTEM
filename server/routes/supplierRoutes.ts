@@ -59,7 +59,10 @@ export function registerSupplierRoutes(app: Express) {
   // Phase 3 reviewed handler: supplierService.create inserts a NEW company-scoped
   // supplier and audit row atomically. Create Only may not use the opening
   // balance field to introduce financial balances through this route.
-  app.post("/api/suppliers", requireAuth, requireNonPOS,
+  app.post(
+    "/api/suppliers",
+    requireAuth,
+    requireNonPOS,
     requireVerifiedBusinessAction({
       resource: "erp.suppliers",
       action: "create",
@@ -72,16 +75,17 @@ export function registerSupplierRoutes(app: Express) {
       },
     }),
     async (req, res) => {
-    try {
-      const companyId = getActiveSupplierCompanyId(req);
-      const supplier = await supplierService.create(companyId, req.body, getSupplierAuditActor(req));
-      return res.status(201).json(supplier);
-    } catch (error: unknown) {
-      const dbError = masterDataDbErrorResponse(error, "supplier", req.session.currentCompanyId);
-      if (dbError) return res.status(dbError.status).json(dbError.body);
-      return sendSupplierRouteError(res, error, 400);
+      try {
+        const companyId = getActiveSupplierCompanyId(req);
+        const supplier = await supplierService.create(companyId, req.body, getSupplierAuditActor(req));
+        return res.status(201).json(supplier);
+      } catch (error: unknown) {
+        const dbError = masterDataDbErrorResponse(error, "supplier", req.session.currentCompanyId);
+        if (dbError) return res.status(dbError.status).json(dbError.body);
+        return sendSupplierRouteError(res, error, 400);
+      }
     }
-  });
+  );
 
   app.patch("/api/suppliers/:id", requireAuth, requireNonPOS, async (req, res) => {
     try {

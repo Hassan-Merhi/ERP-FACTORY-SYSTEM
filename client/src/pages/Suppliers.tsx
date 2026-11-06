@@ -172,7 +172,11 @@ export default function Suppliers() {
   const handleExportToExcel = async () => {
     if (!selectedSupplier || unifiedLedger.length === 0) return;
     if (!mayExportSupplier.allowed) {
-      toast({ title: "Export unavailable", description: canDenialMessage(mayExportSupplier.reason), variant: "destructive" });
+      toast({
+        title: "Export unavailable",
+        description: canDenialMessage(mayExportSupplier.reason),
+        variant: "destructive",
+      });
       return;
     }
     const worksheet = utils.json_to_sheet(supplierLedgerToExportRows(unifiedLedger));
@@ -435,7 +439,9 @@ export default function Suppliers() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => supplierToDelete && mayDeleteSupplier.allowed && deleteMutation.mutate(supplierToDelete.id)}
+              onClick={() =>
+                supplierToDelete && mayDeleteSupplier.allowed && deleteMutation.mutate(supplierToDelete.id)
+              }
               disabled={!mayDeleteSupplier.allowed || deleteMutation.isPending}
               title={!mayDeleteSupplier.allowed ? canDenialMessage(mayDeleteSupplier.reason) : undefined}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"

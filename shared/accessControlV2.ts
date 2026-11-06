@@ -169,10 +169,7 @@ export interface AccessControlEvaluation {
   reason: AccessControlDecisionReason;
 }
 
-function createOnlyDefault(
-  resource: AccessControlResource,
-  action: AccessControlAction
-): boolean {
+function createOnlyDefault(resource: AccessControlResource, action: AccessControlAction): boolean {
   if (!OPERATIONAL_RESOURCES.has(resource)) return false;
   if (action === "view" || action === "export") return true;
   if (action === "create") return CREATE_ONLY_CREATABLE_RESOURCES.has(resource);
@@ -189,8 +186,10 @@ function createOnlyDefault(
  * user override > role override > Create Only template / legacy parity.
  */
 export function evaluateAccessControl(input: AccessControlEvaluationInput): AccessControlEvaluation {
-  const validCompany = typeof input.companyId === "number" && Number.isSafeInteger(input.companyId) && input.companyId > 0;
-  const assignedOrSupport = input.isAssignedToCompany || (input.role === "Developer" && input.developerSupportBypass === true);
+  const validCompany =
+    typeof input.companyId === "number" && Number.isSafeInteger(input.companyId) && input.companyId > 0;
+  const assignedOrSupport =
+    input.isAssignedToCompany || (input.role === "Developer" && input.developerSupportBypass === true);
   if (!validCompany || !assignedOrSupport) {
     return { allowed: false, reason: "invalid_company_scope" };
   }

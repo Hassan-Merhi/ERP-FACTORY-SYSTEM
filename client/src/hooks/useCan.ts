@@ -13,15 +13,46 @@ import { accessQueryPolicy } from "@/lib/queryPolicies";
 import type { AccessControlResource, AccessControlAction } from "@shared/accessControlV2";
 
 export type LegacyPermissionRow = { featureKey: string; enabled: boolean };
-export type CanReason = "allowed_by_legacy" | "missing_company" | "loading" | "permission_unavailable" |
-  "legacy_restricted" | "view_only" | "create_only_unverified" | "tester_settings" | "caller_restricted";
-export interface CanResult { allowed: boolean; pending: boolean; reason: CanReason }
+export type CanReason =
+  | "allowed_by_legacy"
+  | "missing_company"
+  | "loading"
+  | "permission_unavailable"
+  | "legacy_restricted"
+  | "view_only"
+  | "create_only_unverified"
+  | "tester_settings"
+  | "caller_restricted";
+export interface CanResult {
+  allowed: boolean;
+  pending: boolean;
+  reason: CanReason;
+}
 
 const MUTATING = new Set<AccessControlAction>([
-  "create", "edit", "delete", "approve", "finalize", "void", "reverse", "import", "manage_settings", "manage_users", "repair",
+  "create",
+  "edit",
+  "delete",
+  "approve",
+  "finalize",
+  "void",
+  "reverse",
+  "import",
+  "manage_settings",
+  "manage_users",
+  "repair",
 ]);
 const CREATE_ONLY_DENIED = new Set<AccessControlAction>([
-  "edit", "delete", "approve", "finalize", "void", "reverse", "import", "manage_settings", "manage_users", "repair",
+  "edit",
+  "delete",
+  "approve",
+  "finalize",
+  "void",
+  "reverse",
+  "import",
+  "manage_settings",
+  "manage_users",
+  "repair",
 ]);
 
 export function decideLegacyCan(input: {
@@ -37,7 +68,17 @@ export function decideLegacyCan(input: {
   /** Explicitly handler-verified Create Only writes, not inferred from URLs. */
   verifiedCreateOnly?: boolean;
 }): CanResult {
-  const { role, companyId, resource, action, legacyAllowed, featureKey, permissions, permissionsReady, permissionsError } = input;
+  const {
+    role,
+    companyId,
+    resource,
+    action,
+    legacyAllowed,
+    featureKey,
+    permissions,
+    permissionsReady,
+    permissionsError,
+  } = input;
   if (!Number.isSafeInteger(companyId) || !companyId || companyId <= 0 || !role) {
     return { allowed: false, pending: false, reason: "missing_company" };
   }
@@ -48,8 +89,10 @@ export function decideLegacyCan(input: {
   if (role === "View Only" && MUTATING.has(action)) {
     return { allowed: false, pending: false, reason: "view_only" };
   }
-  if (role === "Create Only" && (CREATE_ONLY_DENIED.has(action) ||
-    (action === "create" && input.verifiedCreateOnly !== true))) {
+  if (
+    role === "Create Only" &&
+    (CREATE_ONLY_DENIED.has(action) || (action === "create" && input.verifiedCreateOnly !== true))
+  ) {
     return { allowed: false, pending: false, reason: "create_only_unverified" };
   }
   if (role === "Create Only" && resource.startsWith("system.")) {
@@ -82,25 +125,55 @@ export function useCan(
     refetchOnWindowFocus: true,
     refetchInterval: hasContext && !!options.featureKey ? 30_000 : false,
   });
-  return useMemo(() => decideLegacyCan({
-    role, companyId, resource, action, legacyAllowed: options.legacyAllowed,
-    featureKey: options.featureKey, verifiedCreateOnly: options.verifiedCreateOnly,
-    permissions: query.data, permissionsReady: query.isSuccess, permissionsError: query.isError,
-  }), [role, companyId, resource, action, options.legacyAllowed, options.featureKey,
-    options.verifiedCreateOnly, query.data, query.isSuccess, query.isError]);
+  return useMemo(
+    () =>
+      decideLegacyCan({
+        role,
+        companyId,
+        resource,
+        action,
+        legacyAllowed: options.legacyAllowed,
+        featureKey: options.featureKey,
+        verifiedCreateOnly: options.verifiedCreateOnly,
+        permissions: query.data,
+        permissionsReady: query.isSuccess,
+        permissionsError: query.isError,
+      }),
+    [
+      role,
+      companyId,
+      resource,
+      action,
+      options.legacyAllowed,
+      options.featureKey,
+      options.verifiedCreateOnly,
+      query.data,
+      query.isSuccess,
+      query.isError,
+    ]
+  );
 }
 
 /** Short, accessible feedback for disabled operations. */
 export function canDenialMessage(reason: CanReason): string {
   switch (reason) {
-    case "loading": return "Checking your access permissions.";
-    case "permission_unavailable": return "Permissions could not be verified. Refresh or contact an administrator.";
-    case "view_only": return "View Only users cannot change business records.";
-    case "create_only_unverified": return "This operation is not approved for Create Only users.";
-    case "tester_settings": return "ERP Tester cannot manage settings.";
-    case "legacy_restricted": return "Your company role does not allow this action.";
-    case "missing_company": return "Select an authorized company to continue.";
-    case "caller_restricted": return "This operation is restricted for your current account.";
-    default: return "";
+    case "loading":
+      return "Checking your access permissions.";
+    case "permission_unavailable":
+      return "Permissions could not be verified. Refresh or contact an administrator.";
+    case "view_only":
+      return "View Only users cannot change business records.";
+    case "create_only_unverified":
+      return "This operation is not approved for Create Only users.";
+    case "tester_settings":
+      return "ERP Tester cannot manage settings.";
+    case "legacy_restricted":
+      return "Your company role does not allow this action.";
+    case "missing_company":
+      return "Select an authorized company to continue.";
+    case "caller_restricted":
+      return "This operation is restricted for your current account.";
+    default:
+      return "";
   }
 }

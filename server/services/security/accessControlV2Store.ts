@@ -17,7 +17,13 @@ import {
 import { canAccessModule } from "../../lib/permissionHelpers";
 
 export const V2_EDITABLE_ROLES = [
-  "Owner", "Manager", "POS", "Normal User", "View Only", "ERP Tester", CREATE_ONLY_ROLE,
+  "Owner",
+  "Manager",
+  "POS",
+  "Normal User",
+  "View Only",
+  "ERP Tester",
+  CREATE_ONLY_ROLE,
 ] as const;
 
 export interface V2RuleChange {
@@ -27,16 +33,30 @@ export interface V2RuleChange {
 }
 
 export class V2PolicyError extends Error {
-  constructor(public readonly status: number, public readonly code: string, message: string) {
+  constructor(
+    public readonly status: number,
+    public readonly code: string,
+    message: string
+  ) {
     super(message);
     this.name = "V2PolicyError";
   }
 }
 
 type PermissionSubject = { kind: "role"; roleKey: string } | { kind: "user"; userId: string };
-interface RuleRow { resource_key: string; action_key: string; decision: AccessDecision }
-interface VersionRow { revision: string; mode: string }
-export interface V2PolicyActor { companyId: number; userId: string }
+interface RuleRow {
+  resource_key: string;
+  action_key: string;
+  decision: AccessDecision;
+}
+interface VersionRow {
+  revision: string;
+  mode: string;
+}
+export interface V2PolicyActor {
+  companyId: number;
+  userId: string;
+}
 
 function revisionNumber(raw: string | number | null | undefined): number {
   const number = Number(raw ?? 0);
@@ -62,12 +82,14 @@ export function assertV2ChangesSafe(role: string | null, changes: V2RuleChange[]
       throw new V2PolicyError(400, "INVALID_POLICY_RULE", "Unrecognized resource, action, or decision");
     }
     // Only denials/inheritance can be staged for protected administration.
-    if (change.decision === "allow" &&
-      (reserved.has(change.resource) || immutableActions.has(change.action))) {
+    if (change.decision === "allow" && (reserved.has(change.resource) || immutableActions.has(change.action))) {
       throw new V2PolicyError(403, "PROTECTED_POLICY_ACTION", "Protected system permissions cannot be granted");
     }
-    if (role === CREATE_ONLY_ROLE && change.decision === "allow" &&
-      ["edit", "delete", "approve", "finalize", "void", "reverse", "import"].includes(change.action)) {
+    if (
+      role === CREATE_ONLY_ROLE &&
+      change.decision === "allow" &&
+      ["edit", "delete", "approve", "finalize", "void", "reverse", "import"].includes(change.action)
+    ) {
       throw new V2PolicyError(403, "CREATE_ONLY_IMMUTABLE", "Create Only cannot be granted editing or reversal powers");
     }
   }
@@ -79,7 +101,8 @@ export function assertV2ChangesSafe(role: string | null, changes: V2RuleChange[]
 
 export async function readV2Revision(companyId: number): Promise<{ revision: number; mode: string }> {
   const result = await pool.query<VersionRow>(
-    "SELECT revision::text AS revision, mode FROM access_policy_versions WHERE company_id=$1", [companyId]
+    "SELECT revision::text AS revision, mode FROM access_policy_versions WHERE company_id=$1",
+    [companyId]
   );
   const current = result.rows[0];
   return { revision: revisionNumber(current?.revision), mode: current?.mode ?? "shadow" };
@@ -88,13 +111,14 @@ export async function readV2Revision(companyId: number): Promise<{ revision: num
 export async function readV2Roles(companyId: number) {
   const [templates, rules, version, affectedUsers] = await Promise.all([
     pool.query(
-      "SELECT role_key AS \"roleKey\", display_name AS \"displayName\", system_managed AS \"systemManaged\" FROM access_role_templates WHERE company_id=$1 ORDER BY role_key",
+      'SELECT role_key AS "roleKey", display_name AS "displayName", system_managed AS "systemManaged" FROM access_role_templates WHERE company_id=$1 ORDER BY role_key',
       [companyId]
     ),
     pool.query(
       `SELECT t.role_key AS "roleKey", r.resource_key AS "resource", r.action_key AS "action", r.decision
          FROM access_role_rules r JOIN access_role_templates t ON t.id=r.role_id AND t.company_id=r.company_id
-        WHERE r.company_id=$1 ORDER BY t.role_key, r.resource_key, r.action_key`, [companyId]
+        WHERE r.company_id=$1 ORDER BY t.role_key, r.resource_key, r.action_key`,
+      [companyId]
     ),
     readV2Revision(companyId),
     pool.query<{ role: string; count: string }>(
@@ -102,14 +126,15 @@ export async function readV2Roles(companyId: number) {
       [companyId]
     ),
   ]);
-  const impactCounts = Object.fromEntries(
-    affectedUsers.rows.map((row) => [row.role, Number(row.count)])
-  );
+  const impactCounts = Object.fromEntries(affectedUsers.rows.map((row) => [row.role, Number(row.count)]));
   return {
     impactCounts,
-    mode: version.mode, revision: version.revision,
+    mode: version.mode,
+    revision: version.revision,
     editableRoles: V2_EDITABLE_ROLES,
-    templates: templates.rows, rules: rules.rows, enforced: false,
+    templates: templates.rows,
+    rules: rules.rows,
+    enforced: false,
   };
 }
 
@@ -139,7 +164,8 @@ export async function readV2Overrides(companyId: number, userId: string) {
 
 export async function assignedCompanyRole(companyId: number, userId: string): Promise<string> {
   const rows = await pool.query<{ role: string }>(
-    "SELECT role FROM user_company_roles WHERE company_id=$1 AND user_id=$2 LIMIT 1", [companyId, userId]
+    "SELECT role FROM user_company_roles WHERE company_id=$1 AND user_id=$2 LIMIT 1",
+    [companyId, userId]
   );
   if (!rows.rows[0]) {
     throw new V2PolicyError(404, "USER_NOT_IN_COMPANY", "User is not assigned to this company");
@@ -159,7 +185,8 @@ async function loadRules(client: PoolClient, companyId: number, subject: Permiss
   }
   const result = await client.query<RuleRow>(
     `SELECT resource_key, action_key, decision FROM access_user_overrides
-      WHERE company_id=$1 AND user_id=$2 ORDER BY resource_key, action_key`, [companyId, subject.userId]
+      WHERE company_id=$1 AND user_id=$2 ORDER BY resource_key, action_key`,
+    [companyId, subject.userId]
   );
   return result.rows;
 }
@@ -213,7 +240,8 @@ export async function saveV2Rules(input: {
         `INSERT INTO access_role_templates(company_id, role_key, display_name, system_managed)
          VALUES($1,$2,$2,true)
          ON CONFLICT(company_id,role_key) DO UPDATE SET updated_at=access_role_templates.updated_at
-         RETURNING id::text`, [actor.companyId, subject.roleKey]
+         RETURNING id::text`,
+        [actor.companyId, subject.roleKey]
       );
       roleId = row.rows[0]?.id ?? null;
       if (!roleId) throw new V2PolicyError(503, "ROLE_TEMPLATE_MISSING", "Role template is unavailable");
@@ -255,16 +283,22 @@ export async function saveV2Rules(input: {
     const nextRevision = revision + 1;
     await client.query(
       `UPDATE access_policy_versions SET revision=$2,updated_by=$3,updated_at=NOW()
-       WHERE company_id=$1 AND mode='shadow'`, [actor.companyId, nextRevision, actor.userId]
+       WHERE company_id=$1 AND mode='shadow'`,
+      [actor.companyId, nextRevision, actor.userId]
     );
     await client.query(
       `INSERT INTO access_policy_change_audit
        (company_id,revision,actor_id,subject_type,subject_key,before_rules,after_rules,reason)
        VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8)`,
       [
-        actor.companyId, nextRevision, actor.userId, subject.kind,
+        actor.companyId,
+        nextRevision,
+        actor.userId,
+        subject.kind,
         subject.kind === "role" ? subject.roleKey : subject.userId,
-        JSON.stringify(before), JSON.stringify(after), reason,
+        JSON.stringify(before),
+        JSON.stringify(after),
+        reason,
       ]
     );
     await client.query("COMMIT");
@@ -283,7 +317,8 @@ export async function readV2Audit(companyId: number, limit: number) {
             subject_key AS "subjectKey", before_rules AS "beforeRules",
             after_rules AS "afterRules", reason, created_at AS "createdAt"
        FROM access_policy_change_audit WHERE company_id=$1
-      ORDER BY revision DESC LIMIT $2`, [companyId, limit]
+      ORDER BY revision DESC LIMIT $2`,
+    [companyId, limit]
   );
   return r.rows;
 }
@@ -312,33 +347,50 @@ export async function previewV2(input: {
         )
       : Promise.resolve({ rows: [] as Array<{ decision: AccessDecision }> }),
     pool.query<{ feature_key: string; enabled: boolean }>(
-      "SELECT feature_key,enabled FROM role_feature_permissions WHERE company_id=$1 AND role=$2", [companyId, role]
+      "SELECT feature_key,enabled FROM role_feature_permissions WHERE company_id=$1 AND role=$2",
+      [companyId, role]
     ),
   ]);
 
-  const module =
-    resource.startsWith("factory.") ? "mod_factory" :
-    resource.startsWith("retail.") ? "mod_pos" :
-    resource.startsWith("properties.") ? "mod_properties" :
-    resource.startsWith("system.") ? "mod_settings" :
-    ["erp.accounts", "erp.vouchers"].includes(resource) ? "mod_accounting" :
-    resource === "erp.analytics" ? "mod_analytics" :
-    ["erp.stock_items", "erp.stock_transfers", "erp.inventory", "erp.containers"].includes(resource) ? "mod_inventory" :
-    "mod_erp";
+  const module = resource.startsWith("factory.")
+    ? "mod_factory"
+    : resource.startsWith("retail.")
+      ? "mod_pos"
+      : resource.startsWith("properties.")
+        ? "mod_properties"
+        : resource.startsWith("system.")
+          ? "mod_settings"
+          : ["erp.accounts", "erp.vouchers"].includes(resource)
+            ? "mod_accounting"
+            : resource === "erp.analytics"
+              ? "mod_analytics"
+              : ["erp.stock_items", "erp.stock_transfers", "erp.inventory", "erp.containers"].includes(resource)
+                ? "mod_inventory"
+                : "mod_erp";
 
-  const legacyModuleAllowed = role === CREATE_ONLY_ROLE ? null :
-    canAccessModule(role, module, new Map(legacyRows.rows.map(x => [x.feature_key,x.enabled])));
+  const legacyModuleAllowed =
+    role === CREATE_ONLY_ROLE
+      ? null
+      : canAccessModule(role, module, new Map(legacyRows.rows.map((x) => [x.feature_key, x.enabled])));
 
   const evaluationInput = {
-    role, companyId, isAssignedToCompany: true,
-    resource, action, roleDecision: r.rows[0]?.decision,
+    role,
+    companyId,
+    isAssignedToCompany: true,
+    resource,
+    action,
+    roleDecision: r.rows[0]?.decision,
     userDecision: u.rows[0]?.decision,
     legacyAllowed: legacyModuleAllowed ?? undefined,
   };
   const unverified = evaluateAccessControl({ ...evaluationInput, routeVerified: false });
   const hypothetical = evaluateAccessControl({ ...evaluationInput, routeVerified: true });
   return {
-    companyId, role, userId: userId ?? null, resource, action,
+    companyId,
+    role,
+    userId: userId ?? null,
+    resource,
+    action,
     roleDecision: r.rows[0]?.decision ?? "inherit",
     userDecision: u.rows[0]?.decision ?? "inherit",
     legacyModuleAllowed,

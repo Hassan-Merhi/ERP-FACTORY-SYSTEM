@@ -4,7 +4,11 @@ const context = vi.hoisted(() => ({ get: vi.fn() }));
 vi.mock("../server/services/security/activeCompanyPermissionContext", () => ({
   getActiveCompanyPermissionContext: context.get,
   ActiveCompanyPermissionContextError: class ActiveCompanyPermissionContextError extends Error {
-    constructor(message: string, public readonly status: 401 | 403, public readonly code: string) {
+    constructor(
+      message: string,
+      public readonly status: 401 | 403,
+      public readonly code: string
+    ) {
       super(message);
     }
   },
@@ -24,14 +28,18 @@ describe("Phase 7 permission middleware bypass and transaction boundary", () => 
   beforeEach(() => {
     vi.resetAllMocks();
     context.get.mockResolvedValue({
-      role: "Create Only", companyId: 7, developerBypass: false,
+      role: "Create Only",
+      companyId: 7,
+      developerBypass: false,
     });
   });
   it("allows a newly created company-scoped record through a reviewed route", async () => {
     const next = vi.fn();
     const res = response();
     await requireVerifiedBusinessAction({
-      resource: "erp.suppliers", action: "create", handlerVerified: true,
+      resource: "erp.suppliers",
+      action: "create",
+      handlerVerified: true,
     })(req(), res as never, next);
     expect(next).toHaveBeenCalledOnce();
     expect(res.status).not.toHaveBeenCalled();
@@ -41,7 +49,9 @@ describe("Phase 7 permission middleware bypass and transaction boundary", () => 
       const next = vi.fn();
       const res = response();
       await requireVerifiedBusinessAction({
-        resource: "factory.containers", action, handlerVerified: true,
+        resource: "factory.containers",
+        action,
+        handlerVerified: true,
       })(req(), res as never, next);
       expect(res.status).toHaveBeenCalledWith(403);
       expect(next).not.toHaveBeenCalled();
@@ -51,7 +61,9 @@ describe("Phase 7 permission middleware bypass and transaction boundary", () => 
     const next = vi.fn();
     const res = response();
     await requireVerifiedBusinessAction({
-      resource: "erp.suppliers", action: "create", handlerVerified: true,
+      resource: "erp.suppliers",
+      action: "create",
+      handlerVerified: true,
       editsExistingRecord: () => true,
     })(req(), res as never, next);
     expect(res.status).toHaveBeenCalledWith(403);
@@ -61,7 +73,9 @@ describe("Phase 7 permission middleware bypass and transaction boundary", () => 
     const next = vi.fn();
     const res = response();
     await requireVerifiedBusinessAction({
-      resource: "erp.suppliers", action: "create", handlerVerified: true,
+      resource: "erp.suppliers",
+      action: "create",
+      handlerVerified: true,
       hardDenied: () => true,
     })(req(), res as never, next);
     expect(res.status).toHaveBeenCalledWith(403);
@@ -72,7 +86,9 @@ describe("Phase 7 permission middleware bypass and transaction boundary", () => 
     const next = vi.fn();
     const res = response();
     await requireVerifiedBusinessAction({
-      resource: "erp.suppliers", action: "create", handlerVerified: true,
+      resource: "erp.suppliers",
+      action: "create",
+      handlerVerified: true,
     })(req(), res as never, next);
     expect(res.status).toHaveBeenCalledWith(403);
     expect(next).not.toHaveBeenCalled();
@@ -82,7 +98,9 @@ describe("Phase 7 permission middleware bypass and transaction boundary", () => 
     const next = vi.fn();
     const res = response();
     await requireVerifiedBusinessAction({
-      resource: "erp.suppliers", action: "create", handlerVerified: true,
+      resource: "erp.suppliers",
+      action: "create",
+      handlerVerified: true,
     })(req(), res as never, next);
     expect(next).toHaveBeenCalledOnce();
     expect(next.mock.calls[0][0]).toBeInstanceOf(Error);
@@ -92,7 +110,9 @@ describe("Phase 7 permission middleware bypass and transaction boundary", () => 
     context.get.mockResolvedValueOnce({ role: "Manager", companyId: 7, developerBypass: false });
     const next = vi.fn();
     await requireVerifiedBusinessAction({
-      resource: "erp.suppliers", action: "delete", handlerVerified: true,
+      resource: "erp.suppliers",
+      action: "delete",
+      handlerVerified: true,
     })(req(), response() as never, next);
     expect(next).toHaveBeenCalledOnce();
   });

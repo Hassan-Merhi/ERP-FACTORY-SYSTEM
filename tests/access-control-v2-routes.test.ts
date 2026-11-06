@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
 import routeManifest from "../config/route-manifest.json";
 import routeReview from "../config/access-control-v2-route-review.json";
-import {
-  candidateAccessControlAction,
-  candidateAccessControlRouteCount,
-} from "../shared/accessControlV2RouteReview";
+import { candidateAccessControlAction, candidateAccessControlRouteCount } from "../shared/accessControlV2RouteReview";
 import {
   ACCESS_CONTROL_ACTIONS,
   ACCESS_CONTROL_RESOURCES,
@@ -12,9 +9,7 @@ import {
   evaluateAccessControl,
 } from "../shared/accessControlV2";
 
-const signatures = new Set(
-  routeManifest.routes.map((row) => row.split(" [")[0])
-);
+const signatures = new Set(routeManifest.routes.map((row) => row.split(" [")[0]));
 const candidates = Object.entries(routeReview.routes);
 
 describe("Phase 1 permissions V2 route coverage (shadow-mode only)", () => {
@@ -41,7 +36,8 @@ describe("Phase 1 permissions V2 route coverage (shadow-mode only)", () => {
 
   it("classifies POST according to business meaning, not HTTP verb", () => {
     expect(candidateAccessControlAction("POST /api/vouchers")).toMatchObject({
-      resource: "erp.vouchers", action: "create",
+      resource: "erp.vouchers",
+      action: "create",
     });
     expect(candidateAccessControlAction("POST /api/vouchers/:id/reverse")).toMatchObject({
       action: "reverse",
@@ -67,15 +63,17 @@ describe("Phase 1 permissions V2 route coverage (shadow-mode only)", () => {
   it("never authorizes Create Only using a candidate mapping alone", () => {
     const candidate = candidateAccessControlAction("POST /api/vouchers");
     expect(candidate?.status).toBe("candidate");
-    expect(evaluateAccessControl({
-      role: CREATE_ONLY_ROLE,
-      companyId: 1,
-      isAssignedToCompany: true,
-      routeVerified: false,
-      resource: candidate!.resource,
-      action: candidate!.action,
-      roleDecision: "allow",
-      userDecision: "allow",
-    }).allowed).toBe(false);
+    expect(
+      evaluateAccessControl({
+        role: CREATE_ONLY_ROLE,
+        companyId: 1,
+        isAssignedToCompany: true,
+        routeVerified: false,
+        resource: candidate!.resource,
+        action: candidate!.action,
+        roleDecision: "allow",
+        userDecision: "allow",
+      }).allowed
+    ).toBe(false);
   });
 });

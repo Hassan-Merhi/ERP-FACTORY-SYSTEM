@@ -22,8 +22,7 @@ export interface AccessControlRouteCandidate {
 
 const ACTIONS: ReadonlySet<string> = new Set(ACCESS_CONTROL_ACTIONS);
 const RESOURCES: ReadonlySet<string> = new Set(ACCESS_CONTROL_RESOURCES);
-const RAW_ROUTES: Record<string, { resource: string; action: string; status: string }> =
-  routeReview.routes;
+const RAW_ROUTES: Record<string, { resource: string; action: string; status: string }> = routeReview.routes;
 
 /**
  * Strictly matches the REGISTERED route signature (e.g. POST
@@ -34,11 +33,7 @@ const RAW_ROUTES: Record<string, { resource: string; action: string; status: str
 export function candidateAccessControlAction(signature: string): AccessControlRouteCandidate | null {
   if (!Object.prototype.hasOwnProperty.call(RAW_ROUTES, signature)) return null;
   const record = RAW_ROUTES[signature];
-  if (
-    record.status !== "candidate" ||
-    !ACTIONS.has(record.action) ||
-    !RESOURCES.has(record.resource)
-  ) {
+  if (record.status !== "candidate" || !ACTIONS.has(record.action) || !RESOURCES.has(record.resource)) {
     return null;
   }
   return {

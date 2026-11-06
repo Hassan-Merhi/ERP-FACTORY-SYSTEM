@@ -18,13 +18,15 @@ describe("Phase 5 company-scoped user access backend", () => {
   });
 
   it("rejects an administrator changing their own user-level exceptions", async () => {
-    await expect(saveV2Rules({
-      actor: { companyId: 44, userId: "admin-1" },
-      subject: { kind: "user", userId: "admin-1" },
-      expectedRevision: 0,
-      reason: "Disallowed own policy update",
-      changes: [{ resource: "erp.vouchers", action: "view", decision: "allow" }],
-    })).rejects.toMatchObject({ status: 403, code: "SELF_ESCALATION_FORBIDDEN" });
+    await expect(
+      saveV2Rules({
+        actor: { companyId: 44, userId: "admin-1" },
+        subject: { kind: "user", userId: "admin-1" },
+        expectedRevision: 0,
+        reason: "Disallowed own policy update",
+        changes: [{ resource: "erp.vouchers", action: "view", decision: "allow" }],
+      })
+    ).rejects.toMatchObject({ status: 403, code: "SELF_ESCALATION_FORBIDDEN" });
     expect(mockPool.query).not.toHaveBeenCalled();
   });
 

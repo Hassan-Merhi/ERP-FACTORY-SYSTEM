@@ -7,15 +7,9 @@
  */
 import { isViewOnlyWriteBlocked } from "./viewOnlyWritePolicy";
 
-const HANDLER_VERIFIED_CREATES = new Set([
-  "POST /api/suppliers",
-]);
+const HANDLER_VERIFIED_CREATES = new Set(["POST /api/suppliers"]);
 
-export function isCreateOnlyWriteBlocked(
-  role: string | null | undefined,
-  methodInput: string,
-  path: string
-): boolean {
+export function isCreateOnlyWriteBlocked(role: string | null | undefined, methodInput: string, path: string): boolean {
   if (role !== "Create Only") return false;
   const method = methodInput.toUpperCase();
   if (method === "GET" || method === "HEAD" || method === "OPTIONS") return false;

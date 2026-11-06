@@ -55,6 +55,7 @@ const compatibilityTranslationFiles = [
   "client/src/i18n/phase3RemainingTranslations.part34.ts",
   "client/src/i18n/phase3RemainingTranslations.part35.ts",
   "client/src/i18n/phase3RemainingTranslations.part36.ts",
+  "client/src/i18n/phase3RemainingTranslations.part37.ts",
   "client/src/i18n/supplierPartnerPhase4Translations.part1.ts",
   "client/src/i18n/supplierPartnerPhase4Translations.part2.ts",
   "client/src/i18n/supplierPartnerPhase4Translations.part3.ts",
@@ -127,6 +128,12 @@ const reviewedTechnicalValues = new Set([
   "INVENTORY_AUDIT_INVALID_COMPANY",
   "FORCE RLS",
   "POLICY CHANGE",
+  // Permissions Control Center API error codes: machine-readable codes returned beside a
+  // readable message so clients can branch on them. Never rendered as display text.
+  "ACCESS_POLICY_CONSTRAINT",
+  "ACCESS_POLICY_SCHEMA_REQUIRED",
+  "ACCESS_POLICY_UNAVAILABLE",
+  "INVALID_POLICY_INPUT",
   // Scheduled WhatsApp placeholders: an example group chat ID and an IANA timezone
   // identifier. Both are literal technical formats the user must type as-is.
   "120363012345678901@g.us",

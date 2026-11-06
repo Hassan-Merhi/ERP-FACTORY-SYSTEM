@@ -4,9 +4,11 @@ import { describe, expect, it } from "vitest";
 
 const root = process.cwd();
 const read = (name: string) => fs.readFileSync(path.join(root, name), "utf8");
+// Collapse formatter line breaks inside call arguments so signatures stay stable under Prettier.
+const readCode = (name: string) => read(name).replace(/\(\s+/g, "(").replace(/,\s+/g, ", ");
 
 describe("Phase 2 permission API security registration contract", () => {
-  const routes = read("server/routes/admin/permissionControlCenterRoutes.ts");
+  const routes = readCode("server/routes/admin/permissionControlCenterRoutes.ts");
   const registrar = read("server/routes/adminRoutes.ts");
   const migration = read("migrations/20261024_001_permissions_control_center_shadow.sql");
   const store = read("server/services/security/accessControlV2Store.ts");
@@ -41,8 +43,11 @@ describe("Phase 2 permission API security registration contract", () => {
 
   it("keeps schema additive, forced-company-RLS and audit append-only", () => {
     for (const table of [
-      "access_role_templates", "access_role_rules", "access_user_overrides",
-      "access_policy_versions", "access_policy_change_audit",
+      "access_role_templates",
+      "access_role_rules",
+      "access_user_overrides",
+      "access_policy_versions",
+      "access_policy_change_audit",
     ]) {
       expect(migration).toContain(`CREATE TABLE IF NOT EXISTS ${table}`);
     }
@@ -50,12 +55,14 @@ describe("Phase 2 permission API security registration contract", () => {
     expect(migration).toContain("erp_company_scope_matches(company_id)");
     expect(migration).toContain("ACCESS_OVERRIDE_COMPANY_ROLE_REQUIRED");
     expect(migration).toContain("ACCESS_POLICY_AUDIT_APPEND_ONLY");
-    expect(migration).not.toMatch(/(?:UPDATE|DELETE)\s+(?:FROM\s+)?(?:vouchers|voucher_entries|inventory|role_feature_permissions)\b/i);
+    expect(migration).not.toMatch(
+      /(?:UPDATE|DELETE)\s+(?:FROM\s+)?(?:vouchers|voucher_entries|inventory|role_feature_permissions)\b/i
+    );
   });
 
   it("never activates live policy or claims candidate action verified", () => {
     expect(store).toContain('mode: "shadow"');
     expect(store).toContain("currentlyEnforcedByV2");
-    expect(routes).toContain('enforced: false');
+    expect(routes).toContain("enforced: false");
   });
 });

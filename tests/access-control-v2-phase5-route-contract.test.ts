@@ -4,9 +4,11 @@ import { describe, expect, it } from "vitest";
 
 const root = process.cwd();
 const read = (name: string) => fs.readFileSync(path.join(root, name), "utf8");
+// Collapse formatter line breaks inside call arguments so signatures stay stable under Prettier.
+const readCode = (name: string) => read(name).replace(/\(\s+/g, "(").replace(/,\s+/g, ", ");
 
 describe("Phase 5 shadow user API boundaries", () => {
-  const routes = read("server/routes/admin/permissionControlCenterRoutes.ts");
+  const routes = readCode("server/routes/admin/permissionControlCenterRoutes.ts");
   const store = read("server/services/security/accessControlV2Store.ts");
   const ui = read("client/src/pages/settings/UserAccessOverrides.tsx");
 

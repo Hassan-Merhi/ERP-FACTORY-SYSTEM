@@ -1,5 +1,5 @@
 # Permissions Control Center — ERP + Factory
-Status: Phase 1 source deliverables complete; phases 2–8 pending (NOT wired to production permissions)
+Status: Phases 1–8 source merged to main in shadow mode (2026-11-06). NOT wired to production permissions; release gates remain blocked.
 Branch: `feature/permissions-control-center`
 
 ## Goal

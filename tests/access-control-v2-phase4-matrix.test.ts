@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { ACCESS_CONTROL_ACTIONS, ACCESS_CONTROL_RESOURCES } from "../shared/accessControlV2";
 import {
-  canStageRoleDecision, matrixActions, matrixResources,
-  pendingRoleChanges, roleRulesFor, ruleKey,
+  canStageRoleDecision,
+  matrixActions,
+  matrixResources,
+  pendingRoleChanges,
+  roleRulesFor,
+  ruleKey,
 } from "../client/src/pages/settings/rolePermissionMatrixModel";
 
 describe("Phase 4 role templates UI policy model", () => {
@@ -12,10 +16,13 @@ describe("Phase 4 role templates UI policy model", () => {
   });
 
   it("computes minimal versioned edits and explicit resets to inherit", () => {
-    const saved = roleRulesFor([
-      { roleKey: "Manager", resource: "erp.vouchers", action: "edit", decision: "deny" },
-      { roleKey: "Owner", resource: "erp.vouchers", action: "edit", decision: "allow" },
-    ], "Manager");
+    const saved = roleRulesFor(
+      [
+        { roleKey: "Manager", resource: "erp.vouchers", action: "edit", decision: "deny" },
+        { roleKey: "Owner", resource: "erp.vouchers", action: "edit", decision: "allow" },
+      ],
+      "Manager"
+    );
     const edited = new Map(saved);
     edited.set(ruleKey("erp.vouchers", "edit"), "inherit");
     edited.set(ruleKey("factory.containers", "view"), "allow");

@@ -33,13 +33,15 @@ describe("Permissions V2 Phase 2 shadow store", () => {
   });
 
   it("records rule changes, policy revision and append-only audit in one transaction", async () => {
-    await expect(saveV2Rules({
-      actor,
-      subject: { kind: "role", roleKey: "Create Only" },
-      expectedRevision: 0,
-      reason: "New role permissions draft",
-      changes: [change],
-    })).resolves.toEqual({ revision: 1, mode: "shadow", applied: 1 });
+    await expect(
+      saveV2Rules({
+        actor,
+        subject: { kind: "role", roleKey: "Create Only" },
+        expectedRevision: 0,
+        reason: "New role permissions draft",
+        changes: [change],
+      })
+    ).resolves.toEqual({ revision: 1, mode: "shadow", applied: 1 });
 
     const calls = client.query.mock.calls;
     expect(calls[0][0]).toBe("BEGIN");
@@ -59,10 +61,15 @@ describe("Permissions V2 Phase 2 shadow store", () => {
       if (sql.includes("SELECT revision::text")) return { rows: [{ revision: "7", mode: "shadow" }] };
       return { rows: [], rowCount: 1 };
     });
-    await expect(saveV2Rules({
-      actor, subject: { kind: "role", roleKey: "Manager" },
-      expectedRevision: 6, reason: "Prevent conflicting updates", changes: [change],
-    })).rejects.toMatchObject({ code: "POLICY_STALE_REVISION", status: 409 });
+    await expect(
+      saveV2Rules({
+        actor,
+        subject: { kind: "role", roleKey: "Manager" },
+        expectedRevision: 6,
+        reason: "Prevent conflicting updates",
+        changes: [change],
+      })
+    ).rejects.toMatchObject({ code: "POLICY_STALE_REVISION", status: 409 });
     expect(client.query.mock.calls.some(([sql]) => String(sql).includes("INSERT INTO access_role_rules"))).toBe(false);
     expect(client.query.mock.calls.at(-1)?.[0]).toBe("ROLLBACK");
     expect(client.release).toHaveBeenCalledOnce();
@@ -74,21 +81,26 @@ describe("Permissions V2 Phase 2 shadow store", () => {
       if (sql.includes("SELECT role FROM user_company_roles")) return { rows: [] };
       return { rows: [] };
     });
-    await expect(saveV2Rules({
-      actor, subject: { kind: "user", userId: "outside-company" },
-      expectedRevision: 0, reason: "Cross-company attempt blocked", changes: [change],
-    })).rejects.toMatchObject({ code: "USER_NOT_IN_COMPANY", status: 404 });
+    await expect(
+      saveV2Rules({
+        actor,
+        subject: { kind: "user", userId: "outside-company" },
+        expectedRevision: 0,
+        reason: "Cross-company attempt blocked",
+        changes: [change],
+      })
+    ).rejects.toMatchObject({ code: "USER_NOT_IN_COMPANY", status: 404 });
     expect(client.query.mock.calls.some(([sql]) => String(sql).includes("access_user_overrides"))).toBe(false);
     expect(client.query.mock.calls.at(-1)?.[0]).toBe("ROLLBACK");
   });
 
   it("preserves all business data and refuses protected privileges", () => {
-    expect(() => assertV2ChangesSafe("Create Only", [
-      { resource: "erp.vouchers", action: "delete", decision: "allow" },
-    ])).toThrow(V2PolicyError);
-    expect(() => assertV2ChangesSafe("Manager", [
-      { resource: "system.users", action: "manage_users", decision: "allow" },
-    ])).toThrow(V2PolicyError);
+    expect(() =>
+      assertV2ChangesSafe("Create Only", [{ resource: "erp.vouchers", action: "delete", decision: "allow" }])
+    ).toThrow(V2PolicyError);
+    expect(() =>
+      assertV2ChangesSafe("Manager", [{ resource: "system.users", action: "manage_users", decision: "allow" }])
+    ).toThrow(V2PolicyError);
     expect(() => assertV2ChangesSafe("Admin", [change])).toThrow(V2PolicyError);
     expect(() => assertV2ChangesSafe(null, [change, change])).toThrow(V2PolicyError);
     expect(() => assertV2ChangesSafe("Create Only", [change])).not.toThrow();

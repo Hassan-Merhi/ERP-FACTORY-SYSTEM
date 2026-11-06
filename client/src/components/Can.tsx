@@ -28,7 +28,9 @@ export function Can({
   const decision = useCan(resource, action, { legacyAllowed, featureKey, verifiedCreateOnly });
   if (decision.allowed) return <>{children}</>;
   if (!showExplanation) return <>{fallback}</>;
-  return <div role="status" className="text-xs text-muted-foreground">
-    {canDenialMessage(decision.reason)}
-  </div>;
+  return (
+    <div role="status" className="text-xs text-muted-foreground">
+      {canDenialMessage(decision.reason)}
+    </div>
+  );
 }
