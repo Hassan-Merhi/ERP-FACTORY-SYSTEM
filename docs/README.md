@@ -21,6 +21,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [permissions-control-center-plan.md](permissions-control-center-plan.md) | Permissions Control Center design, rollout sequence and security acceptance criteria |
 | [permissions-control-center-phase1.md](permissions-control-center-phase1.md) | Route inventory, candidate mappings and policy model |
 | [permissions-control-center-phase2.md](permissions-control-center-phase2.md) | Shadow policy API, migration and audit foundation |
+| [permissions-control-center-phase7.md](permissions-control-center-phase7.md) | Phase 7 security verification, staging integrity and rollback gate |
 | [permissions-control-center-phase6.md](permissions-control-center-phase6.md) | Phase 6 shared frontend permission bridge and UI integration plan |
 | [permissions-control-center-phase5.md](permissions-control-center-phase5.md) | Phase 5 company-scoped user overrides and shadow access preview |
 | [permissions-control-center-phase4.md](permissions-control-center-phase4.md) | Phase 4 shadow role permissions matrix and release gates |
