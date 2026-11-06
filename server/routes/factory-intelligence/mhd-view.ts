@@ -12,6 +12,14 @@ type ViewSnapshot = { revision: number; rows: ViewRow[]; updatedAt: string };
 type MhdView = ViewSnapshot & { history: ViewSnapshot[] };
 type ProductRow = { id: number; articleCode: string; name: string };
 
+const MHD_ERROR = {
+  missingCompany: "No Factory company selected",
+  invalidRevision: "Expected ordered rows and a valid revision",
+  invalidItem: "Each row requires an article code and optional item name",
+  duplicateCode: "Duplicate article code:",
+  unknownCode: "Unknown or ambiguous Factory article codes",
+  revisionConflict: "MHD View was updated by someone else. Reload and retry.",
+} as const;
 const normalizeCode = (code: string) => code.trim().toUpperCase();
 const isObject = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -52,7 +60,7 @@ async function companyProducts(db: AppDb, companyId: number): Promise<ProductRow
 export function registerFactoryMhdViewRoutes(app: Express, requireAuth: AuthMiddleware, db: AppDb) {
   app.get("/api/factory/mhd-view", requireAuth, async (req: Request, res: Response) => {
     const companyId = companyFor(req);
-    if (!Number.isSafeInteger(companyId) || companyId <= 0) return res.status(400).json({ message: "No Factory company selected" });
+    if (!Number.isSafeInteger(companyId) || companyId <= 0) return res.status(400).json({ message: MHD_ERROR.missingCompany });
     try {
       const [settings, products] = await Promise.all([
         db.select({ extraSettings: factorySettings.extraSettings }).from(factorySettings)
@@ -72,11 +80,11 @@ export function registerFactoryMhdViewRoutes(app: Express, requireAuth: AuthMidd
 
   app.put("/api/factory/mhd-view", requireAuth, requireRole("Admin", "Owner"), async (req: Request, res: Response) => {
     const companyId = companyFor(req);
-    if (!Number.isSafeInteger(companyId) || companyId <= 0) return res.status(400).json({ message: "No Factory company selected" });
+    if (!Number.isSafeInteger(companyId) || companyId <= 0) return res.status(400).json({ message: MHD_ERROR.missingCompany });
     const input: unknown = req.body?.rows;
     const expectedRevision: unknown = req.body?.expectedRevision;
     if (!Array.isArray(input) || input.length > 10000 || !Number.isSafeInteger(expectedRevision)) {
-      return res.status(400).json({ message: "Expected ordered rows and a valid revision" });
+      return res.status(400).json({ message: MHD_ERROR.invalidRevision });
     }
 
     const seen = new Set<string>();
@@ -85,10 +93,10 @@ export function registerFactoryMhdViewRoutes(app: Express, requireAuth: AuthMidd
       if (!isObject(item) || typeof item.articleCode !== "string" ||
           typeof item.itemName !== "string" || item.itemName.length > 250 ||
           !item.articleCode.trim() || item.articleCode.length > 150) {
-        return res.status(400).json({ message: "Each row requires an article code and optional item name" });
+        return res.status(400).json({ message: MHD_ERROR.invalidItem });
       }
       const code = normalizeCode(item.articleCode);
-      if (seen.has(code)) return res.status(400).json({ message: "Duplicate article code: " + code });
+      if (seen.has(code)) return res.status(400).json({ message: MHD_ERROR.duplicateCode + " " + code });
       seen.add(code);
       requested.push({ articleCode: code, itemName: item.itemName.trim() });
     }
@@ -104,7 +112,7 @@ export function registerFactoryMhdViewRoutes(app: Express, requireAuth: AuthMidd
       }
       const unknown = requested.filter((row) => !known.has(row.articleCode) || ambiguous.has(row.articleCode));
       if (unknown.length) return res.status(400).json({
-        message: "Unknown or ambiguous Factory article codes",
+        message: MHD_ERROR.unknownCode,
         articleCodes: unknown.slice(0, 50).map((row) => row.articleCode),
       });
       const rows: ViewRow[] = requested.map((item, index) => ({
@@ -128,7 +136,7 @@ export function registerFactoryMhdViewRoutes(app: Express, requireAuth: AuthMidd
         }).where(eq(factorySettings.companyId, companyId));
         return next;
       });
-      if (!result) return res.status(409).json({ message: "MHD View was updated by someone else. Reload and retry." });
+      if (!result) return res.status(409).json({ message: MHD_ERROR.revisionConflict });
       res.set("Cache-Control", "private, no-store");
       return res.json(result);
     } catch (error) {
