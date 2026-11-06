@@ -21,6 +21,7 @@ type Unit = {
   billingDay?: number | null;
   nextBillingDate?: string | null;
   isShared?: boolean;
+  isInternalLeaseProjection?: boolean;
   ownerCompanyName?: string | null;
   guaranteeRemaining?: number | string | null;
 };
