@@ -51,3 +51,49 @@ html[data-seasonal-camera-active="true"] .christmas-sleigh-flight {
   display: none !important;
   animation: none !important;
 }
+
+
+/* Magical golden stardust trails behind the sleigh, never blocks a click. */
+.christmas-sleigh-flight::before,
+.christmas-sleigh-flight::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  left: 94%;
+  top: 29%;
+  width: 134px;
+  height: 32px;
+  opacity: .8;
+  background:
+    radial-gradient(circle at 5% 44%, #fff5c0 0 2px, transparent 3px),
+    radial-gradient(circle at 22% 14%, #ffe6a2 0 1.5px, transparent 3px),
+    radial-gradient(circle at 41% 70%, #f8cc64 0 1.4px, transparent 2.6px),
+    radial-gradient(circle at 58% 31%, #ffe2a0 0 1.7px, transparent 3px),
+    radial-gradient(circle at 78% 57%, #ffd179 0 1px, transparent 2px),
+    linear-gradient(100deg, rgb(255 216 129 / .35), transparent 75%);
+  filter: drop-shadow(0 0 6px #e9ba66);
+  animation: christmas-stardust-glint 1.9s ease-in-out infinite alternate;
+}
+.christmas-sleigh-flight::after {
+  transform: translate(-19px, 18px) scale(.72);
+  opacity: .56;
+  animation-delay: .6s;
+}
+@keyframes christmas-stardust-glint {
+  from { opacity: .42; filter: drop-shadow(0 0 2px #d9a452); }
+  to { opacity: .91; filter: drop-shadow(0 0 7px #ffe4a1); }
+}
+html[data-christmas-intensity="subtle"] .christmas-sleigh-flight::before,
+html[data-christmas-intensity="subtle"] .christmas-sleigh-flight::after {
+  opacity: .3;
+}
+html[data-christmas-intensity="full"] .christmas-sleigh-flight::before,
+html[data-christmas-intensity="full"] .christmas-sleigh-flight::after {
+  opacity: 1;
+  filter: drop-shadow(0 0 10px #ffe5a0);
+}
+@media print, (prefers-reduced-motion: reduce), (prefers-reduced-data: reduce) {
+  .christmas-sleigh-flight::before,
+  .christmas-sleigh-flight::after { animation: none !important; }
+}

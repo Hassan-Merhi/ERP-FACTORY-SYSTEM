@@ -11,19 +11,33 @@ import { systemSettings, users } from "@shared/schema";
 import {
   CHRISTMAS_ALLOWED_USERS_KEY,
   CHRISTMAS_MASTER_KEY,
+  CHRISTMAS_VISUALS_KEY,
   christmasModeEnabledForUser,
+  parseChristmasVisualSettings,
   christmasModeUserPreferenceKey,
   parseChristmasAllowedUserIds,
 } from "../services/seasonalChristmasAccessPolicy";
 
 const enabledSchema = z.object({ enabled: z.boolean() }).strict();
+const visualSchema = z.object({
+  intensity: z.enum(["subtle", "balanced", "full"]),
+  effects: z.object({
+    snowfall: z.boolean(),
+    santa: z.boolean(),
+    garlands: z.boolean(),
+    countdown: z.boolean(),
+    gifts: z.boolean(),
+    ambient: z.boolean(),
+  }).strict(),
+}).strict();
 const configSchema = z.object({
   enabled: z.boolean(),
   userIds: z.array(z.string().trim().min(1).max(128)).max(5000),
+  visuals: visualSchema.optional(),
 }).strict();
 
 async function loadChristmasConfig(userId?: string | null) {
-  const keys = [CHRISTMAS_MASTER_KEY, CHRISTMAS_ALLOWED_USERS_KEY];
+  const keys = [CHRISTMAS_MASTER_KEY, CHRISTMAS_ALLOWED_USERS_KEY, CHRISTMAS_VISUALS_KEY];
   if (userId) keys.push(christmasModeUserPreferenceKey(userId));
   const rows = await db
     .select({ key: systemSettings.key, value: systemSettings.value })
@@ -37,6 +51,7 @@ async function loadChristmasConfig(userId?: string | null) {
     masterValue,
     allowedRaw,
     userIds: parseChristmasAllowedUserIds(allowedRaw),
+    visuals: parseChristmasVisualSettings(settings.get(CHRISTMAS_VISUALS_KEY)),
     // Existing eligible users keep the experience ON unless they personally opt out.
     preferenceEnabled: userId ? settings.get(christmasModeUserPreferenceKey(userId)) !== "false" : true,
   };
@@ -60,6 +75,7 @@ export function registerSeasonalAppearanceRoutes(app: Express): void {
         ),
         available,
         preferenceEnabled: available ? config.preferenceEnabled : false,
+        visuals: available ? config.visuals : null,
       });
     } catch {
       return res.status(500).json({ message: "Unable to load Christmas Mode setting" });
@@ -91,6 +107,7 @@ export function registerSeasonalAppearanceRoutes(app: Express): void {
         available: true,
         preferenceEnabled,
         enabled: config.masterEnabled && preferenceEnabled,
+        visuals: config.visuals,
       });
     } catch {
       return res.status(500).json({ message: "Unable to save your Christmas Mode preference" });
@@ -119,6 +136,7 @@ export function registerSeasonalAppearanceRoutes(app: Express): void {
           enabled: config.masterEnabled,
           userIds: config.userIds.filter((id) => allowedActiveIds.has(id)),
           users: activeUsers,
+          visuals: config.visuals,
         });
       } catch {
         return res.status(500).json({ message: "Unable to load Christmas Mode configuration" });
@@ -165,9 +183,19 @@ export function registerSeasonalAppearanceRoutes(app: Express): void {
               target: systemSettings.key,
               set: { value: JSON.stringify(userIds), updatedAt: new Date() },
             });
+          // Optional for backward compatibility with old developer clients.
+          if (parsed.data.visuals) {
+            const value = JSON.stringify(parsed.data.visuals);
+            await tx.insert(systemSettings)
+              .values({ key: CHRISTMAS_VISUALS_KEY, value })
+              .onConflictDoUpdate({
+                target: systemSettings.key,
+                set: { value, updatedAt: new Date() },
+              });
+          }
         });
         res.setHeader("Cache-Control", "no-store");
-        return res.json({ enabled, userIds });
+        return res.json({ enabled, userIds, visuals: parsed.data.visuals ?? (await loadChristmasConfig()).visuals });
       } catch {
         return res.status(500).json({ message: "Unable to save Christmas Mode configuration" });
       }

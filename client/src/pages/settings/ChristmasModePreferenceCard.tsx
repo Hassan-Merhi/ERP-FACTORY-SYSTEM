@@ -69,6 +69,18 @@ export function ChristmasModePreferenceCard() {
             Preview Santa now
           </Button>
         )}
+        {setting.enabled && setting.visuals?.effects.gifts && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-3 ml-2"
+            data-testid="button-preview-christmas-gift"
+            onClick={() => window.dispatchEvent(new Event("christmas:gift-preview"))}
+          >
+            Preview a festive gift
+          </Button>
+        )}
         {!setting.enabled && setting.preferenceEnabled && (
           <p className="mt-2 text-xs text-muted-foreground" role="status">
             Your preference is on. Decorations will appear when the Developer activates Christmas Mode.
