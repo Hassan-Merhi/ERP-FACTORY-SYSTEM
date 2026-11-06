@@ -20,7 +20,12 @@ import { effectiveErpPageKeys } from "../services/security/erpViewerPagePolicy";
 import { getActiveCompanyPermissionContext } from "../services/security/activeCompanyPermissionContext";
 import { companies } from "@shared/schema";
 import { resolveFactoryPageKey } from "@shared/factoryAccessRegistry";
-import { getErpRouteFeatureKeys } from "@shared/erpRouteAccess";
+import {
+  ERP_POS_ROLE_ROUTES,
+  canonicalErpAccessPath,
+  getErpRouteFeatureKeys,
+  isErpDeveloperOnlyRoute,
+} from "@shared/erpRouteAccess";
 import { eq } from "drizzle-orm";
 import { db } from "../db";
 
@@ -103,7 +108,12 @@ const PAGE_FOR_TOPIC: Readonly<Record<string, { mode: "erp" | "factory"; key?: s
   "erp-reports": { mode: "erp", key: "sales_report" },
 };
 
-type TopicDestination = { mode: "erp" | "factory" | "sp"; key?: string; erpKeys?: readonly string[] };
+type TopicDestination = {
+  mode: "erp" | "factory" | "sp";
+  key?: string;
+  erpKeys?: readonly string[];
+  route?: string;
+};
 
 /**
  * Where a published recording leads. The original tours keep their reviewed
@@ -120,7 +130,7 @@ function destinationFor(topic: string, route: string | undefined): TopicDestinat
     return key ? { mode: "factory", key } : null;
   }
   if (route === "/sp" || route.startsWith("/sp/")) return { mode: "sp" };
-  return { mode: "erp", erpKeys: getErpRouteFeatureKeys(route) };
+  return { mode: "erp", erpKeys: getErpRouteFeatureKeys(route), route: canonicalErpAccessPath(route) };
 }
 
 async function canStreamTopic(req: Request, topic: string, route?: string): Promise<boolean> {
@@ -137,12 +147,15 @@ async function canStreamTopic(req: Request, topic: string, route?: string): Prom
   if (destination.mode === "factory" && !isFactory) return false;
   if (destination.mode === "erp" && isFactory) return false;
   if (destination.mode === "sp") return isSupplierPartner;
-  if (destination.erpKeys) {
+  if (destination.erpKeys && destination.route) {
+    // Same rule as the ERP sidebar (AppSidebar isItemVisible).
+    if (isErpDeveloperOnlyRoute(destination.route)) return context.role === "Developer";
     if (["Admin", "Owner", "Developer"].includes(context.role)) return true;
-    // An ERP page with no page grant is open to Admin, Owner and Developer only.
-    if (destination.erpKeys.length === 0) return false;
+    if (context.role === "POS") return ERP_POS_ROLE_ROUTES.includes(destination.route);
     const granted = effectiveErpPageKeys(context.role, await getErpUserPageAccess(context.companyId, context.userId));
-    return destination.erpKeys.some((key) => granted.includes(key));
+    if (destination.erpKeys.length > 0) return destination.erpKeys.some((key) => granted.includes(key));
+    // A page without its own grant is open to anyone who has been given any ERP page.
+    return granted.length > 0;
   }
   if (!destination.key) return true;
   if (destination.mode === "factory") {

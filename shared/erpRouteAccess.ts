@@ -34,3 +34,27 @@ export function getErpRouteFeatureKeys(url: string): readonly FeatureKey[] {
   const direct = ROUTE_TO_FEATURE[path];
   return direct ? [direct] : [];
 }
+
+/** ERP pages the sidebar shows to Developers only (see AppSidebar isItemVisible). */
+const ERP_DEVELOPER_ONLY_ROUTES = new Set([
+  "/cost-centers",
+  "/net-profit-report",
+  "/company-transfer",
+  "/spreadsheet",
+  "/live-sheets",
+  "/chat",
+]);
+
+export function isErpDeveloperOnlyRoute(url: string): boolean {
+  const path = canonicalErpAccessPath(url);
+  return ERP_DEVELOPER_ONLY_ROUTES.has(path) || path.startsWith("/accounting/");
+}
+
+/** The only ERP pages a POS user's sidebar offers (POS Excel import aside). */
+export const ERP_POS_ROLE_ROUTES: readonly string[] = [
+  "/pos",
+  "/pos-dashboard",
+  "/pos-daybook",
+  "/sales-tools",
+  "/location-inventory",
+];
