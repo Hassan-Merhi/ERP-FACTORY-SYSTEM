@@ -13,6 +13,7 @@
     "POST /api/offline/legacy-queue/decisions [requireAuth > <anonymous>]",
     "GET /api/permissions-v2/catalog [requireAuth > <anonymous>]",
     "GET /api/permissions-v2/roles [requireAuth > <anonymous>]",
+    "GET /api/permissions-v2/users [requireAuth > <anonymous>]",
     "GET /api/permissions-v2/users/:userId/overrides [requireAuth > <anonymous>]",
     "GET /api/permissions-v2/preview [requireAuth > <anonymous>]",
     "GET /api/permissions-v2/audit [requireAuth > <anonymous>]",
