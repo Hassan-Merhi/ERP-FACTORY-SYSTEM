@@ -3,6 +3,7 @@ import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { FactoryLanOriginBadge } from "@/components/FactoryLanOriginBadge";
 import { GlobalSnowfall } from "@/components/GlobalSnowfall";
 import { GlobalSeasonalDecorations } from "@/components/GlobalSeasonalDecorations";
+import { useChristmasMode } from "@/hooks/useChristmasMode";
 
 const RemoteSupportRuntime = lazy(() =>
   import("@/components/RemoteSupportRuntime").then((module) => ({
@@ -41,12 +42,14 @@ function useDeferredRemoteSupport() {
  */
 export function AuthenticatedAppOverlays() {
   const remoteSupportReady = useDeferredRemoteSupport();
+  const { settingQuery } = useChristmasMode();
+  const christmasModeEnabled = settingQuery.data?.enabled === true;
 
   return (
     <>
       <FactoryLanOriginBadge />
-      <GlobalSeasonalDecorations />
-      <GlobalSnowfall />
+      <GlobalSeasonalDecorations enabled={christmasModeEnabled} />
+      <GlobalSnowfall enabled={christmasModeEnabled} />
       <Suspense fallback={null}>{remoteSupportReady ? <RemoteSupportRuntime /> : null}</Suspense>
     </>
   );
