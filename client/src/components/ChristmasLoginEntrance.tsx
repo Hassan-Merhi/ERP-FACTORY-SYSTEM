@@ -7,6 +7,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { Snowflake, Sparkles } from "lucide-react";
 import { consumeChristmasLoginEntrancePending } from "@/lib/christmasLoginEntrance";
+import { useSeasonalMotionRestricted } from "@/hooks/useSeasonalMotionRestricted";
 import "@/styles/christmas-login-entrance.css";
 
 const ENTRANCE_DURATION_MS = 4_000;
@@ -15,25 +16,6 @@ type Props = {
   enabled: boolean;
   queryStatus: "pending" | "success" | "error";
 };
-
-function useReducedMotion(): boolean {
-  const [reducedMotion, setReducedMotion] = useState(() =>
-    typeof window !== "undefined" && typeof window.matchMedia === "function"
-      ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
-      : false
-  );
-
-  useEffect(() => {
-    if (typeof window.matchMedia !== "function") return;
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const onChange = (event: MediaQueryListEvent) => setReducedMotion(event.matches);
-    setReducedMotion(media.matches);
-    media.addEventListener("change", onChange);
-    return () => media.removeEventListener("change", onChange);
-  }, []);
-
-  return reducedMotion;
-}
 
 type FallStyle = CSSProperties & { "--welcome-drift": string };
 
@@ -52,7 +34,7 @@ const WELCOME_FLAKES: FallStyle[] = Array.from({ length: 56 }, (_, index) => {
 });
 
 export function ChristmasLoginEntrance({ enabled, queryStatus }: Props) {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useSeasonalMotionRestricted();
   const [visibleUntil, setVisibleUntil] = useState(0);
 
   // Consume only after the master setting has resolved. Even when OFF or when
