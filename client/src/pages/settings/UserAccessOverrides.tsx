@@ -88,7 +88,7 @@ export function UserAccessOverrides() {
   const currentMember = members.data?.users.find((item) => item.userId === userId);
   const locked = !currentMember || ["Admin", "Developer"].includes(currentMember.role) ||
     userId === "" || members.data?.companyId !== companyId || user.data?.companyId !== companyId ||
-    user.data.role !== currentMember.role || user.data.policy.mode !== "shadow" || user.data.enforced;
+    user.data?.role !== currentMember.role || user.data?.policy.mode !== "shadow" || user.data?.enforced === true;
   const changes = useMemo(() => pendingRoleChanges(saved, draft), [saved, draft]);
   const rows = matrixResources.filter((resource) =>
     (module === "all" || resource.startsWith(`${module}.`)) &&
