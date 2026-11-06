@@ -1,0 +1,328 @@
+/* Properties-only rentals redesign. Shared ERP/Factory rental pages retain their own UI. */
+.properties-rentals-hub,
+.properties-rentals-premium {
+  --rent-border: rgba(65, 83, 128, 0.18);
+  --rent-surface: #ffffff;
+  --rent-surface-alt: #f5f7fc;
+  --rent-ink: #111c34;
+  --rent-muted: #657189;
+  --rent-row-hover: rgba(74, 102, 211, 0.08);
+  --rent-group-rgb: 48, 89, 204;
+}
+
+.dark .properties-rentals-hub,
+.dark .properties-rentals-premium {
+  --rent-border: rgba(164, 181, 230, 0.15);
+  --rent-surface: #1b2336;
+  --rent-surface-alt: #151d2e;
+  --rent-ink: #f2f5ff;
+  --rent-muted: #aeb9cf;
+  --rent-row-hover: rgba(107, 133, 230, 0.15);
+}
+
+.properties-rentals-hub .properties-rentals-tabs {
+  height: auto;
+  min-height: 48px;
+  padding: 5px;
+  gap: 5px;
+  border: 1px solid var(--rent-border);
+  border-radius: 999px;
+  background: var(--rent-surface-alt);
+  box-shadow: 0 10px 26px rgba(9, 19, 49, 0.08);
+}
+.properties-rentals-hub .properties-rentals-tabs [role="tab"] {
+  min-height: 37px;
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-weight: 600;
+  color: var(--rent-muted);
+  transition: background 180ms ease, color 180ms ease, box-shadow 180ms ease;
+}
+.properties-rentals-hub .properties-rentals-tabs [role="tab"][data-state="active"] {
+  color: white;
+  background: linear-gradient(120deg, #7168e6, #2555b4);
+  box-shadow: 0 5px 17px rgba(71, 91, 215, 0.32), inset 0 1px 0 rgba(255,255,255,0.28);
+}
+.properties-rentals-hub .properties-rentals-tabs [role="tab"]:focus-visible {
+  outline: 2px solid #818cf8;
+  outline-offset: 3px;
+}
+
+.properties-rentals-premium {
+  position: relative;
+  padding: 16px 10px 32px;
+  min-width: 0;
+}
+.properties-rentals-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 26px clamp(14px, 2.1vw, 31px);
+  min-height: 170px;
+  border-radius: 22px;
+  border: 1px solid var(--rent-border);
+  color: var(--rent-ink);
+  background:
+    radial-gradient(ellipse at 90% -22%, rgba(108, 82, 242, 0.24), transparent 45%),
+    radial-gradient(ellipse at 110% 110%, rgba(44, 91, 218, 0.12), transparent 45%),
+    linear-gradient(120deg, var(--rent-surface), var(--rent-surface-alt));
+}
+.dark .properties-rentals-hero {
+  background:
+    radial-gradient(ellipse at 91% -22%, rgba(116, 85, 251, 0.30), transparent 48%),
+    radial-gradient(ellipse at 110% 130%, rgba(40, 69, 200, 0.24), transparent 45%),
+    linear-gradient(120deg, #151b2c, #111827);
+}
+.properties-rentals-hero-copy {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+.properties-rentals-hero-icon {
+  width: 72px;
+  height: 72px;
+  flex: 0 0 72px;
+  display: grid;
+  place-items: center;
+  border-radius: 21px;
+  background: linear-gradient(140deg, rgba(113, 86, 240, 0.3), rgba(83, 72, 173, 0.12));
+  border: 1px solid rgba(125, 97, 247, 0.33);
+  color: #946fff;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
+}
+.properties-rentals-hero-text { min-width: 0; }
+.properties-rentals-eyebrow {
+  display: block;
+  margin-bottom: 3px;
+  color: #917df4;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.15em;
+}
+.properties-rentals-heading {
+  margin: 0;
+  font-size: clamp(24px, 2vw, 34px);
+  letter-spacing: -0.035em;
+  font-weight: 780;
+  line-height: 1.16;
+  color: var(--rent-ink);
+}
+.properties-rentals-subheading {
+  max-width: 650px;
+  margin-top: 8px;
+  line-height: 1.55;
+  color: var(--rent-muted);
+  font-size: 13px;
+}
+.properties-rentals-hero-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.properties-rentals-hero-actions button {
+  min-height: 42px;
+  border-radius: 12px;
+  padding-inline: 16px;
+  font-weight: 650;
+}
+.properties-rentals-hero-actions button:last-child:not(:first-child) {
+  background: linear-gradient(112deg, #315ed7, #2551c2);
+  color: #fff;
+  border-color: #6d91f0;
+  box-shadow: 0 6px 18px rgba(36, 83, 207, 0.18);
+}
+.properties-rentals-hero-actions button:focus-visible { outline-offset: 3px; }
+
+.properties-rentals-kpis { align-items: stretch; }
+.properties-rentals-stat {
+  --stat-accent: #64748b;
+  --stat-tint: rgba(100,116,139,0.10);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 157px;
+  display: block;
+  background: linear-gradient(135deg, var(--rent-surface), var(--stat-tint)) !important;
+  border: 1px solid var(--rent-border) !important;
+  border-radius: 15px !important;
+  box-shadow: 0 6px 24px rgba(8, 18, 49, 0.05);
+  color: var(--rent-ink);
+}
+.properties-rentals-stat::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: 170px;
+  height: 88px;
+  right: -45px;
+  bottom: -52px;
+  border-radius: 45%;
+  transform: rotate(-16deg);
+  background: var(--stat-tint);
+  pointer-events: none;
+}
+.properties-rentals-stat--units { --stat-accent: #9aa9c5; --stat-tint: rgba(135,156,209,0.12); }
+.properties-rentals-stat--rent { --stat-accent: #57a0ff; --stat-tint: rgba(47,114,238,0.16); }
+.properties-rentals-stat--guarantee { --stat-accent: #fa7285; --stat-tint: rgba(221,75,97,0.13); }
+.properties-rentals-stat--paid { --stat-accent: #41e6b0; --stat-tint: rgba(16,185,129,0.14); }
+.properties-rentals-stat--collect { --stat-accent: #51dadb; --stat-tint: rgba(20,184,166,0.14); }
+.properties-rentals-stat--owed { --stat-accent: #fa8a95; --stat-tint: rgba(225,78,100,0.12); }
+.properties-rentals-stat > [data-slot="card-header"] {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 17px 16px 3px;
+  min-height: 60px;
+}
+.properties-rentals-stat-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  color: var(--stat-accent);
+  background: var(--stat-tint);
+  border-radius: 12px;
+}
+.properties-rentals-stat [data-slot="card-title"] {
+  flex: 1 1 auto;
+  color: var(--rent-muted);
+  font-size: 10px;
+  line-height: 1.3;
+  letter-spacing: 0.045em;
+  font-weight: 700;
+}
+.properties-rentals-stat > [data-slot="card-content"] {
+  padding: 10px 16px 19px;
+}
+.properties-rentals-stat [data-testid^="stat-"] {
+  font-size: clamp(21px, 1.7vw, 29px);
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+  font-weight: 780;
+  color: var(--stat-accent);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.properties-rentals-stat--units [data-testid^="stat-"] { color: var(--rent-ink); }
+.properties-rentals-stat p {
+  margin-top: 6px;
+  line-height: 1.35;
+  color: var(--rent-muted);
+  font-size: 11px;
+}
+
+.properties-rentals-table-shell {
+  overflow: hidden;
+  border: 1px solid var(--rent-border) !important;
+  border-radius: 17px !important;
+  color: var(--rent-ink);
+  background: var(--rent-surface) !important;
+  box-shadow: 0 12px 30px rgba(6, 17, 48, 0.06);
+}
+.properties-rentals-data-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+.properties-rentals-table-head {
+  background: var(--rent-surface-alt);
+}
+.properties-rentals-table-head th {
+  height: 53px;
+  border-bottom: 1px solid var(--rent-border);
+  font-size: 12px;
+  color: var(--rent-muted);
+  white-space: nowrap;
+  font-weight: 650;
+}
+.properties-rentals-group-cell {
+  background: linear-gradient(102deg, #2857bf, #263575);
+  color: #fff;
+  text-align: left;
+  border-top: 12px solid var(--rent-surface);
+  border-radius: 10px 10px 0 0;
+}
+.properties-rentals-group-cell button { margin-left: 10px; }
+.properties-rentals-unit-row {
+  background: var(--rent-surface-alt);
+}
+.properties-rentals-unit-row:nth-child(even) {
+  background: var(--rent-surface);
+}
+.properties-rentals-unit-row:hover,
+.properties-rentals-unit-row:focus-within {
+  background: var(--rent-row-hover);
+}
+.properties-rentals-unit-row td {
+  padding-top: 13px;
+  padding-bottom: 13px;
+  border-bottom: 1px solid var(--rent-border);
+  vertical-align: middle;
+  line-height: 1.45;
+}
+.properties-rentals-unit-row td:nth-child(4) { font-weight: 650; }
+.properties-rentals-unit-pill,
+.properties-rentals-money-pill,
+.properties-rentals-date {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-weight: 680;
+  white-space: nowrap;
+  background: rgba(106,122,155,0.12);
+}
+.properties-rentals-unit-pill {
+  background: rgba(49, 98, 230, 0.16);
+  color: #6099ff;
+  font-size: 12px;
+}
+.properties-rentals-money-pill { font-size: 12px; }
+.properties-rentals-date {
+  font-size: 11px;
+  font-weight: 550;
+  color: var(--rent-muted);
+}
+.properties-rentals-data-table .text-red-600 .properties-rentals-money-pill,
+.properties-rentals-data-table .dark\\:text-red-400 .properties-rentals-money-pill {
+  background: rgba(233, 78, 108, 0.14);
+}
+.properties-rentals-data-table .text-green-600 .properties-rentals-money-pill,
+.properties-rentals-data-table .dark\\:text-green-400 .properties-rentals-money-pill {
+  background: rgba(25, 186, 129, 0.14);
+}
+
+@media (max-width: 1150px) {
+  .properties-rentals-hero { align-items: flex-start; }
+  .properties-rentals-hero-actions { justify-content: flex-start; width: 100%; }
+}
+@media (max-width: 640px) {
+  .properties-rentals-premium { padding: 8px 0 22px; }
+  .properties-rentals-hero { padding: 17px 14px; border-radius: 16px; min-height: 0; }
+  .properties-rentals-hero-copy { gap: 12px; align-items: flex-start; }
+  .properties-rentals-hero-icon { height: 48px; width: 48px; flex-basis: 48px; border-radius: 14px; }
+  .properties-rentals-hero-icon svg { width: 24px; height: 24px; }
+  .properties-rentals-heading { font-size: 24px; }
+  .properties-rentals-subheading { font-size: 12px; }
+  .properties-rentals-hero-actions button { flex: 1 1 auto; }
+  .properties-rentals-hub .properties-rentals-tabs { width: 100%; justify-content: stretch; }
+  .properties-rentals-hub .properties-rentals-tabs [role="tab"] { flex: 1 1 50%; }
+}
