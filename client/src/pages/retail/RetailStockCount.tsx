@@ -278,7 +278,7 @@ export default function RetailStockCount() {
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
         <Card className="h-fit">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">Sessions</CardTitle>
