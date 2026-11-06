@@ -108,7 +108,11 @@ vi.mock("@/contexts/CompanyContext", () => ({
   }),
 }));
 vi.mock("@/contexts/CurrencyContext", () => ({
-  useCurrencyContext: () => ({ formatAmount: (value: unknown) => `$${value}` }),
+  useCurrencyContext: () => ({
+    formatAmount: (value: unknown) => `$${value}`,
+    formatHistoricalBaseAmount: (value: unknown) => `$${value}`,
+    formatTransactionAmount: (value: unknown, currency: string) => `${currency} ${value}`,
+  }),
 }));
 vi.mock("@/contexts/DateFormatContext", () => ({
   useDateFormat: () => ({

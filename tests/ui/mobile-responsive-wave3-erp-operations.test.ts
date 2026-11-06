@@ -50,9 +50,15 @@ describe("Mobile Wave 3 ERP operational workflows", () => {
   it("stacks transaction journal filters and search controls on phones", () => {
     const filters = source("client/src/pages/transactionjournal/components/JournalFilters.tsx");
 
-    expect(filters).toContain('className="w-full sm:w-[150px]"');
-    expect(filters).toContain('className="w-full sm:w-[110px]"');
-    expect(filters).toContain('className="w-full sm:w-[130px]"');
+    expect(filters).toContain(
+      'className="h-9 w-full rounded-lg border-slate-200 bg-white/85 shadow-sm dark:border-white/15 dark:bg-white/[0.04] sm:w-[150px]"'
+    );
+    expect(filters).toContain(
+      'className="h-9 w-full rounded-lg border-slate-200 bg-white/85 shadow-sm dark:border-white/15 dark:bg-white/[0.04] sm:w-[112px]"'
+    );
+    expect(filters).toContain(
+      'className="h-9 w-full rounded-lg border-slate-200 bg-white/85 shadow-sm dark:border-white/15 dark:bg-white/[0.04] sm:w-[138px]"'
+    );
     expect(filters).toContain('className="flex flex-col gap-2 sm:flex-row"');
   });
 
