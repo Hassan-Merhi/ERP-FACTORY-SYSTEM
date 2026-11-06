@@ -3,8 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useOptionalCompany } from "@/contexts/CompanyContext";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { queryClient } from "@/lib/queryClient";
+import { factoryMhdLookup, factoryMhdName, sortFactoryMhdRows, type FactoryMhdDisplayMode, type FactoryMhdEntry } from "@/lib/factoryMhdDisplay";
 
-type MhdEntry = { articleCode: string; itemName: string; sortOrder: number };
+type MhdEntry = FactoryMhdEntry;
 type MhdResponse = { revision: number; rows: MhdEntry[]; products: Array<{ id: number; articleCode: string; name: string }> };
 export type FactoryProductViewMode = "standard" | "mhd";
 const MHD_FETCH_ERROR = "Unable to load MHD View";
@@ -26,24 +27,11 @@ export function useFactoryMhdView() {
     },
   });
   const mode: FactoryProductViewMode = prefs?.factoryMhdViewDefault ? "mhd" : "standard";
-  const lookup = useMemo(() => {
-    const map = new Map<string, MhdEntry>();
-    for (const row of data?.rows ?? []) map.set(normalize(row.articleCode), row);
-    return map;
-  }, [data?.rows]);
-
-  const nameFor = (articleCode: string | null | undefined, originalName: string): string => {
-    if (mode !== "mhd") return originalName;
-    return lookup.get(normalize(articleCode))?.itemName || originalName;
-  };
-  const sortRows = <T,>(rows: readonly T[], articleCode: (row: T) => string | null | undefined): T[] => {
-    if (mode !== "mhd" || !lookup.size) return [...rows];
-    return rows.map((row, originalIndex) => ({ row, originalIndex })).sort((a, b) => {
-      const aOrder = lookup.get(normalize(articleCode(a.row)))?.sortOrder ?? Number.MAX_SAFE_INTEGER;
-      const bOrder = lookup.get(normalize(articleCode(b.row)))?.sortOrder ?? Number.MAX_SAFE_INTEGER;
-      return aOrder - bOrder || a.originalIndex - b.originalIndex;
-    }).map((item) => item.row);
-  };
+  const lookup = useMemo(() => factoryMhdLookup(data?.rows ?? []), [data?.rows]);
+  const nameFor = (articleCode: string | null | undefined, originalName: string): string =>
+    factoryMhdName(mode, lookup, articleCode, originalName);
+  const sortRows = <T,>(rows: readonly T[], articleCode: (row: T) => string | null | undefined): T[] =>
+    sortFactoryMhdRows(mode, lookup, rows, articleCode);
 
   const setMode = async (next: FactoryProductViewMode) => {
     if (saving || next === mode) return;
