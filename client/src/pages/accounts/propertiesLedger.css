@@ -261,6 +261,7 @@
   .properties-ledger-modern .properties-ledger-metrics { grid-template-columns: 1fr; }
 }
 
+@media screen {
 /*
  * Light theme for the Properties ledger. The app toggles `.dark` on <html>,
  * so this tracks the existing theme control without a second switch.
@@ -424,6 +425,8 @@ html:not(.dark) .properties-ledger-modern [data-testid="account-statement-scroll
   }
 }
 
+}
+
 @media print {
   .properties-ledger-modern { background: white !important; color: black !important; border: 0; padding: 0; }
   .properties-ledger-modern .properties-ledger-breadcrumb,
@@ -434,4 +437,11 @@ html:not(.dark) .properties-ledger-modern [data-testid="account-statement-scroll
   .properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr { background: white !important; color: black !important; }
   .properties-ledger-modern [data-testid="account-statement-scroll-region"] td,
   .properties-ledger-modern [data-testid="account-statement-scroll-region"] th { color: black !important; }
+  .properties-ledger-modern .properties-ledger-heading-title h3,
+  .properties-ledger-modern .properties-ledger-stat p:first-child,
+  .properties-ledger-modern .properties-ledger-stat p:nth-child(2) { color: black !important; }
+  .properties-ledger-modern [data-testid="account-statement-scroll-region"] tbody tr:last-child {
+    background: white !important;
+    color: black !important;
+  }
 }
