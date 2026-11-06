@@ -1,5 +1,7 @@
 name: Temporary PR 2927 Prettier Preview
 on:
+  pull_request:
+    branches: [main]
   push:
     branches:
       - feature/properties-rename-location-groups-20261106
