@@ -71,7 +71,6 @@ export function RolePermissionMatrix() {
     setDraft(new Map(saved));
     setShowReview(false);
     setReason("");
-    setNotice(null);
   }, [companyId, role, saved]);
 
   const changes = useMemo(() => pendingRoleChanges(saved, draft), [saved, draft]);
