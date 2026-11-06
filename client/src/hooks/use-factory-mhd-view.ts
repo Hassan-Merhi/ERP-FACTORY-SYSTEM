@@ -7,10 +7,9 @@ import { factoryMhdLookup, factoryMhdName, sortFactoryMhdRows, type FactoryMhdDi
 
 type MhdEntry = FactoryMhdEntry;
 type MhdResponse = { revision: number; rows: MhdEntry[]; products: Array<{ id: number; articleCode: string; name: string }> };
-export type FactoryProductViewMode = "standard" | "mhd";
+export type FactoryProductViewMode = FactoryMhdDisplayMode;
 const MHD_FETCH_ERROR = "Unable to load MHD View";
 const MHD_SAVE_ERROR = "Unable to save your Factory view preference";
-const normalize = (code: string | null | undefined) => String(code ?? "").trim().toUpperCase();
 
 export function useFactoryMhdView() {
   const selectedCompany = useOptionalCompany()?.selectedCompany;
