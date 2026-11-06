@@ -81,13 +81,13 @@ function RentalUnitCard({
       ? null
       : outstanding > 0
         ? {
-            label: unit.isInternalLeaseProjection ? "Factory balance (reference)" : landlordView ? "To collect" : "Outstanding",
+            label: unit.isInternalLeaseProjection ? "Source balance (reference)" : landlordView ? "To collect" : "Outstanding",
             text: fmtMoneyCurrency(outstanding, currency),
             tone: unit.isInternalLeaseProjection ? "text-muted-foreground" : landlordView ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400",
           }
         : credit > 0
           ? {
-              label: unit.isInternalLeaseProjection ? "Factory credit (reference)" : landlordView ? "Owed to tenant" : "Credit",
+              label: unit.isInternalLeaseProjection ? "Source credit (reference)" : landlordView ? "Owed to tenant" : "Credit",
               text: fmtMoneyCurrency(credit, currency),
               tone: unit.isInternalLeaseProjection ? "text-muted-foreground" : landlordView ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400",
             }
@@ -112,7 +112,9 @@ function RentalUnitCard({
           )}
           {contract?.isInternal && <Badge className="bg-violet-600 text-xs text-white">Internal</Badge>}
           {unit.isInternalLeaseProjection ? (
-            <Badge className="bg-violet-600 text-xs text-white">Factory reference</Badge>
+            <Badge className="bg-violet-600 text-xs text-white">
+              {unit.sourceModule === "ERP" ? "ERP reference" : "Factory reference"}
+            </Badge>
           ) : unit.isShared ? <Badge className="bg-sky-600 text-xs text-white">Shared</Badge> : null}
         </>
       }
