@@ -158,3 +158,9 @@
 @media(prefers-reduced-motion:reduce) {
   .premium-nav-link {transition:none}
 }
+/* Phones and touch screens keep the 44px touch target the mobile drawer
+   requires; these unlayered rules would otherwise override its min-h-11. */
+@media (max-width: 767px), (pointer: coarse) {
+  .premium-nav-link,
+  .premium-nav-section {min-height:44px}
+}
