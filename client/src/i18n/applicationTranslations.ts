@@ -374,7 +374,8 @@ export const applicationEnglishTranslations = {
   "monthlyProduction.placeAbove": "Place above",
   "monthlyProduction.placeBelow": "Place below",
   "mhd.managerTitle": "MHD View Manager",
-  "mhd.managerDescription": "Upload article codes in the order you prefer. Item Name is optional; blanks use the original product name. This changes display only, never Factory records.",
+  "mhd.managerDescription":
+    "Upload article codes in the order you prefer. Item Name is optional; blanks use the original product name. This changes display only, never Factory records.",
   "mhd.downloadTemplate": "Download Template",
   "mhd.downloadCurrent": "Download Current Products",
   "mhd.uploadExcel": "Upload Excel",
@@ -403,7 +404,8 @@ export const applicationEnglishTranslations = {
   "mhd.view": "MHD View",
   "mhd.requireUpload": "Upload an MHD list in Intelligence Settings first.",
   "mhd.settingsTitle": "Preferred Factory Product View",
-  "mhd.settingsDescription": "Choose the Factory product names and ordering you see. The MHD catalog is shared; this preference is yours.",
+  "mhd.settingsDescription":
+    "Choose the Factory product names and ordering you see. The MHD catalog is shared; this preference is yours.",
   "mhd.standardView": "Standard View",
   "mhd.noProductRows": "No product rows were found in the uploaded sheet.",
   "mhd.maxProducts": "Maximum 10,000 products per MHD View.",
