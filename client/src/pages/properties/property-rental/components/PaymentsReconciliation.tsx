@@ -118,9 +118,12 @@ export function PaymentsReconciliation({
   });
 
   const totals = useMemo(() => receiptTotals(payments), [payments]);
+  const aliLedgerId = ali?.id;
+  const cashboxLedgerId = cashbox?.id;
   const bridge = useMemo(() => accountBalanceHistoryBridge(
-    payments, ali ? [ali.id, ...(cashbox ? [cashbox.id] : [])] : null
-  ), [payments, ali?.id, cashbox?.id]);
+    payments,
+    aliLedgerId == null ? null : [aliLedgerId, ...(cashboxLedgerId == null ? [] : [cashboxLedgerId])]
+  ), [payments, aliLedgerId, cashboxLedgerId]);
   const withdrawalAmount = postedMovement(withdrawalStatement, "debit");
   const depositAmount = postedMovement(depositsStatement, "credit");
   const aliAmount = postedMovement(aliStatement, "debit");
