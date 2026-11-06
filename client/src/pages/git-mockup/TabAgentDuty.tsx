@@ -139,7 +139,7 @@ export function TabAgentDuty() {
 
   const modeSelector = (
     <div
-      className="max-sm:grid max-sm:grid-cols-2 max-sm:[&>button]:h-auto max-sm:[&>button]:min-w-0 max-sm:[&>button]:whitespace-normal max-sm:[&>button]:py-1.5 flex items-center gap-2 flex-wrap"
+      className="flex flex-wrap items-center gap-2 rounded-xl py-1 max-sm:grid max-sm:grid-cols-2 max-sm:[&>button]:h-auto max-sm:[&>button]:min-w-0 max-sm:[&>button]:whitespace-normal"
       data-testid="agent-duty-mode-selector"
     >
       <Building2 className="max-sm:hidden h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -147,7 +147,7 @@ export function TabAgentDuty() {
       <Button
         size="sm"
         variant={companyMode === "session" ? "default" : "outline"}
-        className="text-xs gap-1.5"
+        className="min-h-9 gap-1.5 rounded-xl border border-border/60 px-4 text-xs font-semibold shadow-sm transition-colors data-[state=active]:bg-violet-600"
         onClick={() => setCompanyMode("session")}
         data-testid="button-agent-duty-my-company"
       >
@@ -157,7 +157,7 @@ export function TabAgentDuty() {
         <Button
         size="sm"
         variant={companyMode === "all" ? "default" : "outline"}
-        className="text-xs gap-1.5"
+        className="min-h-9 gap-1.5 rounded-xl border border-border/60 px-4 text-xs font-semibold shadow-sm transition-colors"
         onClick={() => setCompanyMode("all")}
         data-testid="button-agent-duty-all-companies"
       >
@@ -226,7 +226,7 @@ export function TabAgentDuty() {
     );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {modeSelector}
       {displaySections.map((section) => (
         <div key={section.companyId} className="space-y-4" data-testid={`company-section-${section.companyId}`}>
