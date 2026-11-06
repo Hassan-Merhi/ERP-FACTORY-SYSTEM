@@ -134,6 +134,8 @@ export default function PropertyRentalPage({
       totalPaid = 0,
       totalMonthlyRent = 0;
     units.forEach((u) => {
+      // Factory projections are references, not Properties receivables or deposits.
+      if (u.isInternalLeaseProjection) return;
       if (u.contract) {
         totalGuarantee += Number((u.guaranteeRemaining ?? u.contract.guaranteeAmount) || 0);
         const outstanding = u.outstanding ?? 0;
@@ -205,7 +207,7 @@ export default function PropertyRentalPage({
   const [selectedContractIds, setSelectedContractIds] = useState<Set<number>>(new Set());
   const [bulkPayOpen, setBulkPayOpen] = useState(false);
 
-  const contractedUnits = useMemo(() => units.filter((u) => u.contract && !u.isShared), [units]);
+  const contractedUnits = useMemo(() => units.filter((u) => u.contract && !u.isShared && !u.isInternalLeaseProjection), [units]);
 
   const toggleSelect = (contractId: number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -376,6 +378,12 @@ export default function PropertyRentalPage({
           </div>
         )}
 
+        {isPropertiesRental && unitType === "SHOP" && units.some((unit) => unit.isInternalLeaseProjection) && (
+          <p className="text-xs text-muted-foreground" data-testid="properties-factory-internal-lease-note">
+            Internal Factory leases appear for reference only. They are excluded from Properties rent and balance totals;
+            manage payments and accounting from Factory Rentals.
+          </p>
+        )}
         {isPropertiesRental && (
           <p className="text-xs text-muted-foreground" data-testid="properties-rent-cashbox-status">
             {propertiesCashbox
@@ -651,7 +659,7 @@ export default function PropertyRentalPage({
                                 data-testid={`row-unit-${u.id}`}
                               >
                                 <td className="px-3 py-2 w-8" onClick={(e) => e.stopPropagation()}>
-                                  {u.contract && !u.isShared && (
+                                  {u.contract && !u.isShared && !u.isInternalLeaseProjection && (
                                     <Checkbox
                                       checked={selectedContractIds.has(u.contract.id)}
                                       onCheckedChange={() =>
@@ -706,7 +714,10 @@ export default function PropertyRentalPage({
                                       {u.contract.isInternal && (
                                         <Badge className="text-xs bg-violet-600 text-white">Internal</Badge>
                                       )}
-                                      {u.isShared && (
+                                      {u.isInternalLeaseProjection && (
+                                        <Badge className="text-xs bg-violet-600 text-white">Factory reference</Badge>
+                                      )}
+                                      {u.isShared && !u.isInternalLeaseProjection && (
                                         <Badge
                                           className="text-xs bg-sky-600 text-white"
                                           title={u.ownerCompanyName ? `From: ${u.ownerCompanyName}` : undefined}
@@ -723,11 +734,15 @@ export default function PropertyRentalPage({
                                 </td>
                                 <td className="px-3 py-2">
                                   {u.contract ? (
-                                    <NoteCell
-                                      contractId={u.contract.id}
-                                      note={u.contract.notes}
-                                      testId={`unit-${u.id}`}
-                                    />
+                                    {u.isInternalLeaseProjection ? (
+                                      <span className="text-xs text-muted-foreground">{u.contract.notes || "—"}</span>
+                                    ) : (
+                                      <NoteCell
+                                        contractId={u.contract.id}
+                                        note={u.contract.notes}
+                                        testId={`unit-${u.id}`}
+                                      />
+                                    )}
                                   ) : (
                                     <span className="text-xs text-muted-foreground">—</span>
                                   )}
@@ -802,7 +817,7 @@ export default function PropertyRentalPage({
                                 </td>
                                 <td className="px-2 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                                   <div className="flex items-center justify-end gap-1">
-                                    {!u.isShared && (
+                                    {!u.isShared && !u.isInternalLeaseProjection && (
                                       <Button
                                         size="icon"
                                         variant="ghost"
