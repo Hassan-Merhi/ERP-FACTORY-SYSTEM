@@ -374,6 +374,7 @@ export const applicationArabicTranslations = {
   "mhd.managerTitle": "إدارة عرض MHD",
   "mhd.managerDescription":
     "حمّل رموز الأصناف بالترتيب المطلوب. اسم الصنف اختياري، والفراغ يحافظ على الاسم الأصلي. لن تتغير سجلات المصنع.",
+  "mhd.restorePrevious": "استعادة عرض MHD السابق",
   "mhd.downloadTemplate": "تنزيل النموذج",
   "mhd.downloadCurrent": "تنزيل الأصناف الحالية",
   "mhd.uploadExcel": "رفع ملف إكسل",
