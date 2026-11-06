@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { FactoryLanOriginBadge } from "@/components/FactoryLanOriginBadge";
+import { GlobalSnowfall } from "@/components/GlobalSnowfall";
 
 const RemoteSupportRuntime = lazy(() =>
   import("@/components/RemoteSupportRuntime").then((module) => ({
@@ -43,6 +44,7 @@ export function AuthenticatedAppOverlays() {
   return (
     <>
       <FactoryLanOriginBadge />
+      <GlobalSnowfall />
       <Suspense fallback={null}>{remoteSupportReady ? <RemoteSupportRuntime /> : null}</Suspense>
     </>
   );
