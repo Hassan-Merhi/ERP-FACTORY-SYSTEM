@@ -108,8 +108,8 @@ export function ChristmasLoginEntrance({ enabled, queryStatus }: Props) {
           <Snowflake aria-hidden="true" />
         </span>
         <div className="christmas-login-greeting-copy">
-          <span className="christmas-login-greeting-title">Welcome back</span>
-          <span className="christmas-login-greeting-subtitle">Wishing you a wonderful holiday season</span>
+          <span className="christmas-login-greeting-title">Merry Christmas</span>
+          <span className="christmas-login-greeting-subtitle">Welcome back — wishing you a wonderful season</span>
         </div>
         <Sparkles className="christmas-login-greeting-sparkle" aria-hidden="true" />
       </div>
