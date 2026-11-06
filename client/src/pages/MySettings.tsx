@@ -14,10 +14,12 @@ import { PageHeader } from "@/components/PageHeader";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 
 type DateFormatType = "MM/DD/YYYY" | "DD/MM/YYYY";
 
 export default function MySettings() {
+  const { t } = useApplicationLanguage();
   const { toast } = useToast();
   const { dateFormat } = useDateFormat();
   const { prefs, updatePref, isPending: prefsPending } = useUserPreferences();
@@ -104,15 +106,15 @@ export default function MySettings() {
 
       {["factory", "factory_v2"].includes(selectedCompany?.companyType ?? "") && <Card data-testid="settings-factory-mhd-default">
         <CardHeader>
-          <CardTitle className="text-base">Preferred Factory Product View</CardTitle>
-          <CardDescription>Choose which product names and ordering appear in Factory screens. The MHD catalog is shared; this preference is yours.</CardDescription>
+          <CardTitle className="text-base">{t("mhd.settingsTitle")}</CardTitle>
+          <CardDescription>{t("mhd.settingsDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           <Select value={factoryMhd.mode} disabled={factoryMhd.saving} onValueChange={(value) => void factoryMhd.setMode(value as "standard" | "mhd")}>
             <SelectTrigger data-testid="select-factory-mhd-default"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="standard">Standard View</SelectItem>
-              <SelectItem value="mhd">MHD View</SelectItem>
+              <SelectItem value="standard">{t("mhd.standardView")}</SelectItem>
+              <SelectItem value="mhd">{t("mhd.view")}</SelectItem>
             </SelectContent>
           </Select>
         </CardContent>
