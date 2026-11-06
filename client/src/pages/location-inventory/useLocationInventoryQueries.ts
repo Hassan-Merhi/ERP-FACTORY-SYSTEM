@@ -158,14 +158,15 @@ export function useLocationInventoryQueries({
   // queryFn always resolves to a flat array of inventory rows.
   const allInventoryData = Array.isArray(allInventoryRaw) ? allInventoryRaw : [];
 
-  const { data: allNegativeStock = [], isLoading: negativeStockLoading } = useQuery<NegativeInventoryRow[]>({
+  const { data: allNegativeStock = [], isLoading: negativeStockLoading, isError: negativeStockError } = useQuery<NegativeInventoryRow[]>({
     queryKey: companyId ? ["/api/inventory/negative", companyId] : [],
     queryFn: async () => {
       const res = await fetch("/api/inventory/negative", { credentials: "include" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
-    enabled: !posUser && !!companyId && showNegativeStock && !selectedLocationLocal,
+    // The overview needs the real negative-stock count; never render a made-up zero.
+    enabled: !posUser && !!companyId && !selectedLocationLocal,
     staleTime: 30000,
   });
 
@@ -196,6 +197,7 @@ export function useLocationInventoryQueries({
     allInventoryLoading,
     allNegativeStock,
     negativeStockLoading,
+    negativeStockError,
     categoriesList,
   };
 }
