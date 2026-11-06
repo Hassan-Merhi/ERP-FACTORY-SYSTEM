@@ -14,7 +14,7 @@ import {
 import {
   V2_EDITABLE_ROLES, V2PolicyError, assignedCompanyRole,
   previewV2, readV2Audit, readV2Overrides, readV2Revision,
-  readV2Roles, saveV2Rules,
+  readV2Roles, readV2CompanyMembers, saveV2Rules,
 } from "../../services/security/accessControlV2Store";
 
 const changeSchema = z.object({
@@ -103,6 +103,16 @@ export function registerPermissionControlCenterRoutes(app: Express): void {
     res.json({ companyId: actor.companyId, ...await readV2Roles(actor.companyId) });
   }));
 
+  app.get("/api/permissions-v2/users", requireAuth, handle(async (req, res) => {
+    const actor = await requirePolicyAdmin(req);
+    res.json({
+      companyId: actor.companyId,
+      users: await readV2CompanyMembers(actor.companyId),
+      mode: "shadow",
+      enforced: false,
+    });
+  }));
+
   app.get("/api/permissions-v2/users/:userId/overrides", requireAuth, handle(async (req, res) => {
     const actor = await requirePolicyAdmin(req);
     const userId = z.string().min(1).max(128).parse(req.params.userId);
@@ -119,7 +129,10 @@ export function registerPermissionControlCenterRoutes(app: Express): void {
     const actor = await requirePolicyAdmin(req);
     const q = previewParams.parse(req.query);
     const companyRole = q.userId ? await assignedCompanyRole(actor.companyId, q.userId) : null;
-    const role = q.role ?? companyRole ?? "Create Only";
+    if (q.userId && q.role && q.role !== companyRole) {
+      throw new V2PolicyError(400, "POLICY_ROLE_MISMATCH", "Requested role does not match company membership");
+    }
+    const role = companyRole ?? q.role ?? "Create Only";
     const v = await readV2Revision(actor.companyId);
     res.json({
       policy: v,
