@@ -36,7 +36,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { EyeOff, Plus, ChevronDown, FileDown, LayoutList, Layers } from "lucide-react";
+import { EyeOff, Plus, ChevronDown, FileDown, LayoutList, Layers, BookOpen, ReceiptText, CheckCircle2, Clock3, Wallet } from "lucide-react";
 import { format, addDays } from "date-fns";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { cn } from "@/lib/utils";
@@ -65,6 +65,7 @@ import type {
 import { loadDaybookState, saveDaybookState } from "./daybook/state";
 import { DaybookFilters } from "./daybook/DaybookFilters";
 import { DaybookTable } from "./daybook/DaybookTable";
+import "./daybook/daybook-premium.css";
 import { VoucherDetailsDialog } from "./daybook/VoucherDetailsDialog";
 import { VoucherEditDialog } from "./daybook/VoucherEditDialog";
 import { voucherEditPath } from "./daybook/voucherEditRoute";
@@ -422,6 +423,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
   const [accountNameCache] = useState<Record<number, string>>({});
   const {
     response: voucherPageResponse,
+    summary: voucherSummary,
     vouchers,
     isLoading,
     isError,
@@ -533,6 +535,19 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
     });
   }, [filters.voucherType, filters.sortOrder, filteredVouchers, voucherPage, offloads]);
 
+  // Summary amounts/counts come from the same company-scoped, filtered voucher API.
+  // Legacy list responses have no global summary, so their fallback is explicitly page-scoped.
+  const overviewStats = useMemo(() => {
+    const loadedValue = filteredVouchers.reduce((sum, voucher) => sum + (Number(voucher.totalAmount) || 0), 0);
+    return {
+      vouchers: voucherPageResponse?.total ?? filteredVouchers.length,
+      value: voucherSummary?.totalAmount ?? loadedValue,
+      active: voucherSummary?.active ?? filteredVouchers.filter((voucher) => !voucher.optional).length,
+      optional: voucherSummary?.optional ?? filteredVouchers.filter((voucher) => voucher.optional).length,
+      scope: voucherSummary ? "Selected filters" : "Loaded page",
+    };
+  }, [filteredVouchers, voucherPageResponse?.total, voucherSummary]);
+
   const visibleRows = useMemo(
     () =>
       allRows.filter(
@@ -621,11 +636,12 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
   };
 
   return (
-    <div className="flex flex-col gap-4 md:gap-6 p-3 md:p-6">
-      <PageHeader title="Daybook" subtitle={routineAccountingViewFiltered ? "Operational activity view" : "View all accounting transactions chronologically"} showBackButton>
+    <div className="daybook-premium flex min-w-0 flex-col gap-4 p-3 md:gap-5 md:p-6">
+      <section className="daybook-hero" aria-label="Daybook heading">
+      <PageHeader title="Daybook" subtitle={routineAccountingViewFiltered ? "Operational activity view" : "View all accounting transactions chronologically"} icon={<BookOpen className="h-6 w-6" />} showBackButton>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="daybook-export gap-2">
               <FileDown className="w-4 h-4" />
               Export
               <ChevronDown className="w-4 h-4" />
@@ -636,11 +652,53 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
             <DropdownMenuItem onClick={handleExportDetailedToExcel}>Detailed</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button onClick={() => navigate(vouchersBase)} className="gap-2">
+        <Button onClick={() => navigate(vouchersBase)} className="daybook-new-voucher gap-2">
           <Plus className="w-4 h-4" />
           New Voucher
         </Button>
       </PageHeader>
+      </section>
+
+      <section
+        className={cn("daybook-overview", hideAmounts && "daybook-overview--restricted")}
+        aria-label="Daybook overview"
+        data-testid="daybook-overview"
+      >
+        <div className="daybook-kpi daybook-kpi--count">
+          <span className="daybook-kpi__icon"><ReceiptText className="h-5 w-5" aria-hidden="true" /></span>
+          <div className="min-w-0">
+            <div className="daybook-kpi__label">Matching vouchers</div>
+            <div className="daybook-kpi__value" data-testid="daybook-kpi-count">{overviewStats.vouchers.toLocaleString()}</div>
+            <div className="daybook-kpi__caption">Selected period</div>
+          </div>
+        </div>
+        {!hideAmounts && (
+          <div className="daybook-kpi daybook-kpi--value">
+            <span className="daybook-kpi__icon"><Wallet className="h-5 w-5" aria-hidden="true" /></span>
+            <div className="min-w-0">
+              <div className="daybook-kpi__label">Voucher value</div>
+              <div className="daybook-kpi__value" data-testid="daybook-kpi-value">{formatAmount(overviewStats.value)}</div>
+              <div className="daybook-kpi__caption">{overviewStats.scope} · not account balance</div>
+            </div>
+          </div>
+        )}
+        <div className="daybook-kpi daybook-kpi--active">
+          <span className="daybook-kpi__icon"><CheckCircle2 className="h-5 w-5" aria-hidden="true" /></span>
+          <div className="min-w-0">
+            <div className="daybook-kpi__label">Active vouchers</div>
+            <div className="daybook-kpi__value" data-testid="daybook-kpi-active">{overviewStats.active.toLocaleString()}</div>
+            <div className="daybook-kpi__caption">{overviewStats.scope}</div>
+          </div>
+        </div>
+        <div className="daybook-kpi daybook-kpi--optional">
+          <span className="daybook-kpi__icon"><Clock3 className="h-5 w-5" aria-hidden="true" /></span>
+          <div className="min-w-0">
+            <div className="daybook-kpi__label">Optional vouchers</div>
+            <div className="daybook-kpi__value" data-testid="daybook-kpi-optional">{overviewStats.optional.toLocaleString()}</div>
+            <div className="daybook-kpi__caption">{overviewStats.scope}</div>
+          </div>
+        </div>
+      </section>
 
       {/* Tab selector: Transactions / Edits & Activity */}
       <Tabs
@@ -648,13 +706,14 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
         onValueChange={(value) => setActiveDaybookTab(value as "transactions" | "activity")}
       >
         <div className="erp-mobile-scroll-tabs pb-1">
-          <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Daybook sections">
+          <TabsList className="daybook-tab-list" aria-label="Daybook sections">
             <TabsTrigger value="transactions">Transactions</TabsTrigger>
             <TabsTrigger value="activity">Edits &amp; Activity</TabsTrigger>
           </TabsList>
         </div>
 
         <TabsContent value="transactions" className="space-y-4 mt-0">
+          <div className="daybook-filter-panel">
           <DaybookFilters
             periodFilter={periodFilter}
             setPeriodFilter={setPeriodFilter}
@@ -665,11 +724,12 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
             onPrevDay={() => shiftDay(-1)}
             onNextDay={() => shiftDay(1)}
           />
+          </div>
 
           <div>
             <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
               <div>
-                <h2 className="text-base font-semibold">Transactions</h2>
+                <h2 className="daybook-results-title">Transactions</h2>
                 <p className="text-sm text-muted-foreground">All accounting vouchers and transactions</p>
               </div>
               <div className="flex items-center gap-2">
@@ -684,7 +744,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
                   <EyeOff className="w-4 h-4" />
                   {showHidden ? "Showing hidden" : "Show hidden"}
                 </Button>
-                <div className="flex border border-border/80 rounded-md overflow-hidden bg-muted/20">
+                <div className="daybook-view-toggle" role="group" aria-label="Transaction layout">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -692,7 +752,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
                       setViewMode("detailed");
                       saveDaybookState({ viewMode: "detailed" });
                     }}
-                    className={cn("rounded-none gap-1.5", viewMode === "detailed" && "bg-primary/10 text-primary font-semibold dark:bg-primary/20")}
+                    className={cn("gap-1.5", viewMode === "detailed" && "daybook-toggle-active")}
                     data-testid="button-view-detailed"
                     data-remote-control-safe="true"
                     data-remote-control-action="toggle-view"
@@ -707,7 +767,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
                       setViewMode("condensed");
                       saveDaybookState({ viewMode: "condensed" });
                     }}
-                    className={cn("rounded-none gap-1.5", viewMode === "condensed" && "bg-primary/10 text-primary font-semibold dark:bg-primary/20")}
+                    className={cn("gap-1.5", viewMode === "condensed" && "daybook-toggle-active")}
                     data-testid="button-view-condensed"
                     data-remote-control-safe="true"
                     data-remote-control-action="toggle-view"
@@ -718,6 +778,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
                 </div>
               </div>
             </div>
+            <div className="daybook-table-shell">
             <DaybookTable
               displayedRows={displayedRows}
               visibleRows={visibleRows}
@@ -756,6 +817,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
               errorMessage={daybookErrorMessage}
               onRetry={() => void refetchVouchers()}
             />
+            </div>
             <PaginationBar
               page={voucherPageResponse?.page ?? voucherPage}
               totalPages={voucherPageResponse?.totalPages ?? 0}
@@ -821,7 +883,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
           />
         </TabsContent>
 
-        <TabsContent value="activity" className="mt-2">
+        <TabsContent value="activity" className="daybook-activity-panel mt-2">
           {activeDaybookTab === "activity" && <AuditLog context="daybook" defaultActions="all" />}
         </TabsContent>
       </Tabs>

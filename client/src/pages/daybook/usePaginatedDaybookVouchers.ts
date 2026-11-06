@@ -144,6 +144,8 @@ export function usePaginatedDaybookVouchers(options: UsePaginatedDaybookVouchers
     queryUrl,
     response: page,
     vouchers: page.data,
+    // The API summary covers all matching vouchers, not just the loaded page.
+    summary: !Array.isArray(query.data) ? query.data?.summary ?? null : null,
     loadAllVouchers,
   };
 }
