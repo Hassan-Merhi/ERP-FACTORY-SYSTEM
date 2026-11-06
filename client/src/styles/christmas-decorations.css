@@ -149,3 +149,109 @@ html[data-christmas-mode="on"][data-seasonal-camera-active="true"] [data-seasona
     animation: none !important;
   }
 }
+
+/* Extra Christmas ambience for explicitly selected accounts only.
+   Small corner ornaments sit below dialogs and never absorb pointer events. */
+.seasonal-atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 32;
+  overflow: hidden;
+  pointer-events: none !important;
+  user-select: none;
+  contain: layout style paint;
+}
+
+.seasonal-atmosphere-sprig {
+  position: absolute;
+  top: 68px;
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  border: 1px solid rgb(180 149 87 / 0.16);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(62 143 94 / 0.12), transparent 72%);
+  filter: drop-shadow(0 3px 8px rgb(34 88 49 / 0.12));
+  opacity: 0.8;
+}
+
+.seasonal-atmosphere-sprig-left { inset-inline-start: 8px; }
+.seasonal-atmosphere-sprig-right { inset-inline-end: 8px; }
+
+.seasonal-atmosphere-tree,
+.seasonal-atmosphere-gift {
+  width: 32px;
+  height: 32px;
+  stroke-width: 1.5;
+  color: #39875b;
+}
+
+.seasonal-atmosphere-gift { color: #bf5b65; }
+html.dark .seasonal-atmosphere-tree { color: #80c99c; }
+html.dark .seasonal-atmosphere-gift { color: #f49a9e; }
+
+.seasonal-atmosphere-star {
+  position: absolute;
+  top: 4px;
+  inset-inline-end: 5px;
+  width: 16px;
+  height: 16px;
+  color: #d5a347;
+  animation: christmas-star-glow 5.5s ease-in-out infinite alternate;
+}
+
+.seasonal-atmosphere-berry {
+  position: absolute;
+  bottom: 7px;
+  inset-inline-start: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #c75e5a;
+  box-shadow: 8px 4px 0 -2px #d9a752;
+}
+
+.seasonal-atmosphere-flurry {
+  position: absolute;
+  bottom: 20px;
+  inset-inline-end: 24px;
+  opacity: 0.5;
+  color: #7aa6c6;
+}
+
+.seasonal-atmosphere-flurry-icon {
+  width: 24px;
+  height: 24px;
+  stroke-width: 1.5;
+  animation: christmas-star-glow 7s ease-in-out infinite alternate;
+}
+
+html.dark .seasonal-atmosphere-flurry { color: #d1ebfa; }
+
+@media (max-width: 767px) {
+  .seasonal-atmosphere-sprig {
+    top: max(64px, calc(env(safe-area-inset-top) + 48px));
+    width: 40px;
+    height: 40px;
+    opacity: 0.58;
+  }
+  .seasonal-atmosphere-sprig-left { inset-inline-start: 2px; }
+  .seasonal-atmosphere-sprig-right { inset-inline-end: 2px; }
+  .seasonal-atmosphere-tree,
+  .seasonal-atmosphere-gift { width: 21px; height: 21px; }
+  .seasonal-atmosphere-star { width: 11px; height: 11px; }
+  .seasonal-atmosphere-flurry { display: none; }
+}
+
+@media print {
+  .seasonal-atmosphere { display: none !important; }
+}
+
+@media (prefers-reduced-motion: reduce), (prefers-reduced-data: reduce) {
+  .seasonal-atmosphere * { animation: none !important; }
+}
+
+html[data-seasonal-camera-active="true"] .seasonal-atmosphere * {
+  animation: none !important;
+}
