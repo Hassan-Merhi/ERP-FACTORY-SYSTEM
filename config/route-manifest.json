@@ -11,6 +11,7 @@
     "GET /api/training/media/:topic/screenshot [requireAuth > <anonymous>]",
     "POST /api/offline/legacy-queue/decisions [requireAuth > <anonymous>]",
     "GET /api/seasonal/christmas-mode [requireAuth > <anonymous>]",
+    "PUT /api/seasonal/christmas-mode/preference [requireAuth > <anonymous>]",
     "GET /api/seasonal/christmas-mode/config [requireAuth > <anonymous> > <anonymous>]",
     "PUT /api/seasonal/christmas-mode/config [requireAuth > <anonymous> > <anonymous>]",
     "PUT /api/seasonal/christmas-mode [requireAuth > <anonymous> > <anonymous>]",
