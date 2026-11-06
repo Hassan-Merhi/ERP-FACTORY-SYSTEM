@@ -245,6 +245,7 @@ export function registerUserAccessRoutes(app: Express) {
         showChatWidget,
         showNotesPanel,
         factoryNetPositionValuationMode,
+        factoryMhdViewDefault,
         hiddenTransactionJournalVoucherIds,
       } = req.body;
       if (dateFormat && !["MM/DD/YYYY", "DD/MM/YYYY"].includes(dateFormat)) {
@@ -258,6 +259,9 @@ export function registerUserAccessRoutes(app: Express) {
         !["cost", "selling"].includes(factoryNetPositionValuationMode)
       ) {
         return res.status(400).json({ message: "Invalid factory net position valuation mode" });
+      }
+      if (factoryMhdViewDefault !== undefined && typeof factoryMhdViewDefault !== "boolean") {
+        return res.status(400).json({ message: "Invalid Factory MHD view preference" });
       }
       let normalizedHiddenTransactionJournalVoucherIds: number[] | undefined;
       if (hiddenTransactionJournalVoucherIds !== undefined) {
@@ -284,6 +288,7 @@ export function registerUserAccessRoutes(app: Express) {
       if (factoryNetPositionValuationMode !== undefined) {
         updateFields.factoryNetPositionValuationMode = factoryNetPositionValuationMode;
       }
+      if (factoryMhdViewDefault !== undefined) updateFields.factoryMhdViewDefault = factoryMhdViewDefault;
       if (normalizedHiddenTransactionJournalVoucherIds !== undefined) {
         updateFields.hiddenTransactionJournalVoucherIds = normalizedHiddenTransactionJournalVoucherIds;
       }
@@ -299,6 +304,7 @@ export function registerUserAccessRoutes(app: Express) {
             showChatWidget: showChatWidget ?? true,
             showNotesPanel: showNotesPanel ?? true,
             factoryNetPositionValuationMode: factoryNetPositionValuationMode ?? "cost",
+            factoryMhdViewDefault: factoryMhdViewDefault ?? false,
             hiddenTransactionJournalVoucherIds: normalizedHiddenTransactionJournalVoucherIds ?? [],
           })
           .returning();
