@@ -18,6 +18,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 
 | Doc | What it covers |
 |---|---|
+| [permissions-control-center-phase4.md](permissions-control-center-phase4.md) | Phase 4 shadow role permissions matrix and release gates |
 | [permissions-control-center-phase3.md](permissions-control-center-phase3.md) | Permissions Phase 3: fail-closed Create Only writes, reviewed supplier creation and remaining route audits |
 | [what-is-this.md](what-is-this.md) | What the system is, in one page |
 | [onboarding.md](onboarding.md) | First login through first transaction |
