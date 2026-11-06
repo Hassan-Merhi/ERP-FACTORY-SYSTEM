@@ -11,6 +11,8 @@ import {
   assertV2ChangesSafe,
   saveV2Rules,
   readV2Revision,
+  readV2Roles,
+  readV2UserPolicy,
 } from "../server/services/security/accessControlV2Store";
 
 const actor = { companyId: 11, userId: "admin-1" };
@@ -23,7 +25,7 @@ describe("Permissions V2 Phase 2 shadow store", () => {
     vi.clearAllMocks();
     client = { query: vi.fn(), release: vi.fn() };
     mockDb.connect.mockResolvedValue(client);
-    client.query.mockImplementation(async (sql: string, values?: unknown[]) => {
+    client.query.mockImplementation(async (sql: string, _values?: unknown[]) => {
       if (sql.includes("SELECT revision::text")) return { rows: [{ revision: "0", mode: "shadow" }] };
       if (sql.includes("RETURNING id::text")) return { rows: [{ id: "100" }] };
       if (sql.includes("SELECT r.resource_key") || sql.includes("SELECT resource_key, action_key")) return { rows: [] };
@@ -109,5 +111,33 @@ describe("Permissions V2 Phase 2 shadow store", () => {
   it("reads revision zero when no V2 state was created for a company", async () => {
     mockDb.query.mockResolvedValue({ rows: [] });
     await expect(readV2Revision(11)).resolves.toEqual({ revision: 0, mode: "shadow" });
+  });
+
+  it("reads role rules and their revision from one read-only snapshot", async () => {
+    await readV2Roles(11);
+    const calls = client.query.mock.calls.map(([sql]) => String(sql));
+    expect(calls[0]).toBe("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+    expect(calls.some((sql) => sql.includes("FROM access_role_rules"))).toBe(true);
+    expect(calls.some((sql) => sql.includes("SELECT revision::text"))).toBe(true);
+    expect(calls.at(-1)).toBe("COMMIT");
+    expect(mockDb.query).not.toHaveBeenCalled();
+    expect(client.release).toHaveBeenCalledOnce();
+  });
+
+  it("reads user overrides and their revision from one snapshot and releases on failure", async () => {
+    await expect(readV2UserPolicy(11, "user-2")).resolves.toEqual({
+      policy: { revision: 0, mode: "shadow" },
+      rules: [],
+    });
+    expect(client.query.mock.calls[0][0]).toBe("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+    expect(mockDb.query).not.toHaveBeenCalled();
+
+    client.query.mockImplementation(async (sql: string) => {
+      if (sql.includes("SELECT revision::text")) throw new Error("connection lost");
+      return { rows: [] };
+    });
+    await expect(readV2UserPolicy(11, "user-2")).rejects.toThrow("connection lost");
+    expect(client.query.mock.calls.at(-1)?.[0]).toBe("ROLLBACK");
+    expect(client.release).toHaveBeenCalledTimes(2);
   });
 });

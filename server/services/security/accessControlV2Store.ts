@@ -99,8 +99,10 @@ export function assertV2ChangesSafe(role: string | null, changes: V2RuleChange[]
   }
 }
 
-export async function readV2Revision(companyId: number): Promise<{ revision: number; mode: string }> {
-  const result = await pool.query<VersionRow>(
+type V2Queryable = Pick<PoolClient, "query">;
+
+async function readRevisionWith(db: V2Queryable, companyId: number): Promise<{ revision: number; mode: string }> {
+  const result = await db.query<VersionRow>(
     "SELECT revision::text AS revision, mode FROM access_policy_versions WHERE company_id=$1",
     [companyId]
   );
@@ -108,34 +110,68 @@ export async function readV2Revision(companyId: number): Promise<{ revision: num
   return { revision: revisionNumber(current?.revision), mode: current?.mode ?? "shadow" };
 }
 
+export async function readV2Revision(companyId: number): Promise<{ revision: number; mode: string }> {
+  return readRevisionWith(pool, companyId);
+}
+
+/**
+ * Run several policy reads against one consistent database snapshot. Rules and
+ * the revision an editor later sends back as expectedRevision must describe the
+ * same committed state, or a save based on stale rules could pass the revision
+ * check and silently overwrite a concurrent administrator's change.
+ */
+async function withV2Snapshot<T>(read: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+    const result = await read(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function readV2Roles(companyId: number) {
-  const [templates, rules, version, affectedUsers] = await Promise.all([
-    pool.query(
+  return withV2Snapshot(async (client) => {
+    const templates = await client.query(
       'SELECT role_key AS "roleKey", display_name AS "displayName", system_managed AS "systemManaged" FROM access_role_templates WHERE company_id=$1 ORDER BY role_key',
       [companyId]
-    ),
-    pool.query(
+    );
+    const rules = await client.query(
       `SELECT t.role_key AS "roleKey", r.resource_key AS "resource", r.action_key AS "action", r.decision
          FROM access_role_rules r JOIN access_role_templates t ON t.id=r.role_id AND t.company_id=r.company_id
         WHERE r.company_id=$1 ORDER BY t.role_key, r.resource_key, r.action_key`,
       [companyId]
-    ),
-    readV2Revision(companyId),
-    pool.query<{ role: string; count: string }>(
+    );
+    const version = await readRevisionWith(client, companyId);
+    const affectedUsers = await client.query<{ role: string; count: string }>(
       "SELECT role, COUNT(DISTINCT user_id)::text AS count FROM user_company_roles WHERE company_id=$1 GROUP BY role",
       [companyId]
-    ),
-  ]);
-  const impactCounts = Object.fromEntries(affectedUsers.rows.map((row) => [row.role, Number(row.count)]));
-  return {
-    impactCounts,
-    mode: version.mode,
-    revision: version.revision,
-    editableRoles: V2_EDITABLE_ROLES,
-    templates: templates.rows,
-    rules: rules.rows,
-    enforced: false,
-  };
+    );
+    const impactCounts = Object.fromEntries(affectedUsers.rows.map((row) => [row.role, Number(row.count)]));
+    return {
+      impactCounts,
+      mode: version.mode,
+      revision: version.revision,
+      editableRoles: V2_EDITABLE_ROLES,
+      templates: templates.rows,
+      rules: rules.rows,
+      enforced: false,
+    };
+  });
+}
+
+/** A user's overrides together with the policy revision they belong to, from one snapshot. */
+export async function readV2UserPolicy(companyId: number, userId: string) {
+  return withV2Snapshot(async (client) => {
+    const policy = await readRevisionWith(client, companyId);
+    const rules = await readOverridesWith(client, companyId, userId);
+    return { policy, rules };
+  });
 }
 
 /**
@@ -152,14 +188,18 @@ export async function readV2CompanyMembers(companyId: number) {
   return result.rows;
 }
 
-export async function readV2Overrides(companyId: number, userId: string) {
-  const result = await pool.query(
+async function readOverridesWith(db: V2Queryable, companyId: number, userId: string) {
+  const result = await db.query(
     `SELECT resource_key AS "resource", action_key AS "action", decision
        FROM access_user_overrides
       WHERE company_id=$1 AND user_id=$2 ORDER BY resource_key, action_key`,
     [companyId, userId]
   );
   return result.rows;
+}
+
+export async function readV2Overrides(companyId: number, userId: string) {
+  return readOverridesWith(pool, companyId, userId);
 }
 
 export async function assignedCompanyRole(companyId: number, userId: string): Promise<string> {

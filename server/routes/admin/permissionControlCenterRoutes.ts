@@ -22,9 +22,9 @@ import {
   assignedCompanyRole,
   previewV2,
   readV2Audit,
-  readV2Overrides,
   readV2Revision,
   readV2Roles,
+  readV2UserPolicy,
   readV2CompanyMembers,
   saveV2Rules,
 } from "../../services/security/accessControlV2Store";
@@ -159,8 +159,7 @@ export function registerPermissionControlCenterRoutes(app: Express): void {
         companyId: actor.companyId,
         userId,
         role,
-        policy: await readV2Revision(actor.companyId),
-        rules: await readV2Overrides(actor.companyId, userId),
+        ...(await readV2UserPolicy(actor.companyId, userId)),
         enforced: false,
       });
     })
