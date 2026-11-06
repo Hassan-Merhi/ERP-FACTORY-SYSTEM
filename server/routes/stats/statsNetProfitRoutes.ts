@@ -54,7 +54,10 @@ export function registerStatsNetProfitRoutes(app: Express) {
       // Monthly SP display uses the business day rather than the Render server's
       // UTC midnight. GC operates in Lebanon unless a company timezone is set.
       const localDateParts = new Intl.DateTimeFormat("en-US", {
-        timeZone: "Asia/Beirut", year: "numeric", month: "2-digit", day: "2-digit",
+        timeZone: "Asia/Beirut",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
       }).formatToParts(new Date());
       const localPart = (key: string) => localDateParts.find((part) => part.type === key)?.value || "";
       const businessToday = `${localPart("year")}-${localPart("month")}-${localPart("day")}`;
@@ -135,8 +138,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
                 a.subType === "sp_payable"
             )
           : companyAccounts.filter((a) => a.subType !== "sp_stock" && a.subType !== "sp_cost_clearing")
-      ).filter((a) => !parties.customerLedgerIds.has(a.id) &&
-        !isExcludedFromCompany12ManagementReports(companyId, a));
+      ).filter((a) => !parties.customerLedgerIds.has(a.id) && !isExcludedFromCompany12ManagementReports(companyId, a));
       // Perpetual inventory (wave 8.5): from the cut-over the ledger carries the stock.
       const ledgerStock = !isSupplierPartner && (await ledgerCarriesStock(companyId, toDate));
       const classified = classifyNetPositionAccounts(accountsForClassify, accountBalances, {
