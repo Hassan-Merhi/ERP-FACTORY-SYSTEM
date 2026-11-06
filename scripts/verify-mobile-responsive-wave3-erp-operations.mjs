@@ -52,10 +52,11 @@ expectTokens("client/src/pages/containers/ContainerFilters.tsx", [
 ]);
 
 expectTokens("client/src/pages/transactionjournal/components/JournalFilters.tsx", [
+  // Filters are full width on phones and fixed width from sm up (restyled in #2973).
   'className="w-full min-w-0 space-y-1.5 sm:w-auto"',
-  'className="h-9 w-full rounded-lg border-slate-200 bg-white/85 shadow-sm dark:border-white/15 dark:bg-white/[0.04] sm:w-[150px]"',
-  'className="h-9 w-full rounded-lg border-slate-200 bg-white/85 shadow-sm dark:border-white/15 dark:bg-white/[0.04] sm:w-[112px]"',
-  'className="h-9 w-full rounded-lg border-slate-200 bg-white/85 shadow-sm dark:border-white/15 dark:bg-white/[0.04] sm:w-[138px]"',
+  "w-full rounded-lg border-slate-200 bg-white/85 shadow-sm dark:border-white/15 dark:bg-white/[0.04] sm:w-[150px]",
+  "w-full rounded-lg border-slate-200 bg-white/85 shadow-sm dark:border-white/15 dark:bg-white/[0.04] sm:w-[112px]",
+  "w-full rounded-lg border-slate-200 bg-white/85 shadow-sm dark:border-white/15 dark:bg-white/[0.04] sm:w-[138px]",
   'className="flex flex-col gap-2 sm:flex-row"',
 ]);
 

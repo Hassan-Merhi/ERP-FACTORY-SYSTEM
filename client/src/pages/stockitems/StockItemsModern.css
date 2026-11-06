@@ -469,21 +469,19 @@
     grid-template-columns: 1fr;
   }
 }
-/* Phones and touch screens keep 44px touch targets on the Stock tabs. */
-@media (max-width: 767px), (pointer: coarse) {
-  .stock-hub-tabs .stock-hub-tab {
-    min-height: 44px;
-  }
-}
 @media (prefers-reduced-motion: reduce) {
   .stock-hub-tabs .stock-hub-tab {
     transition: none;
   }
-}
-/* Phones and touch screens keep 44px touch targets in the Stock Items filters. */
+} /* Phones and touch screens keep the 44px touch target the mobile checks require. */
 @media (max-width: 767px), (pointer: coarse) {
+  .stock-hub-tabs .stock-hub-tab,
   .stock-items-search-input,
   .stock-items-select {
     min-height: 44px !important;
+  }
+  .stock-items-layout-switch button {
+    width: 44px;
+    height: 44px;
   }
 }

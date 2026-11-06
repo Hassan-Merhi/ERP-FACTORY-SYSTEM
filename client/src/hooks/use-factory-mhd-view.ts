@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useOptionalCompany } from "@/contexts/CompanyContext";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
@@ -37,18 +37,10 @@ export function useFactoryMhdView() {
   });
   const mode: FactoryProductViewMode = prefs?.factoryMhdViewDefault ? "mhd" : "standard";
   const lookup = useMemo(() => factoryMhdLookup(data?.rows ?? []), [data?.rows]);
-  // Stable while the view mode and published mapping are unchanged, so callers
-  // can list them as hook dependencies without recomputing on every render.
-  const nameFor = useCallback(
-    (articleCode: string | null | undefined, originalName: string): string =>
-      factoryMhdName(mode, lookup, articleCode, originalName),
-    [mode, lookup]
-  );
-  const sortRows = useCallback(
-    <T>(rows: readonly T[], articleCode: (row: T) => string | null | undefined): T[] =>
-      sortFactoryMhdRows(mode, lookup, rows, articleCode),
-    [mode, lookup]
-  );
+  const nameFor = (articleCode: string | null | undefined, originalName: string): string =>
+    factoryMhdName(mode, lookup, articleCode, originalName);
+  const sortRows = <T>(rows: readonly T[], articleCode: (row: T) => string | null | undefined): T[] =>
+    sortFactoryMhdRows(mode, lookup, rows, articleCode);
 
   const setMode = async (next: FactoryProductViewMode) => {
     if (saving || next === mode) return;
@@ -72,14 +64,22 @@ export function useFactoryMhdView() {
       setSaving(false);
     }
   };
-  return {
-    mode,
-    setMode,
-    saving,
-    isLoading,
-    nameFor,
-    sortRows,
-    hasMhdView: lookup.size > 0,
-    revision: data?.revision ?? 0,
-  };
+  const revision = data?.revision ?? 0;
+  // One stable object per (mode, names, save state), so callers can list `mhd`
+  // as a memo dependency without recomputing on every render.
+  return useMemo(
+    () => ({
+      mode,
+      setMode,
+      saving,
+      isLoading,
+      nameFor,
+      sortRows,
+      hasMhdView: lookup.size > 0,
+      revision,
+    }),
+    // nameFor, sortRows and setMode only close over mode, lookup and saving.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mode, lookup, saving, isLoading, revision]
+  );
 }

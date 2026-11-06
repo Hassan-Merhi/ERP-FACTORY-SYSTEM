@@ -190,3 +190,42 @@ html.light .christmas-login-greeting-subtitle {
     display: none !important;
   }
 }
+
+/* A browser can block autoplay after login. Only this small explicit
+   playback control can receive clicks; the rest stays input-transparent. */
+.christmas-login-play-button {
+  position: absolute;
+  left: 50%;
+  bottom: max(30px, calc(env(safe-area-inset-bottom) + 24px));
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: calc(100vw - 32px);
+  padding: 12px 18px;
+  border: 1px solid rgb(232 196 119 / 0.7);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgb(32 85 65 / 0.95), rgb(37 68 64 / 0.96));
+  color: #fff6db;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow: 0 9px 32px rgb(10 33 25 / 0.22);
+  transform: translateX(-50%);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.christmas-login-play-button:hover { background: #31765c; }
+.christmas-login-play-button:focus-visible {
+  outline: 3px solid #f2c56e;
+  outline-offset: 3px;
+}
+html.light .christmas-login-play-button {
+  background: rgb(247 255 249 / 0.98);
+  color: #205c42;
+  border-color: rgb(66 137 89 / 0.5);
+}
+
+@media print {
+  .christmas-login-play-button { display: none !important; }
+}

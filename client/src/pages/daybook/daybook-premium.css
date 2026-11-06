@@ -220,6 +220,14 @@
     border-color 0.15s ease,
     box-shadow 0.15s ease;
 }
+/* Phones and touch screens keep the 44px touch target the mobile checks require. */
+@media (max-width: 767px), (pointer: coarse) {
+  .daybook-filter-panel input,
+  .daybook-filter-panel [role="combobox"],
+  .daybook-filter-panel [data-testid="period-filter"] button {
+    min-height: 44px;
+  }
+}
 .daybook-filter-panel input:focus-visible,
 .daybook-filter-panel [role="combobox"]:focus-visible,
 .daybook-filter-panel button:focus-visible {
@@ -361,13 +369,5 @@
   }
   .daybook-kpi:hover {
     transform: none;
-  }
-}
-/* Phones and touch screens keep 44px touch targets in the Daybook filters. */
-@media (max-width: 767px), (pointer: coarse) {
-  .daybook-filter-panel input,
-  .daybook-filter-panel [role="combobox"],
-  .daybook-filter-panel [data-testid="period-filter"] button {
-    min-height: 44px;
   }
 }
