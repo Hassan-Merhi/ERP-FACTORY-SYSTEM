@@ -50,7 +50,7 @@ function ProductColorPills({
     <div
       className="inline-flex flex-wrap items-center gap-1.5"
       role="group"
-      aria-label={`Label design color for ${mhd.nameFor(product.articleCode, product.name)}`}
+      aria-label={`Label design color for ${product.name}`}
       data-testid={`product-color-pills-${product.id}`}
     >
       <button
@@ -427,7 +427,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
                           <TableCell className="font-mono text-muted-foreground text-sm pl-8">
                             {product.articleCode || "-"}
                           </TableCell>
-                          <TableCell className="text-sm">{product.name}</TableCell>
+                          <TableCell className="text-sm">{mhd.nameFor(product.articleCode, product.name)}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {product.categoryId ? categoryMap.get(product.categoryId) || "-" : "-"}
                           </TableCell>
@@ -529,7 +529,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
                   <TableCell className="font-mono font-semibold text-slate-800 dark:text-slate-100">{product.articleCode || "-"}</TableCell>
                   <TableCell className="font-medium">
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                      <span>{product.name}</span>
+                      <span>{mhd.nameFor(product.articleCode, product.name)}</span>
                       <ProductColorPills
                         product={product}
                         designColors={designColors}
