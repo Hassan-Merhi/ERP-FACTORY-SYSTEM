@@ -5,7 +5,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
  * Extracted from PropertyRentalPage.tsx during the Phase 4 god-file split.
  */
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import { DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { CalendarDays } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CURRENCIES, billingDayLabel } from "../utils";
 import { useApiBase } from "../shared";
 
@@ -44,9 +45,23 @@ export function StartContractForm({
     currency: defaultCurrency,
   });
   const [isInternal, setIsInternal] = useState(false);
+  const [linkedCompanyId, setLinkedCompanyId] = useState<number | null>(null);
+
+  const { data: allCompanies = [] } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ["/api/companies"],
+    queryFn: async () => {
+      const res = await fetch("/api/companies", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load companies");
+      return res.json();
+    },
+    enabled: unitType === "SHOP" && apiBase === "/api/factory/rental",
+  });
 
   const start = useMutation({
-    mutationFn: () => apiRequest("POST", apiBase + "/contracts", { ...form, unitId, isInternal }),
+    mutationFn: () => apiRequest("POST", apiBase + "/contracts", {
+      ...form, unitId, isInternal,
+      ...(unitType === "SHOP" && apiBase === "/api/factory/rental" && isInternal ? { linkedCompanyId } : {}),
+    }),
     onSuccess: () => {
       toast({ title: "Contract started" });
       queryClient.invalidateQueries({ queryKey: [apiBase + "/units"] });
@@ -135,7 +150,7 @@ export function StartContractForm({
             data-testid={`input-${testIdPrefix}-contract-notes`}
           />
         </div>
-        {unitType === "WAREHOUSE" && (
+        {(unitType === "WAREHOUSE" || (unitType === "SHOP" && apiBase === "/api/factory/rental")) && (
           <div className="sm:col-span-2 flex items-center gap-3 rounded-md border p-3 bg-violet-50 dark:bg-violet-950/20">
             <Switch
               id={`switch-${testIdPrefix}-internal`}
@@ -148,9 +163,32 @@ export function StartContractForm({
                 Internal Lease
               </Label>
               <p className="text-xs text-muted-foreground mt-0.5">
-                This warehouse is occupied by your own company. It will also appear in Shops Rented for tracking.
+                {unitType === "SHOP"
+                  ? "Show this Factory shop in Properties Rentals as a read-only internal lease; Factory remains the accounting source."
+                  : "This warehouse is occupied by your own company. It will also appear in Shops Rented for tracking."}
               </p>
             </div>
+          </div>
+        )}
+        {unitType === "SHOP" && apiBase === "/api/factory/rental" && isInternal && (
+          <div className="sm:col-span-2 space-y-2 rounded-md border p-3">
+            <Label>Properties company (optional)</Label>
+            <p className="text-xs text-muted-foreground">
+              Leave empty to show this lease in Properties for the same company.
+              Choose a destination company only if Properties is managed under a different company.
+            </p>
+            <Select value={linkedCompanyId === null ? "none" : String(linkedCompanyId)}
+              onValueChange={(value) => setLinkedCompanyId(value === "none" ? null : Number(value))}>
+              <SelectTrigger data-testid={`select-${testIdPrefix}-internal-target`}>
+                <SelectValue placeholder="Same company" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Same company</SelectItem>
+                {allCompanies.map((company) => (
+                  <SelectItem key={company.id} value={String(company.id)}>{company.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
       </div>
