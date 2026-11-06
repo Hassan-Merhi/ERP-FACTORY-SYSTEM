@@ -45,6 +45,7 @@ const mockCompany = {
   selectCompany: vi.fn(),
 };
 vi.mock("@/contexts/CompanyContext", () => ({
+  useOptionalCompany: () => null,
   useCompany: () => mockCompany,
   CompanyProvider: ({ children }: any) => <>{children}</>,
 }));
