@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Copy, Scale } from "lucide-react";
@@ -10,6 +10,17 @@ import {
   HISTORICAL_RENT_CUTOFF_LABEL,
   belongsToHistoricalRentSnapshot,
 } from "../historicalRentSnapshot";
+
+export type ReconciliationSnapshot = {
+  companyId: number | undefined;
+  loading: boolean;
+  verified: boolean;
+  accountSum: number | null;
+  recorded: number;
+  netAdjustment: number | null;
+  reconciled: number | null;
+  difference: number | null;
+};
 
 export type ReconciliationPayment = ReceiptRow & {
   id: number;
@@ -60,11 +71,13 @@ export function PaymentsReconciliation({
   companyId,
   isLoading,
   isError = false,
+  onReconciliationChange,
 }: {
   payments: ReconciliationPayment[];
   companyId: number | undefined;
   isLoading: boolean;
   isError?: boolean;
+  onReconciliationChange?: (snapshot: ReconciliationSnapshot) => void;
 }) {
   const [showDetails, setShowDetails] = useState(false);
   const { toast } = useToast();
@@ -157,6 +170,19 @@ export function PaymentsReconciliation({
   const unavailable = isError || accountsError || withdrawalError || depositsError || aliError ||
     withdrawalMatches.length !== 1 || depositsMatches.length !== 1 || aliMatches.length !== 1;
   const verified = !loading && !unavailable && !sums.mixedCurrency && difference === 0;
+  useEffect(() => {
+    onReconciliationChange?.({
+      companyId,
+      loading: loading || unavailable || sums.mixedCurrency,
+      verified,
+      accountSum,
+      recorded: sums.recorded,
+      netAdjustment: bridge.netAdjustment,
+      reconciled: bridge.reconciledTotal,
+      difference,
+    });
+  }, [onReconciliationChange, companyId, loading, unavailable, sums.mixedCurrency, sums.recorded,
+    verified, accountSum, bridge.netAdjustment, bridge.reconciledTotal, difference]);
   const canCopy = !loading && !unavailable && !sums.mixedCurrency && accountSum !== null && ali != null;
   const copyReconciledHistory = async () => {
     if (!canCopy || !ali || accountSum === null) return;
