@@ -95,14 +95,6 @@ export function UserAccessOverrides() {
     `${resource} ${readableResource(resource)}`.toLowerCase().includes(filter.toLowerCase()));
   const canSave = !locked && changes.length > 0 && changes.length <= MAX_BATCH &&
     reason.trim().length >= 10 && reason.trim().length <= 500;
-  const update = useMutation({
-    mutationFn: async (payload: { expectedRevision: number; changes: RoleChange; reason: string }) => {
-      const response = await apiRequest("PUT", "/api/permissions-v2/user-overrides", {
-        userId, expectedRevision: payload.expectedRevision, reason: payload.reason, changes: [payload.changes],
-      });
-      return response.json() as Promise<{ revision: number; applied: number }>;
-    },
-  });
   const batch = useMutation({
     mutationFn: async (payload: { expectedRevision: number; changes: RoleChange[]; reason: string }) => {
       const response = await apiRequest("PUT", "/api/permissions-v2/user-overrides", { userId, ...payload });
