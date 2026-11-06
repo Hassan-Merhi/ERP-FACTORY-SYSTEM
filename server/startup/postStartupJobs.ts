@@ -17,6 +17,27 @@ export function runPostStartupJobs(): void {
   if (installed) return;
   installed = true;
 
+  // Owner-requested HADI L'SHI ERP rent expense consolidation. Never rewrites
+  // historical vouchers: moves the source opening to the survivor and retires
+  // its zero-net historical master. Disabled unless the exact scoped opt-in is
+  // set; transaction refuses if source ledger or opening balance has drifted.
+  if (
+    process.env.ERP_MERGE_HADI_ERP_RENT_EXPENSE_20261106 ===
+    "approved-company1-rent1007-archive881-3500opening"
+  ) {
+    const mergeHadiRentTimer = setTimeout(async () => {
+      try {
+        const { runApprovedHadiRentExpenseConsolidation } = await import("./runApprovedHadiRentExpenseConsolidation");
+        await runApprovedHadiRentExpenseConsolidation();
+      } catch (error: unknown) {
+        logger.error("[HadiRentExpenseConsolidation] Refused; no partial accounting mutation", {
+          error: getErrorMessage(error),
+        });
+      }
+    }, 3000);
+    unrefTimer(mergeHadiRentTimer);
+  }
+
   // Owner-authorized HADI L'SHI shop prepaid rent *opening* reclassification.
   // No journals/vouchers. Balances are changed only if exact live evidence still
   // matches the reviewed November snapshot and the opposite opening stays
