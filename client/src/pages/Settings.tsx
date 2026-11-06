@@ -118,7 +118,7 @@ export default function Settings() {
 
   const canManageCompanyTimezone = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
   const canManageSessions = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
-  const canManageChristmasMode = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
+  const canManageChristmasMode = currentUser?.role === "Developer";
 
   const sidebarGroups = [
     {
@@ -126,7 +126,7 @@ export default function Settings() {
       items: [
         { key: "companies", label: "Companies", icon: Building2 },
         { key: "floating-widgets", label: "Floating Widgets", icon: LayoutPanelLeft },
-        { key: "appearance-seasonal", label: "Appearance & Seasonal", icon: Snowflake },
+        { key: "appearance-seasonal", label: "Appearance & Seasonal", icon: Snowflake, devOnly: true },
         { key: "preferences", label: "Preferences", icon: Settings2, devOnly: true },
       ],
     },
@@ -257,8 +257,8 @@ export default function Settings() {
 
         <div className="flex-1 sm:overflow-y-auto py-3 sm:p-6">
           {activeSection === "companies" && <CompaniesTab />}
-          {activeSection === "appearance-seasonal" && (
-            <ChristmasModeSettingsCard canManage={canManageChristmasMode} />
+          {activeSection === "appearance-seasonal" && canManageChristmasMode && (
+            <ChristmasModeSettingsCard />
           )}
           {activeSection === "floating-widgets" && (
             <div className="space-y-5 max-w-2xl">
