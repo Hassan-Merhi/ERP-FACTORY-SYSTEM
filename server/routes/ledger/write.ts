@@ -66,10 +66,10 @@ export const SYSTEM_ACCOUNT_CODE_RESERVED_CODE = "SYSTEM_ACCOUNT_CODE_RESERVED" 
 export const SYSTEM_ACCOUNT_CODE_RESERVED_MESSAGE =
   "The system finds an account by this code, so an account cannot be re-coded to it or away from it.";
 
-// Phase 19 (B), C6: the accounts the system resolves by code (registry, RETAIL-*,
-// literal look-ups) keep their code and their name.
-export const SYSTEM_ACCOUNT_RENAME_REFUSED_CODE = "SYSTEM_ACCOUNT_RENAME_REFUSED" as const;
-export const SYSTEM_ACCOUNT_RENAME_REFUSED_MESSAGE = "This is a system account: its name cannot be changed.";
+// System account names are editable by privileged users; their identity is the
+// immutable code, so posting and historical ledger references remain stable.
+export const SYSTEM_ACCOUNT_RENAME_FORBIDDEN_CODE = "SYSTEM_ACCOUNT_RENAME_FORBIDDEN" as const;
+export const SYSTEM_ACCOUNT_RENAME_FORBIDDEN_MESSAGE = "Only an Admin, Owner or Developer can rename a system account.";
 // Phase 19 (B), C5: the tree guard (ledgerIntegrityGuard.ts) refuses the link.
 export const LEDGER_ACCOUNT_PARENT_INVALID_CODE = "LEDGER_ACCOUNT_PARENT_INVALID" as const;
 export const LEDGER_ACCOUNT_PARENT_INVALID_MESSAGE =
@@ -267,14 +267,18 @@ export function registerLedgerAccountWriteRoutes(app: Express) {
           .json({ message: SYSTEM_ACCOUNT_CODE_RESERVED_MESSAGE, code: SYSTEM_ACCOUNT_CODE_RESERVED_CODE });
       }
 
-      // Phase 19 (B), C6: a system account keeps its name (the close, the
-      // registry and the name-based readers depend on it); a rename must not
-      // take another live account's name.
+      // The account code (not the display name) is the stable accounting identity.
+      // Permit an audited system-account rename for privileged roles while still
+      // refusing duplicate names within the company.
       if (parsed.name !== undefined && parsed.name.trim() !== existingAccount.name.trim()) {
-        if (isSystemResolvedAccountCode(existingAccount.code)) {
-          return res
-            .status(409)
-            .json({ message: SYSTEM_ACCOUNT_RENAME_REFUSED_MESSAGE, code: SYSTEM_ACCOUNT_RENAME_REFUSED_CODE });
+        if (
+          isSystemResolvedAccountCode(existingAccount.code) &&
+          !ACCOUNT_HISTORY_EDIT_ROLES.has(String(requestRole(req) ?? ""))
+        ) {
+          return res.status(403).json({
+            message: SYSTEM_ACCOUNT_RENAME_FORBIDDEN_MESSAGE,
+            code: SYSTEM_ACCOUNT_RENAME_FORBIDDEN_CODE,
+          });
         }
         const sameName = await storage.getLedgerAccountByName(parsed.name, req.session.currentCompanyId!);
         if (sameName && sameName.id !== accountId) {
