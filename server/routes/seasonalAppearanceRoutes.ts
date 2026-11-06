@@ -16,10 +16,12 @@ import {
 } from "../services/seasonalChristmasAccessPolicy";
 
 const enabledSchema = z.object({ enabled: z.boolean() }).strict();
-const configSchema = z.object({
-  enabled: z.boolean(),
-  userIds: z.array(z.string().trim().min(1).max(128)).max(5000),
-}).strict();
+const configSchema = z
+  .object({
+    enabled: z.boolean(),
+    userIds: z.array(z.string().trim().min(1).max(128)).max(5000),
+  })
+  .strict();
 
 async function loadChristmasConfig() {
   const rows = await db
@@ -48,7 +50,7 @@ export function registerSeasonalAppearanceRoutes(app: Express): void {
         enabled: christmasModeEnabledForUser(
           config.masterValue,
           config.allowedRaw,
-          req.user?.id ?? req.session.userId ?? null,
+          req.user?.id ?? req.session.userId ?? null
         ),
       });
     } catch {
@@ -58,107 +60,92 @@ export function registerSeasonalAppearanceRoutes(app: Express): void {
 
   // Developer-only configuration, including the active-user directory. No
   // passwords, sensitive profiles, company membership or permission data.
-  app.get(
-    "/api/seasonal/christmas-mode/config",
-    requireAuth,
-    requireRole("Developer"),
-    async (_req, res) => {
-      try {
-        const [config, activeUsers] = await Promise.all([
-          loadChristmasConfig(),
-          db
-            .select({ id: users.id, username: users.username })
-            .from(users)
-            .where(eq(users.active, true))
-            .orderBy(asc(users.username)),
-        ]);
-        const allowedActiveIds = new Set(activeUsers.map((user) => user.id));
-        res.setHeader("Cache-Control", "no-store");
-        return res.json({
-          enabled: config.masterEnabled,
-          userIds: config.userIds.filter((id) => allowedActiveIds.has(id)),
-          users: activeUsers,
-        });
-      } catch {
-        return res.status(500).json({ message: "Unable to load Christmas Mode configuration" });
-      }
-    },
-  );
+  app.get("/api/seasonal/christmas-mode/config", requireAuth, requireRole("Developer"), async (_req, res) => {
+    try {
+      const [config, activeUsers] = await Promise.all([
+        loadChristmasConfig(),
+        db
+          .select({ id: users.id, username: users.username })
+          .from(users)
+          .where(eq(users.active, true))
+          .orderBy(asc(users.username)),
+      ]);
+      const allowedActiveIds = new Set(activeUsers.map((user) => user.id));
+      res.setHeader("Cache-Control", "no-store");
+      return res.json({
+        enabled: config.masterEnabled,
+        userIds: config.userIds.filter((id) => allowedActiveIds.has(id)),
+        users: activeUsers,
+      });
+    } catch {
+      return res.status(500).json({ message: "Unable to load Christmas Mode configuration" });
+    }
+  });
 
   // Atomically save master status and explicit user allowlist. A user must
   // exist and be active to receive access. No new users are enabled by default.
-  app.put(
-    "/api/seasonal/christmas-mode/config",
-    requireAuth,
-    requireRole("Developer"),
-    async (req, res) => {
-      const parsed = configSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res.status(400).json({ message: "enabled must be a boolean and userIds must be an array of user IDs" });
-      }
-      const { enabled } = parsed.data;
-      const userIds = [...new Set(parsed.data.userIds)];
-      try {
-        if (userIds.length > 0) {
-          const activeMatches = await db
-            .select({ id: users.id })
-            .from(users)
-            .where(and(eq(users.active, true), inArray(users.id, userIds)));
-          if (activeMatches.length !== userIds.length) {
-            return res.status(400).json({ message: "One or more selected users are missing or inactive" });
-          }
+  app.put("/api/seasonal/christmas-mode/config", requireAuth, requireRole("Developer"), async (req, res) => {
+    const parsed = configSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "enabled must be a boolean and userIds must be an array of user IDs" });
+    }
+    const { enabled } = parsed.data;
+    const userIds = [...new Set(parsed.data.userIds)];
+    try {
+      if (userIds.length > 0) {
+        const activeMatches = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(and(eq(users.active, true), inArray(users.id, userIds)));
+        if (activeMatches.length !== userIds.length) {
+          return res.status(400).json({ message: "One or more selected users are missing or inactive" });
         }
-
-        await db.transaction(async (tx) => {
-          await tx
-            .insert(systemSettings)
-            .values({ key: CHRISTMAS_MASTER_KEY, value: String(enabled) })
-            .onConflictDoUpdate({
-              target: systemSettings.key,
-              set: { value: String(enabled), updatedAt: new Date() },
-            });
-          await tx
-            .insert(systemSettings)
-            .values({ key: CHRISTMAS_ALLOWED_USERS_KEY, value: JSON.stringify(userIds) })
-            .onConflictDoUpdate({
-              target: systemSettings.key,
-              set: { value: JSON.stringify(userIds), updatedAt: new Date() },
-            });
-        });
-        res.setHeader("Cache-Control", "no-store");
-        return res.json({ enabled, userIds });
-      } catch {
-        return res.status(500).json({ message: "Unable to save Christmas Mode configuration" });
       }
-    },
-  );
 
-  // Backward-compatible Phase 1 endpoint: Developer only. This changes the
-  // master flag, never individual access or the allowlist. The new Settings UI
-  // uses /config to save both values as one operation.
-  app.put(
-    "/api/seasonal/christmas-mode",
-    requireAuth,
-    requireRole("Developer"),
-    async (req, res) => {
-      const parsed = enabledSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res.status(400).json({ message: "enabled must be a boolean" });
-      }
-      try {
-        const enabled = parsed.data.enabled;
-        await db
+      await db.transaction(async (tx) => {
+        await tx
           .insert(systemSettings)
           .values({ key: CHRISTMAS_MASTER_KEY, value: String(enabled) })
           .onConflictDoUpdate({
             target: systemSettings.key,
             set: { value: String(enabled), updatedAt: new Date() },
           });
-        res.setHeader("Cache-Control", "no-store");
-        return res.json({ enabled });
-      } catch {
-        return res.status(500).json({ message: "Unable to save Christmas Mode setting" });
-      }
-    },
-  );
+        await tx
+          .insert(systemSettings)
+          .values({ key: CHRISTMAS_ALLOWED_USERS_KEY, value: JSON.stringify(userIds) })
+          .onConflictDoUpdate({
+            target: systemSettings.key,
+            set: { value: JSON.stringify(userIds), updatedAt: new Date() },
+          });
+      });
+      res.setHeader("Cache-Control", "no-store");
+      return res.json({ enabled, userIds });
+    } catch {
+      return res.status(500).json({ message: "Unable to save Christmas Mode configuration" });
+    }
+  });
+
+  // Backward-compatible Phase 1 endpoint: Developer only. This changes the
+  // master flag, never individual access or the allowlist. The new Settings UI
+  // uses /config to save both values as one operation.
+  app.put("/api/seasonal/christmas-mode", requireAuth, requireRole("Developer"), async (req, res) => {
+    const parsed = enabledSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "enabled must be a boolean" });
+    }
+    try {
+      const enabled = parsed.data.enabled;
+      await db
+        .insert(systemSettings)
+        .values({ key: CHRISTMAS_MASTER_KEY, value: String(enabled) })
+        .onConflictDoUpdate({
+          target: systemSettings.key,
+          set: { value: String(enabled), updatedAt: new Date() },
+        });
+      res.setHeader("Cache-Control", "no-store");
+      return res.json({ enabled });
+    } catch {
+      return res.status(500).json({ message: "Unable to save Christmas Mode setting" });
+    }
+  });
 }

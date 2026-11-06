@@ -24,7 +24,7 @@ export function parseChristmasAllowedUserIds(raw: string | null | undefined): st
 export function christmasModeEnabledForUser(
   masterValue: string | null | undefined,
   allowedIdsRaw: string | null | undefined,
-  userId: string | null | undefined,
+  userId: string | null | undefined
 ): boolean {
   if (masterValue !== "true" || !userId) return false;
   return parseChristmasAllowedUserIds(allowedIdsRaw).includes(userId);

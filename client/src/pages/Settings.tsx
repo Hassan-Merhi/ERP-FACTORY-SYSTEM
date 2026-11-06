@@ -172,7 +172,13 @@ export default function Settings() {
         appMode === "factory"
           ? [
               { key: "automatic-priority-printing", label: "Automatic Priority Printing", icon: Printer },
-              { key: "label-banner-images", label: "Label Banner Images", icon: Images, href: "/factory/label-banners", adminOnly: true },
+              {
+                key: "label-banner-images",
+                label: "Label Banner Images",
+                icon: Images,
+                href: "/factory/label-banners",
+                adminOnly: true,
+              },
               { key: "fx-rates", label: "FX Rates", icon: TrendingUp },
               ...(canManageCompanyTimezone
                 ? [{ key: "company-timezone", label: "Company Timezone", icon: Clock }]
@@ -187,7 +193,9 @@ export default function Settings() {
   ];
 
   const allowedItems = (items: SettingsSidebarItem[]) =>
-    items.filter((item) => (!item.devOnly || currentUser?.role === "Developer") && (!item.adminOnly || canManageSessions));
+    items.filter(
+      (item) => (!item.devOnly || currentUser?.role === "Developer") && (!item.adminOnly || canManageSessions)
+    );
   const canManageTrackingDefaults = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
 
   const openSection = (key: string) => {
@@ -257,9 +265,7 @@ export default function Settings() {
 
         <div className="flex-1 sm:overflow-y-auto py-3 sm:p-6">
           {activeSection === "companies" && <CompaniesTab />}
-          {activeSection === "appearance-seasonal" && canManageChristmasMode && (
-            <ChristmasModeSettingsCard />
-          )}
+          {activeSection === "appearance-seasonal" && canManageChristmasMode && <ChristmasModeSettingsCard />}
           {activeSection === "floating-widgets" && (
             <div className="space-y-5 max-w-2xl">
               <div>
