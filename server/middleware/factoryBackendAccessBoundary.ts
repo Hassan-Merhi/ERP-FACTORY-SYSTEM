@@ -338,7 +338,7 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   // MHD product aliases are display-only; reads are available only to Factory
   // users authorized on at least one product-bearing page. Writes require Settings.
   if (path === "/mhd-view") {
-    if (isWrite(req)) return requirement("factory/settings");
+    if (isWrite(req)) return requirement("factory/intelligence/mhd-view");
     return anyOf(
       requirement("factory/stock-allocation-v5"),
       requirement("factory/bales-hub"),
@@ -349,7 +349,8 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
       requirement("factory/stock-bale-list"),
       requirement("factory/bale-tracking"),
       requirement("factory/invoicing"),
-      requirement("factory/settings")
+      requirement("factory/settings"),
+      requirement("factory/intelligence/mhd-view")
     );
   }
 
