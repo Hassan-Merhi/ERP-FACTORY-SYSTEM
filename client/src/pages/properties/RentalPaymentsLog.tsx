@@ -17,6 +17,8 @@ import { useAppMode } from "@/contexts/AppModeContext";
 import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 import { AlertTriangle, ClipboardList, Copy, Trash2 } from "lucide-react";
 import { format } from "date-fns";
+import { PropertiesPaymentsPremium, type PaymentsPeriod } from "./property-rental/components/PropertiesPaymentsPremium";
+import "./property-rental/propertiesPaymentsPremium.css";
 import {
   PaymentsReconciliation,
   type ReconciliationSnapshot,
@@ -45,7 +47,7 @@ const RECONCILIATION_VIEWS = [
   { key: "ALL", label: "All records" },
 ] as const;
 type ReconciliationView = (typeof RECONCILIATION_VIEWS)[number]["key"];
-type PaymentRow = {
+export type PaymentRow = {
   id: number;
   paymentDate: string;
   amount: string;
@@ -88,6 +90,9 @@ export default function RentalPaymentsLog({
   // Phones restack the payments table as cards in every mode.
   const { tableProps: cardTableProps } = useMobileCardTable();
   const [search, setSearch] = useState("");
+  const [period, setPeriod] = useState<PaymentsPeriod>("all");
+  const [selectedUnit, setSelectedUnit] = useState("all");
+  const [selectedTenant, setSelectedTenant] = useState("all");
   const [deleteTarget, setDeleteTarget] = useState<PaymentRow | null>(null);
   const [reconciliationView, setReconciliationView] = useState<ReconciliationView>("HISTORICAL_RENT");
   const [reconciliation, setReconciliation] = useState<ReconciliationSnapshot | null>(null);
@@ -97,11 +102,11 @@ export default function RentalPaymentsLog({
   const isHassanProperties = isPropertiesPayments && selectedCompany?.name === HISTORICAL_RENT_COMPANY;
   // In HASSAN PROPERTIES the only visible rental payment history is All Records.
   // Other company/module views retain their existing tabs.
-  // Widened to the full view union: since HASSAN PROPERTIES shows only All
-  // Records, the "HISTORICAL_RENT" branches below are unreachable for now, and
-  // without the widening TypeScript rejects them as impossible comparisons.
+  // Widened to the full view union: Properties payments now show only All
+  // Records, so the "HISTORICAL_RENT" branches below are unreachable for now,
+  // and without the widening TypeScript rejects them as impossible comparisons.
   const effectiveView = (
-    isHassanProperties ? "ALL" : reconciliationView === "HISTORICAL_RENT" ? "ACTIVE_RENT" : reconciliationView
+    isPropertiesPayments ? "ALL" : reconciliationView === "HISTORICAL_RENT" ? "ACTIVE_RENT" : reconciliationView
   ) as ReconciliationView;
   const queryKey = [
     apiBase + "/payments",
@@ -164,17 +169,65 @@ export default function RentalPaymentsLog({
     return payments.filter((p) => p.reconciliationCategory === effectiveView);
   }, [payments, isPropertiesPayments, effectiveView]);
 
+  const unitOptions = useMemo(() => {
+    const uniqueUnits = new Map<string, string>();
+    payments.forEach((payment) => {
+      if (payment.unitId != null && !uniqueUnits.has(String(payment.unitId))) {
+        uniqueUnits.set(
+          String(payment.unitId),
+          [payment.unitNumber, payment.locationGroup].filter(Boolean).join(" — ") || `Unit ${payment.unitId}`
+        );
+      }
+    });
+    return [...uniqueUnits.entries()]
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+  }, [payments]);
+
+  const tenantOptions = useMemo(
+    () =>
+      [...new Set(payments.map((p) => p.tenantName).filter((name): name is string => Boolean(name)))]
+        .sort((a, b) => a.localeCompare(b))
+        .map((value) => ({ value, label: value })),
+    [payments]
+  );
+
   const filtered = useMemo(() => {
-    if (!search.trim()) return viewPayments;
-    return viewPayments.filter((p) =>
-      searchAny(search, p.tenantName, p.unitNumber, p.locationGroup, p.notes, p.sourceModule)
-    );
-  }, [viewPayments, search]);
+    const now = new Date();
+    const since =
+      period === "month"
+        ? new Date(now.getFullYear(), now.getMonth(), 1)
+        : period === "year"
+          ? new Date(now.getFullYear(), 0, 1)
+          : period === "30days"
+            ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29)
+            : null;
+    return viewPayments.filter((p) => {
+      if (
+        search.trim() &&
+        !searchAny(
+          search,
+          p.tenantName,
+          p.unitNumber,
+          p.locationGroup,
+          p.notes,
+          p.sourceModule,
+          String(p.voucherId ?? "")
+        )
+      )
+        return false;
+      if (isPropertiesPayments && selectedUnit !== "all" && String(p.unitId) !== selectedUnit) return false;
+      if (isPropertiesPayments && selectedTenant !== "all" && p.tenantName !== selectedTenant) return false;
+      if (isPropertiesPayments && since && new Date(p.paymentDate).getTime() < since.getTime()) return false;
+      return true;
+    });
+  }, [viewPayments, search, period, selectedUnit, selectedTenant, isPropertiesPayments]);
 
   // Keep recorded billing allocations visible, but do NOT count them as cash.
   // All amounts come from the visible records and are accumulated in cents.
   const paymentTotals = receiptTotals(filtered);
-  const isFullHistory = isHassanProperties && effectiveView === "ALL" && !search.trim();
+  const noFilters = !search.trim() && period === "all" && selectedUnit === "all" && selectedTenant === "all";
+  const isFullHistory = isHassanProperties && effectiveView === "ALL" && noFilters;
   const reconciliationReady =
     isFullHistory &&
     !isLoading &&
@@ -232,6 +285,88 @@ export default function RentalPaymentsLog({
     !warehouseTotalsError &&
     !isLoading &&
     Math.abs(total - activeWarehouseRentPaid) > 0.009;
+
+  if (isPropertiesPayments) {
+    const amountDisplay = paymentsError
+      ? "Unavailable"
+      : isFullHistory
+        ? reconciliationReady && reconciliation?.reconciled != null
+          ? formatMoneyNumber(reconciliation.reconciled / 100)
+          : "Verifying…"
+        : formatMoneyNumber(total);
+    const copyIsFull = noFilters;
+    const copyAllowed =
+      !isLoading && !paymentsError && filtered.length > 0 && clipboardIsUsd && (!isFullHistory || reconciliationReady);
+    return (
+      <div className="space-y-4 sm:p-4" data-testid={`page-${testIdPrefix}-payments-log`}>
+        {isHassanProperties && (
+          <PaymentsReconciliation
+            payments={payments}
+            companyId={selectedCompany?.id}
+            isLoading={isLoading}
+            isError={paymentsError}
+            onReconciliationChange={setReconciliation}
+          />
+        )}
+        <PropertiesPaymentsPremium
+          payments={filtered}
+          totalRecords={payments.length}
+          isLoading={isLoading}
+          isError={paymentsError}
+          search={search}
+          onSearchChange={setSearch}
+          period={period}
+          onPeriodChange={setPeriod}
+          selectedUnit={selectedUnit}
+          onUnitChange={setSelectedUnit}
+          selectedTenant={selectedTenant}
+          onTenantChange={setSelectedTenant}
+          unitOptions={unitOptions}
+          tenantOptions={tenantOptions}
+          totalAmount={amountDisplay}
+          amountLabel={isHassanProperties && !isFullHistory ? "Cash Received" : "Total Amount Recorded"}
+          canCopy={copyAllowed}
+          fullHistory={copyIsFull}
+          onCopy={() => {
+            void (isFullHistory ? copyFullHistory() : copyHistory());
+          }}
+          onDelete={setDeleteTarget}
+        />
+        {!clipboardIsUsd && (
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            Non-USD entries need their booked currency conversion before copying history.
+          </p>
+        )}
+        <ConfirmDialog
+          open={!!deleteTarget}
+          onOpenChange={(open) => {
+            if (!open) setDeleteTarget(null);
+          }}
+          title="Delete this payment?"
+          tone="destructive"
+          confirmText="Yes, Delete Payment"
+          confirmButtonTestId="button-confirm-delete-payment"
+          loading={deleteMutation.isPending}
+          description={
+            deleteTarget ? (
+              <>
+                This will permanently remove the{" "}
+                <strong>
+                  <MoneyAmount amount={deleteTarget.amount} currency={deleteTarget.currency ?? "USD"} />
+                </strong>{" "}
+                payment from <strong>{deleteTarget.tenantName ?? "—"}</strong> ({MONTH_NAMES[deleteTarget.forMonth]}{" "}
+                {deleteTarget.forYear}). The accounting entry and any associated inter-company transfer will be reversed
+                in their respective companies. This cannot be undone.
+              </>
+            ) : undefined
+          }
+          onConfirm={async () => {
+            if (deleteTarget) await deleteMutation.mutateAsync(deleteTarget.id);
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div
