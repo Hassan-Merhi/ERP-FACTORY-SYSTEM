@@ -5,32 +5,19 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { permissionAuditDiff, type AuditRule } from "./permissionAuditDiff";
 
-type Rule = { resource_key?: string; resource?: string; action_key?: string; action?: string; decision?: string };
 type AuditRecord = {
   revision: string | number;
   actorId: string;
   subjectType: "role" | "user";
   subjectKey: string;
-  beforeRules: Rule[];
-  afterRules: Rule[];
+  beforeRules: AuditRule[];
+  afterRules: AuditRule[];
   reason: string;
   createdAt: string;
 };
 type AuditResponse = { companyId: number; records: AuditRecord[] };
-
-function safeRules(rows: Rule[] | null | undefined): Rule[] {
-  return Array.isArray(rows) ? rows : [];
-}
-function diffRows(before: Rule[], after: Rule[]): Array<{ key: string; before: string; after: string }> {
-  const toKey = (rule: Rule) =>
-    `${rule.resource_key ?? rule.resource ?? ""}:${rule.action_key ?? rule.action ?? ""}`;
-  const left = new Map(safeRules(before).map((rule) => [toKey(rule), rule.decision ?? "inherit"]));
-  const right = new Map(safeRules(after).map((rule) => [toKey(rule), rule.decision ?? "inherit"]));
-  return [...new Set([...left.keys(), ...right.keys()])].sort()
-    .filter((key) => (left.get(key) ?? "inherit") !== (right.get(key) ?? "inherit"))
-    .map((key) => ({ key, before: left.get(key) ?? "inherit", after: right.get(key) ?? "inherit" }));
-}
 
 /** Shadow-only audit viewer. Never activates a permission or modifies audit history. */
 export function PermissionChangeAudit() {
@@ -91,7 +78,7 @@ export function PermissionChangeAudit() {
         <div className="max-h-[480px] space-y-2 overflow-y-auto" aria-label="Permission audit records">
           {records.map((record) => {
             const key = `${record.revision}:${record.subjectType}:${record.subjectKey}`;
-            const changes = diffRows(record.beforeRules, record.afterRules);
+            const changes = permissionAuditDiff(record.beforeRules, record.afterRules);
             const open = expanded === key;
             return <div key={key} className="rounded-lg border p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
