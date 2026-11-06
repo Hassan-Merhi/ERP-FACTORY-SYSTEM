@@ -18,11 +18,9 @@ const affectedPaths = [
   "/factory/stock-query",
 ];
 
-export function FactoryMhdViewToggle() {
-  const [location] = useLocation();
+function MhdToggleInner() {
   const mhd = useFactoryMhdView();
   const [error, setError] = useState("");
-  if (!affectedPaths.some((path) => location === path || location.startsWith(path + "/"))) return null;
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border bg-card p-2 text-sm" data-testid="factory-mhd-view-toggle">
       <span className="mr-1 font-medium">Product View</span>
@@ -43,3 +41,4 @@ export function FactoryMhdViewToggle() {
     </div>
   );
 }
+\nexport function FactoryMhdViewToggle() {\n  const [location] = useLocation();\n  if (!affectedPaths.some((path) => location === path || location.startsWith(path + "/"))) return null;\n  return <MhdToggleInner />;\n}\n
