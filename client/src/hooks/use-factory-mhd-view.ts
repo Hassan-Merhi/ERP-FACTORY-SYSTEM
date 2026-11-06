@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useCompany } from "@/contexts/CompanyContext";
+import { useOptionalCompany } from "@/contexts/CompanyContext";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { queryClient } from "@/lib/queryClient";
 
@@ -10,7 +10,7 @@ export type FactoryProductViewMode = "standard" | "mhd";
 const normalize = (code: string | null | undefined) => String(code ?? "").trim().toUpperCase();
 
 export function useFactoryMhdView() {
-  const { selectedCompany } = useCompany();
+  const selectedCompany = useOptionalCompany()?.selectedCompany;
   const { prefs } = useUserPreferences();
   const [saving, setSaving] = useState(false);
   const { data, isLoading } = useQuery<MhdResponse>({
