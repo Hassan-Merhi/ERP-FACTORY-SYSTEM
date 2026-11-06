@@ -28,12 +28,14 @@ import { Input } from "@/components/ui/input";
 import { CreateBaleProductDialog } from "../components/CreateBaleProductDialog";
 import { AdminAuthDialog } from "@/components/AdminAuthDialog";
 import { useBaleProductsModel } from "./baleproducts/useBaleProductsModel";
+import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { BaleProductsDialog1 } from "./baleproducts/components/BaleProductsDialog1";
 import { BaleProductsDialog2 } from "./baleproducts/components/BaleProductsDialog2";
 import { BaleProductsView1 } from "./baleproducts/components/BaleProductsView1";
 
 export default function BaleProducts() {
   const model = useBaleProductsModel();
+  const mhd = useFactoryMhdView();
   const {
     createDialogOpen,
     setCreateDialogOpen,
@@ -210,7 +212,7 @@ export default function BaleProducts() {
             {categories && categories.length > 0 ? (
               <div className="space-y-1">
                 {categories.map((cat) => {
-                  const catProducts = (products ?? []).filter((p) => p.categoryId === cat.id);
+                  const catProducts = mhd.sortRows((products ?? []).filter((p) => p.categoryId === cat.id), (p) => p.articleCode);
                   const isExpanded = expandedCategories.has(cat.id);
                   return (
                     <div key={cat.id} className="rounded-md border overflow-hidden">
@@ -331,7 +333,7 @@ export default function BaleProducts() {
                                       {p.articleCode}
                                     </td>
                                     <td className="px-4 py-1.5 font-medium">
-                                      {p.name}
+                                      {mhd.nameFor(p.articleCode, p.name)}
                                       {p.active === false && (
                                         <Badge variant="outline" className="ml-2 text-xs">
                                           Hidden
