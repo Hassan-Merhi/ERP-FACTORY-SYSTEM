@@ -710,7 +710,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
                     </tr>
                   ) : (
                     <>
-                      {regularProducts.map((prod) => renderProductRow(prod))}
+                      {mhd.sortRows(regularProducts, (prod) => prod.articleCode).map((prod) => renderProductRow(prod))}
                       {regularProducts.length > 0 && (
                         <tr className="inventory-section-total border-t bg-muted/50 h-12 font-bold">
                           {proformaMode && <td></td>}
@@ -825,7 +825,7 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
                       </tr>
                     </thead>
                     <tbody>
-                      {specialProducts.map((prod) => renderProductRow(prod, "-sp"))}
+                      {mhd.sortRows(specialProducts, (prod) => prod.articleCode).map((prod) => renderProductRow(prod, "-sp"))}
                       <tr className="inventory-section-total border-t bg-muted/50 h-12 font-bold">
                         {proformaMode && <td></td>}
                         <td className="px-3" colSpan={col("category") ? 2 : 1}>
