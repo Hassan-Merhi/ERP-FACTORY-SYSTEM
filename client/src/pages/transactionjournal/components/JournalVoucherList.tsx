@@ -247,7 +247,7 @@ function MobileCards({ model }: { model: TransactionJournalModel }) {
               <Fragment key={`${v.entryType || "voucher"}-${v.id}`}>
                 {newCompany && (
                   <div className="border-t border-violet-200 bg-violet-100/80 px-3 py-2 dark:border-violet-400/20 dark:bg-violet-500/15" data-testid={`card-company-group-${v.companyId}`}>
-                    <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-sm ${companyColor(v.companyId)}`}}>
+                    <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-sm ${companyColor(v.companyId)}`}>
                       {v.companyName}
                     </span>
                   </div>
