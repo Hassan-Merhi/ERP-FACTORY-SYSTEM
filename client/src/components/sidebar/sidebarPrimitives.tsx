@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { SidebarHeader, SidebarFooter } from "@/components/ui/sidebar";
 import { useConnectivity } from "@/contexts/ConnectivityContext";
+import { reconcilePinnedOrder } from "./pinnedOrder";
 
 /**
  * A navigation glyph. Every call site passes a lucide-react icon, which is a
@@ -247,12 +248,8 @@ export function usePinnedOrder(storageKey: string, defaults: NavItem[]) {
   const [pinnedOrder, setPinnedOrder] = useState<string[]>(() => {
     try {
       const raw = localStorage.getItem(storageKey);
-      const saved = raw ? (JSON.parse(raw) as string[]) : null;
-      const defaultUrls = defaults.map((i) => i.url);
-      if (saved && defaultUrls.every((u) => saved.includes(u))) {
-        return saved.filter((u) => defaultUrls.includes(u));
-      }
-      return defaultUrls;
+      const saved: unknown = raw ? JSON.parse(raw) : null;
+      return reconcilePinnedOrder(saved, defaults.map((i) => i.url));
     } catch {
       return defaults.map((i) => i.url);
     }
