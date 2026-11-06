@@ -51,13 +51,16 @@ export function receiptTotals(rows: ReceiptRow[]) {
  * The bridge consists only of independently identifiable source facts.
  * Never plug the remainder of an account discrepancy into an invented receipt.
  */
-export function accountBalanceHistoryBridge(rows: ReceiptRow[], aliCashLedgerId: number | null | undefined) {
+export function accountBalanceHistoryBridge(rows: ReceiptRow[], cashLedgerIds: number | readonly number[] | null | undefined) {
   const history = receiptTotals(rows);
-  const cashAndLiabilityOverlap = aliCashLedgerId == null
+  const ledgerIds = cashLedgerIds == null ? null : new Set(
+    (Array.isArray(cashLedgerIds) ? cashLedgerIds : [cashLedgerIds]) as number[]
+  );
+  const cashAndLiabilityOverlap = ledgerIds === null
     ? null
     : rows.filter((row) =>
         row.receiptKind === "GUARANTEE_DEPOSIT" &&
-        row.cashAccountId === aliCashLedgerId &&
+        row.cashAccountId != null && ledgerIds.has(row.cashAccountId) &&
         isCashReceipt(row)
       ).reduce((sum, row) => sum + cents(row.amount), 0);
   const removeNonCashBilling = history.nonCash;
@@ -74,6 +77,7 @@ export function accountBalanceHistoryBridge(rows: ReceiptRow[], aliCashLedgerId:
 
 export type HistoryReconciliationExport = {
   aliCashLedgerId: number;
+  cashboxLedgerId?: number | null;
   threeAccountsTotal: number;
 };
 
@@ -83,7 +87,7 @@ export type HistoryReconciliationExport = {
  * the residual must be zero for the history to be fully reconciled.
  */
 export function reconciledHistoryTsv(rows: ReceiptRow[], snapshot: HistoryReconciliationExport): string {
-  const bridge = accountBalanceHistoryBridge(rows, snapshot.aliCashLedgerId);
+  const bridge = accountBalanceHistoryBridge(rows, [snapshot.aliCashLedgerId, ...(snapshot.cashboxLedgerId == null ? [] : [snapshot.cashboxLedgerId])]);
   const base = paymentHistoryTsv(rows);
   const totals = bridge.history;
   const fmt = (amount: number | null) => amount === null ? "" : (amount / 100).toFixed(2);
@@ -107,11 +111,12 @@ export function reconciledHistoryTsv(rows: ReceiptRow[], snapshot: HistoryReconc
     bridgeLine("RECONCILED HISTORY + ADJUSTMENT",
       "Recorded history plus net reconciliation adjustment",
       bridge.reconciledTotal),
-    bridgeLine("THREE ACCOUNT BALANCES",
-      "HP Rental Withdrawal + Tenant Deposits + ALI KOLWEZI RENT CASH",
+    bridgeLine("TRACKED ACCOUNT BALANCES",
+      "HP Rental Withdrawal + Tenant Deposits + ALI KOLWEZI RENT CASH" +
+        (snapshot.cashboxLedgerId == null ? "" : " + Properties Rent Cashbox"),
       snapshot.threeAccountsTotal),
     bridgeLine("UNRECONCILED DIFFERENCE",
-      "Three account balances minus reconciled history",
+      "Tracked account balances minus reconciled history",
       bridge.reconciledTotal === null ? null : snapshot.threeAccountsTotal - bridge.reconciledTotal),
   ];
   // Add a separate reconciliation column, so bridge lines never masquerade
