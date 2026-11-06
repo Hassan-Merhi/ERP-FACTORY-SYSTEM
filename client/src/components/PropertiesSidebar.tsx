@@ -68,12 +68,21 @@ export function getPropertiesVisibleNavSections(isDeveloper: boolean): NavSectio
 const PROPERTIES_PINNED_DEFAULTS: NavItem[] = [
   { title: "Daybook", url: "/properties/daybook", icon: BookOpen },
   { title: "Agent Ledger", url: "/properties/agents", icon: UserRound },
+  { title: "Rentals", url: "/properties/rentals", icon: Building2 },
+  { title: "Accounts", url: "/properties/accounts", icon: Landmark },
+  { title: "Vouchers", url: "/properties/vouchers", icon: FileText },
+  { title: "Analytics", url: "/properties/analytics", icon: BarChart2 },
 ];
 
 export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogout: () => void | Promise<void> }) {
   const isAdmin = user?.role === "Admin" || user?.role === "Developer";
   const isDeveloper = user?.role === "Developer";
-  const visibleSections = useMemo(() => getPropertiesVisibleNavSections(isDeveloper), [isDeveloper]);
+  // These pages are pinned at the top and should not also appear in
+  // collapsible sections. Keep the registry entries for command search.
+  const visibleSections = useMemo(
+    () => getPropertiesVisibleNavSections(isDeveloper).filter((section) => !["Rentals", "Accounting"].includes(section.label)),
+    [isDeveloper]
+  );
 
   const { items: pinnedItems, reorder: reorderPinned } = usePinnedOrder(
     "properties-pinned-order",
