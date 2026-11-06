@@ -202,7 +202,7 @@ export function createFactoryLocationProductRenderers(inventory: FactoryLocation
             className={`text-left font-medium flex-1 ${proformaMode ? "" : "text-primary hover:underline cursor-pointer"}`}
             data-testid={`link-mobile${testIdSuffix}-${prod.productId}`}
           >
-            {prod.productName}
+            {nameFor(prod.articleCode, prod.productName)}
           </button>
           {prod.isInactive && (
             <Badge variant="outline" className="text-xs text-muted-foreground no-default-active-elevate shrink-0">
