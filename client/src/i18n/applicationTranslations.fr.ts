@@ -385,6 +385,7 @@ export const applicationFrenchTranslations = {
   "mhd.managerTitle": "Gestionnaire de vue MHD",
   "mhd.managerDescription":
     "Importez les codes d'article dans l'ordre souhaité. Le nom est facultatif ; un champ vide utilise le nom d'origine. Aucun enregistrement n'est modifié.",
+  "mhd.restorePrevious": "Restaurer la vue MHD précédente",
   "mhd.downloadTemplate": "Télécharger le modèle",
   "mhd.downloadCurrent": "Télécharger les articles actuels",
   "mhd.uploadExcel": "Importer Excel",
