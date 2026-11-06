@@ -19,23 +19,23 @@ export default function GITMockup({ embedded = false }: { embedded?: boolean } =
     <div className="flex flex-col h-full overflow-hidden">
       {!embedded && <PageHeader title="GIT" subtitle="Daily goods-in-transit workbook — spreadsheet replacement" />}
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        <Tabs defaultValue="detail">
+      <div className="flex-1 overflow-y-auto px-3 pb-5 pt-2 sm:px-4">
+        <Tabs defaultValue="detail" className="min-w-0">
           <div className="erp-mobile-scroll-tabs pb-1">
-            <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="GIT tracking sections">
-              <TabsTrigger value="detail" data-testid="tab-git-detail">
+            <TabsList className="h-auto w-max min-w-full gap-1 rounded-xl border border-border/70 bg-muted/60 p-1 shadow-sm sm:min-w-0 sm:w-fit" aria-label="GIT tracking sections">
+              <TabsTrigger value="detail" className="rounded-lg px-4 py-2 text-sm font-semibold transition-all data-[state=active]:bg-violet-600 data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-600 data-[state=active]:to-fuchsia-600 data-[state=active]:text-white data-[state=active]:shadow-sm dark:data-[state=active]:bg-violet-600" data-testid="tab-git-detail">
                 Detail
               </TabsTrigger>
-              <TabsTrigger value="trucks" data-testid="tab-git-trucks">
+              <TabsTrigger value="trucks" className="rounded-lg px-4 py-2 text-sm font-semibold transition-all data-[state=active]:bg-violet-600 data-[state=active]:text-white data-[state=active]:shadow-sm dark:data-[state=active]:bg-violet-600" data-testid="tab-git-trucks">
                 Truck / Location
               </TabsTrigger>
-              <TabsTrigger value="agents" data-testid="tab-git-agents">
+              <TabsTrigger value="agents" className="rounded-lg px-4 py-2 text-sm font-semibold transition-all data-[state=active]:bg-violet-600 data-[state=active]:text-white data-[state=active]:shadow-sm dark:data-[state=active]:bg-violet-600" data-testid="tab-git-agents">
                 Agent / Duty
               </TabsTrigger>
             </TabsList>
           </div>
 
-          <TabsContent value="detail" className="mt-4">
+          <TabsContent value="detail" className="mt-4 min-w-0">
             <TabDetail />
           </TabsContent>
 

@@ -23,6 +23,11 @@ import {
   MessageCircle,
   CheckCircle2,
   ArrowUp,
+  Building2,
+  Wallet,
+  Boxes,
+  Truck,
+  Coins,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -357,23 +362,29 @@ export function AgentCard({
   }, [allOpenPartial, customOrder, pendingGraduationIds, saveOrder]);
 
   const confidenceBadge = {
-    exact: { label: "Exact match", cls: "bg-green-700 text-white" },
-    fuzzy: { label: "Fuzzy match", cls: "bg-amber-600 text-white" },
-    unmapped: { label: "No mapping", cls: "bg-muted text-muted-foreground border" },
+    exact: { label: "Exact match", cls: "bg-emerald-500/15 text-emerald-200 border-emerald-400/35" },
+    fuzzy: { label: "Fuzzy match", cls: "bg-amber-500/15 text-amber-200 border-amber-400/35" },
+    unmapped: { label: "No mapping", cls: "bg-slate-500/20 text-slate-200 border-slate-400/30" },
   }[matchConfidence];
+
+  // These cards are projections of the existing duty allocation state, not new calculations.
+  const displayBalance = hasAdjustments ? adjustedBalance : ledgerBalance;
+  const containerCount = clearedRows.length + partialRows.length + openRows.length + activePreviewRows.length;
+  const upcomingDuty = remainingTransitRows.reduce((sum, row) => sum + row.dutyFee, 0);
+  const balanceKind = displayBalance === null ? "" : displayBalance > 0 ? "Dr" : displayBalance < 0 ? "Cr" : "";
 
   return (
     <>
-      <div className="space-y-0" data-testid={`agent-card-${agentName}`}>
+      <div className="space-y-2" data-testid={`agent-card-${agentName}`}>
         {waGroupChatId && (
-          <div className="flex justify-end mb-1">
+          <div className="flex justify-end">
             <button
               type="button"
               onClick={sendToWhatsApp}
               disabled={waSending}
               title={`Send ${agentName} balance to WhatsApp`}
               data-testid={`button-wa-send-${agentName}`}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-green-600 text-white text-xs font-semibold disabled:opacity-60 shadow-xs"
+              className="inline-flex min-h-9 items-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm shadow-emerald-900/15 transition-colors hover:bg-emerald-500 disabled:opacity-60"
             >
               {waSending ? (
                 <span className="animate-spin inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full" />
@@ -385,18 +396,63 @@ export function AgentCard({
           </div>
         )}
 
-        <div className="rounded-md border border-border overflow-hidden shadow-xs">
-          <div
-            className="bg-slate-800 dark:bg-slate-900 text-white px-4 py-2.5 grid min-h-11"
-            style={{ gridTemplateColumns: "1fr auto 1fr" }}
-          >
-            <span />
-            <span className="font-bold tracking-widest text-sm uppercase self-center text-center">{agentName}</span>
-            <span className="flex justify-end items-center">
-              <Badge className={cn("text-[11px] no-default-active-elevate shrink-0", confidenceBadge.cls)}>
+        <div className="overflow-hidden rounded-2xl border border-violet-200/70 bg-card shadow-[0_10px_32px_-22px_rgba(76,29,149,0.4)] dark:border-violet-400/20 dark:shadow-[0_18px_48px_-22px_rgba(0,0,0,0.7)]">
+          <div className="relative grid min-h-16 grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)] items-center gap-2 border-b border-violet-300/20 bg-gradient-to-r from-indigo-950 via-violet-950 to-indigo-950 px-3 py-3 text-white sm:px-5">
+            <div className="flex justify-start">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-violet-300/25 bg-violet-500/25 text-violet-200 shadow-inner">
+                <Building2 className="h-4.5 w-4.5" aria-hidden="true" />
+              </span>
+            </div>
+            <h3 className="min-w-0 truncate text-center text-base font-extrabold uppercase tracking-wider text-white sm:text-lg" title={agentName}>
+              {agentName}
+            </h3>
+            <div className="flex min-w-0 justify-end">
+              <Badge className={cn("max-w-full truncate border px-2 py-1 text-[10px] font-semibold no-default-active-elevate sm:text-[11px]", confidenceBadge.cls)}>
                 {confidenceBadge.label}
               </Badge>
-            </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5 border-b border-violet-200/50 bg-violet-50/40 p-3 dark:border-violet-500/15 dark:bg-slate-950/70 lg:grid-cols-4">
+            <div className="flex min-w-0 items-center gap-3 rounded-xl border border-emerald-200/80 bg-emerald-50/80 px-3 py-3 dark:border-emerald-500/25 dark:bg-emerald-500/10">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
+                <Wallet className="h-4.5 w-4.5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium text-muted-foreground">Account Balance</p>
+                <p className={cn("truncate text-lg font-bold tabular-nums", displayBalance !== null && displayBalance < 0 ? "text-rose-700 dark:text-rose-400" : "text-emerald-800 dark:text-emerald-300")} data-testid={`agent-balance-${agentName}`}>
+                  {displayBalance === null ? "Unavailable" : `${fmt(Math.abs(displayBalance), 0)}`}
+                  {balanceKind && <span className="ml-1 text-xs font-semibold">({balanceKind})</span>}
+                </p>
+              </div>
+            </div>
+            <div className="flex min-w-0 items-center gap-3 rounded-xl border border-border/70 bg-background/90 px-3 py-3 dark:bg-violet-500/10">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-700 dark:text-violet-300">
+                <Boxes className="h-4.5 w-4.5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium text-muted-foreground">Containers</p>
+                <p className="text-lg font-bold tabular-nums text-foreground">{containerCount}</p>
+              </div>
+            </div>
+            <div className="flex min-w-0 items-center gap-3 rounded-xl border border-border/70 bg-background/90 px-3 py-3 dark:bg-violet-500/10">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-700 dark:text-indigo-300">
+                <Truck className="h-4.5 w-4.5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium text-muted-foreground">In Transit</p>
+                <p className="text-lg font-bold tabular-nums text-foreground">{activePreviewRows.length}</p>
+              </div>
+            </div>
+            <div className="flex min-w-0 items-center gap-3 rounded-xl border border-border/70 bg-background/90 px-3 py-3 dark:bg-amber-500/10">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                <Coins className="h-4.5 w-4.5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium text-muted-foreground">Upcoming Duty</p>
+                <p className="truncate text-lg font-bold tabular-nums text-foreground">${fmt(upcomingDuty, 0)}</p>
+              </div>
+            </div>
           </div>
 
           {warnings.map((code) => {
@@ -599,13 +655,13 @@ export function AgentCard({
             </div>
           )}
           {isCustomOrder && (
-            <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 dark:bg-blue-950/20 border-b border-blue-200 dark:border-blue-800 text-xs text-blue-800 dark:text-blue-300">
+            <div className="mx-3 my-2 flex flex-wrap items-center gap-2 rounded-xl border border-sky-200 bg-sky-50/80 px-3 py-2 text-xs text-sky-800 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300">
               <ArrowUp className="h-3 w-3 shrink-0" />
               <span className="font-semibold">Custom priority order active</span>
               <span className="text-blue-600 dark:text-blue-400">— overpayment will be allocated top-to-bottom</span>
               <button
                 onClick={resetOrder}
-                className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-sm border border-blue-300 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-medium"
+                className="ml-auto flex min-h-7 items-center gap-1 rounded-lg border border-sky-300 bg-background/70 px-2.5 py-1 font-medium text-sky-700 transition-colors hover:bg-sky-100 dark:border-sky-400/30 dark:text-sky-200 dark:hover:bg-sky-500/20"
                 data-testid={`button-reset-order-${agentName}`}
               >
                 <RotateCcw className="h-3 w-3" />
