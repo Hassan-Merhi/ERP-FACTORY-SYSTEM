@@ -5,7 +5,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -30,6 +30,8 @@ import {
   UsersRound,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
 import { useAppMode } from "@/contexts/AppModeContext";
@@ -45,8 +47,6 @@ import { CreateUnitDialog } from "./property-rental/components/CreateUnitDialog"
 import { UnitActionDialog } from "./property-rental/components/UnitActionDialog";
 import { BulkPaymentDialog } from "./property-rental/components/BulkPaymentDialog";
 import { RentalUnitCards } from "./property-rental/components/RentalUnitCards";
-import { RentalSummaryTiles } from "./property-rental/components/RentalSummaryTiles";
-import { RenameGroupDialog } from "./property-rental/components/RenameGroupDialog";
 import { ErpMobileActionsMenu, ErpMobileSummaryGrid } from "@/components/ui/erp-mobile-records";
 import { HISTORICAL_RENT_COMPANY } from "./property-rental/historicalRentSnapshot";
 import {
@@ -228,6 +228,18 @@ export default function PropertyRentalPage({
     },
   });
 
+  const renameLocationGroup = useMutation({
+    mutationFn: ({ unitId, locationGroup }: { unitId: number; locationGroup: string }) =>
+      apiRequest("PATCH", `${apiBase}/units/${unitId}`, { renameGroup: true, locationGroup }),
+    onSuccess: () => {
+      toast({ title: "Location group renamed" });
+      queryClient.invalidateQueries({ queryKey: [apiBase + "/units"] });
+      setRenameGroup(null);
+    },
+    onError: (e: ClientErrorLike) =>
+      toast({ title: "Could not rename location group", description: e.message, variant: "destructive" }),
+  });
+
   const editableUnitInGroup = (groupUnits: Unit[]) =>
     groupUnits.find((u) => u.unitType === unitType && !u.isShared && !u.isInternalLeaseProjection);
   const openRenameGroup = (name: string, groupUnits: Unit[]) => {
@@ -238,6 +250,7 @@ export default function PropertyRentalPage({
       unitId: unit.id,
       count: groupUnits.filter((u) => u.unitType === unitType && !u.isShared && !u.isInternalLeaseProjection).length,
     });
+    setNewGroupName(name);
   };
 
   const openUnit = units.find((u) => u.id === openUnitId) ?? null;
@@ -1076,12 +1089,55 @@ export default function PropertyRentalPage({
         )}
 
         {renameGroup && (
-          <RenameGroupDialog
-            apiBase={apiBase}
-            testIdPrefix={testIdPrefix}
-            group={renameGroup}
-            onClose={() => setRenameGroup(null)}
-          />
+          <Dialog open onOpenChange={(open) => !open && !renameLocationGroup.isPending && setRenameGroup(null)}>
+            <DialogContent data-testid={`dialog-${testIdPrefix}-rename-group`}>
+              <DialogHeader>
+                <DialogTitle>Rename location group</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-2">
+                <Label htmlFor="rename-rental-location-group">Group name</Label>
+                <Input
+                  id="rename-rental-location-group"
+                  value={newGroupName}
+                  maxLength={120}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (
+                      e.key === "Enter" &&
+                      newGroupName.trim() &&
+                      newGroupName.trim().toUpperCase() !== renameGroup.name.toUpperCase() &&
+                      !renameLocationGroup.isPending
+                    ) {
+                      renameLocationGroup.mutate({ unitId: renameGroup.unitId, locationGroup: newGroupName.trim() });
+                    }
+                  }}
+                  data-testid={`input-${testIdPrefix}-rename-group`}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Renames this location for all its warehouses or shops in this company. Contracts, payments, and
+                  accounting records are unchanged.
+                </p>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setRenameGroup(null)} disabled={renameLocationGroup.isPending}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() =>
+                    renameLocationGroup.mutate({ unitId: renameGroup.unitId, locationGroup: newGroupName.trim() })
+                  }
+                  disabled={
+                    !newGroupName.trim() ||
+                    newGroupName.trim().toUpperCase() === renameGroup.name.toUpperCase() ||
+                    renameLocationGroup.isPending
+                  }
+                  data-testid={`button-${testIdPrefix}-save-group`}
+                >
+                  {renameLocationGroup.isPending ? "Saving…" : `Rename ${renameGroup.count} units`}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         )}
 
         {/* Confirm delete unit dialog */}
