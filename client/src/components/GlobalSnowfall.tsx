@@ -58,7 +58,7 @@ function SnowfallCanvas() {
     const color = theme === "dark" ? "#e9f6ff" : "#578bac";
     let width = 0;
     let height = 0;
-    let flakes: Flake[] = [];
+    const flakes: Flake[] = [];
     let frameId: number | null = null;
     let resizeFrameId: number | null = null;
     let lastDraw = 0;
