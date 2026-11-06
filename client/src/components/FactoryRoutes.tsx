@@ -132,7 +132,9 @@ const FactoryMonthlyProductionBales = lazy(() =>
     default: module.FactoryMonthlyProductionBales,
   }))
 );
-const HelpTraining = lazy(() => import("@/pages/HelpTraining"));
+const FactoryHelpTraining = lazy(() =>
+  import("@/pages/HelpTrainingWorkspaces").then((m) => ({ default: m.FactoryHelpTraining }))
+);
 const AccountGroups = lazy(() => import("@/pages/AccountGroups"));
 const FactoryInvoiceDetailBilingual = lazy(() => import("@/pages/factory/FactoryInvoiceDetailBilingual"));
 const FactoryProductionBonuses = lazy(() => import("@/pages/factory/FactoryProductionBonuses"));
@@ -163,16 +165,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
     <Switch>
       <Route path="/factory/tickets/new">{() => <TicketManagement sourceMode="factory" />}</Route>
       <Route path="/factory/tickets">{() => <TicketManagement sourceMode="factory" />}</Route>
-      <Route path="/factory/help-training">
-        {() => (
-          <HelpTraining
-            mode="factory"
-            role={user?.role}
-            accessKeys={myAccess?.pageKeys}
-            fullAccess={myAccess?.fullAccess}
-          />
-        )}
-      </Route>
+      <Route path="/factory/help-training">{() => <FactoryHelpTraining user={user} />}</Route>
       <Route path="/factory/daybook">
         {() => (isAdminOwnerOrDev ? <FactoryDaybook /> : <Redirect replace to={factoryDefaultPage} />)}
       </Route>

@@ -3,7 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Switch, Route, Redirect } from "wouter";
 import NotFound from "@/pages/not-found";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
-const HelpTraining = lazy(() => import("@/pages/HelpTraining"));
+const ErpHelpTraining = lazy(() =>
+  import("@/pages/HelpTrainingWorkspaces").then((m) => ({ default: m.ErpHelpTraining }))
+);
 const TicketManagement = lazy(() => import("@/pages/TicketManagement"));
 import { canAccessAnyErpFeature, canAccessErpFeature, type ErpFeatureAccess } from "@/app/erpAccess";
 import type { FeatureKey } from "@shared/schema";
@@ -158,16 +160,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       <Route path="/tickets">{() => <TicketManagement sourceMode="erp" />}</Route>
       <Route path="/">{() => (isAdminOrDev ? <ContainersOTW /> : <Redirect replace to="/tracking" />)}</Route>
       <Route path="/tracking" component={TrackingHub} />
-      <Route path="/help-training">
-        {() => (
-          <HelpTraining
-            mode="erp"
-            role={effectiveRole}
-            accessKeys={erpAccess?.pageKeys}
-            fullAccess={erpAccess?.fullAccess}
-          />
-        )}
-      </Route>
+      <Route path="/help-training">{() => <ErpHelpTraining user={user} />}</Route>
       {R("/financial-overview", effectiveRole !== "View Only" && canAccess("dashboard"), Dashboard)}
 
       {canAccess("pos") ? (
