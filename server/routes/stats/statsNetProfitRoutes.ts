@@ -159,6 +159,11 @@ export function registerStatsNetProfitRoutes(app: Express) {
         const code = (a.code || "").toUpperCase();
         if (nameLower.includes("accrued rent") || code === "ACCR-RENT-PAY" || code === "ACCRUED_RENT_PAYABLE") {
           onUsTotal = round2(minusMoney(onUsTotal, a.value));
+          const catKey = `liability_${a.category || a.name}`;
+          if (categoryTotals[catKey] !== undefined) {
+            categoryTotals[catKey] = round2(minusMoney(categoryTotals[catKey], a.value));
+            if (Math.abs(categoryTotals[catKey]) < 0.01) delete categoryTotals[catKey];
+          }
           onUsAccounts.splice(i, 1);
         }
       }
