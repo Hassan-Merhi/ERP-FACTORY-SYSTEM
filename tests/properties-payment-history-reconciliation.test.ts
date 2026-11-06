@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  accountBalanceHistoryBridge,
+  reconciledHistoryTsv,
   cashCents,
   nonCashCents,
   paymentHistoryTsv,
@@ -77,6 +79,37 @@ describe("Properties read-only payment history reconciliation", () => {
       scheduled: 100000,
       recorded: 140000,
     });
+  });
+
+  it("bridges the recorded history to the three-account total without inventing payments", () => {
+    const bridge = accountBalanceHistoryBridge(rows, 4134);
+    expect(bridge.history.recorded).toBe(35269500);
+    expect(bridge.cashAndLiabilityOverlap).toBe(140000);
+    expect(bridge.removeNonCashBilling).toBe(80000);
+    expect(bridge.netAdjustment).toBe(60000);
+    expect(bridge.reconciledTotal).toBe(35329500);
+  });
+
+  it("exports an auditable bridge and leaves the dated rows unmodified", () => {
+    const before = JSON.stringify(rows);
+    const tsv = reconciledHistoryTsv(rows, { aliCashLedgerId: 4134, threeAccountsTotal: 35329500 });
+    const lines = tsv.split("\\n");
+    expect(tsv).toContain("Account Reconciliation (USD)");
+    expect(tsv).toContain("ACCOUNT RECONCILIATION: GUARANTEE OVERLAP");
+    expect(tsv).toContain("ACCOUNT RECONCILIATION: REMOVE NON-CASH BILLING");
+    expect(tsv).toContain("NET RECONCILIATION ADJUSTMENT");
+    expect(tsv).toContain("RECONCILED HISTORY + ADJUSTMENT");
+    expect(lines.some(line => line.includes("NET RECONCILIATION ADJUSTMENT") && line.endsWith("\\t600.00"))).toBe(true);
+    expect(lines.some(line => line.includes("RECONCILED HISTORY + ADJUSTMENT") && line.endsWith("\\t353295.00"))).toBe(true);
+    expect(lines.some(line => line.includes("UNRECONCILED DIFFERENCE") && line.endsWith("\\t0.00"))).toBe(true);
+    expect(JSON.stringify(rows)).toBe(before);
+  });
+
+  it("reports a residual instead of automatically forcing any arbitrary account total", () => {
+    const tsv = reconciledHistoryTsv(rows, { aliCashLedgerId: 4134, threeAccountsTotal: 35379500 });
+    expect(tsv.split("\\n").some(line =>
+      line.includes("UNRECONCILED DIFFERENCE") && line.endsWith("\\t500.00")
+    )).toBe(true);
   });
 
   it("escapes spreadsheet formulas in copied tenant names", () => {
