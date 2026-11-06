@@ -28,7 +28,7 @@ jobs:
   verify-recording:
     name: Validate training recording without publication privileges
     runs-on: ubuntu-26.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     permissions:
       actions: read
       contents: read
@@ -87,9 +87,24 @@ jobs:
           NODE
           gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" -n "real-erp-training-$SOURCE_RUN" -D "$GITHUB_WORKSPACE/.training-review"
       - name: Install the decoder used to re-verify the recording
+        timeout-minutes: 35
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y ffmpeg
+          # The runner's apt mirror is sometimes very slow (one install took 30
+          # minutes). Give each attempt 15 minutes, skip optional packages, and
+          # retry once against the main Ubuntu archive instead of the mirror.
+          apt_opts=(-o Acquire::Retries=3 -o Acquire::http::Timeout=60)
+          for attempt in 1 2; do
+            if [ "$attempt" = 2 ]; then
+              echo "ffmpeg install attempt 1 failed; retrying against archive.ubuntu.com"
+              sudo sed -i 's#http://azure.archive.ubuntu.com#http://archive.ubuntu.com#g' \
+                /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list 2>/dev/null || true
+            fi
+            if timeout 900 sudo apt-get "${apt_opts[@]}" update -qq &&
+               timeout 900 sudo DEBIAN_FRONTEND=noninteractive apt-get "${apt_opts[@]}" install -y -q --no-install-recommends ffmpeg; then
+              break
+            fi
+            if [ "$attempt" = 2 ]; then echo "::error::ffmpeg could not be installed"; exit 1; fi
+          done
       - name: Verify the H.264 + AAC narrated recording, captions, guide and 1-20 minute duration
         env:
           TRAINING_REVIEW_DIR: ${{ github.workspace }}/.training-review

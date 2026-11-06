@@ -5,6 +5,7 @@
 import type { Express, Request, Response } from "express";
 import { createHash, createHmac } from "node:crypto";
 import { Readable } from "node:stream";
+import { byteWindow, parseByteRange, planMediaResponse } from "./trainingMediaRange";
 import published from "@shared/publishedTrainingMedia.json";
 import {
   MAX_TRAINING_MANIFEST_BYTES,
@@ -74,6 +75,7 @@ export async function loadPublishedTrainingRegistry(): Promise<PublishedTraining
 export function resetPublishedTrainingRegistryCache(): void {
   cachedRegistry = null;
   registryInFlight = null;
+  grantCache.clear();
 }
 const OBJECT_KEY = /^training\/videos\/[a-z0-9-]+\/[a-f0-9]{40}\.(?:webm|mp4|vtt|png)$/;
 const TOPIC_ID = /^[a-z0-9-]{1,80}$/;
@@ -126,10 +128,17 @@ async function canStreamTopic(req: Request, topic: string): Promise<boolean> {
  * one signed read per approved immutable media key through the OIDC gateway.
  * Vercel's short-lived object URL is consumed on the server (not sent to users).
  */
+const GRANT_REUSE_MS = 40_000; // the gateway's read URLs live 60 s
+const grantCache = new Map<string, { url: string; expiresAt: number }>();
+
 export async function authenticatedVercelTrainingObjectRequest(
   key: string,
   range?: string
 ): Promise<{ url: string; headers: Record<string, string> } | null> {
+  // A video player issues many byte-range requests per play; reuse a fresh
+  // grant instead of a gateway round trip (about a second) for every one.
+  const cached = key === TRAINING_MANIFEST_KEY ? undefined : grantCache.get(key);
+  if (cached && Date.now() < cached.expiresAt) return { url: cached.url, headers: range ? { range } : {} };
   const gatewayUrl = process.env.TRAINING_MEDIA_GATEWAY_URL || "";
   const secret = process.env.TRAINING_GATEWAY_READ_SECRET || "";
   const approvedGateway = "https://erp-training-storage-access.vercel.app";
@@ -163,6 +172,10 @@ export async function authenticatedVercelTrainingObjectRequest(
       !url.searchParams.has("vercel-blob-signature")
     )
       return null;
+    if (key !== TRAINING_MANIFEST_KEY) {
+      if (grantCache.size > 200) grantCache.clear();
+      grantCache.set(key, { url: url.toString(), expiresAt: Date.now() + GRANT_REUSE_MS });
+    }
     return { url: url.toString(), headers: range ? { range } : {} };
   } catch {
     return null;
@@ -272,15 +285,16 @@ async function streamMedia(req: Request, res: Response, kind: "video" | "caption
     res.status(404).json({ message: "Training media not published" });
     return;
   }
-  const range = req.headers.range;
-  if (range && (kind !== "video" || !/^bytes=\d+-\d*$/.test(range) || range.length > 80)) {
+  const rawRange = req.headers.range;
+  const range = rawRange ? parseByteRange(rawRange) : null;
+  if (rawRange && (kind !== "video" || !range)) {
     res.status(416).end();
     return;
   }
   const request =
     process.env.TRAINING_MEDIA_PROVIDER === "vercel"
-      ? await authenticatedVercelTrainingObjectRequest(key, range)
-      : signedTrainingObjectRequest(key, range);
+      ? await authenticatedVercelTrainingObjectRequest(key, range?.header)
+      : signedTrainingObjectRequest(key, range?.header);
   if (!request) {
     res.status(503).json({ message: "Training media storage is not configured" });
     return;
@@ -291,11 +305,28 @@ async function streamMedia(req: Request, res: Response, kind: "video" | "caption
       redirect: "error",
       signal: AbortSignal.timeout(300_000),
     });
+    if (upstream.status === 416 && range) {
+      const total = /\/(\d+)$/.exec(upstream.headers.get("content-range") || "")?.[1];
+      await upstream.body?.cancel().catch(() => undefined);
+      if (total) res.setHeader("Content-Range", "bytes */" + total);
+      res.status(416).end();
+      return;
+    }
     if (![200, 206].includes(upstream.status) || !upstream.body) {
       res.status(upstream.status === 404 ? 404 : 502).json({ message: "Training media temporarily unavailable" });
       return;
     }
-    res.status(upstream.status);
+    // Whole-file reads (captions, screenshots, non-range players) stream as-is
+    // when storage omits the length; byte ranges must always be exact.
+    const plan =
+      planMediaResponse(range, upstream.status, upstream.headers) ??
+      (!range && upstream.status === 200 ? { status: 200, length: -1, skip: 0, trim: false } : null);
+    if (!plan) {
+      await upstream.body.cancel().catch(() => undefined);
+      res.status(502).json({ message: "Training media temporarily unavailable" });
+      return;
+    }
+    res.status(plan.status);
     res.setHeader(
       "Content-Type",
       kind === "video"
@@ -308,11 +339,12 @@ async function streamMedia(req: Request, res: Response, kind: "video" | "caption
     );
     res.setHeader("Cache-Control", "private, max-age=300");
     res.setHeader("X-Content-Type-Options", "nosniff");
-    for (const name of ["content-length", "content-range", "accept-ranges"]) {
-      const value = upstream.headers.get(name);
-      if (value) res.setHeader(name, value);
-    }
-    const source = Readable.fromWeb(upstream.body as unknown as import("node:stream/web").ReadableStream);
+    res.setHeader("Accept-Ranges", "bytes");
+    if (plan.length >= 0) res.setHeader("Content-Length", String(plan.length));
+    if (plan.contentRange) res.setHeader("Content-Range", plan.contentRange);
+    const body = Readable.fromWeb(upstream.body as unknown as import("node:stream/web").ReadableStream);
+    const source = plan.skip > 0 || plan.trim ? body.pipe(byteWindow(plan.skip, plan.length)) : body;
+    if (source !== body) body.on("error", (error) => source.destroy(error));
     source.on("error", () => {
       if (!res.headersSent) res.status(502);
       res.destroy();
