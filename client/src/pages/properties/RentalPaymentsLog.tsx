@@ -21,7 +21,6 @@ import { PaymentsReconciliation, type ReconciliationSnapshot } from "./property-
 import { cashCents, nonCashCents, paymentHistoryTsv, reconciledHistoryTsv, receiptTotals } from "./property-rental/paymentsReceiptMath";
 import {
   HISTORICAL_RENT_COMPANY,
-  HISTORICAL_RENT_CUTOFF_LABEL,
   belongsToHistoricalRentSnapshot,
 } from "./property-rental/historicalRentSnapshot";
 
@@ -132,7 +131,6 @@ export default function RentalPaymentsLog({
 
   const viewPayments = useMemo(() => {
     if (!isPropertiesPayments || effectiveView === "ALL") return payments;
-    if (effectiveView === "HISTORICAL_RENT") return payments.filter(belongsToHistoricalRentSnapshot);
     if (effectiveView === "OTHER") {
       // Includes recorded unvouchered corrections, which are not cash receipts.
       return payments.filter((p) => p.reconciliationCategory === "OTHER" || 
@@ -265,13 +263,6 @@ export default function RentalPaymentsLog({
         />
       )}
 
-      {isHassanProperties && effectiveView === "HISTORICAL_RENT" && (
-        <p className="text-xs text-muted-foreground">
-          Historical rent through {HISTORICAL_RENT_CUTOFF_LABEL}, including MORINA K's ended lease.
-          Later receipts, guarantee releases and unvouchered adjustments are shown in their own views.
-        </p>
-      )}
-
       {isHassanProperties && effectiveView === "OTHER" && (
         <p className="text-xs text-muted-foreground">
           STE SIARSEGO's $800 billing transition adjustment has no payment voucher.
@@ -314,9 +305,7 @@ export default function RentalPaymentsLog({
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-xs text-muted-foreground font-normal">
-              {isHassanProperties && effectiveView === "HISTORICAL_RENT"
-                ? "RENT PAID THROUGH 26 OCT"
-                : isFullHistory ? "TOTAL AMOUNT RECORDED"
+              {isFullHistory ? "TOTAL AMOUNT RECORDED"
                 : isHassanProperties ? "CASH RECEIVED (VOUCHER-BACKED)" : "TOTAL AMOUNT RECEIVED"}
             </CardTitle>
           </CardHeader>
