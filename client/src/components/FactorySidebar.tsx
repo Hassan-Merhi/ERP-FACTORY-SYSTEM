@@ -336,10 +336,10 @@ export function FactorySidebar({
   const testIdFor = (i: NavItem) => `link-factory-${i.url.split("/").pop()}`;
 
   return (
-    <Sidebar>
+    <Sidebar className="premium-shell-sidebar">
       <ModuleHeader icon={Factory} label="Business OS" tagline="Factory / Production" accent={MODULE_ACCENT.factory} />
 
-      <SidebarContent className="px-3 py-2 overflow-y-auto">
+      <SidebarContent className="premium-nav-scroll px-3 py-2 overflow-y-auto">
         <PinnedNavList
           items={pinnedItems}
           color={NAV_COLOR.pinned}
