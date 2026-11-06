@@ -142,8 +142,8 @@ export function LocationInventoryHeader({
   ];
 
   return (
-    <div className="shrink-0 sm:px-6 sm:pt-4">
-      <div className={landing ? "relative isolate overflow-hidden rounded-[24px] border border-violet-200/80 bg-gradient-to-r from-violet-50 via-white to-indigo-100/90 shadow-[0_16px_40px_-32px_rgba(107,45,180,.5)] dark:border-violet-300/20 dark:from-[#191333] dark:via-[#17152f] dark:to-[#101a34]" : ""}>
+    <div className="shrink-0 p-2 sm:px-6 sm:pt-5">
+      <div className={landing ? "relative isolate overflow-hidden rounded-[24px] border border-violet-200/80 bg-gradient-to-r from-violet-50 via-white to-indigo-100/90 shadow-[0_16px_40px_-32px_rgba(107,45,180,.5)] dark:border-violet-300/20 dark:from-[#191333] dark:via-[#17152f] dark:to-[#101a34]" : "overflow-hidden rounded-2xl border border-violet-200/80 bg-gradient-to-r from-violet-50 via-background to-indigo-50/80 px-4 pt-3 shadow-sm dark:border-violet-500/25 dark:from-[#171035] dark:via-[#111a36] dark:to-[#0c142c] sm:px-5 sm:pt-4 [&_[data-testid=page-header]]:mb-0 [&_[data-testid=page-header]]:border-b-0"}>
         {landing && (
           <>
             <div aria-hidden="true" className="pointer-events-none absolute -right-4 -top-8 h-[240px] w-[65%] opacity-[.16] dark:opacity-[.68] sm:w-[54%]">
@@ -156,7 +156,7 @@ export function LocationInventoryHeader({
         <div className={landing ? "relative z-10 px-4 pt-4 sm:px-6 sm:pt-5 [&_[data-testid=page-header]]:!border-b-0 [&_[data-testid=page-header]]:!mb-0" : ""}>
       <PageHeader
         title="Location Inventory"
-        icon={landing ? <Warehouse className="h-6 w-6 text-violet-600 dark:text-violet-300" /> : undefined}
+        icon={<span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-md shadow-violet-500/20">{landing ? <Warehouse className="h-5 w-5" /> : <MapPin className="h-5 w-5" />}</span>}
         meta={
           <span className="min-w-0 truncate">
             {landing ? "Manage inventory across all locations" : selectedLocation
@@ -174,7 +174,7 @@ export function LocationInventoryHeader({
                     <Button
                       variant="outline"
                       size="sm"
-                      className="gap-2"
+                      className="h-9 gap-2 rounded-xl border-violet-300/60 bg-violet-600 px-3 text-white shadow-sm shadow-violet-500/20 hover:bg-violet-700 hover:text-white dark:border-violet-500/40 dark:bg-violet-600 dark:hover:bg-violet-500"
                       disabled={!whatsappReady || sendMode !== null}
                       title={whatsappButtonTitle}
                       data-testid="button-send-location-stock-whatsapp"
@@ -234,7 +234,7 @@ export function LocationInventoryHeader({
             {!landing && <Button
               variant={showNegativeStock ? "destructive" : "outline"}
               size="sm"
-              className="gap-2"
+              className="h-9 gap-2 rounded-xl border-violet-200/80 bg-background/80 px-3 shadow-sm dark:border-violet-500/25 dark:bg-slate-950/35"
               onClick={() => setShowNegativeStock(!showNegativeStock)}
               data-testid="button-negative-stock"
             >
