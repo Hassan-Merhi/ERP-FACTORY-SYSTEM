@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, X, ExternalLink, Upload, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, X, ExternalLink, Upload, Download, Plus, Save, Trash2 } from "lucide-react";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { CustomerStatementExports } from "./factorycustomerstatement/CustomerStatementExports";
 import { drCrClass } from "@/lib/formatNumber";
@@ -347,6 +347,43 @@ export default function FactoryCustomerStatement() {
   }, [filteredHistory]);
 
   const hasFilters = filterDestination || filterDateFrom || filterDateTo;
+
+  const handlePriceListTemplateDownload = async () => {
+    // The first sheet matches the importer headers and contains no fake example articles.
+    const workbook = XLSX.utils.book_new();
+    const sheet = XLSX.utils.aoa_to_sheet([["article_code", "price"]]);
+    sheet["!cols"] = [{ wch: 28 }, { wch: 18 }];
+    sheet["!rows"] = [{ hpt: 26 }];
+    sheet["!autofilter"] = { ref: "A1:B1" };
+    for (const cell of ["A1", "B1"]) {
+      sheet[cell].s = {
+        font: { bold: true, color: { rgb: "FFFFFF" } },
+        fill: { patternType: "solid", fgColor: { rgb: "1E293B" } },
+        alignment: { vertical: "center" },
+      };
+    }
+    XLSX.utils.book_append_sheet(workbook, sheet, "Price List");
+
+    const guide = XLSX.utils.aoa_to_sheet([
+      ["How to upload agreed prices"],
+      ["1. In Price List, enter existing article codes under article_code and positive USD prices per bale under price."],
+      ["2. Keep both headers unchanged. Enter prices as numbers without a dollar sign."],
+      ["3. In the ERP, select the correct customer and destination, then use Upload Excel."],
+      ["4. Only that customer and destination are updated; existing proforma line prices are not changed."],
+    ]);
+    guide["!cols"] = [{ wch: 110 }];
+    guide["A1"].s = {
+      font: { bold: true, color: { rgb: "FFFFFF" } },
+      fill: { patternType: "solid", fgColor: { rgb: "1E293B" } },
+    };
+    XLSX.utils.book_append_sheet(workbook, guide, "Instructions");
+
+    try {
+      await XLSX.writeFile(workbook, "agreed-prices-upload-template.xlsx");
+    } catch {
+      toast({ title: "Failed to download price-list template", variant: "destructive" });
+    }
+  };
 
   const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -810,7 +847,11 @@ export default function FactoryCustomerStatement() {
                       New proformas use only agreed prices for their own customer and destination.
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={handlePriceListTemplateDownload}
+                      data-testid="button-download-pricelist-template">
+                      <Download className="h-4 w-4 mr-2" /> Download Template
+                    </Button>
                     <input type="file" accept=".xlsx,.xls,.csv" ref={fileInputRef}
                       onChange={handleExcelUpload} className="hidden" data-testid="input-upload-pricelist" />
                     <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}
