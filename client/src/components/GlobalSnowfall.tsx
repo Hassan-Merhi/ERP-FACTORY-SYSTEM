@@ -6,7 +6,6 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "@/components/ThemeProvider";
-import { useChristmasMode } from "@/hooks/useChristmasMode";
 
 type Flake = {
   x: number;
@@ -195,8 +194,7 @@ function SnowfallCanvas() {
  * Only render after the global setting is explicitly ON.
  * Reduced-motion users never start the canvas animation.
  */
-export function GlobalSnowfall() {
-  const { settingQuery } = useChristmasMode();
+export function GlobalSnowfall({ enabled }: { enabled: boolean }) {
   const [reduceMotion, setReduceMotion] = useState(() =>
     typeof window !== "undefined" && typeof window.matchMedia === "function"
       ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -212,6 +210,6 @@ export function GlobalSnowfall() {
     return () => media.removeEventListener("change", handleChange);
   }, []);
 
-  if (settingQuery.data?.enabled !== true || reduceMotion) return null;
+  if (!enabled || reduceMotion) return null;
   return <SnowfallCanvas />;
 }
