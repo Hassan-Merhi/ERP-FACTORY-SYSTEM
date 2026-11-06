@@ -21,6 +21,7 @@ import {
 } from "../routes/inventory/inventoryQuickAdjustCore";
 import { Phase9EventConflict } from "./phase9CloudEventStore.mjs";
 import { PHASE9_STOCK_NEGATIVE_CONFLICT } from "./phase9StockEnvelope.mjs";
+import { throwIfClosedPeriod } from "./phase9ClosedPeriod";
 
 type Queryable = Pick<PoolClient, "query">;
 
@@ -165,6 +166,7 @@ async function apply(
       allowNegative,
     });
   } catch (error) {
+    throwIfClosedPeriod(error);
     if (error instanceof QuickAdjustmentNegativeStockError) {
       throw new Phase9EventConflict(PHASE9_STOCK_NEGATIVE_CONFLICT, {
         stockItemId: p.stockItemId,

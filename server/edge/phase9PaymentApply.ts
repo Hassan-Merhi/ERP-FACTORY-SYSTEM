@@ -20,6 +20,7 @@ import {
 import { PostingValidationError } from "../services/accounting/postingValidationError";
 import { Phase9EventConflict } from "./phase9CloudEventStore.mjs";
 import type { Phase9PaymentVoucherInputs } from "./phase9PaymentEnvelope.mjs";
+import { throwIfClosedPeriod } from "./phase9ClosedPeriod";
 
 type Queryable = Pick<PoolClient, "query">;
 
@@ -96,6 +97,7 @@ async function apply(client: Queryable, event: Phase9PaymentEvent): Promise<Phas
       businessDate: v.voucherDate,
     };
   } catch (error) {
+    throwIfClosedPeriod(error);
     // Business refusals need a decision; anything else (a dropped connection,
     // a deadlock) is retried by the next apply run.
     const message = getErrorMessage(error);
