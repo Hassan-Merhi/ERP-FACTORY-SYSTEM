@@ -1,3 +1,4 @@
+import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Columns3, History, Loader2, Package, Search, ShoppingCart, SlidersHorizontal, Truck, UserRound, UsersRound } from "lucide-react";
@@ -57,6 +58,7 @@ async function readJson<T>(url: string): Promise<T> {
   return payload as T;
 }
 export default function CustomerLoading() {
+  const mhd = useFactoryMhdView();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [customerId, setCustomerId] = useState("");
@@ -169,9 +171,10 @@ export default function CustomerLoading() {
     search,
   ]);
 
+  const displayedProducts = mhd.sortRows(filteredProducts, (product) => product.articleCode || product.code);
   const pageCount = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
-  const visibleProducts = filteredProducts.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const visibleProducts = displayedProducts.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const selectedLines = useMemo(
     () =>
@@ -638,7 +641,7 @@ export default function CustomerLoading() {
                             {product.articleCode || product.code}
                           </td>
                         )}
-                        {isColumnVisible("product") && <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100">{product.name}</td>}
+                        {isColumnVisible("product") && <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100">{mhd.nameFor(product.articleCode || product.code, product.name)}</td>}
                         {isColumnVisible("arabicName") && (
                           <td className="px-4 py-3 text-right" dir="rtl">
                             {product.nameAr || "—"}
