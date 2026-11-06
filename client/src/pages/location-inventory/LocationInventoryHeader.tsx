@@ -159,7 +159,7 @@ export function LocationInventoryHeader({
         icon={landing ? <Warehouse className="h-6 w-6 text-violet-600 dark:text-violet-300" /> : undefined}
         meta={
           <span className="min-w-0 truncate">
-            {selectedLocation
+            {landing ? "Manage inventory across all locations" : selectedLocation
               ? `Manage inventory for ${selectedLocation.name}`
               : "Manage inventory across all locations"}
           </span>
@@ -167,7 +167,7 @@ export function LocationInventoryHeader({
       >
         {!posUser && (
           <>
-            {canManageWhatsapp && selectedLocation && (
+            {canManageWhatsapp && !landing && selectedLocation && (
               <>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
