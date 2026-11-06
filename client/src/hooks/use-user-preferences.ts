@@ -9,6 +9,7 @@ export interface UserPrefs {
   showChatWidget?: boolean;
   showNotesPanel?: boolean;
   factoryNetPositionValuationMode?: "cost" | "selling";
+  factoryMhdViewDefault?: boolean;
 }
 
 export function useUserPreferences() {
