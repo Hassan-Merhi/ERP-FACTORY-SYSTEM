@@ -104,7 +104,10 @@ export function measurePageData() {
     const style = getComputedStyle(element);
     return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
   };
-  const emptyPattern = /^(no |nothing |there (are|is) no |empty)|\b(no (records|data|results|entries|items|rows|transactions)( found| yet| to show)?)\b/i;
+  // "No sales found", "No mix batches yet", "Nothing to show": empty states.
+  // A label that merely starts with "No" (e.g. "No Global Logo") is not one.
+  const emptyPattern =
+    /\b(no|nothing)\b[^.]{0,50}\b(found|yet|available|to show|recorded|exist)\b|^(no|nothing) (records|data|results|entries|items|rows|transactions)\b|^empty\b/i;
   const rows = [...main.querySelectorAll("tbody tr, [role=row], [data-testid^=row-], [data-testid^=card-]")].filter(
     (row) => visible(row) && row.textContent.trim().length > 0 && !emptyPattern.test(row.textContent.trim())
   );
