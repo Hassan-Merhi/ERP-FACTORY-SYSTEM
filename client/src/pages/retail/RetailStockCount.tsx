@@ -425,7 +425,11 @@ export default function RetailStockCount() {
                         data-testid="stock-count-scan"
                       />
                     </div>
-                    <MobileBarcodeScanner onScan={(code) => scanMutation.mutate(code)} disabled={scanMutation.isPending} className="h-11 w-11 shrink-0" />
+                    <MobileBarcodeScanner
+                      onScan={(code) => scanMutation.mutate(code)}
+                      disabled={scanMutation.isPending}
+                      className="h-11 w-11 shrink-0"
+                    />
                     <Button
                       type="submit"
                       disabled={!scanText.trim() || scanMutation.isPending}
