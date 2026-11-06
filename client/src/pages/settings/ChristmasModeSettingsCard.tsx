@@ -75,8 +75,8 @@ export function ChristmasModeSettingsCard({ canManage }: Props) {
           <Globe2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <span>
             When ON, snowfall, festive header lights and subtle sidebar ornaments
-            appear throughout all signed-in workspaces. A special login animation
-            will be added in the next phase.
+            appear throughout all signed-in workspaces. A four-second holiday
+            welcome also plays once after a successful sign-in.
             {!canManage && " Only Admin, Owner and Developer users can change it."}
           </span>
         </div>
