@@ -31,7 +31,15 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     settingsVisible: false,
     landing: false,
   },
-  { key: "factory/tickets", label: "Ticket Management", group: "Finance", route: "/factory/tickets", aliases: ["/factory/tickets/new"], sidebar: true, landing: false },
+  {
+    key: "factory/tickets",
+    label: "Ticket Management",
+    group: "Finance",
+    route: "/factory/tickets",
+    aliases: ["/factory/tickets/new"],
+    sidebar: true,
+    landing: false,
+  },
   // Pinned / primary
   {
     key: "factory/production-report",
@@ -461,6 +469,16 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     featureFlag: "alertsEnabled",
   },
   {
+    key: "factory/intelligence/mhd-view",
+    label: "MHD View",
+    group: "Intelligence",
+    route: "/factory/intelligence/mhd-view",
+    sidebar: true,
+    settingsVisible: false,
+    accessLevel: "admin",
+    landing: false,
+  },
+  {
     key: "factory/intelligence/settings",
     label: "Intel Settings",
     group: "Intelligence",
@@ -644,6 +662,7 @@ export function factoryPageAllowsRole(page: FactoryPageDefinition, role?: string
   // The bonus checkout route is Admin/Owner-only (not Developer); do not widen it
   // through the general "admin" registry classification.
   if (page.key === "factory/production-bonuses") return role === "Admin" || role === "Owner";
+  if (page.key === "factory/intelligence/mhd-view") return ["Admin", "Owner", "Developer"].includes(role ?? "");
   const level = page.accessLevel ?? "user";
   if (level === "developer") return role === "Developer";
   // Account Groups and Daybook are also accessible to Owners in FactoryRoutes;

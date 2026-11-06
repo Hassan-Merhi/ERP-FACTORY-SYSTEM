@@ -28,12 +28,14 @@ import { Input } from "@/components/ui/input";
 import { CreateBaleProductDialog } from "../components/CreateBaleProductDialog";
 import { AdminAuthDialog } from "@/components/AdminAuthDialog";
 import { useBaleProductsModel } from "./baleproducts/useBaleProductsModel";
+import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { BaleProductsDialog1 } from "./baleproducts/components/BaleProductsDialog1";
 import { BaleProductsDialog2 } from "./baleproducts/components/BaleProductsDialog2";
 import { BaleProductsView1 } from "./baleproducts/components/BaleProductsView1";
 
 export default function BaleProducts() {
   const model = useBaleProductsModel();
+  const mhd = useFactoryMhdView();
   const {
     createDialogOpen,
     setCreateDialogOpen,
@@ -87,14 +89,20 @@ export default function BaleProducts() {
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Bale Products</h1>
-              <p className="mt-0.5 text-xs text-slate-600 dark:text-blue-100/70">Manage product types for bale production</p>
+              <p className="mt-0.5 text-xs text-slate-600 dark:text-blue-100/70">
+                Manage product types for bale production
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {isAdmin && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="border-slate-300 bg-white/80 shadow-sm dark:border-blue-300/30 dark:bg-[#172a4e]/80" data-testid="button-actions-menu">
+                  <Button
+                    variant="outline"
+                    className="border-slate-300 bg-white/80 shadow-sm dark:border-blue-300/30 dark:bg-[#172a4e]/80"
+                    data-testid="button-actions-menu"
+                  >
                     Actions
                     <ChevronDown className="h-3 w-3 ml-2" />
                   </Button>
@@ -159,12 +167,39 @@ export default function BaleProducts() {
         </div>
         <div className="relative grid grid-cols-2 gap-3 border-t border-blue-200/60 px-4 py-4 sm:px-6 xl:grid-cols-4 dark:border-blue-200/10">
           {[
-            { label: "Total Products", value: products?.length ?? 0, icon: Package, style: "border-blue-200 bg-blue-50/80 text-blue-700 dark:border-blue-400/25 dark:bg-blue-500/15 dark:text-blue-200" },
-            { label: "Categories", value: categories?.length ?? 0, icon: Tags, style: "border-violet-200 bg-violet-50/80 text-violet-700 dark:border-violet-400/25 dark:bg-violet-500/15 dark:text-violet-200" },
-            { label: "Active Products", value: (products ?? []).filter((product) => product.active !== false).length, icon: Layers3, style: "border-emerald-200 bg-emerald-50/80 text-emerald-700 dark:border-emerald-400/25 dark:bg-emerald-500/15 dark:text-emerald-200" },
-            { label: "Hidden Products", value: (products ?? []).filter((product) => product.active === false).length, icon: Archive, style: "border-amber-200 bg-amber-50/80 text-amber-700 dark:border-amber-400/25 dark:bg-amber-500/15 dark:text-amber-200" },
+            {
+              label: "Total Products",
+              value: products?.length ?? 0,
+              icon: Package,
+              style:
+                "border-blue-200 bg-blue-50/80 text-blue-700 dark:border-blue-400/25 dark:bg-blue-500/15 dark:text-blue-200",
+            },
+            {
+              label: "Categories",
+              value: categories?.length ?? 0,
+              icon: Tags,
+              style:
+                "border-violet-200 bg-violet-50/80 text-violet-700 dark:border-violet-400/25 dark:bg-violet-500/15 dark:text-violet-200",
+            },
+            {
+              label: "Active Products",
+              value: (products ?? []).filter((product) => product.active !== false).length,
+              icon: Layers3,
+              style:
+                "border-emerald-200 bg-emerald-50/80 text-emerald-700 dark:border-emerald-400/25 dark:bg-emerald-500/15 dark:text-emerald-200",
+            },
+            {
+              label: "Hidden Products",
+              value: (products ?? []).filter((product) => product.active === false).length,
+              icon: Archive,
+              style:
+                "border-amber-200 bg-amber-50/80 text-amber-700 dark:border-amber-400/25 dark:bg-amber-500/15 dark:text-amber-200",
+            },
           ].map(({ label, value, icon: Icon, style }) => (
-            <div key={label} className={`flex min-w-0 items-center gap-3 rounded-xl border px-3 py-3 shadow-sm ${style}`}>
+            <div
+              key={label}
+              className={`flex min-w-0 items-center gap-3 rounded-xl border px-3 py-3 shadow-sm ${style}`}
+            >
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-current/15 bg-white/50 dark:bg-white/5">
                 <Icon className="h-5 w-5" />
               </div>
@@ -210,7 +245,10 @@ export default function BaleProducts() {
             {categories && categories.length > 0 ? (
               <div className="space-y-1">
                 {categories.map((cat) => {
-                  const catProducts = (products ?? []).filter((p) => p.categoryId === cat.id);
+                  const catProducts = mhd.sortRows(
+                    (products ?? []).filter((p) => p.categoryId === cat.id),
+                    (p) => p.articleCode
+                  );
                   const isExpanded = expandedCategories.has(cat.id);
                   return (
                     <div key={cat.id} className="rounded-md border overflow-hidden">
@@ -331,7 +369,7 @@ export default function BaleProducts() {
                                       {p.articleCode}
                                     </td>
                                     <td className="px-4 py-1.5 font-medium">
-                                      {p.name}
+                                      {mhd.nameFor(p.articleCode, p.name)}
                                       {p.active === false && (
                                         <Badge variant="outline" className="ml-2 text-xs">
                                           Hidden

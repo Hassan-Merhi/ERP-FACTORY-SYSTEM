@@ -332,10 +332,10 @@ export function AppSidebar({ user, onLogout }: { user?: SidebarUser; onLogout: (
   };
 
   return (
-    <Sidebar className="flex!">
+    <Sidebar className="flex! premium-shell-sidebar">
       <ModuleHeader icon={Package} label="Business OS" tagline="ERP / Warehouse" accent={MODULE_ACCENT.erp} />
 
-      <SidebarContent className="px-3 py-2 overflow-y-auto">
+      <SidebarContent className="premium-nav-scroll px-3 py-2 overflow-y-auto">
         <PinnedNavList
           items={pinnedItems}
           color={NAV_COLOR.pinned}

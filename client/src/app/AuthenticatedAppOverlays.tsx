@@ -1,6 +1,12 @@
 import { Suspense, useEffect, useState } from "react";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { FactoryLanOriginBadge } from "@/components/FactoryLanOriginBadge";
+import { GlobalSnowfall } from "@/components/GlobalSnowfall";
+import { GlobalSeasonalDecorations } from "@/components/GlobalSeasonalDecorations";
+import { useChristmasMode } from "@/hooks/useChristmasMode";
+import { ChristmasLoginEntrance } from "@/components/ChristmasLoginEntrance";
+import { ChristmasSleighFlyover } from "@/components/ChristmasSleighFlyover";
+import { useSeasonalCameraActivity } from "@/lib/seasonalCameraActivity";
 
 const RemoteSupportRuntime = lazy(() =>
   import("@/components/RemoteSupportRuntime").then((module) => ({
@@ -39,10 +45,18 @@ function useDeferredRemoteSupport() {
  */
 export function AuthenticatedAppOverlays() {
   const remoteSupportReady = useDeferredRemoteSupport();
+  const { settingQuery } = useChristmasMode();
+  const christmasModeEnabled = settingQuery.data?.enabled === true;
+  const cameraActive = useSeasonalCameraActivity();
+  const allowSeasonalAnimations = christmasModeEnabled && !cameraActive;
 
   return (
     <>
       <FactoryLanOriginBadge />
+      <GlobalSeasonalDecorations enabled={christmasModeEnabled} />
+      <GlobalSnowfall enabled={allowSeasonalAnimations} />
+      <ChristmasSleighFlyover enabled={allowSeasonalAnimations} />
+      <ChristmasLoginEntrance enabled={allowSeasonalAnimations} queryStatus={settingQuery.status} />
       <Suspense fallback={null}>{remoteSupportReady ? <RemoteSupportRuntime /> : null}</Suspense>
     </>
   );

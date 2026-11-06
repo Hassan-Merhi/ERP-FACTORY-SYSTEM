@@ -13,6 +13,7 @@ import {
   KeyRound,
   Tag,
   ClipboardList,
+  LifeBuoy,
 } from "lucide-react";
 
 export interface PosNavItem {
@@ -21,6 +22,8 @@ export interface PosNavItem {
   icon: ComponentType<{ className?: string }>;
   active: boolean;
   testId: string;
+  /** Destination route, also used to list this page in Help & Training. */
+  path: string;
   onClick: () => void;
   badge?: number;
 }
@@ -57,6 +60,7 @@ export function usePosNavigationItems({
         icon: ShoppingCart,
         active: currentLocation === "/" || currentLocation === "/pos" || currentLocation === "/retail/pos",
         testId: "button-pos-tab",
+        path: "/retail/pos",
         onClick: () => setLocation("/retail/pos"),
       },
       {
@@ -65,7 +69,17 @@ export function usePosNavigationItems({
         icon: KeyRound,
         active: currentLocation === "/my-settings",
         testId: "button-pos-my-settings-tab",
+        path: "/my-settings",
         onClick: () => setLocation("/my-settings"),
+      },
+      {
+        label: "Help & Training",
+        group: "tools",
+        icon: LifeBuoy,
+        active: currentLocation === "/help-training",
+        testId: "button-pos-help-training-tab",
+        path: "/help-training",
+        onClick: () => setLocation("/help-training"),
       },
     ];
   }
@@ -89,6 +103,7 @@ export function usePosNavigationItems({
       icon: ShoppingCart,
       active: isOnPOS,
       testId: "button-pos-tab",
+      path: "/pos",
       onClick: () => setLocation("/pos"),
     },
     {
@@ -97,6 +112,7 @@ export function usePosNavigationItems({
       icon: BookOpen,
       active: isOnDaybook,
       testId: "button-daybook-tab",
+      path: "/pos-daybook",
       onClick: () => setLocation("/pos-daybook"),
     },
     {
@@ -105,6 +121,7 @@ export function usePosNavigationItems({
       icon: MapPin,
       active: isOnInventory,
       testId: "button-inventory-tab",
+      path: "/location-inventory",
       onClick: () => setLocation("/location-inventory"),
     },
     {
@@ -113,6 +130,7 @@ export function usePosNavigationItems({
       icon: Tag,
       active: isOnPriceList,
       testId: "button-price-list-tab",
+      path: "/pos-price-list",
       onClick: () => setLocation("/pos-price-list"),
     },
     {
@@ -121,6 +139,7 @@ export function usePosNavigationItems({
       icon: Package,
       active: isOnTransfer,
       testId: "button-stock-transfer-tab",
+      path: "/vouchers?tab=transfer",
       onClick: () => setLocation("/vouchers?tab=transfer"),
     },
     {
@@ -129,6 +148,7 @@ export function usePosNavigationItems({
       icon: ClipboardList,
       active: isOnTransferOrders,
       testId: "button-transfer-orders-tab",
+      path: "/pos-transfer-orders",
       onClick: () => setLocation("/pos-transfer-orders"),
     },
     {
@@ -137,6 +157,7 @@ export function usePosNavigationItems({
       icon: Ship,
       active: isOnContainers,
       testId: "button-pos-containers-tab",
+      path: "/pos-containers",
       onClick: () => setLocation("/pos-containers"),
     },
     ...(user?.canAccessCustomers
@@ -147,6 +168,7 @@ export function usePosNavigationItems({
             icon: Users,
             active: isOnCustomers,
             testId: "button-customers-tab",
+            path: "/pos-customers",
             onClick: () => setLocation("/pos-customers"),
           },
         ]
@@ -159,6 +181,7 @@ export function usePosNavigationItems({
             icon: Upload,
             active: isOnImport,
             testId: "button-pos-import-tab",
+            path: "/pos-import",
             onClick: () => setLocation("/pos-import"),
           },
         ]
@@ -171,6 +194,7 @@ export function usePosNavigationItems({
             icon: MessageSquare,
             active: isOnChat,
             testId: "button-chat-tab",
+            path: "/pos-chat",
             onClick: () => setLocation("/pos-chat"),
             badge: chatUnread?.count || 0,
           },
@@ -182,7 +206,17 @@ export function usePosNavigationItems({
       icon: Cog,
       active: isOnSettings,
       testId: "button-settings-tab",
+      path: "/pos-settings",
       onClick: () => setLocation("/pos-settings"),
+    },
+    {
+      label: "Help & Training",
+      group: "tools",
+      icon: LifeBuoy,
+      active: currentLocation === "/help-training",
+      testId: "button-pos-help-training-tab",
+      path: "/help-training",
+      onClick: () => setLocation("/help-training"),
     },
   ];
 

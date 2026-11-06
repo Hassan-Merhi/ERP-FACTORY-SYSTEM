@@ -276,6 +276,12 @@ These current-reference documents are indexed here for audit coverage. Their beh
 | [ticket-management-phase4-operations.md](ticket-management-phase4-operations.md) | Ticket Management Phase 4: delivery operations, case notifications and 24h escalation |
 | [ticket-management-phase5-reporting.md](ticket-management-phase5-reporting.md) | Ticket Management Phase 5: admin reporting and CSV export policy |
 | [ticket-management-phase6-verification.md](ticket-management-phase6-verification.md) | Ticket Management Phase 6: verification and staging release gate |
+| [christmas-mode-phase1.md](christmas-mode-phase1.md) | Global Christmas Mode Phase 1: configuration |
+| [christmas-mode-phase2.md](christmas-mode-phase2.md) | Global Christmas Mode Phase 2: snowfall engine |
+| [christmas-mode-phase3.md](christmas-mode-phase3.md) | Global Christmas Mode Phase 3: decorations |
+| [christmas-mode-phase4.md](christmas-mode-phase4.md) | Global Christmas Mode Phase 4: one-time post-login entrance |
+| [christmas-mode-phase5.md](christmas-mode-phase5.md) | Global Christmas Mode Phase 5: performance, scanner and accessibility hardening |
+| [christmas-mode-developer-allowlist.md](christmas-mode-developer-allowlist.md) | Christmas Mode: Developer-only access and per-user rollout |
 
 | [October 2026 salary reconciliation](accounting/october-2026-salary-reconciliation-20261103.md) | Read-only October payroll, paid cash and salary advances reconciliation (no journal edits) |
 | [Factory worker-advance ledger audit](accounting/factory-worker-advance-ledger-audit-2026-11-03.md) | Current worker-advance ledger investigation, safeguards and payment evidence |

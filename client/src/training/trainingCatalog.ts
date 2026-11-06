@@ -3,9 +3,9 @@
  * confidential data. Actual tutorials are produced by the sandbox recorder
  * and only attached after review and publication.
  */
-export type TrainingMode = "erp" | "factory";
-export type TrainingCategory =
-  "Getting started" | "Production" | "Inventory" | "Sales" | "Finance" | "People" | "Reports";
+export type TrainingMode = "erp" | "factory" | "properties" | "pos";
+/** Curated guides use these; generated topics take the sidebar section label. */
+export type TrainingCategory = string;
 export interface TrainingTopic {
   id: string;
   title: string;
@@ -15,6 +15,8 @@ export interface TrainingTopic {
   accessKey?: string;
   route?: string;
   steps: readonly string[];
+  /** Tabs on this page the current user may open (generated topics only). */
+  tabs?: readonly string[];
   keywords?: readonly string[];
 }
 
@@ -276,18 +278,3 @@ export const TRAINING_TOPICS: readonly TrainingTopic[] = [
     keywords: ["kpi", "sales", "analytics"],
   },
 ] as const;
-
-/** UI filtering is not an authorization boundary; no sensitive data belongs in this catalog. */
-export function visibleTrainingTopics(
-  mode: TrainingMode,
-  role: string | null | undefined,
-  accessKeys: readonly string[] | undefined,
-  fullAccess: boolean
-): readonly TrainingTopic[] {
-  const privileged = ["Admin", "Owner", "Developer"].includes(role ?? "");
-  return TRAINING_TOPICS.filter(
-    (topic) =>
-      (topic.mode === mode || topic.mode === "both") &&
-      (!topic.accessKey || privileged || fullAccess || Boolean(accessKeys?.includes(topic.accessKey)))
-  );
-}

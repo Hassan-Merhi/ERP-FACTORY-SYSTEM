@@ -29,6 +29,7 @@ import { LedgerAccount, BankAccount, insertBankAccountSchema, updateLedgerAccoun
 import type { InsertBankAccount, UpdateLedgerAccount } from "@shared/schema";
 import { Account, Transaction, WaRule, WaChat } from "../accounts/accountTypes";
 import { readNotInLedger } from "./NotInLedgerSection";
+import { buildAccountStatementTabUrl } from "./accountStatementNavigation";
 
 /** Voucher type → Vouchers page tab, for statement row navigation. */
 const VOUCHER_TAB_MAP: Record<string, string> = {
@@ -628,10 +629,12 @@ export function useAccountsLegacyModel() {
 
   const handleAccountChange = (id: string) => {
     const acc = allAccounts.find((a) => a.id === id);
-    if (acc) {
-      setSelectedAccount(acc);
-      updateUrlParams({ accountId: String(acc.accountId), accountType: acc.type });
-    }
+    if (!acc) return;
+
+    // Keep the overview (including expansion, search and scroll position) intact.
+    // The existing accountId/accountType deep link opens the statement in the new tab.
+    const statementUrl = buildAccountStatementTabUrl(window.location.href, acc, periodFilter);
+    window.open(statementUrl, "_blank", "noopener,noreferrer");
   };
 
   const toggleVoucherSelection = (voucherId: number) => {

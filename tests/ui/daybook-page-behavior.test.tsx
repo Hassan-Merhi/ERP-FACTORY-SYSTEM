@@ -108,7 +108,13 @@ vi.mock("@/contexts/CompanyContext", () => ({
   }),
 }));
 vi.mock("@/contexts/CurrencyContext", () => ({
-  useCurrencyContext: () => ({ formatAmount: (value: unknown) => `$${value}` }),
+  // The Daybook formats totals with formatHistoricalBaseAmount (#2973) and
+  // per-transaction amounts with formatTransactionAmount.
+  useCurrencyContext: () => ({
+    formatAmount: (value: unknown) => `$${value}`,
+    formatHistoricalBaseAmount: (value: unknown) => `$${value}`,
+    formatTransactionAmount: (value: unknown) => `$${value}`,
+  }),
 }));
 vi.mock("@/contexts/DateFormatContext", () => ({
   useDateFormat: () => ({

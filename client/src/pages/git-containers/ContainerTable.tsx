@@ -42,7 +42,7 @@ export function ContainerTable({ containers, colVis, sessionCompanyId, readOnly 
   );
 
   return (
-    <div className="rounded-md border bg-card h-full flex flex-col shadow-xs overflow-clip">
+    <div className="rounded-xl border border-border/80 bg-card h-full flex flex-col shadow-sm overflow-clip dark:border-violet-500/20">
       <div
         ref={virtualRows.scrollRef}
         data-horizontal-scroll="true"
@@ -60,45 +60,45 @@ export function ContainerTable({ containers, colVis, sessionCompanyId, readOnly 
             wrapperClassName="overflow-visible border-0 rounded-none"
             mobileLayout="cards"
           >
-            <TableHeader className="sticky top-0 z-50 bg-teal-800 dark:bg-teal-950">
-              <TableRow className="bg-transparent! hover:bg-transparent! border-b border-teal-600 dark:border-teal-700">
-                <TableHead className="w-[40px] font-bold h-9 text-teal-50 text-center">#</TableHead>
-                <TableHead className="w-[110px] font-bold h-9 text-teal-50">Container #</TableHead>
-                {colVis.supplier && <TableHead className="w-[100px] font-bold h-9 text-teal-50">Supplier</TableHead>}
-                {colVis.company && <TableHead className="w-[120px] font-bold h-9 text-teal-50">Company</TableHead>}
-                {colVis.shopName && <TableHead className="w-[100px] font-bold h-9 text-teal-50">Shop Name</TableHead>}
-                {colVis.eta && <TableHead className="w-[100px] font-bold h-9 text-teal-50">ETA DAS</TableHead>}
+            <TableHeader className="sticky top-0 z-50 bg-violet-700 dark:bg-[#32205c]">
+              <TableRow className="bg-transparent! hover:bg-transparent! border-b border-violet-500/40 dark:border-violet-400/20">
+                <TableHead className="w-[40px] font-bold h-9 text-white text-center">#</TableHead>
+                <TableHead className="w-[110px] font-bold h-9 text-white">Container #</TableHead>
+                {colVis.supplier && <TableHead className="w-[100px] font-bold h-9 text-white">Supplier</TableHead>}
+                {colVis.company && <TableHead className="w-[120px] font-bold h-9 text-white">Company</TableHead>}
+                {colVis.shopName && <TableHead className="w-[100px] font-bold h-9 text-white">Shop Name</TableHead>}
+                {colVis.eta && <TableHead className="w-[100px] font-bold h-9 text-white">ETA DAS</TableHead>}
                 {colVis.cost && (
-                  <TableHead className="w-[85px] font-bold text-right h-9 text-teal-50">Cost ($)</TableHead>
+                  <TableHead className="w-[85px] font-bold text-right h-9 text-white">Cost ($)</TableHead>
                 )}
                 {colVis.freight && (
-                  <TableHead className="w-[70px] font-bold text-center h-9 text-teal-50">Freight</TableHead>
+                  <TableHead className="w-[70px] font-bold text-center h-9 text-white">Freight</TableHead>
                 )}
-                {colVis.truckNo && <TableHead className="w-[100px] font-bold h-9 text-teal-50">Truck #</TableHead>}
-                {colVis.location && <TableHead className="w-[110px] font-bold h-9 text-teal-50">Location</TableHead>}
+                {colVis.truckNo && <TableHead className="w-[100px] font-bold h-9 text-white">Truck #</TableHead>}
+                {colVis.location && <TableHead className="w-[110px] font-bold h-9 text-white">Location</TableHead>}
                 {colVis.borderDate && (
-                  <TableHead className="w-[100px] font-bold h-9 text-teal-50">Border Date</TableHead>
+                  <TableHead className="w-[100px] font-bold h-9 text-white">Border Date</TableHead>
                 )}
                 {colVis.maxOffload && (
-                  <TableHead className="w-[100px] font-bold h-9 text-teal-50">Max Offload</TableHead>
+                  <TableHead className="w-[100px] font-bold h-9 text-white">Max Offload</TableHead>
                 )}
                 {colVis.delayed && (
-                  <TableHead className="w-[70px] font-bold text-center h-9 text-teal-50">Delayed</TableHead>
+                  <TableHead className="w-[70px] font-bold text-center h-9 text-white">Delayed</TableHead>
                 )}
-                {colVis.docs && <TableHead className="w-[50px] font-bold text-center h-9 text-teal-50">Docs</TableHead>}
-                {colVis.docsSent && <TableHead className="w-[100px] font-bold h-9 text-teal-50">Docs Sent</TableHead>}
+                {colVis.docs && <TableHead className="w-[50px] font-bold text-center h-9 text-white">Docs</TableHead>}
+                {colVis.docsSent && <TableHead className="w-[100px] font-bold h-9 text-white">Docs Sent</TableHead>}
                 {colVis.transporter && (
-                  <TableHead className="w-[110px] font-bold h-9 text-teal-50">Transporter</TableHead>
+                  <TableHead className="w-[110px] font-bold h-9 text-white">Transporter</TableHead>
                 )}
                 {colVis.transportFee && (
-                  <TableHead className="w-[90px] font-bold text-right h-9 text-teal-50">Trans. Fee</TableHead>
+                  <TableHead className="w-[90px] font-bold text-right h-9 text-white">Trans. Fee</TableHead>
                 )}
-                {colVis.agent && <TableHead className="w-[90px] font-bold h-9 text-teal-50">Agent</TableHead>}
+                {colVis.agent && <TableHead className="w-[90px] font-bold h-9 text-white">Agent</TableHead>}
                 {colVis.dutyFee && (
-                  <TableHead className="w-[80px] font-bold text-right h-9 text-teal-50">Duty ($)</TableHead>
+                  <TableHead className="w-[80px] font-bold text-right h-9 text-white">Duty ($)</TableHead>
                 )}
-                {colVis.notes && <TableHead className="w-[120px] font-bold h-9 text-teal-50">Notes</TableHead>}
-                {colVis.blDocs && <TableHead className="w-[120px] font-bold h-9 text-teal-50">BL Docs</TableHead>}
+                {colVis.notes && <TableHead className="w-[120px] font-bold h-9 text-white">Notes</TableHead>}
+                {colVis.blDocs && <TableHead className="w-[120px] font-bold h-9 text-white">BL Docs</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
