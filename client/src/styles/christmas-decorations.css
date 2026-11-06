@@ -1,0 +1,257 @@
+/*
+ * Phase 3 — seasonal shell ornaments, opt-in with a single document attribute.
+ * Decorative only: do not change layout dimensions, route behavior or focus.
+ * No remote resources, JS timers or per-page animation loops.
+ */
+
+/* A thin evergreen cable with spaced warm-white, ruby and jade bulbs.
+   Keep it within the top 11px so it does not compete with header controls. */
+html[data-christmas-mode="on"] [data-slot="app-top-bar"],
+html[data-christmas-mode="on"] [data-slot="pos-top-bar"] {
+  position: relative;
+}
+
+html[data-christmas-mode="on"] [data-slot="app-top-bar"]::before,
+html[data-christmas-mode="on"] [data-slot="pos-top-bar"]::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 10px;
+  pointer-events: none;
+  z-index: 1;
+  background: linear-gradient(to bottom, transparent 0 3px, rgb(55 120 91 / 0.48) 3px 4px, transparent 4px);
+}
+
+html[data-christmas-mode="on"] [data-slot="app-top-bar"]::after,
+html[data-christmas-mode="on"] [data-slot="pos-top-bar"]::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 1px;
+  height: 10px;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.86;
+  background-image:
+    radial-gradient(circle at 12px 5px, #f3ca78 0 2.8px, transparent 3.6px),
+    radial-gradient(circle at 36px 5px, #d85f63 0 2.7px, transparent 3.6px),
+    radial-gradient(circle at 60px 5px, #60b99e 0 2.7px, transparent 3.6px),
+    radial-gradient(circle at 84px 5px, #eacb90 0 2.8px, transparent 3.6px);
+  background-size: 96px 10px;
+  background-repeat: repeat-x;
+  filter: drop-shadow(0 0 2px rgb(239 191 115 / 0.28));
+  animation: christmas-lights-glow 7s ease-in-out infinite alternate;
+}
+
+@keyframes christmas-lights-glow {
+  from { opacity: 0.66; }
+  to { opacity: 0.95; }
+}
+
+/* Sidebar brand ornament; visually separated from the company name. */
+[data-seasonal-brand-accent] {
+  display: none;
+}
+
+html[data-christmas-mode="on"] [data-seasonal-brand-accent] {
+  position: absolute;
+  inset-inline-end: 11px;
+  top: 10px;
+  display: block;
+  width: 25px;
+  height: 30px;
+  color: #277b58;
+  pointer-events: none;
+  user-select: none;
+  z-index: 2;
+  opacity: 0.92;
+}
+
+html.dark[data-christmas-mode="on"] [data-seasonal-brand-accent] {
+  color: #7ed5ac;
+}
+
+[data-seasonal-brand-accent] .seasonal-brand-tree {
+  position: absolute;
+  inset-inline-start: 2px;
+  top: 5px;
+  height: 22px;
+  width: 22px;
+  stroke-width: 1.9;
+  filter: drop-shadow(0 2px 3px rgb(24 91 59 / 0.14));
+}
+
+[data-seasonal-brand-accent] .seasonal-brand-sparkle {
+  position: absolute;
+  inset-inline-end: 0;
+  top: 0;
+  width: 11px;
+  height: 11px;
+  color: #d9a44a;
+  stroke-width: 2.1;
+  animation: christmas-star-glow 6s ease-in-out infinite alternate;
+}
+
+@keyframes christmas-star-glow {
+  from { opacity: 0.58; }
+  to { opacity: 1; }
+}
+
+/* A quiet gold-green seasonal trim, not a replacement for company colors. */
+html[data-christmas-mode="on"] .premium-nav-brand {
+  box-shadow: inset 0 -2px 0 rgb(70 144 101 / 0.22);
+}
+
+html[data-christmas-mode="on"] [data-pos-sidebar-header] {
+  position: relative;
+}
+
+html[data-christmas-mode="on"] [data-pos-sidebar-header] [data-seasonal-brand-accent] {
+  inset-inline-end: 7px;
+  top: 5px;
+  transform: scale(0.82);
+  transform-origin: top right;
+}
+
+/* Preserve print exports and user accessibility preferences. */
+@media print {
+  html[data-christmas-mode="on"] [data-slot="app-top-bar"]::before,
+  html[data-christmas-mode="on"] [data-slot="app-top-bar"]::after,
+  html[data-christmas-mode="on"] [data-slot="pos-top-bar"]::before,
+  html[data-christmas-mode="on"] [data-slot="pos-top-bar"]::after,
+  html[data-christmas-mode="on"] [data-seasonal-brand-accent] {
+    display: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-christmas-mode="on"] [data-slot="app-top-bar"]::after,
+  html[data-christmas-mode="on"] [data-slot="pos-top-bar"]::after,
+  html[data-christmas-mode="on"] [data-seasonal-brand-accent] .seasonal-brand-sparkle {
+    animation: none !important;
+  }
+}
+
+/* Camera decoding has priority over decorative lighting animation. The tree
+   and bulbs remain visible but stop pulsing until the video stream closes. */
+html[data-christmas-mode="on"][data-seasonal-camera-active="true"] [data-slot="app-top-bar"]::after,
+html[data-christmas-mode="on"][data-seasonal-camera-active="true"] [data-slot="pos-top-bar"]::after,
+html[data-christmas-mode="on"][data-seasonal-camera-active="true"] [data-seasonal-brand-accent] .seasonal-brand-sparkle {
+  animation: none !important;
+}
+
+/* Conserve battery/bandwidth when the OS/browser explicitly requests it. */
+@media (prefers-reduced-data: reduce) {
+  html[data-christmas-mode="on"] [data-slot="app-top-bar"]::after,
+  html[data-christmas-mode="on"] [data-slot="pos-top-bar"]::after,
+  html[data-christmas-mode="on"] [data-seasonal-brand-accent] .seasonal-brand-sparkle {
+    animation: none !important;
+  }
+}
+
+/* Extra Christmas ambience for explicitly selected accounts only.
+   Small corner ornaments sit below dialogs and never absorb pointer events. */
+.seasonal-atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 32;
+  overflow: hidden;
+  pointer-events: none !important;
+  user-select: none;
+  contain: layout style paint;
+}
+
+.seasonal-atmosphere-sprig {
+  position: absolute;
+  top: 68px;
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  border: 1px solid rgb(180 149 87 / 0.16);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(62 143 94 / 0.12), transparent 72%);
+  filter: drop-shadow(0 3px 8px rgb(34 88 49 / 0.12));
+  opacity: 0.8;
+}
+
+.seasonal-atmosphere-sprig-left { inset-inline-start: 8px; }
+.seasonal-atmosphere-sprig-right { inset-inline-end: 8px; }
+
+.seasonal-atmosphere-tree,
+.seasonal-atmosphere-gift {
+  width: 32px;
+  height: 32px;
+  stroke-width: 1.5;
+  color: #39875b;
+}
+
+.seasonal-atmosphere-gift { color: #bf5b65; }
+html.dark .seasonal-atmosphere-tree { color: #80c99c; }
+html.dark .seasonal-atmosphere-gift { color: #f49a9e; }
+
+.seasonal-atmosphere-star {
+  position: absolute;
+  top: 4px;
+  inset-inline-end: 5px;
+  width: 16px;
+  height: 16px;
+  color: #d5a347;
+  animation: christmas-star-glow 5.5s ease-in-out infinite alternate;
+}
+
+.seasonal-atmosphere-berry {
+  position: absolute;
+  bottom: 7px;
+  inset-inline-start: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #c75e5a;
+  box-shadow: 8px 4px 0 -2px #d9a752;
+}
+
+.seasonal-atmosphere-flurry {
+  position: absolute;
+  bottom: 20px;
+  inset-inline-end: 24px;
+  opacity: 0.5;
+  color: #7aa6c6;
+}
+
+.seasonal-atmosphere-flurry-icon {
+  width: 24px;
+  height: 24px;
+  stroke-width: 1.5;
+  animation: christmas-star-glow 7s ease-in-out infinite alternate;
+}
+
+html.dark .seasonal-atmosphere-flurry { color: #d1ebfa; }
+
+@media (max-width: 767px) {
+  .seasonal-atmosphere-sprig {
+    top: max(64px, calc(env(safe-area-inset-top) + 48px));
+    width: 40px;
+    height: 40px;
+    opacity: 0.58;
+  }
+  .seasonal-atmosphere-sprig-left { inset-inline-start: 2px; }
+  .seasonal-atmosphere-sprig-right { inset-inline-end: 2px; }
+  .seasonal-atmosphere-tree,
+  .seasonal-atmosphere-gift { width: 21px; height: 21px; }
+  .seasonal-atmosphere-star { width: 11px; height: 11px; }
+  .seasonal-atmosphere-flurry { display: none; }
+}
+
+@media print {
+  .seasonal-atmosphere { display: none !important; }
+}
+
+@media (prefers-reduced-motion: reduce), (prefers-reduced-data: reduce) {
+  .seasonal-atmosphere * { animation: none !important; }
+}
+
+html[data-seasonal-camera-active="true"] .seasonal-atmosphere * {
+  animation: none !important;
+}

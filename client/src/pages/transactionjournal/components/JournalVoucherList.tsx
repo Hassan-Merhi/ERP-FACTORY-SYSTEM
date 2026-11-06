@@ -7,7 +7,7 @@
  * displaying company and voucher-type headers over server-grouped rows.
  */
 import { Fragment } from "react";
-import { AlertCircle, ChevronLeft, ChevronRight, Eye, EyeOff, Pencil, RefreshCw, X } from "lucide-react";
+import { AlertCircle, ChevronLeft, ChevronRight, Eye, EyeOff, ListFilter, Pencil, RefreshCw, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,13 +60,13 @@ function RowActions({
   if (voucher.entryType === "offload") {
     return (
       <>
-        <Button variant="ghost" size="icon"
+        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-600 hover:bg-violet-100 hover:text-violet-700 dark:text-slate-300 dark:hover:bg-violet-400/15 dark:hover:text-violet-200"
           onClick={() => model.openInCompany(voucher.companyId, `/offloads/${voucher.offloadId}`)}
           data-testid={`button-view-offload${suffix}-${voucher.offloadId}`}
           title="View offload">
           <Eye className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="icon"
+        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-600 hover:bg-violet-100 hover:text-violet-700 dark:text-slate-300 dark:hover:bg-violet-400/15 dark:hover:text-violet-200"
           onClick={() => model.openInCompany(voucher.companyId, `/containers/${voucher.containerId}`)}
           data-testid={`button-open-offload-container${suffix}-${voucher.offloadId}`}
           title="Open container">
@@ -80,6 +80,7 @@ function RowActions({
       <Button
         variant="ghost"
         size="icon"
+        className="h-8 w-8 rounded-lg text-slate-600 hover:bg-violet-100 hover:text-violet-700 dark:text-slate-300 dark:hover:bg-violet-400/15 dark:hover:text-violet-200"
         onClick={() => model.openDetail(voucher.id)}
         data-testid={`button-preview-voucher${suffix}-${voucher.id}`}
         title="Preview"
@@ -89,6 +90,7 @@ function RowActions({
       <Button
         variant="ghost"
         size="icon"
+        className="h-8 w-8 rounded-lg text-slate-600 hover:bg-violet-100 hover:text-violet-700 dark:text-slate-300 dark:hover:bg-violet-400/15 dark:hover:text-violet-200"
         onClick={() => model.toggleHideRow(voucher.id)}
         data-testid={`button-hide-voucher${suffix}-${voucher.id}`}
         title={isHidden ? "Unhide row" : "Hide row"}
@@ -98,6 +100,7 @@ function RowActions({
       <Button
         variant="ghost"
         size="icon"
+        className="h-8 w-8 rounded-lg text-slate-600 hover:bg-violet-100 hover:text-violet-700 dark:text-slate-300 dark:hover:bg-violet-400/15 dark:hover:text-violet-200"
         onClick={() => model.openInCompany(voucher.companyId, `/daybook?voucherId=${voucher.id}`)}
         data-testid={`button-edit-voucher${suffix}-${voucher.id}`}
         title="Open in Daybook"
@@ -112,17 +115,17 @@ function DesktopTable({ model }: { model: TransactionJournalModel }) {
   const { hideAmounts, isLoading, visibleVouchers } = model;
   return (
     <div className="hidden md:block">
-      <div className="table-responsive">
+      <div className="table-responsive px-3 pb-3 sm:px-4">
         {/* Phone landscape is wider than md; the rows restack as cards there too. */}
-        <Table mobileLayout="cards">
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[110px]">Date</TableHead>
-              <TableHead className="w-[150px]">Company</TableHead>
-              <TableHead className="w-[160px]">Type</TableHead>
-              <TableHead>Description</TableHead>
-              {!hideAmounts && <TableHead className="text-right w-[130px]">Amount</TableHead>}
-              <TableHead className="w-[120px] text-center">Actions</TableHead>
+        <Table mobileLayout="cards" className="overflow-hidden rounded-xl text-sm">
+          <TableHeader className="bg-slate-100/90 dark:bg-white/[0.055]">
+            <TableRow className="border-b border-slate-200 dark:border-white/10">
+              <TableHead className="w-[110px] text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Date</TableHead>
+              <TableHead className="w-[150px] text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Company</TableHead>
+              <TableHead className="w-[160px] text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Type</TableHead>
+              <TableHead className="text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Description</TableHead>
+              {!hideAmounts && <TableHead className="w-[130px] text-right text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Amount</TableHead>}
+              <TableHead className="w-[120px] text-center text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -149,17 +152,17 @@ function DesktopTable({ model }: { model: TransactionJournalModel }) {
                 return (
                   <Fragment key={`${v.entryType || "voucher"}-${v.id}`}>
                     {newCompany && (
-                      <TableRow className="bg-muted/60 hover:bg-muted/60" data-testid={`row-company-group-${v.companyId}`}>
-                        <TableCell colSpan={hideAmounts ? 5 : 6} className="py-2">
-                          <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-sm ${companyColor(v.companyId)}`}>
+                      <TableRow className="border-t-2 border-violet-200 bg-gradient-to-r from-violet-100 via-purple-50 to-violet-50 hover:from-violet-100 hover:to-violet-50 dark:border-violet-400/20 dark:from-violet-500/25 dark:via-purple-500/15 dark:to-violet-500/10 dark:hover:from-violet-500/25" data-testid={`row-company-group-${v.companyId}`}>
+                        <TableCell colSpan={hideAmounts ? 5 : 6} className="py-2.5">
+                          <span className={`inline-block rounded-md px-2.5 py-1 text-xs font-bold ${companyColor(v.companyId)}`}>
                             {v.companyName}
                           </span>
                         </TableCell>
                       </TableRow>
                     )}
                     {newType && (
-                      <TableRow className="bg-muted/30 hover:bg-muted/30" data-testid={`row-type-group-${v.companyId}-${typeGroupKey(v.voucherType)}`}>
-                        <TableCell colSpan={hideAmounts ? 5 : 6} className="py-1.5 pl-6 text-xs font-semibold tracking-wide text-muted-foreground">
+                      <TableRow className="bg-slate-50/90 hover:bg-slate-50/90 dark:bg-white/[0.035] dark:hover:bg-white/[0.035]" data-testid={`row-type-group-${v.companyId}-${typeGroupKey(v.voucherType)}`}>
+                        <TableCell colSpan={hideAmounts ? 5 : 6} className="py-1.5 pl-6 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                           {voucherGroupLabel(v.voucherType)}
                         </TableCell>
                       </TableRow>
@@ -167,14 +170,14 @@ function DesktopTable({ model }: { model: TransactionJournalModel }) {
                     <TableRow
                       key={v.id}
                       data-testid={`row-voucher-${v.id}`}
-                      className={isHidden && model.showHidden ? "opacity-50" : ""}
+                      className={`border-b border-slate-100 transition-colors hover:bg-violet-50/60 dark:border-white/[0.06] dark:hover:bg-violet-400/[0.08] ${isHidden && model.showHidden ? "opacity-50" : ""}`}
                     >
-                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                      <TableCell className="whitespace-nowrap py-2.5 text-xs font-medium text-slate-600 dark:text-slate-300">
                         {fmtDate(v.voucherDate)}
                       </TableCell>
                       <TableCell>
                         <span
-                          className={`inline-block text-xs font-medium px-2 py-0.5 rounded-sm truncate max-w-[140px] ${companyColor(v.companyId)}`}
+                          className={`inline-block max-w-[140px] truncate rounded-md px-2 py-1 text-xs font-semibold ${companyColor(v.companyId)}`}
                         >
                           {v.companyName}
                         </span>
@@ -194,20 +197,20 @@ function DesktopTable({ model }: { model: TransactionJournalModel }) {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm max-w-xs text-muted-foreground">
+                      <TableCell className="max-w-xs py-2.5 text-sm text-slate-700 dark:text-slate-300">
                         <div className="flex items-center gap-1 truncate">
                           <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
                           <span className="truncate">{v.description || v.narration || "—"}</span>
                         </div>
                       </TableCell>
                       {!hideAmounts && (
-                        <TableCell className="text-right text-sm font-mono">
+                        <TableCell className="py-2.5 text-right font-mono text-sm font-semibold tabular-nums text-slate-900 dark:text-white">
                           <span className="text-xs text-muted-foreground mr-1">{v.currency}</span>
                           {formatAmount(v.totalAmount)}
                         </TableCell>
                       )}
                       <TableCell>
-                        <div className="flex items-center justify-center gap-1">
+                        <div className="flex items-center justify-center gap-0.5">
                           <RowActions voucher={v} model={model} suffix="" />
                         </div>
                       </TableCell>
@@ -243,20 +246,20 @@ function MobileCards({ model }: { model: TransactionJournalModel }) {
             return (
               <Fragment key={`${v.entryType || "voucher"}-${v.id}`}>
                 {newCompany && (
-                  <div className="px-3 py-2 bg-muted/60" data-testid={`card-company-group-${v.companyId}`}>
+                  <div className="border-t border-violet-200 bg-violet-100/80 px-3 py-2 dark:border-violet-400/20 dark:bg-violet-500/15" data-testid={`card-company-group-${v.companyId}`}>
                     <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-sm ${companyColor(v.companyId)}`}>
                       {v.companyName}
                     </span>
                   </div>
                 )}
                 {newType && (
-                  <div className="px-3 py-1.5 bg-muted/30 text-xs font-semibold text-muted-foreground"
+                  <div className="bg-slate-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:bg-white/[0.035] dark:text-slate-400"
                     data-testid={`card-type-group-${v.companyId}-${typeGroupKey(v.voucherType)}`}>
                     {voucherGroupLabel(v.voucherType)}
                   </div>
                 )}
                 <div
-                  className={`px-3 py-3 ${isHidden && model.showHidden ? "opacity-50" : ""}`}
+                  className={`px-3 py-3 transition-colors hover:bg-violet-50/60 dark:hover:bg-violet-400/[0.08] ${isHidden && model.showHidden ? "opacity-50" : ""}`}
                   data-testid={`card-voucher-${v.id}`}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -307,9 +310,10 @@ function MobileCards({ model }: { model: TransactionJournalModel }) {
 function ListHeader({ model }: { model: TransactionJournalModel }) {
   const { hideAmounts, hiddenRowIds, showHidden, page, totalPages } = model;
   return (
-    <CardHeader className="pb-3 flex flex-row items-center justify-between gap-2 flex-wrap">
+    <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 px-4 pb-3 pt-4 sm:px-5">
       <div className="flex items-center gap-2 flex-wrap">
-        <CardTitle className="text-base">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-400/15 dark:text-violet-300"><ListFilter className="h-4 w-4" /></span>
+        <CardTitle className="text-base font-bold tracking-tight">
           Transactions
           {!model.isLoading && (
             <span className="ml-2 text-sm font-normal text-muted-foreground">
@@ -320,7 +324,7 @@ function ListHeader({ model }: { model: TransactionJournalModel }) {
         <Button
           variant="ghost"
           size="sm"
-          className="gap-1.5 h-8 text-xs"
+          className="h-8 gap-1.5 rounded-lg text-xs text-slate-600 hover:bg-violet-50 hover:text-violet-700 dark:text-slate-300 dark:hover:bg-violet-400/10"
           onClick={model.toggleHideAmounts}
           title={hideAmounts ? "Show amounts" : "Hide amounts"}
           data-testid="button-toggle-hide-amounts"
@@ -331,7 +335,7 @@ function ListHeader({ model }: { model: TransactionJournalModel }) {
         <Button
           variant={showHidden ? "secondary" : "outline"}
           size="sm"
-          className="gap-1.5 h-8 text-xs"
+          className="h-8 gap-1.5 rounded-lg border-slate-200 bg-white/80 text-xs text-slate-600 dark:border-white/15 dark:bg-white/[0.04] dark:text-slate-300"
           onClick={() => model.setShowHidden((v) => !v)}
           disabled={hiddenRowIds.size === 0}
           title={
@@ -351,7 +355,7 @@ function ListHeader({ model }: { model: TransactionJournalModel }) {
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 text-xs text-muted-foreground"
+            className="h-8 rounded-lg text-xs text-muted-foreground"
             onClick={model.clearHiddenRows}
             data-testid="button-clear-hidden-rows"
             title="Clear all hidden rows"
@@ -393,7 +397,7 @@ function PaginationFooter({ model }: { model: TransactionJournalModel }) {
   const { page, totalPages, totalVouchers, limit } = model;
   if (totalPages <= 1) return null;
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-t">
+    <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 dark:border-white/10">
       <span className="text-sm text-muted-foreground">
         Showing {(page - 1) * limit + 1}–{Math.min(page * limit, totalVouchers)} of {totalVouchers.toLocaleString()}
       </span>
@@ -425,7 +429,7 @@ export function JournalVoucherList({ model }: { model: TransactionJournalModel }
   if (model.error) {
     const message = model.error instanceof Error ? model.error.message : "Unable to load transactions.";
     return (
-      <Card>
+      <Card className="overflow-hidden rounded-2xl border-slate-200/80 bg-white/90 shadow-sm dark:border-violet-400/20 dark:bg-slate-900/70">
         <CardContent
           className="flex flex-col items-center justify-center gap-3 py-12 text-center"
           data-testid="journal-error"
@@ -445,7 +449,7 @@ export function JournalVoucherList({ model }: { model: TransactionJournalModel }
   }
 
   return (
-    <Card>
+    <Card className="overflow-hidden rounded-2xl border-slate-200/80 bg-white/90 shadow-sm dark:border-violet-400/20 dark:bg-slate-900/70">
       <ListHeader model={model} />
       <CardContent className="p-0">
         <DesktopTable model={model} />

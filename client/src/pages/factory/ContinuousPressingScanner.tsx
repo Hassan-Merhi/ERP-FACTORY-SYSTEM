@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { createCameraDecoder, hasCameraAccess, type CameraBarcodeDecoder, type CameraDecoderEngine } from "./pressing-scanner/cameraDecoder";
 import { ContinuousScanGate } from "./pressing-scanner/continuousScanGate";
 import { PRESSING_TIME_ZONE } from "@shared/pressingTimeZone";
+import { pauseSeasonalEffectsForCamera } from "@/lib/seasonalCameraActivity";
 
 export type PressingScanCapture = {
   barcode: string;
@@ -249,6 +250,7 @@ export function ContinuousPressingScanner({
     let screenLock: ScreenWakeLock | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let cameraTrack: MediaStreamTrack | null = null;
+    let resumeSeasonalEffects: (() => void) | null = null;
     gateRef.current.suspend();
     setStatus("starting");
     setError(null);
@@ -263,6 +265,8 @@ export function ContinuousPressingScanner({
       cameraTrack?.removeEventListener?.("ended", onTrackEnded);
       stream?.getTracks().forEach((track) => track.stop());
       stream = null;
+      resumeSeasonalEffects?.();
+      resumeSeasonalEffects = null;
       void screenLock?.release().catch(() => {});
       decoder?.dispose();
       decoder = null;
@@ -318,6 +322,7 @@ export function ContinuousPressingScanner({
           stream.getTracks().forEach(track => track.stop());
           return;
         }
+        resumeSeasonalEffects = pauseSeasonalEffectsForCamera();
         if (!videoRef.current) throw new Error("Camera preview is not ready");
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
@@ -341,6 +346,8 @@ export function ContinuousPressingScanner({
         if (!decoder) {
           stream?.getTracks().forEach(track => track.stop());
           stream = null;
+          resumeSeasonalEffects?.();
+          resumeSeasonalEffects = null;
           if (videoRef.current) videoRef.current.srcObject = null;
           setStatus("manual");
           setError("Automatic barcode decoding could not start in this browser. Use manual entry below.");
@@ -361,6 +368,8 @@ export function ContinuousPressingScanner({
       } catch (cause) {
         stream?.getTracks().forEach(track => track.stop());
         stream = null;
+        resumeSeasonalEffects?.();
+        resumeSeasonalEffects = null;
         if (!canceled) {
           setStatus("error");
           setError(cameraErrorMessage(cause));

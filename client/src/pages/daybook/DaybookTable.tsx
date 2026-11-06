@@ -876,7 +876,7 @@ export function DaybookTable({
         <Table wrapperClassName="max-h-[calc(100dvh-220px)]">
           <TableHeader className="sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_th]:text-foreground/90">
             <TableRow>
-              <TableHead className="sticky left-0 bg-muted z-10">Date</TableHead>
+              <TableHead className="sticky left-0 bg-muted z-10">Date &amp; Time</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Description</TableHead>
               {!hideAmounts && <TableHead className="text-right">Amount</TableHead>}
