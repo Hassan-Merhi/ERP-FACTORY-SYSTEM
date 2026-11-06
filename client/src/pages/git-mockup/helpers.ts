@@ -41,8 +41,18 @@ export const COMPANY_COLORS: { bg: string; text: string }[] = [
 ];
 
 export function getRealRowBg(r: EnrichedContainerApi): string {
-  if (r.isOverdue) return "bg-red-50 dark:bg-red-950/20";
-  if (r.daysDelayed !== null && r.daysDelayed > 0) return "bg-orange-50 dark:bg-orange-950/20";
+  // Keep the row-state palette consistent with the workbook legend in both themes.
+  if (r.isOverdue) return "bg-red-50 dark:bg-red-500/10";
+  if (r.status === "At Port" && !r.docReceived) return "bg-rose-50 dark:bg-rose-500/10";
+  if (r.docsReadyNotSent) return "bg-amber-50 dark:bg-amber-500/10";
+  if (r.daysDelayed !== null && r.daysDelayed > 0) return "bg-orange-50 dark:bg-orange-500/10";
+  if (!r.docReceived && r.eta) {
+    const eta = Date.parse(`${r.eta}T12:00:00Z`);
+    const daysUntilEta = (eta - Date.now()) / 86_400_000;
+    if (Number.isFinite(daysUntilEta) && daysUntilEta >= 0 && daysUntilEta <= 14) {
+      return "bg-yellow-50 dark:bg-yellow-500/10";
+    }
+  }
   return "";
 }
 
