@@ -40,8 +40,15 @@ type Account = {
   opening_balance_historical_rate: string | null;
 };
 type Totals = { ledger_account_id: number; n: string; debits: string; credits: string };
+// Internal guard codes are machine-readable audit identifiers, not UI prose.
+class HadiRentExpenseMergeRefusal extends Error {
+  constructor(code: string) {
+    super(code);
+    this.name = "HadiRentExpenseMergeRefusal";
+  }
+}
 function assert(ok: unknown, code: string): asserts ok {
-  if (!ok) throw new Error("HADI_RENT_EXPENSE_MERGE_REFUSED_" + code);
+  if (!ok) throw new HadiRentExpenseMergeRefusal(code);
 }
 const money = (value: unknown) => toMoney(String(value ?? "0")).toFixed(2);
 
