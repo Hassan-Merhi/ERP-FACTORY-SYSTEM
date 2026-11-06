@@ -109,7 +109,7 @@ export default function FactoryMonthlyProductionMatrix() {
     return (!category || product.categoryName === category) &&
       (!q || [mhd.nameFor(product.articleCode, product.name), product.articleCode, product.categoryName].some((v) => v.toLowerCase().includes(q)));
   });
-  const canReorder = !search.trim() && !category && !saving;
+  const canReorder = mhd.mode === "standard" && !search.trim() && !category && !saving;
   const byId = (productId: number, month: string) => counts.get(productId)?.get(month) ?? 0;
   const openWorkerBreakdown = (productId: number, selectedMonths: string[]) => {
     if (selectedMonths.length === 0) return;
