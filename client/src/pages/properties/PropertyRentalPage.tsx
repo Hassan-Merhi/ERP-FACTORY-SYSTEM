@@ -403,6 +403,7 @@ export default function PropertyRentalPage({
         )}
         {phoneCards ? (
           <ErpMobileSummaryGrid
+            className={isPropertiesRental ? "properties-rentals-mobile-stats" : undefined}
             data-testid={`summary-${testIdPrefix}`}
             items={[
               { label: "TOTAL UNITS", value: units.length },
