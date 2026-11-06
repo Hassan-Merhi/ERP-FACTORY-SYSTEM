@@ -12,9 +12,11 @@ export function isPropertiesInternalSourceReference(
   viewingModule: string,
   contract: { module: string; isInternal: boolean }
 ): boolean {
-  return viewingModule === "PROPERTIES" &&
+  return (
+    viewingModule === "PROPERTIES" &&
     contract.isInternal &&
-    (contract.module === "ERP" || contract.module === "FACTORY");
+    (contract.module === "ERP" || contract.module === "FACTORY")
+  );
 }
 
 export function sharedRentalDisplayTab(
@@ -22,8 +24,10 @@ export function sharedRentalDisplayTab(
   contract: { module: string; isInternal: boolean },
   unit: { unitType: string }
 ): "WAREHOUSE" | "SHOP" {
-  if (isPropertiesInternalSourceReference(viewingModule, contract) &&
-      (unit.unitType === "WAREHOUSE" || contract.module === "FACTORY")) {
+  if (
+    isPropertiesInternalSourceReference(viewingModule, contract) &&
+    (unit.unitType === "WAREHOUSE" || contract.module === "FACTORY")
+  ) {
     return "WAREHOUSE";
   }
   return "SHOP";
