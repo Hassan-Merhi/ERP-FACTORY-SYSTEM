@@ -181,7 +181,6 @@ export default function RentalPaymentsLog({
   const isActiveUnfiltered = isPropertiesPayments && effectiveView === "ACTIVE_RENT" && !search.trim();
   const discrepancy = isActiveUnfiltered && !warehouseTotalsLoading && !warehouseTotalsError
     && !isLoading && Math.abs(total - activeWarehouseRentPaid) > 0.009;
-  const currentViewLabel = RECONCILIATION_VIEWS.find((v) => v.key === effectiveView)?.label ?? "Payments";
 
   return (
     <div
