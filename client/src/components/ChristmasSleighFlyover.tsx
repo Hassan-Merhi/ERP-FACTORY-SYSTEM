@@ -36,7 +36,7 @@ function SleighArtwork() {
       {/* The leading pair fly to the left, joined by warm gold reins. */}
       <path d="M102 51Q165 58 221 56M45 48Q125 65 221 58" stroke="#eccd8d" strokeWidth="1.6" fill="none" opacity="0.83" />
       {[{ x: 17, y: 25, scale: 0.85 }, { x: 99, y: 19, scale: 0.91 }].map((deer) => (
-        <g key={deer.x} transform={`translate(${deer.x} ${deer.y}) scale(${deer.scale})`}>
+        <g key={deer.x} transform={`translate(${deer.x} ${deer.y}) scale(${deer.scale}) translate(90 0) scale(-1 1)`}>
           <path d="M44 28Q52 14 69 16Q80 20 76 28" fill="none" stroke="#9d6442" strokeWidth="9" strokeLinecap="round" />
           <ellipse cx="39" cy="36" rx="25" ry="12" fill="#bb8055" />
           <path d="M22 41L11 65M48 43L55 66M52 32L67 55M26 30L20 12" fill="none" stroke="#91603e" strokeWidth="5" strokeLinecap="round" />
