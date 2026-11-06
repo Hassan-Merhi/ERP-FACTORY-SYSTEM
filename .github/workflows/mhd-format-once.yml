@@ -1,0 +1,35 @@
+name: Temporary MHD branch formatter
+on:
+  push:
+    branches:
+      - feature/factory-mhd-view
+permissions:
+  contents: write
+jobs:
+  format:
+    if: github.repository == 'Hassan-Merhi/ERP-FACTORY-SYSTEM'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout current branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Install Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+      - name: Install formatting dependencies
+        run: |
+          sed -i 's#http://package-firewall.replit.local/npm/#https://registry.npmjs.org/#g' package-lock.json
+          npm ci --no-audit --bin-links=true
+      - name: Format only MHD feature changed files
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write 'client/src/app/FactoryShell.tsx' 'client/src/components/CompanySelector.tsx' 'client/src/components/FactoryMhdViewToggle.tsx' 'client/src/components/FactoryRoutes.tsx' 'client/src/components/FactorySidebar.tsx' 'client/src/contexts/CompanyContext.tsx' 'client/src/hooks/use-factory-mhd-view.ts' 'client/src/hooks/use-user-preferences.ts' 'client/src/i18n/applicationTranslations.ar.ts' 'client/src/i18n/applicationTranslations.fr.ts' 'client/src/i18n/applicationTranslations.ts' 'client/src/lazyPages.ts' 'client/src/lib/factoryMhdDisplay.ts' 'client/src/pages/BaleProducts.tsx' 'client/src/pages/MySettings.tsx' 'client/src/pages/baleproducts/components/BaleProductsView1.tsx' 'client/src/pages/factory/BalesHistory.tsx' 'client/src/pages/factory/CustomerLoading.tsx' 'client/src/pages/factory/FactoryBaleTracking.tsx' 'client/src/pages/factory/FactoryLocationInventoryProductRenderers.tsx' 'client/src/pages/factory/FactoryLocationInventoryProductView.tsx' 'client/src/pages/factory/FactoryMhdViewManagerPage.tsx' 'client/src/pages/factory/FactoryMonthlyProductionMatrix.tsx' 'client/src/pages/factory/FactoryPriceList.tsx' 'client/src/pages/factory/FactoryStockAllocationV5.tsx' 'client/src/pages/factory/FactoryStockBaleList.tsx' 'client/src/pages/factory/FactoryStockQueryWorkspace.tsx' 'client/src/pages/factory/bale-product-history/FactoryBaleProductHistory.tsx' 'client/src/pages/factory/factorysettings/FactorySettingsView.tsx' 'client/src/pages/factory/factorysettings/MhdViewManager.tsx' 'server/middleware/factoryBackendAccessBoundary.ts' 'server/routes/auth/userAccessRoutes.ts' 'server/routes/factory-intelligence/index.ts' 'server/routes/factory-intelligence/mhd-view.ts' 'server/routes/factory-intelligence/settings.ts' 'server/startup-schema/001-core-tables-and-columns.ts' 'server/startup/ensureRuntimeSchema.ts' 'shared/factoryAccessRegistry.ts' 'shared/schema/users.ts' 'tests/factory-mhd-display.test.ts'
+          git add -- 'client/src/app/FactoryShell.tsx' 'client/src/components/CompanySelector.tsx' 'client/src/components/FactoryMhdViewToggle.tsx' 'client/src/components/FactoryRoutes.tsx' 'client/src/components/FactorySidebar.tsx' 'client/src/contexts/CompanyContext.tsx' 'client/src/hooks/use-factory-mhd-view.ts' 'client/src/hooks/use-user-preferences.ts' 'client/src/i18n/applicationTranslations.ar.ts' 'client/src/i18n/applicationTranslations.fr.ts' 'client/src/i18n/applicationTranslations.ts' 'client/src/lazyPages.ts' 'client/src/lib/factoryMhdDisplay.ts' 'client/src/pages/BaleProducts.tsx' 'client/src/pages/MySettings.tsx' 'client/src/pages/baleproducts/components/BaleProductsView1.tsx' 'client/src/pages/factory/BalesHistory.tsx' 'client/src/pages/factory/CustomerLoading.tsx' 'client/src/pages/factory/FactoryBaleTracking.tsx' 'client/src/pages/factory/FactoryLocationInventoryProductRenderers.tsx' 'client/src/pages/factory/FactoryLocationInventoryProductView.tsx' 'client/src/pages/factory/FactoryMhdViewManagerPage.tsx' 'client/src/pages/factory/FactoryMonthlyProductionMatrix.tsx' 'client/src/pages/factory/FactoryPriceList.tsx' 'client/src/pages/factory/FactoryStockAllocationV5.tsx' 'client/src/pages/factory/FactoryStockBaleList.tsx' 'client/src/pages/factory/FactoryStockQueryWorkspace.tsx' 'client/src/pages/factory/bale-product-history/FactoryBaleProductHistory.tsx' 'client/src/pages/factory/factorysettings/FactorySettingsView.tsx' 'client/src/pages/factory/factorysettings/MhdViewManager.tsx' 'server/middleware/factoryBackendAccessBoundary.ts' 'server/routes/auth/userAccessRoutes.ts' 'server/routes/factory-intelligence/index.ts' 'server/routes/factory-intelligence/mhd-view.ts' 'server/routes/factory-intelligence/settings.ts' 'server/startup-schema/001-core-tables-and-columns.ts' 'server/startup/ensureRuntimeSchema.ts' 'shared/factoryAccessRegistry.ts' 'shared/schema/users.ts' 'tests/factory-mhd-display.test.ts'
+          if git diff --cached --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "style(factory): format MHD view code"
+          git push origin HEAD:feature/factory-mhd-view
