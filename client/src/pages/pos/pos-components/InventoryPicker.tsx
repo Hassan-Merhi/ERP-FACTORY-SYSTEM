@@ -3,7 +3,7 @@ import { Search, Package } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
 import { InventoryItem } from "./posTypes";
-import { getPosPickerInventory } from "../utils/posCalculations";
+import { getPosPickerInventory, getPosKeyboardHighlightedIndex, stepPosKeyboardHighlight } from "../utils/posCalculations";
 
 export interface InventoryPickerProps {
   inventory: InventoryItem[];
@@ -16,6 +16,7 @@ export interface InventoryPickerProps {
   setHighlightedIndex: React.Dispatch<React.SetStateAction<number>>;
   syncTerm?: string;
   mobile?: boolean;
+  canSellNegativeStock?: boolean;
 }
 
 export function InventoryPicker({
@@ -29,6 +30,7 @@ export function InventoryPicker({
   setHighlightedIndex,
   syncTerm,
   mobile = false,
+  canSellNegativeStock = false,
 }: InventoryPickerProps) {
   const [localSearch, setLocalSearch] = useState("");
   const pickerId = useId();
@@ -55,14 +57,15 @@ export function InventoryPicker({
   // highlighted index must point to one canonical item regardless of whether
   // the cashier clicks it or confirms it with Enter/Tab.
   const filteredInventory = getPosPickerInventory(inventory, effectiveSearch);
+  const selectedIndex = getPosKeyboardHighlightedIndex(filteredInventory, highlightedIndex, canSellNegativeStock);
 
   // Scroll only the inventory list, before the browser paints the new
   // highlighted option. This also handles arrows from the sale-row Item input.
   // The min-h-0 list can shrink inside the flex card and owns its scrollTop.
   useLayoutEffect(() => {
     const list = itemListRef.current;
-    if (!list || !filteredInventory.length) return;
-    const option = list.children.item(highlightedIndex) as HTMLElement | null;
+    if (!list || selectedIndex < 0) return;
+    const option = list.children.item(selectedIndex) as HTMLElement | null;
     if (!option) return;
     const listRect = list.getBoundingClientRect();
     const optionRect = option.getBoundingClientRect();
@@ -70,10 +73,11 @@ export function InventoryPicker({
     else if (optionRect.bottom > listRect.bottom) {
       list.scrollTop += optionRect.bottom - listRect.bottom;
     }
-  }, [highlightedIndex, effectiveSearch, inventory, itemListRef, filteredInventory.length]);
+  }, [selectedIndex, effectiveSearch, inventory, itemListRef, filteredInventory.length]);
 
   const selectHighlighted = () => {
-    const item = filteredInventory[highlightedIndex];
+    // An all-out-of-stock search still opens the existing stock warning.
+    const item = filteredInventory[selectedIndex] ?? (selectedIndex === -1 ? filteredInventory[0] : undefined);
     if (!item) return;
     chooseItem(item);
   };
@@ -102,17 +106,17 @@ export function InventoryPicker({
             aria-autocomplete="list"
             aria-expanded={filteredInventory.length > 0}
             aria-controls={listboxId}
-            aria-activedescendant={filteredInventory.length > 0 ? `${listboxId}-item-${Math.min(highlightedIndex, filteredInventory.length - 1)}` : undefined}
+            aria-activedescendant={selectedIndex >= 0 ? `${listboxId}-item-${selectedIndex}` : undefined}
             autoComplete="off"
             value={effectiveSearch}
             onChange={(e) => changeSearch(e.target.value)}
             onKeyDown={(event) => {
               if (event.key === "ArrowDown" && filteredInventory.length > 0) {
                 event.preventDefault();
-                setHighlightedIndex((index) => Math.min(index + 1, filteredInventory.length - 1));
+                setHighlightedIndex((index) => stepPosKeyboardHighlight(filteredInventory, index, 1, canSellNegativeStock));
               } else if (event.key === "ArrowUp" && filteredInventory.length > 0) {
                 event.preventDefault();
-                setHighlightedIndex((index) => Math.max(index - 1, 0));
+                setHighlightedIndex((index) => stepPosKeyboardHighlight(filteredInventory, index, -1, canSellNegativeStock));
               } else if (event.key === "Enter" && filteredInventory.length > 0) {
                 event.preventDefault();
                 selectHighlighted();
@@ -154,11 +158,16 @@ export function InventoryPicker({
               key={item.stockItemId ?? item.code}
               id={`${listboxId}-item-${index}`}
               role="option"
-              aria-selected={index === highlightedIndex}
+              aria-selected={index === selectedIndex}
               tabIndex={-1}
-              className={`w-full text-left flex items-center justify-between gap-2 border-b border-muted/40 transition-colors duration-100 ${
+              data-pos-keyboard-selected={index === selectedIndex ? "true" : undefined}
+              className={`w-full text-left flex items-center justify-between gap-2 border-b border-muted/40 border-l-4 transition-colors duration-100 ${
                 mobile ? "px-4 py-3 active:bg-primary/10" : "px-3 py-3"
-              } ${index === highlightedIndex ? "bg-primary/25" : "hover:bg-muted/40"} ${isOut ? "opacity-50" : ""}`}
+              } ${
+                index === selectedIndex
+                  ? "border-l-blue-600 bg-blue-100 text-slate-950 ring-1 ring-inset ring-blue-500/60 dark:border-l-blue-400 dark:bg-blue-900/60 dark:text-white dark:ring-blue-400/60"
+                  : "border-l-transparent hover:bg-muted/40"
+              } ${isOut && index !== selectedIndex ? "opacity-50" : ""}`}
               onMouseMove={(event) => {
                 const { clientX: x, clientY: y } = event;
                 const last = lastMousePosition.current;
