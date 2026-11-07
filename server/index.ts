@@ -22,7 +22,7 @@ import { securityHeadersMiddleware } from "./security/securityHeaders";
 import { registerRoutes } from "./routes";
 import { markStartupMigrationsComplete } from "./startupMigrationReport";
 import { registerDbHealthRoute } from "./health/dbHealthRoute";
-import { blockErpTesterSettings, blockViewOnlyWrites } from "./auth";
+import { blockErpTesterSettings, blockViewOnlyWrites, blockUnverifiedCreateOnlyWrites } from "./auth";
 import { registerWebSocketHttpFallback, setupWS } from "./wsServer";
 import { startScheduler } from "./services/scheduler";
 import { pool } from "./db";
@@ -164,6 +164,7 @@ registerFactoryEdgeBoundary(app);
 // Globally block all mutation requests (POST/PUT/PATCH/DELETE) for View Only role.
 // Must run after session middleware so req.session.currentRole is populated.
 app.use(blockViewOnlyWrites);
+app.use(blockUnverifiedCreateOnlyWrites);
 app.use(blockErpTesterSettings);
 
 // Add build version header to all responses for cache tracking
@@ -224,9 +225,7 @@ let migrationsDone = false;
     try {
       // The server selects the signal using the authenticated session's
       // effective role. Never trust a client-provided role for this decision.
-      const target = ["Admin", "Owner", "Developer"].includes(req.session.currentRole ?? "")
-        ? "privileged"
-        : "regular";
+      const target = ["Admin", "Owner", "Developer"].includes(req.session.currentRole ?? "") ? "privileged" : "regular";
       const forceRefreshToken = await readGlobalForceRefreshToken(target);
       res.json({ version: BUILD_VERSION, forceRefreshToken, refreshAudience: target });
     } catch (error) {

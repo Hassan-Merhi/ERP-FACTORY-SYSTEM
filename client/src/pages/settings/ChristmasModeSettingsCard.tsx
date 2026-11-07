@@ -1,14 +1,69 @@
 import { useMemo, useState } from "react";
-import { Globe2, Search, ShieldCheck, Snowflake, Users } from "lucide-react";
+import {
+  CalendarDays,
+  Gift,
+  Globe2,
+  Layers3,
+  Search,
+  ShieldCheck,
+  Snowflake,
+  Sparkles,
+  TreePine,
+  Users,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { useChristmasModeConfiguration } from "@/hooks/useChristmasMode";
+import {
+  useChristmasModeConfiguration,
+  defaultChristmasVisuals,
+  type ChristmasEffectKey,
+  type ChristmasVisualSettings,
+} from "@/hooks/useChristmasMode";
 
-type ChristmasDraft = { enabled: boolean; userIds: string[] };
+type ChristmasDraft = { enabled: boolean; userIds: string[]; visuals: ChristmasVisualSettings };
+
+const EFFECT_CONTROLS = [
+  {
+    key: "snowfall",
+    name: "Snowfall & snow caps",
+    description: "Falling snow and subtle winter accents on header and panels.",
+    icon: Snowflake,
+  },
+  {
+    key: "santa",
+    name: "Santa flyover",
+    description: "Reindeer, golden sparkles and sleigh across the top bar.",
+    icon: Sparkles,
+  },
+  {
+    key: "garlands",
+    name: "Garland lights",
+    description: "Pine garlands, glowing lights and ornaments.",
+    icon: TreePine,
+  },
+  {
+    key: "countdown",
+    name: "Christmas countdown",
+    description: "Compact live countdown near the top bar.",
+    icon: CalendarDays,
+  },
+  { key: "gifts", name: "Surprise gifts", description: "Optional seasonal gift and interactive greeting.", icon: Gift },
+  {
+    key: "ambient",
+    name: "Ambient Christmas corner",
+    description: "A tasteful, compact Christmas tree and warm fireplace.",
+    icon: TreePine,
+  },
+] as const satisfies ReadonlyArray<{
+  key: ChristmasEffectKey;
+  name: string;
+  description: string;
+  icon: typeof Snowflake;
+}>;
 
 /** Accessible only from Developer Settings; the server independently enforces it. */
 export function ChristmasModeSettingsCard() {
@@ -20,6 +75,7 @@ export function ChristmasModeSettingsCard() {
   const config = configQuery.data;
   const enabled = draft?.enabled ?? config?.enabled ?? false;
   const selectedIds = useMemo(() => draft?.userIds ?? config?.userIds ?? [], [draft?.userIds, config?.userIds]);
+  const visuals = draft?.visuals ?? config?.visuals ?? defaultChristmasVisuals;
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const filteredUsers = useMemo(
     () => (config?.users ?? []).filter((user) => user.username.toLowerCase().includes(search.trim().toLowerCase())),
@@ -29,7 +85,8 @@ export function ChristmasModeSettingsCard() {
     draft !== null &&
     (draft.enabled !== config?.enabled ||
       draft.userIds.length !== (config?.userIds.length ?? 0) ||
-      draft.userIds.some((id) => !config?.userIds.includes(id)));
+      draft.userIds.some((id) => !config?.userIds.includes(id)) ||
+      JSON.stringify(draft.visuals) !== JSON.stringify(config?.visuals ?? defaultChristmasVisuals));
   const loading = configQuery.isLoading;
   const saving = saveConfig.isPending;
 
@@ -37,6 +94,7 @@ export function ChristmasModeSettingsCard() {
     setDraft((previous) => ({
       enabled: next.enabled ?? previous?.enabled ?? config?.enabled ?? false,
       userIds: next.userIds ?? previous?.userIds ?? config?.userIds ?? [],
+      visuals: next.visuals ?? previous?.visuals ?? config?.visuals ?? defaultChristmasVisuals,
     }));
   };
 
@@ -49,7 +107,7 @@ export function ChristmasModeSettingsCard() {
 
   const save = () => {
     saveConfig.mutate(
-      { enabled, userIds: selectedIds },
+      { enabled, userIds: selectedIds, visuals },
       {
         onSuccess: () => {
           setDraft(null);
@@ -76,8 +134,8 @@ export function ChristmasModeSettingsCard() {
           Christmas Mode
         </CardTitle>
         <CardDescription>
-          Developer-only control for snowfall, festive lights, sidebar ornaments and the 10-second Jingle Bells login
-          welcome with a Santa ho-ho-ho, plus Santa's sleigh every five minutes. Enable it for specific user accounts only.
+          Select who can use Christmas Mode, then customize its six visual effects and atmosphere. The existing login
+          jingle remains unchanged.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -105,6 +163,74 @@ export function ChristmasModeSettingsCard() {
                 onCheckedChange={(next) => edit({ enabled: next })}
               />
             </div>
+            <section
+              className="rounded-2xl border border-amber-300/20 bg-gradient-to-br from-violet-500/10 via-background to-emerald-500/5 p-4 shadow-sm"
+              data-testid="christmas-control-center"
+            >
+              <div className="mb-4 flex items-center gap-3">
+                <span className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-2.5 text-amber-600 dark:text-amber-300">
+                  <Gift className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <div>
+                  <h3 className="font-semibold text-base">Christmas Control Center</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Personalized festive details across all company types.
+                  </p>
+                </div>
+              </div>
+              <div className="divide-y rounded-xl border bg-background/60">
+                {EFFECT_CONTROLS.map((effect) => {
+                  const Icon = effect.icon;
+                  return (
+                    <div key={effect.key} className="flex items-center justify-between gap-3 p-3">
+                      <span className="flex min-w-0 items-center gap-3">
+                        <span className="shrink-0 rounded-lg bg-primary/10 p-2 text-primary">
+                          <Icon className="h-4 w-4" aria-hidden="true" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold">{effect.name}</span>
+                          <span className="block text-xs text-muted-foreground">{effect.description}</span>
+                        </span>
+                      </span>
+                      <Switch
+                        checked={visuals.effects[effect.key]}
+                        disabled={loading || saving}
+                        aria-label={`Enable ${effect.name}`}
+                        data-testid={`christmas-effect-${effect.key}`}
+                        onCheckedChange={(next) =>
+                          edit({ visuals: { ...visuals, effects: { ...visuals.effects, [effect.key]: next } } })
+                        }
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <span className="flex items-center gap-2 text-sm font-semibold">
+                  <Layers3 className="h-4 w-4 text-muted-foreground" /> Intensity
+                </span>
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Christmas animation intensity">
+                  {(["subtle", "balanced", "full"] as const).map((intensity) => (
+                    <Button
+                      key={intensity}
+                      type="button"
+                      size="sm"
+                      variant={visuals.intensity === intensity ? "default" : "outline"}
+                      aria-pressed={visuals.intensity === intensity}
+                      disabled={loading || saving}
+                      data-testid={`christmas-intensity-${intensity}`}
+                      onClick={() => edit({ visuals: { ...visuals, intensity } })}
+                    >
+                      {intensity === "full" ? "Full Christmas" : intensity[0].toUpperCase() + intensity.slice(1)}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Balanced is the default. Scanner cameras, reduced-motion and data-saver preferences take priority over
+                animations.
+              </p>
+            </section>
             <div className="space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
@@ -113,7 +239,8 @@ export function ChristmasModeSettingsCard() {
                     Users allowed to see Christmas Mode
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Select individual users. New users are not added automatically. Each selected user can turn off the effects in My Settings.
+                    Select individual users. New users are not added automatically. Each selected user can turn off the
+                    effects in My Settings.
                   </p>
                 </div>
                 <span

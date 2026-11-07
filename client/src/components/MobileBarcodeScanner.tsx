@@ -172,7 +172,10 @@ export function MobileBarcodeScanner({
           }
         }
         decoder = await createCameraDecoder();
-        if (canceled) { decoder?.dispose(); return; }
+        if (canceled) {
+          decoder?.dispose();
+          return;
+        }
         if (!decoder) {
           acquired.getTracks().forEach((cameraTrack) => cameraTrack.stop());
           resumeSeasonalEffects?.();
@@ -329,15 +332,22 @@ export function MobileBarcodeScanner({
           )}
           {error && (
             <div className="space-y-2">
-              <p role="alert" className="text-sm text-destructive">{error}</p>
-              <Button type="button" variant="outline" size="sm" className="min-h-11"
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-11"
                 onClick={() => {
                   setError(null);
                   setTorchAvailable(false);
                   setTorchOn(false);
                   setRetryAttempt((attempt) => attempt + 1);
                 }}
-                data-testid="button-mobile-camera-retry">
+                data-testid="button-mobile-camera-retry"
+              >
                 Retry camera
               </Button>
             </div>

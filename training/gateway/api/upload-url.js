@@ -35,18 +35,27 @@ export default { async fetch(request) {
   if (!authorization.startsWith("Bearer ") || authorization.length > 10000) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
+  let payload;
   try {
-    const { payload } = await jwtVerify(authorization.slice(7), jwks, {
+    ({ payload } = await jwtVerify(authorization.slice(7), jwks, {
       issuer: "https://token.actions.githubusercontent.com",
       audience: "erp-training-private-publisher-v1",
       algorithms: ["RS256"],
-    });
+    }));
+  } catch (error) {
+    // Name the failed check (jose error code, e.g. ERR_JWT_EXPIRED) so the
+    // publisher's log shows why; never echo the token itself.
+    const reason = String(error?.code || error?.name || "invalid token").slice(0, 60);
+    console.error("training gateway: identity rejected:", reason);
+    return Response.json({ error: "publisher authorization failed", reason }, { status: 403 });
+  }
+  try {
     const events = workflows[payload.workflow_ref] || [];
     if (String(payload.repository_id) !== "1087409074" ||
         payload.repository !== "Hassan-Merhi/ERP-FACTORY-SYSTEM" ||
         payload.ref !== "refs/heads/main" || payload.environment !== "training-publication" ||
         !events.includes(payload.event_name)) {
-      return Response.json({ error: "publisher not permitted" }, { status: 403 });
+      return Response.json({ error: "publisher not permitted", reason: "workflow, ref, environment or event" }, { status: 403 });
     }
     const body = await request.json();
     const key = typeof body?.key === "string" ? body.key : "";
@@ -93,7 +102,11 @@ export default { async fetch(request) {
     return Response.json({ uploadUrl: result.presignedUrl, contentType: type, allowOverwrite: overwrite }, {
       headers: { "cache-control": "no-store" },
     });
-  } catch {
-    return Response.json({ error: "publisher authorization failed" }, { status: 403 });
+  } catch (error) {
+    // Signing failures are storage-side (credentials, store state, Vercel API),
+    // not a refused publisher: report them as such with the error type.
+    const reason = (String(error?.name || "Error") + ": " + String(error?.message || "")).slice(0, 200);
+    console.error("training gateway: signing failed:", reason);
+    return Response.json({ error: "signing unavailable", reason }, { status: 502 });
   }
 }};

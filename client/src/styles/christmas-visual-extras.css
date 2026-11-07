@@ -1,0 +1,361 @@
+/*
+ * Premium seasonal accents: lightweight HTML/CSS only, no image downloads.
+ * Decorative layers cannot block business controls, except the deliberate
+ * miniature gift and collapse buttons. Print and scanners have priority.
+ */
+.christmas-countdown-chip {
+  position: absolute;
+  top: 1px;
+  inset-inline-end: 12px;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px 3px;
+  min-height: 18px;
+  max-width: 140px;
+  border: 1px solid rgb(232 182 91 / 0.52);
+  border-top: 0;
+  border-radius: 0 0 9px 9px;
+  background: linear-gradient(115deg, rgb(108 32 49 / 0.95), rgb(140 45 64 / 0.91));
+  box-shadow:
+    0 2px 10px rgb(112 38 45 / 0.22),
+    inset 0 -1px rgb(255 246 215 / 0.12);
+  color: #fff0c7;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+.christmas-countdown-chip svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+}
+@media (max-width: 950px) {
+  .christmas-countdown-chip {
+    top: 1px;
+    inset-inline-end: 5px;
+    font-size: 9px;
+    min-height: 15px;
+    padding: 1px 5px;
+  }
+  .christmas-countdown-chip svg {
+    width: 10px;
+    height: 10px;
+  }
+}
+@media (max-width: 640px) {
+  .christmas-countdown-chip {
+    display: none;
+  }
+}
+
+.christmas-gift-surprise {
+  position: fixed;
+  z-index: 43;
+  top: 45%;
+  right: 15px;
+  width: 43px;
+  height: 43px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(251 214 142 / 0.8);
+  border-radius: 15px;
+  background: radial-gradient(circle at 30% 22%, #fa8a7d, #bb284a 68%, #76213f);
+  color: #ffe9a8;
+  box-shadow:
+    0 0 0 5px rgb(218 153 89 / 0.09),
+    0 6px 20px rgb(126 47 37 / 0.26),
+    inset 0 1px rgb(255 251 236 / 0.25);
+  cursor: pointer;
+  animation:
+    christmas-gift-arrive 0.8s ease-out both,
+    christmas-gift-float 3.8s ease-in-out 0.8s infinite;
+}
+.christmas-gift-surprise:hover {
+  filter: brightness(1.13);
+}
+.christmas-gift-surprise:focus-visible {
+  outline: 3px solid #eec06f;
+  outline-offset: 4px;
+}
+.christmas-gift-surprise > svg:first-child {
+  width: 25px;
+  height: 25px;
+  stroke-width: 1.8;
+}
+.christmas-gift-sparkle {
+  position: absolute;
+  top: -11px;
+  right: -7px;
+  width: 16px;
+  height: 16px;
+  filter: drop-shadow(0 0 5px #ffe6a1);
+  animation: christmas-gift-twinkle 1.9s alternate infinite;
+}
+.christmas-gift-message {
+  position: fixed;
+  right: 12px;
+  top: 47%;
+  z-index: 43;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(300px, calc(100vw - 24px));
+  padding: 13px 16px;
+  border: 1px solid rgb(228 183 95 / 0.6);
+  border-radius: 13px;
+  color: #fff0c5;
+  background: linear-gradient(120deg, #521d54, #1d4754);
+  box-shadow: 0 8px 24px rgb(31 33 61 / 0.3);
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+  animation: christmas-gift-arrive 0.3s ease-out both;
+}
+.christmas-gift-message svg {
+  width: 18px;
+  height: 18px;
+  color: #f4d67b;
+  flex: none;
+}
+@keyframes christmas-gift-arrive {
+  from {
+    opacity: 0;
+    transform: translate3d(22px, 0, 0) scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+@keyframes christmas-gift-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+@keyframes christmas-gift-twinkle {
+  from {
+    opacity: 0.55;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+}
+
+.christmas-ambient-corner {
+  position: fixed;
+  right: 79px;
+  bottom: 12px;
+  z-index: 34;
+  width: 142px;
+  height: 115px;
+  pointer-events: none;
+  user-select: none;
+  filter: drop-shadow(0 5px 13px rgb(12 24 37 / 0.2));
+}
+.christmas-ambient-control {
+  position: absolute;
+  right: 0;
+  top: 3px;
+  z-index: 2;
+  width: 21px;
+  height: 21px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(229 197 123 / 0.6);
+  border-radius: 9px;
+  background: rgb(30 43 67 / 0.87);
+  color: #f4d99b;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.christmas-ambient-control svg {
+  width: 12px;
+  height: 12px;
+}
+.christmas-ambient-control:focus-visible {
+  outline: 2px solid #cda863;
+  outline-offset: 2px;
+}
+.christmas-ambient-art {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+.christmas-ambient-tree {
+  position: absolute;
+  bottom: 9px;
+  left: 4px;
+  width: 84px;
+  height: 94px;
+}
+.christmas-ambient-pine {
+  position: absolute;
+  width: 78px;
+  height: 80px;
+  bottom: 0;
+  color: #31946b;
+  stroke-width: 2.2;
+  filter: drop-shadow(0 0 4px rgb(139 206 129 / 0.38));
+}
+.christmas-ambient-star {
+  position: absolute;
+  z-index: 1;
+  top: -2px;
+  left: 31px;
+  width: 20px;
+  height: 20px;
+  fill: #f5cc66;
+  stroke: #f8e4a2;
+  filter: drop-shadow(0 0 7px rgb(248 199 89 / 0.65));
+}
+.christmas-tree-bauble {
+  position: absolute;
+  z-index: 1;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid rgb(255 222 169 / 0.7);
+  background: radial-gradient(circle at 25% 25%, #ffddb1, #bd4056 70%);
+  box-shadow: 0 0 5px rgb(236 198 103 / 0.46);
+}
+.christmas-bauble-a {
+  left: 33px;
+  top: 39px;
+}
+.christmas-bauble-b {
+  left: 49px;
+  top: 58px;
+  background: radial-gradient(circle at 25% 25%, #fff3b9, #d7a443 70%);
+}
+.christmas-bauble-c {
+  left: 23px;
+  top: 70px;
+}
+.christmas-fireplace {
+  position: absolute;
+  right: 5px;
+  bottom: 9px;
+  display: grid;
+  place-items: end center;
+  width: 54px;
+  height: 62px;
+  padding-bottom: 4px;
+  border: 5px solid #937055;
+  border-bottom-width: 8px;
+  border-radius: 6px 6px 4px 4px;
+  background: radial-gradient(circle at 52% 76%, rgb(251 157 63 / 0.49), #301f2e 65%);
+  box-shadow:
+    inset 0 0 8px rgb(20 15 30 / 0.5),
+    0 0 12px rgb(242 160 70 / 0.17);
+}
+.christmas-fireplace-mantel {
+  position: absolute;
+  height: 9px;
+  width: 66px;
+  top: -9px;
+  left: -11px;
+  border-radius: 3px;
+  background: linear-gradient(#598258 0 3px, #a4795a 4px 9px);
+}
+.christmas-fireplace > svg {
+  width: 29px;
+  height: 35px;
+  color: #ffb55e;
+  fill: #f58b3e;
+  filter: drop-shadow(0 0 8px #e68b45);
+  animation: christmas-hearth-flicker 2.4s ease-in-out infinite alternate;
+}
+.christmas-ambient-ground {
+  position: absolute;
+  bottom: 4px;
+  width: 145px;
+  height: 10px;
+  border-radius: 50%;
+  background: linear-gradient(90deg, transparent, rgb(212 231 244 / 0.87) 45%, transparent);
+  filter: blur(1.5px);
+}
+.christmas-ambient-minimized {
+  width: 35px;
+  height: 35px;
+  bottom: 19px;
+}
+.christmas-ambient-minimized .christmas-ambient-control {
+  width: 30px;
+  height: 30px;
+  border-radius: 12px;
+}
+.christmas-ambient-minimized .christmas-ambient-control svg {
+  width: 19px;
+  height: 19px;
+}
+@keyframes christmas-hearth-flicker {
+  from {
+    opacity: 0.65;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
+html[data-christmas-intensity="subtle"] .christmas-ambient-corner {
+  opacity: 0.76;
+  transform: scale(0.8);
+  transform-origin: bottom right;
+}
+html[data-christmas-intensity="full"] .christmas-ambient-corner {
+  transform: scale(1.1);
+  transform-origin: bottom right;
+}
+@media (max-width: 1050px) {
+  .christmas-ambient-corner {
+    display: none;
+  }
+}
+@media (max-width: 640px) {
+  .christmas-gift-surprise {
+    right: 8px;
+    width: 35px;
+    height: 35px;
+  }
+  .christmas-gift-surprise > svg:first-child {
+    width: 20px;
+    height: 20px;
+  }
+}
+@media print, (prefers-reduced-data: reduce) {
+  .christmas-gift-surprise,
+  .christmas-gift-message,
+  .christmas-ambient-corner,
+  .christmas-countdown-chip {
+    display: none !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .christmas-gift-surprise,
+  .christmas-gift-message,
+  .christmas-ambient-corner * {
+    animation: none !important;
+  }
+}
+html[data-seasonal-camera-active="true"] .christmas-gift-surprise,
+html[data-seasonal-camera-active="true"] .christmas-gift-message {
+  display: none !important;
+}
+html[data-seasonal-camera-active="true"] .christmas-ambient-corner * {
+  animation: none !important;
+}
