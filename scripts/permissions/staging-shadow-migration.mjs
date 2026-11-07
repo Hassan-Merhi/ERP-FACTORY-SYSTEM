@@ -24,6 +24,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import pg from "pg";
+import { resolveDatabaseSsl } from "../../server/lib/databaseSsl.mjs";
 
 const PRODUCTION_DATABASE_NAMES = new Set(["erp_db_qscj_64lv_e7rz_8744_2lm3"]);
 const MIGRATION = path.resolve("migrations/20261024_001_permissions_control_center_shadow.sql");
@@ -108,7 +109,8 @@ if (!connectionString || !expectedName) {
 
 const client = new pg.Client({
   connectionString,
-  ssl: process.env.PGSSLMODE === "disable" ? false : { rejectUnauthorized: false },
+  // Same verified-TLS settings as the application (PGSSLROOTCERT / PGSSLMODE honoured).
+  ssl: resolveDatabaseSsl(connectionString),
 });
 await client.connect();
 try {
