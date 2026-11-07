@@ -1,0 +1,59 @@
+{
+  "phase": 4,
+  "status": "source-contract-passed",
+  "workspaces": [
+    {
+      "workspace": "erp",
+      "companyCode": "PHASE9-ERP",
+      "requiredRole": "Developer",
+      "staticRoutes": 101,
+      "parameterizedRoutes": 19
+    },
+    {
+      "workspace": "factory",
+      "companyCode": "PHASE9-FACTORY",
+      "requiredRole": "Developer",
+      "staticRoutes": 118,
+      "parameterizedRoutes": 22
+    },
+    {
+      "workspace": "properties",
+      "companyCode": "PHASE9-PROPERTIES",
+      "requiredRole": "Developer",
+      "staticRoutes": 35,
+      "parameterizedRoutes": 4
+    },
+    {
+      "workspace": "supplier-partner",
+      "companyCode": "PHASE9-SP",
+      "requiredRole": "Developer",
+      "staticRoutes": 9,
+      "parameterizedRoutes": 0
+    },
+    {
+      "workspace": "retail-admin",
+      "companyCode": "PHASE9-RETAIL",
+      "requiredRole": "Developer",
+      "staticRoutes": 6,
+      "parameterizedRoutes": 1
+    },
+    {
+      "workspace": "pos",
+      "companyCode": "PHASE9-ERP",
+      "requiredRole": "POS",
+      "staticRoutes": 15,
+      "parameterizedRoutes": 4
+    },
+    {
+      "workspace": "retail-pos",
+      "companyCode": "PHASE9-RETAIL",
+      "requiredRole": "POS",
+      "staticRoutes": 6,
+      "parameterizedRoutes": 0
+    }
+  ],
+  "parameterizedRoutesNeedingSeededBrowserEvidence": 50,
+  "physicalSafariCertification": "NOT VERIFIED — requires user-owned device",
+  "fullBrowserMatrixCertification": "NOT VERIFIED by this source-only script",
+  "violations": []
+}

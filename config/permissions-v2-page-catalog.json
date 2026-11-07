@@ -1,0 +1,1757 @@
+{
+  "formatVersion": 1,
+  "description": "Permissions V2 frontend page catalog: business pages per company type, the permission-controlled actions each offers, and how each is gated for View Only and Create Only. Loaded and validated by shared/permissionPageCatalog.ts; checked against the source tree by scripts/permissions/audit-frontend-page-catalog.ts. Presentation policy only; the server stays authoritative.",
+  "pages": [
+    {
+      "id": "erp.accounts",
+      "area": "erp",
+      "label": "Accounts",
+      "note": "Account edit, reorder and bulk voucher delete are hidden for read-only roles.",
+      "paths": [
+        "/accounts"
+      ],
+      "resource": "erp.accounts",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "component",
+      "files": [
+        "client/src/pages/AccountsLegacy.tsx",
+        "client/src/pages/accounts/AccountStatementView.tsx"
+      ]
+    },
+    {
+      "id": "erp.accounts.historical-openings",
+      "area": "erp",
+      "label": "Historical opening balances",
+      "paths": [
+        "/accounts/historical-openings"
+      ],
+      "resource": "erp.accounts",
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    },
+    {
+      "id": "erp.accounts.ledger",
+      "area": "erp",
+      "label": "Account ledger",
+      "paths": [
+        "/ledger-monthly/:accountId",
+        "/ledger-vouchers/:accountId/:year/:month"
+      ],
+      "resource": "erp.accounts",
+      "actions": [
+        "view",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "erp.vouchers.create",
+      "area": "erp",
+      "label": "Vouchers (journal, transfer, adjustment forms)",
+      "note": "Voucher creation is not a handler-verified Create Only create.",
+      "paths": [
+        "/vouchers"
+      ],
+      "resource": "erp.vouchers",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "approve",
+        "finalize",
+        "reverse",
+        "void",
+        "export"
+      ],
+      "mode": "create",
+      "inPage": "route"
+    },
+    {
+      "id": "erp.vouchers.edit",
+      "area": "erp",
+      "label": "Edit voucher",
+      "paths": [
+        "/vouchers/:id/edit"
+      ],
+      "resource": "erp.vouchers",
+      "actions": [
+        "view",
+        "edit",
+        "delete",
+        "reverse"
+      ],
+      "mode": "change",
+      "inPage": "route",
+      "readView": "/voucher-detail/:id"
+    },
+    {
+      "id": "erp.vouchers.detail",
+      "area": "erp",
+      "label": "Voucher detail",
+      "note": "Read view; cost-centre allocation is refused by the server for read-only roles.",
+      "paths": [
+        "/voucher-detail/:voucherId"
+      ],
+      "resource": "erp.vouchers",
+      "actions": [
+        "view",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "erp.vouchers.optional",
+      "area": "erp",
+      "label": "Optional vouchers",
+      "paths": [
+        "/optional-vouchers"
+      ],
+      "resource": "erp.vouchers",
+      "actions": [
+        "view",
+        "approve",
+        "finalize",
+        "delete"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    },
+    {
+      "id": "erp.accounting.create",
+      "area": "erp",
+      "label": "Create master data",
+      "note": "Create Only sees only the supplier and stock item forms (verified creates).",
+      "paths": [
+        "/create"
+      ],
+      "resource": "erp.accounts",
+      "actions": [
+        "view",
+        "create"
+      ],
+      "mode": "create",
+      "inPage": "component",
+      "files": [
+        "client/src/pages/AccountingCreate.tsx"
+      ],
+      "createOnlyCreate": "suppliers"
+    },
+    {
+      "id": "erp.parties",
+      "area": "erp",
+      "label": "Customers and suppliers",
+      "paths": [
+        "/parties"
+      ],
+      "resource": "erp.customers",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "component",
+      "files": [
+        "client/src/pages/Customers.tsx",
+        "client/src/pages/Suppliers.tsx"
+      ],
+      "createOnlyCreate": "customers"
+    },
+    {
+      "id": "erp.suppliers.edit",
+      "area": "erp",
+      "label": "Edit supplier",
+      "paths": [
+        "/suppliers/:id/edit"
+      ],
+      "resource": "erp.suppliers",
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    },
+    {
+      "id": "erp.suppliers.proformas",
+      "area": "erp",
+      "label": "Supplier proformas",
+      "paths": [
+        "/suppliers/:supplierId/proformas"
+      ],
+      "resource": "erp.suppliers",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "erp.purchase-orders.import",
+      "area": "erp",
+      "label": "Purchase order import",
+      "paths": [
+        "/po-import"
+      ],
+      "resource": "erp.purchase_orders",
+      "actions": [
+        "view",
+        "import"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    },
+    {
+      "id": "erp.purchase-orders.edit",
+      "area": "erp",
+      "label": "Edit purchase order",
+      "paths": [
+        "/purchase-orders/:id/edit"
+      ],
+      "resource": "erp.purchase_orders",
+      "actions": [
+        "view",
+        "edit",
+        "delete"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    },
+    {
+      "id": "erp.sales.pos",
+      "area": "erp",
+      "label": "POS sale",
+      "note": "POS sales were reviewed and kept denied for Create Only.",
+      "paths": [
+        "/pos"
+      ],
+      "resource": "erp.sales",
+      "actions": [
+        "view",
+        "create"
+      ],
+      "mode": "create",
+      "inPage": "route"
+    },
+    {
+      "id": "erp.sales.pos-edit",
+      "area": "erp",
+      "label": "Edit POS sale",
+      "paths": [
+        "/pos/edit/:id"
+      ],
+      "resource": "erp.sales",
+      "actions": [
+        "view",
+        "edit",
+        "void"
+      ],
+      "mode": "change",
+      "inPage": "route",
+      "readView": "/voucher-detail/:id"
+    },
+    {
+      "id": "erp.sales.item-replacement",
+      "area": "erp",
+      "label": "POS item replacement",
+      "paths": [
+        "/pos-item-replacement"
+      ],
+      "resource": "erp.sales",
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    },
+    {
+      "id": "erp.sales.pos-import",
+      "area": "erp",
+      "label": "POS import",
+      "paths": [
+        "/pos-import"
+      ],
+      "resource": "erp.sales",
+      "actions": [
+        "view",
+        "import"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    },
+    {
+      "id": "erp.sales.reports",
+      "area": "erp",
+      "label": "Sales reports",
+      "paths": [
+        "/sales-report",
+        "/sales-report/detail",
+        "/sales-report/comparison",
+        "/stock-in-sales-report",
+        "/item-market-analysis",
+        "/supplier-profit-reconciliation",
+        "/supplier-profit-check"
+      ],
+      "resource": "erp.sales",
+      "actions": [
+        "view",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "erp.sales.tools",
+      "area": "erp",
+      "label": "Sales tools (daybook, price list, transfers)",
+      "paths": [
+        "/sales-tools"
+      ],
+      "resource": "erp.sales",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "approve",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "erp.inventory",
+      "area": "erp",
+      "label": "Inventory",
+      "paths": [
+        "/inventory"
+      ],
+      "resource": "erp.inventory",
+      "actions": [
+        "view",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "erp.stock",
+      "area": "erp",
+      "label": "Stock items",
+      "paths": [
+        "/stock"
+      ],
+      "resource": "erp.stock_items",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "component",
+      "files": [
+        "client/src/pages/stockitems/StockItemsView.tsx"
+      ],
+      "createOnlyCreate": "stockItems"
+    },
+    {
+      "id": "erp.stock.detail",
+      "area": "erp",
+      "label": "Stock item detail and history",
+      "note": "Edit links resolve to the read-only voucher view for read-only roles.",
+      "paths": [
+        "/stock-query/:id",
+        "/stock-items/:id/history",
+        "/stock-items/:id/history/:year/:month",
+        "/stock-items/:stockItemId/monthly-summary",
+        "/locations/:locationId/stock-items/:stockItemId/history",
+        "/locations/:locationId/stock-items/:stockItemId/vouchers/:year/:month"
+      ],
+      "resource": "erp.stock_items",
+      "actions": [
+        "view",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "erp.stock.import",
+      "area": "erp",
+      "label": "Import stock items",
+      "paths": [
+        "/import-stock-items"
+      ],
+      "resource": "erp.stock_items",
+      "actions": [
+        "view",
+        "import"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    },
+    {
+      "id": "erp.stock.opening-closing",
+      "area": "erp",
+      "label": "Opening and closing stock",
+      "paths": [
+        "/opening-stock",
+        "/opening-stock/:groupId",
+        "/closing-stock-summary",
+        "/closing-stock/:groupId",
+        "/bale-ledger"
+      ],
+      "resource": "erp.inventory",
+      "actions": [
+        "view",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "erp.stock.barcodes",
+      "area": "erp",
+      "label": "Barcode manager",
+      "paths": [
+        "/barcode-manager"
+      ],
+      "resource": "erp.stock_items",
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    },
+    {
+      "id": "erp.stock-transfers.create",
+      "area": "erp",
+      "label": "Stock transfer order",
+      "paths": [
+        "/stock-transfer-order"
+      ],
+      "resource": "erp.stock_transfers",
+      "actions": [
+        "view",
+        "create",
+        "approve"
+      ],
+      "mode": "create",
+      "inPage": "route"
+    },
+    {
+      "id": "erp.containers",
+      "area": "erp",
+      "label": "Containers",
+      "note": "Container renaming and voucher re-sync are hidden for read-only roles.",
+      "paths": [
+        "/containers"
+      ],
+      "resource": "erp.containers",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "approve",
+        "finalize",
+        "reverse",
+        "void",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "component",
+      "files": [
+        "client/src/pages/Containers.tsx"
+      ]
+    },
+    {
+      "id": "erp.containers.detail",
+      "area": "erp",
+      "label": "Container and offload detail",
+      "paths": [
+        "/containers/:id",
+        "/offloads/:id"
+      ],
+      "resource": "erp.containers",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "approve",
+        "finalize",
+        "reverse",
+        "void",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "erp.containers.verification",
+      "area": "erp",
+      "label": "Container verification",
+      "paths": [
+        "/containers/:containerId/verification"
+      ],
+      "resource": "erp.containers",
+      "actions": [
+        "view",
+        "approve"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    },
+    {
+      "id": "erp.containers.git",
+      "area": "erp",
+      "label": "Goods in transit containers",
+      "paths": [
+        "/git",
+        "/mock-git",
+        "/containers-otw",
+        "/mock-containers-otw"
+      ],
+      "resource": "erp.containers",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "component",
+      "files": [
+        "client/src/pages/GITContainers.tsx",
+        "client/src/pages/git-mockup/TabDetail.tsx",
+        "client/src/pages/git-mockup/TabTruckLocation.tsx",
+        "client/src/pages/git-mockup/TabAgentDuty.tsx"
+      ]
+    },
+    {
+      "id": "erp.daybook",
+      "area": "erp",
+      "label": "Daybook",
+      "paths": [
+        "/daybook"
+      ],
+      "resource": "erp.vouchers",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "approve",
+        "finalize",
+        "reverse",
+        "void",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "component",
+      "files": [
+        "client/src/pages/daybook/DaybookTable.tsx"
+      ]
+    },
+    {
+      "id": "erp.transaction-journal",
+      "area": "erp",
+      "label": "Transaction journal",
+      "paths": [
+        "/transaction-journal"
+      ],
+      "resource": "erp.vouchers",
+      "actions": [
+        "view",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "erp.reports.analytics",
+      "area": "erp",
+      "label": "Analytics",
+      "paths": [
+        "/analytics"
+      ],
+      "resource": "erp.analytics",
+      "actions": [
+        "view",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "erp.reports.financial-overview",
+      "area": "erp",
+      "label": "Financial overview",
+      "note": "Hidden for read-only roles since the Create Only activation change.",
+      "paths": [
+        "/financial-overview"
+      ],
+      "resource": "erp.analytics",
+      "actions": [
+        "view",
+        "export"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    },
+    {
+      "id": "erp.transporter-statement",
+      "area": "erp",
+      "label": "Tracking hub and transporter statement",
+      "paths": [
+        "/tracking"
+      ],
+      "resource": "erp.accounts",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "component",
+      "files": [
+        "client/src/pages/TransporterStatement.tsx"
+      ]
+    },
+    {
+      "id": "erp.payroll",
+      "area": "erp",
+      "label": "Payroll",
+      "note": "Bulk payroll was reviewed and kept denied for Create Only.",
+      "paths": [
+        "/payroll"
+      ],
+      "resource": "erp.payroll",
+      "actions": [
+        "view",
+        "create",
+        "approve",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "erp.rentals",
+      "area": "erp",
+      "label": "ERP rentals",
+      "paths": [
+        "/erp/rental/warehouses",
+        "/erp/rental/shops"
+      ],
+      "resource": "properties.units",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "component",
+      "files": [
+        "client/src/pages/properties/property-rental/components/RentalUnitCards.tsx",
+        "client/src/pages/properties/property-rental/components/UnitActionDialog.tsx",
+        "client/src/pages/properties/property-rental/components/StartContractForm.tsx",
+        "client/src/pages/properties/property-rental/components/NoteCell.tsx"
+      ],
+      "createOnlyCreate": "rentalUnits"
+    },
+    {
+      "id": "erp.rentals.payments",
+      "area": "erp",
+      "label": "ERP rental payments",
+      "note": "Rental payments were reviewed and kept denied for Create Only.",
+      "paths": [
+        "/erp/rental/payments"
+      ],
+      "resource": "properties.payments",
+      "actions": [
+        "view",
+        "create",
+        "reverse"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "erp.conflicts",
+      "area": "erp",
+      "label": "Offline conflict center",
+      "paths": [
+        "/conflicts"
+      ],
+      "resource": "system.maintenance",
+      "actions": [
+        "view",
+        "repair"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    },
+    {
+      "id": "erp.settings",
+      "area": "erp",
+      "label": "Settings and administration",
+      "paths": [
+        "/settings",
+        "/intercompany-links",
+        "/chatbot-settings",
+        "/notification-settings",
+        "/account-groups"
+      ],
+      "resource": "system.settings",
+      "actions": [
+        "view",
+        "manage_settings"
+      ],
+      "mode": "change",
+      "inPage": "role_restricted"
+    },
+    {
+      "id": "erp.repair",
+      "area": "erp",
+      "label": "Repair and maintenance",
+      "paths": [
+        "/orphaned-records",
+        "/deleted-items",
+        "/import-cycle-diagnostics",
+        "/inventory-repair",
+        "/balance-repair",
+        "/convergence-reconciliation",
+        "/company-data-reset",
+        "/account-migration",
+        "/account-transfer",
+        "/company-transfer"
+      ],
+      "resource": "system.maintenance",
+      "actions": [
+        "view",
+        "repair"
+      ],
+      "mode": "change",
+      "inPage": "role_restricted"
+    },
+    {
+      "id": "factory.inventory",
+      "area": "factory",
+      "label": "Factory inventory",
+      "paths": [
+        "/factory/raw-stock",
+        "/factory/raw-materials",
+        "/factory/location-inventory",
+        "/factory/stock-query",
+        "/factory/stock-query/:id",
+        "/factory/stock-otw"
+      ],
+      "resource": "factory.raw_stock",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "factory.inventory.opening-edit",
+      "area": "factory",
+      "label": "Edit raw-stock opening balance",
+      "paths": [
+        "/factory/raw-stock/opening-balance/:id/edit"
+      ],
+      "resource": "factory.raw_stock",
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    },
+    {
+      "id": "factory.inventory.recalculate",
+      "area": "factory",
+      "label": "Raw-stock recalculation",
+      "paths": [
+        "/factory/raw-stock/recalculate"
+      ],
+      "resource": "factory.raw_stock",
+      "actions": [
+        "view",
+        "repair"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    },
+    {
+      "id": "factory.stock-allocation",
+      "area": "factory",
+      "label": "Stock allocation",
+      "note": "Allocation edits existing proformas and allocations.",
+      "paths": [
+        "/factory/stock-allocation",
+        "/factory/stock-allocation-v3",
+        "/factory/stock-allocation-v5"
+      ],
+      "resource": "factory.customer_orders",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    },
+    {
+      "id": "factory.stock-allocation.proforma-new",
+      "area": "factory",
+      "label": "New proforma",
+      "paths": [
+        "/factory/stock-allocation-v5/proformas/new"
+      ],
+      "resource": "factory.customer_orders",
+      "actions": [
+        "view",
+        "create"
+      ],
+      "mode": "create",
+      "inPage": "route"
+    },
+    {
+      "id": "factory.stock-allocation.proforma-edit",
+      "area": "factory",
+      "label": "Edit proforma",
+      "paths": [
+        "/factory/stock-allocation-v5/proformas/:id/edit",
+        "/factory/invoicing/proformas/:id/edit",
+        "/factory/sales/proformas/:proformaId/add-line"
+      ],
+      "resource": "factory.customer_orders",
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    },
+    {
+      "id": "factory.invoicing",
+      "area": "factory",
+      "label": "Invoicing",
+      "paths": [
+        "/factory/invoicing",
+        "/factory/sales/invoices/:id",
+        "/factory/price-list"
+      ],
+      "resource": "factory.customer_orders",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "approve",
+        "finalize",
+        "reverse",
+        "void",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "factory.sales.new",
+      "area": "factory",
+      "label": "New customer order",
+      "paths": [
+        "/factory/sales/new"
+      ],
+      "resource": "factory.customer_orders",
+      "actions": [
+        "view",
+        "create"
+      ],
+      "mode": "create",
+      "inPage": "route",
+      "createOnlyCreate": "factoryCustomerOrders"
+    },
+    {
+      "id": "factory.sales.verify",
+      "area": "factory",
+      "label": "Verify pending invoice",
+      "paths": [
+        "/factory/sales/pending-invoices/:id/verify"
+      ],
+      "resource": "factory.customer_orders",
+      "actions": [
+        "view",
+        "approve",
+        "finalize"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    },
+    {
+      "id": "factory.bales",
+      "area": "factory",
+      "label": "Bale explorer, list, tracking and history",
+      "paths": [
+        "/factory/bales-hub",
+        "/factory/stock-bale-list",
+        "/factory/bale-tracking",
+        "/factory/bales-history",
+        "/factory/bale-product-history/:productId/:locationId",
+        "/factory/bale-product-history/:productId/:locationId/:year/:month",
+        "/factory/bale-product-history/:productId/:locationId/:year/all",
+        "/factory/bale-ledger",
+        "/factory/reprint-labels",
+        "/factory/bale-products"
+      ],
+      "resource": "factory.bales",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "factory.bales.relabel",
+      "area": "factory",
+      "label": "Bale relabeling and merging",
+      "paths": [
+        "/factory/bale-relabeling",
+        "/factory/bale-relabeling/wipers-re-entry",
+        "/factory/merge-bale-products"
+      ],
+      "resource": "factory.bales",
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    },
+    {
+      "id": "factory.production.entry",
+      "area": "factory",
+      "label": "Bale production entry",
+      "note": "Production positions were reviewed and kept denied for Create Only.",
+      "paths": [
+        "/factory/stock-entry"
+      ],
+      "resource": "factory.production",
+      "actions": [
+        "view",
+        "create"
+      ],
+      "mode": "create",
+      "inPage": "route"
+    },
+    {
+      "id": "factory.production.pressing",
+      "area": "factory",
+      "label": "Pressing and scanning",
+      "note": "The server's pressing access endpoint reports canScan=false for read-only roles.",
+      "paths": [
+        "/factory/pressing"
+      ],
+      "resource": "factory.production",
+      "actions": [
+        "view",
+        "create",
+        "edit"
+      ],
+      "mode": "browse",
+      "inPage": "component",
+      "files": [
+        "client/src/pages/factory/PressingMachineManagement.tsx"
+      ]
+    },
+    {
+      "id": "factory.production.finalize",
+      "area": "factory",
+      "label": "Finalize production",
+      "paths": [
+        "/factory/finalize"
+      ],
+      "resource": "factory.production",
+      "actions": [
+        "view",
+        "finalize"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    },
+    {
+      "id": "factory.production.reports",
+      "area": "factory",
+      "label": "Production reports",
+      "paths": [
+        "/factory/production-report",
+        "/factory/production-summary",
+        "/factory/production-comparison",
+        "/factory/monthly-production-matrix",
+        "/factory/monthly-production-matrix/:productId/workers",
+        "/factory/monthly-production-matrix/:productId/bales/:workerId"
+      ],
+      "resource": "factory.production",
+      "actions": [
+        "view",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "factory.mixing",
+      "area": "factory",
+      "label": "Mixing and mix optimizer",
+      "note": "Mix batches were reviewed and kept denied for Create Only.",
+      "paths": [
+        "/factory/intelligence/mix-optimizer"
+      ],
+      "resource": "factory.mix_batches",
+      "actions": [
+        "view",
+        "create",
+        "edit"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "factory.containers",
+      "area": "factory",
+      "label": "Containers",
+      "paths": [
+        "/factory/containers",
+        "/factory/containers-hub"
+      ],
+      "resource": "factory.containers",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "approve",
+        "finalize",
+        "reverse",
+        "void",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "component",
+      "files": [
+        "client/src/pages/factory/FactoryShippingContainers.tsx"
+      ]
+    },
+    {
+      "id": "factory.containers.new",
+      "area": "factory",
+      "label": "New container",
+      "note": "Factory containers were reviewed and kept denied for Create Only.",
+      "paths": [
+        "/factory/containers/new"
+      ],
+      "resource": "factory.containers",
+      "actions": [
+        "view",
+        "create"
+      ],
+      "mode": "create",
+      "inPage": "route"
+    },
+    {
+      "id": "factory.loading",
+      "area": "factory",
+      "label": "Loading",
+      "paths": [
+        "/factory/sales/loadings",
+        "/factory/sales/loading/pending",
+        "/factory/dispatch-batches",
+        "/factory/dispatch-batches/:id"
+      ],
+      "resource": "factory.containers",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "finalize"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "factory.loading.scan",
+      "area": "factory",
+      "label": "Loading scan",
+      "paths": [
+        "/factory/sales/loading/new",
+        "/factory/invoices/:id/loading-scan",
+        "/factory/dispatch-batches/:batchId/rides/:rideId/scan"
+      ],
+      "resource": "factory.containers",
+      "actions": [
+        "view",
+        "create",
+        "edit"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    },
+    {
+      "id": "factory.workers",
+      "area": "factory",
+      "label": "Workers and employees",
+      "paths": [
+        "/factory/employees",
+        "/factory/employees/:id",
+        "/factory/workers",
+        "/factory/workers/:id",
+        "/factory/insurance"
+      ],
+      "resource": "factory.employees",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "factory.payroll",
+      "area": "factory",
+      "label": "Attendance, payroll, targets and bonuses",
+      "note": "Bulk payroll was reviewed and kept denied for Create Only.",
+      "paths": [
+        "/factory/payroll-hub",
+        "/factory/worker-payroll",
+        "/factory/payroll",
+        "/factory/production-bonuses"
+      ],
+      "resource": "factory.payroll",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "approve",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "factory.scanning",
+      "area": "factory",
+      "label": "Barcode lookup",
+      "paths": [
+        "/factory/barcode-lookup"
+      ],
+      "resource": "factory.bales",
+      "actions": [
+        "view",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "factory.accounting",
+      "area": "factory",
+      "label": "Factory accounts and ledger",
+      "paths": [
+        "/factory/accounts",
+        "/factory/ledger-monthly/:accountId",
+        "/factory/ledger-vouchers/:accountId/:year/:month",
+        "/factory/contacts",
+        "/factory/parties",
+        "/factory/customers/:id",
+        "/factory/transporters"
+      ],
+      "resource": "factory.accounting",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "factory.vouchers.create",
+      "area": "factory",
+      "label": "Factory vouchers",
+      "paths": [
+        "/factory/vouchers"
+      ],
+      "resource": "factory.accounting",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "approve",
+        "finalize",
+        "reverse",
+        "void",
+        "export"
+      ],
+      "mode": "create",
+      "inPage": "route"
+    },
+    {
+      "id": "factory.vouchers.edit",
+      "area": "factory",
+      "label": "Edit factory voucher",
+      "paths": [
+        "/factory/vouchers/:id/edit"
+      ],
+      "resource": "factory.accounting",
+      "actions": [
+        "view",
+        "edit",
+        "delete",
+        "reverse"
+      ],
+      "mode": "change",
+      "inPage": "route",
+      "readView": "/factory/voucher-detail/:id"
+    },
+    {
+      "id": "factory.vouchers.detail",
+      "area": "factory",
+      "label": "Factory voucher detail",
+      "paths": [
+        "/factory/voucher-detail/:voucherId"
+      ],
+      "resource": "factory.accounting",
+      "actions": [
+        "view",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "factory.accounting.create",
+      "area": "factory",
+      "label": "Factory create master data",
+      "paths": [
+        "/factory/create"
+      ],
+      "resource": "factory.accounting",
+      "actions": [
+        "view",
+        "create"
+      ],
+      "mode": "create",
+      "inPage": "component",
+      "files": [
+        "client/src/pages/AccountingCreate.tsx"
+      ],
+      "createOnlyCreate": "suppliers"
+    },
+    {
+      "id": "factory.daybook",
+      "area": "factory",
+      "label": "Factory daybook",
+      "paths": [
+        "/factory/daybook"
+      ],
+      "resource": "factory.accounting",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "approve",
+        "finalize",
+        "reverse",
+        "void",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "component",
+      "files": [
+        "client/src/pages/factory/daybook/useFactoryDaybookModel.ts"
+      ]
+    },
+    {
+      "id": "factory.reports",
+      "area": "factory",
+      "label": "Factory analytics and intelligence",
+      "paths": [
+        "/factory/analytics",
+        "/factory/intelligence/dashboard",
+        "/factory/intelligence/kpis",
+        "/factory/intelligence/alerts",
+        "/factory/intelligence/supplier-hub",
+        "/factory/intelligence/financial-hub",
+        "/factory/intelligence/production-hub",
+        "/factory/net-position-details",
+        "/factory/financial-snapshot",
+        "/factory/broker-visual-statement"
+      ],
+      "resource": "factory.analytics",
+      "actions": [
+        "view",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "factory.pos",
+      "area": "factory",
+      "label": "Factory POS",
+      "paths": [
+        "/factory/pos"
+      ],
+      "resource": "retail.pos",
+      "actions": [
+        "view",
+        "create"
+      ],
+      "mode": "create",
+      "inPage": "route"
+    },
+    {
+      "id": "factory.import",
+      "area": "factory",
+      "label": "Factory import",
+      "paths": [
+        "/factory/import"
+      ],
+      "resource": "factory.raw_stock",
+      "actions": [
+        "view",
+        "import"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    },
+    {
+      "id": "factory.rentals",
+      "area": "factory",
+      "label": "Factory rentals",
+      "paths": [
+        "/factory/rental/warehouses",
+        "/factory/rental/shops"
+      ],
+      "resource": "properties.units",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "component",
+      "files": [
+        "client/src/pages/properties/property-rental/components/RentalUnitCards.tsx",
+        "client/src/pages/properties/property-rental/components/UnitActionDialog.tsx",
+        "client/src/pages/properties/property-rental/components/StartContractForm.tsx"
+      ],
+      "createOnlyCreate": "rentalUnits"
+    },
+    {
+      "id": "factory.rentals.payments",
+      "area": "factory",
+      "label": "Factory rental payments",
+      "paths": [
+        "/factory/rental/payments"
+      ],
+      "resource": "properties.payments",
+      "actions": [
+        "view",
+        "create",
+        "reverse"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "factory.settings",
+      "area": "factory",
+      "label": "Factory settings and catalogs",
+      "paths": [
+        "/factory/settings",
+        "/factory/catalog-translations",
+        "/factory/bale-product-images",
+        "/factory/customer-logos",
+        "/factory/label-banners",
+        "/factory/intelligence/settings",
+        "/factory/users",
+        "/factory/account-groups",
+        "/factory/chatbot-settings"
+      ],
+      "resource": "system.settings",
+      "actions": [
+        "view",
+        "manage_settings"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    },
+    {
+      "id": "factory.repair",
+      "area": "factory",
+      "label": "Factory repair and maintenance",
+      "paths": [
+        "/factory/deleted-items",
+        "/factory/orphaned-records",
+        "/factory/inventory-repair",
+        "/factory/company-data-reset",
+        "/factory/import-cycle-diagnostics",
+        "/factory/balance-repair",
+        "/factory/conflicts"
+      ],
+      "resource": "system.maintenance",
+      "actions": [
+        "view",
+        "repair"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    },
+    {
+      "id": "retail.pos",
+      "area": "pos_retail",
+      "label": "Retail POS",
+      "note": "Retail POS sales were reviewed and kept denied for Create Only.",
+      "paths": [
+        "/retail/pos"
+      ],
+      "resource": "retail.pos",
+      "actions": [
+        "view",
+        "create",
+        "void"
+      ],
+      "mode": "create",
+      "inPage": "route"
+    },
+    {
+      "id": "retail.products",
+      "area": "pos_retail",
+      "label": "Retail products and inventory",
+      "paths": [
+        "/retail",
+        "/retail/inventory",
+        "/retail/products/:id"
+      ],
+      "resource": "retail.stock_items",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "component",
+      "files": [
+        "client/src/pages/retail/RetailInventory.tsx",
+        "client/src/pages/retail/RetailProductEditor.tsx",
+        "client/src/pages/retail/RetailCatalogList.tsx"
+      ],
+      "createOnlyCreate": "retailProducts"
+    },
+    {
+      "id": "retail.stock-count",
+      "area": "pos_retail",
+      "label": "Retail stock count",
+      "paths": [
+        "/retail/stock-count"
+      ],
+      "resource": "retail.stock_items",
+      "actions": [
+        "view",
+        "edit"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    },
+    {
+      "id": "retail.history",
+      "area": "pos_retail",
+      "label": "Retail sales history and reports",
+      "paths": [
+        "/retail/history",
+        "/retail/reports"
+      ],
+      "resource": "retail.pos",
+      "actions": [
+        "view",
+        "void",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "pos.role-workspace",
+      "area": "pos_retail",
+      "label": "POS role workspace (daybook, pricing, discounts, refunds, transfers, payments)",
+      "note": "Rendered only for the POS role; governed by pos_perm_* feature keys and the POS operational policy on the server.",
+      "paths": [
+        "/pos-daybook",
+        "/pos-dashboard",
+        "/pos-customers",
+        "/pos-price-list",
+        "/pos-transfer-orders",
+        "/pos-settings",
+        "/pos-containers",
+        "/pos-containers/:id"
+      ],
+      "resource": "retail.pos",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "void",
+        "approve",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "properties.dashboard",
+      "area": "properties",
+      "label": "Properties dashboard and reports",
+      "paths": [
+        "/properties/dashboard",
+        "/properties/analytics"
+      ],
+      "resource": "properties.analytics",
+      "actions": [
+        "view",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "properties.rentals",
+      "area": "properties",
+      "label": "Properties, units, tenants and contracts",
+      "paths": [
+        "/properties/rentals"
+      ],
+      "resource": "properties.contracts",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "component",
+      "files": [
+        "client/src/pages/properties/property-rental/components/RentalUnitCards.tsx",
+        "client/src/pages/properties/property-rental/components/UnitActionDialog.tsx",
+        "client/src/pages/properties/property-rental/components/StartContractForm.tsx",
+        "client/src/pages/properties/property-rental/components/NoteCell.tsx"
+      ],
+      "createOnlyCreate": "rentalContracts"
+    },
+    {
+      "id": "properties.accounts",
+      "area": "properties",
+      "label": "Properties accounts and ledger",
+      "paths": [
+        "/properties/accounts",
+        "/properties/ledger-monthly/:accountId",
+        "/properties/ledger-vouchers/:accountId/:year/:month"
+      ],
+      "resource": "properties.payments",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "properties.daybook",
+      "area": "properties",
+      "label": "Properties daybook",
+      "paths": [
+        "/properties/daybook"
+      ],
+      "resource": "properties.payments",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "approve",
+        "finalize",
+        "reverse",
+        "void",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "properties.vouchers.create",
+      "area": "properties",
+      "label": "Properties vouchers and payments",
+      "note": "Rental payments were reviewed and kept denied for Create Only.",
+      "paths": [
+        "/properties/vouchers",
+        "/properties/create"
+      ],
+      "resource": "properties.payments",
+      "actions": [
+        "view",
+        "create",
+        "edit",
+        "delete",
+        "approve",
+        "finalize",
+        "reverse",
+        "void",
+        "export"
+      ],
+      "mode": "create",
+      "inPage": "route"
+    },
+    {
+      "id": "properties.vouchers.edit",
+      "area": "properties",
+      "label": "Edit properties voucher",
+      "paths": [
+        "/properties/vouchers/:id/edit"
+      ],
+      "resource": "properties.payments",
+      "actions": [
+        "view",
+        "edit",
+        "delete",
+        "reverse"
+      ],
+      "mode": "change",
+      "inPage": "route",
+      "readView": "/properties/voucher-detail/:id"
+    },
+    {
+      "id": "properties.vouchers.detail",
+      "area": "properties",
+      "label": "Properties voucher detail",
+      "paths": [
+        "/properties/voucher-detail/:voucherId"
+      ],
+      "resource": "properties.payments",
+      "actions": [
+        "view",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced"
+    },
+    {
+      "id": "properties.settings",
+      "area": "properties",
+      "label": "Properties settings and transfer",
+      "paths": [
+        "/properties/settings",
+        "/properties/transfer",
+        "/properties/balance-repair"
+      ],
+      "resource": "system.settings",
+      "actions": [
+        "view",
+        "manage_settings"
+      ],
+      "mode": "change",
+      "inPage": "role_restricted"
+    },
+    {
+      "id": "sp.overview",
+      "area": "supplier_partner",
+      "label": "Supplier partner sales and reports",
+      "paths": [
+        "/sp",
+        "/sp/golden-coast",
+        "/sp/reports"
+      ],
+      "resource": "retail.pos",
+      "actions": [
+        "view",
+        "create",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "server_enforced",
+      "createOnlyCreate": "spSales"
+    },
+    {
+      "id": "sp.setup",
+      "area": "supplier_partner",
+      "label": "Supplier partner setup",
+      "paths": [
+        "/sp/opening-stock",
+        "/sp/aliases",
+        "/sp/setup"
+      ],
+      "resource": "system.settings",
+      "actions": [
+        "view",
+        "manage_settings"
+      ],
+      "mode": "change",
+      "inPage": "route"
+    }
+  ]
+}

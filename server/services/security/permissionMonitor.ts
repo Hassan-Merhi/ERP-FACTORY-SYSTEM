@@ -121,11 +121,12 @@ export function recordPermissionSignal(signal: PermissionSignal, now: number = D
 
   const escalation = ESCALATED[signal.kind];
   if (escalation) {
+    const eventSummary = [signal.kind, payload.code].join(":");
     recordOperationalEvent({
       category: signal.kind === "permission_service_error" ? "error" : "integrity",
       code: `permission_${signal.kind}`,
       severity: escalation,
-      message: `Permission signal: ${signal.kind} (${payload.code})`,
+      message: eventSummary,
       method: signal.method,
       path,
       companyId: signal.companyId ?? undefined,

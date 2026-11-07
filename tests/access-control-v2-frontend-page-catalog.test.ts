@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import pageNotes from "../config/permissions-v2-page-catalog-notes.json";
+import pageCatalog from "../config/permissions-v2-page-catalog.json";
 import {
   PERMISSION_PAGE_CATALOG,
   decideReadOnlyRoleRoute,
@@ -35,9 +35,10 @@ describe("Permissions V2 frontend page catalog", () => {
   });
 
   it("names every page for the audit report", () => {
-    const named = pageNotes.pages as Record<string, { label?: string }>;
-    for (const entry of PERMISSION_PAGE_CATALOG) expect(named[entry.id]?.label, entry.id).toBeTruthy();
-    expect(Object.keys(named).sort()).toEqual(PERMISSION_PAGE_CATALOG.map((entry) => entry.id).sort());
+    for (const row of pageCatalog.pages as Array<{ id: string; label?: string }>) {
+      expect(row.label, row.id).toBeTruthy();
+    }
+    expect(pageCatalog.pages.map((row) => row.id)).toEqual(PERMISSION_PAGE_CATALOG.map((entry) => entry.id));
   });
 
   it("never assigns one route to two pages", () => {
