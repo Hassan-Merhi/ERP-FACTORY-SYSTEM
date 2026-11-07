@@ -3,6 +3,7 @@ import { getErrorDetails } from "@shared/errorUtils";
 import { useEffect, useMemo, useRef } from "react";
 import { useLocation as useLocationContext } from "@/contexts/LocationContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
@@ -39,6 +40,7 @@ import { GoldenCoastPosReadinessAlert } from "./pos-components/GoldenCoastPosRea
 export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; editVoucherId?: string } = {}) {
   const { selectedLocation, setSelectedLocation } = useLocationContext();
   const { selectedCompany } = useCompany();
+  const { t } = useApplicationLanguage();
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { selectedCurrency, exchangeRate: dailyExchangeRate, displayCurrency } = useCurrencyContext();
@@ -774,10 +776,10 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
             )}
           </div>
           <div data-pos-notes-wrap="true" className="mt-2 px-1 pb-2">
-            <label htmlFor="pos-desktop-notes" className="flex items-center gap-2 text-sm font-medium"><NotebookPen className="h-4 w-4" aria-hidden="true" /> Notes <span className="text-muted-foreground font-normal">(optional)</span></label>
+            <label htmlFor="pos-desktop-notes" className="flex items-center gap-2 text-sm font-medium"><NotebookPen className="h-4 w-4" aria-hidden="true" /> {t("pos.modern.notes")} <span className="text-muted-foreground font-normal">{t("pos.modern.optional")}</span></label>
             <Textarea
               id="pos-desktop-notes"
-              placeholder="Add a note about this sale..."
+              placeholder={t("pos.modern.notesPlaceholder")}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="resize-none h-12 min-h-[48px] text-sm"
@@ -787,8 +789,8 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
           {!rows.some((row) => row.stockItemId || row.itemName?.trim()) && (
             <div data-pos-empty-state="true" className="hidden lg:flex flex-1 flex-col items-center justify-center px-6 py-10 text-center">
               <span data-pos-empty-icon="true"><ShoppingCart className="h-8 w-8" aria-hidden="true" /></span>
-              <h2 className="mt-4 text-base font-semibold">Add items to this sale</h2>
-              <p className="mt-2 max-w-sm text-sm text-muted-foreground">Search and select products from the Items panel or type in the sale grid above.</p>
+              <h2 className="mt-4 text-base font-semibold">{t("pos.modern.addItems")}</h2>
+              <p className="mt-2 max-w-sm text-sm text-muted-foreground">{t("pos.modern.addItemsHint")}</p>
             </div>
           )}
         </div>
