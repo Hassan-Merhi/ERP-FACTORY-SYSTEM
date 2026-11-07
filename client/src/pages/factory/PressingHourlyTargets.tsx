@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, Check, RefreshCw, Target, TrendingUp } from "lucide-react";
+import { CalendarClock, CalendarDays, Check, RefreshCw, Target, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translatePressingUiText } from "@/i18n/pressingUiTranslations";
@@ -10,6 +11,9 @@ import { type PressingHourlySnapshot } from "./pressing-scanner/pressingHourlyKp
 
 const ENDPOINT = "/api/factory/pressing-machines/report/hourly-targets";
 const ZONE = "Asia/Beirut";
+const SCHEDULE_HOURS = Array.from({ length: 10 }, (_, index) => index + 7);
+const scheduleHourLabel = (hour: number) =>
+  String(hour).padStart(2, "0") + ":00–" + String(hour + 1).padStart(2, "0") + ":00";
 type HourlyResponse = PressingHourlySnapshot;
 const formatKg = (value: number) =>
   value.toLocaleString(undefined, { maximumFractionDigits: 3 });
@@ -56,6 +60,13 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
   const setDay = onDayChange ?? setLocalDay;
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [savingHour, setSavingHour] = useState<string | null>(null);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleDrafts, setScheduleDrafts] = useState<Record<string, string>>({});
+  const [savingSchedule, setSavingSchedule] = useState(false);
+  useEffect(() => {
+    setScheduleOpen(false);
+    setScheduleDrafts({});
+  }, [companyId]);
   useEffect(() => {
     if (selectedDay === undefined) setLocalDay(serverToday || "");
     setDrafts({});
@@ -130,6 +141,59 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
     } finally { setSavingHour(null); }
   }
 
+  function openDailySchedule() {
+    if (!data?.canEdit) return;
+    // Edit today's effective template, even if a historical day is selected.
+    const fields: Record<string, string> = {};
+    for (const hour of SCHEDULE_HOURS) {
+      const target = data.editableDailyScheduleKg?.[String(hour)] ?? uniformBaseline ?? 850;
+      fields[String(hour)] = String(target);
+    }
+    setScheduleDrafts(fields);
+    setScheduleOpen(true);
+  }
+
+  async function saveDailySchedule() {
+    if (!data?.canEdit || savingSchedule) return;
+    const targetsKg: number[] = [];
+    for (const hour of SCHEDULE_HOURS) {
+      const raw = scheduleDrafts[String(hour)] ?? "";
+      const kg = Number(raw);
+      if (!raw.trim() || !Number.isFinite(kg) || kg < 0.001 || kg > 100000) {
+        toast({
+          title: "Invalid daily schedule",
+          description: scheduleHourLabel(hour) + ": enter a target between 0.001 and 100,000 KG.",
+          variant: "destructive",
+        });
+        return;
+      }
+      targetsKg.push(kg);
+    }
+    setSavingSchedule(true);
+    try {
+      const response = await fetch(ENDPOINT + "/daily-schedule", {
+        method: "PUT", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetsKg }),
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.message || "Could not save recurring daily schedule");
+      }
+      await hourly.refetch();
+      setScheduleOpen(false);
+      toast({ title: "Daily schedule saved", description: "Fixed targets now apply every day from today onward (Beirut time)." });
+    } catch (error) {
+      toast({
+        title: "Daily schedule not saved",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingSchedule(false);
+    }
+  }
+
   return (
     <section className="overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-card via-card to-sky-500/[0.035] shadow-[0_12px_38px_-22px_rgba(14,165,233,0.25)]"
       data-testid="pressing-hourly-targets">
@@ -143,6 +207,19 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
             <p className="mt-1 text-xs text-muted-foreground">
               07:00–17:00 Beirut time · confirmed scans only · target per worker
             </p>
+            {data?.canEdit && (
+              <Button type="button" size="sm" variant="outline"
+                className="mt-2 h-8 gap-1.5 rounded-lg border-sky-500/30 bg-sky-500/5 text-xs font-semibold hover:bg-sky-500/10"
+                onClick={openDailySchedule} data-testid="pressing-open-daily-schedule">
+                <CalendarClock className="h-3.5 w-3.5 text-sky-500" />
+                Daily schedule
+              </Button>
+            )}
+            {data?.dailyScheduleEffectiveDay && (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Recurring hourly schedule active · saved {data.dailyScheduleEffectiveDay}
+              </p>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -247,6 +324,51 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
           </div>
         </>
       )}
+      <Dialog open={scheduleOpen} onOpenChange={open => { if (!savingSchedule) setScheduleOpen(open); }}>
+        <DialogContent className="flex max-h-[90dvh] w-[calc(100vw-2rem)] max-w-lg flex-col gap-0 overflow-hidden rounded-2xl border-border/70 bg-background p-0 shadow-2xl">
+          <DialogHeader className="shrink-0 border-b border-border/60 bg-gradient-to-r from-sky-500/10 via-background to-violet-500/5 px-5 pb-4 pt-5">
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <CalendarClock className="h-5 w-5 text-sky-500" />
+              Fixed daily KG schedule
+            </DialogTitle>
+            <DialogDescription className="text-xs leading-relaxed">
+              Set the KG target per worker for each hour. This same 07:00–17:00 plan
+              repeats automatically every day starting today in Beirut time.
+              Previous days retain their historical schedule.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-4">
+            <div className="mb-2 grid grid-cols-[1fr_135px] gap-3 px-2 text-[11px] font-semibold text-muted-foreground">
+              <span>Production hour (Beirut)</span><span>Target / worker</span>
+            </div>
+            {SCHEDULE_HOURS.map(hour => (
+              <div key={hour} className="grid grid-cols-[1fr_135px] items-center gap-3 rounded-xl border border-border/60 bg-card/60 px-3 py-2 transition-colors focus-within:border-sky-500/50">
+                <span className="font-semibold tabular-nums text-sm">{scheduleHourLabel(hour)}</span>
+                <div className="relative">
+                  <Input type="number" inputMode="decimal" min="0.001" max="100000" step="0.001"
+                    aria-label={"Daily scheduled target for " + scheduleHourLabel(hour)}
+                    className="h-9 rounded-lg bg-background pr-9 text-right font-semibold tabular-nums"
+                    value={scheduleDrafts[String(hour)] ?? ""} disabled={savingSchedule}
+                    onChange={event => setScheduleDrafts(old => ({ ...old, [String(hour)]: event.target.value }))} />
+                  <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-muted-foreground">KG</span>
+                </div>
+              </div>
+            ))}
+            <p className="pt-2 text-xs leading-relaxed text-muted-foreground">
+              Targets apply to all three pressing workers. An hour manually saved for
+              a specific date will override the fixed schedule on that date only.
+            </p>
+          </div>
+          <DialogFooter className="shrink-0 flex-row gap-2 border-t border-border/60 bg-muted/20 px-5 py-4 sm:justify-end">
+            <Button type="button" variant="outline" disabled={savingSchedule}
+              onClick={() => setScheduleOpen(false)}>Cancel</Button>
+            <Button type="button" disabled={savingSchedule || !data?.canEdit}
+              onClick={() => void saveDailySchedule()}>
+              {savingSchedule ? "Saving…" : "Save daily schedule"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
