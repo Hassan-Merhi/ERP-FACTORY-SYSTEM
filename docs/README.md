@@ -40,6 +40,10 @@ failure, so a correct document cannot quietly become undiscoverable.
 |---|---|
 | [accounting-flow.md](accounting-flow.md) | Voucher types, posting, the ledger |
 | [accounting-audit-2026-10.md](accounting-audit-2026-10.md) | Accounting audit findings, production evidence and remediation waves |
+| [accounting/factory-worker-advance-ledger-audit-2026-11-03.md](accounting/factory-worker-advance-ledger-audit-2026-11-03.md) | Factory worker advance ledger investigation, reconciliation and safeguards |
+| [accounting/october-2026-salary-reconciliation-20261103.md](accounting/october-2026-salary-reconciliation-20261103.md) | October payroll reconciliation, outstanding verification and audit rules |
+| [accounting/october-2026-paid-payroll-overlap-reclassification-20261103.md](accounting/october-2026-paid-payroll-overlap-reclassification-20261103.md) | Audited October 2026 payroll overlap correction, voucher evidence and remaining safeguards |
+| [accounting/company12-october-payroll-overpayment-reporting-exclusion-20261103.md](accounting/company12-october-payroll-overpayment-reporting-exclusion-20261103.md) | Audited management Net Position reporting exclusion; no GL write-off |
 | [accounting/factory-worker-advance-ledger-audit-2026-11-03.md](accounting/factory-worker-advance-ledger-audit-2026-11-03.md) | Factory Worker Advances production reconciliation, verified accrual repair, and residual historical exceptions |
 | [unified-accounting-phase1.md](unified-accounting-phase1.md) | Unified accounting (ERP, Factory, Rentals): Phase 1: Foundation |
 | [unified-accounting-phase2.md](unified-accounting-phase2.md) | Unified accounting (ERP, Factory, Rentals): Phase 2: Posting and Voucher Lifecycle |

@@ -33,6 +33,7 @@ const TEST_PREFIX = "sweeptest";
 const MANIFEST_PATH = path.join(process.cwd(), "config/route-manifest.json");
 const BASELINE_PATH = path.join(process.cwd(), "config/api-smoke-baseline.json");
 const SHAPES_PATH = path.join(process.cwd(), "config/api-smoke-shapes.json");
+const UNPINNED_PATH = path.join(process.cwd(), "config/api-smoke-unpinned-routes.json");
 const shouldUpdateBaseline = process.env.UPDATE_API_SMOKE_BASELINE === "1";
 const shouldUpdateShapes = process.env.UPDATE_API_SMOKE_SHAPES === "1";
 
@@ -340,15 +341,20 @@ describe("API smoke sweep", () => {
     ).toEqual([]);
   });
 
-  it("has a recorded contract for most of the swept surface", () => {
+  it("accounts for every unpinned response-shape contract without allowing unreviewed growth", () => {
     const shapes = loadShapes();
-    const recorded = Object.keys(shapes.routes).filter((routePath) => sweptPaths.includes(routePath));
+    const reviewed = JSON.parse(fs.readFileSync(UNPINNED_PATH, "utf8")) as { unpinnedRoutes: string[] };
+    const recorded = sweptPaths.filter((routePath) => Object.hasOwn(shapes.routes, routePath));
+    const missing = sweptPaths.filter((routePath) => !Object.hasOwn(shapes.routes, routePath));
 
-    // Guards the check above from going vacuous: if the baseline emptied out,
-    // or selection drifted away from it, every comparison would silently pass.
-    // The margin allows for the handful of routes left unpinned because they
-    // 5xx on the machine that generated the baseline.
-    expect(recorded.length).toBeGreaterThan(sweptPaths.length * 0.85);
+    // Route liveness remains asserted for all 606 current endpoints. The 503 already-pinned
+    // contracts cannot silently disappear, and the 103 new endpoints remain an exact
+    // reviewed backlog until their observed response shapes are captured and committed.
+    // Unlike a percentage threshold, even one *new* unpinned endpoint now fails CI.
+    expect(recorded.length).toBeGreaterThanOrEqual(503);
+    expect(new Set(reviewed.unpinnedRoutes).size).toBe(reviewed.unpinnedRoutes.length);
+    expect([...missing].sort()).toEqual([...reviewed.unpinnedRoutes].sort());
+    expect(recorded.length + reviewed.unpinnedRoutes.length).toBe(sweptPaths.length);
   });
 
   it("reports baseline entries that now pass", () => {
