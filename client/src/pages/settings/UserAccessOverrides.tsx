@@ -66,6 +66,20 @@ function rowsToMap(rows: UserRule[]) {
 }
 
 /** Company-scoped, shadow-only per-user decisions. Role assignment stays in the existing hardened editor. */
+type EffectiveSource = "not_member" | "system_role" | "hard_restriction" | "legacy" | "v2_active";
+type EffectiveMatrix = {
+  companyId: number;
+  enforced: boolean;
+  decisions: Partial<Record<string, Partial<Record<string, { allowed: boolean; source: EffectiveSource }>>>>;
+};
+const EFFECTIVE_SOURCE_LABEL: Record<EffectiveSource, string> = {
+  not_member: "not a company member",
+  system_role: "system role",
+  hard_restriction: "system restriction",
+  legacy: "current role permissions",
+  v2_active: "active V2 rules",
+};
+
 export function UserAccessOverrides() {
   const { selectedCompany } = useCompany();
   const companyId = selectedCompany?.id;
@@ -108,6 +122,16 @@ export function UserAccessOverrides() {
     enabled: !!userId && !!companyId && user.data?.companyId === companyId && user.isSuccess,
     retry: false,
   });
+  const effective = useQuery<EffectiveMatrix>({
+    queryKey: ["/api/permissions-v2/users", companyId, userId, "effective", user.data?.policy?.revision],
+    queryFn: () => readJson<EffectiveMatrix>(`/api/permissions-v2/users/${encodeURIComponent(userId)}/effective`),
+    enabled: !!userId && !!companyId && user.data?.companyId === companyId && user.isSuccess,
+    retry: false,
+  });
+  const effectiveDecision =
+    effective.data && effective.data.companyId === companyId
+      ? effective.data.decisions[previewResource]?.[previewAction]
+      : undefined;
   const saved = useMemo(() => rowsToMap(user.data?.rules ?? EMPTY), [user.data?.rules]);
   useEffect(() => {
     setDraft(new Map(saved));
@@ -385,6 +409,17 @@ export function UserAccessOverrides() {
               ) : (
                 <p className="text-muted-foreground">Preview not available.</p>
               )}
+              {effectiveDecision ? (
+                <p data-testid="user-access-effective-now">
+                  Effective now: <strong>{effectiveDecision.allowed ? "Allow" : "Deny"}</strong> (
+                  {EFFECTIVE_SOURCE_LABEL[effectiveDecision.source]})
+                  {effective.data?.enforced ? null : (
+                    <span className="block text-xs text-muted-foreground">
+                      V2 rules are not enforced for this company.
+                    </span>
+                  )}
+                </p>
+              ) : null}
               <p className="text-muted-foreground text-xs">
                 Server-side hypothetical only; no impersonation. Does not account for all legacy page, location, field,
                 or hard-denial policies and never grants live access.

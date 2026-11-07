@@ -39,6 +39,7 @@ export const PERMISSION_REVALIDATION_QUERY_PREFIXES: readonly string[] = [
   "/api/auth/me",
   "/api/my-permissions",
   "/api/my-locations",
+  "/api/permissions-v2/me",
 ];
 
 export const PERMISSION_REVALIDATE_STORAGE_KEY = "erp:permissions-revalidate";

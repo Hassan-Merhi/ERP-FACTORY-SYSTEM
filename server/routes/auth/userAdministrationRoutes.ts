@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 
 import { requireAuth, requireRole } from "../../auth";
 import { db } from "../../db";
@@ -10,6 +10,12 @@ import {
 import { storage } from "../../storage";
 import { erpUserPageAccess, insertUserCompanyRoleSchema, insertUserSchema, userCompanyRoles } from "@shared/schema";
 import { refuseInactiveCreateOnlyAssignment } from "../../services/security/createOnlyActivation";
+import {
+  CompanyAdministratorGuardError,
+  assertCompanyKeepsAdministrator,
+  refuseSelfRoleChange,
+} from "../../services/security/companyAdministratorGuard";
+import { recordPermissionSignal } from "../../services/security/permissionMonitor";
 import { ERP_TESTER_PAGE_KEYS, ERP_TESTER_ROLE } from "@shared/erpTestCompanyAccess";
 import { and, eq, sql } from "drizzle-orm";
 import { hashPassword, logAudit, verifyPassword } from "../_helpers";
@@ -20,6 +26,25 @@ async function invalidateUserSessions(userId: string) {
   } catch {
     // Failure here is non-fatal and the surrounding flow continues deliberately.
   }
+}
+
+/** Answer a refused or failed role assignment and record the monitoring signal. */
+function respondRoleAssignmentFailure(req: Request, res: Response, error: unknown): void {
+  const guard = error instanceof CompanyAdministratorGuardError ? error : null;
+  recordPermissionSignal({
+    kind: "role_assignment_failed",
+    code: guard?.code ?? "ROLE_ASSIGNMENT_INVALID",
+    companyId: req.session.currentCompanyId ?? null,
+    userId: req.session.userId ?? null,
+    role: req.session.currentRole ?? null,
+    method: req.method,
+    path: req.path,
+  });
+  if (guard) {
+    res.status(guard.status).json({ code: guard.code, message: guard.message });
+    return;
+  }
+  res.status(400).json({ message: getErrorMessage(error) });
 }
 
 export function registerUserAdministrationRoutes(app: Express) {
@@ -99,10 +124,32 @@ export function registerUserAdministrationRoutes(app: Express) {
           return res.status(403).json({ message: "Cannot delete this account" });
         }
       }
+      // Deleting the account removes all its company roles; refuse when it is
+      // any company's last Admin.
+      const soleAdminCompanies = await db.execute(sql`
+        SELECT mine.company_id
+          FROM user_company_roles mine
+         WHERE mine.user_id = ${id} AND mine.role = 'Admin'
+           AND NOT EXISTS (
+             SELECT 1 FROM user_company_roles other
+              WHERE other.company_id = mine.company_id AND other.role = 'Admin' AND other.user_id <> ${id}
+           )
+         LIMIT 1`);
+      if (soleAdminCompanies.rows.length > 0) {
+        throw new CompanyAdministratorGuardError(
+          409,
+          "LAST_COMPANY_ADMINISTRATOR",
+          "This account is a company's last administrator. Assign another Admin before deleting it."
+        );
+      }
       await storage.deleteUser(id);
       await invalidateUserSessions(id);
       res.json({ message: "User deleted successfully" });
     } catch (error: unknown) {
+      if (error instanceof CompanyAdministratorGuardError) {
+        respondRoleAssignmentFailure(req, res, error);
+        return;
+      }
       res.status(400).json({ message: getErrorMessage(error) });
     }
   });
@@ -212,7 +259,7 @@ export function registerUserAdministrationRoutes(app: Express) {
       });
       res.status(201).json(role);
     } catch (error: unknown) {
-      res.status(400).json({ message: getErrorMessage(error) });
+      respondRoleAssignmentFailure(req, res, error);
     }
   });
 
@@ -234,10 +281,34 @@ export function registerUserAdministrationRoutes(app: Express) {
           .status(createOnlyRefusal.status)
           .json({ code: createOnlyRefusal.code, message: createOnlyRefusal.message });
       }
+      const selfRefusal = refuseSelfRoleChange({
+        actorUserId: req.session.userId,
+        actorRole: req.session.currentRole,
+        targetUserId: oldRecord.userId,
+        previousRole: oldRecord.role,
+        nextRole: parsed.role,
+        removing: false,
+      });
+      if (selfRefusal) throw selfRefusal;
       const effectiveRole = parsed.role ?? oldRecord.role;
       // Phase 21 (B): the role change and its audit row commit together; the
       // sessions are invalidated after commit, as before.
       const role = await db.transaction(async (tx) => {
+        await assertCompanyKeepsAdministrator(tx, {
+          companyId: parsed.companyId ?? oldRecord.companyId,
+          targetRowId: id,
+          targetRole: oldRecord.role,
+          nextRole: effectiveRole,
+        });
+        // Moving an Admin row to another company also removes it from this one.
+        if (parsed.companyId !== undefined && parsed.companyId !== oldRecord.companyId) {
+          await assertCompanyKeepsAdministrator(tx, {
+            companyId: oldRecord.companyId,
+            targetRowId: id,
+            targetRole: oldRecord.role,
+            nextRole: null,
+          });
+        }
         const updatedRole = await storage.updateUserCompanyRole(id, parsed, tx);
         if (effectiveRole === ERP_TESTER_ROLE) {
           await tx
@@ -282,7 +353,7 @@ export function registerUserAdministrationRoutes(app: Express) {
       if (oldRecord) await invalidateUserSessions(oldRecord.userId);
       res.json(role);
     } catch (error: unknown) {
-      res.status(400).json({ message: getErrorMessage(error) });
+      respondRoleAssignmentFailure(req, res, error);
     }
   });
 
@@ -290,9 +361,28 @@ export function registerUserAdministrationRoutes(app: Express) {
     try {
       const id = parseInt(req.params.id);
       const [oldRecord] = await db.select().from(userCompanyRoles).where(eq(userCompanyRoles.id, id)).limit(1);
+      if (oldRecord) {
+        const selfRefusal = refuseSelfRoleChange({
+          actorUserId: req.session.userId,
+          actorRole: req.session.currentRole,
+          targetUserId: oldRecord.userId,
+          previousRole: oldRecord.role,
+          nextRole: null,
+          removing: true,
+        });
+        if (selfRefusal) throw selfRefusal;
+      }
       // Phase 21 (B): the delete and its audit row commit together; the
       // sessions are invalidated after commit, as before.
       await db.transaction(async (tx) => {
+        if (oldRecord) {
+          await assertCompanyKeepsAdministrator(tx, {
+            companyId: oldRecord.companyId,
+            targetRowId: id,
+            targetRole: oldRecord.role,
+            nextRole: null,
+          });
+        }
         await storage.deleteUserCompanyRole(id, tx);
         if (oldRecord) {
           await logAudit(
@@ -313,7 +403,7 @@ export function registerUserAdministrationRoutes(app: Express) {
       if (oldRecord) await invalidateUserSessions(oldRecord.userId);
       res.status(204).send();
     } catch (error: unknown) {
-      res.status(400).json({ message: getErrorMessage(error) });
+      respondRoleAssignmentFailure(req, res, error);
     }
   });
 }
