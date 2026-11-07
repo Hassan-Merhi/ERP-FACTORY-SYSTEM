@@ -149,7 +149,7 @@ export function SaleGrid({
                           aria-autocomplete={col.key === "itemName" ? "list" : undefined}
                           aria-expanded={col.key === "itemName" ? matchingItemCount > 0 : undefined}
                           aria-controls={col.key === "itemName" ? pickerListId : undefined}
-                          aria-activedescendant={col.key === "itemName" && matchingItemCount > 0
+                          aria-activedescendant={col.key === "itemName" && matchingItemCount > 0 && highlightedIndex >= 0
                             ? `${pickerListId}-item-${Math.min(highlightedIndex, matchingItemCount - 1)}`
                             : undefined}
                           type={col.key === "quantity" || col.key === "rate" ? "number" : "text"}

@@ -33,7 +33,7 @@ import { usePosMutations } from "./hooks/usePosMutations";
 import { usePosAutosave } from "./hooks/usePosAutosave";
 import { usePosHandlers } from "./hooks/usePosHandlers";
 
-import { POS_COLUMNS, formatDisplayAmount, getPosPickerInventory } from "./utils/posCalculations";
+import { POS_COLUMNS, formatDisplayAmount, getPosPickerInventory, getPosKeyboardHighlightedIndex } from "./utils/posCalculations";
 import { ErrorState } from "@/components/ui/page-state";
 import { GoldenCoastPosReadinessAlert } from "./pos-components/GoldenCoastPosReadinessAlert";
 
@@ -543,7 +543,10 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
   });
 
   const handleKeyDown = makeHandleKeyDown(searchTerm);
-  const matchingItemCount = useMemo(() => getPosPickerInventory(inventory, searchTerm).length, [inventory, searchTerm]);
+  const matchingItems = useMemo(() => getPosPickerInventory(inventory, searchTerm), [inventory, searchTerm]);
+  const matchingItemCount = matchingItems.length;
+  const canSellNegativeStock = authUser?.canSellNegativeStock ?? posUser?.canSellNegativeStock ?? false;
+  const selectedItemIndex = getPosKeyboardHighlightedIndex(matchingItems, highlightedIndex, canSellNegativeStock);
   const fmtAmount = (v: number) => formatDisplayAmount(activeCurrency, v);
   const goldenCoastPosBlocked = isSpCompany && goldenCoastPhase6 && goldenCoastReadiness?.canPost === false;
   const goldenCoastPosSaveDisabled = isSpCompany && (goldenCoastReadinessLoading || goldenCoastPosBlocked);
@@ -761,7 +764,7 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
                 rows={rows}
                 columns={POS_COLUMNS}
                 selectedCell={selectedCell}
-                highlightedIndex={highlightedIndex}
+                highlightedIndex={selectedItemIndex}
                 matchingItemCount={matchingItemCount}
                 pickerListId={POS_PICKER_LIST_ID}
                 setSelectedCell={setSelectedCell}
@@ -822,6 +825,7 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
           itemListRef={itemListRef}
           highlightedIndex={highlightedIndex}
           setHighlightedIndex={setHighlightedIndex}
+          canSellNegativeStock={canSellNegativeStock}
           syncTerm={searchTerm}
         />
       </PosWorkspaceColumns>
