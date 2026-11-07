@@ -46,7 +46,7 @@ describe("Simple pressing access — page-authorized user controls", () => {
     expect(page).toContain("fullControls || viewOnly");
     expect(page).toContain('data-testid="pressing-view-only-notice"');
     expect(report).toContain('ctx.role === "View Only"');
-    expect(report).toContain('canCorrect: (ctx.role === "Admin" || ctx.role === "Owner")');
+    expect(report).toContain("canCorrect: canEditPressingTargets(ctx.role, ctx.posViewOnly)");
   });
   it("has NO shift, downtime, machine target or manual user assignment interfaces", () => {
     expect(page).not.toContain("PressingShiftAnalytics");
