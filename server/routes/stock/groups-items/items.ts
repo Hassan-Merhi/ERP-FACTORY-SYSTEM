@@ -22,6 +22,7 @@ import {
   stockItemEditRecorder,
   updateStockItemFieldsTx,
 } from "../../../services/inventory/stockItemEditCapture";
+import { requireCreateOnlyVerifiedCreate } from "../../../services/security/createOnlyVerifiedCreates";
 
 export function registerStockItemRoutes(app: Express) {
   // Stock Items
@@ -203,7 +204,9 @@ export function registerStockItemRoutes(app: Express) {
     }
   });
 
-  app.post("/api/stock-items", requireAuth, requireNonPOS, async (req, res) => {
+  // Create Only may add a new stock item without opening stock (createOnlyVerifiedCreates.ts).
+  const createOnlyStockItem = requireCreateOnlyVerifiedCreate("stockItems");
+  app.post("/api/stock-items", requireAuth, requireNonPOS, createOnlyStockItem, async (req, res) => {
     try {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });

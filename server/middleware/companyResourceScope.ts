@@ -14,6 +14,7 @@ const AUTHENTICATED_ROLES = [
   "POS",
   "Normal User",
   "View Only",
+  "Create Only",
   "ERP Tester",
 ] as const;
 

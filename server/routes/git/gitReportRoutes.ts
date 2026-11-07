@@ -73,48 +73,53 @@ export function registerGitReportRoutes(app: Express) {
    *
    * Read-only. No vouchers, containers, or accounting records are modified.
    */
-  app.get("/api/git/agent-duty-summary", requireAuth, requireRole("Admin", "Owner", "ERP Tester", "View Only"), async (req, res) => {
-    try {
-      const userId = String((req.user as { id: unknown }).id);
-      const role = String(req.session?.currentRole ?? (req.user as { role: unknown }).role ?? "");
-      const sessionCompanyId: number | undefined = req.session?.currentCompanyId;
-      const scope = await resolveGitCompanyScope(
-        userId,
-        role,
-        req.query as Record<string, string | string[] | undefined>,
-        sessionCompanyId
-      );
-      if ("error" in scope) {
-        return res.status(scope.status).json({ message: scope.error, code: scope.code });
-      }
-
-      const asOf = new Date().toISOString();
-      if (scope.mode === "all") {
-        const nameMap = await loadCompanyNames(scope.companyIds);
-        const sections = await Promise.all(
-          scope.companyIds.map(async (companyId) => ({
-            companyId,
-            companyName: nameMap[companyId] ?? `Company ${companyId}`,
-            agents: await buildAgentsForCompany(companyId),
-          }))
+  app.get(
+    "/api/git/agent-duty-summary",
+    requireAuth,
+    requireRole("Admin", "Owner", "ERP Tester", "View Only", "Create Only"),
+    async (req, res) => {
+      try {
+        const userId = String((req.user as { id: unknown }).id);
+        const role = String(req.session?.currentRole ?? (req.user as { role: unknown }).role ?? "");
+        const sessionCompanyId: number | undefined = req.session?.currentCompanyId;
+        const scope = await resolveGitCompanyScope(
+          userId,
+          role,
+          req.query as Record<string, string | string[] | undefined>,
+          sessionCompanyId
         );
-        sections.sort((left, right) => left.companyId - right.companyId);
-        return res.json({ asOf, mode: "all", companies: sections });
-      }
+        if ("error" in scope) {
+          return res.status(scope.status).json({ message: scope.error, code: scope.code });
+        }
 
-      const nameMap = await loadCompanyNames([scope.companyId]);
-      return res.json({
-        asOf,
-        mode: "single",
-        companyId: scope.companyId,
-        companyName: nameMap[scope.companyId] ?? `Company ${scope.companyId}`,
-        agents: await buildAgentsForCompany(scope.companyId),
-      });
-    } catch (err) {
-      logger.error("[gitRoutes] agent-duty-summary error:", { error: err });
-      return res.status(500).json({ message: "Internal server error", code: "GIT_REPORT_FAILED" });
+        const asOf = new Date().toISOString();
+        if (scope.mode === "all") {
+          const nameMap = await loadCompanyNames(scope.companyIds);
+          const sections = await Promise.all(
+            scope.companyIds.map(async (companyId) => ({
+              companyId,
+              companyName: nameMap[companyId] ?? `Company ${companyId}`,
+              agents: await buildAgentsForCompany(companyId),
+            }))
+          );
+          sections.sort((left, right) => left.companyId - right.companyId);
+          return res.json({ asOf, mode: "all", companies: sections });
+        }
+
+        const nameMap = await loadCompanyNames([scope.companyId]);
+        return res.json({
+          asOf,
+          mode: "single",
+          companyId: scope.companyId,
+          companyName: nameMap[scope.companyId] ?? `Company ${scope.companyId}`,
+          agents: await buildAgentsForCompany(scope.companyId),
+        });
+      } catch (err) {
+        logger.error("[gitRoutes] agent-duty-summary error:", { error: err });
+        return res.status(500).json({ message: "Internal server error", code: "GIT_REPORT_FAILED" });
+      }
     }
-  });
+  );
 
   // ─── Shared inner helper ────────────────────────────────────────────────────
   // Resolves scope, fetches+enriches active containers, applies query filters,
@@ -279,40 +284,50 @@ export function registerGitReportRoutes(app: Express) {
    *
    * Read-only. No mutations.
    */
-  app.get("/api/git/containers", requireAuth, requireRole("Admin", "Owner", "ERP Tester", "View Only"), (req, res) => handleGitListing(req, res));
+  app.get(
+    "/api/git/containers",
+    requireAuth,
+    requireRole("Admin", "Owner", "ERP Tester", "View Only", "Create Only"),
+    (req, res) => handleGitListing(req, res)
+  );
 
-  app.get("/api/git/containers/:id", requireAuth, requireRole("Admin", "Owner", "ERP Tester", "View Only"), async (req, res, next) => {
-    // Pass through literal sub-paths (e.g. import-template.xlsx) to later handlers.
-    if (!/^-?\d+$/.test(req.params.id)) return next();
-    try {
-      const containerId = Number.parseInt(req.params.id, 10);
-      if (!Number.isSafeInteger(containerId) || containerId === 0) {
-        return res.status(400).json({ message: "Invalid container ID" });
+  app.get(
+    "/api/git/containers/:id",
+    requireAuth,
+    requireRole("Admin", "Owner", "ERP Tester", "View Only", "Create Only"),
+    async (req, res, next) => {
+      // Pass through literal sub-paths (e.g. import-template.xlsx) to later handlers.
+      if (!/^-?\d+$/.test(req.params.id)) return next();
+      try {
+        const containerId = Number.parseInt(req.params.id, 10);
+        if (!Number.isSafeInteger(containerId) || containerId === 0) {
+          return res.status(400).json({ message: "Invalid container ID" });
+        }
+        const userId: string = (req.user as { id: string }).id;
+        const role = String(req.session?.currentRole ?? (req.user as { role: unknown }).role ?? "");
+        const sessionCompanyId: number | undefined = req.session?.currentCompanyId;
+        const scope = await resolveGitCompanyScope(
+          userId,
+          role,
+          req.query as Record<string, string | undefined>,
+          sessionCompanyId
+        );
+        if ("error" in scope) return res.status(scope.status).json({ message: scope.error, code: scope.code });
+        const companyIds = scope.mode === "all" ? scope.companyIds : [scope.companyId];
+        const [rows, nameMap] = await Promise.all([
+          fetchActiveContainers(companyIds, { includeOffloaded: true, containerId }),
+          loadCompanyNames(companyIds),
+        ]);
+        const container = enrichContainers(rows, nameMap)[0];
+        if (!container) return res.status(404).json({ message: "Container not found" });
+        res.setHeader("Cache-Control", "private, max-age=15, stale-while-revalidate=15");
+        return res.json(container);
+      } catch (err) {
+        logger.error("[gitRoutes] container detail error:", { error: err });
+        return res.status(500).json({ message: "Internal server error" });
       }
-      const userId: string = (req.user as { id: string }).id;
-      const role = String(req.session?.currentRole ?? (req.user as { role: unknown }).role ?? "");
-      const sessionCompanyId: number | undefined = req.session?.currentCompanyId;
-      const scope = await resolveGitCompanyScope(
-        userId,
-        role,
-        req.query as Record<string, string | undefined>,
-        sessionCompanyId
-      );
-      if ("error" in scope) return res.status(scope.status).json({ message: scope.error, code: scope.code });
-      const companyIds = scope.mode === "all" ? scope.companyIds : [scope.companyId];
-      const [rows, nameMap] = await Promise.all([
-        fetchActiveContainers(companyIds, { includeOffloaded: true, containerId }),
-        loadCompanyNames(companyIds),
-      ]);
-      const container = enrichContainers(rows, nameMap)[0];
-      if (!container) return res.status(404).json({ message: "Container not found" });
-      res.setHeader("Cache-Control", "private, max-age=15, stale-while-revalidate=15");
-      return res.json(container);
-    } catch (err) {
-      logger.error("[gitRoutes] container detail error:", { error: err });
-      return res.status(500).json({ message: "Internal server error" });
     }
-  });
+  );
 
   /**
    * GET /api/git/summary
@@ -330,61 +345,66 @@ export function registerGitReportRoutes(app: Express) {
    *
    * Read-only. No mutations.
    */
-  app.get("/api/git/summary", requireAuth, requireRole("Admin", "Owner", "ERP Tester", "View Only"), async (req, res) => {
-    try {
-      const userId: string = (req.user as { id: string }).id;
-      const role = String(req.session?.currentRole ?? (req.user as { role: unknown }).role ?? "");
-      const sessionCompanyId: number | undefined = req.session?.currentCompanyId;
+  app.get(
+    "/api/git/summary",
+    requireAuth,
+    requireRole("Admin", "Owner", "ERP Tester", "View Only", "Create Only"),
+    async (req, res) => {
+      try {
+        const userId: string = (req.user as { id: string }).id;
+        const role = String(req.session?.currentRole ?? (req.user as { role: unknown }).role ?? "");
+        const sessionCompanyId: number | undefined = req.session?.currentCompanyId;
 
-      const scope = await resolveGitCompanyScope(
-        userId,
-        role,
-        req.query as Record<string, string | undefined>,
-        sessionCompanyId
-      );
-      if ("error" in scope) {
-        return res.status(scope.status).json({ message: scope.error, code: scope.code });
-      }
+        const scope = await resolveGitCompanyScope(
+          userId,
+          role,
+          req.query as Record<string, string | undefined>,
+          sessionCompanyId
+        );
+        if ("error" in scope) {
+          return res.status(scope.status).json({ message: scope.error, code: scope.code });
+        }
 
-      const companyIds = scope.mode === "all" ? scope.companyIds : [scope.companyId];
+        const companyIds = scope.mode === "all" ? scope.companyIds : [scope.companyId];
 
-      const [raw, nameMap] = await Promise.all([fetchActiveContainers(companyIds), loadCompanyNames(companyIds)]);
+        const [raw, nameMap] = await Promise.all([fetchActiveContainers(companyIds), loadCompanyNames(companyIds)]);
 
-      const enriched = enrichContainers(raw, nameMap);
-      const filtered = applyGitFilters(enriched, req.query as GitFilterQuery);
-      const asOf = new Date().toISOString();
+        const enriched = enrichContainers(raw, nameMap);
+        const filtered = applyGitFilters(enriched, req.query as GitFilterQuery);
+        const asOf = new Date().toISOString();
 
-      if (scope.mode === "all") {
-        // Overall + per-company breakdown
-        const overall = buildSummary(filtered);
+        if (scope.mode === "all") {
+          // Overall + per-company breakdown
+          const overall = buildSummary(filtered);
 
-        const byCompany = companyIds.map((cid) => ({
-          companyId: cid,
-          companyName: nameMap[cid] ?? `Company ${cid}`,
-          summary: buildSummary(filtered.filter((r) => r.companyId === cid)),
-        }));
+          const byCompany = companyIds.map((cid) => ({
+            companyId: cid,
+            companyName: nameMap[cid] ?? `Company ${cid}`,
+            summary: buildSummary(filtered.filter((r) => r.companyId === cid)),
+          }));
 
+          return res.json({
+            asOf,
+            mode: "all",
+            summary: overall,
+            byCompany,
+          });
+        }
+
+        const companyName = nameMap[scope.companyId] ?? `Company ${scope.companyId}`;
         return res.json({
           asOf,
-          mode: "all",
-          summary: overall,
-          byCompany,
+          mode: "single",
+          companyId: scope.companyId,
+          companyName,
+          summary: buildSummary(filtered),
         });
+      } catch (err) {
+        logger.error("[gitRoutes] summary error:", { error: err });
+        return res.status(500).json({ message: "Internal server error" });
       }
-
-      const companyName = nameMap[scope.companyId] ?? `Company ${scope.companyId}`;
-      return res.json({
-        asOf,
-        mode: "single",
-        companyId: scope.companyId,
-        companyName,
-        summary: buildSummary(filtered),
-      });
-    } catch (err) {
-      logger.error("[gitRoutes] summary error:", { error: err });
-      return res.status(500).json({ message: "Internal server error" });
     }
-  });
+  );
 
   /**
    * GET /api/git/at-port
@@ -395,8 +415,11 @@ export function registerGitReportRoutes(app: Express) {
    *
    * Read-only. No mutations.
    */
-  app.get("/api/git/at-port", requireAuth, requireRole("Admin", "Owner", "ERP Tester", "View Only"), (req, res) =>
-    handleGitListing(req, res, (rows) => rows.filter((r) => r.status === "At Port"))
+  app.get(
+    "/api/git/at-port",
+    requireAuth,
+    requireRole("Admin", "Owner", "ERP Tester", "View Only", "Create Only"),
+    (req, res) => handleGitListing(req, res, (rows) => rows.filter((r) => r.status === "At Port"))
   );
 
   /**
@@ -408,7 +431,10 @@ export function registerGitReportRoutes(app: Express) {
    *
    * Read-only. No mutations.
    */
-  app.get("/api/git/truck-location", requireAuth, requireRole("Admin", "Owner", "ERP Tester", "View Only"), (req, res) =>
-    handleGitListing(req, res, (rows) => rows.filter((r) => !!(r.numberPlate ?? "").trim()))
+  app.get(
+    "/api/git/truck-location",
+    requireAuth,
+    requireRole("Admin", "Owner", "ERP Tester", "View Only", "Create Only"),
+    (req, res) => handleGitListing(req, res, (rows) => rows.filter((r) => !!(r.numberPlate ?? "").trim()))
   );
 }

@@ -49,6 +49,12 @@ function getPermissions(
       perms.push({ label: "Cannot create, edit, import, delete, or post transactions", dangerous: false });
       break;
 
+    case "Create Only":
+      perms.push({ label: "Browse ERP and Factory data in the assigned company", dangerous: false });
+      perms.push({ label: "Add approved new records only", dangerous: false });
+      perms.push({ label: "Cannot edit, delete, approve, void, reverse or import records", dangerous: false });
+      break;
+
     case "Normal User":
       perms.push({ label: "Only explicitly granted page and action permissions", dangerous: false });
       break;
@@ -59,7 +65,7 @@ function getPermissions(
   }
 
   // A View Only role cannot mutate, irrespective of stale editable-role flags.
-  if (role === "View Only") return perms;
+  if (role === "View Only" || role === "Create Only") return perms;
 
   if (flags.canSellNegativeStock) {
     perms.push({ label: "Sell items even when out of stock", dangerous: true });
@@ -88,7 +94,7 @@ function getDangerWarnings(
   }
 ): string[] {
   const warns: string[] = [];
-  if (role === "View Only") return warns;
+  if (role === "View Only" || role === "Create Only") return warns;
 
   if (["Admin", "Developer"].includes(role)) {
     warns.push("This role has unrestricted system access including all deletions and exports.");

@@ -112,7 +112,7 @@ describe("operational permission route policy", () => {
     expect(classifyOperationalPermissionRoute("POST", "/api/po-import/import")).toMatchObject({
       operation: "import",
       permissionKey: "act_import_data",
-      deniedRoles: ["POS", "View Only"],
+      deniedRoles: ["POS", "View Only", "Create Only"],
     });
     expect(classifyOperationalPermissionRoute("POST", "/api/stock-items/import")).toMatchObject({
       operation: "import",
@@ -133,7 +133,7 @@ describe("operational permission route policy", () => {
           operation: "import",
           permissionType: "action",
           permissionKey: "act_import_data",
-          deniedRoles: ["View Only"],
+          deniedRoles: ["View Only", "Create Only"],
           permissionBypassRoles: ["POS"],
         });
       }
@@ -150,7 +150,7 @@ describe("operational permission route policy", () => {
       operation: "import",
       permissionType: "action",
       permissionKey: "act_import_data",
-      deniedRoles: ["POS", "View Only"],
+      deniedRoles: ["POS", "View Only", "Create Only"],
     });
   });
 

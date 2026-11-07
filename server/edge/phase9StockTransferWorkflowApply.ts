@@ -69,7 +69,7 @@ export interface Phase9StockTransferWorkflowResult {
   businessDate: string;
 }
 
-const READ_ONLY_ROLES = new Set(["View Only", "ERP Tester"]);
+const READ_ONLY_ROLES = new Set(["View Only", "Create Only", "ERP Tester"]);
 const TRANSFER_KINDS = ["Stock Transfer", "StockTransfer", "Transfer"];
 const REVISION_STALE_CODES = new Set([
   "STOCK_TRANSFER_REVISION_STALE",

@@ -57,6 +57,7 @@ import {
   type NavItem,
   type NavSection,
 } from "@/components/sidebar/sidebarPrimitives";
+import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
 
 const defaultPinnedItems: NavItem[] = [
   { title: "Tracking", url: "/tracking", icon: Ship },
@@ -206,7 +207,7 @@ export function useErpVisibleSections(user?: SidebarUser): {
 
     // Match the View Only Dashboard restriction already enforced on main.
     // Shared by desktop, mobile, recent links and command search.
-    if (effectiveRole === "View Only" && item.url === "/financial-overview") return false;
+    if (isExistingRecordReadOnlyRole(effectiveRole) && item.url === "/financial-overview") return false;
     if (selectedCompany?.companyType === "retail" && RETAIL_HIDDEN_ERP_ROUTES.has(item.url)) return false;
     if (effectiveRole === "ERP Tester" && item.url === "/transaction-journal") return false;
     if (item.url === "/tracking") return !isPOSUser;

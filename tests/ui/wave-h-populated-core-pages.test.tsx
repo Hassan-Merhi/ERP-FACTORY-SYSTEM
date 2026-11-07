@@ -28,8 +28,8 @@ vi.mock("@/contexts/AppModeContext", () => ({
   getModePrefix: () => "",
 }));
 
-vi.mock("@/contexts/CompanyContext", () => ({
-  useCompany: () => ({
+vi.mock("@/contexts/CompanyContext", () => {
+  const companyState = () => ({
     selectedCompany: { id: 1, name: "Test Co", code: "TC", active: true, companyType: "erp" as const, role: "Admin" },
     companies: [
       { id: 1, name: "Test Co", code: "TC", active: true, companyType: "erp" as const },
@@ -37,9 +37,14 @@ vi.mock("@/contexts/CompanyContext", () => ({
     ],
     isLoading: false,
     selectCompany: vi.fn(),
-  }),
-  CompanyProvider: ({ children }: any) => <>{children}</>,
-}));
+  });
+  return {
+    useCompany: companyState,
+    // Read by useExistingRecordChangeAccess for role-based control gating.
+    useOptionalCompany: companyState,
+    CompanyProvider: ({ children }: any) => <>{children}</>,
+  };
+});
 
 vi.mock("@/contexts/CurrencyContext", () => ({
   useCurrencyContext: () => ({

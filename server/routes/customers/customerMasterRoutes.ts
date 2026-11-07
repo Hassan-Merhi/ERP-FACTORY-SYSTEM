@@ -2,15 +2,12 @@ import type { Express } from "express";
 
 import { requireAuth, requireNonPOS } from "../../auth";
 import { sendCustomerRouteError } from "./customerErrors";
-import {
-  getActiveCustomerCompanyId,
-  getCustomerAuditActor,
-  parseCustomerId,
-} from "./customerRequestContext";
+import { getActiveCustomerCompanyId, getCustomerAuditActor, parseCustomerId } from "./customerRequestContext";
 import { customerService } from "./customerService";
 import { logger } from "../../lib/logger";
 import { getMonetaryFxValuation } from "../../services/accounting/monetaryFxValuationService";
 import { applyCurrentCustomerFxOverlay } from "../../services/accounting/monetaryFxReportOverlay";
+import { requireCreateOnlyVerifiedCreate } from "../../services/security/createOnlyVerifiedCreates";
 
 export function registerCustomerMasterRoutes(app: Express) {
   app.get("/api/customers/for-pos", requireAuth, async (req, res) => {
@@ -41,7 +38,10 @@ export function registerCustomerMasterRoutes(app: Express) {
         return res.json(applyCurrentCustomerFxOverlay(bookRows, valuation));
       } catch (error) {
         // Customer ledgers remain readable when native evidence or FX is missing.
-        logger.error("[customers/stats] Monetary USD projection unavailable; preserving book balances", { companyId, error });
+        logger.error("[customers/stats] Monetary USD projection unavailable; preserving book balances", {
+          companyId,
+          error,
+        });
         return res.json(bookRows);
       }
     } catch (error: unknown) {
@@ -71,31 +71,32 @@ export function registerCustomerMasterRoutes(app: Express) {
     }
   });
 
-  app.post("/api/customers", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = getActiveCustomerCompanyId(req);
-      if (req.body?.companyId !== undefined && Number(req.body.companyId) !== companyId) {
-        return res.status(403).json({
-          message: "Access denied: Customer belongs to a different company",
-        });
+  app.post(
+    "/api/customers",
+    requireAuth,
+    requireNonPOS,
+    requireCreateOnlyVerifiedCreate("customers"),
+    async (req, res) => {
+      try {
+        const companyId = getActiveCustomerCompanyId(req);
+        if (req.body?.companyId !== undefined && Number(req.body.companyId) !== companyId) {
+          return res.status(403).json({
+            message: "Access denied: Customer belongs to a different company",
+          });
+        }
+        const customer = await customerService.create(companyId, req.body, getCustomerAuditActor(req));
+        return res.status(201).json(customer);
+      } catch (error: unknown) {
+        return sendCustomerRouteError(res, error, 400);
       }
-      const customer = await customerService.create(companyId, req.body, getCustomerAuditActor(req));
-      return res.status(201).json(customer);
-    } catch (error: unknown) {
-      return sendCustomerRouteError(res, error, 400);
     }
-  });
+  );
 
   app.put("/api/customers/:id", requireAuth, requireNonPOS, async (req, res) => {
     try {
       const companyId = getActiveCustomerCompanyId(req);
       const customerId = parseCustomerId(req.params.id);
-      const customer = await customerService.update(
-        customerId,
-        companyId,
-        req.body,
-        getCustomerAuditActor(req),
-      );
+      const customer = await customerService.update(customerId, companyId, req.body, getCustomerAuditActor(req));
       return res.json(customer);
     } catch (error: unknown) {
       return sendCustomerRouteError(res, error, 400);

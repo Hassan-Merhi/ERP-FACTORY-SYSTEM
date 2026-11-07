@@ -11,6 +11,11 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { accessQueryPolicy } from "@/lib/queryPolicies";
 import type { AccessControlResource, AccessControlAction } from "@shared/accessControlV2";
+import {
+  isCreateOnlyFeatureAllowed,
+  isCreateOnlyVerifiedCreateName,
+  type CreateOnlyVerifiedCreateName,
+} from "@shared/createOnlyRolePolicy";
 
 export type LegacyPermissionRow = { featureKey: string; enabled: boolean };
 export type CanReason =
@@ -67,6 +72,8 @@ export function decideLegacyCan(input: {
   permissionsError?: boolean;
   /** Explicitly handler-verified Create Only writes, not inferred from URLs. */
   verifiedCreateOnly?: boolean;
+  /** Name of the server's handler-verified create this control submits to. */
+  createOnlyCreate?: CreateOnlyVerifiedCreateName;
 }): CanResult {
   const {
     role,
@@ -91,7 +98,10 @@ export function decideLegacyCan(input: {
   }
   if (
     role === "Create Only" &&
-    (CREATE_ONLY_DENIED.has(action) || (action === "create" && input.verifiedCreateOnly !== true))
+    (CREATE_ONLY_DENIED.has(action) ||
+      (action === "create" &&
+        input.verifiedCreateOnly !== true &&
+        !isCreateOnlyVerifiedCreateName(input.createOnlyCreate)))
   ) {
     return { allowed: false, pending: false, reason: "create_only_unverified" };
   }
@@ -103,7 +113,12 @@ export function decideLegacyCan(input: {
     if (permissionsError) return { allowed: false, pending: false, reason: "permission_unavailable" };
     if (!permissionsReady || !permissions) return { allowed: false, pending: true, reason: "loading" };
     const stored = permissions.find((item) => item.featureKey === featureKey)?.enabled;
-    const allowed = role === "Normal User" ? stored === true : stored !== false;
+    const allowed =
+      role === "Create Only"
+        ? isCreateOnlyFeatureAllowed(featureKey, stored)
+        : role === "Normal User"
+          ? stored === true
+          : stored !== false;
     if (!allowed) return { allowed: false, pending: false, reason: "legacy_restricted" };
   }
   return { allowed: true, pending: false, reason: "allowed_by_legacy" };
@@ -112,7 +127,12 @@ export function decideLegacyCan(input: {
 export function useCan(
   resource: AccessControlResource,
   action: AccessControlAction,
-  options: { legacyAllowed: boolean; featureKey?: string; verifiedCreateOnly?: boolean }
+  options: {
+    legacyAllowed: boolean;
+    featureKey?: string;
+    verifiedCreateOnly?: boolean;
+    createOnlyCreate?: CreateOnlyVerifiedCreateName;
+  }
 ): CanResult {
   const { selectedCompany } = useCompany();
   const companyId = selectedCompany?.id ?? null;
@@ -135,6 +155,7 @@ export function useCan(
         legacyAllowed: options.legacyAllowed,
         featureKey: options.featureKey,
         verifiedCreateOnly: options.verifiedCreateOnly,
+        createOnlyCreate: options.createOnlyCreate,
         permissions: query.data,
         permissionsReady: query.isSuccess,
         permissionsError: query.isError,
@@ -147,6 +168,7 @@ export function useCan(
       options.legacyAllowed,
       options.featureKey,
       options.verifiedCreateOnly,
+      options.createOnlyCreate,
       query.data,
       query.isSuccess,
       query.isError,
@@ -164,7 +186,7 @@ export function canDenialMessage(reason: CanReason): string {
     case "view_only":
       return "View Only users cannot change business records.";
     case "create_only_unverified":
-      return "This operation is not approved for Create Only users.";
+      return "Create Only users can add approved new records, but cannot change, delete, approve or import records.";
     case "tester_settings":
       return "ERP Tester cannot manage settings.";
     case "legacy_restricted":

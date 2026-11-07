@@ -118,7 +118,8 @@ async function scheduleAuthorStillAuthorized(row: ScheduleRow): Promise<boolean>
     row.company_id,
     rows.map((userRole) => ({ companyId: userRole.company_id, role: userRole.role }))
   );
-  if (!selected || selected.role === "POS" || selected.role === "View Only") return false;
+  if (!selected || selected.role === "POS" || selected.role === "View Only" || selected.role === "Create Only")
+    return false;
   if (selected.developerBypass || selected.role === "Admin") return true;
 
   const role = selected.role;

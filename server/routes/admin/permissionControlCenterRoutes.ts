@@ -28,6 +28,7 @@ import {
   readV2CompanyMembers,
   saveV2Rules,
 } from "../../services/security/accessControlV2Store";
+import { isCreateOnlyAssignmentEnabled } from "../../services/security/createOnlyActivation";
 
 const changeSchema = z
   .object({
@@ -121,6 +122,9 @@ export function registerPermissionControlCenterRoutes(app: Express): void {
         editableRoles: V2_EDITABLE_ROLES,
         mode: "shadow",
         enforced: false,
+        // The Create Only write boundary is always enforced; this only says
+        // whether administrators may assign the role to people yet.
+        createOnlyAssignable: isCreateOnlyAssignmentEnabled(),
       });
     })
   );

@@ -22,6 +22,7 @@ import { fmtAmt, fmtNum, monthAgo, today } from "./transporterstatement/utils";
 import { StatusBadge } from "./transporterstatement/components/StatusBadge";
 import { DueDateCell } from "./transporterstatement/components/DueDateCell";
 import { SettingsPopover } from "./transporterstatement/components/SettingsPopover";
+import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export default function TransporterStatement({ embedded }: { embedded?: boolean }) {
@@ -29,7 +30,7 @@ export default function TransporterStatement({ embedded }: { embedded?: boolean 
   const { data: viewer } = useQuery(authenticatedUserQueryOptions());
   const role = viewer?.currentRole ?? viewer?.role;
   const isTester = role === "ERP Tester";
-  const isViewer = role === "View Only";
+  const isViewer = isExistingRecordReadOnlyRole(role);
   const queryClient = useQueryClient();
   const { formatDisplayDate: formatDate } = useDateFormat();
 
@@ -479,24 +480,28 @@ export default function TransporterStatement({ embedded }: { embedded?: boolean 
           <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
             {selectedAccountId && (
               <>
-                {!isViewer && <Button
-                  variant="outline"
-                  onClick={() => reallocateMutation.mutate()}
-                  disabled={reallocateMutation.isPending}
-                  data-testid="btn-reallocate"
-                >
-                  <RefreshCw className={cn("h-4 w-4 mr-2", reallocateMutation.isPending && "animate-spin")} />
-                  {reallocateMutation.isPending ? "Running…" : "Reallocate"}
-                </Button>}
-                {!isViewer && <Button
-                  variant="outline"
-                  onClick={handleSendWhatsApp}
-                  disabled={waSending || !statement}
-                  data-testid="btn-send-whatsapp"
-                >
-                  <MessageCircle className={cn("h-4 w-4 mr-2", waSending && "animate-pulse")} />
-                  {waSending ? "Sending…" : "Send WhatsApp"}
-                </Button>}
+                {!isViewer && (
+                  <Button
+                    variant="outline"
+                    onClick={() => reallocateMutation.mutate()}
+                    disabled={reallocateMutation.isPending}
+                    data-testid="btn-reallocate"
+                  >
+                    <RefreshCw className={cn("h-4 w-4 mr-2", reallocateMutation.isPending && "animate-spin")} />
+                    {reallocateMutation.isPending ? "Running…" : "Reallocate"}
+                  </Button>
+                )}
+                {!isViewer && (
+                  <Button
+                    variant="outline"
+                    onClick={handleSendWhatsApp}
+                    disabled={waSending || !statement}
+                    data-testid="btn-send-whatsapp"
+                  >
+                    <MessageCircle className={cn("h-4 w-4 mr-2", waSending && "animate-pulse")} />
+                    {waSending ? "Sending…" : "Send WhatsApp"}
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   onClick={handleExportPDF}
@@ -655,7 +660,11 @@ export default function TransporterStatement({ embedded }: { embedded?: boolean 
                           {fmtNum(row.runningBalance)}
                         </TableCell>
                         <TableCell>
-                          {isViewer ? <span className="text-sm">{row.dateToBePaid ? formatDate(row.dateToBePaid) : "—"}</span> : <DueDateCell row={row} onSave={handleDueDateSave} />}
+                          {isViewer ? (
+                            <span className="text-sm">{row.dateToBePaid ? formatDate(row.dateToBePaid) : "—"}</span>
+                          ) : (
+                            <DueDateCell row={row} onSave={handleDueDateSave} />
+                          )}
                         </TableCell>
                         <TableCell>
                           <StatusBadge status={row.status} paidAmount={row.paidAmount} total={row.credit} />

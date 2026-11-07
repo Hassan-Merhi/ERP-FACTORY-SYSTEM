@@ -360,7 +360,7 @@ function LedgerView({
                           >
                             Accrued
                           </Badge>
-                          {isAdmin && apiBase.includes("/erp/") && paid < 0.005 && (
+                          {isAdmin && !readOnly && apiBase.includes("/erp/") && paid < 0.005 && (
                             <Button
                               size="icon"
                               variant="ghost"

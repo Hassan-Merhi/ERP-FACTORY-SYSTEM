@@ -20,7 +20,13 @@ import {
 } from "@shared/pressingReportContracts";
 import { factoryLocalDate } from "../../services/factory/pressingShiftTime";
 import { PRESSING_TIME_ZONE } from "@shared/pressingTimeZone";
-import { PRESSING_DAILY_HOURS, PRESSING_WORKDAYS, pressingWeekdayFromDate, pressingWeeklyScheduleForDay, pressingWeeklyScheduleForWeekday } from "./pressingDailySchedule";
+import {
+  PRESSING_DAILY_HOURS,
+  PRESSING_WORKDAYS,
+  pressingWeekdayFromDate,
+  pressingWeeklyScheduleForDay,
+  pressingWeeklyScheduleForWeekday,
+} from "./pressingDailySchedule";
 
 // Individual worker history stays scoped. View Only can read company-wide reports but never correct scans.
 const MANAGER_ROLES = new Set(["Admin", "Owner", "Developer"]);
@@ -64,7 +70,8 @@ async function context(req: Request): Promise<QueryCtx> {
   return {
     companyId: ctx.companyId,
     userId: ctx.userId,
-    supervisor: (MANAGER_ROLES.has(ctx.role) && !ctx.posViewOnly) || ctx.role === "View Only",
+    supervisor:
+      (MANAGER_ROLES.has(ctx.role) && !ctx.posViewOnly) || ctx.role === "View Only" || ctx.role === "Create Only",
     canCorrect: (ctx.role === "Admin" || ctx.role === "Owner") && !ctx.posViewOnly,
   };
 }
@@ -420,7 +427,15 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
         const configured = Number(targets[String(row.userId)]);
         return {
           ...row,
-          targetKgPerHour: targets[String(row.userId)] !== undefined && targets[String(row.userId)] !== null && targets[String(row.userId)] !== "" && Number.isFinite(configured) && configured >= 0 && configured <= 100000 ? configured : 850,
+          targetKgPerHour:
+            targets[String(row.userId)] !== undefined &&
+            targets[String(row.userId)] !== null &&
+            targets[String(row.userId)] !== "" &&
+            Number.isFinite(configured) &&
+            configured >= 0 &&
+            configured <= 100000
+              ? configured
+              : 850,
         };
       });
       const result = await pool.query(
@@ -475,43 +490,52 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
   // Each Monday–Saturday template stores all ten hourly slots together.
   // Each selected weekday has its own effective-dated version from today onward.
   // Sundays are excluded. Only Admin/Owner (not POS view-only) can update.
-  app.put("/api/factory/pressing-machines/report/hourly-targets/daily-schedule", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const ctx = await context(req);
-      if (!ctx.canCorrect)
-        throw new ReportPermissionError(
-          403, "PRESSING_TARGET_FORBIDDEN", "Only Admin or Owner may edit pressing targets"
+  app.put(
+    "/api/factory/pressing-machines/report/hourly-targets/daily-schedule",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const ctx = await context(req);
+        if (!ctx.canCorrect)
+          throw new ReportPermissionError(
+            403,
+            "PRESSING_TARGET_FORBIDDEN",
+            "Only Admin or Owner may edit pressing targets"
+          );
+        const input = z
+          .object({
+            weekday: z.number().int().min(1).max(6),
+            targetsKg: z.array(z.number().finite().min(0).max(100000)).length(PRESSING_DAILY_HOURS.length),
+          })
+          .strict()
+          .parse(req.body);
+        const effectiveDay = factoryLocalDate(new Date(), PRESSING_TIME_ZONE);
+        const hours: Record<string, number> = {};
+        PRESSING_DAILY_HOURS.forEach((hour, index) => {
+          hours[String(hour)] = input.targetsKg[index];
+        });
+        // One atomic JSONB patch preserves schedules for all other weekdays,
+        // prior effective dates, and unrelated company settings.
+        await pool.query(
+          "INSERT INTO factory_settings (company_id,extra_settings,updated_at) " +
+            "VALUES ($1,jsonb_build_object('pressingHourlyWeeklySchedulesKg'," +
+            "jsonb_build_object($2::text,jsonb_build_object($3::text,$4::jsonb))),now()) " +
+            "ON CONFLICT (company_id) DO UPDATE SET " +
+            "extra_settings=COALESCE(factory_settings.extra_settings,'{}'::jsonb) || " +
+            "jsonb_build_object('pressingHourlyWeeklySchedulesKg'," +
+            "COALESCE(factory_settings.extra_settings->'pressingHourlyWeeklySchedulesKg','{}'::jsonb) || " +
+            "jsonb_build_object($2::text," +
+            "COALESCE(factory_settings.extra_settings->'pressingHourlyWeeklySchedulesKg'->($2::text),'{}'::jsonb) || " +
+            "jsonb_build_object($3::text,$4::jsonb))),updated_at=now()",
+          [ctx.companyId, effectiveDay, String(input.weekday), JSON.stringify(hours)]
         );
-      const input = z.object({
-        weekday: z.number().int().min(1).max(6),
-        targetsKg: z.array(z.number().finite().min(0).max(100000)).length(PRESSING_DAILY_HOURS.length),
-      }).strict().parse(req.body);
-      const effectiveDay = factoryLocalDate(new Date(), PRESSING_TIME_ZONE);
-      const hours: Record<string, number> = {};
-      PRESSING_DAILY_HOURS.forEach((hour, index) => {
-        hours[String(hour)] = input.targetsKg[index];
-      });
-      // One atomic JSONB patch preserves schedules for all other weekdays,
-      // prior effective dates, and unrelated company settings.
-      await pool.query(
-        "INSERT INTO factory_settings (company_id,extra_settings,updated_at) " +
-          "VALUES ($1,jsonb_build_object('pressingHourlyWeeklySchedulesKg'," +
-          "jsonb_build_object($2::text,jsonb_build_object($3::text,$4::jsonb))),now()) " +
-          "ON CONFLICT (company_id) DO UPDATE SET " +
-          "extra_settings=COALESCE(factory_settings.extra_settings,'{}'::jsonb) || " +
-          "jsonb_build_object('pressingHourlyWeeklySchedulesKg'," +
-          "COALESCE(factory_settings.extra_settings->'pressingHourlyWeeklySchedulesKg','{}'::jsonb) || " +
-          "jsonb_build_object($2::text," +
-          "COALESCE(factory_settings.extra_settings->'pressingHourlyWeeklySchedulesKg'->($2::text),'{}'::jsonb) || " +
-          "jsonb_build_object($3::text,$4::jsonb))),updated_at=now()",
-        [ctx.companyId, effectiveDay, String(input.weekday), JSON.stringify(hours)]
-      );
-      res.set("Cache-Control", "private, no-store");
-      return res.json({ saved: true, effectiveDay, weekday: input.weekday, hourlyTargetsKg: hours });
-    } catch (error) {
-      return handleError(res, error);
+        res.set("Cache-Control", "private, no-store");
+        return res.json({ saved: true, effectiveDay, weekday: input.weekday, hourlyTargetsKg: hours });
+      } catch (error) {
+        return handleError(res, error);
+      }
     }
-  });
+  );
 
   // Store targets in existing company-scoped Factory settings, with an atomic
   // JSONB update so unrelated flags and other workers' targets are not lost.

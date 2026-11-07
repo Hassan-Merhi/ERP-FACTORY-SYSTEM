@@ -15,7 +15,9 @@ vi.mock("../server/services/security/activeCompanyPermissionContext", () => ({
 }));
 import { requireVerifiedBusinessAction } from "../server/services/security/accessControlV2Enforcement";
 
-const req = (body: unknown = {}) => ({ body }) as never;
+// The guard reads the session role and the tenant boundary's canonical role;
+// these requests carry a Create Only session, as the outer guard requires.
+const req = (body: unknown = {}) => ({ body, session: { currentRole: "Create Only" } }) as never;
 function response() {
   const res = {
     status: vi.fn().mockReturnThis(),

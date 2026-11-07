@@ -33,7 +33,8 @@ export function visibleVariants(product: RetailProduct, filters: RetailCatalogFi
       if (filters.size && norm(variant.size) !== norm(filters.size)) return false;
       // Only show variants assigned to the chosen location; a different branch
       // can hold other sizes/colors of the same style.
-      if (filters.locationId && !variant.stocks.some((stock) => stock.locationId === Number(filters.locationId))) return false;
+      if (filters.locationId && !variant.stocks.some((stock) => stock.locationId === Number(filters.locationId)))
+        return false;
       const quantity = variantQuantity(variant, filters.locationId);
       if (filters.stockStatus === "in" && quantity <= 0) return false;
       if (filters.stockStatus === "out" && quantity > 0) return false;
@@ -68,6 +69,7 @@ export function RetailCatalogList({
   onArchiveProduct,
   onVariantAction,
   showBrandHeadings = true,
+  changeDisabledReason = null,
 }: {
   products: RetailProduct[];
   filters: RetailCatalogFilters;
@@ -79,6 +81,8 @@ export function RetailCatalogList({
   onArchiveProduct: (product: RetailProduct, active: boolean) => void;
   onVariantAction: (action: RetailVariantAction, product: RetailProduct, variant: RetailVariant) => void;
   showBrandHeadings?: boolean;
+  /** When set, the role cannot edit or archive existing products; those buttons are disabled with this reason. */
+  changeDisabledReason?: string | null;
 }) {
   const groups: Array<{ brand: string; products: RetailProduct[] }> = [];
   for (const product of products) {
@@ -133,8 +137,9 @@ export function RetailCatalogList({
                       <Button
                         size="icon"
                         variant="ghost"
-                        aria-label="Edit"
-                        title="Edit"
+                        aria-label={changeDisabledReason ?? "Edit"}
+                        title={changeDisabledReason ?? "Edit"}
+                        disabled={!!changeDisabledReason}
                         onClick={() => onEdit(product)}
                       >
                         <Pencil className="h-4 w-4" />
@@ -142,8 +147,9 @@ export function RetailCatalogList({
                       <Button
                         size="icon"
                         variant="ghost"
-                        aria-label={product.active ? "Archive style" : "Restore style"}
-                        title={product.active ? "Archive style" : "Restore style"}
+                        aria-label={changeDisabledReason ?? (product.active ? "Archive style" : "Restore style")}
+                        title={changeDisabledReason ?? (product.active ? "Archive style" : "Restore style")}
+                        disabled={!!changeDisabledReason}
                         onClick={() => onArchiveProduct(product, !product.active)}
                       >
                         {product.active ? <Archive className="h-4 w-4" /> : <ArchiveRestore className="h-4 w-4" />}
@@ -196,8 +202,11 @@ export function RetailCatalogList({
                             <StockBadge quantity={quantity} lowThreshold={variant.lowStockThreshold} />
                             <div className="hidden min-w-32 text-xs text-muted-foreground md:block" data-no-translate>
                               {variant.stocks
-                                .filter((stock) => stock.quantity !== 0 &&
-                                  (!filters.locationId || stock.locationId === Number(filters.locationId)))
+                                .filter(
+                                  (stock) =>
+                                    stock.quantity !== 0 &&
+                                    (!filters.locationId || stock.locationId === Number(filters.locationId))
+                                )
                                 .map((stock) => `${stock.locationName}: ${stock.quantity}`)
                                 .join(" · ") || "—"}
                             </div>
@@ -216,8 +225,11 @@ export function RetailCatalogList({
                                 size="icon"
                                 variant="ghost"
                                 className="h-8 w-8"
-                                aria-label={variant.active ? "Archive variant" : "Restore variant"}
-                                title={variant.active ? "Archive variant" : "Restore variant"}
+                                aria-label={
+                                  changeDisabledReason ?? (variant.active ? "Archive variant" : "Restore variant")
+                                }
+                                title={changeDisabledReason ?? (variant.active ? "Archive variant" : "Restore variant")}
+                                disabled={!!changeDisabledReason}
                                 onClick={() =>
                                   onVariantAction(variant.active ? "archive" : "restore", product, variant)
                                 }

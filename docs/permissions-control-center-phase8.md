@@ -53,3 +53,7 @@ Work done to make the branch mergeable:
 - Formatted all branch source files with Prettier and made the route-contract tests whitespace-insensitive.
 
 Until the API's migration is applied, the new endpoints answer `503 ACCESS_POLICY_SCHEMA_REQUIRED` and live authorization is unchanged.
+
+## Create Only activation work (2026-11-07)
+
+Phases 3, 5, 6 and 7 are implemented on `feature/permissions-control-center-activation`: server enforcement with 13 handler-verified creates, the assignment switch, frontend gating and request guard, and automated plus isolated-database verification. One release gate (`handler-review`) is verified with evidence; the others stay blocked with the remaining work recorded in `config/permissions-v2-release-readiness.json`. See [the activation runbook](permissions-control-center-activation.md) and [the route review](permissions-control-center-phase3-route-review.md).

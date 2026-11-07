@@ -144,7 +144,7 @@ export function canEmptyFactoryLoadingContainer(access: {
   hiddenCostFields?: readonly string[];
 }): boolean {
   if (["Admin", "Owner", "Developer"].includes(access.role ?? "")) return true;
-  if (!access.hasFactoryAccess || access.role === "View Only") return false;
+  if (!access.hasFactoryAccess || access.role === "View Only" || access.role === "Create Only") return false;
   if (access.pageKeys?.length && !access.pageKeys.includes("factory/invoicing")) return false;
   return access.hiddenCostFields?.includes(FACTORY_EMPTY_CONTAINER_GRANT_KEY) === true;
 }

@@ -43,6 +43,7 @@ import {
   type ShippingQuickSelection,
 } from "./factoryshippingcontainers/components/ShippingStatusChips";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
 
 export default function FactoryShippingContainers() {
   const { toast } = useToast();
@@ -341,7 +342,7 @@ export default function FactoryShippingContainers() {
           onDateFrom={setDateFrom}
           onDateTo={setDateTo}
           onOpenInvoicing={() => navigate("/factory/sales/new")}
-          allowNewOrder={Boolean(me?.role && me.role !== "View Only")}
+          allowNewOrder={Boolean(me?.role && !isExistingRecordReadOnlyRole(me.role))}
           showOrderValue={colVis.containerCost}
         />
         {/* ── Compact search + controls ── */}
