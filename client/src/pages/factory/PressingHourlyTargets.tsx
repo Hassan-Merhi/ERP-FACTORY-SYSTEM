@@ -12,6 +12,14 @@ import { type PressingHourlySnapshot } from "./pressing-scanner/pressingHourlyKp
 const ENDPOINT = "/api/factory/pressing-machines/report/hourly-targets";
 const ZONE = "Asia/Beirut";
 const SCHEDULE_HOURS = Array.from({ length: 10 }, (_, index) => index + 7);
+const SCHEDULE_DAYS = [
+  { id: 1, name: "Monday", short: "Mon" },
+  { id: 2, name: "Tuesday", short: "Tue" },
+  { id: 3, name: "Wednesday", short: "Wed" },
+  { id: 4, name: "Thursday", short: "Thu" },
+  { id: 5, name: "Friday", short: "Fri" },
+  { id: 6, name: "Saturday", short: "Sat" },
+] as const;
 const scheduleHourLabel = (hour: number) =>
   String(hour).padStart(2, "0") + ":00–" + String(hour + 1).padStart(2, "0") + ":00";
 type HourlyResponse = PressingHourlySnapshot;
@@ -28,7 +36,7 @@ function hourLabel(iso: string): string {
     hourCycle: "h23", timeZoneName: "shortOffset",
   });
 }
-type Verdict = "upcoming" | "progress" | "none" | "met" | "above" | "below";
+type Verdict = "off" | "upcoming" | "progress" | "none" | "met" | "above" | "below";
 function resultStatus(kg: number, target: number, bales: number, started: boolean, complete: boolean): Verdict {
   if (!started) return "upcoming";
   if (!complete) return "progress";
@@ -37,6 +45,7 @@ function resultStatus(kg: number, target: number, bales: number, started: boolea
   return kg > target ? "above" : "below";
 }
 const verdictStyle: Record<Verdict, { label: string; pill: string; bar: string }> = {
+  off: { label: "Day off", pill: "bg-slate-500/15 text-muted-foreground", bar: "bg-slate-500" },
   upcoming: { label: "upcoming", pill: "bg-slate-500/10 text-slate-500", bar: "bg-slate-500" },
   progress: { label: "In progress", pill: "bg-sky-500/15 text-sky-600 dark:text-sky-300", bar: "bg-sky-500" },
   none: { label: "No scans", pill: "bg-slate-500/15 text-muted-foreground", bar: "bg-slate-500" },
@@ -61,7 +70,8 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [savingHour, setSavingHour] = useState<string | null>(null);
   const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [scheduleDrafts, setScheduleDrafts] = useState<Record<string, string>>({});
+  const [scheduleDrafts, setScheduleDrafts] = useState<Record<string, Record<string, string>>>({});
+  const [selectedWeekday, setSelectedWeekday] = useState(1);
   const [savingSchedule, setSavingSchedule] = useState(false);
   useEffect(() => {
     setScheduleOpen(false);
@@ -107,6 +117,7 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
   const uniformBaseline = baseline.length && baseline.every(v => v === baseline[0]) ? baseline[0] : null;
   const targetText = (hour: string) => {
     const value = configured(hour);
+    if (data?.scheduledWorkday === false && value === undefined) return "";
     return value !== undefined ? String(value) : uniformBaseline !== null ? String(uniformBaseline) : "";
   };
   const valueForHour = (hour: string) => drafts[hour] ?? targetText(hour);
@@ -143,21 +154,32 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
 
   function openDailySchedule() {
     if (!data?.canEdit) return;
-    // Edit today's effective template, even if a historical day is selected.
-    const fields: Record<string, string> = {};
-    for (const hour of SCHEDULE_HOURS) {
-      const target = data.editableDailyScheduleKg?.[String(hour)] ?? uniformBaseline ?? 850;
-      fields[String(hour)] = String(target);
+    // Preload all six templates. Keep each weekday's draft in memory when
+    // switching between tabs, and never derive it from the historical date.
+    const draftsByDay: Record<string, Record<string, string>> = {};
+    for (const weekday of SCHEDULE_DAYS) {
+      const fields: Record<string, string> = {};
+      for (const hour of SCHEDULE_HOURS) {
+        const target = data.editableWeeklySchedulesKg?.[String(weekday.id)]?.[String(hour)]
+          ?? uniformBaseline ?? 850;
+        fields[String(hour)] = String(target);
+      }
+      draftsByDay[String(weekday.id)] = fields;
     }
-    setScheduleDrafts(fields);
+    const todayName = new Intl.DateTimeFormat("en-US", {
+      timeZone: ZONE, weekday: "long",
+    }).format(new Date(data.serverNow));
+    setSelectedWeekday(SCHEDULE_DAYS.find(day => day.name === todayName)?.id ?? 1);
+    setScheduleDrafts(draftsByDay);
     setScheduleOpen(true);
   }
 
   async function saveDailySchedule() {
     if (!data?.canEdit || savingSchedule) return;
     const targetsKg: number[] = [];
+    const selectedFields = scheduleDrafts[String(selectedWeekday)] ?? {};
     for (const hour of SCHEDULE_HOURS) {
-      const raw = scheduleDrafts[String(hour)] ?? "";
+      const raw = selectedFields[String(hour)] ?? "";
       const kg = Number(raw);
       if (!raw.trim() || !Number.isFinite(kg) || kg < 0.001 || kg > 100000) {
         toast({
@@ -174,15 +196,18 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
       const response = await fetch(ENDPOINT + "/daily-schedule", {
         method: "PUT", credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetsKg }),
+        body: JSON.stringify({ weekday: selectedWeekday, targetsKg }),
       });
       if (!response.ok) {
         const result = await response.json().catch(() => ({}));
         throw new Error(result.message || "Could not save recurring daily schedule");
       }
       await hourly.refetch();
-      setScheduleOpen(false);
-      toast({ title: "Daily schedule saved", description: "Fixed targets now apply every day from today onward (Beirut time)." });
+      const weekdayName = SCHEDULE_DAYS.find(day => day.id === selectedWeekday)?.name ?? "Selected day";
+      toast({
+        title: weekdayName + " schedule saved",
+        description: "The hourly targets repeat every " + weekdayName + " from today onward. You can now select another day.",
+      });
     } catch (error) {
       toast({
         title: "Daily schedule not saved",
@@ -212,7 +237,7 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
                 className="mt-2 h-8 gap-1.5 rounded-lg border-sky-500/30 bg-sky-500/5 text-xs font-semibold hover:bg-sky-500/10"
                 onClick={openDailySchedule} data-testid="pressing-open-daily-schedule">
                 <CalendarClock className="h-3.5 w-3.5 text-sky-500" />
-                Daily schedule
+                Weekly schedule
               </Button>
             )}
             {data?.dailyScheduleEffectiveDay && (
@@ -286,13 +311,20 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
                     {data.workers.map(worker => {
                       const row = data.hours.find(item => item.hourStart === hour && item.userId === worker.userId);
                       const kg = Number(row?.kg || 0);
-                      const target = hourTarget ?? worker.targetKgPerHour;
-                      const verdict = resultStatus(kg, target, Number(row?.bales || 0), started, complete);
+                      // Sundays without an explicit or historical target are off,
+                      // not 0/850 KG misses. Existing historical Sunday targets remain visible.
+                      const scheduled = data.scheduledWorkday !== false || hourTarget !== undefined;
+                      const target = scheduled ? hourTarget ?? worker.targetKgPerHour : 0;
+                      const verdict = scheduled
+                        ? resultStatus(kg, target, Number(row?.bales || 0), started, complete)
+                        : "off";
                       const style = verdictStyle[verdict];
                       const percent = target > 0 ? Math.round(kg / target * 100) : 0;
                       return <td key={worker.userId} className="border-b border-border/50 px-3 py-2.5">
                         <div className="flex flex-wrap items-center justify-between gap-1.5">
-                          <strong className="whitespace-nowrap tabular-nums">{formatKg(kg)} / {formatKg(target)} KG</strong>
+                          <strong className="whitespace-nowrap tabular-nums">
+                            {formatKg(kg)} / {scheduled ? formatKg(target) + " KG" : "Off"}
+                          </strong>
                           <span className={"rounded-full px-2 py-1 text-[10px] font-semibold " + style.pill}>{verdict === "upcoming" || verdict === "above" || verdict === "below" ? t(style.label as "upcoming" | "aboveTarget" | "belowTarget") : style.label}</span>
                         </div>
                         <div className="mt-2 flex items-center gap-2">
@@ -304,7 +336,7 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
                           </div>
                           <span className="w-9 shrink-0 text-right font-medium tabular-nums text-muted-foreground">{percent}%</span>
                         </div>
-                        {complete && Number(row?.bales || 0) > 0 && verdict !== "met" && (
+                        {complete && Number(row?.bales || 0) > 0 && verdict !== "met" && verdict !== "off" && (
                           <div className={"mt-1 text-[10px] " + (verdict === "above" ? "text-emerald-500" : "text-rose-500")}>
                             {formatKg(Math.abs(kg - target))} KG {verdict === "above" ? "over" : "short"}
                           </div>
@@ -329,34 +361,63 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
           <DialogHeader className="shrink-0 border-b border-border/60 bg-gradient-to-r from-sky-500/10 via-background to-violet-500/5 px-5 pb-4 pt-5">
             <DialogTitle className="flex items-center gap-2 text-lg">
               <CalendarClock className="h-5 w-5 text-sky-500" />
-              Fixed daily KG schedule
+              Weekly KG schedule
             </DialogTitle>
             <DialogDescription className="text-xs leading-relaxed">
-              Set the KG target per worker for each hour. This same 07:00–17:00 plan
-              repeats automatically every day starting today in Beirut time.
-              Previous days retain their historical schedule.
+              Select Monday–Saturday and set each hour's KG target per worker.
+              Save each day separately; it repeats every week from today in Beirut time.
+              Sunday is excluded, and previous days retain their history.
             </DialogDescription>
           </DialogHeader>
+          <div className="shrink-0 border-b border-border/60 px-5 py-3">
+            <div className="mb-2 flex items-center justify-between gap-2 text-[11px] font-semibold text-muted-foreground">
+              <span>Select a day</span>
+              <span>Sunday · off</span>
+            </div>
+            <div role="tablist" aria-label="Choose weekly pressing schedule day"
+              className="grid grid-cols-3 gap-1.5 sm:grid-cols-6">
+              {SCHEDULE_DAYS.map(weekday => (
+                <button key={weekday.id} type="button" role="tab"
+                  aria-selected={selectedWeekday === weekday.id}
+                  aria-label={weekday.name}
+                  disabled={savingSchedule}
+                  onClick={() => setSelectedWeekday(weekday.id)}
+                  className={"rounded-lg border px-2 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring " +
+                    (selectedWeekday === weekday.id
+                      ? "border-sky-500/60 bg-sky-500/15 text-sky-700 dark:text-sky-300"
+                      : "border-border/70 bg-card/50 text-muted-foreground hover:bg-muted/80 hover:text-foreground")}>
+                  {weekday.short}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-4">
             <div className="mb-2 grid grid-cols-[1fr_135px] gap-3 px-2 text-[11px] font-semibold text-muted-foreground">
-              <span>Production hour (Beirut)</span><span>Target / worker</span>
+              <span>{SCHEDULE_DAYS.find(day => day.id === selectedWeekday)?.name} · Beirut time</span>
+              <span>KG per worker</span>
             </div>
             {SCHEDULE_HOURS.map(hour => (
               <div key={hour} className="grid grid-cols-[1fr_135px] items-center gap-3 rounded-xl border border-border/60 bg-card/60 px-3 py-2 transition-colors focus-within:border-sky-500/50">
                 <span className="font-semibold tabular-nums text-sm">{scheduleHourLabel(hour)}</span>
                 <div className="relative">
                   <Input type="number" inputMode="decimal" min="0.001" max="100000" step="0.001"
-                    aria-label={"Daily scheduled target for " + scheduleHourLabel(hour)}
+                    aria-label={SCHEDULE_DAYS.find(day => day.id === selectedWeekday)?.name + " target for " + scheduleHourLabel(hour)}
                     className="h-9 rounded-lg bg-background pr-9 text-right font-semibold tabular-nums"
-                    value={scheduleDrafts[String(hour)] ?? ""} disabled={savingSchedule}
-                    onChange={event => setScheduleDrafts(old => ({ ...old, [String(hour)]: event.target.value }))} />
+                    value={scheduleDrafts[String(selectedWeekday)]?.[String(hour)] ?? ""} disabled={savingSchedule}
+                    onChange={event => setScheduleDrafts(old => ({
+                      ...old,
+                      [String(selectedWeekday)]: {
+                        ...old[String(selectedWeekday)],
+                        [String(hour)]: event.target.value,
+                      },
+                    }))} />
                   <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-muted-foreground">KG</span>
                 </div>
               </div>
             ))}
             <p className="pt-2 text-xs leading-relaxed text-muted-foreground">
-              Targets apply to all three pressing workers. An hour manually saved for
-              a specific date will override the fixed schedule on that date only.
+              Save the selected weekday before leaving. Each day's times repeat weekly for
+              all three workers. A manually saved date-specific target still takes priority.
             </p>
           </div>
           <DialogFooter className="shrink-0 flex-row gap-2 border-t border-border/60 bg-muted/20 px-5 py-4 sm:justify-end">
@@ -364,7 +425,7 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
               onClick={() => setScheduleOpen(false)}>Cancel</Button>
             <Button type="button" disabled={savingSchedule || !data?.canEdit}
               onClick={() => void saveDailySchedule()}>
-              {savingSchedule ? "Saving…" : "Save daily schedule"}
+              {savingSchedule ? "Saving…" : "Save " + (SCHEDULE_DAYS.find(day => day.id === selectedWeekday)?.name ?? "day") + " schedule"}
             </Button>
           </DialogFooter>
         </DialogContent>

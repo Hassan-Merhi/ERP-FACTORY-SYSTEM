@@ -11,8 +11,10 @@ export type PressingHourlySnapshot = {
   hourlyTargetsKg: Record<string, number>;
   dailyScheduleKg?: Record<string, number>;
   dailyScheduleEffectiveDay?: string | null;
-  editableDailyScheduleKg?: Record<string, number>;
-  editableDailyScheduleEffectiveDay?: string | null;
+  /** Weekly recurring targets keyed by ISO weekday: 1=Mon, ..., 6=Sat. */
+  editableWeeklySchedulesKg?: Record<string, Record<string, number>>;
+  editableWeeklyScheduleEffectiveDays?: Record<string, string | null>;
+  scheduledWorkday?: boolean;
 };
 
 const hourFormatter = new Intl.DateTimeFormat("en-GB", {
