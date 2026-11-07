@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useId } from "react";
 import { Search, Package } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
@@ -10,6 +10,7 @@ export interface InventoryPickerProps {
   selectItem: (item: InventoryItem) => void;
   itemListRef: React.RefObject<HTMLDivElement | null>;
   highlightedIndex: number;
+  setHighlightedIndex: React.Dispatch<React.SetStateAction<number>>;
   syncTerm?: string;
   mobile?: boolean;
 }
@@ -19,10 +20,13 @@ export function InventoryPicker({
   selectItem,
   itemListRef,
   highlightedIndex,
+  setHighlightedIndex,
   syncTerm,
   mobile = false,
 }: InventoryPickerProps) {
   const [localSearch, setLocalSearch] = useState("");
+  const pickerId = useId();
+  const listboxId = `${pickerId}-items`;
 
   useEffect(() => {
     if (syncTerm !== undefined) setLocalSearch(syncTerm);
@@ -32,6 +36,28 @@ export function InventoryPicker({
   // highlighted index must point to one canonical item regardless of whether
   // the cashier clicks it or confirms it with Enter/Tab.
   const filteredInventory = getPosPickerInventory(inventory, localSearch);
+
+  // Keep the selected option visible when cashiers navigate long lists using
+  // the keyboard. This works for the independent right-hand search field,
+  // not just the item-name cells in the sales grid.
+  useEffect(() => {
+    const list = itemListRef.current;
+    if (!list || !filteredInventory.length) return;
+    const option = list.children.item(highlightedIndex) as HTMLElement | null;
+    if (!option) return;
+    if (option.offsetTop < list.scrollTop) list.scrollTop = option.offsetTop;
+    else if (option.offsetTop + option.offsetHeight > list.scrollTop + list.clientHeight) {
+      list.scrollTop = option.offsetTop + option.offsetHeight - list.clientHeight;
+    }
+  }, [highlightedIndex, localSearch, inventory, itemListRef, filteredInventory.length]);
+
+  const selectHighlighted = () => {
+    const item = filteredInventory[highlightedIndex];
+    if (!item) return;
+    selectItem(item);
+    setLocalSearch("");
+    setHighlightedIndex(0);
+  };
 
   return (
     <Card
@@ -52,8 +78,32 @@ export function InventoryPicker({
           <input
             className={`flex-1 bg-transparent outline-hidden placeholder:text-muted-foreground ${mobile ? "text-base" : "text-sm"}`}
             placeholder="Scan barcode or search..."
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded={filteredInventory.length > 0}
+            aria-controls={listboxId}
+            aria-activedescendant={filteredInventory.length > 0 ? `${pickerId}-item-${Math.min(highlightedIndex, filteredInventory.length - 1)}` : undefined}
+            autoComplete="off"
             value={localSearch}
-            onChange={(e) => setLocalSearch(e.target.value)}
+            onChange={(e) => {
+              setLocalSearch(e.target.value);
+              setHighlightedIndex(0);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowDown" && filteredInventory.length > 0) {
+                event.preventDefault();
+                setHighlightedIndex((index) => Math.min(index + 1, filteredInventory.length - 1));
+              } else if (event.key === "ArrowUp" && filteredInventory.length > 0) {
+                event.preventDefault();
+                setHighlightedIndex((index) => Math.max(index - 1, 0));
+              } else if (event.key === "Enter" && filteredInventory.length > 0) {
+                event.preventDefault();
+                selectHighlighted();
+              } else if (event.key === "Escape") {
+                setLocalSearch("");
+                setHighlightedIndex(0);
+              }
+            }}
             data-testid="input-product-search"
           />
           <MobileBarcodeScanner
@@ -62,11 +112,15 @@ export function InventoryPicker({
               if (match) {
                 selectItem(match);
                 setLocalSearch("");
-              } else setLocalSearch(code);
+                setHighlightedIndex(0);
+              } else {
+                setLocalSearch(code);
+                setHighlightedIndex(0);
+              }
             }}
           />
           {localSearch && (
-            <button className="text-muted-foreground" onClick={() => setLocalSearch("")} aria-label="Clear search">
+            <button className="text-muted-foreground" onClick={() => { setLocalSearch(""); setHighlightedIndex(0); }} aria-label="Clear search">
               ×
             </button>
           )}
@@ -76,6 +130,9 @@ export function InventoryPicker({
       {/* List */}
       <div
         data-pos-product-list="true"
+        id={listboxId}
+        role="listbox"
+        aria-label="Matching inventory items"
         className="flex-1 overflow-y-auto"
         ref={itemListRef as React.RefObject<HTMLDivElement>}
       >
@@ -85,12 +142,17 @@ export function InventoryPicker({
           return (
             <button
               key={item.stockItemId ?? item.code}
+              id={`${pickerId}-item-${index}`}
+              role="option"
+              aria-selected={index === highlightedIndex}
+              tabIndex={-1}
               className={`w-full text-left flex items-center justify-between gap-2 border-b border-muted/40 transition-colors duration-100 ${
                 mobile ? "px-4 py-3 active:bg-primary/10" : "px-3 py-3"
               } ${index === highlightedIndex ? "bg-primary/25" : "hover:bg-muted/40"} ${isOut ? "opacity-50" : ""}`}
               onClick={() => {
                 selectItem(item);
                 setLocalSearch("");
+                setHighlightedIndex(0);
               }}
               data-testid={`button-select-item-${item.stockItemId ?? item.code}`}
             >
