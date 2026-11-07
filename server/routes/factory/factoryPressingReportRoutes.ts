@@ -20,6 +20,7 @@ import {
 } from "@shared/pressingReportContracts";
 import { factoryLocalDate } from "../../services/factory/pressingShiftTime";
 import { PRESSING_TIME_ZONE } from "@shared/pressingTimeZone";
+import { PRESSING_DAILY_HOURS, pressingDailyScheduleForDay } from "./pressingDailySchedule";
 
 // Individual worker history stays scoped. View Only can read company-wide reports but never correct scans.
 const MANAGER_ROLES = new Set(["Admin", "Owner", "Developer"]);
@@ -382,14 +383,21 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
       );
       const settings = await pool.query(
         "SELECT extra_settings->'pressingWorkerTargetsKg' AS targets, " +
-          "extra_settings->'pressingHourlyTargetsByDateKg'->($2::text) AS \"hourlyTargets\" " +
+          "extra_settings->'pressingHourlyTargetsByDateKg'->($2::text) AS \"hourlyTargets\", " +
+          "extra_settings->'pressingHourlyDailySchedulesKg' AS \"dailySchedules\" " +
           "FROM factory_settings WHERE company_id=$1",
         [ctx.companyId, day]
       );
       const raw = settings.rows[0]?.targets;
       const targets = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
       const rawHourly = settings.rows[0]?.hourlyTargets;
-      const hourlyTargetsKg: Record<string, number> = {};
+      // A reusable daily schedule is effective from its save date onward.
+      // Single-day overrides remain highest priority; older days are unchanged.
+      const dailySchedule = pressingDailyScheduleForDay(settings.rows[0]?.dailySchedules, day);
+      const editableDailySchedule = pressingDailyScheduleForDay(
+        settings.rows[0]?.dailySchedules, factoryLocalDate(new Date(), PRESSING_TIME_ZONE)
+      );
+      const hourlyTargetsKg: Record<string, number> = { ...dailySchedule.hours };
       if (rawHourly && typeof rawHourly === "object" && !Array.isArray(rawHourly)) {
         for (let hour = 7; hour < 17; hour++) {
           const value = Number((rawHourly as Record<string, unknown>)[String(hour)]);
@@ -443,7 +451,47 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
         workers,
         hours: result.rows,
         hourlyTargetsKg,
+        dailyScheduleKg: dailySchedule.hours,
+        dailyScheduleEffectiveDay: dailySchedule.effectiveDay,
+        editableDailyScheduleKg: editableDailySchedule.hours,
+        editableDailyScheduleEffectiveDay: editableDailySchedule.effectiveDay,
       });
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+  // Fixed daily template: all ten 07:00–17:00 Beirut hourly slots are saved
+  // together. A new version starts today, without changing past schedules.
+  // Only Admin/Owner (not POS view-only) can update the company template.
+  app.put("/api/factory/pressing-machines/report/hourly-targets/daily-schedule", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const ctx = await context(req);
+      if (!ctx.canCorrect)
+        throw new ReportPermissionError(
+          403, "PRESSING_TARGET_FORBIDDEN", "Only Admin or Owner may edit pressing targets"
+        );
+      const input = z.object({
+        targetsKg: z.array(z.number().finite().min(0.001).max(100000)).length(PRESSING_DAILY_HOURS.length),
+      }).strict().parse(req.body);
+      const effectiveDay = factoryLocalDate(new Date(), PRESSING_TIME_ZONE);
+      const hours: Record<string, number> = {};
+      PRESSING_DAILY_HOURS.forEach((hour, index) => {
+        hours[String(hour)] = input.targetsKg[index];
+      });
+      await pool.query(
+        "INSERT INTO factory_settings (company_id,extra_settings,updated_at) " +
+          "VALUES ($1,jsonb_build_object('pressingHourlyDailySchedulesKg'," +
+          "jsonb_build_object($2::text,$3::jsonb)),now()) " +
+          "ON CONFLICT (company_id) DO UPDATE SET " +
+          "extra_settings=COALESCE(factory_settings.extra_settings,'{}'::jsonb) || " +
+          "jsonb_build_object('pressingHourlyDailySchedulesKg'," +
+          "COALESCE(factory_settings.extra_settings->'pressingHourlyDailySchedulesKg','{}'::jsonb) || " +
+          "jsonb_build_object($2::text,$3::jsonb)),updated_at=now()",
+        [ctx.companyId, effectiveDay, JSON.stringify(hours)]
+      );
+      res.set("Cache-Control", "private, no-store");
+      return res.json({ saved: true, effectiveDay, hourlyTargetsKg: hours });
     } catch (error) {
       return handleError(res, error);
     }
