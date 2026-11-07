@@ -1,4 +1,5 @@
 import { MapPin, User, ChevronDown, Check, CalendarDays, CreditCard, Wallet } from "lucide-react";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -60,13 +61,14 @@ export function PosCheckoutStrip({
   cashLedgerAccounts,
   isSpCompany,
 }: PosCheckoutStripProps) {
+  const { t } = useApplicationLanguage();
   if (!activeLocation) return null;
 
   return (
-    <section data-pos-checkout-strip="true" aria-label="Sale settings" className="hidden lg:flex flex-wrap items-center gap-3 px-4 py-3">
+    <section data-pos-checkout-strip="true" aria-label={t("pos.modern.saleSettings")} className="hidden lg:flex flex-wrap items-center gap-3 px-4 py-3">
       {/* Location — admin: full select; POS user: name badge or select if multiple */}
       <div data-pos-checkout-field="location" className="pos-checkout-field">
-        <span className="pos-checkout-field-label"><MapPin className="h-3.5 w-3.5" aria-hidden="true" />Location</span>
+        <span className="pos-checkout-field-label"><MapPin className="h-3.5 w-3.5" aria-hidden="true" />{t("pos.modern.location")}</span>
       {!posUser ? (
         <Select
           value={activeLocation?.id?.toString()}
@@ -116,7 +118,7 @@ export function PosCheckoutStrip({
       </div>
 
       <div data-pos-checkout-field="date" className="pos-checkout-field">
-        <label htmlFor="pos-desktop-sale-date" className="pos-checkout-field-label"><CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />Date</label>
+        <label htmlFor="pos-desktop-sale-date" className="pos-checkout-field-label"><CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />{t("pos.modern.date")}</label>
       <input
         id="pos-desktop-sale-date"
         type="date"
@@ -131,7 +133,7 @@ export function PosCheckoutStrip({
       {!isCreditSale && (
         <>
           <div data-pos-checkout-field="method" className="pos-checkout-field">
-            <span className="pos-checkout-field-label"><CreditCard className="h-3.5 w-3.5" aria-hidden="true" />Payment Method</span>
+            <span className="pos-checkout-field-label"><CreditCard className="h-3.5 w-3.5" aria-hidden="true" />{t("pos.modern.paymentMethod")}</span>
           <Select
             value={paymentAccountType}
             onValueChange={
@@ -154,7 +156,7 @@ export function PosCheckoutStrip({
           </div>
 
           <div data-pos-checkout-field="account" className="pos-checkout-field">
-            <span className="pos-checkout-field-label"><Wallet className="h-3.5 w-3.5" aria-hidden="true" />Cashbox / Account</span>
+            <span className="pos-checkout-field-label"><Wallet className="h-3.5 w-3.5" aria-hidden="true" />{t("pos.modern.account")}</span>
           <Select
             value={paymentAccountId || ""}
             onValueChange={posUser ? undefined : setPaymentAccountId}
