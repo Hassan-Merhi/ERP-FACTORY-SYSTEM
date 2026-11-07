@@ -77,8 +77,8 @@
       "id": "quality-ci",
       "status": "blocked",
       "evidence": null,
-      "verification": "Pending: see the PR checks for the branch head; local typecheck, lint on changed files, Prettier on changed files, i18n ratchet, doc index, source-text ratchet and the permission suites pass.",
-      "commit": null,
+      "verification": "GitHub CI on PR #3033 at commit 69208a4a80ea6a4921e941128c45ffe974573064: all 31 checks green (backend, frontend, coverage, type-check, lint/format, repository audits, CodeQL, Semgrep, secret scan, fuzzing, RTL/accessibility, mobile). Local: full backend 9,615 pass / 0 fail / 23 pre-existing skips; full frontend 3,236 pass / 0 fail.",
+      "commit": "69208a4a80ea6a4921e941128c45ffe974573064",
       "blockers": ["Required CI must be green on the final release SHA chosen for production."],
       "required": "All required CI, UI, security, translations, TypeScript, lint and browser suites green on final SHA"
     },

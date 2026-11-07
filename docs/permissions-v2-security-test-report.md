@@ -45,8 +45,9 @@ With `PERMISSIONS_V2_ENFORCEMENT=enabled` and the company in shadow mode, Develo
 |---|---|
 | All `tests/access-control-v2-*` (including the four new suites) and the other permission, tenant, role-administration and ERP Tester suites | Pass |
 | Full frontend suite (`vitest.config.frontend.ts`) | 338 files, 3,236 tests: all pass |
-| Full backend suite (`vitest.config.ts`) | Still running when this report was committed: 2102 tests passed and 0 failed so far. The final result is recorded on the pull request and in CI's "Backend / Database Tests" job. |
+| Full backend suite (`vitest.config.ts`) | 1,361 files, 9,638 tests: 9,615 pass, 0 fail, 23 skipped (pre-existing skips) |
 | `npm run verify:permissions-shadow-migration` | Pass (both migrations, RLS, triggers, store checks) |
+| GitHub CI on commit 69208a4 (PR #3033) | All 31 checks green, including Backend / Database Tests, Frontend Tests, Coverage Ratchet, Type-check, Lint / Format, Repository Audits, CodeQL, Semgrep, secret scan, security fuzzing, RTL / Accessibility and Mobile Responsiveness |
 | Staging certification rehearsal (`CERT_MODE=rehearsal`) | Every step pass (not staging evidence) |
 
 No test was skipped, weakened or given a larger allowance to pass. One existing suite (`voucher-purchase-adjustment-update-routes`) failed against the first version of the stale-session fix, which pre-empted each route's own View Only check; the fix was narrowed to stale sessions only, and the suite passes unchanged.
