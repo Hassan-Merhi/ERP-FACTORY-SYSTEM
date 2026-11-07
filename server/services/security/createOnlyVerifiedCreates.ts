@@ -88,7 +88,7 @@ const VERIFIED_CREATE_GUARDS: Record<CreateOnlyVerifiedCreateName, VerifiedCreat
     resource: "factory.customer_orders",
     hardDenied: async (req) => {
       const b = body(req);
-      if (createOnlyRequestRules.customerOrderFields(b)) return true;
+      if (createOnlyRequestRules.customerOrderFields(b, getTrustedClientDate(req))) return true;
       const companyId = factoryCompanyId(req);
       if (!companyId) return true;
       if (!(await belongsToCompany(customers, b.customerId, companyId))) return true;

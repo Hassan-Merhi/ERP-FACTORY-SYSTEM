@@ -84,8 +84,13 @@ export const createOnlyRequestRules = {
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > CREATE_ONLY_MAX_BALES_PER_BATCH) return true;
     return !Number.isFinite(weight) || weight <= 0 || weight > CREATE_ONLY_MAX_KG_PER_BALE;
   },
-  /** A new order is a DRAFT: no lifecycle, invoice, booking or total fields. */
-  customerOrderFields(b: Body): boolean {
+  /**
+   * A new order is a DRAFT dated today: no lifecycle, invoice, booking or total
+   * fields, and no backdated or future-dated order date.
+   */
+  customerOrderFields(b: Body, today: string): boolean {
+    const orderDate = typeof b.orderDate === "string" ? b.orderDate.slice(0, 10) : "";
+    if (orderDate !== today) return true;
     if (isPresent(b.status) && b.status !== "DRAFT") return true;
     if (b.isHidden === true) return true;
     if (CUSTOMER_ORDER_LIFECYCLE_FIELDS.some((field) => isPresent(b[field]))) return true;

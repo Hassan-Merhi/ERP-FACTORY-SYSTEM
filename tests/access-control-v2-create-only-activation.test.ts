@@ -149,10 +149,16 @@ describe("Create Only per-route request rules", () => {
     expect(createOnlyRequestRules.baleBatch({ quantity: 2, weightPerBale: "x" })).toBe(true);
   });
 
-  it("keeps a new customer order a plain draft", () => {
-    const draft = { customerId: 4, orderDate: "2026-11-07", notes: "n" };
-    expect(createOnlyRequestRules.customerOrderFields(draft)).toBe(false);
-    expect(createOnlyRequestRules.customerOrderFields({ ...draft, status: "DRAFT", grandTotal: "0" })).toBe(false);
+  it("keeps a new customer order a plain draft dated today", () => {
+    const today = "2026-11-07";
+    const draft = { customerId: 4, orderDate: today, notes: "n" };
+    expect(createOnlyRequestRules.customerOrderFields(draft, today)).toBe(false);
+    expect(createOnlyRequestRules.customerOrderFields({ ...draft, status: "DRAFT", grandTotal: "0" }, today)).toBe(
+      false
+    );
+    expect(createOnlyRequestRules.customerOrderFields({ ...draft, orderDate: "2026-11-06" }, today)).toBe(true);
+    expect(createOnlyRequestRules.customerOrderFields({ ...draft, orderDate: "2026-12-01" }, today)).toBe(true);
+    expect(createOnlyRequestRules.customerOrderFields({ ...draft, orderDate: undefined }, today)).toBe(true);
     for (const extra of [
       { status: "FINALIZED" },
       { verifiedAt: "2026-11-07" },
@@ -163,7 +169,9 @@ describe("Create Only per-route request rules", () => {
       { bookingInfo: "BK-1" },
       { dispatchBatchId: 3 },
     ]) {
-      expect(createOnlyRequestRules.customerOrderFields({ ...draft, ...extra }), JSON.stringify(extra)).toBe(true);
+      expect(createOnlyRequestRules.customerOrderFields({ ...draft, ...extra }, today), JSON.stringify(extra)).toBe(
+        true
+      );
     }
   });
 

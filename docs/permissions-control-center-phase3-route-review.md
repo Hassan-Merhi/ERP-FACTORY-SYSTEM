@@ -25,7 +25,7 @@ Supporting rules:
 | `POST /api/customers` | non-zero `openingBalance`, any `ledgerAccountId` (re-links ledger history), `deletedAt`; page_customers disabled |
 | `POST /api/stock-items` | non-zero `openingQty` / `openingRate` / `openingValue` (opening stock without a source document), `deletedAt`; page_stock_items disabled |
 | `POST /api/factory/bales/create-batch` | quantity outside 1–200, weight per bale not a positive number up to 2,000 kg |
-| `POST /api/factory/customer-orders` | any status but DRAFT; verification, loading, finalization, invoice, dispatch, booking, hidden or deleted fields; non-zero totals; a customer or location outside the company |
+| `POST /api/factory/customer-orders` | an order date other than today; any status but DRAFT; verification, loading, finalization, invoice, dispatch, booking, hidden or deleted fields; non-zero totals; a customer or location outside the company |
 | `POST /api/{properties,erp,factory}/rental/units` | `active: false` |
 | `POST /api/{properties,erp,factory}/rental/contracts` | any status but ACTIVE, `linkedCompanyId`, `isInternal`, guarantee posting state, a start date before the first day of the current month |
 | `POST /api/retail/products` | variant opening stock (`stocks`), variant `id` or `expectedQuantity` (edit markers) |
