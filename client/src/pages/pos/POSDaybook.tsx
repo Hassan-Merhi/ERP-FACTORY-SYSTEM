@@ -5,7 +5,11 @@ import { useReactToPrint } from "react-to-print";
 import { addDays, format, isValid, parseISO } from "date-fns";
 import {
   ArrowRight,
-  Calendar,
+  BookOpen,
+  ReceiptText,
+  Search,
+  ShoppingCart,
+  Snowflake,
   ChevronLeft,
   ChevronRight,
   DollarSign,
@@ -20,7 +24,8 @@ import {
   X,
 } from "lucide-react";
 
-import { PageHeader } from "@/components/PageHeader";
+import { useChristmasMode } from "@/hooks/useChristmasMode";
+import "@/styles/pos-daybook-modern.css";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
@@ -61,6 +66,9 @@ export default function POSDaybook() {
   const [optionalVoucher, setOptionalVoucher] = useState<Voucher | null>(null);
   const [printVoucherId, setPrintVoucherId] = useState<number | null>(null);
   const [hiddenRowIds, setHiddenRowIds] = useState<Set<number>>(new Set());
+  const [transactionSearch, setTransactionSearch] = useState("");
+  const [transactionKind, setTransactionKind] = useState<"all" | "sales" | "transfers">("all");
+  const { settingQuery: christmasSetting } = useChristmasMode();
   const printRef = useRef<HTMLDivElement>(null);
   const printStartedRef = useRef(false);
 
@@ -138,6 +146,19 @@ export default function POSDaybook() {
   const visibleVouchers = showHidden
     ? filteredVouchers
     : filteredVouchers.filter((voucher) => !hiddenRowIds.has(voucher.id));
+
+  // Keep summary totals tied to the selected date, not the text/type table search.
+  const searchedVouchers = visibleVouchers.filter((voucher) => {
+    const matchesKind =
+      transactionKind === "all" ||
+      (transactionKind === "sales" ? voucher.voucherType === "Sales" : voucher.voucherType !== "Sales");
+    const term = transactionSearch.trim().toLocaleLowerCase();
+    const matchesSearch =
+      !term ||
+      [voucher.voucherNumber, voucher.voucherType, voucher.locationName, voucher.description]
+        .some((value) => String(value ?? "").toLocaleLowerCase().includes(term));
+    return matchesKind && matchesSearch;
+  });
 
   const { data: voucherDetails, isLoading: detailsLoading } = useQuery<VoucherWithItems>({
     queryKey: selectedVoucher ? [`/api/vouchers/${selectedVoucher.id}`] : ["pos-daybook-no-selection"],
@@ -276,11 +297,25 @@ export default function POSDaybook() {
   };
 
   return (
-    <div className="container mx-auto space-y-4 p-4 md:space-y-6 md:p-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <PageHeader title="POS Daybook" subtitle={subtitle} />
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" onClick={() => shiftDay(-1)} title="Previous day">
+    <div className="pos-daybook mx-auto w-full min-w-0 max-w-[1560px] space-y-5 pb-8" data-pos-daybook="modern">
+      <section className="pos-daybook-hero flex flex-col justify-between gap-4 sm:flex-row sm:items-center" aria-label="Daybook heading">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="pos-daybook-title-icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
+            <BookOpen className="h-6 w-6" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold tracking-tight sm:text-2xl" data-testid="text-page-title">POS Daybook</h1>
+            <p className="mt-0.5 text-sm text-muted-foreground" data-testid="text-page-subtitle">{subtitle}</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {christmasSetting.data?.available === true && (
+            <span className="pos-daybook-seasonal-chip mr-1 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-medium">
+              <Snowflake className="h-3.5 w-3.5" aria-hidden="true" />
+              Christmas {christmasSetting.data.enabled ? "On" : "Off"}
+            </span>
+          )}
+          <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => shiftDay(-1)} aria-label="Previous day">
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <PeriodFilter
@@ -288,168 +323,209 @@ export default function POSDaybook() {
             onChange={(next) => setFilter("periodFilter", next)}
             data-testid="pos-daybook-period-filter"
           />
-          <Button variant="ghost" size="icon" onClick={() => shiftDay(1)} title="Next day">
+          <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => shiftDay(1)} aria-label="Next day">
             <ChevronRight className="h-4 w-4" />
           </Button>
-          {hasActiveFilters && (
-            <Button variant="outline" size="sm" onClick={resetFilters} data-testid="button-reset-filters">
+          {(hasActiveFilters || transactionSearch.trim() || transactionKind !== "all") && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-xl"
+              onClick={() => {
+                resetFilters();
+                setTransactionSearch("");
+                setTransactionKind("all");
+              }}
+              data-testid="button-reset-filters"
+            >
               <X className="mr-1 h-4 w-4" />
-              Reset filters
+              Reset
             </Button>
           )}
         </div>
-      </div>
+      </section>
 
-      <div className="flex flex-wrap gap-3">
-        <Stat
-          label="Sales"
-          value={String(salesOnly.length)}
-          icon={<Package className="h-4 w-4" />}
-          loading={isLoading}
-        />
-        <Stat
-          label="Total Revenue"
-          value={formatCashAmount(totalSales)}
-          icon={<DollarSign className="h-4 w-4" />}
-          loading={isLoading}
-        />
-        <Stat
-          label="Avg per Sale"
-          value={formatCashAmount(salesOnly.length ? totalSales / salesOnly.length : 0)}
-          icon={<Calendar className="h-4 w-4" />}
-          loading={isLoading}
-        />
-        <Stat
-          label="Transfers"
-          value={String(transfersOnly.length)}
-          icon={<ArrowRight className="h-4 w-4" />}
-          loading={isLoading}
-        />
-      </div>
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Sales summary">
+        <Stat label="Sales" value={String(salesOnly.length)} icon={<Package className="h-5 w-5" />} tone="blue" loading={isLoading} />
+        <Stat label="Total Revenue" value={formatCashAmount(totalSales)} icon={<DollarSign className="h-5 w-5" />} tone="violet" loading={isLoading} />
+        <Stat label="Avg per Sale" value={formatCashAmount(salesOnly.length ? totalSales / salesOnly.length : 0)} icon={<ReceiptText className="h-5 w-5" />} tone="cyan" loading={isLoading} />
+        <Stat label="Transfers" value={String(transfersOnly.length)} icon={<ArrowRight className="h-5 w-5" />} tone="slate" loading={isLoading} />
+      </section>
 
-      <div>
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <p className="text-sm font-semibold">Transactions</p>
-          <Button
-            variant={showHidden ? "secondary" : "outline"}
-            size="sm"
-            onClick={() => setFilter("showHidden", (value) => !value)}
-            disabled={hiddenRowIds.size === 0}
-          >
-            {showHidden ? <Eye className="mr-1 h-4 w-4" /> : <EyeOff className="mr-1 h-4 w-4" />}
-            {showHidden ? "Showing hidden" : "Show hidden"}
-          </Button>
+      <section className="pos-daybook-transactions" aria-label="Transactions">
+        <div className="pos-daybook-toolbar flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <h2 className="text-lg font-semibold tracking-tight">Transactions</h2>
+            <span className="pos-daybook-count rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums">
+              {searchedVouchers.length}
+            </span>
+          </div>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <label className="pos-daybook-search flex min-h-10 min-w-[170px] flex-1 items-center gap-2 rounded-xl px-3 sm:flex-none" >
+              <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <input
+                type="search"
+                value={transactionSearch}
+                onChange={(event) => setTransactionSearch(event.target.value)}
+                aria-label="Search POS transactions"
+                placeholder="Search transactions..."
+                className="w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground sm:w-44"
+                data-testid="pos-daybook-search"
+              />
+            </label>
+            <div className="pos-daybook-type-tabs flex shrink-0 items-center gap-0.5 rounded-xl p-1" role="group" aria-label="Transaction type">
+              {(["all", "sales", "transfers"] as const).map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  aria-pressed={transactionKind === kind}
+                  className="pos-daybook-type-tab rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors"
+                  onClick={() => setTransactionKind(kind)}
+                >
+                  {kind === "all" ? "All" : kind === "sales" ? "Sales" : "Transfers"}
+                </button>
+              ))}
+            </div>
+            <Button
+              variant={showHidden ? "secondary" : "outline"}
+              size="sm"
+              className="min-h-10 rounded-xl"
+              onClick={() => setFilter("showHidden", (value) => !value)}
+              disabled={hiddenRowIds.size === 0}
+            >
+              {showHidden ? <Eye className="mr-1.5 h-4 w-4" /> : <EyeOff className="mr-1.5 h-4 w-4" />}
+              {showHidden ? "Showing hidden" : "Show hidden"}
+            </Button>
+          </div>
         </div>
 
         {isLoadingUser || isLoading ? (
-          <div className="space-y-2">
-            {[0, 1, 2].map((key) => (
-              <Skeleton key={key} className="h-12 w-full" />
-            ))}
+          <div className="space-y-2 p-4" role="status" aria-label="Loading transactions">
+            {[0, 1, 2].map((key) => <Skeleton key={key} className="h-14 w-full rounded-xl" />)}
           </div>
-        ) : visibleVouchers.length === 0 ? (
-          <div className="py-12 text-center text-muted-foreground">No transactions found</div>
+        ) : searchedVouchers.length === 0 ? (
+          <div className="pos-daybook-empty flex min-h-[300px] flex-col items-center justify-center px-5 py-12 text-center">
+            <span className="pos-daybook-empty-icon mb-4 flex h-16 w-16 items-center justify-center rounded-2xl">
+              <ReceiptText className="h-8 w-8" aria-hidden="true" />
+            </span>
+            <h3 className="text-base font-semibold">
+              {visibleVouchers.length === 0 ? "No transactions found" : "No matching transactions"}
+            </h3>
+            <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+              {visibleVouchers.length === 0
+                ? "There are no visible POS sales or transfers for the selected date."
+                : "Try a different search term or transaction type."}
+            </p>
+            {isPOS && (
+              <Button className="mt-5 rounded-xl shadow-sm" onClick={() => navigate("/pos")}>
+                <ShoppingCart className="mr-2 h-4 w-4" />
+                New Sale
+              </Button>
+            )}
+          </div>
         ) : (
-          <div className="overflow-hidden rounded-xl border">
-            <div className="table-responsive">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/40">
-                    <TableHead>Time</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead className="hidden sm:table-cell">Location</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead className="hidden md:table-cell">Notes</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {visibleVouchers.map((voucher) => {
-                    const isOwnVoucher = !isPOS || voucher.userId === currentUser?.id;
-                    const canAct = isOwnVoucher;
-                    const isSending = whatsappMutation.isPending && whatsappMutation.variables?.id === voucher.id;
-                    const isPrinting = printVoucherId === voucher.id;
-                    const isHidden = hiddenRowIds.has(voucher.id);
-                    return (
-                      <TableRow key={voucher.id} className={isHidden && showHidden ? "opacity-50" : ""}>
-                        <TableCell className="font-mono text-xs">
-                          {voucher.createdAt && isValid(new Date(voucher.createdAt))
-                            ? format(new Date(voucher.createdAt), "MMM dd, hh:mm a")
-                            : "—"}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={voucher.voucherType === "Sales" ? "default" : "outline"}>
-                            {voucher.voucherType === "Sales" ? "Sale" : "Transfer"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="hidden sm:table-cell">
-                          {voucher.locationName || `Location ${voucher.locationId}`}
-                        </TableCell>
-                        <TableCell className="text-right font-mono font-semibold">
-                          {formatCashAmount(Number(voucher.totalAmount || 0))}
-                        </TableCell>
-                        <TableCell className="hidden max-w-xs truncate md:table-cell">
-                          {voucher.description || "-"}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex justify-end gap-1">
-                            {voucher.voucherType === "Sales" && (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  disabled={!canAct || isPrinting}
-                                  onClick={() => setPrintVoucherId(voucher.id)}
-                                  title={canAct ? "Print receipt" : "You can only print your own sales"}
-                                >
-                                  <Printer className={`h-4 w-4 ${isPrinting ? "animate-pulse" : ""}`} />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  disabled={!canAct || isSending}
-                                  onClick={() => whatsappMutation.mutate(voucher)}
-                                  title={canAct ? "Resend receipt on WhatsApp" : "You can only resend your own sales"}
-                                >
-                                  <MessageCircle className={`h-4 w-4 ${isSending ? "animate-pulse" : ""}`} />
-                                </Button>
-                              </>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              disabled={!canAct}
-                              onClick={() => canAct && setSelectedVoucher(voucher)}
-                              title={canAct ? "View full sale details" : "You can only view your own sales"}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() =>
-                                setHiddenRowIds((previous) => {
-                                  const next = new Set(previous);
-                                  if (next.has(voucher.id)) next.delete(voucher.id);
-                                  else next.add(voucher.id);
-                                  return next;
-                                })
-                              }
-                              title={isHidden ? "Unhide row" : "Hide row"}
-                            >
-                              {isHidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+          <div className="pos-daybook-table-wrap table-responsive">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="whitespace-nowrap">Time</TableHead>
+                  <TableHead className="whitespace-nowrap">Receipt #</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead className="hidden sm:table-cell">Location</TableHead>
+                  <TableHead className="whitespace-nowrap text-right">Amount</TableHead>
+                  <TableHead className="hidden md:table-cell">Notes</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {searchedVouchers.map((voucher) => {
+                  const isOwnVoucher = !isPOS || voucher.userId === currentUser?.id;
+                  const canAct = isOwnVoucher;
+                  const isSending = whatsappMutation.isPending && whatsappMutation.variables?.id === voucher.id;
+                  const isPrinting = printVoucherId === voucher.id;
+                  const isHidden = hiddenRowIds.has(voucher.id);
+                  return (
+                    <TableRow key={voucher.id} className={isHidden && showHidden ? "opacity-50" : ""}>
+                      <TableCell className="whitespace-nowrap text-xs font-medium tabular-nums">
+                        {voucher.createdAt && isValid(new Date(voucher.createdAt))
+                          ? format(new Date(voucher.createdAt), "MMM dd, hh:mm a")
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-sm font-semibold tabular-nums">
+                        {voucher.voucherNumber}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={voucher.voucherType === "Sales" ? "pos-daybook-sale-badge" : "pos-daybook-transfer-badge"}>
+                          {voucher.voucherType === "Sales" ? "Sale" : "Transfer"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        {voucher.locationName || `Location ${voucher.locationId}`}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-right font-semibold tabular-nums">
+                        {formatCashAmount(Number(voucher.totalAmount || 0))}
+                      </TableCell>
+                      <TableCell className="hidden max-w-[220px] truncate text-muted-foreground md:table-cell" title={voucher.description || ""}>
+                        {voucher.description || "—"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex justify-end gap-1">
+                          {voucher.voucherType === "Sales" && (
+                            <>
+                              <Button
+                                variant="ghost" size="icon" className="h-9 w-9 rounded-lg"
+                                disabled={!canAct || isPrinting}
+                                onClick={() => setPrintVoucherId(voucher.id)}
+                                title={canAct ? "Print receipt" : "You can only print your own sales"}
+                                aria-label={`Print receipt ${voucher.voucherNumber}`}
+                              >
+                                <Printer className={`h-4 w-4 ${isPrinting ? "animate-pulse" : ""}`} />
+                              </Button>
+                              <Button
+                                variant="ghost" size="icon" className="h-9 w-9 rounded-lg"
+                                disabled={!canAct || isSending}
+                                onClick={() => whatsappMutation.mutate(voucher)}
+                                title={canAct ? "Resend receipt on WhatsApp" : "You can only resend your own sales"}
+                                aria-label={`Resend ${voucher.voucherNumber} on WhatsApp`}
+                              >
+                                <MessageCircle className={`h-4 w-4 ${isSending ? "animate-pulse" : ""}`} />
+                              </Button>
+                            </>
+                          )}
+                          <Button
+                            variant="ghost" size="icon" className="h-9 w-9 rounded-lg"
+                            disabled={!canAct}
+                            onClick={() => canAct && setSelectedVoucher(voucher)}
+                            title={canAct ? "View full sale details" : "You can only view your own sales"}
+                            aria-label={`View ${voucher.voucherNumber}`}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost" size="icon" className="h-9 w-9 rounded-lg"
+                            onClick={() =>
+                              setHiddenRowIds((previous) => {
+                                const next = new Set(previous);
+                                if (next.has(voucher.id)) next.delete(voucher.id);
+                                else next.add(voucher.id);
+                                return next;
+                              })
+                            }
+                            title={isHidden ? "Unhide row" : "Hide row"}
+                            aria-label={`${isHidden ? "Unhide" : "Hide"} ${voucher.voucherNumber}`}
+                          >
+                            {isHidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           </div>
         )}
-      </div>
+      </section>
 
       <div style={offscreenPrintStyle} aria-hidden="true">
         <div ref={printRef} className="bg-white p-6 text-black">
@@ -662,23 +738,29 @@ function Stat({
   value,
   icon,
   loading,
+  tone,
 }: {
   label: string;
   value: string;
   icon: React.ReactNode;
   loading: boolean;
+  tone: "blue" | "violet" | "cyan" | "slate";
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-4 py-2.5">
-      <div className="text-muted-foreground">{icon}</div>
-      <div>
-        <p className="mb-0.5 text-xs leading-none text-muted-foreground">{label}</p>
-        {loading ? (
-          <Skeleton className="mt-1 h-5 w-16" />
-        ) : (
-          <p className="font-mono text-lg font-semibold leading-none">{value}</p>
-        )}
+    <div className={`pos-daybook-stat pos-daybook-stat--${tone} relative min-w-0 overflow-hidden rounded-2xl p-4 sm:p-5`}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-semibold text-muted-foreground sm:text-sm">{label}</span>
+        <span className="pos-daybook-stat-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" aria-hidden="true">
+          {icon}
+        </span>
       </div>
+      {loading ? (
+        <Skeleton className="mt-4 h-7 w-24" />
+      ) : (
+        <p className="mt-4 truncate text-xl font-bold tracking-tight tabular-nums sm:text-2xl" title={value}>
+          {value}
+        </p>
+      )}
     </div>
   );
 }

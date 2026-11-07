@@ -32,13 +32,13 @@ import { Badge } from "@/components/ui/badge";
 import { SkipLink } from "@/components/ui/responsive-accessibility";
 import { WorkspaceRouteBoundary } from "@/components/ui/workspace-route-boundary";
 import { ArrowLeft, LogOut, Search, ShoppingCart, ChevronDown, TreePine } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
-import { useChristmasMode } from "@/hooks/useChristmasMode";
-import { useToast } from "@/hooks/use-toast";
 import { usePosNavigationItems } from "./usePosNavigationItems";
 import { canUseAdminSearch, type ShellUser } from "./shellUser";
 import "@/styles/pos-sidebar-modern.css";
 import { SeasonalBrandAccent } from "@/components/SeasonalBrandAccent";
+import { useChristmasMode } from "@/hooks/useChristmasMode";
+import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/hooks/use-toast";
 
 interface PosShellProps {
   user: ShellUser;
@@ -80,10 +80,10 @@ export function PosShell({
 }: PosShellProps) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [currentLocation] = useLocation();
+  const { settingQuery: christmasSetting, updatePersonalPreference } = useChristmasMode();
+  const { toast } = useToast();
   const { selectedCompany } = useCompany();
   const { t } = useApplicationLanguage();
-  const { toast } = useToast();
-  const { settingQuery: seasonalPreferenceQuery, updatePersonalPreference } = useChristmasMode();
   const posNavItems = usePosNavigationItems({
     user,
     posImportEnabled,
@@ -292,7 +292,8 @@ export function PosShell({
                 </button>
               )}
               <div data-slot="pos-top-bar-actions" className="ml-auto flex min-w-0 items-center gap-1 sm:gap-2">
-                {seasonalPreferenceQuery.data?.available === true && (
+                <PendingSyncIndicator />
+                {christmasSetting.data?.available === true && (
                   <label
                     className="pos-christmas-switch"
                     title="Your personal Christmas Mode preference — controlled by the Developer master setting"
@@ -302,7 +303,7 @@ export function PosShell({
                     <Switch
                       aria-label="Show Christmas Mode on my account"
                       data-testid="switch-pos-christmas-mode"
-                      checked={seasonalPreferenceQuery.data.preferenceEnabled === true}
+                      checked={christmasSetting.data.preferenceEnabled === true}
                       disabled={updatePersonalPreference.isPending}
                       onCheckedChange={(enabled) =>
                         updatePersonalPreference.mutate(enabled, {
@@ -313,7 +314,6 @@ export function PosShell({
                     />
                   </label>
                 )}
-                <PendingSyncIndicator />
                 {hasAdminSearch && (
                   <Button
                     variant="ghost"
