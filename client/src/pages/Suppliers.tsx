@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useCan, canDenialMessage } from "@/hooks/useCan";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { companyDataKey } from "@/lib/frontendDataArchitecture";
 import { suppliersApi } from "@/api/suppliersApi";
@@ -60,9 +61,14 @@ export default function Suppliers() {
     setHidePayments,
   } = useSuppliersFilters(selectedCompany?.id);
   const debouncedSearch = useDebounce(searchTerm, 300);
+  const mayDeleteSupplier = useCan("erp.suppliers", "delete", { legacyAllowed: selectedCompany?.role !== "POS" });
+  const mayExportSupplier = useCan("erp.suppliers", "export", { legacyAllowed: true, featureKey: "exp_excel" });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => suppliersApi.delete(id),
+    mutationFn: (id: number) => {
+      if (!mayDeleteSupplier.allowed) throw new Error(canDenialMessage(mayDeleteSupplier.reason));
+      return suppliersApi.delete(id);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/suppliers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/suppliers/stats"] });
@@ -165,6 +171,14 @@ export default function Suppliers() {
 
   const handleExportToExcel = async () => {
     if (!selectedSupplier || unifiedLedger.length === 0) return;
+    if (!mayExportSupplier.allowed) {
+      toast({
+        title: "Export unavailable",
+        description: canDenialMessage(mayExportSupplier.reason),
+        variant: "destructive",
+      });
+      return;
+    }
     const worksheet = utils.json_to_sheet(supplierLedgerToExportRows(unifiedLedger));
     const workbook = utils.book_new();
     utils.book_append_sheet(workbook, worksheet, "Supplier Ledger");
@@ -406,6 +420,8 @@ export default function Suppliers() {
         onDialogTabChange={setDialogTab}
         onClose={handleCloseDialog}
         onExport={handleExportToExcel}
+        canExport={mayExportSupplier.allowed}
+        exportUnavailableReason={canDenialMessage(mayExportSupplier.reason)}
         onTransactionClick={handleTransactionClick}
         onPOClick={handlePOClick}
         onContainerClick={handleContainerClick}
@@ -423,7 +439,11 @@ export default function Suppliers() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => supplierToDelete && deleteMutation.mutate(supplierToDelete.id)}
+              onClick={() =>
+                supplierToDelete && mayDeleteSupplier.allowed && deleteMutation.mutate(supplierToDelete.id)
+              }
+              disabled={!mayDeleteSupplier.allowed || deleteMutation.isPending}
+              title={!mayDeleteSupplier.allowed ? canDenialMessage(mayDeleteSupplier.reason) : undefined}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               data-testid="button-confirm-delete-supplier"
             >

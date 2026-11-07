@@ -10,6 +10,7 @@ import { CompanyIsolationError, assertRequestCompanyMatchesSession } from "./ser
 import { decideExplicitCompanyScope } from "./services/security/companyRequestScopePolicy";
 import { isErpTesterForbiddenApiPath } from "@shared/erpTestCompanyAccess";
 import { isViewOnlyWriteBlocked } from "./services/security/viewOnlyWritePolicy";
+import { isCreateOnlyWriteBlocked } from "./services/security/createOnlyWritePolicy";
 import { canReadAccountMigrationSource } from "./services/security/accountMigrationRequestPolicy";
 
 const EXPECTED_ANONYMOUS_SESSION_REASONS = new Set(["SESSION_REQUIRED", "SESSION_USER_REQUIRED"]);
@@ -493,6 +494,31 @@ export function blockViewOnlyWrites(req: Request, res: Response, next: NextFunct
       reason: "View Only role attempted a write operation",
     });
     return res.status(403).json({ message: "View Only accounts cannot make changes" });
+  }
+  next();
+}
+
+/**
+ * Create Only protection is additive to the existing global View Only guard.
+ * The new role is not yet selectable. Unknown business writes are denied
+ * before they can reach routes, including bulk actions and direct API calls.
+ */
+export function blockUnverifiedCreateOnlyWrites(req: Request, res: Response, next: NextFunction) {
+  const role = req.session?.currentRole;
+  if (isCreateOnlyWriteBlocked(role, req.method, req.path)) {
+    logDenied({
+      userId: req.session.userId ?? null,
+      username: req.session.username ?? null,
+      role,
+      companyId: req.session.currentCompanyId ?? null,
+      method: req.method,
+      path: req.path,
+      reason: "Create Only attempted an unverified business write",
+    });
+    return res.status(403).json({
+      code: "BUSINESS_ACTION_NOT_VERIFIED",
+      message: "This action is not available to Create Only users.",
+    });
   }
   next();
 }
