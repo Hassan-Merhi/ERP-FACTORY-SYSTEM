@@ -408,7 +408,9 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
       const hourlyTargetsKg: Record<string, number> = { ...dailySchedule.hours };
       if (rawHourly && typeof rawHourly === "object" && !Array.isArray(rawHourly)) {
         for (let hour = 7; hour < 17; hour++) {
-          const value = Number((rawHourly as Record<string, unknown>)[String(hour)]);
+          const rawTarget = (rawHourly as Record<string, unknown>)[String(hour)];
+          if (rawTarget === undefined || rawTarget === null || rawTarget === "") continue;
+          const value = Number(rawTarget);
           if (Number.isFinite(value) && value >= 0 && value <= 100000) {
             hourlyTargetsKg[String(hour)] = value;
           }
