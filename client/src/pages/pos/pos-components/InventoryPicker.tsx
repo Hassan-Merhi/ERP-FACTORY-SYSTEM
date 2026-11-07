@@ -1,4 +1,4 @@
-import { useState, useEffect, useId } from "react";
+import { useState, useLayoutEffect, useId, useRef } from "react";
 import { Search, Package } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { MobileBarcodeScanner } from "@/components/MobileBarcodeScanner";
@@ -32,6 +32,9 @@ export function InventoryPicker({
 }: InventoryPickerProps) {
   const [localSearch, setLocalSearch] = useState("");
   const pickerId = useId();
+  // A stationary pointer must not steal the highlight when keyboard navigation
+  // scrolls an option beneath it (Chrome can re-fire mouse enter on scrolling).
+  const lastMousePosition = useRef<{ x: number; y: number } | null>(null);
   const listboxId = listId ?? `${pickerId}-items`;
   // When the sale row supplies a term, use it directly rather than syncing a
   // second state after render. Arrows/Enter must always match the visible list.
@@ -53,10 +56,10 @@ export function InventoryPicker({
   // the cashier clicks it or confirms it with Enter/Tab.
   const filteredInventory = getPosPickerInventory(inventory, effectiveSearch);
 
-  // Keep the selected option visible when cashiers navigate long lists using
-  // the keyboard. This works for the independent right-hand search field,
-  // not just the item-name cells in the sales grid.
-  useEffect(() => {
+  // Scroll only the inventory list, before the browser paints the new
+  // highlighted option. This also handles arrows from the sale-row Item input.
+  // The min-h-0 list can shrink inside the flex card and owns its scrollTop.
+  useLayoutEffect(() => {
     const list = itemListRef.current;
     if (!list || !filteredInventory.length) return;
     const option = list.children.item(highlightedIndex) as HTMLElement | null;
@@ -140,7 +143,7 @@ export function InventoryPicker({
         id={listboxId}
         role="listbox"
         aria-label="Matching inventory items"
-        className="flex-1 overflow-y-auto"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
         ref={itemListRef as React.RefObject<HTMLDivElement>}
       >
         {filteredInventory.map((item, index) => {
@@ -156,7 +159,14 @@ export function InventoryPicker({
               className={`w-full text-left flex items-center justify-between gap-2 border-b border-muted/40 transition-colors duration-100 ${
                 mobile ? "px-4 py-3 active:bg-primary/10" : "px-3 py-3"
               } ${index === highlightedIndex ? "bg-primary/25" : "hover:bg-muted/40"} ${isOut ? "opacity-50" : ""}`}
-              onMouseEnter={() => setHighlightedIndex(index)}
+              onMouseMove={(event) => {
+                const { clientX: x, clientY: y } = event;
+                const last = lastMousePosition.current;
+                if (!last || last.x !== x || last.y !== y) {
+                  lastMousePosition.current = { x, y };
+                  setHighlightedIndex(index);
+                }
+              }}
               onClick={() => chooseItem(item)}
               data-testid={`button-select-item-${item.stockItemId ?? item.code}`}
             >
