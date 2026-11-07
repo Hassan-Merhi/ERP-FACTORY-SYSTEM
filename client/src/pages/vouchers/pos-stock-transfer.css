@@ -1,0 +1,297 @@
+/*
+ * POS Stock Transfer redesign.
+ * Scope every rule to the POS voucher page so ERP, Factory, and retail
+ * transfer workflows retain their existing appearance and behavior.
+ * Seasonal details follow the existing global, per-user html data attribute.
+ */
+.pos-stock-transfer-page {
+  --pos-transfer-orange: #f77620;
+  --pos-transfer-purple: #7138cc;
+  --pos-transfer-outline: rgba(112, 84, 176, 0.16);
+  --pos-transfer-shadow: 0 12px 36px rgba(39, 34, 82, 0.07);
+  min-width: 0;
+}
+
+.pos-stock-transfer-page [data-testid="page-header"] {
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 1rem;
+  padding: 1.2rem 1.4rem;
+  border: 1px solid var(--pos-transfer-outline);
+  border-radius: 1.35rem;
+  background:
+    radial-gradient(ellipse at 100% 0, rgba(123, 49, 202, 0.15), transparent 34%),
+    radial-gradient(ellipse at 85% 0, rgba(255, 135, 43, 0.16), transparent 48%),
+    hsl(var(--card));
+  box-shadow: var(--pos-transfer-shadow);
+  isolation: isolate;
+}
+
+.pos-stock-transfer-page [data-testid="page-header"]::before {
+  content: "";
+  position: absolute;
+  top: -135px;
+  right: -80px;
+  width: min(55%, 620px);
+  height: 245px;
+  background: linear-gradient(112deg, rgba(252, 158, 59, 0.4), rgba(241, 109, 56, 0.34) 48%, rgba(113, 49, 199, 0.55));
+  border-radius: 0 0 55% 55%;
+  transform: rotate(10deg);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.pos-stock-transfer-page [data-testid="page-header"] > div:last-child > div:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+.pos-stock-transfer-page [data-testid="text-page-title"] {
+  font-size: clamp(1.45rem, 1.8vw, 2rem);
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+}
+.pos-stock-transfer-page [data-testid="text-page-title"] > span:first-child {
+  display: inline-grid;
+  width: 3rem;
+  height: 3rem;
+  place-items: center;
+  color: white;
+  background: linear-gradient(135deg, var(--pos-transfer-orange), #ef5929 50%, var(--pos-transfer-purple));
+  border-radius: 0.9rem;
+  box-shadow: 0 6px 14px rgba(160, 78, 137, 0.2);
+}
+
+.pos-transfer-panel {
+  padding: clamp(0.9rem, 1.5vw, 1.45rem);
+  border: 1px solid var(--pos-transfer-outline);
+  border-radius: 1.35rem;
+  background: linear-gradient(165deg, rgba(120, 79, 211, 0.035), transparent 45%), hsl(var(--card));
+  box-shadow: var(--pos-transfer-shadow);
+}
+.pos-transfer-toolbar {
+  align-items: center;
+  border-radius: 0.95rem;
+  padding: 0.35rem 0.3rem 0.75rem;
+}
+.pos-transfer-toolbar > div:first-child,
+.pos-transfer-toolbar [data-slot="form-item"] {
+  min-width: 0;
+}
+.pos-transfer-field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+.pos-transfer-field-label svg { color: var(--pos-transfer-purple); }
+.pos-transfer-source-name,
+.pos-transfer-control,
+.pos-transfer-import {
+  min-height: 2.65rem;
+  border: 1px solid rgba(110, 78, 182, 0.24) !important;
+  border-radius: 0.75rem !important;
+  background: hsl(var(--background)) !important;
+  box-shadow: 0 3px 9px rgba(54, 42, 95, 0.04);
+}
+.pos-transfer-control:focus-visible,
+.pos-transfer-import:focus-visible,
+.pos-transfer-table input:focus-visible {
+  outline: 2px solid var(--pos-transfer-purple) !important;
+  outline-offset: 2px;
+}
+.pos-transfer-source-name {
+  display: inline-flex;
+  align-items: center;
+  padding-inline: 0.85rem;
+  max-width: 17rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pos-transfer-import { padding-inline: 1rem; font-weight: 600; }
+.pos-transfer-import:hover { border-color: rgba(113, 56, 204, 0.45) !important; }
+
+.pos-transfer-table,
+.pos-transfer-form .pos-transfer-sidebar {
+  border: 1px solid var(--pos-transfer-outline);
+  border-radius: 1rem;
+  background: hsl(var(--card));
+  box-shadow: 0 4px 14px rgba(37, 31, 75, 0.035);
+}
+.pos-transfer-table-header {
+  background: linear-gradient(90deg, rgba(123, 64, 213, 0.085), rgba(120, 84, 193, 0.05));
+  color: hsl(var(--foreground));
+  border-color: rgba(127, 84, 183, 0.14);
+}
+.pos-transfer-table-header > div {
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  border-color: rgba(127, 84, 183, 0.12);
+}
+.pos-transfer-table-row {
+  border-color: rgba(127, 84, 183, 0.1);
+  transition: background-color 150ms ease;
+}
+.pos-transfer-table-row:hover { background: rgba(133, 96, 217, 0.045); }
+.pos-transfer-table-row > div { border-color: rgba(127, 84, 183, 0.1); min-height: 2.9rem; }
+.pos-transfer-table-header > div { min-height: 2.85rem; }
+.pos-transfer-table-row input {
+  color: hsl(var(--foreground));
+  font-size: 0.875rem;
+}
+.pos-transfer-table-row input::placeholder { color: hsl(var(--muted-foreground)); }
+.pos-transfer-table-row input:focus { background: rgba(116, 64, 207, 0.075); }
+
+.pos-transfer-empty-state {
+  min-height: 150px;
+  padding: 1.2rem 0.75rem 1.55rem;
+  text-align: center;
+  background: radial-gradient(ellipse at center, rgba(132, 95, 218, 0.07), transparent 65%);
+}
+.pos-transfer-empty-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 4.5rem;
+  height: 3.7rem;
+  margin: 0 auto 0.55rem;
+  border-radius: 1.2rem;
+  color: #966fcf;
+  background: linear-gradient(145deg, rgba(149, 117, 221, 0.14), rgba(124, 72, 198, 0.045));
+}
+.pos-transfer-empty-state p { font-size: 0.94rem; font-weight: 700; }
+.pos-transfer-empty-state span { display: block; margin-top: 0.2rem; font-size: 0.8rem; color: hsl(var(--muted-foreground)); }
+
+.pos-transfer-totals { background: rgba(126, 84, 207, 0.035); }
+.pos-transfer-totals .pos-transfer-total-value {
+  min-width: 2rem;
+  padding: 0.2rem 0.55rem;
+  text-align: center;
+  border-radius: 0.65rem;
+  background: rgba(126, 84, 207, 0.11);
+  color: hsl(var(--foreground));
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+.pos-transfer-mobile-row {
+  border-color: var(--pos-transfer-outline);
+  border-radius: 0.85rem;
+  box-shadow: 0 3px 10px rgba(47, 34, 96, 0.045);
+}
+.pos-transfer-mobile-row input { border-color: rgba(110, 78, 182, 0.21); }
+.pos-transfer-mobile-row input:focus-visible { outline: 2px solid var(--pos-transfer-purple); outline-offset: 1px; }
+.pos-transfer-footer {
+  display: flex;
+  gap: 0.85rem;
+  align-items: center;
+}
+.pos-transfer-notes { min-width: min(100%, 18rem); }
+.pos-transfer-notes textarea {
+  min-height: 4.25rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(110, 78, 182, 0.2);
+  border-radius: 0.8rem;
+  background: hsl(var(--background));
+}
+.pos-transfer-notes textarea:focus-visible {
+  outline: 2px solid var(--pos-transfer-purple);
+  outline-offset: 2px;
+}
+.pos-transfer-optional {
+  border: 1px solid rgba(120, 83, 187, 0.17);
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.75rem;
+  background: rgba(132, 86, 219, 0.035);
+}
+.pos-transfer-export { min-height: 2.65rem; border-radius: 0.72rem; font-weight: 600; }
+.pos-transfer-save {
+  min-height: 2.65rem;
+  padding-inline: 1.15rem;
+  border: 0;
+  border-radius: 0.75rem;
+  background: linear-gradient(110deg, #fc871a, #f26927 42%, #7937ce);
+  color: white;
+  box-shadow: 0 6px 15px rgba(152, 69, 149, 0.23);
+  font-weight: 700;
+}
+.pos-transfer-save:hover:not(:disabled) {
+  filter: brightness(1.06);
+  box-shadow: 0 7px 18px rgba(152, 69, 149, 0.32);
+}
+.pos-transfer-save:focus-visible {
+  outline: 2px solid hsl(var(--foreground));
+  outline-offset: 2px;
+}
+.pos-transfer-save:disabled { opacity: 0.55; box-shadow: none; }
+
+/* Dark mode: retain the orange/purple identity without white surfaces. */
+html.dark .pos-stock-transfer-page {
+  --pos-transfer-outline: rgba(184, 154, 247, 0.19);
+  --pos-transfer-shadow: 0 15px 40px rgba(3, 3, 16, 0.2);
+}
+html.dark .pos-stock-transfer-page [data-testid="page-header"] {
+  background:
+    radial-gradient(ellipse at 90% 0, rgba(122, 65, 225, 0.24), transparent 50%),
+    radial-gradient(ellipse at 75% 0, rgba(247, 121, 41, 0.14), transparent 45%),
+    hsl(var(--card));
+}
+html.dark .pos-transfer-panel {
+  background: linear-gradient(150deg, rgba(131, 73, 222, 0.09), transparent 55%), hsl(var(--card));
+}
+html.dark .pos-transfer-control,
+html.dark .pos-transfer-import,
+html.dark .pos-transfer-source-name,
+html.dark .pos-transfer-notes textarea { background: hsl(var(--background)) !important; }
+html.dark .pos-transfer-table-header { background: linear-gradient(90deg, rgba(125, 71, 211, 0.23), rgba(125, 71, 211, 0.1)); }
+html.dark .pos-transfer-table-row:hover { background: rgba(122, 73, 223, 0.12); }
+html.dark .pos-transfer-empty-art { color: #c6a8fa; }
+html.dark .pos-transfer-totals .pos-transfer-total-value { background: rgba(172, 133, 235, 0.18); }
+
+/* The existing Christmas Mode hook owns the toggle; no seasonal UI when OFF. */
+html[data-christmas-mode="on"] .pos-stock-transfer-page [data-testid="page-header"]::after {
+  content: "✦  ❄  ✦";
+  position: absolute;
+  right: 2.25rem;
+  bottom: 0.7rem;
+  color: rgba(87, 154, 116, 0.62);
+  font-size: 0.9rem;
+  letter-spacing: 0.6rem;
+  pointer-events: none;
+}
+html[data-christmas-mode="on"] .pos-stock-transfer-page .pos-transfer-empty-art::after {
+  content: "❄";
+  position: absolute;
+  margin-left: 3.4rem;
+  margin-top: -2.2rem;
+  color: #4f9c78;
+  font-size: 1.25rem;
+}
+html[data-christmas-mode="on"] .pos-stock-transfer-page .pos-transfer-panel {
+  border-color: rgba(69, 150, 99, 0.25);
+}
+html.dark[data-christmas-mode="on"] .pos-stock-transfer-page [data-testid="page-header"]::after {
+  color: rgba(152, 218, 180, 0.78);
+}
+
+@media (max-width: 720px) {
+  .pos-stock-transfer-page [data-testid="page-header"] { padding: 1rem; }
+  .pos-stock-transfer-page [data-testid="page-header"]::before { width: 65%; right: -125px; }
+  .pos-transfer-toolbar { align-items: stretch; }
+  .pos-transfer-toolbar > div:first-child { width: 100%; }
+  .pos-transfer-toolbar [data-slot="form-item"] { width: 100%; }
+  .pos-transfer-toolbar .pos-transfer-control { width: 100%; }
+  .pos-transfer-panel { padding: 0.75rem; }
+  .pos-transfer-footer { align-items: stretch; }
+  .pos-transfer-notes { flex-basis: 100%; }
+  .pos-transfer-save { flex: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pos-stock-transfer-page * { transition: none !important; }
+}
+@media print {
+  .pos-stock-transfer-page [data-testid="page-header"]::before,
+  .pos-stock-transfer-page [data-testid="page-header"]::after { display: none; }
+  .pos-stock-transfer-page [data-testid="page-header"],
+  .pos-transfer-panel { box-shadow: none; }
+}
