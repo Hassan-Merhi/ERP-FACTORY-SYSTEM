@@ -24,6 +24,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCan, canDenialMessage } from "@/hooks/useCan";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { companyDataKey } from "@/lib/frontendDataArchitecture";
 import { suppliersApi } from "@/api/suppliersApi";
@@ -63,6 +64,8 @@ export default function Suppliers() {
   const debouncedSearch = useDebounce(searchTerm, 300);
   const mayDeleteSupplier = useCan("erp.suppliers", "delete", { legacyAllowed: selectedCompany?.role !== "POS" });
   const mayExportSupplier = useCan("erp.suppliers", "export", { legacyAllowed: true, featureKey: "exp_excel" });
+  // View Only and Create Only roles cannot change existing suppliers.
+  const recordChanges = useExistingRecordChangeAccess();
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => {
@@ -389,9 +392,13 @@ export default function Suppliers() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => navigate(`/suppliers/${supplier.id}/edit`)}
+                  onClick={() => {
+                    if (recordChanges.allowed) navigate(`/suppliers/${supplier.id}/edit`);
+                  }}
+                  disabled={!recordChanges.allowed}
                   data-testid={`button-edit-supplier-${supplier.id}`}
-                  title="Edit"
+                  title={recordChanges.reason ?? "Edit"}
+                  aria-label={recordChanges.reason ?? "Edit supplier"}
                 >
                   <Edit className="h-4 w-4" />
                 </Button>
@@ -440,10 +447,17 @@ export default function Suppliers() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() =>
-                supplierToDelete && mayDeleteSupplier.allowed && deleteMutation.mutate(supplierToDelete.id)
+                supplierToDelete &&
+                mayDeleteSupplier.allowed &&
+                recordChanges.allowed &&
+                deleteMutation.mutate(supplierToDelete.id)
               }
-              disabled={!mayDeleteSupplier.allowed || deleteMutation.isPending}
-              title={!mayDeleteSupplier.allowed ? canDenialMessage(mayDeleteSupplier.reason) : undefined}
+              disabled={!mayDeleteSupplier.allowed || !recordChanges.allowed || deleteMutation.isPending}
+              title={
+                !mayDeleteSupplier.allowed
+                  ? canDenialMessage(mayDeleteSupplier.reason)
+                  : (recordChanges.reason ?? undefined)
+              }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               data-testid="button-confirm-delete-supplier"
             >

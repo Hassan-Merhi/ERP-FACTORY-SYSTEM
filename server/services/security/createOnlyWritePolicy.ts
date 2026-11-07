@@ -5,37 +5,17 @@
  * handler-verified requireVerifiedBusinessAction guard. Keep this allowlist
  * exact: method + literal path, not a prefix or an HTTP verb guess.
  */
+import { isCreateOnlyVerifiedSignature } from "@shared/createOnlyRolePolicy";
 import { isViewOnlyWriteBlocked } from "./viewOnlyWritePolicy";
 
-/**
- * Handler-verified creates, by name. Each name has a matching per-route guard
- * in createOnlyVerifiedCreates.ts that is installed on the route itself; a
- * signature listed here without that guard fails the release tests.
- */
-export const CREATE_ONLY_VERIFIED_CREATE_SIGNATURES = {
-  suppliers: ["POST /api/suppliers"],
-  customers: ["POST /api/customers"],
-  stockItems: ["POST /api/stock-items"],
-  factoryBaleBatch: ["POST /api/factory/bales/create-batch"],
-  factoryCustomerOrders: ["POST /api/factory/customer-orders"],
-  rentalUnits: ["POST /api/properties/rental/units", "POST /api/erp/rental/units", "POST /api/factory/rental/units"],
-  rentalContracts: [
-    "POST /api/properties/rental/contracts",
-    "POST /api/erp/rental/contracts",
-    "POST /api/factory/rental/contracts",
-  ],
-  retailProducts: ["POST /api/retail/products"],
-  spSales: ["POST /api/sp/sales"],
-} as const;
+export {
+  CREATE_ONLY_VERIFIED_CREATE_SIGNATURES,
+  type CreateOnlyVerifiedCreateName,
+} from "@shared/createOnlyRolePolicy";
 
-export type CreateOnlyVerifiedCreateName = keyof typeof CREATE_ONLY_VERIFIED_CREATE_SIGNATURES;
-
-const HANDLER_VERIFIED_CREATES: ReadonlySet<string> = new Set(
-  Object.values(CREATE_ONLY_VERIFIED_CREATE_SIGNATURES).flat()
-);
-
+/** Exact handler-verified create signature (shared catalog, see shared/createOnlyRolePolicy.ts). */
 export function isCreateOnlyVerifiedCreate(methodInput: string, path: string): boolean {
-  return HANDLER_VERIFIED_CREATES.has(`${methodInput.toUpperCase()} ${path}`);
+  return isCreateOnlyVerifiedSignature(methodInput, path);
 }
 
 export function isCreateOnlyWriteBlocked(role: string | null | undefined, methodInput: string, path: string): boolean {
@@ -51,5 +31,5 @@ export function isCreateOnlyWriteBlocked(role: string | null | undefined, method
   // Preserve exact authentication/presence transport exceptions from the
   // hardened View Only boundary; none constitutes a business mutation.
   if (!isViewOnlyWriteBlocked("View Only", method, lowerPath)) return false;
-  return !HANDLER_VERIFIED_CREATES.has(`${method} ${path}`);
+  return !isCreateOnlyVerifiedSignature(method, path);
 }

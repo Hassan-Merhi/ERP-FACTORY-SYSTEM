@@ -8,6 +8,7 @@ import { getVoucherTypeBadge } from "@/lib/voucherTypeBadge";
 import { cn } from "@/lib/utils";
 import { isVoucherMutationBlocked, voucherLockLabel } from "@/lib/migratedVoucherGuard";
 import { DaybookRow, Voucher, ViewVoucherEntry } from "./types";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 interface DaybookTableProps {
   displayedRows: DaybookRow[];
@@ -70,8 +71,8 @@ export function DaybookTable({
   handleView,
   handleEdit,
   handleDelete,
-  canEdit,
-  canDelete,
+  canEdit: canEditVoucher,
+  canDelete: canDeleteVoucher,
   setDaybookRowLimit,
   DAYBOOK_PAGE_SIZE,
   navigate,
@@ -79,6 +80,9 @@ export function DaybookTable({
   errorMessage = null,
   onRetry,
 }: DaybookTableProps) {
+  const { allowed: changesAllowed } = useExistingRecordChangeAccess(); // View Only / Create Only
+  const canEdit = (v: Voucher) => changesAllowed && canEditVoucher(v);
+  const canDelete = () => changesAllowed && canDeleteVoucher();
   // Loading, failure and empty are three different situations. Rendering a bare
   // header for all three makes a failed request look like a day with no
   // transactions, so each one gets its own visible state.
@@ -228,7 +232,9 @@ export function DaybookTable({
                               const o = row.data;
                               const desc = [
                                 o.containerNumber,
-                                ...(offloadAlphabetical ? [formatDisplayDate(parseISO(o.offloadedAt.slice(0, 10)))] : []),
+                                ...(offloadAlphabetical
+                                  ? [formatDisplayDate(parseISO(o.offloadedAt.slice(0, 10)))]
+                                  : []),
                                 o.locationName,
                               ]
                                 .filter(Boolean)
@@ -883,7 +889,9 @@ export function DaybookTable({
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
-          <TableBody className="text-foreground dark:[&_tr]:border-border/70 dark:[&_td]:border-border/70">{tableRows}</TableBody>
+          <TableBody className="text-foreground dark:[&_tr]:border-border/70 dark:[&_td]:border-border/70">
+            {tableRows}
+          </TableBody>
         </Table>
         {loadMoreButton}
       </div>

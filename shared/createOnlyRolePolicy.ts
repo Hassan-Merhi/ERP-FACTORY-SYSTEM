@@ -63,3 +63,39 @@ export function isCreateOnlyFeatureAllowed(featureKey: string, stored: boolean |
 export function isExistingRecordReadOnlyRole(role: string | null | undefined): boolean {
   return role === "View Only" || role === CREATE_ONLY_ROLE_NAME;
 }
+
+/**
+ * Handler-verified Create Only creates, by name, with their exact
+ * "METHOD /path" signatures. The server's global Create Only guard lets only
+ * these business writes through, and each has a named per-route guard
+ * (server/services/security/createOnlyVerifiedCreates.ts). The client uses the
+ * same catalog to show only the create controls the server will accept.
+ */
+export const CREATE_ONLY_VERIFIED_CREATE_SIGNATURES = {
+  suppliers: ["POST /api/suppliers"],
+  customers: ["POST /api/customers"],
+  stockItems: ["POST /api/stock-items"],
+  factoryBaleBatch: ["POST /api/factory/bales/create-batch"],
+  factoryCustomerOrders: ["POST /api/factory/customer-orders"],
+  rentalUnits: ["POST /api/properties/rental/units", "POST /api/erp/rental/units", "POST /api/factory/rental/units"],
+  rentalContracts: [
+    "POST /api/properties/rental/contracts",
+    "POST /api/erp/rental/contracts",
+    "POST /api/factory/rental/contracts",
+  ],
+  retailProducts: ["POST /api/retail/products"],
+  spSales: ["POST /api/sp/sales"],
+} as const;
+
+export type CreateOnlyVerifiedCreateName = keyof typeof CREATE_ONLY_VERIFIED_CREATE_SIGNATURES;
+
+const VERIFIED_SIGNATURES: ReadonlySet<string> = new Set(Object.values(CREATE_ONLY_VERIFIED_CREATE_SIGNATURES).flat());
+
+export function isCreateOnlyVerifiedCreateName(name: string | null | undefined): name is CreateOnlyVerifiedCreateName {
+  return typeof name === "string" && Object.prototype.hasOwnProperty.call(CREATE_ONLY_VERIFIED_CREATE_SIGNATURES, name);
+}
+
+/** Exact match of a request against the verified catalog (no prefix, no casing tricks). */
+export function isCreateOnlyVerifiedSignature(method: string, path: string): boolean {
+  return VERIFIED_SIGNATURES.has(`${method.toUpperCase()} ${path}`);
+}

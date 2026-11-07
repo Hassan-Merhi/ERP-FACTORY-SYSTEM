@@ -26,6 +26,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { z } from "zod";
 import { usePaginatedFilterState } from "@/hooks/use-paginated-filter-state";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 const formSchema = insertCustomerSchema.extend({
   legalName: z.string().min(1, "Legal name is required"),
@@ -63,6 +64,7 @@ function CompanyCustomers() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const recordChanges = useExistingRecordChangeAccess();
   const {
     filters: { searchQuery, hideZero },
     setFilter,
@@ -258,49 +260,52 @@ function CompanyCustomers() {
             </FormItem>
           )}
         />
-        <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="openingBalance"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Opening Balance</FormLabel>
-                <FormControl>
-                  <Input
-                    {...field}
-                    value={field.value || "0"}
-                    type="number"
-                    step="0.01"
-                    placeholder="0.00"
-                    data-testid={isEdit ? "input-edit-opening-balance" : "input-opening-balance"}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="openingBalanceSide"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Balance Side</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value || "Dr"}>
+        {/* Create Only adds customers without an opening balance (refused by the server). */}
+        {!recordChanges.isCreateOnly && (
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="openingBalance"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Opening Balance</FormLabel>
                   <FormControl>
-                    <SelectTrigger data-testid={isEdit ? "select-edit-balance-side" : "select-balance-side"}>
-                      <SelectValue placeholder="Select side" />
-                    </SelectTrigger>
+                    <Input
+                      {...field}
+                      value={field.value || "0"}
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      data-testid={isEdit ? "input-edit-opening-balance" : "input-opening-balance"}
+                    />
                   </FormControl>
-                  <SelectContent>
-                    <SelectItem value="Dr">Dr (Debit)</SelectItem>
-                    <SelectItem value="Cr">Cr (Credit)</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="openingBalanceSide"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Balance Side</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value || "Dr"}>
+                    <FormControl>
+                      <SelectTrigger data-testid={isEdit ? "select-edit-balance-side" : "select-balance-side"}>
+                        <SelectValue placeholder="Select side" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="Dr">Dr (Debit)</SelectItem>
+                      <SelectItem value="Cr">Cr (Credit)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        )}
         <div className="flex justify-end gap-2 pt-2">
           <Button
             type="button"
@@ -498,8 +503,11 @@ function CompanyCustomers() {
                         size="icon"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleEditClick(customer);
+                          if (recordChanges.allowed) handleEditClick(customer);
                         }}
+                        disabled={!recordChanges.allowed}
+                        title={recordChanges.reason ?? undefined}
+                        aria-label={recordChanges.reason ?? "Edit customer"}
                         data-testid={`button-edit-customer-${customer.id}`}
                       >
                         <Pencil className="h-4 w-4" />
@@ -700,8 +708,8 @@ function CompanyCustomers() {
                 <div>
                   <h3 className="text-sm font-semibold">Retail POS purchases and returns</h3>
                   <p className="text-xs text-muted-foreground">
-                    Paid purchases appear here as sales history, not extra receivables.
-                    On-account sales and payments affect the accounting ledger above.
+                    Paid purchases appear here as sales history, not extra receivables. On-account sales and payments
+                    affect the accounting ledger above.
                   </p>
                 </div>
                 {retailHistoryLoading ? (
@@ -739,7 +747,9 @@ function CompanyCustomers() {
                             <TableCell className="text-xs whitespace-nowrap">
                               {format(new Date(entry.createdAt), "dd/MM/yyyy")}
                             </TableCell>
-                            <TableCell className="text-xs">Return #{entry.id} (sale #{entry.saleId ?? "—"})</TableCell>
+                            <TableCell className="text-xs">
+                              Return #{entry.id} (sale #{entry.saleId ?? "—"})
+                            </TableCell>
                             <TableCell className="text-xs">Refund</TableCell>
                             <TableCell className="text-xs text-right font-mono">
                               {formatHistoricalBaseAmount(entry.refundAmount)}

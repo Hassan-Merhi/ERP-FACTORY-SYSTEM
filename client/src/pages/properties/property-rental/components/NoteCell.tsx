@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Pencil, Check, X } from "lucide-react";
 import { useApiBase } from "../shared";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 export // ── Inline Note Cell ─────────────────────────────────────
 function NoteCell({ contractId, note, testId }: { contractId: number; note: string | null; testId: string }) {
@@ -19,6 +20,8 @@ function NoteCell({ contractId, note, testId }: { contractId: number; note: stri
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(note ?? "");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // View Only and Create Only roles see the note but cannot change it.
+  const recordChanges = useExistingRecordChangeAccess();
 
   useEffect(() => {
     if (editing) {
@@ -36,6 +39,22 @@ function NoteCell({ contractId, note, testId }: { contractId: number; note: stri
     },
     onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
+
+  if (!recordChanges.allowed) {
+    return (
+      <div
+        className="flex items-start gap-1 min-w-[100px] max-w-[220px]"
+        title={recordChanges.reason ?? undefined}
+        data-testid={`${testId}-note-display`}
+      >
+        {note ? (
+          <span className="text-xs text-foreground leading-snug line-clamp-2 whitespace-pre-wrap">{note}</span>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        )}
+      </div>
+    );
+  }
 
   if (editing) {
     return (

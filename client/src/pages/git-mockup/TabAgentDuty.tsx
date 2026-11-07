@@ -247,10 +247,11 @@ export function TabAgentDuty() {
                   (agent.activePreviewRows.length > 0 || agent.openRows.length > 0 || agent.partialRows.length > 0) &&
                   (agent.openBalance === null || agent.openBalance !== 0)
               )
-              .map((agent) =>
-                isViewer ? (
-                  <AgentCardReadOnly key={`${section.companyId}-${agent.agentName}`} agent={agent} />
-                ) : (
+              .map((agent) => {
+                if (isViewer) {
+                  return <AgentCardReadOnly key={`${section.companyId}-${agent.agentName}`} agent={agent} />;
+                }
+                return (
                   <AgentCard
                     key={`${section.companyId}-${agent.agentName}`}
                     agent={agent}
@@ -263,8 +264,8 @@ export function TabAgentDuty() {
                         : undefined
                     }
                   />
-                )
-              )
+                );
+              })
           )}
         </div>
       ))}

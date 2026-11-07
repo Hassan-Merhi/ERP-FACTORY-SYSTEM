@@ -1,7 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useRoute } from "wouter";
-import { ArrowLeft, Boxes, ChevronDown, ChevronRight, FolderOpen, MapPin, Pencil, Plus, Printer, Upload } from "lucide-react";
+import {
+  ArrowLeft,
+  Boxes,
+  ChevronDown,
+  ChevronRight,
+  FolderOpen,
+  MapPin,
+  Pencil,
+  Plus,
+  Printer,
+  Upload,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { RetailSupplierImportDialog } from "./RetailSupplierImportDialog";
 import { ProductEditor } from "./RetailProductEditor";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { ProductImageGallery } from "./RetailProductImage";
 import { RetailCatalogList, type RetailCatalogFilters, type RetailVariantAction } from "./RetailCatalogList";
 import { RetailLabelPrintDialog, type RetailLabelRequestItem } from "./retailLabels";
@@ -29,6 +41,8 @@ import {
 export default function RetailInventory() {
   const { selectedCompany } = useCompany();
   const [, navigate] = useLocation();
+  // View Only and Create Only roles cannot edit, archive or import into existing products.
+  const recordChanges = useExistingRecordChangeAccess();
   const [detailMatch, detailParams] = useRoute("/retail/products/:id");
   const [editorOpen, setEditorOpen] = useState(false);
   const [supplierImportOpen, setSupplierImportOpen] = useState(false);
@@ -95,12 +109,15 @@ export default function RetailInventory() {
     return params.toString();
   }, [locationId, debouncedSearch, color, size, stockStatus, showArchived]);
 
-  const { data: navigationData, isLoading: navigationLoading, isError: navigationFailed } =
-    useQuery<RetailCatalogNavigation>({
-      queryKey: ["retail-catalog-navigation", companyKey, navigationParams],
-      queryFn: () => getJson(`/api/retail/catalog-navigation?${navigationParams}`),
-      enabled: retailEnabled && Boolean(locationId),
-    });
+  const {
+    data: navigationData,
+    isLoading: navigationLoading,
+    isError: navigationFailed,
+  } = useQuery<RetailCatalogNavigation>({
+    queryKey: ["retail-catalog-navigation", companyKey, navigationParams],
+    queryFn: () => getJson(`/api/retail/catalog-navigation?${navigationParams}`),
+    enabled: retailEnabled && Boolean(locationId),
+  });
   const selectedLocation = locations.find((entry) => String(entry.id) === locationId);
   const selectedCategory = navigationData?.categories.find((entry) => entry.key === categoryKey);
   const expandedBrand = selectedCategory?.brands.find((entry) => entry.key === expandedBrandKey);
@@ -117,7 +134,11 @@ export default function RetailInventory() {
     return params.toString();
   }, [page, debouncedSearch, color, size, categoryKey, expandedBrandKey, locationId, stockStatus, showArchived]);
 
-  const { data: catalogPage, isLoading, isError: catalogFailed } = useQuery<RetailCatalogPage>({
+  const {
+    data: catalogPage,
+    isLoading,
+    isError: catalogFailed,
+  } = useQuery<RetailCatalogPage>({
     queryKey: ["retail-products", "page", companyKey, catalogParams],
     queryFn: () => getJson(`/api/retail/products-page?${catalogParams}`),
     enabled: retailEnabled && Boolean(locationId && selectedCategory && expandedBrand),
@@ -161,6 +182,7 @@ export default function RetailInventory() {
       return next;
     });
   const openEditor = (product: RetailProduct) => {
+    if (!recordChanges.allowed) return;
     setEditingProduct(product);
     setEditorOpen(true);
   };
@@ -172,6 +194,7 @@ export default function RetailInventory() {
       queryClient.invalidateQueries({ queryKey: ["retail-pos-items"] }),
     ]);
   const setProductActive = async (product: RetailProduct, active: boolean) => {
+    if (!recordChanges.allowed) return;
     if (!active && !(await confirmAction({ title: `Archive ${product.name}? Its sales and stock history are kept.` })))
       return;
     try {
@@ -187,6 +210,7 @@ export default function RetailInventory() {
       setLabelItems([labelItemFor(product, variant)]);
       setLabelOpen(true);
     } else {
+      if (!recordChanges.allowed) return;
       const active = action === "restore";
       try {
         await apiRequest("PATCH", `/api/retail/variants/${variant.id}/active`, { active });
@@ -267,9 +291,13 @@ export default function RetailInventory() {
           </Button>
           <Button
             onClick={() => {
+              if (!recordChanges.allowed) return;
               setEditingProduct(detailProduct);
               setEditorOpen(true);
             }}
+            disabled={!recordChanges.allowed}
+            title={recordChanges.reason ?? undefined}
+            aria-label={recordChanges.reason ?? "Edit product"}
           >
             <Pencil className="mr-2 h-4 w-4" /> Edit product
           </Button>
@@ -297,7 +325,14 @@ export default function RetailInventory() {
           <CardContent>
             <RetailCatalogList
               products={[detailProduct]}
-              filters={{ ...catalogFilters, locationId: "", color: "", size: "", stockStatus: "all", showArchived: true }}
+              filters={{
+                ...catalogFilters,
+                locationId: "",
+                color: "",
+                size: "",
+                stockStatus: "all",
+                showArchived: true,
+              }}
               selected={selected}
               onToggle={toggleVariant}
               onToggleProduct={toggleVariants}
@@ -305,6 +340,7 @@ export default function RetailInventory() {
               onEdit={openEditor}
               onArchiveProduct={(product, active) => void setProductActive(product, active)}
               onVariantAction={handleVariantAction}
+              changeDisabledReason={recordChanges.reason}
             />
           </CardContent>
         </Card>
@@ -335,9 +371,16 @@ export default function RetailInventory() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => setSupplierImportOpen(true)}>
-            <Upload className="mr-2 h-4 w-4" /> Supplier Stock Import
-          </Button>
+          {/* Create Only cannot import stock; View Only sees it disabled. */}
+          {!recordChanges.isCreateOnly && (
+            <Button
+              onClick={() => setSupplierImportOpen(true)}
+              disabled={!recordChanges.allowed}
+              title={recordChanges.reason ?? undefined}
+            >
+              <Upload className="mr-2 h-4 w-4" /> Supplier Stock Import
+            </Button>
+          )}
           <Button
             variant="outline"
             onClick={() => {
@@ -397,7 +440,10 @@ export default function RetailInventory() {
         <span>Show archived items</span>
       </label>
 
-      <nav aria-label="Retail inventory breadcrumbs" className="flex flex-wrap items-center gap-1 rounded-lg border bg-card p-2">
+      <nav
+        aria-label="Retail inventory breadcrumbs"
+        className="flex flex-wrap items-center gap-1 rounded-lg border bg-card p-2"
+      >
         <Button
           variant={!locationId ? "secondary" : "ghost"}
           size="sm"
@@ -448,26 +494,32 @@ export default function RetailInventory() {
             </p>
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {locations.filter((entry) => entry.active !== false).map((location) => (
-                <button
-                  key={location.id}
-                  type="button"
-                  className="flex items-center gap-3 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
-                  onClick={() => {
-                    setLocationId(String(location.id));
-                    setCategoryKey(null);
-                    setExpandedBrandKey(null);
-                    setSelected(new Set());
-                  }}
-                >
-                  <MapPin className="h-5 w-5 shrink-0 text-primary" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold" data-no-translate>{location.name}</span>
-                    <span className="block text-xs text-muted-foreground" data-no-translate>{location.code}</span>
-                  </span>
-                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                </button>
-              ))}
+              {locations
+                .filter((entry) => entry.active !== false)
+                .map((location) => (
+                  <button
+                    key={location.id}
+                    type="button"
+                    className="flex items-center gap-3 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+                    onClick={() => {
+                      setLocationId(String(location.id));
+                      setCategoryKey(null);
+                      setExpandedBrandKey(null);
+                      setSelected(new Set());
+                    }}
+                  >
+                    <MapPin className="h-5 w-5 shrink-0 text-primary" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-semibold" data-no-translate>
+                        {location.name}
+                      </span>
+                      <span className="block text-xs text-muted-foreground" data-no-translate>
+                        {location.code}
+                      </span>
+                    </span>
+                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                  </button>
+                ))}
             </div>
           )}
         </section>
@@ -501,10 +553,10 @@ export default function RetailInventory() {
                 >
                   <FolderOpen className="h-5 w-5 shrink-0 text-primary" />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold" data-no-translate>{item.name}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {item.productCount} products
+                    <span className="block truncate font-semibold" data-no-translate>
+                      {item.name}
                     </span>
+                    <span className="block text-xs text-muted-foreground">{item.productCount} products</span>
                   </span>
                   <ChevronRight className="h-5 w-5 text-muted-foreground" />
                 </button>
@@ -530,7 +582,7 @@ export default function RetailInventory() {
                     className="flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
                     aria-expanded={expandedBrandKey === brand.key}
                     onClick={() => {
-                      setExpandedBrandKey((current) => current === brand.key ? null : brand.key);
+                      setExpandedBrandKey((current) => (current === brand.key ? null : brand.key));
                       setPage(1);
                       setSelected(new Set());
                     }}
@@ -540,10 +592,10 @@ export default function RetailInventory() {
                     ) : (
                       <ChevronRight className="h-5 w-5 text-muted-foreground" />
                     )}
-                    <span className="flex-1 truncate font-semibold" data-no-translate>{brand.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {brand.productCount} products
+                    <span className="flex-1 truncate font-semibold" data-no-translate>
+                      {brand.name}
                     </span>
+                    <span className="text-xs text-muted-foreground">{brand.productCount} products</span>
                   </button>
                   {expandedBrandKey === brand.key && (
                     <div className="space-y-4 border-t p-3 sm:p-4">
@@ -567,6 +619,7 @@ export default function RetailInventory() {
                           onArchiveProduct={(product, active) => void setProductActive(product, active)}
                           onVariantAction={handleVariantAction}
                           showBrandHeadings={false}
+                          changeDisabledReason={recordChanges.reason}
                         />
                       )}
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

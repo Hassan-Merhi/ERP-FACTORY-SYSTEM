@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { confirmAction } from "@/components/ConfirmHost";
 import { normalizeRetailImageUrl } from "@/lib/retailImageUrl";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import {
   ALLOWED_IMAGE_TYPES,
   blankDraft,
@@ -47,6 +48,9 @@ export function ProductEditor({
   locations: Location[];
 }) {
   const { toast } = useToast();
+  // Create Only adds products without opening stock or new brands (both refused by the server).
+  const { isCreateOnly } = useExistingRecordChangeAccess();
+  const hideInitialStock = isCreateOnly && !product;
   const [draft, setDraft] = useState<ProductDraft>(() => blankDraft());
   const [addingBrand, setAddingBrand] = useState(false);
   const [newBrandName, setNewBrandName] = useState("");
@@ -248,13 +252,15 @@ export function ProductEditor({
         sellingPrice: Number(variant.sellingPrice),
         lowStockThreshold: Number(variant.lowStockThreshold),
         active: variant.active,
-        stocks: variant.stocks
-          .filter((stock) => stock.locationId !== "")
-          .map((stock) => ({
-            locationId: Number(stock.locationId),
-            quantity: Number(stock.quantity),
-            expectedQuantity: stock.expectedQuantity,
-          })),
+        stocks: hideInitialStock
+          ? []
+          : variant.stocks
+              .filter((stock) => stock.locationId !== "")
+              .map((stock) => ({
+                locationId: Number(stock.locationId),
+                quantity: Number(stock.quantity),
+                expectedQuantity: stock.expectedQuantity,
+              })),
       }));
 
       if (!draft.name.trim()) throw new Error("Item name is required");
@@ -320,9 +326,11 @@ export function ProductEditor({
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <Label>Brand</Label>
-              <Button type="button" size="sm" variant="ghost" onClick={() => setAddingBrand((current) => !current)}>
-                <Plus className="mr-1 h-4 w-4" /> Add brand
-              </Button>
+              {!isCreateOnly && (
+                <Button type="button" size="sm" variant="ghost" onClick={() => setAddingBrand((current) => !current)}>
+                  <Plus className="mr-1 h-4 w-4" /> Add brand
+                </Button>
+              )}
             </div>
             <select
               className="h-10 w-full rounded-md border bg-background px-3 text-sm"
@@ -484,7 +492,10 @@ export function ProductEditor({
                         readOnly={Boolean(variant.id) && !unlockedBarcodes.has(variantIndex)}
                         onChange={(e) => updateVariant(variantIndex, { barcode: e.target.value })}
                       />
-                      <MobileBarcodeScanner onScan={(code) => updateVariant(variantIndex, { barcode: code })} disabled={Boolean(variant.id) && !unlockedBarcodes.has(variantIndex)} />
+                      <MobileBarcodeScanner
+                        onScan={(code) => updateVariant(variantIndex, { barcode: code })}
+                        disabled={Boolean(variant.id) && !unlockedBarcodes.has(variantIndex)}
+                      />
                       {variant.id && !unlockedBarcodes.has(variantIndex) && (
                         <Button
                           type="button"
@@ -608,70 +619,72 @@ export function ProductEditor({
                   )}
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label>Stock by location</Label>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() =>
-                        updateVariant(variantIndex, { stocks: [...variant.stocks, { locationId: "", quantity: 0 }] })
-                      }
-                    >
-                      + Location
-                    </Button>
-                  </div>
-                  {variant.stocks.map((stock, stockIndex) => (
-                    <div key={`${variantIndex}-${stockIndex}`} className="flex gap-2">
-                      <select
-                        className="h-10 flex-1 rounded-md border bg-background px-3 text-sm"
-                        value={stock.locationId}
-                        onChange={(e) => {
-                          const stocks = variant.stocks.map((item, i) =>
-                            i === stockIndex
-                              ? { ...item, locationId: e.target.value ? Number(e.target.value) : ("" as const) }
-                              : item
-                          );
-                          updateVariant(variantIndex, { stocks });
-                        }}
+                {!hideInitialStock && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Stock by location</Label>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          updateVariant(variantIndex, { stocks: [...variant.stocks, { locationId: "", quantity: 0 }] })
+                        }
                       >
-                        <option value="">Select location</option>
-                        {locations
-                          .filter((location) => location.active !== false)
-                          .map((location) => (
-                            <option key={location.id} value={location.id}>
-                              {location.name}
-                            </option>
-                          ))}
-                      </select>
-                      <Input
-                        className="w-36"
-                        type="number"
-                        step="0.001"
-                        value={stock.quantity}
-                        onChange={(e) => {
-                          const stocks = variant.stocks.map((item, i) =>
-                            i === stockIndex ? { ...item, quantity: Number(e.target.value) } : item
-                          );
-                          updateVariant(variantIndex, { stocks });
-                        }}
-                      />
-                      {variant.stocks.length > 1 && (
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          onClick={() =>
-                            updateVariant(variantIndex, { stocks: variant.stocks.filter((_, i) => i !== stockIndex) })
-                          }
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      )}
+                        + Location
+                      </Button>
                     </div>
-                  ))}
-                </div>
+                    {variant.stocks.map((stock, stockIndex) => (
+                      <div key={`${variantIndex}-${stockIndex}`} className="flex gap-2">
+                        <select
+                          className="h-10 flex-1 rounded-md border bg-background px-3 text-sm"
+                          value={stock.locationId}
+                          onChange={(e) => {
+                            const stocks = variant.stocks.map((item, i) =>
+                              i === stockIndex
+                                ? { ...item, locationId: e.target.value ? Number(e.target.value) : ("" as const) }
+                                : item
+                            );
+                            updateVariant(variantIndex, { stocks });
+                          }}
+                        >
+                          <option value="">Select location</option>
+                          {locations
+                            .filter((location) => location.active !== false)
+                            .map((location) => (
+                              <option key={location.id} value={location.id}>
+                                {location.name}
+                              </option>
+                            ))}
+                        </select>
+                        <Input
+                          className="w-36"
+                          type="number"
+                          step="0.001"
+                          value={stock.quantity}
+                          onChange={(e) => {
+                            const stocks = variant.stocks.map((item, i) =>
+                              i === stockIndex ? { ...item, quantity: Number(e.target.value) } : item
+                            );
+                            updateVariant(variantIndex, { stocks });
+                          }}
+                        />
+                        {variant.stocks.length > 1 && (
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            onClick={() =>
+                              updateVariant(variantIndex, { stocks: variant.stocks.filter((_, i) => i !== stockIndex) })
+                            }
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {draft.variants.length > 1 && !variant.id && (
                   <Button

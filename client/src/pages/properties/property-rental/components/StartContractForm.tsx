@@ -19,6 +19,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CURRENCIES, billingDayLabel } from "../utils";
 import { useApiBase } from "../shared";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 export function StartContractForm({
   unitId,
@@ -44,6 +45,8 @@ export function StartContractForm({
     notes: "",
     currency: defaultCurrency,
   });
+  // Create Only cannot create internal or company-linked leases (refused by the server).
+  const { isCreateOnly } = useExistingRecordChangeAccess();
   const [isInternal, setIsInternal] = useState(false);
   const [linkedCompanyId, setLinkedCompanyId] = useState<number | null>(null);
   // Keep a single request identity for an exact retry, but never reuse that
@@ -57,7 +60,7 @@ export function StartContractForm({
       if (!res.ok) throw new Error("Failed to load companies");
       return res.json();
     },
-    enabled: unitType === "SHOP" && apiBase === "/api/factory/rental",
+    enabled: unitType === "SHOP" && apiBase === "/api/factory/rental" && !isCreateOnly,
   });
 
   const start = useMutation({
@@ -73,8 +76,8 @@ export function StartContractForm({
       if (pendingCreate.current?.payload !== fingerprint) {
         pendingCreate.current = {
           payload: fingerprint,
-          requestId: globalThis.crypto?.randomUUID?.() ??
-            `rental-contract-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          requestId:
+            globalThis.crypto?.randomUUID?.() ?? `rental-contract-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         };
       }
       return apiRequest("POST", apiBase + "/contracts", {
@@ -176,7 +179,7 @@ export function StartContractForm({
             data-testid={`input-${testIdPrefix}-contract-notes`}
           />
         </div>
-        {(unitType === "WAREHOUSE" || (unitType === "SHOP" && apiBase === "/api/factory/rental")) && (
+        {!isCreateOnly && (unitType === "WAREHOUSE" || (unitType === "SHOP" && apiBase === "/api/factory/rental")) && (
           <div className="sm:col-span-2 flex items-center gap-3 rounded-md border p-3 bg-violet-50 dark:bg-violet-950/20">
             <Switch
               id={`switch-${testIdPrefix}-internal`}
@@ -196,22 +199,26 @@ export function StartContractForm({
             </div>
           </div>
         )}
-        {unitType === "SHOP" && apiBase === "/api/factory/rental" && isInternal && (
+        {!isCreateOnly && unitType === "SHOP" && apiBase === "/api/factory/rental" && isInternal && (
           <div className="sm:col-span-2 space-y-2 rounded-md border p-3">
             <Label>Properties company (optional)</Label>
             <p className="text-xs text-muted-foreground">
-              Leave empty to show this lease in Properties for the same company.
-              Choose a destination company only if Properties is managed under a different company.
+              Leave empty to show this lease in Properties for the same company. Choose a destination company only if
+              Properties is managed under a different company.
             </p>
-            <Select value={linkedCompanyId === null ? "none" : String(linkedCompanyId)}
-              onValueChange={(value) => setLinkedCompanyId(value === "none" ? null : Number(value))}>
+            <Select
+              value={linkedCompanyId === null ? "none" : String(linkedCompanyId)}
+              onValueChange={(value) => setLinkedCompanyId(value === "none" ? null : Number(value))}
+            >
               <SelectTrigger data-testid={`select-${testIdPrefix}-internal-target`}>
                 <SelectValue placeholder="Same company" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Same company</SelectItem>
                 {allCompanies.map((company) => (
-                  <SelectItem key={company.id} value={String(company.id)}>{company.name}</SelectItem>
+                  <SelectItem key={company.id} value={String(company.id)}>
+                    {company.name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
