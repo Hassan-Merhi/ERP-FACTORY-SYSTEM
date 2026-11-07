@@ -1,5 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { isCreateOnlyWriteBlocked } from "../services/security/createOnlyWritePolicy";
+import { isViewOnlyWriteBlocked } from "../services/security/viewOnlyWritePolicy";
+import { isErpTesterForbiddenApiPath } from "@shared/erpTestCompanyAccess";
 import { and, eq, or } from "drizzle-orm";
 import { companies, userCompanyRoles } from "@shared/schema";
 
@@ -285,6 +287,28 @@ export async function tenantIsolationBoundary(req: Request, res: Response, next:
     // Second, canonical Create Only write check. The global guard reads the
     // session role; this one reads the current company membership, so a role
     // changed to Create Only after login cannot carry an older session's writes.
+    //
+    // Stale-session checks for View Only and ERP Tester: their global guards
+    // read the session's copy of the role. When the canonical role has since
+    // become View Only or ERP Tester (and the person's sessions could not be
+    // removed), refuse here what the global guard would refuse. A session
+    // whose role is current is left to the global guard and the route's own
+    // checks, exactly as before.
+    const sessionRoleIsStale = req.session?.currentRole !== context.role;
+    if (sessionRoleIsStale && context.role === "ERP Tester" && isErpTesterForbiddenApiPath(req.path)) {
+      logIsolationDenial(req, context, "ERP_TESTER_SETTINGS_DENIED");
+      return res.status(403).json({
+        code: "ERP_TESTER_SETTINGS_DENIED",
+        message: "ERP Tester accounts cannot access system settings or user administration",
+      });
+    }
+    if (sessionRoleIsStale && isViewOnlyWriteBlocked(context.role, req.method, req.path)) {
+      logIsolationDenial(req, context, "VIEW_ONLY_WRITE_DENIED");
+      return res.status(403).json({
+        code: "VIEW_ONLY_WRITE_DENIED",
+        message: "View Only accounts cannot make changes",
+      });
+    }
     if (isCreateOnlyWriteBlocked(context.role, req.method, req.path)) {
       logIsolationDenial(req, context, "CREATE_ONLY_WRITE_NOT_VERIFIED");
       return res.status(403).json({
