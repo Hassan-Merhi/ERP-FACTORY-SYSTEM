@@ -40,7 +40,7 @@ export function InventoryPicker({
     >
       {/* Header */}
       <div className={`shrink-0 ${mobile ? "px-4 pt-4 pb-3" : "px-3 pt-3 pb-2"}`}>
-        <div className="flex items-center gap-1.5 mb-2">
+        <div data-pos-inventory-heading="true" className="flex items-center gap-1.5 mb-2">
           <Package className={`text-primary shrink-0 ${mobile ? "h-5 w-5" : "h-4 w-4"}`} />
           <p className={`font-bold text-foreground tracking-wide ${mobile ? "text-base" : "text-sm"}`}>Items</p>
         </div>
