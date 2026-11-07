@@ -415,8 +415,10 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
       const hourlyTargetsKg: Record<string, number> = { ...dailySchedule.hours };
       if (rawHourly && typeof rawHourly === "object" && !Array.isArray(rawHourly)) {
         for (let hour = 7; hour < 17; hour++) {
-          const value = Number((rawHourly as Record<string, unknown>)[String(hour)]);
-          if (Number.isFinite(value) && value > 0 && value <= 100000) {
+          const rawTarget = (rawHourly as Record<string, unknown>)[String(hour)];
+          if (rawTarget === undefined || rawTarget === null || rawTarget === "") continue;
+          const value = Number(rawTarget);
+          if (Number.isFinite(value) && value >= 0 && value <= 100000) {
             hourlyTargetsKg[String(hour)] = value;
           }
         }
@@ -425,7 +427,15 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
         const configured = Number(targets[String(row.userId)]);
         return {
           ...row,
-          targetKgPerHour: Number.isFinite(configured) && configured > 0 && configured <= 100000 ? configured : 850,
+          targetKgPerHour:
+            targets[String(row.userId)] !== undefined &&
+            targets[String(row.userId)] !== null &&
+            targets[String(row.userId)] !== "" &&
+            Number.isFinite(configured) &&
+            configured >= 0 &&
+            configured <= 100000
+              ? configured
+              : 850,
         };
       });
       const result = await pool.query(
@@ -495,7 +505,7 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
         const input = z
           .object({
             weekday: z.number().int().min(1).max(6),
-            targetsKg: z.array(z.number().finite().min(0.001).max(100000)).length(PRESSING_DAILY_HOURS.length),
+            targetsKg: z.array(z.number().finite().min(0).max(100000)).length(PRESSING_DAILY_HOURS.length),
           })
           .strict()
           .parse(req.body);
@@ -539,7 +549,7 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
           "PRESSING_TARGET_FORBIDDEN",
           "Only Admin or Owner may edit pressing targets"
         );
-      const kgSchema = z.number().finite().positive().max(100000);
+      const kgSchema = z.number().finite().min(0).max(100000);
       const input = z
         .union([
           z

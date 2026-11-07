@@ -36,8 +36,9 @@ function hourLabel(iso: string): string {
     hourCycle: "h23", timeZoneName: "shortOffset",
   });
 }
-type Verdict = "off" | "upcoming" | "progress" | "none" | "met" | "above" | "below";
+type Verdict = "off" | "zero" | "upcoming" | "progress" | "none" | "met" | "above" | "below";
 function resultStatus(kg: number, target: number, bales: number, started: boolean, complete: boolean): Verdict {
+  if (target === 0) return "zero";
   if (!started) return "upcoming";
   if (!complete) return "progress";
   if (!bales) return "none";
@@ -46,6 +47,7 @@ function resultStatus(kg: number, target: number, bales: number, started: boolea
 }
 const verdictStyle: Record<Verdict, { label: string; pill: string; bar: string }> = {
   off: { label: "Day off", pill: "bg-slate-500/15 text-muted-foreground", bar: "bg-slate-500" },
+  zero: { label: "No target", pill: "bg-slate-500/15 text-muted-foreground", bar: "bg-slate-500" },
   upcoming: { label: "upcoming", pill: "bg-slate-500/10 text-slate-500", bar: "bg-slate-500" },
   progress: { label: "In progress", pill: "bg-sky-500/15 text-sky-600 dark:text-sky-300", bar: "bg-sky-500" },
   none: { label: "No scans", pill: "bg-slate-500/15 text-muted-foreground", bar: "bg-slate-500" },
@@ -129,7 +131,7 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
     const raw = valueForHour(hour);
     const targetKgPerHour = Number(raw);
     if (!raw.trim() || !Number.isFinite(targetKgPerHour) ||
-        targetKgPerHour <= 0 || targetKgPerHour > 100000) {
+        targetKgPerHour < 0 || targetKgPerHour > 100000) {
       toast({ title: "Invalid target", description: t("invalidTargetDescription"), variant: "destructive" });
       return;
     }
@@ -181,10 +183,10 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
     for (const hour of SCHEDULE_HOURS) {
       const raw = selectedFields[String(hour)] ?? "";
       const kg = Number(raw);
-      if (!raw.trim() || !Number.isFinite(kg) || kg < 0.001 || kg > 100000) {
+      if (!raw.trim() || !Number.isFinite(kg) || kg < 0 || kg > 100000) {
         toast({
           title: "Invalid daily schedule",
-          description: scheduleHourLabel(hour) + ": enter a target between 0.001 and 100,000 KG.",
+          description: scheduleHourLabel(hour) + ": enter a target between 0 and 100,000 KG.",
           variant: "destructive",
         });
         return;
@@ -283,7 +285,7 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
                     <td className="border-b border-border/50 px-3 py-2">
                       <div className="flex items-center gap-1">
                         <div className="relative">
-                          <Input type="number" min="0.001" max="100000" step="0.001"
+                          <Input type="number" min="0" max="100000" step="0.001"
                             aria-label={"Hourly target for " + hourLabel(hour)}
                             title={t("hourTargetDescription")}
                             className="h-9 w-[105px] rounded-lg border-border/80 bg-background/75 pr-8 text-right font-bold tabular-nums"
@@ -334,9 +336,9 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
                             <div className={"h-full rounded-full transition-all " + style.bar}
                               style={{ width: Math.min(100, Math.max(0, percent)) + "%" }} />
                           </div>
-                          <span className="w-9 shrink-0 text-right font-medium tabular-nums text-muted-foreground">{percent}%</span>
+                          <span className="w-9 shrink-0 text-right font-medium tabular-nums text-muted-foreground">{target > 0 ? percent + "%" : "—"}</span>
                         </div>
-                        {complete && Number(row?.bales || 0) > 0 && verdict !== "met" && verdict !== "off" && (
+                        {complete && Number(row?.bales || 0) > 0 && verdict !== "met" && verdict !== "off" && verdict !== "zero" && (
                           <div className={"mt-1 text-[10px] " + (verdict === "above" ? "text-emerald-500" : "text-rose-500")}>
                             {formatKg(Math.abs(kg - target))} KG {verdict === "above" ? "over" : "short"}
                           </div>
@@ -400,7 +402,7 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
               <div key={hour} className="grid grid-cols-[1fr_135px] items-center gap-3 rounded-xl border border-border/60 bg-card/60 px-3 py-2 transition-colors focus-within:border-sky-500/50">
                 <span className="font-semibold tabular-nums text-sm">{scheduleHourLabel(hour)}</span>
                 <div className="relative">
-                  <Input type="number" inputMode="decimal" min="0.001" max="100000" step="0.001"
+                  <Input type="number" inputMode="decimal" min="0" max="100000" step="0.001"
                     aria-label={SCHEDULE_DAYS.find(day => day.id === selectedWeekday)?.name + " target for " + scheduleHourLabel(hour)}
                     className="h-9 rounded-lg bg-background pr-9 text-right font-semibold tabular-nums"
                     value={scheduleDrafts[String(selectedWeekday)]?.[String(hour)] ?? ""} disabled={savingSchedule}
@@ -416,8 +418,8 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
               </div>
             ))}
             <p className="pt-2 text-xs leading-relaxed text-muted-foreground">
-              Save the selected weekday before leaving. Each day's times repeat weekly for
-              all three workers. A manually saved date-specific target still takes priority.
+              Use 0 KG for an hour with no required target. Save the selected weekday;
+              its times repeat weekly for all three workers. Date-specific changes still take priority.
             </p>
           </div>
           <DialogFooter className="shrink-0 flex-row gap-2 border-t border-border/60 bg-muted/20 px-5 py-4 sm:justify-end">
