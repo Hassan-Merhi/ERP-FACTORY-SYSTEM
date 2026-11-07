@@ -57,6 +57,7 @@ const compatibilityTranslationFiles = [
   "client/src/i18n/phase3RemainingTranslations.part36.ts",
   "client/src/i18n/phase3RemainingTranslations.part37.ts",
   "client/src/i18n/phase3RemainingTranslations.part38.ts",
+  "client/src/i18n/phase3RemainingTranslations.part39.ts",
   "client/src/i18n/supplierPartnerPhase4Translations.part1.ts",
   "client/src/i18n/supplierPartnerPhase4Translations.part2.ts",
   "client/src/i18n/supplierPartnerPhase4Translations.part3.ts",

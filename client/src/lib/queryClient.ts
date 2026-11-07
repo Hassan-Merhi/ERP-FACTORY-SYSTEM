@@ -1,5 +1,10 @@
 import { offlineError } from "./offline/offlineError";
 import { CreateOnlyActionNotAvailableError, isCreateOnlyClientWriteBlocked } from "./createOnlyRequestGuard";
+import {
+  installPermissionRevalidationListener,
+  isPermissionDenial,
+  requestPermissionRevalidation,
+} from "./permissionRevalidation";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
 import { QueryClient, QueryFunction, MutationCache, QueryCache } from "@tanstack/react-query";
@@ -462,6 +467,11 @@ async function throwIfResNotOk(res: Response) {
       } = new Error(errorData.message || res.statusText);
     error.status = res.status;
     error.code = errorData.code;
+    // A role or permission refusal means this tab's access data may be stale;
+    // refresh it here and in the other open tabs.
+    if (isPermissionDenial(res.status, errorData.code, errorData.message)) {
+      requestPermissionRevalidation(queryClient);
+    }
     error.requiresConfirmation = errorData.requiresConfirmation;
     error.employeeBalance = errorData.employeeBalance;
     error.ledgerBalance = errorData.ledgerBalance;
@@ -827,6 +837,7 @@ export const queryClient = new QueryClient({
 });
 
 referenceMutationQueryClient = queryClient;
+installPermissionRevalidationListener(queryClient);
 
 export const STABLE_REFERENCE_QUERY_PREFIXES = STABLE_REFERENCE_API_ENDPOINTS;
 export const STABLE_SETTINGS_QUERY_PREFIXES = STABLE_SETTINGS_API_ENDPOINTS;

@@ -37,6 +37,7 @@ import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { shouldShowFactoryCustomerDestination } from "./customerDestinationVisibility";
 import "./propertiesLedger.css";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import {
   AccountStatementOpeningBalanceKpi,
   OpeningBalanceAmount,
@@ -123,6 +124,8 @@ export function AccountStatementView({
   brokerStatementLoading,
   transactionError,
 }: AccountStatementViewProps) {
+  // View Only and Create Only cannot delete existing vouchers (server-enforced too).
+  const { allowed: canChangeExistingRecords } = useExistingRecordChangeAccess();
   const { formatTransactionAmount } = useCurrencyContext();
   const { selectedCompany } = useCompany();
   const { language } = useApplicationLanguage();
@@ -426,6 +429,7 @@ export function AccountStatementView({
                     testId: "button-show-deleted",
                   },
                   !isEurTab &&
+                    canChangeExistingRecords &&
                     selectedVoucherIds.size > 0 && {
                       label: `Delete Selected (${selectedVoucherIds.size})`,
                       icon: Trash2,
@@ -602,7 +606,7 @@ export function AccountStatementView({
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              {!isEurTab && selectedVoucherIds.size > 0 && (
+              {!isEurTab && canChangeExistingRecords && selectedVoucherIds.size > 0 && (
                 <Button
                   variant="destructive"
                   size="sm"

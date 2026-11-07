@@ -16,7 +16,8 @@ interface ActiveContainersTableProps {
   formatAmount: (n: number) => string;
   editingNumberId: number | null;
   editingNumberValue: string;
-  onEditNumberStart: (id: number, number: string) => void;
+  /** Omitted for roles that cannot change existing containers. */
+  onEditNumberStart?: (id: number, number: string) => void;
   onEditNumberChange: (v: string) => void;
   onEditNumberSave: (id: number, containerNumber: string) => void;
   onEditNumberCancel: () => void;
@@ -131,18 +132,20 @@ export function ActiveContainersTable({
                   ) : (
                     <div className="flex min-w-0 items-center gap-1 group">
                       <span className="truncate font-mono font-semibold text-sm">{container.containerNumber}</span>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="erp-mobile-touch-target opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onEditNumberStart(container.id, container.containerNumber);
-                        }}
-                        data-testid={`button-edit-number-${container.id}`}
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </Button>
+                      {onEditNumberStart && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="erp-mobile-touch-target opacity-0 group-hover:opacity-100 touch:opacity-100 transition-opacity"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEditNumberStart(container.id, container.containerNumber);
+                          }}
+                          data-testid={`button-edit-number-${container.id}`}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                      )}
                     </div>
                   )}
                   <Badge

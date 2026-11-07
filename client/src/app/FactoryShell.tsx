@@ -25,6 +25,7 @@ import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { PhoneSheetDialogs } from "@/components/ui/phone-sheet";
 import { useDocumentAppShell } from "@/hooks/use-document-app-shell";
 import { useVisualViewportMetrics } from "@/hooks/use-visual-viewport-metrics";
+import { ReadOnlyRoleRouteGate } from "@/components/ReadOnlyRoleRouteGate";
 import "@/factory-mobile-operations.css";
 
 const FactoryFrenchCatalogManager = lazy(() =>
@@ -146,7 +147,9 @@ export function FactoryShell({
                       ) : null}
                     </ErrorBoundary>
                   </Suspense>
-                  <FactoryRoutes user={user} myAccess={myAccess} factoryDefaultPage={factoryDefaultPage} />
+                  <ReadOnlyRoleRouteGate role={user.role}>
+                    <FactoryRoutes user={user} myAccess={myAccess} factoryDefaultPage={factoryDefaultPage} />
+                  </ReadOnlyRoleRouteGate>
                 </WorkspaceRouteBoundary>
               </main>
             </div>

@@ -1,0 +1,300 @@
+{
+  "description": "Page names and review notes for the Permissions V2 frontend page audit report (scripts/permissions/audit-frontend-page-catalog.ts). Keyed by shared/permissionPageCatalog.ts entry id.",
+  "pages": {
+    "erp.accounts": {
+      "label": "Accounts",
+      "note": "Account edit, reorder and bulk voucher delete are hidden for read-only roles."
+    },
+    "erp.accounts.historical-openings": {
+      "label": "Historical opening balances"
+    },
+    "erp.accounts.ledger": {
+      "label": "Account ledger"
+    },
+    "erp.vouchers.create": {
+      "label": "Vouchers (journal, transfer, adjustment forms)",
+      "note": "Voucher creation is not a handler-verified Create Only create."
+    },
+    "erp.vouchers.edit": {
+      "label": "Edit voucher"
+    },
+    "erp.vouchers.detail": {
+      "label": "Voucher detail",
+      "note": "Read view; cost-centre allocation is refused by the server for read-only roles."
+    },
+    "erp.vouchers.optional": {
+      "label": "Optional vouchers"
+    },
+    "erp.accounting.create": {
+      "label": "Create master data",
+      "note": "Create Only sees only the supplier and stock item forms (verified creates)."
+    },
+    "erp.parties": {
+      "label": "Customers and suppliers"
+    },
+    "erp.suppliers.edit": {
+      "label": "Edit supplier"
+    },
+    "erp.suppliers.proformas": {
+      "label": "Supplier proformas"
+    },
+    "erp.purchase-orders.import": {
+      "label": "Purchase order import"
+    },
+    "erp.purchase-orders.edit": {
+      "label": "Edit purchase order"
+    },
+    "erp.sales.pos": {
+      "label": "POS sale",
+      "note": "POS sales were reviewed and kept denied for Create Only."
+    },
+    "erp.sales.pos-edit": {
+      "label": "Edit POS sale"
+    },
+    "erp.sales.item-replacement": {
+      "label": "POS item replacement"
+    },
+    "erp.sales.pos-import": {
+      "label": "POS import"
+    },
+    "erp.sales.reports": {
+      "label": "Sales reports"
+    },
+    "erp.sales.tools": {
+      "label": "Sales tools (daybook, price list, transfers)"
+    },
+    "erp.inventory": {
+      "label": "Inventory"
+    },
+    "erp.stock": {
+      "label": "Stock items"
+    },
+    "erp.stock.detail": {
+      "label": "Stock item detail and history",
+      "note": "Edit links resolve to the read-only voucher view for read-only roles."
+    },
+    "erp.stock.import": {
+      "label": "Import stock items"
+    },
+    "erp.stock.opening-closing": {
+      "label": "Opening and closing stock"
+    },
+    "erp.stock.barcodes": {
+      "label": "Barcode manager"
+    },
+    "erp.stock-transfers.create": {
+      "label": "Stock transfer order"
+    },
+    "erp.containers": {
+      "label": "Containers",
+      "note": "Container renaming and voucher re-sync are hidden for read-only roles."
+    },
+    "erp.containers.detail": {
+      "label": "Container and offload detail"
+    },
+    "erp.containers.verification": {
+      "label": "Container verification"
+    },
+    "erp.containers.git": {
+      "label": "Goods in transit containers"
+    },
+    "erp.daybook": {
+      "label": "Daybook"
+    },
+    "erp.transaction-journal": {
+      "label": "Transaction journal"
+    },
+    "erp.reports.analytics": {
+      "label": "Analytics"
+    },
+    "erp.reports.financial-overview": {
+      "label": "Financial overview",
+      "note": "Hidden for read-only roles since the Create Only activation change."
+    },
+    "erp.transporter-statement": {
+      "label": "Tracking hub and transporter statement"
+    },
+    "erp.payroll": {
+      "label": "Payroll",
+      "note": "Bulk payroll was reviewed and kept denied for Create Only."
+    },
+    "erp.rentals": {
+      "label": "ERP rentals"
+    },
+    "erp.rentals.payments": {
+      "label": "ERP rental payments",
+      "note": "Rental payments were reviewed and kept denied for Create Only."
+    },
+    "erp.conflicts": {
+      "label": "Offline conflict center"
+    },
+    "erp.settings": {
+      "label": "Settings and administration"
+    },
+    "erp.repair": {
+      "label": "Repair and maintenance"
+    },
+    "factory.inventory": {
+      "label": "Factory inventory"
+    },
+    "factory.inventory.opening-edit": {
+      "label": "Edit raw-stock opening balance"
+    },
+    "factory.inventory.recalculate": {
+      "label": "Raw-stock recalculation"
+    },
+    "factory.stock-allocation": {
+      "label": "Stock allocation",
+      "note": "Allocation edits existing proformas and allocations."
+    },
+    "factory.stock-allocation.proforma-new": {
+      "label": "New proforma"
+    },
+    "factory.stock-allocation.proforma-edit": {
+      "label": "Edit proforma"
+    },
+    "factory.invoicing": {
+      "label": "Invoicing"
+    },
+    "factory.sales.new": {
+      "label": "New customer order"
+    },
+    "factory.sales.verify": {
+      "label": "Verify pending invoice"
+    },
+    "factory.bales": {
+      "label": "Bale explorer, list, tracking and history"
+    },
+    "factory.bales.relabel": {
+      "label": "Bale relabeling and merging"
+    },
+    "factory.production.entry": {
+      "label": "Bale production entry",
+      "note": "Production positions were reviewed and kept denied for Create Only."
+    },
+    "factory.production.pressing": {
+      "label": "Pressing and scanning",
+      "note": "The server's pressing access endpoint reports canScan=false for read-only roles."
+    },
+    "factory.production.finalize": {
+      "label": "Finalize production"
+    },
+    "factory.production.reports": {
+      "label": "Production reports"
+    },
+    "factory.mixing": {
+      "label": "Mixing and mix optimizer",
+      "note": "Mix batches were reviewed and kept denied for Create Only."
+    },
+    "factory.containers": {
+      "label": "Containers"
+    },
+    "factory.containers.new": {
+      "label": "New container",
+      "note": "Factory containers were reviewed and kept denied for Create Only."
+    },
+    "factory.loading": {
+      "label": "Loading"
+    },
+    "factory.loading.scan": {
+      "label": "Loading scan"
+    },
+    "factory.workers": {
+      "label": "Workers and employees"
+    },
+    "factory.payroll": {
+      "label": "Attendance, payroll, targets and bonuses",
+      "note": "Bulk payroll was reviewed and kept denied for Create Only."
+    },
+    "factory.scanning": {
+      "label": "Barcode lookup"
+    },
+    "factory.accounting": {
+      "label": "Factory accounts and ledger"
+    },
+    "factory.vouchers.create": {
+      "label": "Factory vouchers"
+    },
+    "factory.vouchers.edit": {
+      "label": "Edit factory voucher"
+    },
+    "factory.vouchers.detail": {
+      "label": "Factory voucher detail"
+    },
+    "factory.accounting.create": {
+      "label": "Factory create master data"
+    },
+    "factory.daybook": {
+      "label": "Factory daybook"
+    },
+    "factory.reports": {
+      "label": "Factory analytics and intelligence"
+    },
+    "factory.pos": {
+      "label": "Factory POS"
+    },
+    "factory.import": {
+      "label": "Factory import"
+    },
+    "factory.rentals": {
+      "label": "Factory rentals"
+    },
+    "factory.rentals.payments": {
+      "label": "Factory rental payments"
+    },
+    "factory.settings": {
+      "label": "Factory settings and catalogs"
+    },
+    "factory.repair": {
+      "label": "Factory repair and maintenance"
+    },
+    "retail.pos": {
+      "label": "Retail POS",
+      "note": "Retail POS sales were reviewed and kept denied for Create Only."
+    },
+    "retail.products": {
+      "label": "Retail products and inventory"
+    },
+    "retail.stock-count": {
+      "label": "Retail stock count"
+    },
+    "retail.history": {
+      "label": "Retail sales history and reports"
+    },
+    "pos.role-workspace": {
+      "label": "POS role workspace (daybook, pricing, discounts, refunds, transfers, payments)",
+      "note": "Rendered only for the POS role; governed by pos_perm_* feature keys and the POS operational policy on the server."
+    },
+    "properties.dashboard": {
+      "label": "Properties dashboard and reports"
+    },
+    "properties.rentals": {
+      "label": "Properties, units, tenants and contracts"
+    },
+    "properties.accounts": {
+      "label": "Properties accounts and ledger"
+    },
+    "properties.daybook": {
+      "label": "Properties daybook"
+    },
+    "properties.vouchers.create": {
+      "label": "Properties vouchers and payments",
+      "note": "Rental payments were reviewed and kept denied for Create Only."
+    },
+    "properties.vouchers.edit": {
+      "label": "Edit properties voucher"
+    },
+    "properties.vouchers.detail": {
+      "label": "Properties voucher detail"
+    },
+    "properties.settings": {
+      "label": "Properties settings and transfer"
+    },
+    "sp.overview": {
+      "label": "Supplier partner sales and reports"
+    },
+    "sp.setup": {
+      "label": "Supplier partner setup"
+    }
+  }
+}

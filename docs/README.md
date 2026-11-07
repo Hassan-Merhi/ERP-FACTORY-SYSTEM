@@ -22,6 +22,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [permissions-control-center-phase1.md](permissions-control-center-phase1.md) | Route inventory, candidate mappings and policy model |
 | [permissions-control-center-phase2.md](permissions-control-center-phase2.md) | Shadow policy API, migration and audit foundation |
 | [permissions-control-center-phase8.md](permissions-control-center-phase8.md) | Phase 8 release gate, audit, monitored rollout and rollback runbook |
+| [permissions-v2-frontend-page-audit.md](permissions-v2-frontend-page-audit.md) | Generated page-by-page frontend permission gating report for View Only and Create Only |
 | [permissions-control-center-admin-guide.md](permissions-control-center-admin-guide.md) | Shadow role/user permission editor instructions, audit review and troubleshooting |
 | [permissions-control-center-phase7.md](permissions-control-center-phase7.md) | Phase 7 security verification, staging integrity and rollback gate |
 | [permissions-control-center-phase6.md](permissions-control-center-phase6.md) | Phase 6 shared frontend permission bridge and UI integration plan |
