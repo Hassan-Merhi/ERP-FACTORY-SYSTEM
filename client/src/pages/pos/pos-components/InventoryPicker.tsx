@@ -56,11 +56,15 @@ export function InventoryPicker({
             onChange={(e) => setLocalSearch(e.target.value)}
             data-testid="input-product-search"
           />
-          <MobileBarcodeScanner onScan={(code) => {
-            const match = inventory.find((item) => item.code?.trim().toUpperCase() === code.trim().toUpperCase());
-            if (match) { selectItem(match); setLocalSearch(""); }
-            else setLocalSearch(code);
-          }} />
+          <MobileBarcodeScanner
+            onScan={(code) => {
+              const match = inventory.find((item) => item.code?.trim().toUpperCase() === code.trim().toUpperCase());
+              if (match) {
+                selectItem(match);
+                setLocalSearch("");
+              } else setLocalSearch(code);
+            }}
+          />
           {localSearch && (
             <button className="text-muted-foreground" onClick={() => setLocalSearch("")} aria-label="Clear search">
               ×
@@ -70,7 +74,11 @@ export function InventoryPicker({
       </div>
 
       {/* List */}
-      <div data-pos-product-list="true" className="flex-1 overflow-y-auto" ref={itemListRef as React.RefObject<HTMLDivElement>}>
+      <div
+        data-pos-product-list="true"
+        className="flex-1 overflow-y-auto"
+        ref={itemListRef as React.RefObject<HTMLDivElement>}
+      >
         {filteredInventory.map((item, index) => {
           const isOut = item.stock === 0;
           const isLow = !isOut && item.stock < 10;
@@ -87,14 +95,18 @@ export function InventoryPicker({
               data-testid={`button-select-item-${item.stockItemId ?? item.code}`}
             >
               <div className="flex min-w-0 items-center gap-3">
-                {!mobile && <span data-pos-product-avatar="true"><Package className="h-5 w-5" aria-hidden="true" /></span>}
+                {!mobile && (
+                  <span data-pos-product-avatar="true">
+                    <Package className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                )}
                 <div className="min-w-0">
-                <p className={`font-semibold leading-tight truncate ${mobile ? "text-base" : "text-sm"}`}>
-                  {item.name}
-                </p>
-                <p className={`text-muted-foreground font-mono ${mobile ? "text-xs mt-0.5" : "text-[11px]"}`}>
-                  {item.code}
-                </p>
+                  <p className={`font-semibold leading-tight truncate ${mobile ? "text-base" : "text-sm"}`}>
+                    {item.name}
+                  </p>
+                  <p className={`text-muted-foreground font-mono ${mobile ? "text-xs mt-0.5" : "text-[11px]"}`}>
+                    {item.code}
+                  </p>
                 </div>
               </div>
               <span

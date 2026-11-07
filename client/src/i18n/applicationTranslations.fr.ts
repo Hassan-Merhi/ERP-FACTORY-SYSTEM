@@ -4,7 +4,8 @@ export const applicationFrenchTranslations = {
   "pos.modern.createSale": "Créer une nouvelle vente",
   "pos.modern.reviewSale": "Vérifier et modifier cette vente",
   "pos.modern.addItems": "Ajouter des articles à cette vente",
-  "pos.modern.addItemsHint": "Recherchez et sélectionnez des produits dans le panneau Articles ou saisissez-les dans le tableau de vente.",
+  "pos.modern.addItemsHint":
+    "Recherchez et sélectionnez des produits dans le panneau Articles ou saisissez-les dans le tableau de vente.",
   "pos.modern.notes": "Notes",
   "pos.modern.optional": "(facultatif)",
   "pos.modern.notesPlaceholder": "Ajouter une note concernant cette vente...",

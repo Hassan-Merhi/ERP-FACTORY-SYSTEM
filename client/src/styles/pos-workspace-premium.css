@@ -10,7 +10,9 @@
   --pos-soft-blue: color-mix(in srgb, hsl(var(--primary)) 7%, hsl(var(--card)));
   --pos-soft-ink: color-mix(in srgb, hsl(var(--foreground)) 8%, hsl(var(--card)));
   --pos-panel-shadow: 0 12px 34px rgb(24 53 91 / 0.075);
-  background: radial-gradient(ellipse at 55% -16%, color-mix(in srgb, hsl(var(--primary)) 8%, transparent), transparent 53%), hsl(var(--background));
+  background:
+    radial-gradient(ellipse at 55% -16%, color-mix(in srgb, hsl(var(--primary)) 8%, transparent), transparent 53%),
+    hsl(var(--background));
 }
 
 .dark [data-pos-modern-workspace="true"] {
@@ -410,7 +412,11 @@ html[data-christmas-mode="on"] [data-pos-modern-workspace] [data-pos-seasonal-ba
 }
 
 [data-pos-shell="true"] [data-pos-sidebar="modern"] {
-  background: linear-gradient(180deg, color-mix(in srgb, hsl(var(--sidebar)) 93%, hsl(var(--primary)) 7%), hsl(var(--sidebar)));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, hsl(var(--sidebar)) 93%, hsl(var(--primary)) 7%),
+    hsl(var(--sidebar))
+  );
 }
 
 @media (max-width: 1260px) {

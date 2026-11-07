@@ -776,7 +776,10 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
             )}
           </div>
           <div data-pos-notes-wrap="true" className="mt-2 px-1 pb-2">
-            <label htmlFor="pos-desktop-notes" className="flex items-center gap-2 text-sm font-medium"><NotebookPen className="h-4 w-4" aria-hidden="true" /> {t("pos.modern.notes")} <span className="text-muted-foreground font-normal">{t("pos.modern.optional")}</span></label>
+            <label htmlFor="pos-desktop-notes" className="flex items-center gap-2 text-sm font-medium">
+              <NotebookPen className="h-4 w-4" aria-hidden="true" /> {t("pos.modern.notes")}{" "}
+              <span className="text-muted-foreground font-normal">{t("pos.modern.optional")}</span>
+            </label>
             <Textarea
               id="pos-desktop-notes"
               placeholder={t("pos.modern.notesPlaceholder")}
@@ -787,8 +790,13 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
             />
           </div>
           {!rows.some((row) => row.stockItemId || row.itemName?.trim()) && (
-            <div data-pos-empty-state="true" className="hidden lg:flex flex-1 flex-col items-center justify-center px-6 py-10 text-center">
-              <span data-pos-empty-icon="true"><ShoppingCart className="h-8 w-8" aria-hidden="true" /></span>
+            <div
+              data-pos-empty-state="true"
+              className="hidden lg:flex flex-1 flex-col items-center justify-center px-6 py-10 text-center"
+            >
+              <span data-pos-empty-icon="true">
+                <ShoppingCart className="h-8 w-8" aria-hidden="true" />
+              </span>
               <h2 className="mt-4 text-base font-semibold">{t("pos.modern.addItems")}</h2>
               <p className="mt-2 max-w-sm text-sm text-muted-foreground">{t("pos.modern.addItemsHint")}</p>
             </div>

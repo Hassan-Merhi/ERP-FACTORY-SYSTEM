@@ -218,14 +218,19 @@ export function SaleGrid({
             const qty = rows.reduce((s, r) => s + (r.quantity || 0), 0);
             const total = rows.reduce((s, r) => s + (r.amount || 0), 0);
             return (
-              <div data-pos-sale-summary="true" className="flex flex-wrap items-center gap-3 px-2 py-2 border-t border-border bg-muted/20">
+              <div
+                data-pos-sale-summary="true"
+                className="flex flex-wrap items-center gap-3 px-2 py-2 border-t border-border bg-muted/20"
+              >
                 <span className="text-sm text-muted-foreground">
                   <span className="font-semibold text-foreground">{validCount}</span> items&nbsp;&nbsp;Qty{" "}
                   <span className="font-semibold text-foreground font-mono">{qty.toFixed(2)}</span>
                 </span>
                 <span className="text-sm ml-auto flex items-baseline gap-1">
                   <span className="text-muted-foreground">Total</span>
-                  <span data-pos-grand-total="true" className="font-mono font-bold text-2xl">{formatDisplayAmount(total)}</span>
+                  <span data-pos-grand-total="true" className="font-mono font-bold text-2xl">
+                    {formatDisplayAmount(total)}
+                  </span>
                 </span>
               </div>
             );
