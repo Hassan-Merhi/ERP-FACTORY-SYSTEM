@@ -145,7 +145,11 @@ export function ProformaCard(props: ProformaCardProps) {
             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           )}
           <span className="truncate text-base font-bold tracking-tight sm:text-lg">{proforma.name}</span>
-          <Badge variant="outline" className="shrink-0 text-xs" data-testid={`badge-proforma-destination-${proforma.id}`}>
+          <Badge
+            variant="outline"
+            className="shrink-0 text-xs"
+            data-testid={`badge-proforma-destination-${proforma.id}`}
+          >
             {proforma.destination ? `Destination: ${proforma.destination}` : "Destination not linked"}
           </Badge>
           {proforma.isActive && (
@@ -222,7 +226,12 @@ export function ProformaCard(props: ProformaCardProps) {
           {canEdit && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-violet-500/10" data-testid={`button-proforma-menu-${proforma.id}`}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg hover:bg-violet-500/10"
+                  data-testid={`button-proforma-menu-${proforma.id}`}
+                >
                   <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
                 </Button>
               </DropdownMenuTrigger>
@@ -273,7 +282,12 @@ export function ProformaCard(props: ProformaCardProps) {
               </Button>
             )}
             {canEdit && (
-              <Button size="sm" className="h-9 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 font-semibold text-white shadow-sm shadow-violet-500/20 hover:from-violet-500 hover:to-indigo-500" onClick={onAddLine} data-testid={`button-add-line-${proforma.id}`}>
+              <Button
+                size="sm"
+                className="h-9 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 font-semibold text-white shadow-sm shadow-violet-500/20 hover:from-violet-500 hover:to-indigo-500"
+                onClick={onAddLine}
+                data-testid={`button-add-line-${proforma.id}`}
+              >
                 <Plus className="mr-1.5 h-3.5 w-3.5" />
                 Add Item
               </Button>
@@ -297,7 +311,11 @@ export function ProformaCard(props: ProformaCardProps) {
               disabled={saveAgreedPricesMutation.isPending || !proforma.destination}
               className="h-9 rounded-xl border-border/70 bg-background/70 px-3 shadow-sm"
               data-testid={`button-save-agreed-prices-${proforma.id}`}
-              title={proforma.destination ? `Save these as agreed prices for ${proforma.destination}` : "Assign a destination first"}
+              title={
+                proforma.destination
+                  ? `Save these as agreed prices for ${proforma.destination}`
+                  : "Assign a destination first"
+              }
             >
               <BookmarkCheck className="mr-1.5 h-3.5 w-3.5" />
               Save as Agreed Prices
