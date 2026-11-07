@@ -80,7 +80,11 @@ async function grant(jwt, body) {
     body: JSON.stringify(body),
     redirect: "error",
   });
-  if (!response.ok) throw new Error("The protected gateway refused " + body.key + ": HTTP " + response.status);
+  if (!response.ok) {
+    // The gateway names the failed check (identity, policy or storage signing).
+    const detail = (await response.text().catch(() => "")).slice(0, 300);
+    throw new Error("The protected gateway refused " + body.key + ": HTTP " + response.status + (detail ? " " + detail : ""));
+  }
   return response.json();
 }
 
