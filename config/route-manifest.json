@@ -1246,7 +1246,7 @@
     "GET /api/suppliers/stats [requireAuth > <anonymous>]",
     "GET /api/suppliers/:id [requireAuth > <anonymous>]",
     "GET /api/suppliers/:id/balance [requireAuth > <anonymous>]",
-    "POST /api/suppliers [requireAuth > requireNonPOS > <anonymous>]",
+    "POST /api/suppliers [requireAuth > requireNonPOS > <anonymous> > <anonymous>]",
     "PATCH /api/suppliers/:id [requireAuth > requireNonPOS > <anonymous>]",
     "DELETE /api/suppliers/:id [requireAuth > requireNonPOS > <anonymous>]",
     "PATCH /api/suppliers/:id/stock-group [requireAuth > requireNonPOS > <anonymous>]",
