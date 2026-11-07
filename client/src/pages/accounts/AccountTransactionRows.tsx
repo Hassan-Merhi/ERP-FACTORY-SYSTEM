@@ -157,9 +157,11 @@ export function AccountTransactionRows({
           </TableRow>
         </TableHeader>
         <TableBody>
+          {!hideBalances && (
           <TableRow className="bg-accent/20 border-b border-border/60" data-testid="row-opening-balance">
             <TableCell className="py-3 print:hidden" />
-            <TableCell className="py-3 text-xs text-muted-foreground tabular-nums font-mono" colSpan={colSpanMid}>
+            <TableCell className="py-3 text-xs text-muted-foreground tabular-nums font-mono" />
+            <TableCell className="py-3 text-xs text-muted-foreground tabular-nums font-mono" colSpan={colSpanMid - 1}>
               <span className="font-semibold text-foreground">Opening Balance</span>
             </TableCell>
             <TableCell className="text-right font-mono py-3 text-sm tabular-nums">
@@ -193,6 +195,7 @@ export function AccountTransactionRows({
               )}
             </TableCell>
           </TableRow>
+          )}
 
           {virtualRows.topSpacerHeight > 0 && (
             <TableRow aria-hidden="true" data-testid="account-virtual-spacer-top">
