@@ -179,6 +179,33 @@ describe("SalesReport", () => {
 
 // ── 8. Settings ───────────────────────────────────────────────────────────────
 describe("Settings", () => {
+  it.each(["Admin", "Owner"])("restores Preferences for %s without exposing Christmas Mode", async (role) => {
+    const { default: Settings } = await import("@/pages/Settings");
+    renderWithProviders(<Settings />, {
+      seedQueries: [[["/api/auth/me"], { id: "test-user", role }]],
+    });
+    expect(await screen.findByRole("button", { name: "Preferences" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Appearance & Seasonal" })).not.toBeInTheDocument();
+  });
+
+  it("keeps both Preferences and Christmas Mode available to developers", async () => {
+    const { default: Settings } = await import("@/pages/Settings");
+    renderWithProviders(<Settings />, {
+      seedQueries: [[["/api/auth/me"], { id: "test-user", role: "Developer" }]],
+    });
+    expect(await screen.findByRole("button", { name: "Preferences" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Appearance & Seasonal" })).toBeInTheDocument();
+  });
+
+  it("does not expose privileged Settings entries to ordinary users", async () => {
+    const { default: Settings } = await import("@/pages/Settings");
+    renderWithProviders(<Settings />, {
+      seedQueries: [[["/api/auth/me"], { id: "test-user", role: "User" }]],
+    });
+    expect(screen.queryByRole("button", { name: "Preferences" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Appearance & Seasonal" })).not.toBeInTheDocument();
+  });
+
   it("renders settings shell with non-empty content", async () => {
     const { default: Settings } = await import("@/pages/Settings");
     const { container } = renderWithProviders(<Settings />);

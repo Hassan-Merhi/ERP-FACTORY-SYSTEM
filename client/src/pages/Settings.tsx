@@ -127,7 +127,7 @@ export default function Settings() {
         { key: "companies", label: "Companies", icon: Building2 },
         { key: "floating-widgets", label: "Floating Widgets", icon: LayoutPanelLeft },
         { key: "appearance-seasonal", label: "Appearance & Seasonal", icon: Snowflake, devOnly: true },
-        { key: "preferences", label: "Preferences", icon: Settings2, devOnly: true },
+        { key: "preferences", label: "Preferences", icon: Settings2, adminOnly: true },
       ],
     },
     {
