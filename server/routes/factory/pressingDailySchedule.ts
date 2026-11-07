@@ -19,8 +19,10 @@ export function pressingDailyScheduleForDay(stored: unknown, day: string): Press
     const entries = raw as Record<string, unknown>;
     const hours: Record<string, number> = {};
     for (const hour of PRESSING_DAILY_HOURS) {
-      const value = Number(entries[String(hour)]);
-      if (!Number.isFinite(value) || value < 0.001 || value > 100000) break;
+      const rawTarget = entries[String(hour)];
+      if (rawTarget === undefined || rawTarget === null || rawTarget === "") break;
+      const value = Number(rawTarget);
+      if (!Number.isFinite(value) || value < 0 || value > 100000) break;
       hours[String(hour)] = value;
     }
     if (Object.keys(hours).length === PRESSING_DAILY_HOURS.length) {
@@ -47,7 +49,7 @@ function validatedHourTargets(raw: unknown): Record<string, number> | null {
     const rawValue = values[String(hour)];
     if (rawValue === undefined || rawValue === null || rawValue === "") return null;
     const value = Number(rawValue);
-    if (!Number.isFinite(value) || value < 0.001 || value > 100000) return null;
+    if (!Number.isFinite(value) || value < 0 || value > 100000) return null;
     targets[String(hour)] = value;
   }
   return targets;
