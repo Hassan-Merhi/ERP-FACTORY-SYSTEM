@@ -3,10 +3,13 @@ import { getErrorDetails } from "@shared/errorUtils";
 import { useEffect, useMemo, useRef } from "react";
 import { useLocation as useLocationContext } from "@/contexts/LocationContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
 import { Textarea } from "@/components/ui/textarea";
+import { ShoppingCart, NotebookPen } from "lucide-react";
+import "@/styles/pos-workspace-premium.css";
 import { useCurrencyContext, type Currency } from "@/contexts/CurrencyContext";
 import { isSupportedAccountingCurrency } from "@shared/currencyCatalog";
 import { useToast } from "@/hooks/use-toast";
@@ -37,6 +40,7 @@ import { GoldenCoastPosReadinessAlert } from "./pos-components/GoldenCoastPosRea
 export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; editVoucherId?: string } = {}) {
   const { selectedLocation, setSelectedLocation } = useLocationContext();
   const { selectedCompany } = useCompany();
+  const { t } = useApplicationLanguage();
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { selectedCurrency, exchangeRate: dailyExchangeRate, displayCurrency } = useCurrencyContext();
@@ -684,7 +688,7 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full bg-background overflow-hidden relative">
+    <div data-pos-modern-workspace="true" className="flex flex-col h-full bg-background overflow-hidden relative">
       <POSHeader
         posUser={posUser}
         editVoucherId={editVoucherId}
@@ -741,8 +745,8 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
 
       {/* ── Desktop layout ── */}
       <PosWorkspaceColumns layout="erp">
-        <div className="flex-1 flex flex-col overflow-y-auto min-w-0">
-          <div>
+        <div data-pos-sale-panel="true" className="flex-1 flex flex-col overflow-y-auto min-w-0">
+          <div data-pos-grid-wrap="true">
             {inventoryLoading ? (
               <div className="rounded-lg border p-8 text-center text-sm text-muted-foreground" aria-busy="true">
                 Loading inventory…
@@ -771,15 +775,32 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
               />
             )}
           </div>
-          <div className="mt-2 px-1 pb-2">
+          <div data-pos-notes-wrap="true" className="mt-2 px-1 pb-2">
+            <label htmlFor="pos-desktop-notes" className="flex items-center gap-2 text-sm font-medium">
+              <NotebookPen className="h-4 w-4" aria-hidden="true" /> {t("pos.modern.notes")}{" "}
+              <span className="text-muted-foreground font-normal">{t("pos.modern.optional")}</span>
+            </label>
             <Textarea
-              placeholder="Notes (optional)"
+              id="pos-desktop-notes"
+              placeholder={t("pos.modern.notesPlaceholder")}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="resize-none h-12 min-h-[48px] text-sm"
               data-testid="input-notes"
             />
           </div>
+          {!rows.some((row) => row.stockItemId || row.itemName?.trim()) && (
+            <div
+              data-pos-empty-state="true"
+              className="hidden lg:flex flex-1 flex-col items-center justify-center px-6 py-10 text-center"
+            >
+              <span data-pos-empty-icon="true">
+                <ShoppingCart className="h-8 w-8" aria-hidden="true" />
+              </span>
+              <h2 className="mt-4 text-base font-semibold">{t("pos.modern.addItems")}</h2>
+              <p className="mt-2 max-w-sm text-sm text-muted-foreground">{t("pos.modern.addItemsHint")}</p>
+            </div>
+          )}
         </div>
         <InventoryPicker
           inventory={inventory}

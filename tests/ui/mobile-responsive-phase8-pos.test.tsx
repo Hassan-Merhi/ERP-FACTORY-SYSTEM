@@ -188,6 +188,22 @@ describe("Mobile responsiveness Phase 8 POS", () => {
     expect(filters.className).toContain("grid-cols-1");
     expect(filters.className).toContain("sm:grid-cols-2");
     expect(document.querySelector("[data-pos-transfer-orders]")).not.toBeNull();
+    expect(screen.getByTestId("pos-orders-total")).toBeInTheDocument();
+    expect(screen.getByTestId("pos-orders-applied")).toBeInTheDocument();
+    expect(screen.getByTestId("pos-orders-pending")).toBeInTheDocument();
+    expect(screen.getByTestId("button-clear-filters")).toBeDisabled();
+  });
+
+  it("keeps the new POS chrome scoped to themes and existing seasonal settings", () => {
+    const sidebar = source("client/src/styles/pos-sidebar-modern.css");
+    const orders = source("client/src/styles/pos-orders-premium.css");
+    const shell = source("client/src/app/PosShell.tsx");
+    expect(sidebar).toContain('html.dark [data-pos-shell="true"]');
+    expect(sidebar).toContain('[data-pos-sidebar="modern"]');
+    expect(orders).toContain('html.dark [data-pos-transfer-orders]');
+    expect(orders).toContain('html[data-christmas-mode="on"][data-christmas-garlands="on"]');
+    expect(shell).toContain("hasAdminSearch &&");
+    expect(shell).toContain("pos-shell-wordmark");
   });
 
   it("keeps the mobile layout free from POS mutations", () => {

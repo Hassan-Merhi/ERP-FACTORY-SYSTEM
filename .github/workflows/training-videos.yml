@@ -81,6 +81,8 @@ jobs:
       # A full-system run publishes every page that recorded cleanly; a page that
       # fails is reported and keeps its previous video. Short runs must all pass.
       TRAINING_ALLOW_PARTIAL: ${{ (inputs.topic == 'all-pages' || inputs.topic == 'all') && '1' || '0' }}
+      # Full-system runs keep each page to ten minutes so the published set stays small.
+      TRAINING_MAX_SECONDS: ${{ (inputs.topic == 'all-pages' || inputs.topic == 'all') && '600' || '1200' }}
       CSRF_ENFORCE: "0"
       ENABLE_SCHEDULERS: "false"
       PORT: "5000"

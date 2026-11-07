@@ -1,6 +1,18 @@
 import type { ApplicationLanguage } from "@shared/applicationLanguageContract";
 
 export const applicationEnglishTranslations = {
+  "pos.modern.createSale": "Create a new sales transaction",
+  "pos.modern.reviewSale": "Review and update this sale",
+  "pos.modern.addItems": "Add items to this sale",
+  "pos.modern.addItemsHint": "Search and select products from the Items panel or type in the sale grid above.",
+  "pos.modern.notes": "Notes",
+  "pos.modern.optional": "(optional)",
+  "pos.modern.notesPlaceholder": "Add a note about this sale...",
+  "pos.modern.location": "Location",
+  "pos.modern.date": "Date",
+  "pos.modern.paymentMethod": "Payment Method",
+  "pos.modern.account": "Cashbox / Account",
+  "pos.modern.saleSettings": "Sale settings",
   "language.label": "Language",
   "language.english": "English",
   "language.arabic": "Arabic",

@@ -47,7 +47,10 @@ const execFile = promisify(execFileCallback);
 // is "spoken" and muxed with the narration at CAPTURE_FPS; the pointer is then
 // composited by FFmpeg at OUTPUT_FPS so it glides instead of jumping.
 const CAPTURE_FPS = 2;
-const OUTPUT_FPS = 20;
+// 12 fps keeps the pointer smooth while the screen itself changes at
+// CAPTURE_FPS; with CRF 27 a narrated page tour stays a few MB, so a full
+// all-pages set fits the private store comfortably.
+const OUTPUT_FPS = 12;
 const SEGMENT_PAUSE_SECONDS = 0.35;
 const CURSOR_TRAVEL_SECONDS = 0.6;
 const MIN_DURATION_SECONDS = 60;
@@ -271,7 +274,7 @@ async function encodeAndValidate(framesDir, narrationWav, expectedSeconds, outpu
     "[pointer]scale=in_range=full:out_range=limited,format=yuv420p[out]",
     "-map", "[out]", "-map", "2:a:0",
     "-c:v", "libx264", "-profile:v", "main", "-preset", "veryfast",
-    "-crf", "21", "-pix_fmt", "yuv420p", "-color_range", "tv",
+    "-crf", "27", "-pix_fmt", "yuv420p", "-color_range", "tv",
     "-c:a", "aac", "-b:a", "96k", "-ar", "48000", "-ac", "1",
     "-shortest", "-movflags", "+faststart", outputMp4,
   ]);
