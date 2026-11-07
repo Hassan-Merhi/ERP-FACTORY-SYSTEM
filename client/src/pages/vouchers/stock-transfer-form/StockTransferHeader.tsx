@@ -1,5 +1,5 @@
 import { format } from "date-fns";
-import { LayoutGrid, Upload } from "lucide-react";
+import { CalendarDays, LayoutGrid, MapPin, Upload, Warehouse } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -31,10 +31,10 @@ export function StockTransferHeader({ model }: { model: StockTransferFormModel }
   } = model;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 sm:gap-4 mb-4">
+    <div className={isPOS ? "pos-transfer-toolbar flex flex-wrap items-center gap-3 mb-4" : "flex flex-wrap items-center gap-2 sm:gap-4 mb-4"}>
       {isPOS && (
         <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">From:</span>
+          <span className="pos-transfer-field-label text-sm text-muted-foreground">{isPOS && <Warehouse className="h-4 w-4" aria-hidden="true" />}From:</span>
           {myLocations.length > 1 ? (
             <Select
               value={posSelectedSourceId?.toString() || ""}
@@ -54,7 +54,7 @@ export function StockTransferHeader({ model }: { model: StockTransferFormModel }
                 });
               }}
             >
-              <SelectTrigger className="w-[160px]" data-testid="select-source-location-pos">
+              <SelectTrigger className="pos-transfer-control w-full sm:w-[180px]" data-testid="select-source-location-pos">
                 <SelectValue placeholder="Select source..." />
               </SelectTrigger>
               <SelectContent>
@@ -66,7 +66,7 @@ export function StockTransferHeader({ model }: { model: StockTransferFormModel }
               </SelectContent>
             </Select>
           ) : (
-            <span className="font-medium">{posSelectedSourceName || posLocationName}</span>
+            <span className="pos-transfer-source-name font-medium">{posSelectedSourceName || posLocationName}</span>
           )}
         </div>
       )}
@@ -77,7 +77,7 @@ export function StockTransferHeader({ model }: { model: StockTransferFormModel }
           const destinationId = Number(field.value);
           return (
             <FormItem className="flex items-center gap-2 space-y-0 max-sm:w-full max-sm:flex-col max-sm:items-stretch max-sm:gap-1">
-              <FormLabel className="text-sm text-muted-foreground whitespace-nowrap">To:</FormLabel>
+              <FormLabel className="pos-transfer-field-label text-sm text-muted-foreground whitespace-nowrap">{isPOS && <MapPin className="h-4 w-4" aria-hidden="true" />}To:</FormLabel>
               <Select
                 value={Number.isInteger(destinationId) && destinationId > 0 ? String(destinationId) : ""}
                 onValueChange={(value) => {
@@ -87,7 +87,7 @@ export function StockTransferHeader({ model }: { model: StockTransferFormModel }
                 }}
               >
                 <FormControl>
-                  <SelectTrigger className="w-full sm:w-[200px]" data-testid="select-destination-location">
+                  <SelectTrigger className={isPOS ? "pos-transfer-control w-full sm:w-[240px]" : "w-full sm:w-[200px]"} data-testid="select-destination-location">
                     <SelectValue placeholder="Select destination..." />
                   </SelectTrigger>
                 </FormControl>
@@ -111,7 +111,7 @@ export function StockTransferHeader({ model }: { model: StockTransferFormModel }
         name="voucherDate"
         render={({ field }) => (
           <FormItem className="flex items-center gap-2 space-y-0 max-sm:w-full max-sm:flex-col max-sm:items-stretch max-sm:gap-1">
-            <FormLabel className="text-sm text-muted-foreground whitespace-nowrap">Date:</FormLabel>
+            <FormLabel className="pos-transfer-field-label text-sm text-muted-foreground whitespace-nowrap">{isPOS && <CalendarDays className="h-4 w-4" aria-hidden="true" />}Date:</FormLabel>
             <FormControl>
               <Input
                 type="date"
@@ -123,7 +123,7 @@ export function StockTransferHeader({ model }: { model: StockTransferFormModel }
                       : ""
                 }
                 onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value + "T00:00:00") : new Date())}
-                className="w-full sm:w-[160px]"
+                className={isPOS ? "pos-transfer-control w-full sm:w-[175px]" : "w-full sm:w-[160px]"}
                 data-testid="input-transfer-date"
               />
             </FormControl>
@@ -149,6 +149,7 @@ export function StockTransferHeader({ model }: { model: StockTransferFormModel }
         size="sm"
         onClick={() => (isPOS ? setPosImportDialogOpen(true) : setImportDialogOpen(true))}
         data-testid="button-open-import-dialog"
+        className={isPOS ? "pos-transfer-import" : undefined}
       >
         <Upload className="h-4 w-4 mr-2" />
         Import
@@ -161,10 +162,11 @@ export function StockTransferFormView({ model }: { model: StockTransferFormModel
   const { stockTransferForm, onStockTransferSubmit, toast } = model;
 
   return (
-    <div className="space-y-4">
+    <div className={model.isPOS ? "pos-transfer-form space-y-4" : "space-y-4"}>
       <Form {...stockTransferForm}>
         <form
           noValidate
+          className={model.isPOS ? "pos-transfer-panel" : undefined}
           onSubmit={stockTransferForm.handleSubmit(onStockTransferSubmit, (errors) => {
             console.error("Stock Transfer Form Validation Errors:", errors);
             toast({
@@ -179,7 +181,7 @@ export function StockTransferFormView({ model }: { model: StockTransferFormModel
         >
           <StockTransferHeader model={model} />
           <div className="flex flex-col xl:flex-row gap-4">
-            <Card className="flex-1 overflow-hidden min-w-0">
+            <Card className={model.isPOS ? "pos-transfer-table flex-1 overflow-hidden min-w-0" : "flex-1 overflow-hidden min-w-0"}>
               <StockTransferMobileEntries model={model} />
               <StockTransferDesktopEntries model={model} />
               <StockTransferTotals model={model} />
