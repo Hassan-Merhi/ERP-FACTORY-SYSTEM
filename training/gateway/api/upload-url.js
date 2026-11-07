@@ -19,6 +19,10 @@ const host = "txyfgtsysrceqhoj.private.blob.vercel-storage.com";
 // holds what Help & Training serves. Objects younger than this are kept so an
 // upload still in flight is never touched.
 const pruneGraceMs = 60 * 60 * 1000;
+// The ERP caches the manifest (60 s) and signed reads (40 s), so a recording
+// replaced moments ago may still be streamed: keep it until its topic's new
+// entry has been live this long. In practice it goes at the next publication.
+const supersedeGraceMs = 10 * 60 * 1000;
 const pruneLimit = 1000;
 
 async function readManifest() {
@@ -47,6 +51,7 @@ async function pruneSuperseded() {
   }
   if (!keep.size) throw Error("refusing to prune against an empty manifest");
   const cutoff = Date.now() - pruneGraceMs;
+  const supersededCutoff = Date.now() - supersedeGraceMs;
   const stale = [];
   let cursor;
   do {
@@ -54,6 +59,13 @@ async function pruneSuperseded() {
     for (const blob of page.blobs) {
       if (!mediaKey.test(blob.pathname) || keep.has(blob.pathname)) continue;
       if (new Date(blob.uploadedAt).getTime() > cutoff) continue;
+      // Orphans of a failed publication (topic not in the manifest) only need
+      // the upload grace; a replaced recording also waits out the ERP cache.
+      const replacement = manifest[blob.pathname.split("/")[2]];
+      if (replacement) {
+        const replacedAt = Date.parse(replacement.publishedAt || "");
+        if (!Number.isFinite(replacedAt) || replacedAt > supersededCutoff) continue;
+      }
       stale.push(blob);
     }
     cursor = page.hasMore ? page.cursor : undefined;

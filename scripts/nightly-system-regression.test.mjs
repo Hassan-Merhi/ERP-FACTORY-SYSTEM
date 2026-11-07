@@ -165,6 +165,7 @@ test("nightly publication is automatic but only for validated recordings of the 
   assert.ok(gateway.includes('body?.operation === "prune"') && gateway.includes("async function pruneSuperseded()"));
   assert.ok(gateway.includes('refusing to prune against an empty manifest'), "never prune against a missing manifest");
   assert.ok(gateway.includes("pruneGraceMs") && gateway.includes("keep.has(blob.pathname)"), "live and in-flight media survive");
+  assert.ok(gateway.includes("supersedeGraceMs") && gateway.includes("replacedAt > supersededCutoff"), "a just-replaced recording outlives the ERP's manifest cache");
   assert.ok(!/del\([^)]*manifestKey/.test(gateway), "the manifest itself is never deleted");
   assert.ok(uploader.includes('grant(jwt, { operation: "prune" })'), "each publication removes superseded media");
   const api = read("server/routes/trainingMediaRoutes.ts");
