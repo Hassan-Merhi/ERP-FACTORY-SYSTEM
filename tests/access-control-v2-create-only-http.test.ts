@@ -168,15 +168,13 @@ describe("Create Only enforcement over HTTP", () => {
       .post("/api/customers")
       .send({ legalName: "CO Customer Balance", openingBalance: "75" });
     expect(deniedCustomer.status).toBe(403);
-    const deniedItem = await agent
-      .post("/api/stock-items")
-      .send({
-        code: "CO-OPEN",
-        name: "Opening stock item",
-        uom: "PCS",
-        stockGroupId: ctx.stockGroupId,
-        openingQty: "5",
-      });
+    const deniedItem = await agent.post("/api/stock-items").send({
+      code: "CO-OPEN",
+      name: "Opening stock item",
+      uom: "PCS",
+      stockGroupId: ctx.stockGroupId,
+      openingQty: "5",
+    });
     expect(deniedItem.status).toBe(403);
     expect(await fingerprint(ctx.companyId)).toEqual(before);
 

@@ -33,12 +33,10 @@ function sendError(res: Response, error: unknown) {
   if (error instanceof ActiveCompanyPermissionContextError)
     return res.status(error.status).json({ code: error.code, message: error.message });
   logger.error("Pressing access initialization failed", { error });
-  return res
-    .status(500)
-    .json({
-      code: "PRESSING_ACCESS_FAILED",
-      message: "Unable to initialize pressing access. Retry without losing existing scans.",
-    });
+  return res.status(500).json({
+    code: "PRESSING_ACCESS_FAILED",
+    message: "Unable to initialize pressing access. Retry without losing existing scans.",
+  });
 }
 async function currentAssignment(
   companyId: number,
