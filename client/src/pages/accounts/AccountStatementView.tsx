@@ -273,6 +273,9 @@ export function AccountStatementView({
     : vouchersWithBalance.length;
 
   const balSide = (val: number) => (val >= 0 ? "Dr" : "Cr");
+  const openingSide = selectedAccount.type === "supplier"
+    ? (openingBalance > 0 ? "Cr" : "Dr")
+    : balSide(openingBalance);
   const showNativeBalance = !!nativeWallet?.synchronized;
 
   if (isFactorySupplierAccount) {
@@ -623,6 +626,15 @@ export function AccountStatementView({
           items={[
             { label: "Transactions", value: transactionCount },
             {
+              label: showNativeBalance ? "Historical USD opening" : "Opening Balance",
+              value: (
+                <>
+                  {formatAmount(Math.abs(openingBalance))}
+                  <span className="ms-1 text-[11px] font-normal opacity-70">{openingSide}</span>
+                </>
+              ),
+            },
+            {
               label: showNativeBalance ? "Historical USD closing" : "Closing Balance",
               value: (
                 <>
@@ -643,6 +655,16 @@ export function AccountStatementView({
             <div>
               <p className="text-[11px] text-muted-foreground leading-none mb-0.5">Transactions</p>
               <p className="text-base font-semibold leading-none tabular-nums">{transactionCount}</p>
+            </div>
+          </div>
+          <div className="account-ledger-stat" data-testid="account-statement-kpi-opening-balance">
+            <Landmark className="w-4 h-4 text-muted-foreground shrink-0" />
+            <div>
+              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">{showNativeBalance ? "Historical USD opening" : "Opening Balance"}</p>
+              <p className="text-base font-semibold leading-none tabular-nums">
+                {formatAmount(Math.abs(openingBalance))}
+                <span className="ml-1 text-[11px] font-normal opacity-70">{openingSide}</span>
+              </p>
             </div>
           </div>
           <div className="account-ledger-stat">
