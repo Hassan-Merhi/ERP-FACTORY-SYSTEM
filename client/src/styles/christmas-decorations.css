@@ -407,3 +407,88 @@ html[data-christmas-intensity="full"] .seasonal-atmosphere {
     animation: none !important;
   }
 }
+
+
+/* Polished seasonal corner ornaments: compact enamel-style badges instead of
+   large, low-contrast wire icons. Decorations remain pointer-transparent. */
+html[data-christmas-mode="on"] .seasonal-atmosphere-sprig {
+  top: 82px;
+  width: 46px;
+  height: 46px;
+  border: 1px solid rgb(237 201 128 / 0.6);
+  border-radius: 15px;
+  background:
+    radial-gradient(circle at 24% 18%, rgb(255 255 255 / 0.95), transparent 64%),
+    linear-gradient(140deg, #f2fff8, #dbeee7);
+  box-shadow: 0 6px 15px rgb(45 90 72 / 0.12), inset 0 1px 0 #fff;
+  opacity: 0.95;
+  filter: none;
+}
+html[data-christmas-mode="on"] .seasonal-atmosphere-sprig-left { inset-inline-start: 10px; }
+html[data-christmas-mode="on"] .seasonal-atmosphere-sprig-right {
+  inset-inline-end: 10px;
+  background:
+    radial-gradient(circle at 24% 18%, rgb(255 255 255 / 0.96), transparent 62%),
+    linear-gradient(140deg, #fff6ec, #ffe2d4);
+  box-shadow: 0 6px 15px rgb(142 72 56 / 0.12), inset 0 1px 0 #fff;
+}
+html[data-christmas-mode="on"] .seasonal-atmosphere-tree,
+html[data-christmas-mode="on"] .seasonal-atmosphere-gift {
+  width: 26px;
+  height: 26px;
+  stroke-width: 1.8;
+}
+html[data-christmas-mode="on"] .seasonal-atmosphere-tree {
+  color: #18714d;
+  fill: rgb(52 166 109 / 0.19);
+  filter: drop-shadow(0 2px 1px rgb(26 101 71 / 0.12));
+}
+html[data-christmas-mode="on"] .seasonal-atmosphere-gift {
+  color: #b5415c;
+  fill: rgb(238 120 117 / 0.26);
+  filter: drop-shadow(0 2px 1px rgb(152 65 84 / 0.12));
+}
+html[data-christmas-mode="on"] .seasonal-atmosphere-star {
+  top: -5px;
+  inset-inline-end: -5px;
+  width: 14px;
+  height: 14px;
+  color: #d59f3a;
+  fill: #ffe6a0;
+  filter: drop-shadow(0 1px 3px rgb(204 150 49 / 0.3));
+}
+html[data-christmas-mode="on"] .seasonal-atmosphere-berry {
+  bottom: 5px;
+  inset-inline-start: 6px;
+  width: 6px;
+  height: 6px;
+}
+html.dark[data-christmas-mode="on"] .seasonal-atmosphere-sprig {
+  border-color: rgb(224 187 114 / 0.37);
+  background: linear-gradient(140deg, #315544, #213e35);
+  box-shadow: 0 5px 15px rgb(0 0 0 / 0.21);
+}
+html.dark[data-christmas-mode="on"] .seasonal-atmosphere-sprig-right {
+  background: linear-gradient(140deg, #613448, #42283a);
+}
+html.dark[data-christmas-mode="on"] .seasonal-atmosphere-tree {
+  color: #97e5b8;
+  fill: rgb(75 188 120 / 0.28);
+}
+html.dark[data-christmas-mode="on"] .seasonal-atmosphere-gift {
+  color: #ffc0b3;
+  fill: rgb(243 110 134 / 0.25);
+}
+@media (max-width: 767px) {
+  html[data-christmas-mode="on"] .seasonal-atmosphere-sprig {
+    top: max(72px, calc(env(safe-area-inset-top) + 56px));
+    width: 35px;
+    height: 35px;
+    border-radius: 12px;
+  }
+  html[data-christmas-mode="on"] .seasonal-atmosphere-tree,
+  html[data-christmas-mode="on"] .seasonal-atmosphere-gift {
+    width: 20px;
+    height: 20px;
+  }
+}

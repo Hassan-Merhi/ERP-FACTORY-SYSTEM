@@ -152,7 +152,8 @@ export function useFactoryProformasModel() {
   const { data: customerPriceList = [] } = useQuery<{ article_code: string; price_per_bale: string }[]>({
     queryKey: ["/api/factory/customer-price-lists", customerId, addLineDestination],
     queryFn: async () => {
-      const response = await modeApiRequest("GET",
+      const response = await modeApiRequest(
+        "GET",
         `/api/factory/customer-price-lists/${customerId}?destination=${encodeURIComponent(addLineDestination || "")}`
       );
       if (!response.ok) throw new Error("Failed to load destination prices");
@@ -261,7 +262,10 @@ export function useFactoryProformasModel() {
     },
     onSuccess: () => {
       invalidateCustomerProformas();
-      toast({ title: "Destination linked", description: "Only the proforma destination was updated. Item prices are unchanged." });
+      toast({
+        title: "Destination linked",
+        description: "Only the proforma destination was updated. Item prices are unchanged.",
+      });
       setDestinationProforma(null);
       setDestinationValue("");
     },
@@ -417,7 +421,13 @@ export function useFactoryProformasModel() {
   };
 
   const bulkImportMutation = useMutation({
-    mutationFn: async (data: { customerId: number; name: string; destination: string; isActive: boolean; lines: unknown[] }) => {
+    mutationFn: async (data: {
+      customerId: number;
+      name: string;
+      destination: string;
+      isActive: boolean;
+      lines: unknown[];
+    }) => {
       const res = await modeApiRequest("POST", "/api/factory/customer-proformas/bulk", data);
       if (!res.ok) {
         const e = await res.json();
