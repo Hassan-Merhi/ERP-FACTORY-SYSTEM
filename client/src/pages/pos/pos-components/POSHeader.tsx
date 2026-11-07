@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/PageHeader";
+import { useChristmasMode } from "@/hooks/useChristmasMode";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +19,9 @@ import {
   Save,
   Check,
   Sheet,
+  ShoppingCart,
+  TreePine,
+  Gift,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -88,10 +91,26 @@ export function POSHeader({
   onExportTransaction,
 }: POSHeaderProps) {
   const autosaveLabel = useRelativeTime(lastAutosaved);
+  const { settingQuery } = useChristmasMode();
+  const showSeasonalArtwork = settingQuery.data?.enabled === true && (settingQuery.data?.visuals?.effects.gifts ?? true);
 
   return (
     <div className="hidden px-4 pt-4 lg:block" data-pos-desktop-header="true">
-      <PageHeader title={editVoucherId ? "Edit Transaction" : "Point of Sale"} showBackButton={false}>
+      <div data-pos-header-inner="true">
+        <div data-pos-header-identity="true" className="flex min-w-0 items-center gap-4">
+          <div data-pos-title-icon="true"><ShoppingCart className="h-6 w-6" aria-hidden="true" /></div>
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold tracking-tight">{editVoucherId ? "Edit Transaction" : "Point of Sale"}</h1>
+            <p className="text-sm text-muted-foreground">{editVoucherId ? "Review and update this sale" : "Create a new sales transaction"}</p>
+          </div>
+        </div>
+        {showSeasonalArtwork && (
+          <div data-pos-seasonal-banner="true" aria-hidden="true">
+            <TreePine className="h-10 w-10" />
+            <Gift className="h-9 w-9" />
+          </div>
+        )}
+        <div data-pos-header-actions="true" className="flex shrink-0 items-center gap-2">
         {editVoucherId ? (
           <>
             {onExportTransaction && (
@@ -202,7 +221,8 @@ export function POSHeader({
             )}
           </Button>
         )}
-      </PageHeader>
+        </div>
+      </div>
     </div>
   );
 }
