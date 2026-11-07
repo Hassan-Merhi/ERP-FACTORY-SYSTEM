@@ -99,7 +99,7 @@ test("reviewable training videos narrate every visible control as H.264 + AAC MP
   assert.ok(recorder.includes('page.keyboard.press("Backspace")'), "typed demo text is cleared again");
   assert.ok(recorder.includes("function demoFor(row)") && recorder.includes('return null;'), "demos are an allow-list, not arbitrary clicking");
   const screen = read("scripts/training-screen.mjs");
-  assert.ok(recorder.includes("class CursorTrack") && recorder.includes("overlay@cur") && recorder.includes("sendcmd=f=") && recorder.includes("OUTPUT_FPS = 20"), "the pointer is composited at the full output frame rate so it glides");
+  assert.ok(recorder.includes("class CursorTrack") && recorder.includes("overlay@cur") && recorder.includes("sendcmd=f=") && recorder.includes("OUTPUT_FPS = 12"), "the pointer is composited at the full output frame rate so it glides");
   assert.ok(screen.includes("export const CURSOR_SVG") && recorder.includes("omitBackground: true"), "the pointer image is rendered from the SVG once per run");
   assert.ok(screen.includes("export const LAYER_SELECTOR") && screen.includes("export function openLayerType()"), "overlay layers are detected before Escape is pressed");
   const narration = read("scripts/training-narration.mjs");
@@ -161,6 +161,13 @@ test("nightly publication is automatic but only for validated recordings of the 
   assert.ok(gateway.includes("nightly-training-audit.yml@refs/heads/main"));
   assert.ok(gateway.includes('payload.environment !== "training-publication"'));
   assert.ok(gateway.includes("allowOverwrite: overwrite") && gateway.includes("const overwrite = key === manifestKey"));
+  // Clean-up: the gateway, not the publisher, decides what is superseded.
+  assert.ok(gateway.includes('body?.operation === "prune"') && gateway.includes("async function pruneSuperseded()"));
+  assert.ok(gateway.includes('refusing to prune against an empty manifest'), "never prune against a missing manifest");
+  assert.ok(gateway.includes("pruneGraceMs") && gateway.includes("keep.has(blob.pathname)"), "live and in-flight media survive");
+  assert.ok(gateway.includes("supersedeGraceMs") && gateway.includes("replacedAt > supersededCutoff"), "a just-replaced recording outlives the ERP's manifest cache");
+  assert.ok(!/del\([^)]*manifestKey/.test(gateway), "the manifest itself is never deleted");
+  assert.ok(uploader.includes('grant(jwt, { operation: "prune" })'), "each publication removes superseded media");
   const api = read("server/routes/trainingMediaRoutes.ts");
   assert.ok(api.includes("export async function loadPublishedTrainingRegistry()") && api.includes("MANIFEST_TTL_MS"), "the ERP re-reads the manifest without a deploy");
   assert.ok(api.includes('app.get("/api/training/media", requireAuth'));
