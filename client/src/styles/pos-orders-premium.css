@@ -1,0 +1,328 @@
+/* POS Orders premium layout.
+ * Scoped to this route so transfer business logic and the other workspaces stay unchanged.
+ * Seasonal accents follow the existing developer-controlled document attributes.
+ */
+[data-pos-transfer-orders] {
+  --pos-order-purple: #6f34d3;
+  --pos-order-orange: #f97316;
+  color: hsl(var(--foreground));
+}
+[data-pos-transfer-orders] .pos-orders-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 0.15rem 0 0.25rem;
+  position: relative;
+}
+[data-pos-transfer-orders] .pos-orders-hero [data-testid="page-header"] {
+  flex: 1 1 19rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+[data-pos-transfer-orders] .pos-orders-hero [data-testid="page-header"] > div > div:first-child {
+  border: 0;
+  padding-left: 0;
+}
+[data-pos-transfer-orders] .pos-orders-hero [data-testid="text-page-title"] {
+  font-size: clamp(1.65rem, 2vw, 2.2rem);
+  line-height: 1.15;
+  letter-spacing: -0.035em;
+}
+[data-pos-transfer-orders] .pos-orders-hero [data-testid="text-page-title"] > span:first-child {
+  display: inline-flex;
+  padding: 0.65rem;
+  border-radius: 0.95rem;
+  color: white;
+  background: linear-gradient(135deg, #fb923c, #f97316 58%, #b948f2);
+  box-shadow: 0 8px 18px rgb(249 115 22 / 0.24);
+}
+[data-pos-transfer-orders] .pos-orders-new-button,
+[data-pos-transfer-orders] .pos-orders-adjust {
+  border: 0;
+  color: white;
+  background: linear-gradient(120deg, #883cea, #6030c5);
+  box-shadow: 0 4px 12px rgb(111 52 211 / 0.22);
+}
+[data-pos-transfer-orders] .pos-orders-new-button:hover,
+[data-pos-transfer-orders] .pos-orders-adjust:hover {
+  color: white;
+  background: linear-gradient(120deg, #7733d2, #5226af);
+}
+[data-pos-transfer-orders] .pos-orders-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(9.5rem, 1fr));
+  flex: 0 1 35rem;
+  gap: 0.65rem;
+  min-width: 0;
+}
+[data-pos-transfer-orders] .pos-orders-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+  padding: 0.75rem 0.85rem;
+  border-radius: 1rem;
+  border: 1px solid #ded2fa;
+  background: #f4efff;
+}
+[data-pos-transfer-orders] .pos-orders-stat-icon {
+  width: 2.45rem;
+  height: 2.45rem;
+  border-radius: 0.8rem;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(255 255 255 / 0.65);
+  color: #6a37c6;
+}
+[data-pos-transfer-orders] .pos-orders-stat-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+[data-pos-transfer-orders] .pos-orders-stat-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #5a5172;
+  white-space: nowrap;
+}
+[data-pos-transfer-orders] .pos-orders-stat-value {
+  font-size: 1.35rem;
+  line-height: 1.25;
+  font-weight: 750;
+  letter-spacing: -0.04em;
+  color: #241d40;
+}
+[data-pos-transfer-orders] .pos-orders-stat-applied {
+  background: #e8f8f1;
+  border-color: #b7ebce;
+}
+[data-pos-transfer-orders] .pos-orders-stat-applied .pos-orders-stat-icon {
+  color: #128754;
+}
+[data-pos-transfer-orders] .pos-orders-stat-pending {
+  background: #fff3e9;
+  border-color: #f9d6bc;
+}
+[data-pos-transfer-orders] .pos-orders-stat-pending .pos-orders-stat-icon {
+  color: #dd6619;
+}
+[data-pos-transfer-orders] .pos-orders-filters {
+  background: rgb(255 255 255 / 0.86);
+  border-color: #e9e2f6;
+  box-shadow: 0 7px 26px rgb(65 38 117 / 0.08);
+}
+[data-pos-transfer-orders] .pos-orders-control {
+  border-color: #e2dcef;
+  border-radius: 0.7rem;
+  box-shadow: none;
+}
+[data-pos-transfer-orders] .pos-orders-control:focus-visible {
+  outline-color: #7a39d9;
+  box-shadow: 0 0 0 3px rgb(122 57 217 / 0.12);
+}
+[data-pos-transfer-orders] .pos-orders-clear {
+  border-radius: 0.7rem;
+}
+[data-pos-transfer-orders] .pos-orders-list-heading {
+  margin-top: 0.45rem;
+}
+[data-pos-transfer-orders] .pos-orders-list-heading > span {
+  color: #695e83;
+  letter-spacing: 0.09em;
+}
+[data-pos-transfer-orders] .pos-orders-row {
+  position: relative;
+  overflow: hidden;
+  border-color: #e9e3f3;
+  background: hsl(var(--card));
+  box-shadow: 0 4px 14px rgb(48 31 95 / 0.07);
+}
+[data-pos-transfer-orders] .pos-orders-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  inset-inline-start: 0;
+  width: 4px;
+  border-radius: 4px 0 0 4px;
+  background: linear-gradient(to bottom, #fb923c, #ef6b14);
+  pointer-events: none;
+}
+[data-pos-transfer-orders] .pos-orders-row:hover {
+  border-color: #d8c6f0;
+  box-shadow: 0 9px 22px rgb(48 31 95 / 0.12);
+  transform: translateY(-1px);
+}
+[data-pos-transfer-orders] .pos-orders-route {
+  color: hsl(var(--foreground));
+}
+[data-pos-transfer-orders] .pos-orders-count {
+  min-width: 4rem;
+  background: #f1edfc;
+  color: #36245d;
+}
+[data-pos-transfer-orders] .pos-orders-count > div:last-child {
+  color: #71628e;
+}
+[data-pos-transfer-orders] .pos-orders-view {
+  border-color: #ded6f3;
+  color: #372b59;
+  border-radius: 0.7rem;
+  background: #fcfbff;
+}
+[data-pos-transfer-orders] .pos-orders-view:hover {
+  border-color: #ad92e0;
+  background: #f3edff;
+  color: #5c2bb4;
+}
+[data-pos-transfer-orders] .pos-orders-empty {
+  border-color: #d8cdef;
+}
+html.dark [data-pos-transfer-orders] .pos-orders-stat {
+  border-color: #604b88;
+  background: #27203e;
+}
+html.dark [data-pos-transfer-orders] .pos-orders-stat-label,
+html.dark [data-pos-transfer-orders] .pos-orders-list-heading > span {
+  color: #c9badf;
+}
+html.dark [data-pos-transfer-orders] .pos-orders-stat-value {
+  color: #f8f4ff;
+}
+html.dark [data-pos-transfer-orders] .pos-orders-stat-icon {
+  background: rgb(255 255 255 / 0.075);
+  color: #c9a8ff;
+}
+html.dark [data-pos-transfer-orders] .pos-orders-stat-applied {
+  border-color: #1f664e;
+  background: #173c32;
+}
+html.dark [data-pos-transfer-orders] .pos-orders-stat-applied .pos-orders-stat-icon {
+  color: #6ce8ae;
+}
+html.dark [data-pos-transfer-orders] .pos-orders-stat-pending {
+  border-color: #76502e;
+  background: #412c22;
+}
+html.dark [data-pos-transfer-orders] .pos-orders-stat-pending .pos-orders-stat-icon {
+  color: #ffb978;
+}
+html.dark [data-pos-transfer-orders] .pos-orders-filters {
+  border-color: #413454;
+  background: #211a31;
+  box-shadow: 0 8px 24px rgb(8 4 23 / 0.25);
+}
+html.dark [data-pos-transfer-orders] .pos-orders-control {
+  border-color: #4e405e;
+  background: #1a1528;
+}
+html.dark [data-pos-transfer-orders] .pos-orders-row {
+  border-color: #403553;
+  background: #211b30;
+  box-shadow: 0 6px 20px rgb(5 3 15 / 0.23);
+}
+html.dark [data-pos-transfer-orders] .pos-orders-row:hover {
+  border-color: #7d59ae;
+}
+html.dark [data-pos-transfer-orders] .pos-orders-count {
+  background: #332748;
+  color: #f4eaff;
+}
+html.dark [data-pos-transfer-orders] .pos-orders-count > div:last-child {
+  color: #c3b1dc;
+}
+html.dark [data-pos-transfer-orders] .pos-orders-view {
+  border-color: #5b4777;
+  color: #eee5ff;
+  background: #2a213c;
+}
+html.dark [data-pos-transfer-orders] .pos-orders-view:hover {
+  border-color: #9e79d6;
+  color: white;
+  background: #3c2c5c;
+}
+html.dark [data-pos-transfer-orders] .pos-orders-empty {
+  border-color: #544469;
+  background: #211b30;
+}
+/* Developer-scoped Christmas Mode uses the app-wide controls; no duplicated toggle. */
+html[data-christmas-mode="on"][data-christmas-garlands="on"] [data-pos-transfer-orders] .pos-orders-hero::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  top: -0.55rem;
+  right: 0;
+  width: 5.5rem;
+  height: 0.3rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #24805d, #f0ba62 30%, #ba3e57 65%, #24805d);
+  box-shadow: 0 2px 8px rgb(89 133 82 / 0.2);
+}
+@media (max-width: 1050px) {
+  [data-pos-transfer-orders] .pos-orders-stats {
+    flex: 1 1 100%;
+  }
+}
+@media (max-width: 640px) {
+  [data-pos-transfer-orders] .pos-orders-hero {
+    align-items: stretch;
+    gap: 0.9rem;
+  }
+  [data-pos-transfer-orders] .pos-orders-hero [data-testid="page-header"] {
+    flex-basis: 100%;
+  }
+  [data-pos-transfer-orders] .pos-orders-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.4rem;
+  }
+  [data-pos-transfer-orders] .pos-orders-stat {
+    padding: 0.6rem 0.4rem;
+    gap: 0.35rem;
+    flex-direction: column;
+    text-align: center;
+  }
+  [data-pos-transfer-orders] .pos-orders-stat-icon {
+    width: 2rem;
+    height: 2rem;
+  }
+  [data-pos-transfer-orders] .pos-orders-stat-label {
+    font-size: 0.65rem;
+  }
+  [data-pos-transfer-orders] .pos-orders-stat-value {
+    font-size: 1.15rem;
+  }
+  [data-pos-transfer-orders] .pos-orders-row-main {
+    flex-wrap: wrap;
+  }
+  [data-pos-transfer-orders] .pos-orders-row-info {
+    flex-basis: calc(100% - 2rem);
+  }
+  [data-pos-transfer-orders] .pos-orders-row-actions {
+    width: 100%;
+    padding-top: 0.65rem;
+    margin-top: 0.25rem;
+    border-top: 1px solid hsl(var(--border));
+  }
+  [data-pos-transfer-orders] .pos-orders-row-actions > div:last-child {
+    flex: 1 1 auto;
+  }
+  [data-pos-transfer-orders] .pos-orders-row-actions button {
+    min-width: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-pos-transfer-orders] .pos-orders-row {
+    transition: none;
+    transform: none !important;
+  }
+}
+@media print {
+  [data-pos-transfer-orders] .pos-orders-hero::after {
+    display: none !important;
+  }
+}

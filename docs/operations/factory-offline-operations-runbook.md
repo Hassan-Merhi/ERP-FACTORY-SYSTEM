@@ -114,7 +114,9 @@ The rows added by the owner-approved plan of 2026-11-05 are:
 - batch 4: Payment / Receipt edits and deletes, and file renames and moves.
 
 They are refused on the factory server (HTTP 423) until the owner has run
-that batch's staging drill and approved it. Record the approval in
+that batch's staging drill and approved it. The drill scripts, the drill
+record and the reconciliation command are in
+[offline-drills/](offline-drills/README.md). Record the approval in
 `deploy/lan/.env` and restart the server:
 
 ```
@@ -316,6 +318,10 @@ transaction rolls back, the conflict is written to
   `approve receiving ...`; the cloud then receives its current order
   quantities. A file held as `PHASE9_ATTACHMENT_FOLDER_MISSING` can be
   approved with `approve attachments ...`; it is stored at the top level.
+- A record dated in an accounting period the cloud has closed is held as
+  `PHASE9_PERIOD_CLOSED` (payments, stock, transfers, receiving) or as the
+  stream's own refusal code (payment and transfer edits); it can only be
+  rejected. Re-enter the fact in the cloud in an open period.
 - An attachment record waits (no conflict, `PHASE9_ATTACHMENT_FILE_NOT_STAGED`)
   until the relay has uploaded its bytes; re-run the relay, then `apply
   attachments`. The relay checks each file against its recorded SHA-256 before

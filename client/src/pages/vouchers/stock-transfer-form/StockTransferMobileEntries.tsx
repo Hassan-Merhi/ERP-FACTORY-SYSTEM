@@ -63,7 +63,7 @@ export function StockTransferMobileEntries({ model }: { model: StockTransferForm
                 .slice(0, 8)
             : [];
         return (
-          <div key={field.id} className="border rounded-md p-3 space-y-2 bg-card">
+          <div key={field.id} className={isPOS ? "pos-transfer-mobile-row border rounded-md p-3 space-y-2 bg-card" : "border rounded-md p-3 space-y-2 bg-card"}>
             <div className="flex items-center justify-between">
               <span className="text-xs text-muted-foreground font-medium">#{index + 1}</span>
               {transferFields.length > 1 && (

@@ -18,6 +18,16 @@ failure, so a correct document cannot quietly become undiscoverable.
 
 | Doc | What it covers |
 |---|---|
+| [permissions-control-center-plan.md](permissions-control-center-plan.md) | Permissions Control Center design, rollout sequence and security acceptance criteria |
+| [permissions-control-center-phase1.md](permissions-control-center-phase1.md) | Route inventory, candidate mappings and policy model |
+| [permissions-control-center-phase2.md](permissions-control-center-phase2.md) | Shadow policy API, migration and audit foundation |
+| [permissions-control-center-phase8.md](permissions-control-center-phase8.md) | Phase 8 release gate, audit, monitored rollout and rollback runbook |
+| [permissions-control-center-admin-guide.md](permissions-control-center-admin-guide.md) | Shadow role/user permission editor instructions, audit review and troubleshooting |
+| [permissions-control-center-phase7.md](permissions-control-center-phase7.md) | Phase 7 security verification, staging integrity and rollback gate |
+| [permissions-control-center-phase6.md](permissions-control-center-phase6.md) | Phase 6 shared frontend permission bridge and UI integration plan |
+| [permissions-control-center-phase5.md](permissions-control-center-phase5.md) | Phase 5 company-scoped user overrides and shadow access preview |
+| [permissions-control-center-phase4.md](permissions-control-center-phase4.md) | Phase 4 shadow role permissions matrix and release gates |
+| [permissions-control-center-phase3.md](permissions-control-center-phase3.md) | Permissions Phase 3: fail-closed Create Only writes, reviewed supplier creation and remaining route audits |
 | [what-is-this.md](what-is-this.md) | What the system is, in one page |
 | [onboarding.md](onboarding.md) | First login through first transaction |
 | [architecture.md](architecture.md) | How the codebase fits together |
@@ -238,6 +248,12 @@ Encrypted checkpoint transfer is not automatic database reconciliation.
 | [operations/factory-lan-phase4-checkpoint-transfer.md](operations/factory-lan-phase4-checkpoint-transfer.md) | Phase 4 cloud write fence and encrypted staging; remaining sync blockers |
 | [operations/factory-lan-phase6-certification.md](operations/factory-lan-phase6-certification.md) | Phase 6 independent release gate; not yet certified |
 | [operations/factory-offline-operations-runbook.md](operations/factory-offline-operations-runbook.md) | Phases 9–11 offline workflows, authority handover, conflicts, backup/restore, monitoring and verification evidence |
+| [operations/offline-drills/README.md](operations/offline-drills/README.md) | Staging drills for the offline plan batches: setup, roles and the common procedure |
+| [operations/offline-drills/batch-2-stock-items.md](operations/offline-drills/batch-2-stock-items.md) | Staging drill script for batch 2 (stock item create and delete) |
+| [operations/offline-drills/batch-3-transfers-imports.md](operations/offline-drills/batch-3-transfers-imports.md) | Staging drill script for batch 3 (transfers and Excel imports) |
+| [operations/offline-drills/batch-4-payments-files.md](operations/offline-drills/batch-4-payments-files.md) | Staging drill script for batch 4 (payment edits and deletes, file renames and moves) |
+| [operations/offline-drills/session-checks.md](operations/offline-drills/session-checks.md) | Checks run in every drill session: read-only laptops, old queues, operator buttons |
+| [operations/offline-drills/drill-record-template.md](operations/offline-drills/drill-record-template.md) | Template for the signed record of each staging drill |
 | [superpowers/plans/2026-10-30-offline-phase5.md](superpowers/plans/2026-10-30-offline-phase5.md) | Phase 5 browser snapshot encryption and limitations |
 | [superpowers/plans/2026-10-30-offline-integrated-roadmap.md](superpowers/plans/2026-10-30-offline-integrated-roadmap.md) | Remaining offline work planned for Phases 7–11 |
 | [superpowers/plans/2026-10-29-offline-phase1.md](superpowers/plans/2026-10-29-offline-phase1.md) | Phase 1 outbox scope and acceptance |
@@ -282,6 +298,7 @@ These current-reference documents are indexed here for audit coverage. Their beh
 | [christmas-mode-phase4.md](christmas-mode-phase4.md) | Global Christmas Mode Phase 4: one-time post-login entrance |
 | [christmas-mode-phase5.md](christmas-mode-phase5.md) | Global Christmas Mode Phase 5: performance, scanner and accessibility hardening |
 | [christmas-mode-developer-allowlist.md](christmas-mode-developer-allowlist.md) | Christmas Mode: Developer-only access and per-user rollout |
+| [christmas-mode-v2.md](christmas-mode-v2.md) | Christmas Mode 2.0: balanced seasonal experience and per-user opt-out |
 
 | [October 2026 salary reconciliation](accounting/october-2026-salary-reconciliation-20261103.md) | Read-only October payroll, paid cash and salary advances reconciliation (no journal edits) |
 | [Factory worker-advance ledger audit](accounting/factory-worker-advance-ledger-audit-2026-11-03.md) | Current worker-advance ledger investigation, safeguards and payment evidence |

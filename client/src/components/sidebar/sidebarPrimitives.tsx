@@ -1,6 +1,21 @@
 import { useState, useEffect, useRef, ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { ChevronDown, GripVertical, LogOut, Factory, Package, Truck, Wallet, Building2, Sparkles, Landmark, BarChart3, Store, Layers, type LucideIcon } from "lucide-react";
+import {
+  ChevronDown,
+  GripVertical,
+  LogOut,
+  Factory,
+  Package,
+  Truck,
+  Wallet,
+  Building2,
+  Sparkles,
+  Landmark,
+  BarChart3,
+  Store,
+  Layers,
+  type LucideIcon,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -32,15 +47,25 @@ export interface NavSection {
   devOnly?: boolean;
 }
 
-const baseLinkClasses = "premium-nav-link relative flex items-center gap-2.5 rounded-md py-1.5 pl-3 pr-2.5 text-sm transition-colors";
+const baseLinkClasses =
+  "premium-nav-link relative flex items-center gap-2.5 rounded-md py-1.5 pl-3 pr-2.5 text-sm transition-colors";
 const inactiveClasses = "text-muted-foreground hover:bg-sidebar-accent/40 hover:text-foreground";
 const activeClasses = "premium-nav-active bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-2xs";
 
 const SECTION_ICONS: Record<string, LucideIcon> = {
-  production: Factory, inventory: Package, "sales & loading": Truck, "sales & pos": Store,
-  finance: Wallet, accounting: Landmark, "accounting tools": Landmark,
-  analytics: BarChart3, rentals: Building2, intelligence: Sparkles,
-  operations: Layers, reports: BarChart3, "ai tools": Sparkles,
+  production: Factory,
+  inventory: Package,
+  "sales & loading": Truck,
+  "sales & pos": Store,
+  finance: Wallet,
+  accounting: Landmark,
+  "accounting tools": Landmark,
+  analytics: BarChart3,
+  rentals: Building2,
+  intelligence: Sparkles,
+  operations: Layers,
+  reports: BarChart3,
+  "ai tools": Sparkles,
 };
 
 function canonicalSidebarPath(url: string): string {
@@ -260,7 +285,10 @@ export function usePinnedOrder(storageKey: string, defaults: NavItem[]) {
     try {
       const raw = localStorage.getItem(storageKey);
       const saved: unknown = raw ? JSON.parse(raw) : null;
-      return reconcilePinnedOrder(saved, defaults.map((i) => i.url));
+      return reconcilePinnedOrder(
+        saved,
+        defaults.map((i) => i.url)
+      );
     } catch {
       return defaults.map((i) => i.url);
     }

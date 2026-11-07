@@ -1,6 +1,19 @@
 import type { ApplicationTranslationCatalog } from "./applicationTranslations";
 
 export const applicationFrenchTranslations = {
+  "pos.modern.createSale": "Créer une nouvelle vente",
+  "pos.modern.reviewSale": "Vérifier et modifier cette vente",
+  "pos.modern.addItems": "Ajouter des articles à cette vente",
+  "pos.modern.addItemsHint":
+    "Recherchez et sélectionnez des produits dans le panneau Articles ou saisissez-les dans le tableau de vente.",
+  "pos.modern.notes": "Notes",
+  "pos.modern.optional": "(facultatif)",
+  "pos.modern.notesPlaceholder": "Ajouter une note concernant cette vente...",
+  "pos.modern.location": "Emplacement",
+  "pos.modern.date": "Date",
+  "pos.modern.paymentMethod": "Mode de paiement",
+  "pos.modern.account": "Caisse / Compte",
+  "pos.modern.saleSettings": "Paramètres de vente",
   "language.label": "Langue",
   "language.english": "Anglais",
   "language.arabic": "Arabe",

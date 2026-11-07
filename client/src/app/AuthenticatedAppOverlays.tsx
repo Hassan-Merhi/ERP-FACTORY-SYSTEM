@@ -3,9 +3,10 @@ import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { FactoryLanOriginBadge } from "@/components/FactoryLanOriginBadge";
 import { GlobalSnowfall } from "@/components/GlobalSnowfall";
 import { GlobalSeasonalDecorations } from "@/components/GlobalSeasonalDecorations";
-import { useChristmasMode } from "@/hooks/useChristmasMode";
+import { useChristmasMode, defaultChristmasVisuals } from "@/hooks/useChristmasMode";
 import { ChristmasLoginEntrance } from "@/components/ChristmasLoginEntrance";
 import { ChristmasSleighFlyover } from "@/components/ChristmasSleighFlyover";
+import { ChristmasVisualExtras } from "@/components/ChristmasVisualExtras";
 import { useSeasonalCameraActivity } from "@/lib/seasonalCameraActivity";
 
 const RemoteSupportRuntime = lazy(() =>
@@ -47,15 +48,28 @@ export function AuthenticatedAppOverlays() {
   const remoteSupportReady = useDeferredRemoteSupport();
   const { settingQuery } = useChristmasMode();
   const christmasModeEnabled = settingQuery.data?.enabled === true;
+  const visuals = settingQuery.data?.visuals ?? defaultChristmasVisuals;
   const cameraActive = useSeasonalCameraActivity();
   const allowSeasonalAnimations = christmasModeEnabled && !cameraActive;
 
   return (
     <>
       <FactoryLanOriginBadge />
-      <GlobalSeasonalDecorations enabled={christmasModeEnabled} />
-      <GlobalSnowfall enabled={allowSeasonalAnimations} />
-      <ChristmasSleighFlyover enabled={allowSeasonalAnimations} />
+      <GlobalSeasonalDecorations
+        enabled={christmasModeEnabled}
+        garlands={visuals.effects.garlands}
+        snowCaps={visuals.effects.snowfall}
+        intensity={visuals.intensity}
+      />
+      <GlobalSnowfall enabled={allowSeasonalAnimations && visuals.effects.snowfall} intensity={visuals.intensity} />
+      <ChristmasSleighFlyover enabled={allowSeasonalAnimations && visuals.effects.santa} />
+      <ChristmasVisualExtras
+        enabled={christmasModeEnabled}
+        countdown={visuals.effects.countdown}
+        gifts={allowSeasonalAnimations && visuals.effects.gifts}
+        ambient={visuals.effects.ambient}
+        intensity={visuals.intensity}
+      />
       <ChristmasLoginEntrance enabled={allowSeasonalAnimations} queryStatus={settingQuery.status} />
       <Suspense fallback={null}>{remoteSupportReady ? <RemoteSupportRuntime /> : null}</Suspense>
     </>

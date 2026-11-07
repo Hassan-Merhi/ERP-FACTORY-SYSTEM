@@ -39,6 +39,7 @@ export function mergeManifest(current, validated, sha, publishedBy, publishedAt 
       publishedAt,
       publishedBy,
       durationSeconds: Math.round(item.durationSeconds),
+      ...(item.route ? { route: item.route } : {}),
     };
   }
   return Object.fromEntries(Object.entries(next).sort(([a], [b]) => a.localeCompare(b)));
@@ -79,7 +80,11 @@ async function grant(jwt, body) {
     body: JSON.stringify(body),
     redirect: "error",
   });
-  if (!response.ok) throw new Error("The protected gateway refused " + body.key + ": HTTP " + response.status);
+  if (!response.ok) {
+    // The gateway names the failed check (identity, policy or storage signing).
+    const detail = (await response.text().catch(() => "")).slice(0, 300);
+    throw new Error("The protected gateway refused " + body.key + ": HTTP " + response.status + (detail ? " " + detail : ""));
+  }
   return response.json();
 }
 
@@ -170,8 +175,18 @@ if (process.argv[1] && path.resolve(process.argv[1]) === new URL(import.meta.url
   const manifest = mergeManifest(await currentManifest(jwt), validated, sha, publishedBy);
   const manifestBytes = Buffer.from(JSON.stringify(manifest, null, 2) + "\n");
   await upload(jwt, MANIFEST_KEY, manifestBytes, "application/json", true);
+  // The new manifest is live: let the gateway remove recordings it no longer
+  // references, so storage holds one set of videos instead of one per night.
+  // A failed clean-up is reported but does not undo the publication.
+  let pruned = null;
+  try {
+    pruned = await grant(jwt, { operation: "prune" });
+    console.log("Removed " + pruned.deleted + " superseded media file(s), " + Math.round(pruned.freedBytes / 1048576) + " MB");
+  } catch (error) {
+    console.warn("::warning::Superseded recordings were not removed: " + String(error?.message || error));
+  }
   await fs.writeFile(path.join(root, "published-upload-report.json"),
     JSON.stringify({ provider: "Vercel private Blob via OIDC", sourceSha: sha, publishedBy,
-      topics: validated.map((item) => item.topic), uploaded: receipts, manifestTopics: Object.keys(manifest) }, null, 2));
+      topics: validated.map((item) => item.topic), uploaded: receipts, manifestTopics: Object.keys(manifest), pruned }, null, 2));
   console.log("Published " + validated.length + " training video(s); manifest now lists " + Object.keys(manifest).length + " topic(s)");
 }

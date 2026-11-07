@@ -42,17 +42,19 @@ export function ChristmasModePreferenceCard() {
             disabled={updatePersonalPreference.isPending}
             onCheckedChange={(enabled) =>
               updatePersonalPreference.mutate(enabled, {
-                onSuccess: () => toast({
-                  title: enabled ? "Christmas Mode turned on" : "Christmas Mode turned off",
-                  description: enabled
-                    ? "You'll see the festive effects when the Developer master switch is on."
-                    : "Your account will no longer display Christmas decorations.",
-                }),
-                onError: (error) => toast({
-                  title: "Couldn't update Christmas Mode",
-                  description: error.message,
-                  variant: "destructive",
-                }),
+                onSuccess: () =>
+                  toast({
+                    title: enabled ? "Christmas Mode turned on" : "Christmas Mode turned off",
+                    description: enabled
+                      ? "You'll see the festive effects when the Developer master switch is on."
+                      : "Your account will no longer display Christmas decorations.",
+                  }),
+                onError: (error) =>
+                  toast({
+                    title: "Couldn't update Christmas Mode",
+                    description: error.message,
+                    variant: "destructive",
+                  }),
               })
             }
           />
@@ -67,6 +69,18 @@ export function ChristmasModePreferenceCard() {
             onClick={() => window.dispatchEvent(new Event("christmas:sleigh-preview"))}
           >
             Preview Santa now
+          </Button>
+        )}
+        {setting.enabled && setting.visuals?.effects.gifts && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-3 ml-2"
+            data-testid="button-preview-christmas-gift"
+            onClick={() => window.dispatchEvent(new Event("christmas:gift-preview"))}
+          >
+            Preview a festive gift
           </Button>
         )}
         {!setting.enabled && setting.preferenceEnabled && (

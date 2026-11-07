@@ -16,6 +16,8 @@ import { ReceiptVoucherTab } from "@/components/vouchers/ReceiptVoucherTab";
 import { CreditNoteTab } from "@/components/vouchers/CreditNoteTab";
 import { CreateAccountModal } from "@/components/vouchers/CreateAccountModal";
 import { PageHeader } from "@/components/PageHeader";
+import { ArrowRightLeft } from "lucide-react";
+import "@/pages/vouchers/pos-stock-transfer.css";
 import "@/pages/vouchers/voucher-premium.css";
 import {
   AlertDialog,
@@ -527,10 +529,10 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
 
   return (
     <div
-      className={`space-y-4 md:space-y-5 ${!isPOS && (activeTab === "payment" || activeTab === "receipt" || activeTab === "journal") ? `voucher-workspace voucher-workspace--${activeTab}` : ""}`}
+      className={`space-y-4 md:space-y-5 ${isPOS ? "pos-stock-transfer-page" : ""} ${!isPOS && (activeTab === "payment" || activeTab === "receipt" || activeTab === "journal") ? `voucher-workspace voucher-workspace--${activeTab}` : ""}`}
     >
       {isPOS ? (
-        <PageHeader title="Stock Transfer" subtitle="Transfer stock between locations" />
+        <PageHeader title="Stock Transfer" subtitle="Transfer stock between locations" icon={<ArrowRightLeft className="h-6 w-6" aria-hidden="true" />} />
       ) : !isFactoryMode ? (
         <PageHeader title="Vouchers" subtitle="Create and manage payment, receipt, and journal entries">
           {showOptionalDrafts && (

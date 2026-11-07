@@ -44,7 +44,7 @@ function randomFlake(width: number, height: number, startAbove = false): Flake {
   };
 }
 
-function SnowfallCanvas() {
+function SnowfallCanvas({ intensity }: { intensity: "subtle" | "balanced" | "full" }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { theme } = useTheme();
 
@@ -91,7 +91,12 @@ function SnowfallCanvas() {
         }
       }
 
-      const desiredCount = snowfallParticleCount(width, height);
+      const baseCount = snowfallParticleCount(width, height);
+      const maxCount = width < 640 ? 24 : 64;
+      const desiredCount = Math.min(
+        maxCount,
+        Math.round(baseCount * (intensity === "subtle" ? 0.5 : intensity === "full" ? 1.35 : 1))
+      );
       if (flakes.length > desiredCount) flakes.length = desiredCount;
       while (flakes.length < desiredCount) flakes.push(randomFlake(width, height));
     }
@@ -205,7 +210,7 @@ function SnowfallCanvas() {
       window.removeEventListener("pageshow", resume);
       ctx.clearRect(0, 0, width, height);
     };
-  }, [theme]);
+  }, [theme, intensity]);
 
   return (
     <canvas
@@ -224,8 +229,14 @@ function SnowfallCanvas() {
  * Only render after the global setting is explicitly ON.
  * Reduced-motion users never start the canvas animation.
  */
-export function GlobalSnowfall({ enabled }: { enabled: boolean }) {
+export function GlobalSnowfall({
+  enabled,
+  intensity = "balanced",
+}: {
+  enabled: boolean;
+  intensity?: "subtle" | "balanced" | "full";
+}) {
   const motionRestricted = useSeasonalMotionRestricted();
   if (!enabled || motionRestricted) return null;
-  return <SnowfallCanvas />;
+  return <SnowfallCanvas intensity={intensity} />;
 }

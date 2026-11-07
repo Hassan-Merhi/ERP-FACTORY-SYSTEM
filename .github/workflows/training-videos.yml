@@ -43,6 +43,7 @@ on:
           - erp-daybook
           - erp-reports
           - all
+          - all-pages
 
 permissions:
   contents: read
@@ -50,8 +51,13 @@ permissions:
 jobs:
   record-training:
     runs-on: ubuntu-26.04
-    # Sixteen narrated tours take roughly 4-5 minutes each to capture and voice.
+    # "all-pages" records every page the sample users can open (about 60), so it is
+    # split across eight parallel shards; a short topic list records in one job.
     timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON((inputs.topic == 'all-pages' || inputs.topic == 'all') && '[0,1,2,3,4,5,6,7]' || '[0]') }}
     services:
       postgres:
         image: postgres:18
@@ -71,6 +77,12 @@ jobs:
       TRAINING_SANDBOX_VERIFIED: "1"
       TRAINING_BASE_URL: http://127.0.0.1:5000
       TRAINING_TOPIC: ${{ inputs.topic || 'factory-overview,erp-tracking' }}
+      TRAINING_SHARD: ${{ matrix.shard }}/${{ (inputs.topic == 'all-pages' || inputs.topic == 'all') && 8 || 1 }}
+      # A full-system run publishes every page that recorded cleanly; a page that
+      # fails is reported and keeps its previous video. Short runs must all pass.
+      TRAINING_ALLOW_PARTIAL: ${{ (inputs.topic == 'all-pages' || inputs.topic == 'all') && '1' || '0' }}
+      # Full-system runs keep each page to ten minutes so the published set stays small.
+      TRAINING_MAX_SECONDS: ${{ (inputs.topic == 'all-pages' || inputs.topic == 'all') && '600' || '1200' }}
       CSRF_ENFORCE: "0"
       ENABLE_SCHEDULERS: "false"
       PORT: "5000"
@@ -177,7 +189,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: real-erp-training-${{ github.run_id }}
+          name: real-erp-training-${{ github.run_id }}-shard-${{ matrix.shard }}
           path: artifacts/training-videos
           if-no-files-found: warn
           retention-days: 30

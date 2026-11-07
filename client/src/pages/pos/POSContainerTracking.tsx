@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { CheckCircle2, Columns3, FileClock, FilterX, Loader2, MapPin, PackageSearch, Save, Search, Truck } from "lucide-react";
+import { CheckCircle2, Columns3, FileClock, FilterX, Loader2, MapPin, PackageSearch, Save, Search, Snowflake, Truck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +21,7 @@ import { useOptionalApplicationLanguage } from "@/contexts/ApplicationLanguageCo
 import { duoMobileText } from "@/i18n/iphoneDuoMobileTranslations";
 import { useToast } from "@/hooks/use-toast";
 import { daysSincePortDeparture, getLocalTodayISO } from "./portDeparture";
+import "@/styles/pos-container-premium.css";
 
 interface PosUserContext {
   currentCompanyId?: number | null;
@@ -314,17 +315,18 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
 
   return (
     <div
-      className="flex h-full min-h-0 flex-col gap-3 overflow-hidden p-3 sm:p-4"
+      className="pos-containers-page flex h-full min-h-0 flex-col gap-3 overflow-hidden p-3 sm:p-4"
       data-testid="pos-container-tracking-page"
     >
-      <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="pos-containers-heading flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="pos-container-seasonal" aria-hidden="true"><Snowflake className="h-5 w-5" /><Snowflake className="mt-5 h-3 w-3" /></div>
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <div className="pos-containers-heading-icon">
               <PackageSearch className="h-5 w-5" aria-hidden="true" />
             </div>
             <div>
-              <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Containers OTW</h1>
+              <h1 className="pos-containers-title">Containers OTW</h1>
               <div className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
                 <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
                 <span>
@@ -336,52 +338,48 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="text-pos-container-count">
+        <div className="pos-containers-count text-sm text-muted-foreground" data-testid="text-pos-container-count">
           {data ? (
             <>
-              <Badge variant="secondary">{visibleContainers.length} shown</Badge>
+              <Badge variant="secondary" data-pos-shown-badge="true">{visibleContainers.length} shown</Badge>
               <span>{data.total} active</span>
             </>
           ) : null}
         </div>
       </div>
 
-      <div className="grid shrink-0 grid-cols-2 gap-2 lg:grid-cols-4">
-        <div className="rounded-xl border bg-card/60 px-3 py-2.5 shadow-xs">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Active</p>
-            <PackageSearch className="h-4 w-4 text-primary" aria-hidden="true" />
+      <div className="pos-container-kpis grid shrink-0 grid-cols-2 gap-2.5 lg:grid-cols-4">
+        <div className="pos-container-kpi" data-kpi-tone="violet">
+          <span className="pos-container-kpi-icon"><PackageSearch className="h-5 w-5" aria-hidden="true" /></span>
+          <div className="min-w-0">
+            <p className="pos-container-kpi-label">Active</p>
+            <p className="pos-container-kpi-value">{isLoading ? "—" : summary.total}</p>
           </div>
-          <p className="mt-0.5 text-xl font-semibold tabular-nums sm:text-2xl">{isLoading ? "—" : summary.total}</p>
         </div>
-        <div className="rounded-xl border bg-card/60 px-3 py-2.5 shadow-xs">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Truck Assigned</p>
-            <Truck className="h-4 w-4 text-primary" aria-hidden="true" />
+        <div className="pos-container-kpi" data-kpi-tone="orange">
+          <span className="pos-container-kpi-icon"><Truck className="h-5 w-5" aria-hidden="true" /></span>
+          <div className="min-w-0">
+            <p className="pos-container-kpi-label">Truck Assigned</p>
+            <p className="pos-container-kpi-value">{isLoading ? "—" : summary.withTruck}</p>
           </div>
-          <p className="mt-0.5 text-xl font-semibold tabular-nums sm:text-2xl">{isLoading ? "—" : summary.withTruck}</p>
         </div>
-        <div className="rounded-xl border bg-card/60 px-3 py-2.5 shadow-xs">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Docs Received</p>
-            <CheckCircle2 className="h-4 w-4 text-primary" aria-hidden="true" />
+        <div className="pos-container-kpi" data-kpi-tone="green">
+          <span className="pos-container-kpi-icon"><CheckCircle2 className="h-5 w-5" aria-hidden="true" /></span>
+          <div className="min-w-0">
+            <p className="pos-container-kpi-label">Docs Received</p>
+            <p className="pos-container-kpi-value">{isLoading ? "—" : summary.docsReceived}</p>
           </div>
-          <p className="mt-0.5 text-xl font-semibold tabular-nums sm:text-2xl">
-            {isLoading ? "—" : summary.docsReceived}
-          </p>
         </div>
-        <div className="rounded-xl border bg-card/60 px-3 py-2.5 shadow-xs">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Docs To Send</p>
-            <FileClock className="h-4 w-4 text-primary" aria-hidden="true" />
+        <div className="pos-container-kpi" data-kpi-tone="blue">
+          <span className="pos-container-kpi-icon"><FileClock className="h-5 w-5" aria-hidden="true" /></span>
+          <div className="min-w-0">
+            <p className="pos-container-kpi-label">Docs To Send</p>
+            <p className="pos-container-kpi-value">{isLoading ? "—" : summary.docsReadyNotSent}</p>
           </div>
-          <p className="mt-0.5 text-xl font-semibold tabular-nums sm:text-2xl">
-            {isLoading ? "—" : summary.docsReadyNotSent}
-          </p>
         </div>
       </div>
 
-      <div className="shrink-0 rounded-xl border bg-card/40 p-2.5 shadow-xs">
+      <div className="pos-container-filters shrink-0">
         <div className="flex items-center gap-2">
           <div className="relative min-w-0 flex-1">
             <Search
@@ -515,7 +513,7 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
             {dt("noMatchingContainers")}
           </p>
         ) : visibleContainers.map((container) => (
-          <article key={container.id} className="min-w-0 rounded-xl border bg-card p-3 shadow-sm"
+          <article key={container.id} className="pos-container-mobile-card min-w-0 p-3"
             data-testid={`pos-container-mobile-${container.id}`}>
             <div className="flex min-w-0 items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
@@ -528,7 +526,7 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
                   <p className="break-words text-xs text-muted-foreground">{supplierLabel(container)}</p>
                 )}
               </div>
-              {isColumnVisible("status") && <Badge variant="outline" className="max-w-[45%] break-words text-right">{container.status}</Badge>}
+              {isColumnVisible("status") && <Badge variant="outline" className="pos-container-status max-w-[45%] break-words text-right">{container.status}</Badge>}
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-muted/30 p-2 text-xs">
               {isColumnVisible("eta") && (
@@ -569,7 +567,7 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
         ))}
       </section>
       <div
-        className="hidden min-h-[320px] flex-1 overflow-auto rounded-xl border bg-card/30 shadow-xs md:block phone-land:hidden"
+        className="pos-container-table hidden min-h-[320px] flex-1 overflow-auto md:block phone-land:hidden"
         data-table-scroll-region
       >
         {isLoading ? (
@@ -589,7 +587,7 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
           </div>
         ) : (
           <Table className="min-w-[1120px]">
-            <TableHeader className="sticky top-0 z-10 bg-background">
+            <TableHeader className="sticky top-0 z-10">
               <TableRow>
                 {isColumnVisible("container") ? <TableHead className="whitespace-nowrap">Container #</TableHead> : null}
                 {isColumnVisible("supplier") ? <TableHead className="whitespace-nowrap">Supplier</TableHead> : null}
@@ -640,7 +638,7 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
                     ) : null}
                     {isColumnVisible("status") ? (
                       <TableCell className="whitespace-nowrap">
-                        <Badge variant="outline">{container.status}</Badge>
+                        <Badge variant="outline" className="pos-container-status">{container.status}</Badge>
                       </TableCell>
                     ) : null}
                     {isColumnVisible("eta") ? (

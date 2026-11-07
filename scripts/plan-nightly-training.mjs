@@ -66,6 +66,8 @@ fs.mkdirSync("artifacts/training-plan", { recursive: true });
 fs.writeFileSync("artifacts/training-plan/plan.json", JSON.stringify(payload, null, 2));
 if (process.env.GITHUB_OUTPUT) {
   fs.appendFileSync(process.env.GITHUB_OUTPUT, "record=" + String(plan.topics.length > 0) + "\n");
-  fs.appendFileSync(process.env.GITHUB_OUTPUT, "topics=" + plan.topics.join(",") + "\n");
+  // Any change that needs new recordings re-records every page the training
+  // companies expose (discovered from their navigation), split across shards.
+  fs.appendFileSync(process.env.GITHUB_OUTPUT, "topics=" + (plan.topics.length ? "all-pages" : "") + "\n");
 }
 console.log(JSON.stringify(payload, null, 2));

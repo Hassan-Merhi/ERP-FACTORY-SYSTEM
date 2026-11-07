@@ -1,0 +1,231 @@
+/*
+ * POS Daybook refresh — scoped to the POS page so ERP/Factory/Properties
+ * pages retain their own surfaces. All colors inherit application themes.
+ */
+[data-pos-daybook="modern"] {
+  --pos-accent-blue: #2563eb;
+  --pos-accent-violet: #7c3aed;
+  --pos-accent-cyan: #0891b2;
+  --pos-daybook-card: color-mix(in srgb, hsl(var(--card)) 94%, hsl(var(--primary)) 6%);
+  color: hsl(var(--foreground));
+  position: relative;
+  isolation: isolate;
+}
+[data-pos-daybook="modern"] .pos-daybook-hero {
+  min-height: 6.25rem;
+  border: 1px solid color-mix(in srgb, hsl(var(--border)) 78%, transparent);
+  border-radius: 1.25rem;
+  padding: 1.15rem 1.35rem;
+  background:
+    radial-gradient(ellipse at 0 0, color-mix(in srgb, hsl(var(--primary)) 9%, transparent), transparent 62%),
+    hsl(var(--card));
+  box-shadow: 0 7px 28px rgb(15 23 42 / 0.035);
+}
+[data-pos-daybook="modern"] .pos-daybook-title-icon {
+  color: #2563eb;
+  background: linear-gradient(145deg, #e5efff, #f3f6ff);
+  border: 1px solid #cadcff;
+  box-shadow: 0 7px 14px rgb(37 99 235 / 0.12);
+}
+.dark [data-pos-daybook="modern"] .pos-daybook-title-icon {
+  color: #9dc3ff;
+  background: linear-gradient(145deg, #234a96, #132b53);
+  border-color: #365c98;
+  box-shadow: 0 9px 23px rgb(0 0 0 / 0.2);
+}
+[data-pos-daybook="modern"] .pos-daybook-seasonal-chip {
+  border: 1px solid hsl(var(--border));
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--muted) / 0.4);
+}
+html[data-christmas-mode="on"] [data-pos-daybook="modern"] .pos-daybook-seasonal-chip {
+  border-color: rgb(52 151 106 / 0.25);
+  color: #17754b;
+  background: #e6f6ee;
+}
+html.dark[data-christmas-mode="on"] [data-pos-daybook="modern"] .pos-daybook-seasonal-chip {
+  color: #9de3ba;
+  border-color: rgb(89 179 132 / 0.32);
+  background: rgb(21 112 71 / 0.2);
+}
+[data-pos-daybook="modern"] .pos-daybook-stat {
+  border: 1px solid hsl(var(--border) / 0.75);
+  background: var(--pos-daybook-card);
+  box-shadow: 0 10px 26px rgb(15 23 42 / 0.045);
+  transition: box-shadow 160ms ease, transform 160ms ease;
+}
+[data-pos-daybook="modern"] .pos-daybook-stat::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  height: 125px;
+  width: 125px;
+  border-radius: 50%;
+  right: -60px;
+  bottom: -70px;
+  opacity: 0.7;
+  background: var(--pos-stat-glow, transparent);
+}
+[data-pos-daybook="modern"] .pos-daybook-stat--blue {
+  --pos-stat-glow: radial-gradient(circle, rgb(59 130 246 / 0.2), transparent 72%);
+  background: linear-gradient(135deg, color-mix(in srgb, hsl(var(--card)) 92%, #dceaff), hsl(var(--card)));
+}
+[data-pos-daybook="modern"] .pos-daybook-stat--violet {
+  --pos-stat-glow: radial-gradient(circle, rgb(139 92 246 / 0.2), transparent 72%);
+  background: linear-gradient(135deg, color-mix(in srgb, hsl(var(--card)) 91%, #eee5ff), hsl(var(--card)));
+}
+[data-pos-daybook="modern"] .pos-daybook-stat--cyan {
+  --pos-stat-glow: radial-gradient(circle, rgb(6 182 212 / 0.2), transparent 72%);
+  background: linear-gradient(135deg, color-mix(in srgb, hsl(var(--card)) 91%, #dcf8ff), hsl(var(--card)));
+}
+[data-pos-daybook="modern"] .pos-daybook-stat--slate {
+  --pos-stat-glow: radial-gradient(circle, rgb(100 116 139 / 0.15), transparent 72%);
+  background: linear-gradient(135deg, color-mix(in srgb, hsl(var(--card)) 93%, hsl(var(--muted))), hsl(var(--card)));
+}
+[data-pos-daybook="modern"] .pos-daybook-stat-icon {
+  color: var(--pos-accent-blue);
+  background: rgb(37 99 235 / 0.095);
+}
+[data-pos-daybook="modern"] .pos-daybook-stat--violet .pos-daybook-stat-icon {
+  color: var(--pos-accent-violet);
+  background: rgb(124 58 237 / 0.1);
+}
+[data-pos-daybook="modern"] .pos-daybook-stat--cyan .pos-daybook-stat-icon {
+  color: var(--pos-accent-cyan);
+  background: rgb(8 145 178 / 0.1);
+}
+[data-pos-daybook="modern"] .pos-daybook-stat--slate .pos-daybook-stat-icon {
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--muted));
+}
+.dark [data-pos-daybook="modern"] .pos-daybook-stat {
+  border-color: hsl(var(--border) / 0.75);
+  box-shadow: 0 12px 30px rgb(0 0 0 / 0.16);
+}
+.dark [data-pos-daybook="modern"] .pos-daybook-stat-icon { color: #94beff; background: rgb(59 130 246 / 0.17); }
+.dark [data-pos-daybook="modern"] .pos-daybook-stat--violet .pos-daybook-stat-icon { color: #c5a8ff; background: rgb(124 58 237 / 0.16); }
+.dark [data-pos-daybook="modern"] .pos-daybook-stat--cyan .pos-daybook-stat-icon { color: #7de3f4; background: rgb(8 145 178 / 0.16); }
+
+[data-pos-daybook="modern"] .pos-daybook-transactions {
+  overflow: hidden;
+  border: 1px solid hsl(var(--border) / 0.78);
+  border-radius: 1.25rem;
+  background: hsl(var(--card));
+  box-shadow: 0 12px 28px rgb(15 23 42 / 0.038);
+}
+[data-pos-daybook="modern"] .pos-daybook-toolbar {
+  padding: 1.15rem 1.25rem;
+  border-bottom: 1px solid hsl(var(--border) / 0.65);
+}
+[data-pos-daybook="modern"] .pos-daybook-count {
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.085);
+}
+[data-pos-daybook="modern"] .pos-daybook-search,
+[data-pos-daybook="modern"] .pos-daybook-type-tabs {
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border) / 0.86);
+  background: hsl(var(--muted) / 0.4);
+}
+[data-pos-daybook="modern"] .pos-daybook-search:focus-within {
+  outline: 2px solid hsl(var(--ring) / 0.55);
+  outline-offset: 1px;
+}
+[data-pos-daybook="modern"] .pos-daybook-type-tab {
+  color: hsl(var(--muted-foreground));
+}
+[data-pos-daybook="modern"] .pos-daybook-type-tab:hover {
+  color: hsl(var(--foreground));
+}
+[data-pos-daybook="modern"] .pos-daybook-type-tab[aria-pressed="true"] {
+  color: hsl(var(--primary-foreground));
+  background: hsl(var(--primary));
+  box-shadow: 0 3px 7px hsl(var(--primary) / 0.15);
+}
+[data-pos-daybook="modern"] .pos-daybook-type-tab:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 1px;
+}
+[data-pos-daybook="modern"] .pos-daybook-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+[data-pos-daybook="modern"] .pos-daybook-table-wrap table {
+  min-width: 660px;
+}
+[data-pos-daybook="modern"] .pos-daybook-table-wrap thead {
+  background: hsl(var(--muted) / 0.52);
+}
+[data-pos-daybook="modern"] .pos-daybook-table-wrap th {
+  font-size: 0.73rem;
+  font-weight: 700;
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
+}
+[data-pos-daybook="modern"] .pos-daybook-table-wrap td {
+  padding-block: 0.85rem;
+}
+[data-pos-daybook="modern"] .pos-daybook-table-wrap tbody tr:hover {
+  background: hsl(var(--primary) / 0.035);
+}
+[data-pos-daybook="modern"] .pos-daybook-sale-badge {
+  border: 1px solid rgb(37 99 235 / 0.15);
+  color: #1d4ed8;
+  background: rgb(59 130 246 / 0.11);
+  box-shadow: none;
+}
+[data-pos-daybook="modern"] .pos-daybook-transfer-badge {
+  border: 1px solid rgb(124 58 237 / 0.15);
+  color: #6d28d9;
+  background: rgb(124 58 237 / 0.1);
+  box-shadow: none;
+}
+.dark [data-pos-daybook="modern"] .pos-daybook-sale-badge { color: #b6d4ff; background: rgb(37 99 235 / 0.25); }
+.dark [data-pos-daybook="modern"] .pos-daybook-transfer-badge { color: #d7c2ff; background: rgb(124 58 237 / 0.25); }
+[data-pos-daybook="modern"] .pos-daybook-empty {
+  position: relative;
+  background:
+    radial-gradient(ellipse at 50% 100%, hsl(var(--primary) / 0.048), transparent 65%),
+    hsl(var(--card));
+}
+[data-pos-daybook="modern"] .pos-daybook-empty-icon {
+  color: hsl(var(--primary));
+  border: 1px solid hsl(var(--primary) / 0.15);
+  background: hsl(var(--primary) / 0.085);
+}
+/* Reuse the single global effective-user flag; no new toggle, permissions or animation. */
+html[data-christmas-mode="on"] [data-pos-daybook="modern"] .pos-daybook-empty {
+  background:
+    radial-gradient(ellipse at 50% 105%, rgb(111 184 219 / 0.12), transparent 65%),
+    hsl(var(--card));
+}
+html[data-christmas-mode="on"] [data-pos-daybook="modern"] .pos-daybook-empty::after {
+  content: "❄";
+  position: absolute;
+  inset-inline-end: 1.5rem;
+  bottom: 1.2rem;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: #8ebddc;
+  opacity: 0.48;
+  pointer-events: none;
+}
+html.dark[data-christmas-mode="on"] [data-pos-daybook="modern"] .pos-daybook-empty::after { color: #a3d6f0; }
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  [data-pos-daybook="modern"] .pos-daybook-stat:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 28px rgb(15 23 42 / 0.07);
+  }
+}
+@media (max-width: 639px) {
+  [data-pos-daybook="modern"] .pos-daybook-hero { padding: 0.95rem; }
+  [data-pos-daybook="modern"] .pos-daybook-stat { padding: 0.85rem; }
+  [data-pos-daybook="modern"] .pos-daybook-stat-icon { height: 1.9rem; width: 1.9rem; }
+  [data-pos-daybook="modern"] .pos-daybook-toolbar { padding: 0.9rem; }
+  [data-pos-daybook="modern"] .pos-daybook-search { flex-basis: 100%; }
+}
+@media print {
+  [data-pos-daybook="modern"] .pos-daybook-hero,
+  [data-pos-daybook="modern"] .pos-daybook-stats,
+  [data-pos-daybook="modern"] .pos-daybook-transactions { display: none !important; }
+}

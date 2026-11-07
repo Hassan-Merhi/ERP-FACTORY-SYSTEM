@@ -34,6 +34,7 @@ import {
   type Phase9PaymentVoucherRef,
 } from "./phase9PaymentEnvelope.mjs";
 import { phase9PaymentReconciledTx, phase9PaymentSnapshotTx } from "./phase9PaymentSnapshot";
+import { throwIfClosedPeriod } from "./phase9ClosedPeriod";
 
 type Queryable = Pick<PoolClient, "query">;
 type Context = { readonly overrideConflicts: readonly string[]; readonly siteId: string };
@@ -138,6 +139,7 @@ async function holdUnlessUnchanged(
 /** A refusal by the posting code needs a decision; a database failure is retried by the next run. */
 function refusal(error: unknown, code: string): never {
   if (error instanceof Phase9EventConflict) throw error;
+  throwIfClosedPeriod(error);
   const sqlState = (error as { code?: unknown } | null)?.code;
   if (typeof sqlState === "string" && /^[0-9A-Z]{5}$/.test(sqlState)) throw error;
   if (!(error instanceof Error)) throw error;

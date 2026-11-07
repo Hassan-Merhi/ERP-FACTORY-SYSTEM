@@ -101,11 +101,14 @@ export function ChristmasLoginEntrance({ enabled, queryStatus }: Props) {
     }
   }, [enabled, reduceMotion]);
 
-  useEffect(() => () => {
-    playbackAttemptRef.current += 1;
-    playbackStopRef.current?.();
-    playbackStopRef.current = null;
-  }, []);
+  useEffect(
+    () => () => {
+      playbackAttemptRef.current += 1;
+      playbackStopRef.current?.();
+      playbackStopRef.current = null;
+    },
+    []
+  );
 
   if (!enabled || reduceMotion || visibleUntil === 0) return null;
 
@@ -118,11 +121,7 @@ export function ChristmasLoginEntrance({ enabled, queryStatus }: Props) {
     >
       <div className="christmas-login-snowfield" aria-hidden="true">
         {WELCOME_FLAKES.map((style, index) => (
-          <span
-            key={index}
-            className="christmas-login-flake"
-            style={style}
-          >
+          <span key={index} className="christmas-login-flake" style={style}>
             {index % 5 === 0 ? "✦" : "❄"}
           </span>
         ))}

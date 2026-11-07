@@ -248,7 +248,9 @@ jobs:
       - name: Download tonight's recordings from this run
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: real-erp-training-${{ github.run_id }}
+          # Every recording shard of this run, merged into one review folder.
+          pattern: real-erp-training-${{ github.run_id }}-shard-*
+          merge-multiple: true
           path: ${{ github.workspace }}/.training-review/
       - name: Validate every captured recording of this commit (codec, narration, duration, captions, guide)
         run: node scripts/validate-training-recording.mjs

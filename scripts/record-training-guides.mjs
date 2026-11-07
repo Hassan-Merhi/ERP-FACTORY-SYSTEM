@@ -47,12 +47,17 @@ const execFile = promisify(execFileCallback);
 // is "spoken" and muxed with the narration at CAPTURE_FPS; the pointer is then
 // composited by FFmpeg at OUTPUT_FPS so it glides instead of jumping.
 const CAPTURE_FPS = 2;
-const OUTPUT_FPS = 20;
+// 12 fps keeps the pointer smooth while the screen itself changes at
+// CAPTURE_FPS; with CRF 27 a narrated page tour stays a few MB, so a full
+// all-pages set fits the private store comfortably.
+const OUTPUT_FPS = 12;
 const SEGMENT_PAUSE_SECONDS = 0.35;
 const CURSOR_TRAVEL_SECONDS = 0.6;
 const MIN_DURATION_SECONDS = 60;
-const MAX_DURATION_SECONDS = 1200;
-const MAX_SEGMENTS = 220;
+// Per-page caps; the nightly all-pages recording sets shorter limits so every
+// page fits in its shard.
+const MAX_DURATION_SECONDS = Number(process.env.TRAINING_MAX_SECONDS || 1200);
+const MAX_SEGMENTS = Number(process.env.TRAINING_MAX_SEGMENTS || 220);
 const MAX_TABS = 14;
 const MAX_LAYERS = 12;
 const MAX_LAYER_CONTROLS = 14;
@@ -78,8 +83,87 @@ const TOURS = Object.freeze({
 });
 
 
-const chosenIds = selectedTopic === "all" ? Object.keys(TOURS) : selectedTopic.split(",").map((id) => id.trim()).filter(Boolean);
-const tours = [...new Set(chosenIds)].map((id) => [id, TOURS[id]]);
+// TRAINING_TOPIC: "all" (the curated tours), "all-pages" (every page the fixture
+// Developer can open in each training company), or comma-separated topic ids.
+const chosenIds =
+  selectedTopic === "all" || selectedTopic === "all-pages"
+    ? []
+    : [...new Set(selectedTopic.split(",").map((id) => id.trim()).filter(Boolean))];
+const wantsDiscovery = selectedTopic === "all-pages" || chosenIds.some((id) => !TOURS[id]);
+// TRAINING_SHARD="i/n" records every n-th selected page, starting at i (0-based).
+const shardMatch = /^(\d+)\/(\d+)$/.exec(process.env.TRAINING_SHARD || "");
+const shardIndex = shardMatch ? Number(shardMatch[1]) : 0;
+const shardCount = shardMatch ? Math.max(1, Number(shardMatch[2])) : 1;
+const allowPartial = process.env.TRAINING_ALLOW_PARTIAL === "1";
+
+/** Same id rule as Help & Training (client/src/training/helpTrainingTopics.ts). */
+const CURATED_ID_BY_ROUTE = new Map(Object.entries(TOURS).map(([id, tour]) => [tour.route, id]));
+function topicIdForRoute(route) {
+  const pathOnly = route.split(/[?#]/, 1)[0] || "/";
+  const curated = CURATED_ID_BY_ROUTE.get(pathOnly);
+  if (curated) return curated;
+  return ("page-" + pathOnly.replace(/^\/+/, "").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase()).slice(0, 80);
+}
+
+// Developer and maintenance tools are not taught in training videos.
+const SKIPPED_ROUTE = /\/(help-training|settings|my-settings|chat|chatbot-settings|spreadsheet|live-sheets|company-data-reset|deleted-items|orphaned-records|conflicts|inventory-repair|balance-repair|import-cycle-diagnostics|location-inventory-mockup|ai-command-center|ai-validation|create|accounting)(\/|$)/;
+const DISCOVERY_COMPANIES = [
+  { code: "PHASE7-FACTORY", home: "/factory/production-report" },
+  { code: "PHASE7-ERP", home: "/tracking" },
+  { code: "PHASE7-SP", home: "/sp" },
+];
+
+function genericSteps(title) {
+  return [
+    "Open " + title + " from the sidebar and confirm the training company shown at the top.",
+    "Read the totals and the list of records shown for the selected period.",
+    "Use the tabs, search and filters to narrow what is on screen.",
+    "Open a record to see its details. This recording never saves or posts anything.",
+  ];
+}
+
+/** Every sidebar page the fixture Developer can open in each training company. */
+async function discoverTours(page) {
+  const found = new Map();
+  for (const company of DISCOVERY_COMPANIES) {
+    try {
+      await selectFixtureCompany(page, company.code);
+      await page.goto(base + company.home, { waitUntil: "domcontentloaded", timeout });
+      await page.waitForSelector("#main-content", { visible: true, timeout });
+      await delay(1500);
+      // Open collapsed sidebar sections so every link is in the document.
+      for (let round = 0; round < 3; round++) {
+        const opened = await page.evaluate(() => {
+          const closed = [...document.querySelectorAll('button[data-testid^="button-section-"][aria-expanded="false"]')];
+          closed.forEach((button) => button.click());
+          return closed.length;
+        });
+        if (!opened) break;
+        await delay(400);
+      }
+      const links = await page.evaluate(() =>
+        [...document.querySelectorAll('a[data-testid^="link-"][href]')].map((link) => ({
+          href: link.getAttribute("href") || "",
+          title: (link.textContent || "").replace(/\s+/g, " ").trim(),
+        }))
+      );
+      for (const link of links) {
+        if (!link.href.startsWith("/") || !link.title) continue;
+        const route = link.href.split(/[?#]/, 1)[0];
+        // Record pages, not individual records (e.g. a recently opened /containers/3).
+        if (SKIPPED_ROUTE.test(route) || /\/\d+(\/|$)/.test(route)) continue;
+        const id = topicIdForRoute(route);
+        if (found.has(id)) continue;
+        found.set(id, TOURS[id] ?? { company: company.code, route, title: link.title, steps: genericSteps(link.title), discovered: true });
+      }
+    } catch (error) {
+      process.stderr.write("Page discovery failed for " + company.code + ": " + String(error?.message || error) + "\n");
+    }
+  }
+  return found;
+}
+
+let tours = chosenIds.map((id) => [id, TOURS[id]]);
 
 async function assertSafeEnvironment() {
   const url = new URL(base);
@@ -91,7 +175,7 @@ async function assertSafeEnvironment() {
     throw new Error("Training recording requires verified disposable test mode; refusing any live environment.");
   }
   if (!username || !password) throw new Error("The ephemeral Phase 7 fixture credentials are required.");
-  if (tours.some(([id, tour]) => !tour)) throw new Error("Unknown topic: " + selectedTopic);
+  if (!wantsDiscovery && selectedTopic !== "all" && tours.some(([, tour]) => !tour)) throw new Error("Unknown topic: " + selectedTopic);
   // Narration is mandatory: a silent video is not a valid training recording.
   if (!ttsModel || !ttsModel.endsWith(".onnx")) throw new Error("TRAINING_TTS_MODEL must point to the Piper voice .onnx file");
   await fs.access(ttsModel);
@@ -190,7 +274,7 @@ async function encodeAndValidate(framesDir, narrationWav, expectedSeconds, outpu
     "[pointer]scale=in_range=full:out_range=limited,format=yuv420p[out]",
     "-map", "[out]", "-map", "2:a:0",
     "-c:v", "libx264", "-profile:v", "main", "-preset", "veryfast",
-    "-crf", "21", "-pix_fmt", "yuv420p", "-color_range", "tv",
+    "-crf", "27", "-pix_fmt", "yuv420p", "-color_range", "tv",
     "-c:a", "aac", "-b:a", "96k", "-ar", "48000", "-ac", "1",
     "-shortest", "-movflags", "+faststart", outputMp4,
   ]);
@@ -692,6 +776,19 @@ try {
   await page.setContent("<html><body style='margin:0;background:transparent'>" + CURSOR_SVG + "</body></html>");
   cursorImage = await page.screenshot({ type: "png", omitBackground: true, clip: { x: 0, y: 0, width: 28, height: 28 } });
   await login(page);
+  if (selectedTopic === "all") tours = Object.entries(TOURS);
+  if (wantsDiscovery) {
+    const discovered = await discoverTours(page);
+    tours =
+      selectedTopic === "all-pages"
+        ? [...discovered.entries()]
+        : chosenIds.map((id) => [id, TOURS[id] ?? discovered.get(id)]);
+    process.stdout.write("Discovered " + discovered.size + " training page(s): " + [...discovered.keys()].join(", ") + "\n");
+    const unknown = tours.filter(([, tour]) => !tour).map(([id]) => id);
+    if (unknown.length) throw new Error("Unknown topic(s): " + unknown.join(", "));
+  }
+  tours = tours.filter((_, index) => index % shardCount === shardIndex);
+  process.stdout.write("Recording " + tours.length + " page(s) in shard " + shardIndex + "/" + shardCount + ": " + tours.map(([id]) => id).join(", ") + "\n");
   for (const [id, tour] of tours) {
     const startedAt = Date.now();
     try {
@@ -706,6 +803,11 @@ try {
   }
 } finally {
   await browser.close();
-  await fs.writeFile(path.join(output, "report.json"), JSON.stringify(report, null, 2));
+  // Parallel shards are merged into one review folder, so each writes its own report.
+  const reportName = shardCount > 1 ? "report-" + shardIndex + ".json" : "report.json";
+  await fs.writeFile(path.join(output, reportName), JSON.stringify(report, null, 2));
 }
-if (report.some((item) => item.status !== "captured")) process.exitCode = 1;
+const capturedCount = report.filter((item) => item.status === "captured").length;
+if (allowPartial ? capturedCount === 0 && report.length > 0 : report.some((item) => item.status !== "captured")) {
+  process.exitCode = 1;
+}

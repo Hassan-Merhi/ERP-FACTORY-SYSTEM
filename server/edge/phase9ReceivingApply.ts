@@ -21,6 +21,7 @@ import {
 import { Phase9EventConflict } from "./phase9CloudEventStore.mjs";
 import { PHASE9_RECEIVING_ORDER_CHANGED, type Phase9ReceivingOffloadInputs } from "./phase9ReceivingEnvelope.mjs";
 import { phase9ReceivingLineDigestTx } from "./phase9ReceivingOutbox";
+import { throwIfClosedPeriod } from "./phase9ClosedPeriod";
 
 type Queryable = Pick<PoolClient, "query">;
 
@@ -143,6 +144,7 @@ async function apply(
     });
     return { outcome: "cloud-applied", cloudRef: Number(result.offload.id), businessDate: p.offloadDate };
   } catch (error) {
+    throwIfClosedPeriod(error);
     if (error instanceof ContainerOffloadLifecycleError) {
       throw new Phase9EventConflict("PHASE9_RECEIVING_REFUSED", { code: error.code, status: error.status });
     }

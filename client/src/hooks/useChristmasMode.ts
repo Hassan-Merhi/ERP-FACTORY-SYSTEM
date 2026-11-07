@@ -4,10 +4,22 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 const CHRISTMAS_MODE_API = "/api/seasonal/christmas-mode";
 export const christmasModeQueryKey = [CHRISTMAS_MODE_API] as const;
 
+export type ChristmasEffectKey = "snowfall" | "santa" | "garlands" | "countdown" | "gifts" | "ambient";
+export type ChristmasVisualSettings = {
+  intensity: "subtle" | "balanced" | "full";
+  effects: Record<ChristmasEffectKey, boolean>;
+};
+export type ChristmasIntensity = ChristmasVisualSettings["intensity"];
+export const defaultChristmasVisuals: ChristmasVisualSettings = {
+  intensity: "balanced",
+  effects: { snowfall: true, santa: true, garlands: true, countdown: true, gifts: true, ambient: true },
+};
+
 export type ChristmasModeSetting = {
   enabled: boolean;
   available?: boolean;
   preferenceEnabled?: boolean;
+  visuals?: ChristmasVisualSettings | null;
 };
 
 /**
@@ -24,8 +36,7 @@ export function useChristmasMode() {
     staleTime: 15_000,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
-    refetchInterval: () =>
-      typeof document === "undefined" || document.visibilityState === "visible" ? 30_000 : false,
+    refetchInterval: () => (typeof document === "undefined" || document.visibilityState === "visible" ? 30_000 : false),
   });
 
   const updateSetting = useMutation<ChristmasModeSetting, Error, boolean>({
@@ -59,6 +70,7 @@ export const christmasModeConfigQueryKey = [CHRISTMAS_MODE_CONFIG_API] as const;
 export type ChristmasModeConfiguration = {
   enabled: boolean;
   userIds: string[];
+  visuals: ChristmasVisualSettings;
   users: Array<{ id: string; username: string }>;
 };
 
@@ -76,17 +88,17 @@ export function useChristmasModeConfiguration() {
   });
 
   const saveConfig = useMutation<
-    { enabled: boolean; userIds: string[] },
+    { enabled: boolean; userIds: string[]; visuals: ChristmasVisualSettings },
     Error,
-    { enabled: boolean; userIds: string[] }
+    { enabled: boolean; userIds: string[]; visuals: ChristmasVisualSettings }
   >({
     mutationFn: async (nextConfig) => {
       const response = await apiRequest("PUT", CHRISTMAS_MODE_CONFIG_API, nextConfig);
-      return (await response.json()) as { enabled: boolean; userIds: string[] };
+      return (await response.json()) as { enabled: boolean; userIds: string[]; visuals: ChristmasVisualSettings };
     },
     onSuccess: (saved) => {
       queryClient.setQueryData<ChristmasModeConfiguration>(christmasModeConfigQueryKey, (old) =>
-        old ? { ...old, enabled: saved.enabled, userIds: saved.userIds } : old
+        old ? { ...old, enabled: saved.enabled, userIds: saved.userIds, visuals: saved.visuals } : old
       );
       // In particular, if the Developer selected their own account, the
       // snowfall and login layer react immediately without a page refresh.

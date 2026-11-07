@@ -45,8 +45,12 @@ html[data-christmas-mode="on"] [data-slot="pos-top-bar"]::after {
 }
 
 @keyframes christmas-lights-glow {
-  from { opacity: 0.66; }
-  to { opacity: 0.95; }
+  from {
+    opacity: 0.66;
+  }
+  to {
+    opacity: 0.95;
+  }
 }
 
 /* Sidebar brand ornament; visually separated from the company name. */
@@ -94,8 +98,12 @@ html.dark[data-christmas-mode="on"] [data-seasonal-brand-accent] {
 }
 
 @keyframes christmas-star-glow {
-  from { opacity: 0.58; }
-  to { opacity: 1; }
+  from {
+    opacity: 0.58;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* A quiet gold-green seasonal trim, not a replacement for company colors. */
@@ -137,7 +145,9 @@ html[data-christmas-mode="on"] [data-pos-sidebar-header] [data-seasonal-brand-ac
    and bulbs remain visible but stop pulsing until the video stream closes. */
 html[data-christmas-mode="on"][data-seasonal-camera-active="true"] [data-slot="app-top-bar"]::after,
 html[data-christmas-mode="on"][data-seasonal-camera-active="true"] [data-slot="pos-top-bar"]::after,
-html[data-christmas-mode="on"][data-seasonal-camera-active="true"] [data-seasonal-brand-accent] .seasonal-brand-sparkle {
+html[data-christmas-mode="on"][data-seasonal-camera-active="true"]
+  [data-seasonal-brand-accent]
+  .seasonal-brand-sparkle {
   animation: none !important;
 }
 
@@ -176,8 +186,12 @@ html[data-christmas-mode="on"][data-seasonal-camera-active="true"] [data-seasona
   opacity: 0.8;
 }
 
-.seasonal-atmosphere-sprig-left { inset-inline-start: 8px; }
-.seasonal-atmosphere-sprig-right { inset-inline-end: 8px; }
+.seasonal-atmosphere-sprig-left {
+  inset-inline-start: 8px;
+}
+.seasonal-atmosphere-sprig-right {
+  inset-inline-end: 8px;
+}
 
 .seasonal-atmosphere-tree,
 .seasonal-atmosphere-gift {
@@ -187,9 +201,15 @@ html[data-christmas-mode="on"][data-seasonal-camera-active="true"] [data-seasona
   color: #39875b;
 }
 
-.seasonal-atmosphere-gift { color: #bf5b65; }
-html.dark .seasonal-atmosphere-tree { color: #80c99c; }
-html.dark .seasonal-atmosphere-gift { color: #f49a9e; }
+.seasonal-atmosphere-gift {
+  color: #bf5b65;
+}
+html.dark .seasonal-atmosphere-tree {
+  color: #80c99c;
+}
+html.dark .seasonal-atmosphere-gift {
+  color: #f49a9e;
+}
 
 .seasonal-atmosphere-star {
   position: absolute;
@@ -227,7 +247,9 @@ html.dark .seasonal-atmosphere-gift { color: #f49a9e; }
   animation: christmas-star-glow 7s ease-in-out infinite alternate;
 }
 
-html.dark .seasonal-atmosphere-flurry { color: #d1ebfa; }
+html.dark .seasonal-atmosphere-flurry {
+  color: #d1ebfa;
+}
 
 @media (max-width: 767px) {
   .seasonal-atmosphere-sprig {
@@ -236,22 +258,152 @@ html.dark .seasonal-atmosphere-flurry { color: #d1ebfa; }
     height: 40px;
     opacity: 0.58;
   }
-  .seasonal-atmosphere-sprig-left { inset-inline-start: 2px; }
-  .seasonal-atmosphere-sprig-right { inset-inline-end: 2px; }
+  .seasonal-atmosphere-sprig-left {
+    inset-inline-start: 2px;
+  }
+  .seasonal-atmosphere-sprig-right {
+    inset-inline-end: 2px;
+  }
   .seasonal-atmosphere-tree,
-  .seasonal-atmosphere-gift { width: 21px; height: 21px; }
-  .seasonal-atmosphere-star { width: 11px; height: 11px; }
-  .seasonal-atmosphere-flurry { display: none; }
+  .seasonal-atmosphere-gift {
+    width: 21px;
+    height: 21px;
+  }
+  .seasonal-atmosphere-star {
+    width: 11px;
+    height: 11px;
+  }
+  .seasonal-atmosphere-flurry {
+    display: none;
+  }
 }
 
 @media print {
-  .seasonal-atmosphere { display: none !important; }
+  .seasonal-atmosphere {
+    display: none !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce), (prefers-reduced-data: reduce) {
-  .seasonal-atmosphere * { animation: none !important; }
+  .seasonal-atmosphere * {
+    animation: none !important;
+  }
 }
 
 html[data-seasonal-camera-active="true"] .seasonal-atmosphere * {
   animation: none !important;
+}
+
+/* Christmas 2.0: visual toggles and professional winter trim. */
+html[data-christmas-mode="on"][data-christmas-garlands="off"] [data-slot="app-top-bar"]::before,
+html[data-christmas-mode="on"][data-christmas-garlands="off"] [data-slot="app-top-bar"]::after,
+html[data-christmas-mode="on"][data-christmas-garlands="off"] [data-slot="pos-top-bar"]::before,
+html[data-christmas-mode="on"][data-christmas-garlands="off"] [data-slot="pos-top-bar"]::after,
+html[data-christmas-mode="on"][data-christmas-garlands="off"] [data-seasonal-brand-accent] {
+  display: none !important;
+}
+/* Frost along the top edge only: no covered labels or expanded layout heights. */
+html[data-christmas-mode="on"][data-christmas-snowcaps="on"] [data-slot="app-top-bar"],
+html[data-christmas-mode="on"][data-christmas-snowcaps="on"] [data-slot="pos-top-bar"] {
+  box-shadow: inset 0 3px 0 rgb(228 242 253 / 0.72);
+}
+html.dark[data-christmas-mode="on"][data-christmas-snowcaps="on"] [data-slot="app-top-bar"],
+html.dark[data-christmas-mode="on"][data-christmas-snowcaps="on"] [data-slot="pos-top-bar"] {
+  box-shadow: inset 0 3px 0 rgb(203 230 246 / 0.36);
+}
+html[data-christmas-mode="on"][data-christmas-snowcaps="on"] .premium-nav-brand {
+  box-shadow:
+    inset 0 3px 0 rgb(228 242 253 / 0.75),
+    inset 0 -2px 0 rgb(70 144 101 / 0.2);
+}
+html[data-christmas-mode="on"][data-christmas-snowcaps="on"] [data-testid="page-header"] {
+  border-top: 2px solid rgb(226 244 255 / 0.67);
+}
+.seasonal-garland-band {
+  position: absolute;
+  top: 0;
+  inset-inline: 0;
+  height: 13px;
+  pointer-events: none !important;
+  background:
+    radial-gradient(ellipse 13px 6px at 10px 0, rgb(34 112 74 / 0.95) 20%, transparent 90%) 0 0 / 27px 11px repeat-x,
+    radial-gradient(ellipse 13px 6px at 18px 0, rgb(49 142 93 / 0.78) 20%, transparent 90%) 0 0 / 32px 11px repeat-x,
+    repeating-linear-gradient(to right, transparent 0 19px, rgb(232 199 120 / 0.65) 19px 21px, transparent 21px 43px);
+  filter: drop-shadow(0 1px 3px rgb(28 68 48 / 0.25));
+  opacity: 0.92;
+}
+.seasonal-garland-bow {
+  position: absolute;
+  left: 19%;
+  top: 2px;
+  width: 12px;
+  height: 9px;
+  border-radius: 3px 8px 3px 8px;
+  background: linear-gradient(130deg, #ee4a59, #a92b4b);
+  transform: rotate(-32deg);
+  box-shadow:
+    8px 4px 0 -1px #bf2545,
+    5px 3px 1px 0 #f4bf92;
+}
+.seasonal-garland-ornament {
+  position: absolute;
+  top: 11px;
+  width: 8px;
+  height: 8px;
+  border: 1px solid rgb(255 231 172 / 0.78);
+  border-radius: 50%;
+  box-shadow:
+    0 1px 4px rgb(28 29 51 / 0.25),
+    inset 1px 1px 2px rgb(255 255 255 / 0.54);
+}
+.seasonal-garland-ornament::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  bottom: 7px;
+  width: 1px;
+  height: 6px;
+  background: rgb(252 226 163 / 0.7);
+}
+.seasonal-ornament-red {
+  left: 29%;
+  background: #da5767;
+}
+.seasonal-ornament-gold {
+  left: 54%;
+  background: #e0b865;
+}
+.seasonal-ornament-green {
+  left: 81%;
+  background: #50b286;
+}
+html[data-christmas-intensity="subtle"] .seasonal-atmosphere,
+html[data-christmas-intensity="subtle"] [data-seasonal-brand-accent] {
+  opacity: 0.62;
+}
+html[data-christmas-intensity="full"] .seasonal-atmosphere {
+  opacity: 1;
+}
+@media (max-width: 767px) {
+  .seasonal-garland-band {
+    height: 9px;
+    opacity: 0.7;
+  }
+  .seasonal-garland-ornament {
+    top: 9px;
+    transform: scale(0.7);
+  }
+  .seasonal-garland-bow {
+    transform: scale(0.7) rotate(-32deg);
+  }
+}
+@media print {
+  .seasonal-garland-band {
+    display: none !important;
+  }
+}
+@media (prefers-reduced-motion: reduce), (prefers-reduced-data: reduce) {
+  .seasonal-garland-band * {
+    animation: none !important;
+  }
 }
