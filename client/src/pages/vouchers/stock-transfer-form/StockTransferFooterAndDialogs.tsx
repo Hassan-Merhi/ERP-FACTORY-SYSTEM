@@ -18,7 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ChevronDown, FileDown, GitBranch } from "lucide-react";
+import { ArrowRightLeft, ChevronDown, FileDown, GitBranch } from "lucide-react";
 import { formatNumber } from "@/lib/formatNumber";
 import { StockTransferRevisionHistory } from "../StockTransferRevisionHistory";
 import { ApproveRevisionDialog } from "./dialogs/ApproveRevisionDialog";
@@ -91,17 +91,18 @@ export function StockTransferFooterAndDialogs({ model }: { model: StockTransferF
 
   return (
     <>
-      <div className="mt-4 flex flex-wrap items-start gap-2 sm:gap-4">
+      <div className={isPOS ? "pos-transfer-footer mt-4 flex flex-wrap items-start gap-2 sm:gap-4" : "mt-4 flex flex-wrap items-start gap-2 sm:gap-4"}>
         <FormField
           control={stockTransferForm.control}
           name="notes"
           render={({ field }) => (
-            <FormItem className="flex-1 max-sm:basis-full">
+            <FormItem className={isPOS ? "pos-transfer-notes flex-1 max-sm:basis-full" : "flex-1 max-sm:basis-full"}>
               <FormControl>
                 <Textarea
                   {...field}
-                  placeholder="Notes (optional)"
-                  className="resize-none h-9 max-sm:h-20"
+                  placeholder={isPOS ? "Add a note for this transfer..." : "Notes (optional)"}
+                  aria-label="Notes (optional)"
+                  className={isPOS ? "resize-none h-16 max-sm:h-20" : "resize-none h-9 max-sm:h-20"}
                   data-testid="input-transfer-notes"
                 />
               </FormControl>
@@ -112,7 +113,7 @@ export function StockTransferFooterAndDialogs({ model }: { model: StockTransferF
           control={stockTransferForm.control}
           name="optional"
           render={({ field }) => (
-            <FormItem className="flex items-center gap-2 space-y-0">
+            <FormItem className={isPOS ? "pos-transfer-optional flex items-center gap-2 space-y-0" : "flex items-center gap-2 space-y-0"}>
               <FormControl>
                 <Checkbox
                   checked={field.value}
@@ -131,6 +132,7 @@ export function StockTransferFooterAndDialogs({ model }: { model: StockTransferF
               variant="outline"
               disabled={transferEntries.filter((entry) => entry.stockItemId > 0).length === 0}
               data-testid="button-export-stock-transfer"
+              className={isPOS ? "pos-transfer-export" : undefined}
             >
               <FileDown className="h-4 w-4 mr-2" />
               Export
@@ -153,7 +155,9 @@ export function StockTransferFooterAndDialogs({ model }: { model: StockTransferF
               stockTransferMutation.isPending || transferEntries.filter((entry) => entry.stockItemId > 0).length === 0
             }
             data-testid="button-save-transfer-voucher"
+            className={isPOS ? "pos-transfer-save" : undefined}
           >
+            {isPOS && <ArrowRightLeft className="mr-2 h-4 w-4" aria-hidden="true" />}
             {stockTransferMutation.isPending ? "Saving..." : "Save Transfer"}
           </Button>
         )}
