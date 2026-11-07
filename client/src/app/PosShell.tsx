@@ -31,11 +31,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SkipLink } from "@/components/ui/responsive-accessibility";
 import { WorkspaceRouteBoundary } from "@/components/ui/workspace-route-boundary";
-import { ArrowLeft, LogOut, Search, ShoppingCart, ChevronDown } from "lucide-react";
+import { ArrowLeft, LogOut, Search, ShoppingCart, ChevronDown, Snowflake } from "lucide-react";
 import { usePosNavigationItems } from "./usePosNavigationItems";
 import { canUseAdminSearch, type ShellUser } from "./shellUser";
 import "@/styles/pos-sidebar-modern.css";
 import { SeasonalBrandAccent } from "@/components/SeasonalBrandAccent";
+import { useChristmasMode } from "@/hooks/useChristmasMode";
 
 interface PosShellProps {
   user: ShellUser;
@@ -76,7 +77,8 @@ export function PosShell({
   leaveConfirmDialog,
 }: PosShellProps) {
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [currentLocation] = useLocation();
+  const [currentLocation, setLocation] = useLocation();
+  const { settingQuery: christmasSetting } = useChristmasMode();
   const { selectedCompany } = useCompany();
   const { t } = useApplicationLanguage();
   const posNavItems = usePosNavigationItems({
@@ -117,6 +119,10 @@ export function PosShell({
           {selectedCompany?.id && <DailyRateModal companyId={selectedCompany.id} />}
           <Sidebar data-pos-sidebar="modern">
             <SidebarHeader data-pos-sidebar-header>
+              <div className="pos-shell-wordmark" aria-label="Dakzo Systems">
+                <span className="pos-shell-wordmark-mark" aria-hidden="true" />
+                <span>Dakzo Systems</span>
+              </div>
               <SeasonalBrandAccent />
               <div className="flex items-center gap-2">
                 <Button
@@ -274,16 +280,34 @@ export function PosShell({
               </div>
               <div data-slot="pos-top-bar-actions" className="ml-auto flex min-w-0 items-center gap-1 sm:gap-2">
                 <PendingSyncIndicator />
+                {christmasSetting.data?.available === true && (
+                  <button
+                    type="button"
+                    data-pos-seasonal-status={christmasSetting.data.enabled ? "on" : "off"}
+                    className="pos-seasonal-status hidden min-h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold sm:inline-flex"
+                    onClick={() => setLocation("/my-settings")}
+                    title="Manage Christmas Mode in My Settings"
+                    aria-label={`Christmas Mode ${christmasSetting.data.enabled ? "on" : "off"}; open My Settings`}
+                  >
+                    <Snowflake className="h-4 w-4" aria-hidden="true" />
+                    <span className="hidden lg:inline">Christmas Mode</span>
+                    <span className="pos-seasonal-status-value rounded-full px-1.5 py-0.5">
+                      {christmasSetting.data.enabled ? "On" : "Off"}
+                    </span>
+                  </button>
+                )}
                 {hasAdminSearch && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="flex min-h-11 items-center gap-1.5 px-2 text-muted-foreground sm:min-h-9"
+                    className="flex min-h-11 items-center gap-2 px-3 text-muted-foreground sm:min-h-9"
+                    data-pos-command-search="true"
                     onClick={() => setPaletteOpen(true)}
                     aria-label="Open command search"
                     data-testid="button-open-palette"
                   >
                     <Search className="h-4 w-4" aria-hidden="true" />
+                    <span className="hidden truncate lg:inline">Search anything...</span>
                     <kbd className="hidden h-5 items-center gap-1 rounded-sm border bg-muted px-1.5 font-mono text-[11px] lg:inline-flex">
                       {typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform)
                         ? "⌘ /"
@@ -291,7 +315,7 @@ export function PosShell({
                     </kbd>
                   </Button>
                 )}
-                <UserMenu accentColor="#2563eb" user={userMenuUser} onLogout={handleLogout} />
+                <UserMenu accentColor="#8b5cf6" user={userMenuUser} onLogout={handleLogout} />
               </div>
             </header>
             <OfflineBanner />
