@@ -136,7 +136,7 @@
   border-color: rgba(133, 105, 204, .35);
   background: linear-gradient(120deg, rgba(60, 42, 107, .67), rgba(31, 30, 65, .92));
 }
-.account-ledger-modern .account-ledger-stat:nth-child(5) {
+.account-ledger-modern .account-ledger-stat:nth-child(4) {
   border-color: rgba(77, 156, 161, .34);
   background: linear-gradient(120deg, rgba(22, 65, 72, .64), rgba(28, 40, 59, .9));
 }
@@ -160,7 +160,7 @@
 .account-ledger-modern .account-ledger-stat:nth-child(3) > svg {
   color: #bdabff; background: rgba(124, 86, 224, .25);
 }
-.account-ledger-modern .account-ledger-stat:nth-child(5) > svg {
+.account-ledger-modern .account-ledger-stat:nth-child(4) > svg {
   color: #72dfda; background: rgba(37, 166, 165, .19);
 }
 .account-ledger-modern .account-ledger-stat:nth-child(5) > svg {
@@ -344,7 +344,7 @@ html:not(.dark) .account-ledger-modern .account-ledger-stat:nth-child(3) {
   border-color: #e0d6f8;
   background: linear-gradient(120deg, #f1ebfd, #f8f5fe);
 }
-html:not(.dark) .account-ledger-modern .account-ledger-stat:nth-child(5) {
+html:not(.dark) .account-ledger-modern .account-ledger-stat:nth-child(4) {
   border-color: #cce8e4;
   background: linear-gradient(120deg, #e8f7f5, #f5fcfb);
 }
@@ -365,7 +365,7 @@ html:not(.dark) .account-ledger-modern .account-ledger-stat:nth-child(3) > svg {
   color: #7850c4;
   background: #e5d9fb;
 }
-html:not(.dark) .account-ledger-modern .account-ledger-stat:nth-child(5) > svg {
+html:not(.dark) .account-ledger-modern .account-ledger-stat:nth-child(4) > svg {
   color: #167e82;
   background: #d5f0ed;
 }
