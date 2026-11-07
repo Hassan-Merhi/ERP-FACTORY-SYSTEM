@@ -341,7 +341,7 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
         <div className="pos-containers-count text-sm text-muted-foreground" data-testid="text-pos-container-count">
           {data ? (
             <>
-              <Badge variant="secondary" data-pos-shown-badge>{visibleContainers.length} shown</Badge>
+              <Badge variant="secondary" data-pos-shown-badge="true">{visibleContainers.length} shown</Badge>
               <span>{data.total} active</span>
             </>
           ) : null}
