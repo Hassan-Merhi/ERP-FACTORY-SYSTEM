@@ -37,6 +37,11 @@ import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { shouldShowFactoryCustomerDestination } from "./customerDestinationVisibility";
 import "./propertiesLedger.css";
+import {
+  AccountStatementOpeningBalanceKpi,
+  OpeningBalanceAmount,
+  openingBalanceLabel,
+} from "./AccountStatementOpeningBalance";
 
 interface AccountStatementRow extends Transaction {
   totalDebit: number;
@@ -130,9 +135,12 @@ export function AccountStatementView({
   const fxWalletId = nativeWallet?.wallet?.id;
   const [fxTabChoice, setFxTabChoice] = useState<{ accountId: number; tab: "eur" | "usd" } | null>(null);
   const hasFxTabs = selectedAccount.type === "ledger" && !!fxWalletId;
-  const activeFxTab = fxTabChoice?.accountId === selectedAccount.accountId
-    ? fxTabChoice.tab
-    : Number(nativeWallet?.state.eur || 0) > 0 ? "eur" : "usd";
+  const activeFxTab =
+    fxTabChoice?.accountId === selectedAccount.accountId
+      ? fxTabChoice.tab
+      : Number(nativeWallet?.state.eur || 0) > 0
+        ? "eur"
+        : "usd";
   const isEurTab = hasFxTabs && activeFxTab === "eur";
 
   const statementMetadata = queryClient.getQueryData<AccountStatementPageMetadata>([
@@ -157,29 +165,41 @@ export function AccountStatementView({
   useEffect(() => {
     setDestinationFilter("all");
   }, [selectedCompany?.id, selectedAccount.type, selectedAccount.accountId]);
-  const destinationOptions = useMemo(() =>
-    [...new Set(vouchersWithBalance.map((row) => row.destination?.trim()).filter((s): s is string => !!s))]
-      .sort((a, b) => a.localeCompare(b)),
+  const destinationOptions = useMemo(
+    () =>
+      [...new Set(vouchersWithBalance.map((row) => row.destination?.trim()).filter((s): s is string => !!s))].sort(
+        (a, b) => a.localeCompare(b)
+      ),
     [vouchersWithBalance]
   );
-  const filteredCount = !showCustomerDestination || destinationFilter === "all"
-    ? vouchersWithBalance.length
-    : vouchersWithBalance.filter((row) => destinationFilter === "__none__"
-      ? !row.destination?.trim()
-      : row.destination?.trim() === destinationFilter).length;
+  const filteredCount =
+    !showCustomerDestination || destinationFilter === "all"
+      ? vouchersWithBalance.length
+      : vouchersWithBalance.filter((row) =>
+          destinationFilter === "__none__" ? !row.destination?.trim() : row.destination?.trim() === destinationFilter
+        ).length;
   const destinationSelect = showCustomerDestination ? (
-    <Select value={destinationFilter} onValueChange={(value) => {
-      // A new filter must not retain bulk-delete selections from hidden rows.
-      for (const voucherId of selectedVoucherIds) toggleVoucherSelection(voucherId);
-      setDestinationFilter(value);
-    }}>
-      <SelectTrigger className="w-[190px] h-9" aria-label="Filter customer ledger by destination" data-testid="filter-customer-destination">
+    <Select
+      value={destinationFilter}
+      onValueChange={(value) => {
+        // A new filter must not retain bulk-delete selections from hidden rows.
+        for (const voucherId of selectedVoucherIds) toggleVoucherSelection(voucherId);
+        setDestinationFilter(value);
+      }}
+    >
+      <SelectTrigger
+        className="w-[190px] h-9"
+        aria-label="Filter customer ledger by destination"
+        data-testid="filter-customer-destination"
+      >
         <SelectValue placeholder="All destinations" />
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="all">All destinations</SelectItem>
         {destinationOptions.map((destination) => (
-          <SelectItem key={destination} value={destination}>{destination}</SelectItem>
+          <SelectItem key={destination} value={destination}>
+            {destination}
+          </SelectItem>
         ))}
         <SelectItem value="__none__">No destination</SelectItem>
       </SelectContent>
@@ -195,9 +215,22 @@ export function AccountStatementView({
   // same React Query response, so financial totals no longer depend on the global pagination snapshot.
   const displayClosingBalance =
     !isGoldenCoastFreshStart && hasServerClosing
-      ? signedStoredOpening + Number(statementMetadata?.closingNetBalance) +
-        (Number((statementMetadata as AccountStatementPageMetadata & { notInLedger?: { total?: string; prePeriodTotal?: string } })?.notInLedger?.total ?? 0) || 0) +
-        (Number((statementMetadata as AccountStatementPageMetadata & { notInLedger?: { total?: string; prePeriodTotal?: string } })?.notInLedger?.prePeriodTotal ?? 0) || 0)
+      ? signedStoredOpening +
+        Number(statementMetadata?.closingNetBalance) +
+        (Number(
+          (
+            statementMetadata as AccountStatementPageMetadata & {
+              notInLedger?: { total?: string; prePeriodTotal?: string };
+            }
+          )?.notInLedger?.total ?? 0
+        ) || 0) +
+        (Number(
+          (
+            statementMetadata as AccountStatementPageMetadata & {
+              notInLedger?: { total?: string; prePeriodTotal?: string };
+            }
+          )?.notInLedger?.prePeriodTotal ?? 0
+        ) || 0)
       : closingBalance;
 
   const pdfTypeMap: Record<string, string> = {
@@ -273,9 +306,8 @@ export function AccountStatementView({
     : vouchersWithBalance.length;
 
   const balSide = (val: number) => (val >= 0 ? "Dr" : "Cr");
-  const openingSide = selectedAccount.type === "supplier"
-    ? (openingBalance > 0 ? "Cr" : "Dr")
-    : balSide(openingBalance);
+  const openingSide =
+    selectedAccount.type === "supplier" ? (openingBalance > 0 ? "Cr" : "Dr") : balSide(openingBalance);
   const showNativeBalance = !!nativeWallet?.synchronized;
 
   if (isFactorySupplierAccount) {
@@ -352,7 +384,8 @@ export function AccountStatementView({
                     onSelect: openWaRuleDialog,
                     testId: "button-wa-rule",
                   },
-                  !isEurTab && showWhatsApp &&
+                  !isEurTab &&
+                    showWhatsApp &&
                     waRule?.enabled && {
                       label: "Send statement via WhatsApp",
                       icon: Send,
@@ -367,9 +400,24 @@ export function AccountStatementView({
                     separated: true,
                     testId: "button-export-excel",
                   },
-                  { label: isEurTab ? "EUR PDF statement" : "PDF (English)", icon: FileDown, onSelect: () => openPdf("en"), testId: "button-pdf-en" },
-                  !isEurTab && { label: "PDF (Français)", icon: FileDown, onSelect: () => openPdf("fr"), testId: "button-pdf-fr" },
-                  !isEurTab && { label: "PDF (العربية)", icon: FileDown, onSelect: () => openPdf("ar"), testId: "button-pdf-ar" },
+                  {
+                    label: isEurTab ? "EUR PDF statement" : "PDF (English)",
+                    icon: FileDown,
+                    onSelect: () => openPdf("en"),
+                    testId: "button-pdf-en",
+                  },
+                  !isEurTab && {
+                    label: "PDF (Français)",
+                    icon: FileDown,
+                    onSelect: () => openPdf("fr"),
+                    testId: "button-pdf-fr",
+                  },
+                  !isEurTab && {
+                    label: "PDF (العربية)",
+                    icon: FileDown,
+                    onSelect: () => openPdf("ar"),
+                    testId: "button-pdf-ar",
+                  },
                   !isEurTab && {
                     label: showDeletedVouchers ? "Hide Deleted" : "Show Deleted",
                     icon: Clock,
@@ -377,18 +425,19 @@ export function AccountStatementView({
                     separated: true,
                     testId: "button-show-deleted",
                   },
-                  !isEurTab && selectedVoucherIds.size > 0 && {
-                    label: `Delete Selected (${selectedVoucherIds.size})`,
-                    icon: Trash2,
-                    destructive: true,
-                    onSelect: () => setShowBulkDeleteConfirm(true),
-                    testId: "button-bulk-delete",
-                  },
+                  !isEurTab &&
+                    selectedVoucherIds.size > 0 && {
+                      label: `Delete Selected (${selectedVoucherIds.size})`,
+                      icon: Trash2,
+                      destructive: true,
+                      onSelect: () => setShowBulkDeleteConfirm(true),
+                      testId: "button-bulk-delete",
+                    },
                 ]}
               />
             </div>
-            {!hideBalances && (
-              showNativeBalance ? (
+            {!hideBalances &&
+              (showNativeBalance ? (
                 <div className="mt-2">
                   <FxAgentNativeBalance wallet={nativeWallet!} compact />
                 </div>
@@ -401,8 +450,7 @@ export function AccountStatementView({
                   {formatAmount(Math.abs(displayClosingBalance))}
                   <span className="ms-1 text-sm font-normal opacity-70">{balSide(displayClosingBalance)}</span>
                 </p>
-              )
-            )}
+              ))}
             {/* The everyday actions stay one tap away; exports in other languages, WhatsApp
                 settings and deleted-voucher controls remain in the Actions menu. */}
             <div className="mt-3 grid grid-cols-2 gap-2 *:min-h-11" data-testid="account-statement-phone-actions">
@@ -438,8 +486,10 @@ export function AccountStatementView({
       ) : (
         <div className="account-ledger-desktop-header">
           <nav className="account-ledger-breadcrumb" aria-label="Breadcrumb">
-            <span>{ledgerCompanyLabel}</span><ChevronRight className="h-3 w-3" aria-hidden="true" />
-            <span>Accounts</span><ChevronRight className="h-3 w-3" aria-hidden="true" />
+            <span>{ledgerCompanyLabel}</span>
+            <ChevronRight className="h-3 w-3" aria-hidden="true" />
+            <span>Accounts</span>
+            <ChevronRight className="h-3 w-3" aria-hidden="true" />
             <strong>Ledger</strong>
           </nav>
           {/* Compact account info bar */}
@@ -507,18 +557,20 @@ export function AccountStatementView({
                   </Button>
                 )}
               {/* Language selection applies to the historical USD PDF only. */}
-              {!isEurTab && <div className="flex items-center rounded-sm border text-[11px] font-semibold overflow-hidden">
-                {(["en", "fr", "ar"] as const).map((l) => (
-                  <button
-                    key={l}
-                    onClick={() => setPdfLang(l)}
-                    data-testid={`button-lang-${l}`}
-                    className={`px-1.5 py-0.5 leading-none transition-colors ${pdfLang === l ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}
-                  >
-                    {l === "en" ? "EN" : l === "fr" ? "FR" : "عر"}
-                  </button>
-                ))}
-              </div>}
+              {!isEurTab && (
+                <div className="flex items-center rounded-sm border text-[11px] font-semibold overflow-hidden">
+                  {(["en", "fr", "ar"] as const).map((l) => (
+                    <button
+                      key={l}
+                      onClick={() => setPdfLang(l)}
+                      data-testid={`button-lang-${l}`}
+                      className={`px-1.5 py-0.5 leading-none transition-colors ${pdfLang === l ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}
+                    >
+                      {l === "en" ? "EN" : l === "fr" ? "FR" : "عر"}
+                    </button>
+                  ))}
+                </div>
+              )}
               {/* PDF download */}
               <Button
                 size="icon"
@@ -541,7 +593,9 @@ export function AccountStatementView({
           {/* Ledger heading + filters */}
           <div className="account-ledger-heading-row">
             <div className="account-ledger-heading-title">
-              <div className="account-ledger-heading-icon"><Landmark className="h-6 w-6" aria-hidden="true" /></div>
+              <div className="account-ledger-heading-icon">
+                <Landmark className="h-6 w-6" aria-hidden="true" />
+              </div>
               <div className="min-w-0">
                 <p className="account-ledger-subtitle">Account statement · #{selectedAccount.accountId}</p>
                 <h3>Ledger: {selectedAccount?.name}</h3>
@@ -560,15 +614,17 @@ export function AccountStatementView({
               )}
               <PeriodFilter value={periodFilter} onChange={setPeriodFilter} />
               {destinationSelect}
-              {!isEurTab && <Button
-                variant={showDeletedVouchers ? "secondary" : "outline"}
-                size="sm"
-                onClick={() => setShowDeletedVouchers((p: boolean) => !p)}
-                data-testid="button-show-deleted"
-              >
-                <Clock className="h-4 w-4 mr-1" />
-                {showDeletedVouchers ? "Hide Deleted" : "Show Deleted"}
-              </Button>}
+              {!isEurTab && (
+                <Button
+                  variant={showDeletedVouchers ? "secondary" : "outline"}
+                  size="sm"
+                  onClick={() => setShowDeletedVouchers((p: boolean) => !p)}
+                  data-testid="button-show-deleted"
+                >
+                  <Clock className="h-4 w-4 mr-1" />
+                  {showDeletedVouchers ? "Hide Deleted" : "Show Deleted"}
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -576,7 +632,11 @@ export function AccountStatementView({
 
       {hasFxTabs && (
         <div className="flex items-center justify-between gap-2 flex-wrap" data-testid="fx-agent-currency-tabs">
-          <div className="inline-flex rounded-lg border bg-muted/30 p-1 gap-1" role="tablist" aria-label="FX transaction currency">
+          <div
+            className="inline-flex rounded-lg border bg-muted/30 p-1 gap-1"
+            role="tablist"
+            aria-label="FX transaction currency"
+          >
             <Button
               type="button"
               size="sm"
@@ -615,7 +675,8 @@ export function AccountStatementView({
 
       {showCustomerDestination && destinationFilter !== "all" && (
         <p className="text-xs text-muted-foreground" data-testid="customer-destination-filter-status">
-          Showing {filteredCount} of {vouchersWithBalance.length} transactions. Destination filter only changes visible rows; running and closing balances remain for the entire account.
+          Showing {filteredCount} of {vouchersWithBalance.length} transactions. Destination filter only changes visible
+          rows; running and closing balances remain for the entire account.
         </p>
       )}
 
@@ -626,12 +687,9 @@ export function AccountStatementView({
           items={[
             { label: "Transactions", value: transactionCount },
             {
-              label: showNativeBalance ? "Historical USD opening" : "Opening Balance",
+              label: openingBalanceLabel(showNativeBalance),
               value: (
-                <>
-                  {formatAmount(Math.abs(openingBalance))}
-                  <span className="ms-1 text-[11px] font-normal opacity-70">{openingSide}</span>
-                </>
+                <OpeningBalanceAmount openingBalance={openingBalance} side={openingSide} formatAmount={formatAmount} />
               ),
             },
             {
@@ -657,34 +715,36 @@ export function AccountStatementView({
               <p className="text-base font-semibold leading-none tabular-nums">{transactionCount}</p>
             </div>
           </div>
-          <div className="account-ledger-stat" data-testid="account-statement-kpi-opening-balance">
-            <Landmark className="w-4 h-4 text-muted-foreground shrink-0" />
-            <div>
-              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">{showNativeBalance ? "Historical USD opening" : "Opening Balance"}</p>
-              <p className="text-base font-semibold leading-none tabular-nums">
-                {formatAmount(Math.abs(openingBalance))}
-                <span className="ml-1 text-[11px] font-normal opacity-70">{openingSide}</span>
-              </p>
-            </div>
-          </div>
+          <AccountStatementOpeningBalanceKpi
+            showNativeBalance={showNativeBalance}
+            openingBalance={openingBalance}
+            side={openingSide}
+            formatAmount={formatAmount}
+          />
           <div className="account-ledger-stat">
             <TrendingUp className="w-4 h-4 text-muted-foreground shrink-0" />
             <div>
-              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">{showNativeBalance ? "Historical USD debit" : "Total Debit"}</p>
+              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">
+                {showNativeBalance ? "Historical USD debit" : "Total Debit"}
+              </p>
               <p className="text-base font-semibold leading-none tabular-nums">{formatAmount(totalDebit)}</p>
             </div>
           </div>
           <div className="account-ledger-stat">
             <TrendingDown className="w-4 h-4 text-muted-foreground shrink-0" />
             <div>
-              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">{showNativeBalance ? "Historical USD credit" : "Total Credit"}</p>
+              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">
+                {showNativeBalance ? "Historical USD credit" : "Total Credit"}
+              </p>
               <p className="text-base font-semibold leading-none tabular-nums">{formatAmount(totalCredit)}</p>
             </div>
           </div>
           <div className="account-ledger-stat">
             <Scale className="w-4 h-4 text-muted-foreground shrink-0" />
             <div>
-              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">{showNativeBalance ? "Historical USD closing" : "Closing Balance"}</p>
+              <p className="text-[11px] text-muted-foreground leading-none mb-0.5">
+                {showNativeBalance ? "Historical USD closing" : "Closing Balance"}
+              </p>
               <p className="text-base font-semibold leading-none tabular-nums">
                 <>
                   {formatAmount(Math.abs(displayClosingBalance))}
