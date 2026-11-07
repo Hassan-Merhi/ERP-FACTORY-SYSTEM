@@ -810,6 +810,7 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
           selectItem={(item) => selectItem(item, activeRow ?? selectedCell.row)}
           itemListRef={itemListRef}
           highlightedIndex={highlightedIndex}
+          setHighlightedIndex={setHighlightedIndex}
           syncTerm={searchTerm}
         />
       </PosWorkspaceColumns>
