@@ -93,7 +93,10 @@ function SnowfallCanvas({ intensity }: { intensity: "subtle" | "balanced" | "ful
 
       const baseCount = snowfallParticleCount(width, height);
       const maxCount = width < 640 ? 24 : 64;
-      const desiredCount = Math.min(maxCount, Math.round(baseCount * (intensity === "subtle" ? 0.5 : intensity === "full" ? 1.35 : 1)));
+      const desiredCount = Math.min(
+        maxCount,
+        Math.round(baseCount * (intensity === "subtle" ? 0.5 : intensity === "full" ? 1.35 : 1))
+      );
       if (flakes.length > desiredCount) flakes.length = desiredCount;
       while (flakes.length < desiredCount) flakes.push(randomFlake(width, height));
     }
@@ -227,8 +230,12 @@ function SnowfallCanvas({ intensity }: { intensity: "subtle" | "balanced" | "ful
  * Reduced-motion users never start the canvas animation.
  */
 export function GlobalSnowfall({
-  enabled, intensity = "balanced",
-}: { enabled: boolean; intensity?: "subtle" | "balanced" | "full" }) {
+  enabled,
+  intensity = "balanced",
+}: {
+  enabled: boolean;
+  intensity?: "subtle" | "balanced" | "full";
+}) {
   const motionRestricted = useSeasonalMotionRestricted();
   if (!enabled || motionRestricted) return null;
   return <SnowfallCanvas intensity={intensity} />;

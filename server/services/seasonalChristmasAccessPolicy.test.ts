@@ -24,9 +24,12 @@ describe("Developer-managed Christmas Mode access", () => {
   });
 
   it("parses Developer-specific overrides without changing unavailable defaults", () => {
-    const result = parseChristmasVisualSettings(JSON.stringify({
-      intensity: "full", effects: { gifts: false, snowfall: false },
-    }));
+    const result = parseChristmasVisualSettings(
+      JSON.stringify({
+        intensity: "full",
+        effects: { gifts: false, snowfall: false },
+      })
+    );
     expect(result.intensity).toBe("full");
     expect(result.effects.gifts).toBe(false);
     expect(result.effects.snowfall).toBe(false);

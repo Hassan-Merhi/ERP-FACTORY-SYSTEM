@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "description": "Phase 8 release gate record, intentionally blocked until signed staging evidence; never flip from CI results alone.",
+  "rolloutMode": "shadow",
+  "releaseAuthorized": false,
+  "lastVerifiedHead": null,
+  "gates": [
+    {
+      "id": "handler-review",
+      "status": "blocked",
+      "evidence": null,
+      "required": "Review and enforce every eligible business-write handler across ERP, Factory, POS and Properties; Phase 3 incomplete"
+    },
+    {
+      "id": "frontend-role-parity",
+      "status": "blocked",
+      "evidence": null,
+      "required": "All role-sensitive controls integrated and verified against existing backend guards; Phase 6 incomplete"
+    },
+    {
+      "id": "migration-staging",
+      "status": "blocked",
+      "evidence": null,
+      "required": "Staging backup validated and additive shadow migration applied with RLS checks"
+    },
+    {
+      "id": "data-integrity",
+      "status": "blocked",
+      "evidence": null,
+      "required": "Compare staging voucher/stock/container/payroll before-after snapshots and confirm zero unexpected differences"
+    },
+    {
+      "id": "cross-company-rbac",
+      "status": "blocked",
+      "evidence": null,
+      "required": "Cross-company and direct API tests pass across roles, locations and resource lifecycle states"
+    },
+    {
+      "id": "rollback-drill",
+      "status": "blocked",
+      "evidence": null,
+      "required": "Admin-led rollback simulation confirmed with audit history preserved and access restored"
+    },
+    {
+      "id": "quality-ci",
+      "status": "blocked",
+      "evidence": null,
+      "required": "All required CI, UI, security, translations, TypeScript, lint and browser suites green on final SHA"
+    },
+    {
+      "id": "training-monitoring",
+      "status": "blocked",
+      "evidence": null,
+      "required": "Admin instructions reviewed, support ownership named, deny-rate alerts verified, post-release monitoring assigned"
+    },
+    {
+      "id": "owner-signoff",
+      "status": "blocked",
+      "evidence": null,
+      "required": "Separate explicit production merge, activation and deployment approval"
+    }
+  ]
+}

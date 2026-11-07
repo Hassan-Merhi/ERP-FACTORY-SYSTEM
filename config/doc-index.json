@@ -372,6 +372,7 @@
     "docs/christmas-mode-phase3.md": "reference",
     "docs/christmas-mode-phase4.md": "reference",
     "docs/christmas-mode-phase5.md": "reference",
+    "docs/christmas-mode-v2.md": "reference",
     "docs/ci/branch-protection.md": "reference",
     "docs/company12-internal-historical-supplier-voucher-operational-visibility-20261102.md": "reference",
     "docs/company12-worker-advance-internal-reconciliation-routine-visibility-20261103.md": "reference",
@@ -441,6 +442,12 @@
     "docs/operations/factory-lan-phase4-checkpoint-transfer.md": "reference",
     "docs/operations/factory-lan-phase6-certification.md": "reference",
     "docs/operations/factory-offline-operations-runbook.md": "reference",
+    "docs/operations/offline-drills/README.md": "reference",
+    "docs/operations/offline-drills/batch-2-stock-items.md": "reference",
+    "docs/operations/offline-drills/batch-3-transfers-imports.md": "reference",
+    "docs/operations/offline-drills/batch-4-payments-files.md": "reference",
+    "docs/operations/offline-drills/drill-record-template.md": "reference",
+    "docs/operations/offline-drills/session-checks.md": "reference",
     "docs/performance-phase9.md": "reference",
     "docs/performance-wave5-production-certification.md": "reference",
     "docs/permissions-security.md": "reference",
@@ -542,6 +549,16 @@
     "docs/zambia-zmw/phase-6-vouchers-and-parties.md": "reference",
     "docs/zambia-zmw/phase-7-cash-bank-transfers.md": "reference",
     "docs/zambia-zmw/phase-8-inventory-purchasing-intercompany.md": "reference",
-    "docs/zambia-zmw/verification-2026-10-23.md": "reference"
+    "docs/zambia-zmw/verification-2026-10-23.md": "reference",
+    "docs/permissions-control-center-plan.md": "reference",
+    "docs/permissions-control-center-phase1.md": "reference",
+    "docs/permissions-control-center-phase2.md": "reference",
+    "docs/permissions-control-center-phase3.md": "reference",
+    "docs/permissions-control-center-phase4.md": "reference",
+    "docs/permissions-control-center-phase5.md": "reference",
+    "docs/permissions-control-center-phase6.md": "reference",
+    "docs/permissions-control-center-phase7.md": "reference",
+    "docs/permissions-control-center-admin-guide.md": "reference",
+    "docs/permissions-control-center-phase8.md": "reference"
   }
 }

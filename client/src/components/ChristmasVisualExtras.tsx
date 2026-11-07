@@ -20,12 +20,12 @@ function useVisibleTopBar(active: boolean) {
       return;
     }
     const find = () => {
-      const next = Array.from(document.querySelectorAll<HTMLElement>(TOP_BAR_SELECTOR))
-        .find((node) => {
+      const next =
+        Array.from(document.querySelectorAll<HTMLElement>(TOP_BAR_SELECTOR)).find((node) => {
           const rect = node.getBoundingClientRect();
           return rect.width > 120 && rect.height > 24;
         }) ?? null;
-      setHeader((previous) => previous === next ? previous : next);
+      setHeader((previous) => (previous === next ? previous : next));
     };
     find();
     const timer = window.setInterval(find, 1600);
@@ -68,7 +68,7 @@ function ChristmasCountdown() {
       <CalendarDays aria-hidden="true" />
       <span>{message}</span>
     </span>,
-    header,
+    header
   );
 }
 
@@ -96,11 +96,14 @@ function ChristmasSurpriseGift({ intensity }: { intensity: ChristmasIntensity })
       hideTimer = window.setTimeout(() => setVisible(false), 19_000);
     };
     const schedule = () => {
-      timer = window.setTimeout(() => {
-        first = false;
-        show();
-        schedule();
-      }, first ? (intensity === "full" ? 30_000 : intensity === "subtle" ? 120_000 : 75_000) : frequency);
+      timer = window.setTimeout(
+        () => {
+          first = false;
+          show();
+          schedule();
+        },
+        first ? (intensity === "full" ? 30_000 : intensity === "subtle" ? 120_000 : 75_000) : frequency
+      );
     };
     const hideWhenBackgrounded = () => {
       if (document.hidden) setVisible(false);
@@ -155,8 +158,11 @@ function ChristmasSurpriseGift({ intensity }: { intensity: ChristmasIntensity })
 function ChristmasAmbientCorner() {
   const [minimized, setMinimized] = useState(false);
   return (
-    <aside className={`christmas-ambient-corner${minimized ? " christmas-ambient-minimized" : ""}`}
-      aria-label="Christmas ambient corner" data-testid="christmas-ambient-corner">
+    <aside
+      className={`christmas-ambient-corner${minimized ? " christmas-ambient-minimized" : ""}`}
+      aria-label="Christmas ambient corner"
+      data-testid="christmas-ambient-corner"
+    >
       <button
         type="button"
         className="christmas-ambient-control"
@@ -187,7 +193,11 @@ function ChristmasAmbientCorner() {
 }
 
 export function ChristmasVisualExtras({
-  enabled, countdown, gifts, ambient, intensity,
+  enabled,
+  countdown,
+  gifts,
+  ambient,
+  intensity,
 }: {
   enabled: boolean;
   countdown: boolean;

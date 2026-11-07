@@ -21,8 +21,10 @@ export function PosWorkspaceColumns({ children, layout }: PosWorkspaceColumnsPro
   }
 
   return (
-    <div className="hidden lg:flex flex-1 overflow-hidden p-4">
-      <div className="flex flex-row gap-4 h-full w-full">{children}</div>
+    <div data-pos-desktop-layout="true" className="hidden lg:flex flex-1 min-h-0 overflow-hidden p-4">
+      <div data-pos-desktop-columns="true" className="flex flex-row gap-4 h-full min-h-0 w-full">
+        {children}
+      </div>
     </div>
   );
 }

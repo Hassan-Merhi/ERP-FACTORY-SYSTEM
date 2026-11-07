@@ -10,6 +10,7 @@ import {
   parseSupplierId,
 } from "./suppliers/supplierRequestContext";
 import { supplierService } from "./suppliers/supplierService";
+import { requireVerifiedBusinessAction } from "../services/security/accessControlV2Enforcement";
 
 export function registerSupplierRoutes(app: Express) {
   app.get("/api/suppliers", requireAuth, async (req, res) => {
@@ -55,17 +56,36 @@ export function registerSupplierRoutes(app: Express) {
     }
   });
 
-  app.post("/api/suppliers", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = getActiveSupplierCompanyId(req);
-      const supplier = await supplierService.create(companyId, req.body, getSupplierAuditActor(req));
-      return res.status(201).json(supplier);
-    } catch (error: unknown) {
-      const dbError = masterDataDbErrorResponse(error, "supplier", req.session.currentCompanyId);
-      if (dbError) return res.status(dbError.status).json(dbError.body);
-      return sendSupplierRouteError(res, error, 400);
+  // Phase 3 reviewed handler: supplierService.create inserts a NEW company-scoped
+  // supplier and audit row atomically. Create Only may not use the opening
+  // balance field to introduce financial balances through this route.
+  app.post(
+    "/api/suppliers",
+    requireAuth,
+    requireNonPOS,
+    requireVerifiedBusinessAction({
+      resource: "erp.suppliers",
+      action: "create",
+      handlerVerified: true,
+      hardDenied: (req) => {
+        const raw = (req.body as Record<string, unknown> | null)?.openingBalance;
+        if (raw === undefined || raw === null || raw === "") return false;
+        const value = Number(raw);
+        return !Number.isFinite(value) || value !== 0;
+      },
+    }),
+    async (req, res) => {
+      try {
+        const companyId = getActiveSupplierCompanyId(req);
+        const supplier = await supplierService.create(companyId, req.body, getSupplierAuditActor(req));
+        return res.status(201).json(supplier);
+      } catch (error: unknown) {
+        const dbError = masterDataDbErrorResponse(error, "supplier", req.session.currentCompanyId);
+        if (dbError) return res.status(dbError.status).json(dbError.body);
+        return sendSupplierRouteError(res, error, 400);
+      }
     }
-  });
+  );
 
   app.patch("/api/suppliers/:id", requireAuth, requireNonPOS, async (req, res) => {
     try {

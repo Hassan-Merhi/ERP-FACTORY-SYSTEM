@@ -2,6 +2,7 @@ export * from "./common";
 export * from "./accounting";
 export * from "./cost-centers";
 export * from "./users";
+export * from "./accessControlV2Storage";
 export * from "./security";
 export * from "./inventory";
 export * from "./retail";

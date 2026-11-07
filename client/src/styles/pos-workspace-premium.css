@@ -1,0 +1,470 @@
+/*
+ * Modern ERP Point of Sale workspace.
+ * All transactional layout rules are scoped to the original POS screen.
+ * Holiday artwork is additionally gated by the existing per-user Christmas setting.
+ * Uses system design tokens so light/dark themes and company palettes stay in sync.
+ */
+[data-pos-modern-workspace="true"] {
+  --pos-panel-bg: hsl(var(--card));
+  --pos-panel-edge: color-mix(in srgb, hsl(var(--border)) 80%, transparent);
+  --pos-soft-blue: color-mix(in srgb, hsl(var(--primary)) 7%, hsl(var(--card)));
+  --pos-soft-ink: color-mix(in srgb, hsl(var(--foreground)) 8%, hsl(var(--card)));
+  --pos-panel-shadow: 0 12px 34px rgb(24 53 91 / 0.075);
+  background:
+    radial-gradient(ellipse at 55% -16%, color-mix(in srgb, hsl(var(--primary)) 8%, transparent), transparent 53%),
+    hsl(var(--background));
+}
+
+.dark [data-pos-modern-workspace="true"] {
+  --pos-panel-edge: color-mix(in srgb, hsl(var(--border)) 89%, transparent);
+  --pos-soft-blue: color-mix(in srgb, hsl(var(--primary)) 12%, hsl(var(--card)));
+  --pos-soft-ink: color-mix(in srgb, hsl(var(--foreground)) 7%, hsl(var(--card)));
+  --pos-panel-shadow: 0 15px 44px rgb(0 0 0 / 0.23);
+}
+
+[data-pos-modern-workspace] [data-pos-desktop-header] {
+  padding: 1rem 1.15rem 0.65rem;
+  flex-shrink: 0;
+}
+
+[data-pos-modern-workspace] [data-pos-header-inner] {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  gap: 1.25rem;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 104px;
+  padding: 1.15rem 1.3rem;
+  overflow: hidden;
+  background: linear-gradient(106deg, var(--pos-panel-bg) 54%, var(--pos-soft-blue));
+  border: 1px solid var(--pos-panel-edge);
+  border-radius: 1.25rem;
+  box-shadow: var(--pos-panel-shadow);
+}
+
+[data-pos-modern-workspace] [data-pos-header-identity],
+[data-pos-modern-workspace] [data-pos-header-actions] {
+  position: relative;
+  z-index: 2;
+}
+
+[data-pos-modern-workspace] [data-pos-header-identity] h1 {
+  font-size: clamp(1.35rem, 1.45vw, 1.9rem);
+  line-height: 1.18;
+  color: hsl(var(--foreground));
+}
+
+[data-pos-modern-workspace] [data-pos-header-identity] p {
+  margin-top: 0.25rem;
+}
+
+[data-pos-modern-workspace] [data-pos-title-icon] {
+  display: grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  flex-shrink: 0;
+  border-radius: 1.05rem;
+  color: hsl(var(--primary));
+  background: var(--pos-soft-blue);
+  border: 1px solid color-mix(in srgb, hsl(var(--primary)) 15%, transparent);
+}
+
+[data-pos-modern-workspace] [data-pos-header-actions] button {
+  border-radius: 0.85rem;
+  min-height: 2.55rem;
+}
+
+[data-pos-modern-workspace] [data-pos-header-actions] [data-testid="button-save-sale"] {
+  min-width: 7.4rem;
+  padding-inline: 1.4rem;
+  font-weight: 700;
+  box-shadow: 0 7px 19px color-mix(in srgb, hsl(var(--primary)) 23%, transparent);
+}
+
+[data-pos-modern-workspace] [data-pos-header-actions] [data-testid="button-save-sale"]:disabled {
+  box-shadow: none;
+}
+
+[data-pos-modern-workspace] [data-pos-seasonal-banner] {
+  display: none;
+}
+
+/* A small holiday illustration appears only while this user has the master mode ON.
+ * The optional gift visual respects the existing gifts effect preference as well. */
+html[data-christmas-mode="on"] [data-pos-modern-workspace] [data-pos-seasonal-banner] {
+  display: flex;
+  align-items: end;
+  position: absolute;
+  inset-inline-end: 12rem;
+  bottom: -0.25rem;
+  width: 10rem;
+  height: 5.5rem;
+  gap: 0.45rem;
+  justify-content: center;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.85;
+  color: #2d9678;
+  background: radial-gradient(ellipse at bottom, rgb(141 181 219 / 0.25), transparent 71%);
+}
+
+html.dark[data-christmas-mode="on"] [data-pos-modern-workspace] [data-pos-seasonal-banner] {
+  color: #79caa9;
+  opacity: 0.65;
+}
+
+html[data-christmas-mode="on"] [data-pos-modern-workspace] [data-pos-seasonal-banner] svg:last-child {
+  color: #d98449;
+  filter: drop-shadow(0 4px 5px rgb(0 0 0 / 0.08));
+}
+
+[data-pos-modern-workspace] [data-pos-checkout-strip] {
+  flex-shrink: 0;
+  padding: 0.5rem 1.15rem 0.65rem;
+  background: transparent;
+  border: 0;
+}
+
+[data-pos-modern-workspace] .pos-checkout-field {
+  display: flex;
+  flex: 1 1 11.5rem;
+  max-width: 21rem;
+  min-width: 10.5rem;
+  min-height: 4.2rem;
+  padding: 0.5rem 0.85rem;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.05rem;
+  border: 1px solid var(--pos-panel-edge);
+  border-radius: 1rem;
+  background: var(--pos-panel-bg);
+  box-shadow: 0 5px 17px rgb(24 53 91 / 0.055);
+}
+
+.dark [data-pos-modern-workspace] .pos-checkout-field {
+  box-shadow: 0 5px 17px rgb(0 0 0 / 0.13);
+}
+
+[data-pos-modern-workspace] .pos-checkout-field-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.01em;
+  color: hsl(var(--muted-foreground));
+  font-weight: 600;
+}
+
+[data-pos-modern-workspace] .pos-checkout-field-label svg {
+  color: hsl(var(--primary));
+}
+
+[data-pos-modern-workspace] .pos-checkout-field [role="combobox"],
+[data-pos-modern-workspace] .pos-checkout-field input,
+[data-pos-modern-workspace] .pos-checkout-field > div:not(.pos-checkout-field-label) {
+  width: 100%;
+  height: 2rem;
+  min-height: 2rem;
+  padding-inline: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  opacity: 1;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+[data-pos-modern-workspace] .pos-checkout-field [role="combobox"]:focus-visible,
+[data-pos-modern-workspace] .pos-checkout-field input:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 3px;
+  border-radius: 0.3rem;
+}
+
+[data-pos-modern-workspace] .pos-checkout-field [disabled],
+[data-pos-modern-workspace] .pos-checkout-field [readonly] {
+  cursor: default;
+  opacity: 0.78;
+}
+
+[data-pos-modern-workspace] [data-pos-desktop-layout] {
+  padding: 0.35rem 1.15rem 1.15rem;
+}
+
+[data-pos-modern-workspace] [data-pos-desktop-columns] {
+  align-items: stretch;
+  gap: 1rem;
+}
+
+[data-pos-modern-workspace] [data-pos-sale-panel],
+[data-pos-modern-workspace] [data-pos-inventory-picker] {
+  border: 1px solid var(--pos-panel-edge);
+  border-radius: 1.2rem;
+  background: var(--pos-panel-bg);
+  box-shadow: var(--pos-panel-shadow);
+}
+
+[data-pos-modern-workspace] [data-pos-sale-panel] {
+  position: relative;
+  isolation: isolate;
+  background: linear-gradient(180deg, var(--pos-panel-bg) 75%, var(--pos-soft-blue));
+}
+
+[data-pos-modern-workspace] [data-pos-grid-wrap] {
+  padding: 0.65rem 0.65rem 0;
+}
+
+[data-pos-modern-workspace] [data-pos-sale-grid] {
+  min-height: 0;
+  border: 1px solid var(--pos-panel-edge);
+  border-radius: 0.85rem;
+  box-shadow: none;
+  background: var(--pos-panel-bg);
+}
+
+[data-pos-modern-workspace] [data-pos-sale-grid] .table-responsive > div > div:first-child {
+  background: var(--pos-soft-ink);
+}
+
+[data-pos-modern-workspace] [data-pos-sale-grid] .table-responsive > div > div:first-child > div {
+  min-height: 2.6rem;
+  font-size: 0.74rem;
+  letter-spacing: 0.005em;
+}
+
+[data-pos-modern-workspace] [data-pos-sale-grid] .group.flex.border-b {
+  min-height: 3.1rem;
+}
+
+[data-pos-modern-workspace] [data-pos-sale-grid] .group.flex.border-b > div {
+  min-height: 3.1rem;
+  height: auto;
+}
+
+[data-pos-modern-workspace] [data-pos-sale-grid] .group.flex.border-b > div > input {
+  min-height: 3rem;
+}
+
+[data-pos-modern-workspace] [data-pos-sale-grid] .group.flex.border-b:focus-within {
+  background: var(--pos-soft-blue);
+}
+
+[data-pos-modern-workspace] [data-pos-sale-grid] input:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: -2px;
+  border-radius: 0.35rem;
+}
+
+[data-pos-modern-workspace] [data-pos-sale-summary] {
+  min-height: 4.1rem;
+  padding: 0.65rem 0.9rem;
+  background: var(--pos-soft-blue);
+  border-top-color: var(--pos-panel-edge);
+}
+
+[data-pos-modern-workspace] [data-pos-grand-total] {
+  display: inline-block;
+  min-width: 8.4rem;
+  padding: 0.46rem 0.9rem;
+  border-radius: 0.75rem;
+  color: hsl(var(--primary-foreground));
+  background: hsl(var(--primary));
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 6px 17px color-mix(in srgb, hsl(var(--primary)) 22%, transparent);
+}
+
+[data-pos-modern-workspace] [data-pos-notes-wrap] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.65rem 0.65rem 0;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--pos-panel-edge);
+  border-radius: 0.85rem;
+  background: var(--pos-panel-bg);
+}
+
+[data-pos-modern-workspace] [data-pos-notes-wrap] label {
+  color: hsl(var(--foreground));
+}
+
+[data-pos-modern-workspace] [data-pos-notes-wrap] label svg {
+  color: hsl(var(--primary));
+}
+
+[data-pos-modern-workspace] [data-pos-notes-wrap] textarea {
+  min-height: 2.25rem;
+  height: 2.25rem;
+  padding: 0.35rem 0.15rem;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+[data-pos-modern-workspace] [data-pos-notes-wrap] textarea:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 1px;
+  border-radius: 0.25rem;
+}
+
+[data-pos-modern-workspace] [data-pos-empty-state] {
+  min-height: 13rem;
+  color: hsl(var(--foreground));
+}
+
+[data-pos-modern-workspace] [data-pos-empty-icon] {
+  display: grid;
+  place-items: center;
+  width: 4.2rem;
+  height: 4.2rem;
+  border-radius: 1.2rem;
+  background: var(--pos-soft-blue);
+  color: hsl(var(--primary));
+}
+
+[data-pos-modern-workspace] [data-pos-inventory-picker] {
+  width: min(25.5rem, 37%);
+  min-width: 20rem;
+  height: auto;
+  flex-shrink: 0;
+}
+
+[data-pos-modern-workspace] [data-pos-inventory-heading] {
+  min-height: 3.2rem;
+  padding: 0.65rem 0.85rem;
+  margin-bottom: 0.6rem;
+  border-radius: 0.8rem;
+  background: var(--pos-soft-blue);
+}
+
+[data-pos-modern-workspace] [data-pos-inventory-heading] p {
+  font-size: 1.05rem;
+  letter-spacing: normal;
+}
+
+[data-pos-modern-workspace] [data-pos-product-search] {
+  min-height: 2.8rem;
+  border-radius: 0.75rem;
+  border-color: color-mix(in srgb, hsl(var(--primary)) 45%, hsl(var(--border)));
+}
+
+[data-pos-modern-workspace] [data-pos-product-search]:focus-within {
+  box-shadow: 0 0 0 3px color-mix(in srgb, hsl(var(--primary)) 18%, transparent);
+}
+
+[data-pos-modern-workspace] [data-pos-product-list] {
+  padding: 0 0.6rem 0.6rem;
+}
+
+[data-pos-modern-workspace] [data-pos-product-list] > button {
+  min-height: 4.25rem;
+  margin-bottom: 0.15rem;
+  padding-inline: 0.65rem;
+  border: 0;
+  border-bottom: 1px solid var(--pos-panel-edge);
+  border-radius: 0.65rem;
+}
+
+[data-pos-modern-workspace] [data-pos-product-list] > button:hover {
+  background: var(--pos-soft-blue);
+}
+
+[data-pos-modern-workspace] [data-pos-product-list] > button:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: -2px;
+}
+
+[data-pos-modern-workspace] [data-pos-product-list] > button.bg-primary\/25 {
+  background: color-mix(in srgb, hsl(var(--primary)) 16%, var(--pos-panel-bg));
+}
+
+[data-pos-modern-workspace] [data-pos-product-avatar] {
+  display: grid;
+  place-items: center;
+  width: 2.8rem;
+  height: 2.8rem;
+  flex-shrink: 0;
+  border-radius: 0.75rem;
+  color: hsl(var(--primary));
+  background: var(--pos-soft-blue);
+  border: 1px solid var(--pos-panel-edge);
+}
+
+[data-pos-modern-workspace] [data-pos-product-list] [class*="bg-amber-500"] {
+  color: #a76308;
+}
+
+.dark [data-pos-modern-workspace] [data-pos-product-list] [class*="bg-amber-500"] {
+  color: #f7c269;
+}
+
+/* The POS shell stays consistent with the new workspace while the sidebar and
+ * header keep the same theme switcher and existing per-user seasonal layer. */
+[data-pos-shell="true"] [data-slot="pos-top-bar"] {
+  background: color-mix(in srgb, hsl(var(--background)) 92%, hsl(var(--card)) 8%);
+  border-color: hsl(var(--border));
+  backdrop-filter: blur(10px);
+}
+
+[data-pos-shell="true"] [data-pos-sidebar="modern"] {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, hsl(var(--sidebar)) 93%, hsl(var(--primary)) 7%),
+    hsl(var(--sidebar))
+  );
+}
+
+@media (max-width: 1260px) {
+  [data-pos-modern-workspace] .pos-checkout-field {
+    flex-basis: 9rem;
+    min-width: 9rem;
+  }
+  [data-pos-modern-workspace] [data-pos-inventory-picker] {
+    min-width: 18rem;
+    width: 34%;
+  }
+  html[data-christmas-mode="on"] [data-pos-modern-workspace] [data-pos-seasonal-banner] {
+    display: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  [data-pos-modern-workspace] {
+    background: hsl(var(--background));
+  }
+  [data-pos-modern-workspace] [data-pos-inventory-picker] {
+    width: 100%;
+    min-width: 0;
+  }
+  [data-pos-modern-workspace] [data-pos-mobile-page] {
+    background: linear-gradient(180deg, var(--pos-panel-bg), var(--pos-soft-blue));
+  }
+  [data-pos-modern-workspace] [data-pos-mobile-page] section {
+    border-color: var(--pos-panel-edge);
+  }
+  [data-pos-modern-workspace] [data-pos-mobile-checkout] {
+    background: var(--pos-panel-bg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-pos-modern-workspace] *,
+  [data-pos-modern-workspace] *::before,
+  [data-pos-modern-workspace] *::after {
+    scroll-behavior: auto;
+    animation-duration: 0.01ms;
+    transition-duration: 0.01ms;
+  }
+}
+
+@media print {
+  [data-pos-modern-workspace] [data-pos-seasonal-banner],
+  [data-pos-modern-workspace] [data-pos-empty-state] {
+    display: none !important;
+  }
+}

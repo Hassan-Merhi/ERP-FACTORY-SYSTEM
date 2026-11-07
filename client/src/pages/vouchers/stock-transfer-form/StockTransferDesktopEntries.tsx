@@ -1,3 +1,4 @@
+import { Boxes } from "lucide-react";
 import { StockTransferDesktopRow } from "./StockTransferDesktopRow";
 import { StockTransferRowAction } from "./StockTransferRowAction";
 import type { StockTransferFormModel } from "./useStockTransferFormModel";
@@ -6,7 +7,7 @@ export function StockTransferDesktopEntries({ model }: { model: StockTransferFor
   return (
     <div className="hidden sm:block overflow-x-auto">
       <div className="min-w-[400px]">
-        <div className="flex bg-muted/50 border-b sticky top-0 z-30">
+        <div className={model.isPOS ? "pos-transfer-table-header flex border-b sticky top-0 z-30" : "flex bg-muted/50 border-b sticky top-0 z-30"}>
           <div className="w-10 sm:w-12 flex items-center justify-center border-r h-9 sm:h-10 font-medium text-xs">
             #
           </div>
@@ -35,7 +36,7 @@ export function StockTransferDesktopEntries({ model }: { model: StockTransferFor
         </div>
         <div className="max-h-[calc(100dvh-24rem)] overflow-y-auto">
           {model.transferFields.map((field, index) => (
-            <div key={field.id} className="flex border-b hover-elevate">
+            <div key={field.id} className={model.isPOS ? "pos-transfer-table-row flex border-b hover-elevate" : "flex border-b hover-elevate"}>
               <div className="w-10 sm:w-12 flex items-center justify-center border-r h-9 sm:h-10 text-xs text-muted-foreground">
                 {index + 1}
               </div>
@@ -50,6 +51,13 @@ export function StockTransferDesktopEntries({ model }: { model: StockTransferFor
               </div>
             </div>
           ))}
+          {model.isPOS && model.transferEntries.every((entry) => !entry.stockItemId) && (
+            <div className="pos-transfer-empty-state" data-testid="pos-transfer-empty-state">
+              <div className="pos-transfer-empty-art"><Boxes className="h-8 w-8" aria-hidden="true" /></div>
+              <p>Add items to transfer</p>
+              <span>Search and select items, then enter the quantity.</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

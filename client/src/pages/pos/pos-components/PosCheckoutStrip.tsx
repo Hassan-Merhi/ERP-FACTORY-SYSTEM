@@ -1,4 +1,5 @@
-import { MapPin, User, ChevronDown, Check } from "lucide-react";
+import { MapPin, User, ChevronDown, Check, CalendarDays, CreditCard, Wallet } from "lucide-react";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -60,111 +61,141 @@ export function PosCheckoutStrip({
   cashLedgerAccounts,
   isSpCompany,
 }: PosCheckoutStripProps) {
+  const { t } = useApplicationLanguage();
   if (!activeLocation) return null;
 
   return (
-    <div className="hidden lg:flex flex-wrap items-center gap-2 px-4 py-2 border-b bg-muted/10">
+    <section
+      data-pos-checkout-strip="true"
+      aria-label={t("pos.modern.saleSettings")}
+      className="hidden lg:flex flex-wrap items-center gap-3 px-4 py-3"
+    >
       {/* Location — admin: full select; POS user: name badge or select if multiple */}
-      {!posUser ? (
-        <Select
-          value={activeLocation?.id?.toString()}
-          onValueChange={(val) => {
-            const loc = allLocations.find((l) => l.id.toString() === val);
-            if (loc) setSelectedLocation(loc);
-          }}
-        >
-          <SelectTrigger className="w-[180px]" data-testid="select-admin-location">
-            <MapPin className="h-3.5 w-3.5 mr-1 text-muted-foreground shrink-0" />
-            <SelectValue placeholder="Location" />
-          </SelectTrigger>
-          <SelectContent>
-            {allLocations.map((loc) => (
-              <SelectItem key={loc.id} value={loc.id.toString()}>
-                {loc.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      ) : posAssignedLocations.length > 1 ? (
-        <Select
-          value={posSelectedLocation?.id?.toString()}
-          onValueChange={(val) => {
-            const loc = posAssignedLocations.find((l) => l.id.toString() === val);
-            if (loc) setPosSelectedLocation(loc);
-          }}
-        >
-          <SelectTrigger className="w-[180px]" data-testid="select-pos-location-strip">
-            <MapPin className="h-3.5 w-3.5 mr-1 text-muted-foreground shrink-0" />
-            <SelectValue placeholder="Location" />
-          </SelectTrigger>
-          <SelectContent>
-            {posAssignedLocations.map((loc) => (
-              <SelectItem key={loc.id} value={loc.id.toString()}>
-                {loc.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      ) : (
-        <div className="flex items-center gap-1.5 h-9 px-3 rounded-md border border-input bg-muted/30 text-sm">
-          <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <span className="font-medium">{activeLocation.name}</span>
-        </div>
-      )}
+      <div data-pos-checkout-field="location" className="pos-checkout-field">
+        <span className="pos-checkout-field-label">
+          <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+          {t("pos.modern.location")}
+        </span>
+        {!posUser ? (
+          <Select
+            value={activeLocation?.id?.toString()}
+            onValueChange={(val) => {
+              const loc = allLocations.find((l) => l.id.toString() === val);
+              if (loc) setSelectedLocation(loc);
+            }}
+          >
+            <SelectTrigger className="w-[180px]" data-testid="select-admin-location">
+              <MapPin className="h-3.5 w-3.5 mr-1 text-muted-foreground shrink-0" />
+              <SelectValue placeholder="Location" />
+            </SelectTrigger>
+            <SelectContent>
+              {allLocations.map((loc) => (
+                <SelectItem key={loc.id} value={loc.id.toString()}>
+                  {loc.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : posAssignedLocations.length > 1 ? (
+          <Select
+            value={posSelectedLocation?.id?.toString()}
+            onValueChange={(val) => {
+              const loc = posAssignedLocations.find((l) => l.id.toString() === val);
+              if (loc) setPosSelectedLocation(loc);
+            }}
+          >
+            <SelectTrigger className="w-[180px]" data-testid="select-pos-location-strip">
+              <MapPin className="h-3.5 w-3.5 mr-1 text-muted-foreground shrink-0" />
+              <SelectValue placeholder="Location" />
+            </SelectTrigger>
+            <SelectContent>
+              {posAssignedLocations.map((loc) => (
+                <SelectItem key={loc.id} value={loc.id.toString()}>
+                  {loc.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <div className="flex items-center gap-1.5 h-9 px-3 rounded-md border border-input bg-muted/30 text-sm">
+            <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <span className="font-medium">{activeLocation.name}</span>
+          </div>
+        )}
+      </div>
 
-      <input
-        type="date"
-        value={saleDate}
-        onChange={posUser ? undefined : (e) => setSaleDate(e.target.value)}
-        readOnly={!!posUser}
-        className={`h-9 px-3 rounded-md border border-input bg-background text-sm font-mono focus:outline-hidden focus:ring-2 focus:ring-ring ${posUser ? "opacity-60 cursor-not-allowed" : ""}`}
-        data-testid="input-sale-date"
-      />
+      <div data-pos-checkout-field="date" className="pos-checkout-field">
+        <label htmlFor="pos-desktop-sale-date" className="pos-checkout-field-label">
+          <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
+          {t("pos.modern.date")}
+        </label>
+        <input
+          id="pos-desktop-sale-date"
+          type="date"
+          value={saleDate}
+          onChange={posUser ? undefined : (e) => setSaleDate(e.target.value)}
+          readOnly={!!posUser}
+          className={`h-9 px-3 rounded-md border border-input bg-background text-sm font-mono focus:outline-hidden focus:ring-2 focus:ring-ring ${posUser ? "opacity-60 cursor-not-allowed" : ""}`}
+          data-testid="input-sale-date"
+        />
+      </div>
 
       {!isCreditSale && (
         <>
-          <Select
-            value={paymentAccountType}
-            onValueChange={
-              posUser
-                ? undefined
-                : (v) => {
-                    if (v === "bank" || v === "cash") setPaymentAccountType(v);
-                  }
-            }
-            disabled={!!posUser}
-          >
-            <SelectTrigger className="w-24" data-testid="select-account-type">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="cash">Cash</SelectItem>
-              <SelectItem value="bank">Bank</SelectItem>
-            </SelectContent>
-          </Select>
+          <div data-pos-checkout-field="method" className="pos-checkout-field">
+            <span className="pos-checkout-field-label">
+              <CreditCard className="h-3.5 w-3.5" aria-hidden="true" />
+              {t("pos.modern.paymentMethod")}
+            </span>
+            <Select
+              value={paymentAccountType}
+              onValueChange={
+                posUser
+                  ? undefined
+                  : (v) => {
+                      if (v === "bank" || v === "cash") setPaymentAccountType(v);
+                    }
+              }
+              disabled={!!posUser}
+            >
+              <SelectTrigger className="w-24" data-testid="select-account-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="cash">Cash</SelectItem>
+                <SelectItem value="bank">Bank</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-          <Select
-            value={paymentAccountId || ""}
-            onValueChange={posUser ? undefined : setPaymentAccountId}
-            disabled={!!posUser}
-          >
-            <SelectTrigger className="w-[180px]" data-testid="select-payment-account">
-              <SelectValue placeholder={paymentAccountType === "bank" ? "Select Bank" : "Select Cash"} />
-            </SelectTrigger>
-            <SelectContent>
-              {paymentAccountType === "bank"
-                ? (Array.isArray(bankAccounts) ? bankAccounts : []).map((acc) => (
-                    <SelectItem key={acc.id} value={String(acc.id)}>
-                      {acc.name} ({acc.code})
-                    </SelectItem>
-                  ))
-                : cashLedgerAccounts.map((acc) => (
-                    <SelectItem key={acc.id} value={String(acc.id)}>
-                      {acc.name}
-                    </SelectItem>
-                  ))}
-            </SelectContent>
-          </Select>
+          <div data-pos-checkout-field="account" className="pos-checkout-field">
+            <span className="pos-checkout-field-label">
+              <Wallet className="h-3.5 w-3.5" aria-hidden="true" />
+              {t("pos.modern.account")}
+            </span>
+            <Select
+              value={paymentAccountId || ""}
+              onValueChange={posUser ? undefined : setPaymentAccountId}
+              disabled={!!posUser}
+            >
+              <SelectTrigger className="w-[180px]" data-testid="select-payment-account">
+                <SelectValue placeholder={paymentAccountType === "bank" ? "Select Bank" : "Select Cash"} />
+              </SelectTrigger>
+              <SelectContent>
+                {paymentAccountType === "bank"
+                  ? (Array.isArray(bankAccounts) ? bankAccounts : []).map((acc) => (
+                      <SelectItem key={acc.id} value={String(acc.id)}>
+                        {acc.name} ({acc.code})
+                      </SelectItem>
+                    ))
+                  : cashLedgerAccounts.map((acc) => (
+                      <SelectItem key={acc.id} value={String(acc.id)}>
+                        {acc.name}
+                      </SelectItem>
+                    ))}
+              </SelectContent>
+            </Select>
+          </div>
         </>
       )}
 
@@ -222,6 +253,6 @@ export function PosCheckoutStrip({
           </PopoverContent>
         </Popover>
       )}
-    </div>
+    </section>
   );
 }

@@ -30,7 +30,7 @@ vi.mock("@/contexts/AppModeContext", () => ({
 
 vi.mock("@/contexts/CompanyContext", () => ({
   useCompany: () => ({
-    selectedCompany: { id: 1, name: "Test Co", code: "TC", active: true, companyType: "erp" as const },
+    selectedCompany: { id: 1, name: "Test Co", code: "TC", active: true, companyType: "erp" as const, role: "Admin" },
     companies: [
       { id: 1, name: "Test Co", code: "TC", active: true, companyType: "erp" as const },
       { id: 2, name: "Second Co", code: "SC", active: true, companyType: "erp" as const },

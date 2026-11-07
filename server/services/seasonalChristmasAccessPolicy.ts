@@ -11,10 +11,8 @@ export const christmasModeUserPreferenceKey = (userId: string): string => `chris
 
 export const CHRISTMAS_VISUALS_KEY = "christmas_mode_visuals_v2";
 
-export const CHRISTMAS_EFFECT_KEYS = [
-  "snowfall", "santa", "garlands", "countdown", "gifts", "ambient",
-] as const;
-export type ChristmasEffectKey = typeof CHRISTMAS_EFFECT_KEYS[number];
+export const CHRISTMAS_EFFECT_KEYS = ["snowfall", "santa", "garlands", "countdown", "gifts", "ambient"] as const;
+export type ChristmasEffectKey = (typeof CHRISTMAS_EFFECT_KEYS)[number];
 export type ChristmasIntensity = "subtle" | "balanced" | "full";
 export type ChristmasVisualSettings = {
   effects: Record<ChristmasEffectKey, boolean>;
@@ -36,10 +34,11 @@ export const DEFAULT_CHRISTMAS_VISUALS: ChristmasVisualSettings = {
 
 /** Legacy/missing/malformed display configuration falls back to safe presentation defaults. */
 export function parseChristmasVisualSettings(raw: string | null | undefined): ChristmasVisualSettings {
-  if (!raw) return {
-    effects: { ...DEFAULT_CHRISTMAS_VISUALS.effects },
-    intensity: DEFAULT_CHRISTMAS_VISUALS.intensity,
-  };
+  if (!raw)
+    return {
+      effects: { ...DEFAULT_CHRISTMAS_VISUALS.effects },
+      intensity: DEFAULT_CHRISTMAS_VISUALS.intensity,
+    };
   try {
     const decoded: unknown = JSON.parse(raw);
     if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) {
@@ -54,14 +53,12 @@ export function parseChristmasVisualSettings(raw: string | null | undefined): Ch
         if (typeof flag === "boolean") effects[key] = flag;
       }
     }
-    const intensity = data.intensity === "subtle" || data.intensity === "full"
-      ? data.intensity : "balanced";
+    const intensity = data.intensity === "subtle" || data.intensity === "full" ? data.intensity : "balanced";
     return { effects, intensity };
   } catch {
     return parseChristmasVisualSettings(null);
   }
 }
-
 
 export function parseChristmasAllowedUserIds(raw: string | null | undefined): string[] {
   if (!raw) return [];
@@ -80,7 +77,7 @@ export function christmasModeEnabledForUser(
   masterValue: string | null | undefined,
   allowedIdsRaw: string | null | undefined,
   userId: string | null | undefined,
-  preferenceEnabled = true,
+  preferenceEnabled = true
 ): boolean {
   if (masterValue !== "true" || !userId || !preferenceEnabled) return false;
   return parseChristmasAllowedUserIds(allowedIdsRaw).includes(userId);

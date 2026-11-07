@@ -1,4 +1,7 @@
 import { Users } from "lucide-react";
+import { RolePermissionMatrix } from "./RolePermissionMatrix";
+import { UserAccessOverrides } from "./UserAccessOverrides";
+import { PermissionChangeAudit } from "./PermissionChangeAudit";
 import { UsersSection } from "./UsersSection";
 
 interface UsersPermissionsHubProps {
@@ -6,7 +9,7 @@ interface UsersPermissionsHubProps {
   appMode?: string;
 }
 
-export function UsersPermissionsHub({ appMode }: UsersPermissionsHubProps) {
+export function UsersPermissionsHub({ appMode, userRole }: UsersPermissionsHubProps) {
   return (
     <div className="space-y-4">
       <div>
@@ -18,6 +21,9 @@ export function UsersPermissionsHub({ appMode }: UsersPermissionsHubProps) {
       </div>
 
       <UsersSection appMode={appMode} />
+      {["Admin", "Developer"].includes(userRole ?? "") && <RolePermissionMatrix />}
+      {["Admin", "Developer"].includes(userRole ?? "") && <UserAccessOverrides />}
+      {["Admin", "Developer"].includes(userRole ?? "") && <PermissionChangeAudit />}
     </div>
   );
 }

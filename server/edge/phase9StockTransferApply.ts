@@ -18,6 +18,7 @@ import { createStockTransferTx } from "../services/inventory/createStockTransfer
 import { StockTransferPolicyError } from "../storage/stock-ops/transfers-create";
 import { Phase9EventConflict } from "./phase9CloudEventStore.mjs";
 import { PHASE9_STOCK_NEGATIVE_CONFLICT, type Phase9StockTransferEvidence } from "./phase9StockEnvelope.mjs";
+import { throwIfClosedPeriod } from "./phase9ClosedPeriod";
 
 type Queryable = Pick<PoolClient, "query">;
 
@@ -108,6 +109,7 @@ async function apply(
       actorUserId: event.actorUserId,
     });
   } catch (error) {
+    throwIfClosedPeriod(error);
     if (error instanceof StockTransferPolicyError) {
       if (error.code === "STOCK_TRANSFER_NEGATIVE_STOCK_DISABLED") {
         throw new Phase9EventConflict(PHASE9_STOCK_NEGATIVE_CONFLICT, { reason: error.message });

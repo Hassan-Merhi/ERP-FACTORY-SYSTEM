@@ -51,6 +51,8 @@ export interface SupplierDetailDialogProps {
   onDialogTabChange: (tab: SupplierDetailTab) => void;
   onClose: () => void;
   onExport: () => void;
+  canExport?: boolean;
+  exportUnavailableReason?: string;
   onTransactionClick: (txn: SupplierLedgerRow) => void;
   onPOClick: (po: SupplierPurchaseOrder) => void;
   onContainerClick: (po: { companyId: number | null; containerId?: number | null }) => void;
@@ -74,6 +76,8 @@ export function SupplierDetailDialog({
   onDialogTabChange,
   onClose,
   onExport,
+  canExport = true,
+  exportUnavailableReason,
   onTransactionClick,
   onPOClick,
   onContainerClick,
@@ -113,7 +117,8 @@ export function SupplierDetailDialog({
               variant="outline"
               size="default"
               onClick={onExport}
-              disabled={unifiedLedger.length === 0}
+              disabled={unifiedLedger.length === 0 || !canExport}
+              title={!canExport ? exportUnavailableReason : undefined}
               data-testid="button-export-excel"
             >
               <Download className="h-4 w-4 mr-1.5" />

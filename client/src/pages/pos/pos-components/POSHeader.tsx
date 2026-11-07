@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/PageHeader";
+import { useChristmasMode } from "@/hooks/useChristmasMode";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +20,9 @@ import {
   Save,
   Check,
   Sheet,
+  ShoppingCart,
+  TreePine,
+  Gift,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -87,122 +91,147 @@ export function POSHeader({
   onDetailedExport,
   onExportTransaction,
 }: POSHeaderProps) {
+  const { t } = useApplicationLanguage();
   const autosaveLabel = useRelativeTime(lastAutosaved);
+  const { settingQuery } = useChristmasMode();
+  const showSeasonalArtwork =
+    settingQuery.data?.enabled === true && (settingQuery.data?.visuals?.effects.gifts ?? true);
 
   return (
     <div className="hidden px-4 pt-4 lg:block" data-pos-desktop-header="true">
-      <PageHeader title={editVoucherId ? "Edit Transaction" : "Point of Sale"} showBackButton={false}>
-        {editVoucherId ? (
-          <>
-            {onExportTransaction && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onExportTransaction}
-                className="gap-2"
-                data-testid="button-export-transaction"
-                title="Export transaction to Excel (admin/dev only)"
-              >
-                <Sheet className="h-4 w-4" />
-                Export Excel
-              </Button>
-            )}
-          </>
-        ) : (
-          <>
-            {autosaveLabel && <span className="text-xs text-muted-foreground">{autosaveLabel}</span>}
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" data-testid="button-pos-options" aria-label="Open POS options">
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
-                {showPosImport && (
-                  <DropdownMenuItem onClick={onImportClick} className="cursor-pointer gap-2">
-                    <Upload className="h-4 w-4" />
-                    Import Sales
-                  </DropdownMenuItem>
-                )}
-
-                <DropdownMenuSeparator />
-
-                <DropdownMenuItem
-                  onClick={onOpenDraftDialog}
-                  className="cursor-pointer gap-2"
-                  data-testid="button-load-draft"
+      <div data-pos-header-inner="true">
+        <div data-pos-header-identity="true" className="flex min-w-0 items-center gap-4">
+          <div data-pos-title-icon="true">
+            <ShoppingCart className="h-6 w-6" aria-hidden="true" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold tracking-tight">
+              {editVoucherId ? "Edit Transaction" : "Point of Sale"}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {editVoucherId ? t("pos.modern.reviewSale") : t("pos.modern.createSale")}
+            </p>
+          </div>
+        </div>
+        {showSeasonalArtwork && (
+          <div data-pos-seasonal-banner="true" aria-hidden="true">
+            <TreePine className="h-10 w-10" />
+            <Gift className="h-9 w-9" />
+          </div>
+        )}
+        <div data-pos-header-actions="true" className="flex shrink-0 items-center gap-2">
+          {editVoucherId ? (
+            <>
+              {onExportTransaction && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onExportTransaction}
+                  className="gap-2"
+                  data-testid="button-export-transaction"
+                  title="Export transaction to Excel (admin/dev only)"
                 >
-                  <Download className="h-4 w-4" />
-                  Load Draft{drafts.length > 0 ? ` (${drafts.length})` : ""}
-                </DropdownMenuItem>
+                  <Sheet className="h-4 w-4" />
+                  Export Excel
+                </Button>
+              )}
+            </>
+          ) : (
+            <>
+              {autosaveLabel && <span className="text-xs text-muted-foreground">{autosaveLabel}</span>}
 
-                {onUpdateDraft && (
-                  <DropdownMenuItem
-                    onClick={onUpdateDraft}
-                    className="cursor-pointer gap-2"
-                    data-testid="button-update-draft"
-                  >
-                    <Save className="h-4 w-4" />
-                    Update Draft
-                  </DropdownMenuItem>
-                )}
-
-                <DropdownMenuSeparator />
-
-                <DropdownMenuItem onClick={onSummaryExport} className="cursor-pointer gap-2">
-                  <FileText className="h-4 w-4" />
-                  Summary Export
-                </DropdownMenuItem>
-
-                <DropdownMenuItem onClick={onDetailedExport} className="cursor-pointer gap-2">
-                  <FileSpreadsheet className="h-4 w-4" />
-                  Detailed Export
-                </DropdownMenuItem>
-
-                <DropdownMenuSeparator />
-
-                <DropdownMenuItem onClick={onShowStockReport} className="cursor-pointer gap-2">
-                  <Eye className="h-4 w-4" />
-                  Stock Report
-                </DropdownMenuItem>
-
-                <DropdownMenuItem onClick={onExportInventory} className="cursor-pointer gap-2">
-                  <FileDown className="h-4 w-4" />
-                  Export Inventory
-                </DropdownMenuItem>
-
-                <DropdownMenuSeparator />
-
-                <DropdownMenuItem asChild>
-                  <Link href="/pos-daybook" className="flex w-full cursor-pointer items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" data-testid="button-pos-options" aria-label="Open POS options">
                     <MoreHorizontal className="h-4 w-4" />
-                    POS Daybook
-                  </Link>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </>
-        )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  {showPosImport && (
+                    <DropdownMenuItem onClick={onImportClick} className="cursor-pointer gap-2">
+                      <Upload className="h-4 w-4" />
+                      Import Sales
+                    </DropdownMenuItem>
+                  )}
 
-        {handleSaveSale && (
-          <Button
-            onClick={handleSaveSale}
-            disabled={saveMutation?.isPending || !hasValidItems || disableSave}
-            className="gap-2"
-            data-testid="button-save-sale"
-          >
-            {saveMutation?.isPending ? (
-              "Saving..."
-            ) : (
-              <>
-                <Check className="h-4 w-4" />
-                {editVoucherId ? "Update" : "Save"}
-              </>
-            )}
-          </Button>
-        )}
-      </PageHeader>
+                  <DropdownMenuSeparator />
+
+                  <DropdownMenuItem
+                    onClick={onOpenDraftDialog}
+                    className="cursor-pointer gap-2"
+                    data-testid="button-load-draft"
+                  >
+                    <Download className="h-4 w-4" />
+                    Load Draft{drafts.length > 0 ? ` (${drafts.length})` : ""}
+                  </DropdownMenuItem>
+
+                  {onUpdateDraft && (
+                    <DropdownMenuItem
+                      onClick={onUpdateDraft}
+                      className="cursor-pointer gap-2"
+                      data-testid="button-update-draft"
+                    >
+                      <Save className="h-4 w-4" />
+                      Update Draft
+                    </DropdownMenuItem>
+                  )}
+
+                  <DropdownMenuSeparator />
+
+                  <DropdownMenuItem onClick={onSummaryExport} className="cursor-pointer gap-2">
+                    <FileText className="h-4 w-4" />
+                    Summary Export
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem onClick={onDetailedExport} className="cursor-pointer gap-2">
+                    <FileSpreadsheet className="h-4 w-4" />
+                    Detailed Export
+                  </DropdownMenuItem>
+
+                  <DropdownMenuSeparator />
+
+                  <DropdownMenuItem onClick={onShowStockReport} className="cursor-pointer gap-2">
+                    <Eye className="h-4 w-4" />
+                    Stock Report
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem onClick={onExportInventory} className="cursor-pointer gap-2">
+                    <FileDown className="h-4 w-4" />
+                    Export Inventory
+                  </DropdownMenuItem>
+
+                  <DropdownMenuSeparator />
+
+                  <DropdownMenuItem asChild>
+                    <Link href="/pos-daybook" className="flex w-full cursor-pointer items-center gap-2">
+                      <MoreHorizontal className="h-4 w-4" />
+                      POS Daybook
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          )}
+
+          {handleSaveSale && (
+            <Button
+              onClick={handleSaveSale}
+              disabled={saveMutation?.isPending || !hasValidItems || disableSave}
+              className="gap-2"
+              data-testid="button-save-sale"
+            >
+              {saveMutation?.isPending ? (
+                "Saving..."
+              ) : (
+                <>
+                  <Check className="h-4 w-4" />
+                  {editVoucherId ? "Update" : "Save"}
+                </>
+              )}
+            </Button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -76,16 +76,19 @@ jobs:
           // Require the actual recording job to have completed successfully, and
           // separately validate its specific artifact, codec, SHA and duration.
           const data = JSON.parse(fs.readFileSync(root + "/source-jobs.json", "utf8"));
+          // A full-system recording runs as parallel shards ("record-training (3)").
           const recorder = (data.jobs || []).filter((job) =>
-            job.name === "record-training" || job.name === "record / record-training");
-          if (recorder.length !== 1 || recorder[0].status !== "completed" ||
-              recorder[0].conclusion !== "success") {
+            /^(record \/ )?record-training( \(\d+\))?$/.test(String(job.name)));
+          if (!recorder.length || recorder.some((job) => job.status !== "completed" || job.conclusion !== "success")) {
             throw new Error("The requested run has no successful training recording job");
           }
           fs.appendFileSync(process.env.GITHUB_ENV, "TRAINING_SOURCE_SHA=" + run.head_sha + "\n");
           fs.appendFileSync(process.env.GITHUB_OUTPUT, "source_sha=" + run.head_sha + "\n");
           NODE
-          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" -n "real-erp-training-$SOURCE_RUN" -D "$GITHUB_WORKSPACE/.training-review"
+          # Each shard is its own artifact; merge them (older runs have a single one).
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" -p "real-erp-training-$SOURCE_RUN*" -D "$RUNNER_TEMP/shards"
+          mkdir -p "$GITHUB_WORKSPACE/.training-review"
+          for part in "$RUNNER_TEMP"/shards/*/; do cp -R "$part". "$GITHUB_WORKSPACE/.training-review/"; done
       - name: Install the decoder used to re-verify the recording
         timeout-minutes: 35
         run: |

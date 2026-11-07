@@ -1,0 +1,566 @@
+{
+  "formatVersion": 1,
+  "description": "Phase 1 candidate route/action inventory, not verified or production enforcement. All routes absent from this map are UNREVIEWED. Handler-by-handler verification is required before activation.",
+  "routes": {
+    "POST /api/vouchers": {
+      "resource": "erp.vouchers",
+      "action": "create",
+      "status": "candidate"
+    },
+    "POST /api/vouchers/with-entries": {
+      "resource": "erp.vouchers",
+      "action": "create",
+      "status": "candidate"
+    },
+    "POST /api/vouchers/payment-receipt": {
+      "resource": "erp.vouchers",
+      "action": "create",
+      "status": "candidate"
+    },
+    "POST /api/vouchers/journal": {
+      "resource": "erp.vouchers",
+      "action": "create",
+      "status": "candidate"
+    },
+    "PUT /api/vouchers/:id/with-entries": {
+      "resource": "erp.vouchers",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "PATCH /api/vouchers/:id": {
+      "resource": "erp.vouchers",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "PATCH /api/vouchers/:id/adjustment": {
+      "resource": "erp.vouchers",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "PATCH /api/vouchers/:id/payment-receipt": {
+      "resource": "erp.vouchers",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "PATCH /api/vouchers/:id/journal": {
+      "resource": "erp.vouchers",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "PATCH /api/vouchers/:id/transfer": {
+      "resource": "erp.vouchers",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "DELETE /api/vouchers/:id": {
+      "resource": "erp.vouchers",
+      "action": "delete",
+      "status": "candidate"
+    },
+    "POST /api/vouchers/bulk-delete": {
+      "resource": "erp.vouchers",
+      "action": "delete",
+      "status": "candidate"
+    },
+    "POST /api/vouchers/:id/finalize": {
+      "resource": "erp.vouchers",
+      "action": "finalize",
+      "status": "candidate"
+    },
+    "POST /api/vouchers/:id/reverse": {
+      "resource": "erp.vouchers",
+      "action": "reverse",
+      "status": "candidate"
+    },
+    "POST /api/vouchers/:voucherId/exact-reversal": {
+      "resource": "erp.vouchers",
+      "action": "reverse",
+      "status": "candidate"
+    },
+    "POST /api/suppliers": {
+      "resource": "erp.suppliers",
+      "action": "create",
+      "status": "candidate"
+    },
+    "PATCH /api/suppliers/:id": {
+      "resource": "erp.suppliers",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "DELETE /api/suppliers/:id": {
+      "resource": "erp.suppliers",
+      "action": "delete",
+      "status": "candidate"
+    },
+    "POST /api/customers": {
+      "resource": "erp.customers",
+      "action": "create",
+      "status": "candidate"
+    },
+    "PUT /api/customers/:id": {
+      "resource": "erp.customers",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "DELETE /api/customers/:id": {
+      "resource": "erp.customers",
+      "action": "delete",
+      "status": "candidate"
+    },
+    "POST /api/stock-items": {
+      "resource": "erp.stock_items",
+      "action": "create",
+      "status": "candidate"
+    },
+    "PATCH /api/stock-items/:id": {
+      "resource": "erp.stock_items",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "DELETE /api/stock-items/:id": {
+      "resource": "erp.stock_items",
+      "action": "delete",
+      "status": "candidate"
+    },
+    "POST /api/stock-items/bulk-delete": {
+      "resource": "erp.stock_items",
+      "action": "delete",
+      "status": "candidate"
+    },
+    "POST /api/stock-items/bulk-merge": {
+      "resource": "erp.stock_items",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "POST /api/stock-items/import": {
+      "resource": "erp.stock_items",
+      "action": "import",
+      "status": "candidate"
+    },
+    "POST /api/stock-items/import-opening-balances": {
+      "resource": "erp.stock_items",
+      "action": "import",
+      "status": "candidate"
+    },
+    "POST /api/stock-items/:id/merge": {
+      "resource": "erp.stock_items",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "POST /api/stock-transfers/:id/approve": {
+      "resource": "erp.stock_transfers",
+      "action": "approve",
+      "status": "candidate"
+    },
+    "POST /api/stock-transfers/:transferId/revisions": {
+      "resource": "erp.stock_transfers",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "PUT /api/stock-transfers/:id": {
+      "resource": "erp.stock_transfers",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "POST /api/factory/containers": {
+      "resource": "factory.containers",
+      "action": "create",
+      "status": "candidate"
+    },
+    "PATCH /api/factory/containers/:id": {
+      "resource": "factory.containers",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "DELETE /api/factory/containers/:id": {
+      "resource": "factory.containers",
+      "action": "delete",
+      "status": "candidate"
+    },
+    "POST /api/factory/containers/bulk-delete": {
+      "resource": "factory.containers",
+      "action": "delete",
+      "status": "candidate"
+    },
+    "POST /api/factory/containers/:id/reverse-offload": {
+      "resource": "factory.containers",
+      "action": "reverse",
+      "status": "candidate"
+    },
+    "POST /api/factory/containers/import-excel": {
+      "resource": "factory.containers",
+      "action": "import",
+      "status": "candidate"
+    },
+    "POST /api/factory/containers/:id/move-supplier": {
+      "resource": "factory.containers",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "POST /api/factory/containers/:id/other-charges/sync": {
+      "resource": "factory.containers",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "POST /api/factory/raw-stock/offload": {
+      "resource": "factory.raw_stock",
+      "action": "finalize",
+      "status": "candidate"
+    },
+    "POST /api/factory/raw-stock/adjustment": {
+      "resource": "factory.raw_stock",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "POST /api/factory/raw-stock/update-cost": {
+      "resource": "factory.raw_stock",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "POST /api/factory/raw-stock/deduct-received": {
+      "resource": "factory.raw_stock",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "DELETE /api/factory/raw-stock/adjustments/:id": {
+      "resource": "factory.raw_stock",
+      "action": "delete",
+      "status": "candidate"
+    },
+    "PATCH /api/factory/raw-stock/receipts/:rawStockId": {
+      "resource": "factory.raw_stock",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "DELETE /api/factory/raw-stock/receipts/:rawStockId": {
+      "resource": "factory.raw_stock",
+      "action": "delete",
+      "status": "candidate"
+    },
+    "POST /api/factory/raw-stock/recalculate-used": {
+      "resource": "system.maintenance",
+      "action": "repair",
+      "status": "candidate"
+    },
+    "POST /api/factory/raw-stock/recalculate-bale-costs": {
+      "resource": "system.maintenance",
+      "action": "repair",
+      "status": "candidate"
+    },
+    "POST /api/factory/raw-stock/post-offload/repair": {
+      "resource": "system.maintenance",
+      "action": "repair",
+      "status": "candidate"
+    },
+    "POST /api/factory/mix-batches": {
+      "resource": "factory.mix_batches",
+      "action": "create",
+      "status": "candidate"
+    },
+    "PATCH /api/factory/mix-batches/:id": {
+      "resource": "factory.mix_batches",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "DELETE /api/factory/mix-batches/:id": {
+      "resource": "factory.mix_batches",
+      "action": "delete",
+      "status": "candidate"
+    },
+    "POST /api/factory/mix-batches/:id/finalize": {
+      "resource": "factory.mix_batches",
+      "action": "finalize",
+      "status": "candidate"
+    },
+    "POST /api/factory/mix-batches/:id/top-up": {
+      "resource": "factory.mix_batches",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "POST /api/factory/mix-batches/:id/assign-bales": {
+      "resource": "factory.mix_batches",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "POST /api/factory/bales/create-batch": {
+      "resource": "factory.bales",
+      "action": "create",
+      "status": "candidate"
+    },
+    "DELETE /api/factory/bales/:id": {
+      "resource": "factory.bales",
+      "action": "delete",
+      "status": "candidate"
+    },
+    "PATCH /api/factory/bales/:id/status": {
+      "resource": "factory.bales",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "POST /api/factory/bales/:id/return-to-stock": {
+      "resource": "factory.bales",
+      "action": "reverse",
+      "status": "candidate"
+    },
+    "POST /api/factory/bales/:id/restore-to-stock": {
+      "resource": "factory.bales",
+      "action": "reverse",
+      "status": "candidate"
+    },
+    "POST /api/factory/bales/swap": {
+      "resource": "factory.bales",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "POST /api/factory/bales/backfill-costs": {
+      "resource": "system.maintenance",
+      "action": "repair",
+      "status": "candidate"
+    },
+    "POST /api/factory/customer-orders": {
+      "resource": "factory.customer_orders",
+      "action": "create",
+      "status": "candidate"
+    },
+    "DELETE /api/factory/customer-orders/:id": {
+      "resource": "factory.customer_orders",
+      "action": "delete",
+      "status": "candidate"
+    },
+    "PATCH /api/factory/customer-orders/:id/date": {
+      "resource": "factory.customer_orders",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "PATCH /api/factory/customer-orders/:id/change-customer": {
+      "resource": "factory.customer_orders",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "POST /api/factory/customer-orders/:id/bales": {
+      "resource": "factory.customer_orders",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "DELETE /api/factory/customer-orders/:id/bales/:baleId": {
+      "resource": "factory.customer_orders",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "POST /api/factory/customer-orders/:id/finalize": {
+      "resource": "factory.customer_orders",
+      "action": "finalize",
+      "status": "candidate"
+    },
+    "POST /api/factory/customer-orders/:id/finalize-loading": {
+      "resource": "factory.customer_orders",
+      "action": "finalize",
+      "status": "candidate"
+    },
+    "POST /api/factory/customer-orders/:id/unfinalize": {
+      "resource": "factory.customer_orders",
+      "action": "reverse",
+      "status": "candidate"
+    },
+    "POST /api/factory/customer-orders/:id/cancel": {
+      "resource": "factory.customer_orders",
+      "action": "void",
+      "status": "candidate"
+    },
+    "POST /api/factory/customer-orders/:id/reprice": {
+      "resource": "factory.customer_orders",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "POST /api/factory/customer-orders/:id/return-to-loading": {
+      "resource": "factory.customer_orders",
+      "action": "reverse",
+      "status": "candidate"
+    },
+    "POST /api/factory/production-positions": {
+      "resource": "factory.production",
+      "action": "create",
+      "status": "candidate"
+    },
+    "PATCH /api/factory/production-positions/:id": {
+      "resource": "factory.production",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "DELETE /api/factory/production-positions/:id": {
+      "resource": "factory.production",
+      "action": "delete",
+      "status": "candidate"
+    },
+    "POST /api/factory/payrolls/generate-bulk": {
+      "resource": "factory.payroll",
+      "action": "create",
+      "status": "candidate"
+    },
+    "PATCH /api/factory/payrolls/:id/mark-paid": {
+      "resource": "factory.payroll",
+      "action": "finalize",
+      "status": "candidate"
+    },
+    "PATCH /api/factory/payrolls/:id/fix-accounting": {
+      "resource": "system.maintenance",
+      "action": "repair",
+      "status": "candidate"
+    },
+    "POST /api/retail/products": {
+      "resource": "retail.stock_items",
+      "action": "create",
+      "status": "candidate"
+    },
+    "PATCH /api/retail/products/:id": {
+      "resource": "retail.stock_items",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "POST /api/retail/import": {
+      "resource": "retail.stock_imports",
+      "action": "import",
+      "status": "candidate"
+    },
+    "POST /api/retail/supplier-import/confirm": {
+      "resource": "retail.stock_imports",
+      "action": "import",
+      "status": "candidate"
+    },
+    "POST /api/pos/retail/sales": {
+      "resource": "retail.pos",
+      "action": "create",
+      "status": "candidate"
+    },
+    "POST /api/pos/retail/sales/:saleId/cancel": {
+      "resource": "retail.pos",
+      "action": "void",
+      "status": "candidate"
+    },
+    "POST /api/pos/retail/sales/:saleId/returns": {
+      "resource": "retail.pos",
+      "action": "reverse",
+      "status": "candidate"
+    },
+    "POST /api/pos/retail/transfers": {
+      "resource": "retail.transfers",
+      "action": "create",
+      "status": "candidate"
+    },
+    "POST /api/pos/retail/transfers/dispatch": {
+      "resource": "retail.transfers",
+      "action": "finalize",
+      "status": "candidate"
+    },
+    "POST /api/pos/retail/transfers/:id/receive": {
+      "resource": "retail.transfers",
+      "action": "finalize",
+      "status": "candidate"
+    },
+    "POST /api/pos/sales": {
+      "resource": "erp.sales",
+      "action": "create",
+      "status": "candidate"
+    },
+    "POST /api/pos/shifts/open": {
+      "resource": "retail.pos",
+      "action": "finalize",
+      "status": "candidate"
+    },
+    "POST /api/pos/shifts/:id/close": {
+      "resource": "retail.pos",
+      "action": "finalize",
+      "status": "candidate"
+    },
+    "POST /api/properties/rental/units": {
+      "resource": "properties.units",
+      "action": "create",
+      "status": "candidate"
+    },
+    "PATCH /api/properties/rental/units/:id": {
+      "resource": "properties.units",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "DELETE /api/properties/rental/units/:id": {
+      "resource": "properties.units",
+      "action": "delete",
+      "status": "candidate"
+    },
+    "POST /api/properties/rental/contracts": {
+      "resource": "properties.contracts",
+      "action": "create",
+      "status": "candidate"
+    },
+    "PATCH /api/properties/rental/contracts/:id/rent": {
+      "resource": "properties.contracts",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "POST /api/properties/rental/contracts/:id/end": {
+      "resource": "properties.contracts",
+      "action": "finalize",
+      "status": "candidate"
+    },
+    "POST /api/properties/rental/payments": {
+      "resource": "properties.payments",
+      "action": "create",
+      "status": "candidate"
+    },
+    "DELETE /api/properties/rental/payments/:id": {
+      "resource": "properties.payments",
+      "action": "delete",
+      "status": "candidate"
+    },
+    "POST /api/erp/rental/units": {
+      "resource": "properties.units",
+      "action": "create",
+      "status": "candidate"
+    },
+    "PATCH /api/erp/rental/units/:id": {
+      "resource": "properties.units",
+      "action": "edit",
+      "status": "candidate"
+    },
+    "POST /api/erp/rental/contracts": {
+      "resource": "properties.contracts",
+      "action": "create",
+      "status": "candidate"
+    },
+    "POST /api/erp/rental/payments": {
+      "resource": "properties.payments",
+      "action": "create",
+      "status": "candidate"
+    },
+    "POST /api/sp/sales": {
+      "resource": "erp.sales",
+      "action": "create",
+      "status": "candidate"
+    },
+    "POST /api/sp/sales/:id/reverse": {
+      "resource": "erp.sales",
+      "action": "reverse",
+      "status": "candidate"
+    },
+    "POST /api/accounting/fiscal-review/close": {
+      "resource": "system.maintenance",
+      "action": "finalize",
+      "status": "candidate"
+    },
+    "POST /api/accounting/perpetual-inventory/apply": {
+      "resource": "system.maintenance",
+      "action": "repair",
+      "status": "candidate"
+    },
+    "POST /api/accounting/cash-bank/import": {
+      "resource": "system.maintenance",
+      "action": "import",
+      "status": "candidate"
+    },
+    "PUT /api/settings/role-permissions": {
+      "resource": "system.settings",
+      "action": "manage_settings",
+      "status": "candidate"
+    }
+  }
+}

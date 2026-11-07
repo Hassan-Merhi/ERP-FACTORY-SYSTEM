@@ -66,7 +66,9 @@ test("reviewable training videos narrate every visible control as H.264 + AAC MP
     assert.equal(JSON.parse(match[1]).length, 5, "every topic should explain five distinct stages");
   }
   for (const required of [
-    "CAPTURE_FPS = 2", "MIN_DURATION_SECONDS = 60", "MAX_DURATION_SECONDS = 1200",
+    "CAPTURE_FPS = 2", "MIN_DURATION_SECONDS = 60", "TRAINING_MAX_SECONDS || 1200",
+    // Every page of the training companies, split across parallel shards.
+    "async function discoverTours(page)", "TRAINING_SHARD", "function topicIdForRoute(route)",
     "TRAINING_TTS_MODEL must point to the Piper voice",
     "training-narration-tts.py", 'from "./training-narration.mjs"',
     "describeControl(row)", "enumerateScreen", "locateAndScroll", "paintOverlay", 'from "./training-screen.mjs"',
@@ -84,7 +86,8 @@ test("reviewable training videos narrate every visible control as H.264 + AAC MP
   assert.ok(recorder.includes('["GET", "HEAD", "OPTIONS"]'), "prevent writes while recording");
   // Clicks are limited to login, already-visible tabs, and reversible demos
   // (typing into a search box, opening a dropdown/filter menu) that are undone.
-  assert.equal((recorder.match(/\.click\(/g) || []).length, 9, "login, onboarding, tab replay, layer opening and reversible demo clicks only");
+  // Page discovery also expands collapsed sidebar sections, which only reveals links.
+  assert.equal((recorder.match(/\.click\(/g) || []).length, 10, "login, onboarding, sidebar section expansion, tab replay, layer opening and reversible demo clicks only");
   assert.ok(recorder.includes("const NEVER_CLICK = ") && recorder.includes("function explorable(row)") && recorder.includes("!NEVER_CLICK.test(label)"), "destructive, printing and exporting buttons are explained but never pressed");
   assert.ok(recorder.includes("function pickTarget(rows)") && recorder.includes('row.role === "option"'), "only a list choice or an explicit select/import entry is demonstrated inside a layer");
   assert.ok(recorder.includes("MAX_LAYERS = ") && recorder.includes("layerOnly: true") && recorder.includes("hiddenControlsExplained"), "hidden menus, lists and dialogs are opened and their controls explained");
@@ -96,7 +99,7 @@ test("reviewable training videos narrate every visible control as H.264 + AAC MP
   assert.ok(recorder.includes('page.keyboard.press("Backspace")'), "typed demo text is cleared again");
   assert.ok(recorder.includes("function demoFor(row)") && recorder.includes('return null;'), "demos are an allow-list, not arbitrary clicking");
   const screen = read("scripts/training-screen.mjs");
-  assert.ok(recorder.includes("class CursorTrack") && recorder.includes("overlay@cur") && recorder.includes("sendcmd=f=") && recorder.includes("OUTPUT_FPS = 20"), "the pointer is composited at the full output frame rate so it glides");
+  assert.ok(recorder.includes("class CursorTrack") && recorder.includes("overlay@cur") && recorder.includes("sendcmd=f=") && recorder.includes("OUTPUT_FPS = 12"), "the pointer is composited at the full output frame rate so it glides");
   assert.ok(screen.includes("export const CURSOR_SVG") && recorder.includes("omitBackground: true"), "the pointer image is rendered from the SVG once per run");
   assert.ok(screen.includes("export const LAYER_SELECTOR") && screen.includes("export function openLayerType()"), "overlay layers are detected before Escape is pressed");
   const narration = read("scripts/training-narration.mjs");
@@ -141,7 +144,8 @@ test("nightly publication is automatic but only for validated recordings of the 
   assert.ok(publish.includes("id-token: write") && !publish.includes("contents: write"), "the publisher never needs a repository write token");
   assert.ok(publish.includes("TRAINING_PUBLICATION_APPROVAL_ENABLED: ${{ vars.TRAINING_PUBLICATION_APPROVAL_ENABLED }}"));
   assert.ok(publish.includes("TRAINING_SOURCE_SHA: ${{ github.sha }}"), "only this run's own commit can be published");
-  assert.ok(publish.includes("name: real-erp-training-${{ github.run_id }}"), "only this run's own artifact is published");
+  assert.ok(publish.includes("pattern: real-erp-training-${{ github.run_id }}-shard-*"), "only this run's own shards are published");
+  assert.ok(publish.includes("merge-multiple: true"));
   assert.ok(publish.includes("node scripts/validate-training-recording.mjs"));
   assert.ok(publish.includes("node scripts/upload-reviewed-training-vercel.mjs"));
   assert.ok(parent.includes("needs: [plan, record, publish]"));
@@ -157,6 +161,13 @@ test("nightly publication is automatic but only for validated recordings of the 
   assert.ok(gateway.includes("nightly-training-audit.yml@refs/heads/main"));
   assert.ok(gateway.includes('payload.environment !== "training-publication"'));
   assert.ok(gateway.includes("allowOverwrite: overwrite") && gateway.includes("const overwrite = key === manifestKey"));
+  // Clean-up: the gateway, not the publisher, decides what is superseded.
+  assert.ok(gateway.includes('body?.operation === "prune"') && gateway.includes("async function pruneSuperseded()"));
+  assert.ok(gateway.includes('refusing to prune against an empty manifest'), "never prune against a missing manifest");
+  assert.ok(gateway.includes("pruneGraceMs") && gateway.includes("keep.has(blob.pathname)"), "live and in-flight media survive");
+  assert.ok(gateway.includes("supersedeGraceMs") && gateway.includes("replacedAt > supersededCutoff"), "a just-replaced recording outlives the ERP's manifest cache");
+  assert.ok(!/del\([^)]*manifestKey/.test(gateway), "the manifest itself is never deleted");
+  assert.ok(uploader.includes('grant(jwt, { operation: "prune" })'), "each publication removes superseded media");
   const api = read("server/routes/trainingMediaRoutes.ts");
   assert.ok(api.includes("export async function loadPublishedTrainingRegistry()") && api.includes("MANIFEST_TTL_MS"), "the ERP re-reads the manifest without a deploy");
   assert.ok(api.includes('app.get("/api/training/media", requireAuth'));
@@ -168,8 +179,8 @@ test("manual re-publication of one topic still validates the source recorder job
   assert.ok(workflow.includes('TRAINING_PUBLICATION_APPROVAL_ENABLED:'));
   assert.ok(workflow.includes('run.head_branch !== "main"'));
   assert.ok(workflow.includes('"push", "schedule", "workflow_dispatch"'));
-  assert.ok(workflow.includes('job.name === "record / record-training"'));
-  assert.ok(workflow.includes('recorder[0].conclusion !== "success"'));
+  assert.ok(workflow.includes("(record \\/ )?record-training( \\(\\d+\\))?$"), "every recording shard is checked");
+  assert.ok(workflow.includes('recorder.some((job) => job.status !== "completed" || job.conclusion !== "success")'));
   assert.ok(workflow.includes("node scripts/validate-training-recording.mjs"));
   assert.ok(workflow.includes("node scripts/upload-reviewed-training-vercel.mjs"));
   assert.ok(!workflow.includes("gh pr create"), "publication no longer waits for a manifest pull request and deploy");
@@ -179,6 +190,8 @@ test("training PR smoke crosses Factory to ERP and only records after verified c
   const workflow = read(".github/workflows/training-videos.yml");
   const recorder = read("scripts/record-training-guides.mjs");
   assert.ok(workflow.includes("'factory-overview,erp-tracking'"));
+  assert.ok(workflow.includes("name: real-erp-training-${{ github.run_id }}-shard-${{ matrix.shard }}"), "each shard keeps its own artifact");
+  assert.ok(workflow.includes("TRAINING_SHARD: ${{ matrix.shard }}/"));
   const switcher = recorder.slice(recorder.indexOf("async function selectFixtureCompany"), recorder.indexOf("async function encodeAndValidate"));
   assert.ok(switcher.indexOf('page.goto(base + "/my-settings"') < switcher.indexOf('fetch("/api/auth/set-company"'));
   assert.ok(switcher.includes("for (let attempt = 1; attempt <= 3; attempt++)"));

@@ -33,7 +33,11 @@ describe("seasonal animation accessibility and data saver policy", () => {
   });
 
   it("fails safely when media query support is unavailable", () => {
-    vi.stubGlobal("window", { matchMedia: () => { throw new Error("unavailable"); } });
+    vi.stubGlobal("window", {
+      matchMedia: () => {
+        throw new Error("unavailable");
+      },
+    });
     vi.stubGlobal("navigator", { connection: undefined });
     expect(seasonalMotionRestricted()).toBe(false);
   });

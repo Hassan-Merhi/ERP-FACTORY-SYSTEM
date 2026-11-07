@@ -1,6 +1,18 @@
 import type { ApplicationTranslationCatalog } from "./applicationTranslations";
 
 export const applicationArabicTranslations = {
+  "pos.modern.createSale": "إنشاء عملية بيع جديدة",
+  "pos.modern.reviewSale": "مراجعة هذه العملية وتحديثها",
+  "pos.modern.addItems": "أضف أصنافاً إلى هذه العملية",
+  "pos.modern.addItemsHint": "ابحث عن الأصناف واخترها من قائمة المنتجات أو اكتب في جدول البيع أعلاه.",
+  "pos.modern.notes": "ملاحظات",
+  "pos.modern.optional": "(اختياري)",
+  "pos.modern.notesPlaceholder": "أضف ملاحظة حول هذه العملية...",
+  "pos.modern.location": "الموقع",
+  "pos.modern.date": "التاريخ",
+  "pos.modern.paymentMethod": "طريقة الدفع",
+  "pos.modern.account": "الصندوق / الحساب",
+  "pos.modern.saleSettings": "إعدادات البيع",
   "language.label": "اللغة",
   "language.english": "الإنجليزية",
   "language.arabic": "العربية",

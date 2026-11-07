@@ -16,8 +16,7 @@
   isolation: isolate;
   opacity: 0;
   will-change: transform, opacity;
-  filter: drop-shadow(0 2px 4px rgb(20 25 41 / 0.24))
-          drop-shadow(0 0 9px rgb(255 218 150 / 0.27));
+  filter: drop-shadow(0 2px 4px rgb(20 25 41 / 0.24)) drop-shadow(0 0 9px rgb(255 218 150 / 0.27));
   animation: christmas-sleigh-sweep 11s linear both;
 }
 .christmas-sleigh-flight svg {
@@ -31,27 +30,39 @@
     transform: translate3d(16px, -50%, 0);
     opacity: 0;
   }
-  5% { opacity: 1; }
-  94% { opacity: 1; }
+  5% {
+    opacity: 1;
+  }
+  94% {
+    opacity: 1;
+  }
   100% {
     transform: translate3d(calc(-1 * var(--santa-flight-distance)), -50%, 0);
     opacity: 0;
   }
 }
 @media (max-width: 640px) {
-  .christmas-sleigh-flight { width: 232px; height: 54px; }
+  .christmas-sleigh-flight {
+    width: 232px;
+    height: 54px;
+  }
 }
 @media print {
-  .christmas-sleigh-flight { display: none !important; animation: none !important; }
+  .christmas-sleigh-flight {
+    display: none !important;
+    animation: none !important;
+  }
 }
 @media (prefers-reduced-motion: reduce), (prefers-reduced-data: reduce) {
-  .christmas-sleigh-flight { display: none !important; animation: none !important; }
+  .christmas-sleigh-flight {
+    display: none !important;
+    animation: none !important;
+  }
 }
 html[data-seasonal-camera-active="true"] .christmas-sleigh-flight {
   display: none !important;
   animation: none !important;
 }
-
 
 /* Magical golden stardust trails behind the sleigh, never blocks a click. */
 .christmas-sleigh-flight::before,
@@ -64,29 +75,35 @@ html[data-seasonal-camera-active="true"] .christmas-sleigh-flight {
   top: 29%;
   width: 134px;
   height: 32px;
-  opacity: .8;
+  opacity: 0.8;
   background:
     radial-gradient(circle at 5% 44%, #fff5c0 0 2px, transparent 3px),
     radial-gradient(circle at 22% 14%, #ffe6a2 0 1.5px, transparent 3px),
     radial-gradient(circle at 41% 70%, #f8cc64 0 1.4px, transparent 2.6px),
     radial-gradient(circle at 58% 31%, #ffe2a0 0 1.7px, transparent 3px),
     radial-gradient(circle at 78% 57%, #ffd179 0 1px, transparent 2px),
-    linear-gradient(100deg, rgb(255 216 129 / .35), transparent 75%);
+    linear-gradient(100deg, rgb(255 216 129 / 0.35), transparent 75%);
   filter: drop-shadow(0 0 6px #e9ba66);
   animation: christmas-stardust-glint 1.9s ease-in-out infinite alternate;
 }
 .christmas-sleigh-flight::after {
-  transform: translate(-19px, 18px) scale(.72);
-  opacity: .56;
-  animation-delay: .6s;
+  transform: translate(-19px, 18px) scale(0.72);
+  opacity: 0.56;
+  animation-delay: 0.6s;
 }
 @keyframes christmas-stardust-glint {
-  from { opacity: .42; filter: drop-shadow(0 0 2px #d9a452); }
-  to { opacity: .91; filter: drop-shadow(0 0 7px #ffe4a1); }
+  from {
+    opacity: 0.42;
+    filter: drop-shadow(0 0 2px #d9a452);
+  }
+  to {
+    opacity: 0.91;
+    filter: drop-shadow(0 0 7px #ffe4a1);
+  }
 }
 html[data-christmas-intensity="subtle"] .christmas-sleigh-flight::before,
 html[data-christmas-intensity="subtle"] .christmas-sleigh-flight::after {
-  opacity: .3;
+  opacity: 0.3;
 }
 html[data-christmas-intensity="full"] .christmas-sleigh-flight::before,
 html[data-christmas-intensity="full"] .christmas-sleigh-flight::after {
@@ -95,5 +112,7 @@ html[data-christmas-intensity="full"] .christmas-sleigh-flight::after {
 }
 @media print, (prefers-reduced-motion: reduce), (prefers-reduced-data: reduce) {
   .christmas-sleigh-flight::before,
-  .christmas-sleigh-flight::after { animation: none !important; }
+  .christmas-sleigh-flight::after {
+    animation: none !important;
+  }
 }
