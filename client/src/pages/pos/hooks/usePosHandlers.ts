@@ -169,6 +169,7 @@ export function usePosHandlers(params: PosHandlersParams) {
     activeRow: params.activeRow,
     highlightedIndex: params.highlightedIndex,
     inventory: params.inventory,
+    canSellNegativeStock: params.authUser?.canSellNegativeStock ?? params.posUser?.canSellNegativeStock ?? false,
     setSelectedCell: params.setSelectedCell,
     setHighlightedIndex: params.setHighlightedIndex,
     setRows: params.setRows,
