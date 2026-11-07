@@ -42,7 +42,7 @@ export interface Phase9PosSaleEditApplyResult {
   businessDate: string;
 }
 
-const READ_ONLY_ROLES = new Set(["View Only", "ERP Tester"]);
+const READ_ONLY_ROLES = new Set(["View Only", "Create Only", "ERP Tester"]);
 
 async function authorize(client: Queryable, event: Phase9PosSaleEditEvent): Promise<void> {
   const access = await client.query(

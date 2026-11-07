@@ -108,6 +108,25 @@ describe("Permissions V2 Phase 2 shadow store", () => {
     expect(() => assertV2ChangesSafe("Create Only", [change])).not.toThrow();
   });
 
+  it("refuses every policy write once a company is no longer in shadow mode", async () => {
+    client.query.mockImplementation(async (sql: string) => {
+      if (sql.includes("SELECT revision::text")) return { rows: [{ revision: "0", mode: "active" }] };
+      return { rows: [], rowCount: 1 };
+    });
+    await expect(
+      saveV2Rules({
+        actor,
+        subject: { kind: "role", roleKey: "Create Only" },
+        expectedRevision: 0,
+        reason: "Attempted change outside shadow mode",
+        changes: [change],
+      })
+    ).rejects.toMatchObject({ status: 409, code: "POLICY_NOT_SHADOW" });
+    const sqls = client.query.mock.calls.map(([sql]) => String(sql));
+    expect(sqls.some((sql) => sql.includes("INSERT INTO access_role_rules"))).toBe(false);
+    expect(sqls.at(-1)).toBe("ROLLBACK");
+  });
+
   it("reads revision zero when no V2 state was created for a company", async () => {
     mockDb.query.mockResolvedValue({ rows: [] });
     await expect(readV2Revision(11)).resolves.toEqual({ revision: 0, mode: "shadow" });

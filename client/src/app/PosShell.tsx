@@ -286,7 +286,9 @@ export function PosShell({
                 <button
                   type="button"
                   className="pos-top-search hidden min-w-0 items-center gap-2 lg:flex"
-                  onClick={() => document.querySelector<HTMLInputElement>('[data-testid="input-pos-container-search"]')?.focus()}
+                  onClick={() =>
+                    document.querySelector<HTMLInputElement>('[data-testid="input-pos-container-search"]')?.focus()
+                  }
                   aria-label="Focus container search"
                   data-testid="button-pos-focus-container-search"
                 >
@@ -311,8 +313,14 @@ export function PosShell({
                       disabled={updatePersonalPreference.isPending}
                       onCheckedChange={(enabled) =>
                         updatePersonalPreference.mutate(enabled, {
-                          onSuccess: () => toast({ title: enabled ? "Christmas Mode preference on" : "Christmas Mode turned off" }),
-                          onError: (error) => toast({ title: "Could not change Christmas Mode", description: error.message, variant: "destructive" }),
+                          onSuccess: () =>
+                            toast({ title: enabled ? "Christmas Mode preference on" : "Christmas Mode turned off" }),
+                          onError: (error) =>
+                            toast({
+                              title: "Could not change Christmas Mode",
+                              description: error.message,
+                              variant: "destructive",
+                            }),
                         })
                       }
                     />

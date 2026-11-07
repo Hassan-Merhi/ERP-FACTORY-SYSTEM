@@ -54,7 +54,7 @@ export interface Phase9StockApplyResult {
   businessDate: string;
 }
 
-const READ_ONLY_ROLES = new Set(["View Only", "ERP Tester"]);
+const READ_ONLY_ROLES = new Set(["View Only", "Create Only", "ERP Tester"]);
 const ACTION_KEY = "act_adjust_stock";
 
 /** The live route's rule (act_adjust_stock), against CURRENT cloud access. */

@@ -32,7 +32,7 @@ export function resolveExplicitPosLocation(input: PosOperationalLocationInput): 
 export function isPosMutationAllowed(input: { method: string; role: string; posViewOnly: boolean }): boolean {
   const method = input.method.toUpperCase();
   if (["GET", "HEAD", "OPTIONS"].includes(method)) return true;
-  if (input.role === "View Only") return false;
+  if (input.role === "View Only" || input.role === "Create Only") return false;
   if (input.role === "POS" && input.posViewOnly) return false;
   return true;
 }

@@ -44,7 +44,7 @@ interface Result {
   businessDate: string;
 }
 
-const NOT_PERMITTED_ROLES = new Set(["View Only", "ERP Tester"]);
+const NOT_PERMITTED_ROLES = new Set(["View Only", "Create Only", "ERP Tester"]);
 
 /** The live route needs an authenticated writing member; re-checked against CURRENT cloud access. */
 async function authorize(client: Queryable, event: Phase9AttachmentUpdateEvent): Promise<void> {

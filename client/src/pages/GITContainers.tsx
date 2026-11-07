@@ -51,6 +51,7 @@ import { ImportResultBanner } from "./git-containers/ImportResultBanner";
 import { useContainerSummaryStats } from "./git-containers/containerHelpers";
 import { useGITContainersData } from "./git-containers/useGITContainersData";
 import { usePaginatedGITContainers } from "./git-containers/usePaginatedGITContainers";
+import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
 
 export default function GITContainers({ embedded = false }: { embedded?: boolean } = {}) {
   const { data: user, isLoading: userLoading } = useQuery(authenticatedUserQueryOptions());
@@ -113,11 +114,11 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
   }
   const otwHiddenCount = OTW_COLS.filter((c) => !colVis[c.id]).length;
 
-  const allowedRoles = ["Admin", "Developer", "Owner", "ERP Tester", "View Only"];
+  const allowedRoles = ["Admin", "Developer", "Owner", "ERP Tester", "View Only", "Create Only"];
   const effectiveRole = user?.currentRole ?? user?.role ?? "";
   const isAllowed = allowedRoles.includes(effectiveRole);
   const isTester = effectiveRole === "ERP Tester";
-  const isViewOnly = effectiveRole === "View Only";
+  const isViewOnly = isExistingRecordReadOnlyRole(effectiveRole);
   const restrictedToCurrentCompany = isTester || isViewOnly;
 
   const { data, isLoading, isError, error, refetch, loadContainerDetail } = usePaginatedGITContainers({
@@ -223,13 +224,20 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
     sortOrder,
   });
 
-
   const activeFilterChips: Array<{ key: string; label: string; clear: () => void }> = [];
-  if (companyFilter !== "ALL") activeFilterChips.push({ key: "company", label: `Company: ${companyFilter}`, clear: () => setCompanyFilter("ALL") });
-  const multiChip = (key: string, title: string, selected: string[], reset: () => void) => {
-    if (selected.length) activeFilterChips.push({
-      key, label: `${title}: ${selected.length === 1 ? selected[0] : `${selected.length} selected`}`, clear: reset,
+  if (companyFilter !== "ALL")
+    activeFilterChips.push({
+      key: "company",
+      label: `Company: ${companyFilter}`,
+      clear: () => setCompanyFilter("ALL"),
     });
+  const multiChip = (key: string, title: string, selected: string[], reset: () => void) => {
+    if (selected.length)
+      activeFilterChips.push({
+        key,
+        label: `${title}: ${selected.length === 1 ? selected[0] : `${selected.length} selected`}`,
+        clear: reset,
+      });
   };
   multiChip("container", "Container", containerFilters, () => setContainerFilters([]));
   multiChip("supplier", "Supplier", supplierFilters, () => setSupplierFilters([]));
@@ -237,12 +245,30 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
   multiChip("agent", "Agent", agentFilters, () => setAgentFilters([]));
   multiChip("truck", "Truck", truckFilters, () => setTruckFilters([]));
   multiChip("location", "Location", locationFilters, () => setLocationFilters([]));
-  if (docsFilter !== "ALL") activeFilterChips.push({ key: "docs", label: `Docs: ${docsFilter}`, clear: () => setDocsFilter("ALL") });
-  if (delayedFilter !== "ALL") activeFilterChips.push({ key: "delayed", label: `Delayed: ${delayedFilter}`, clear: () => setDelayedFilter("ALL") });
-  if (freightFilter !== "ALL") activeFilterChips.push({ key: "freight", label: `Freight: ${freightFilter}`, clear: () => setFreightFilter("ALL") });
-  if (etaFilter !== "ALL") activeFilterChips.push({ key: "eta", label: "ETA: Custom", clear: () => setEtaFilter("ALL") });
-  if (notesFilter !== "ALL") activeFilterChips.push({ key: "notes", label: `Notes: ${notesFilter}`, clear: () => setNotesFilter("ALL") });
-  if (sortOrder !== "DEFAULT") activeFilterChips.push({ key: "sort", label: `Sort: ${sortOrder === "ETA_ASC" ? "Earliest ETA" : "Latest ETA"}`, clear: () => setSortOrder("DEFAULT") });
+  if (docsFilter !== "ALL")
+    activeFilterChips.push({ key: "docs", label: `Docs: ${docsFilter}`, clear: () => setDocsFilter("ALL") });
+  if (delayedFilter !== "ALL")
+    activeFilterChips.push({
+      key: "delayed",
+      label: `Delayed: ${delayedFilter}`,
+      clear: () => setDelayedFilter("ALL"),
+    });
+  if (freightFilter !== "ALL")
+    activeFilterChips.push({
+      key: "freight",
+      label: `Freight: ${freightFilter}`,
+      clear: () => setFreightFilter("ALL"),
+    });
+  if (etaFilter !== "ALL")
+    activeFilterChips.push({ key: "eta", label: "ETA: Custom", clear: () => setEtaFilter("ALL") });
+  if (notesFilter !== "ALL")
+    activeFilterChips.push({ key: "notes", label: `Notes: ${notesFilter}`, clear: () => setNotesFilter("ALL") });
+  if (sortOrder !== "DEFAULT")
+    activeFilterChips.push({
+      key: "sort",
+      label: `Sort: ${sortOrder === "ETA_ASC" ? "Earliest ETA" : "Latest ETA"}`,
+      clear: () => setSortOrder("DEFAULT"),
+    });
 
   function clearFilters() {
     setCompanyFilter("ALL");
@@ -329,10 +355,20 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
       <div className="flex-1 min-h-0 overflow-hidden p-3 sm:p-4 flex flex-col gap-3">
         {!embedded && (
           <div className="relative shrink-0 overflow-hidden rounded-2xl border border-violet-200/60 bg-gradient-to-r from-violet-50 via-slate-50 to-sky-100 px-4 pt-4 shadow-sm dark:border-violet-400/20 dark:from-[#1e1644] dark:via-[#161c39] dark:to-[#17335a] sm:px-6">
-            <div aria-hidden="true" className="pointer-events-none absolute -right-12 -top-24 h-64 w-80 rounded-full bg-violet-400/15 blur-3xl dark:bg-violet-500/20" />
-            <div aria-hidden="true" className="pointer-events-none absolute right-20 bottom-0 h-16 w-80 rounded-full bg-sky-500/10 blur-2xl dark:bg-sky-400/15" />
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -right-12 -top-24 h-64 w-80 rounded-full bg-violet-400/15 blur-3xl dark:bg-violet-500/20"
+            />
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute right-20 bottom-0 h-16 w-80 rounded-full bg-sky-500/10 blur-2xl dark:bg-sky-400/15"
+            />
             <div className="relative z-10">
-              <PageHeader title="Containers OTW" subtitle="Active container logistics and tracking" icon={<Ship className="h-5 w-5 text-violet-600 dark:text-violet-300" />} />
+              <PageHeader
+                title="Containers OTW"
+                subtitle="Active container logistics and tracking"
+                icon={<Ship className="h-5 w-5 text-violet-600 dark:text-violet-300" />}
+              />
             </div>
           </div>
         )}
@@ -355,23 +391,23 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
             My Company
           </button>
           {!restrictedToCurrentCompany && (
-        <button
-            onClick={() => {
-              setAllCompanies(true);
-              setCompanyFilter("ALL");
-            }}
-            className={cn(
-              "flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold shadow-sm transition-colors",
-              allCompanies
-                ? "border-violet-600 bg-violet-600 text-white shadow-violet-500/15"
-                : "border-border/80 bg-card/70 text-muted-foreground hover:bg-muted hover:text-foreground"
-            )}
-            data-testid="button-all-companies"
-          >
-            <Globe className="h-3.5 w-3.5" />
-            All Accessible Companies
-          </button>
-      )}
+            <button
+              onClick={() => {
+                setAllCompanies(true);
+                setCompanyFilter("ALL");
+              }}
+              className={cn(
+                "flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold shadow-sm transition-colors",
+                allCompanies
+                  ? "border-violet-600 bg-violet-600 text-white shadow-violet-500/15"
+                  : "border-border/80 bg-card/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+              data-testid="button-all-companies"
+            >
+              <Globe className="h-3.5 w-3.5" />
+              All Accessible Companies
+            </button>
+          )}
           {data && (
             <span className="text-xs text-muted-foreground ml-1 max-sm:col-span-2 max-sm:ml-0">
               {data.total} active container{data.total !== 1 ? "s" : ""}
@@ -472,7 +508,12 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
           <Button
             variant={showFilters ? "default" : "outline"}
             size="default"
-            className={cn("h-10 rounded-xl px-4 font-semibold shadow-sm sm:h-11", showFilters ? "bg-violet-600 text-white hover:bg-violet-700" : "border-violet-500/40 text-violet-700 hover:bg-violet-500/10 dark:text-violet-300")}
+            className={cn(
+              "h-10 rounded-xl px-4 font-semibold shadow-sm sm:h-11",
+              showFilters
+                ? "bg-violet-600 text-white hover:bg-violet-700"
+                : "border-violet-500/40 text-violet-700 hover:bg-violet-500/10 dark:text-violet-300"
+            )}
             aria-expanded={showFilters}
             aria-controls="otw-filter-panel"
             onClick={() => setShowFilters((v) => !v)}
@@ -495,7 +536,12 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
 
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" size="default" className="h-10 rounded-xl sm:h-11" data-testid="button-otw-columns">
+              <Button
+                variant="outline"
+                size="default"
+                className="h-10 rounded-xl sm:h-11"
+                data-testid="button-otw-columns"
+              >
                 <SlidersHorizontal className="h-4 w-4 mr-1" />
                 Columns
                 {otwHiddenCount > 0 && (
@@ -534,7 +580,6 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
           />
         </div>
 
-
         {activeFilterChips.length > 0 && (
           <div className="flex shrink-0 min-w-0 flex-wrap items-center gap-1.5" data-testid="otw-active-filter-chips">
             <span className="mr-1 text-xs text-muted-foreground">Active filters:</span>
@@ -552,11 +597,20 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
               </button>
             ))}
             {activeFilterChips.length > 5 && (
-              <button type="button" onClick={() => setShowFilters(true)} className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted">
+              <button
+                type="button"
+                onClick={() => setShowFilters(true)}
+                className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted"
+              >
                 +{activeFilterChips.length - 5} more
               </button>
             )}
-            <button type="button" onClick={clearFilters} className="ml-1 px-1 text-xs font-medium text-muted-foreground hover:text-foreground" data-testid="otw-clear-all-chips">
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="ml-1 px-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+              data-testid="otw-clear-all-chips"
+            >
               Clear all
             </button>
           </div>

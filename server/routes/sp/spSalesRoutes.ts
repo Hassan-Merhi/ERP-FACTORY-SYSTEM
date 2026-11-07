@@ -22,6 +22,7 @@ import { postFactoryVoucherTx } from "../../services/factory/factoryVoucherPosti
 const num = (value: unknown): Decimal =>
   parseMoneyInput(typeof value === "number" ? value : String(value ?? "0")) ?? toMoney(0);
 import { resultRows } from "../../lib/queryResult";
+import { requireCreateOnlyVerifiedCreate } from "../../services/security/createOnlyVerifiedCreates";
 
 type SpSaleLotRow = {
   id: number;
@@ -72,7 +73,9 @@ export function registerSpSalesRoutes(app: Express) {
     }
   });
 
-  app.post("/api/sp/sales", requireAuth, async (req: Request, res: Response) => {
+  // Create Only may add a new SP sale dated today (createOnlyVerifiedCreates.ts).
+  const createOnlySpSale = requireCreateOnlyVerifiedCreate("spSales");
+  app.post("/api/sp/sales", requireAuth, createOnlySpSale, async (req: Request, res: Response) => {
     try {
       const companyId = await requireSpCompany(req, res);
       if (!companyId) return;

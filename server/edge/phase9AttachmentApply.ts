@@ -44,7 +44,7 @@ export interface Phase9AttachmentApplyResult {
   businessDate: string;
 }
 
-const READ_ONLY_ROLES = new Set(["View Only", "ERP Tester"]);
+const READ_ONLY_ROLES = new Set(["View Only", "Create Only", "ERP Tester"]);
 
 async function authorize(client: Queryable, event: Phase9AttachmentEvent): Promise<void> {
   const access = await client.query(

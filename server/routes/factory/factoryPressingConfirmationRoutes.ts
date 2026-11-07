@@ -116,7 +116,7 @@ export function registerFactoryPressingConfirmRoutes(app: Express): void {
     try {
       parsed = confirmSchema.parse(req.body);
       const ctx = await getActiveCompanyPermissionContext(req);
-      if (ctx.posViewOnly || ["View Only", "ERP Tester"].includes(ctx.role)) {
+      if (ctx.posViewOnly || ["View Only", "Create Only", "ERP Tester"].includes(ctx.role)) {
         throw new ConfirmationError(403, "PRESSING_WRITE_DENIED", "Your role cannot confirm pressing");
       }
       const reference = normalizeReference(parsed.barcode);

@@ -82,6 +82,7 @@ export function RoleSummaryRow({ role, companyName, locationNames, isEditing, on
             {role.role === "View Only" && (
               <span className="text-xs text-muted-foreground">Read-only in ERP + Factory</span>
             )}
+            {role.role === "Create Only" && <span className="text-xs text-muted-foreground">Add new records only</span>}
             {customCount > 0 && (
               <Badge variant="secondary" className="text-xs font-normal">
                 Custom · {customCount} {role.role === "Normal User" ? "granted" : "restricted"}

@@ -39,7 +39,7 @@ export interface Phase9StockTransferApplyResult {
   businessDate: string;
 }
 
-const READ_ONLY_ROLES = new Set(["View Only", "ERP Tester"]);
+const READ_ONLY_ROLES = new Set(["View Only", "Create Only", "ERP Tester"]);
 
 /** The live route needs an authenticated, writing member of the company; re-checked against CURRENT cloud access. */
 async function authorize(client: Queryable, event: Phase9StockTransferEvent): Promise<void> {

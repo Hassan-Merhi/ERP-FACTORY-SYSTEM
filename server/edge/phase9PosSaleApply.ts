@@ -55,7 +55,7 @@ export interface Phase9PosSaleApplyResult {
   businessDate: string;
 }
 
-const READ_ONLY_ROLES = new Set(["View Only", "ERP Tester"]);
+const READ_ONLY_ROLES = new Set(["View Only", "Create Only", "ERP Tester"]);
 
 function saleTotal(p: Phase9PosSaleEvent["payload"]) {
   return p.items.reduce(

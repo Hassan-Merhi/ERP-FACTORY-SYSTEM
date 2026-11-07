@@ -18,6 +18,7 @@ import { eq, and, desc, inArray } from "drizzle-orm";
 import { registerFactoryMixBatchRoutes } from "../mix-batches";
 import { registerFactoryBaleExportRoutes } from "../bale-exports";
 import { registerFactoryFxRatesRoutes } from "../factoryFxRatesRoutes";
+import { requireCreateOnlyVerifiedCreate } from "../../../services/security/createOnlyVerifiedCreates";
 
 const QUANTITY_MESSAGE = "quantity must be a whole number of at least 1";
 
@@ -248,86 +249,91 @@ export function registerBalesPressingRoutes(app: Express) {
     }
   });
 
-  app.post("/api/factory/bales/create-batch", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/factory/bales/create-batch",
+    requireAuth,
+    requireCreateOnlyVerifiedCreate("factoryBaleBatch"),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { productId, weightPerBale } = req.body;
-      const quantity = parseBaleQuantity(req.body.quantity);
-      if (!productId || !req.body.quantity || !weightPerBale) {
-        return res.status(400).json({ message: "productId, quantity, and weightPerBale are required" });
-      }
-      if (quantity === null) return res.status(400).json({ message: QUANTITY_MESSAGE });
-
-      const result = await db.transaction(async (tx) => {
-        const [product] = await tx
-          .select()
-          .from(factoryBaleProducts)
-          .where(and(eq(factoryBaleProducts.id, productId), eq(factoryBaleProducts.companyId, companyId)));
-
-        if (!product) throw new Error("Product not found");
-
-        const [pressingBatch] = await tx
-          .insert(factoryPressingBatches)
-          .values({
-            companyId,
-            productId,
-            expectedCount: quantity,
-            status: "PENDING",
-          })
-          .returning();
-
-        const [seqRecord] = await tx
-          .select()
-          .from(factoryBaleSequences)
-          .where(eq(factoryBaleSequences.companyId, companyId))
-          .for("update");
-
-        let nextNumber: number;
-        if (seqRecord) {
-          nextNumber = seqRecord.nextNumber;
-          await tx
-            .update(factoryBaleSequences)
-            .set({ nextNumber: nextNumber + quantity })
-            .where(eq(factoryBaleSequences.id, seqRecord.id));
-        } else {
-          nextNumber = 200000;
-          await tx.insert(factoryBaleSequences).values({
-            companyId,
-            nextNumber: 200000 + quantity,
-          });
+        const { productId, weightPerBale } = req.body;
+        const quantity = parseBaleQuantity(req.body.quantity);
+        if (!productId || !req.body.quantity || !weightPerBale) {
+          return res.status(400).json({ message: "productId, quantity, and weightPerBale are required" });
         }
+        if (quantity === null) return res.status(400).json({ message: QUANTITY_MESSAGE });
 
-        const bales = [];
-        for (let i = 0; i < quantity; i++) {
-          const refNum = `REF${String(nextNumber + i).padStart(6, "0")}`;
-          const [bale] = await tx
-            .insert(factoryBales)
+        const result = await db.transaction(async (tx) => {
+          const [product] = await tx
+            .select()
+            .from(factoryBaleProducts)
+            .where(and(eq(factoryBaleProducts.id, productId), eq(factoryBaleProducts.companyId, companyId)));
+
+          if (!product) throw new Error("Product not found");
+
+          const [pressingBatch] = await tx
+            .insert(factoryPressingBatches)
             .values({
               companyId,
-              pressingBatchId: pressingBatch.id,
               productId,
-              baleCode: product.code,
-              referenceNumber: refNum,
-              articleCode: product.articleCode,
-              productName: product.name,
-              weightKg: String(weightPerBale),
-              status: "PENDING_PRESSING",
+              expectedCount: quantity,
+              status: "PENDING",
             })
             .returning();
-          bales.push(bale);
-        }
 
-        return { pressingBatchId: pressingBatch.id, bales };
-      });
+          const [seqRecord] = await tx
+            .select()
+            .from(factoryBaleSequences)
+            .where(eq(factoryBaleSequences.companyId, companyId))
+            .for("update");
 
-      res.json(result);
-    } catch (error: unknown) {
-      logger.error("Error creating bale batch:", { error: error });
-      res.status(400).json({ message: getErrorMessage(error) });
+          let nextNumber: number;
+          if (seqRecord) {
+            nextNumber = seqRecord.nextNumber;
+            await tx
+              .update(factoryBaleSequences)
+              .set({ nextNumber: nextNumber + quantity })
+              .where(eq(factoryBaleSequences.id, seqRecord.id));
+          } else {
+            nextNumber = 200000;
+            await tx.insert(factoryBaleSequences).values({
+              companyId,
+              nextNumber: 200000 + quantity,
+            });
+          }
+
+          const bales = [];
+          for (let i = 0; i < quantity; i++) {
+            const refNum = `REF${String(nextNumber + i).padStart(6, "0")}`;
+            const [bale] = await tx
+              .insert(factoryBales)
+              .values({
+                companyId,
+                pressingBatchId: pressingBatch.id,
+                productId,
+                baleCode: product.code,
+                referenceNumber: refNum,
+                articleCode: product.articleCode,
+                productName: product.name,
+                weightKg: String(weightPerBale),
+                status: "PENDING_PRESSING",
+              })
+              .returning();
+            bales.push(bale);
+          }
+
+          return { pressingBatchId: pressingBatch.id, bales };
+        });
+
+        res.json(result);
+      } catch (error: unknown) {
+        logger.error("Error creating bale batch:", { error: error });
+        res.status(400).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // ───────────────────────────────────────────────
   // 8. Factory Pressing Batches

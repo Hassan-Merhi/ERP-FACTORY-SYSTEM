@@ -14,6 +14,7 @@ import type {
   AgentDutySummary,
   AgentDutyWaSettings,
 } from "./types";
+import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
 
 const CONF_RANK: Record<AgentDutySummary["matchConfidence"], number> = { exact: 0, fuzzy: 1, unmapped: 2 };
 
@@ -21,7 +22,7 @@ export function TabAgentDuty() {
   const { data: viewer } = useQuery(authenticatedUserQueryOptions());
   const role = viewer?.currentRole ?? viewer?.role;
   const isTester = role === "ERP Tester";
-  const isViewer = role === "View Only";
+  const isViewer = isExistingRecordReadOnlyRole(role);
   const restrictedViewer = isTester || isViewer;
   const [companyMode, setCompanyMode] = useState<CompanyViewMode>("session");
 
@@ -155,14 +156,14 @@ export function TabAgentDuty() {
       </Button>
       {!restrictedViewer && (
         <Button
-        size="sm"
-        variant={companyMode === "all" ? "default" : "outline"}
-        className={`min-h-9 gap-1.5 rounded-xl border px-4 text-xs font-semibold shadow-sm transition-colors ${companyMode === "all" ? "border-violet-600 bg-violet-600 text-white hover:bg-violet-500" : "border-border/60 bg-background hover:bg-violet-50 dark:hover:bg-violet-950/40"}`}
-        onClick={() => setCompanyMode("all")}
-        data-testid="button-agent-duty-all-companies"
-      >
-        All Accessible Companies
-      </Button>
+          size="sm"
+          variant={companyMode === "all" ? "default" : "outline"}
+          className={`min-h-9 gap-1.5 rounded-xl border px-4 text-xs font-semibold shadow-sm transition-colors ${companyMode === "all" ? "border-violet-600 bg-violet-600 text-white hover:bg-violet-500" : "border-border/60 bg-background hover:bg-violet-50 dark:hover:bg-violet-950/40"}`}
+          onClick={() => setCompanyMode("all")}
+          data-testid="button-agent-duty-all-companies"
+        >
+          All Accessible Companies
+        </Button>
       )}
     </div>
   );
@@ -246,22 +247,25 @@ export function TabAgentDuty() {
                   (agent.activePreviewRows.length > 0 || agent.openRows.length > 0 || agent.partialRows.length > 0) &&
                   (agent.openBalance === null || agent.openBalance !== 0)
               )
-              .map((agent) => (
-                isViewer ? (
-                  <AgentCardReadOnly key={`${section.companyId}-${agent.agentName}`} agent={agent} />
-                ) : (
+              .map((agent) => {
+                if (isViewer) {
+                  return <AgentCardReadOnly key={`${section.companyId}-${agent.agentName}`} agent={agent} />;
+                }
+                return (
                   <AgentCard
                     key={`${section.companyId}-${agent.agentName}`}
                     agent={agent}
                     companyId={section.companyId}
                     waGroupChatId={
-                      !restrictedViewer ? (waSettings?.groups?.[agent.agentName] ||
-                      waSettings?.groups?.[agent.agentName.toUpperCase()] ||
-                      undefined) : undefined
+                      !restrictedViewer
+                        ? waSettings?.groups?.[agent.agentName] ||
+                          waSettings?.groups?.[agent.agentName.toUpperCase()] ||
+                          undefined
+                        : undefined
                     }
                   />
-                )
-              ))
+                );
+              })
           )}
         </div>
       ))}

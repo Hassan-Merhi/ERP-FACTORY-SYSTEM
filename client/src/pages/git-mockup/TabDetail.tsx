@@ -6,17 +6,31 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertTriangle, FileX, Search, CheckCircle2, XCircle, LayoutGrid, List, Building2, Boxes, Truck, Anchor, FileCheck2 } from "lucide-react";
+import {
+  AlertTriangle,
+  FileX,
+  Search,
+  CheckCircle2,
+  XCircle,
+  LayoutGrid,
+  List,
+  Building2,
+  Boxes,
+  Truck,
+  Anchor,
+  FileCheck2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmt, fmtD, gitContainersUrl, parseNum, COMPANY_COLORS, getRealRowBg } from "./helpers";
 import { WorkbookLegend, RealWorkbookBlock } from "./WorkbookBlock";
 import type { GitContainersResponse, EnrichedContainerApi, CompanyViewMode } from "./types";
+import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
 
 export function TabDetail() {
   const { data: viewer } = useQuery(authenticatedUserQueryOptions());
   const role = viewer?.currentRole ?? viewer?.role;
   const isTester = role === "ERP Tester";
-  const isViewer = role === "View Only";
+  const isViewer = isExistingRecordReadOnlyRole(role);
   const restrictedViewer = isTester || isViewer;
   const [companyMode, setCompanyMode] = useState<CompanyViewMode>("session");
   const [view, setView] = useState<"workbook" | "flat">("workbook");
@@ -59,39 +73,47 @@ export function TabDetail() {
 
   // Derive the overview from the exact same filtered, company-scoped rows as the workbook.
   // Never show illustrative counts from the design mockup in production.
-  const statusSummary = useMemo(() => ({
-    inTransit: filtered.filter((r) => ["OTW", "Sea", "Left Dar", "At Border", "In Transit"].includes(r.status)).length,
-    portDocsPending: filtered.filter((r) => r.status === "At Port" && !r.docReceived).length,
-    docsReceived: filtered.filter((r) => !!r.docReceived).length,
-  }), [filtered]);
+  const statusSummary = useMemo(
+    () => ({
+      inTransit: filtered.filter((r) => ["OTW", "Sea", "Left Dar", "At Border", "In Transit"].includes(r.status))
+        .length,
+      portDocsPending: filtered.filter((r) => r.status === "At Port" && !r.docReceived).length,
+      docsReceived: filtered.filter((r) => !!r.docReceived).length,
+    }),
+    [filtered]
+  );
 
   const summaryCards = [
     {
       label: "Total Containers",
       value: filtered.length,
       icon: Boxes,
-      style: "border-violet-300/50 bg-gradient-to-br from-violet-100 to-violet-50 dark:border-violet-500/40 dark:from-violet-500/25 dark:to-violet-950/20",
+      style:
+        "border-violet-300/50 bg-gradient-to-br from-violet-100 to-violet-50 dark:border-violet-500/40 dark:from-violet-500/25 dark:to-violet-950/20",
       iconStyle: "bg-violet-500/15 text-violet-700 dark:bg-violet-400/20 dark:text-violet-200",
     },
     {
       label: "In Transit",
       value: statusSummary.inTransit,
       icon: Truck,
-      style: "border-emerald-300/60 bg-gradient-to-br from-emerald-50 to-teal-50 dark:border-emerald-500/35 dark:from-emerald-500/20 dark:to-teal-950/20",
+      style:
+        "border-emerald-300/60 bg-gradient-to-br from-emerald-50 to-teal-50 dark:border-emerald-500/35 dark:from-emerald-500/20 dark:to-teal-950/20",
       iconStyle: "bg-emerald-500/15 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300",
     },
     {
       label: "At Port / Docs Missing",
       value: statusSummary.portDocsPending,
       icon: Anchor,
-      style: "border-amber-300/60 bg-gradient-to-br from-amber-50 to-orange-50 dark:border-amber-500/35 dark:from-amber-500/20 dark:to-orange-950/20",
+      style:
+        "border-amber-300/60 bg-gradient-to-br from-amber-50 to-orange-50 dark:border-amber-500/35 dark:from-amber-500/20 dark:to-orange-950/20",
       iconStyle: "bg-amber-500/15 text-amber-700 dark:bg-amber-400/15 dark:text-amber-300",
     },
     {
       label: "Docs Received",
       value: statusSummary.docsReceived,
       icon: FileCheck2,
-      style: "border-sky-300/60 bg-gradient-to-br from-blue-50 to-sky-50 dark:border-blue-500/35 dark:from-blue-500/20 dark:to-sky-950/20",
+      style:
+        "border-sky-300/60 bg-gradient-to-br from-blue-50 to-sky-50 dark:border-blue-500/35 dark:from-blue-500/20 dark:to-sky-950/20",
       iconStyle: "bg-sky-500/15 text-sky-700 dark:bg-sky-400/15 dark:text-sky-300",
     },
   ];
@@ -106,7 +128,11 @@ export function TabDetail() {
       <Button
         size="sm"
         variant={companyMode === "session" ? "default" : "outline"}
-        className={cn("gap-1.5 rounded-lg text-xs font-semibold", companyMode === "session" && "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:from-violet-700 hover:to-fuchsia-700")}
+        className={cn(
+          "gap-1.5 rounded-lg text-xs font-semibold",
+          companyMode === "session" &&
+            "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:from-violet-700 hover:to-fuchsia-700"
+        )}
         onClick={() => setCompanyMode("session")}
         data-testid="button-detail-my-company"
       >
@@ -114,14 +140,18 @@ export function TabDetail() {
       </Button>
       {!restrictedViewer && (
         <Button
-        size="sm"
-        variant={companyMode === "all" ? "default" : "outline"}
-        className={cn("gap-1.5 rounded-lg text-xs font-semibold", companyMode === "all" && "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:from-violet-700 hover:to-fuchsia-700")}
-        onClick={() => setCompanyMode("all")}
-        data-testid="button-detail-all-companies"
-      >
-        All Accessible Companies
-      </Button>
+          size="sm"
+          variant={companyMode === "all" ? "default" : "outline"}
+          className={cn(
+            "gap-1.5 rounded-lg text-xs font-semibold",
+            companyMode === "all" &&
+              "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:from-violet-700 hover:to-fuchsia-700"
+          )}
+          onClick={() => setCompanyMode("all")}
+          data-testid="button-detail-all-companies"
+        >
+          All Accessible Companies
+        </Button>
       )}
     </div>
   );
@@ -158,13 +188,26 @@ export function TabDetail() {
         {summaryCards.map((card) => {
           const Icon = card.icon;
           return (
-            <div key={card.label} className={cn("flex min-h-24 items-center gap-3 rounded-2xl border p-3 shadow-sm transition-shadow hover:shadow-md sm:p-4", card.style)}>
-              <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl sm:h-12 sm:w-12", card.iconStyle)}>
+            <div
+              key={card.label}
+              className={cn(
+                "flex min-h-24 items-center gap-3 rounded-2xl border p-3 shadow-sm transition-shadow hover:shadow-md sm:p-4",
+                card.style
+              )}
+            >
+              <div
+                className={cn(
+                  "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl sm:h-12 sm:w-12",
+                  card.iconStyle
+                )}
+              >
                 <Icon className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
               </div>
               <div className="min-w-0">
                 <div className="text-xs font-medium text-foreground/75">{card.label}</div>
-                <div className="mt-0.5 text-2xl font-bold tracking-tight tabular-nums">{card.value.toLocaleString("en-US")}</div>
+                <div className="mt-0.5 text-2xl font-bold tracking-tight tabular-nums">
+                  {card.value.toLocaleString("en-US")}
+                </div>
               </div>
             </div>
           );
@@ -189,12 +232,18 @@ export function TabDetail() {
                 data-testid="input-git-detail-search"
               />
             </div>
-            <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold tabular-nums text-muted-foreground">{filtered.length} rows</span>
+            <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold tabular-nums text-muted-foreground">
+              {filtered.length} rows
+            </span>
             <div className="ml-auto flex items-center gap-1 rounded-xl bg-muted/65 p-1">
               <Button
                 size="sm"
                 variant={view === "workbook" ? "default" : "outline"}
-                className={cn("gap-1.5 rounded-lg text-xs", view === "workbook" && "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:from-violet-700 hover:to-fuchsia-700")}
+                className={cn(
+                  "gap-1.5 rounded-lg text-xs",
+                  view === "workbook" &&
+                    "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:from-violet-700 hover:to-fuchsia-700"
+                )}
                 onClick={() => setView("workbook")}
                 data-testid="button-view-workbook"
               >
@@ -204,7 +253,11 @@ export function TabDetail() {
               <Button
                 size="sm"
                 variant={view === "flat" ? "default" : "outline"}
-                className={cn("gap-1.5 rounded-lg text-xs", view === "flat" && "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:from-violet-700 hover:to-fuchsia-700")}
+                className={cn(
+                  "gap-1.5 rounded-lg text-xs",
+                  view === "flat" &&
+                    "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:from-violet-700 hover:to-fuchsia-700"
+                )}
                 onClick={() => setView("flat")}
                 data-testid="button-view-flat"
               >
@@ -242,7 +295,10 @@ export function TabDetail() {
             </div>
           ) : (
             <div className="overflow-x-auto rounded-2xl border border-border/70 bg-card/85 shadow-sm">
-              <Table className="text-xs whitespace-nowrap [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide" mobileLayout="cards">
+              <Table
+                className="text-xs whitespace-nowrap [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide"
+                mobileLayout="cards"
+              >
                 <TableHeader>
                   <TableRow className="bg-muted/70">
                     <TableHead>Container #</TableHead>
@@ -263,7 +319,11 @@ export function TabDetail() {
                 </TableHeader>
                 <TableBody>
                   {filtered.map((r) => (
-                    <TableRow key={r.id} className={cn("transition-colors hover:bg-violet-500/10", getRealRowBg(r))} data-testid={`row-git-${r.containerNumber}`}>
+                    <TableRow
+                      key={r.id}
+                      className={cn("transition-colors hover:bg-violet-500/10", getRealRowBg(r))}
+                      data-testid={`row-git-${r.containerNumber}`}
+                    >
                       <TableCell className="font-mono font-semibold">{r.containerNumber}</TableCell>
                       <TableCell className="text-right font-medium">${fmt(parseNum(r.grandTotal), 2)}</TableCell>
                       <TableCell>{r.companyName}</TableCell>

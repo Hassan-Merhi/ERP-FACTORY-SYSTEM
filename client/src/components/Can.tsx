@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { AccessControlAction, AccessControlResource } from "@shared/accessControlV2";
+import type { CreateOnlyVerifiedCreateName } from "@shared/createOnlyRolePolicy";
 import { canDenialMessage, useCan } from "@/hooks/useCan";
 
 /**
@@ -12,6 +13,7 @@ export function Can({
   legacyAllowed,
   featureKey,
   verifiedCreateOnly,
+  createOnlyCreate,
   children,
   fallback = null,
   showExplanation = false,
@@ -21,11 +23,12 @@ export function Can({
   legacyAllowed: boolean;
   featureKey?: string;
   verifiedCreateOnly?: boolean;
+  createOnlyCreate?: CreateOnlyVerifiedCreateName;
   children: ReactNode;
   fallback?: ReactNode;
   showExplanation?: boolean;
 }) {
-  const decision = useCan(resource, action, { legacyAllowed, featureKey, verifiedCreateOnly });
+  const decision = useCan(resource, action, { legacyAllowed, featureKey, verifiedCreateOnly, createOnlyCreate });
   if (decision.allowed) return <>{children}</>;
   if (!showExplanation) return <>{fallback}</>;
   return (

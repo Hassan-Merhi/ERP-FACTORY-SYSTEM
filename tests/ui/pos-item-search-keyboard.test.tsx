@@ -66,7 +66,6 @@ describe("POS inventory sidebar search keyboard", () => {
   });
 });
 
-
 function GridToSidebarHarness({
   onSelect,
   onToast,
@@ -75,9 +74,7 @@ function GridToSidebarHarness({
   onToast: (options: { title: string }) => void;
 }) {
   const [term, setTerm] = useState("");
-  const [rows, setRows] = useState<SaleRow[]>([
-    { id: "1", itemName: "", quantity: 0, rate: 0, rateUSD: 0, amount: 0 },
-  ]);
+  const [rows, setRows] = useState<SaleRow[]>([{ id: "1", itemName: "", quantity: 0, rate: 0, rateUSD: 0, amount: 0 }]);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [selectedCell, setSelectedCell] = useState({ row: 0, col: 0 });
   const sidebarSearch = useRef<HTMLInputElement>(null);
@@ -137,7 +134,8 @@ describe("POS sale-row keyboard and sidebar pointer integration", () => {
     fireEvent.keyDown(grid, { key: "ArrowDown" });
     expect(options[1].getAttribute("aria-selected")).toBe("true");
     fireEvent.keyDown(grid, { key: "Enter" });
-    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ code: "SH-2" }));
+    // The sale-row path also names the row that receives the item (the first row).
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ code: "SH-2" }), 0);
     expect(onToast).not.toHaveBeenCalled();
   });
 
@@ -237,9 +235,7 @@ const ladiesStock: InventoryItem[] = [
 
 function ActualSaleSelectionHarness() {
   const [term, setTerm] = useState("");
-  const [rows, setRows] = useState<SaleRow[]>([
-    { id: "1", itemName: "", quantity: 0, rate: 0, rateUSD: 0, amount: 0 },
-  ]);
+  const [rows, setRows] = useState<SaleRow[]>([{ id: "1", itemName: "", quantity: 0, rate: 0, rateUSD: 0, amount: 0 }]);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [selectedCell, setSelectedCell] = useState({ row: 0, col: 0 });
   const [stockWarning, setStockWarning] = useState(false);

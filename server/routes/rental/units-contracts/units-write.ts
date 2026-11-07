@@ -15,43 +15,49 @@ import { eq, and } from "drizzle-orm";
 import { propertyUnits, propertyContracts, insertPropertyUnitSchema } from "@shared/schema";
 import { parseId } from "../../../lib/parseId";
 import { logAudit } from "../../_helpers";
+import { requireCreateOnlyVerifiedCreate } from "../../../services/security/createOnlyVerifiedCreates";
 
 export function registerRentalUnitsWriteRoutes(app: Express, ctx: RentalRoutesContext) {
   const { module, urlPrefix } = ctx;
   // ── CREATE unit ──
-  app.post(`${urlPrefix}/units`, requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const data = insertPropertyUnitSchema.parse({ ...req.body, companyId });
-      // Phase 21 (B): the write and its audit commit together.
-      const created = await db.transaction(async (tx) => {
-        const [written] = await tx
-          .insert(propertyUnits)
-          .values({ ...data, module })
-          .returning();
-        await logAudit(
-          {
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId,
-            action: "create",
-            tableName: "property_units",
-            recordId: written.id,
-            recordIdentifier: written.unitNumber || String(written.id),
-            changes: { unitNumber: { old: null, new: written.unitNumber } },
-          },
-          tx
-        );
-        return written;
-      });
-      res.json(created);
-    } catch (e: unknown) {
-      if (e instanceof z.ZodError)
-        return res.status(400).json({ message: e.issues.map((err) => err.message).join(", ") });
-      res.status(500).json({ message: getErrorMessage(e) });
+  app.post(
+    `${urlPrefix}/units`,
+    requireAuth,
+    requireCreateOnlyVerifiedCreate("rentalUnits"),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const data = insertPropertyUnitSchema.parse({ ...req.body, companyId });
+        // Phase 21 (B): the write and its audit commit together.
+        const created = await db.transaction(async (tx) => {
+          const [written] = await tx
+            .insert(propertyUnits)
+            .values({ ...data, module })
+            .returning();
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "create",
+              tableName: "property_units",
+              recordId: written.id,
+              recordIdentifier: written.unitNumber || String(written.id),
+              changes: { unitNumber: { old: null, new: written.unitNumber } },
+            },
+            tx
+          );
+          return written;
+        });
+        res.json(created);
+      } catch (e: unknown) {
+        if (e instanceof z.ZodError)
+          return res.status(400).json({ message: e.issues.map((err) => err.message).join(", ") });
+        res.status(500).json({ message: getErrorMessage(e) });
+      }
     }
-  });
+  );
 
   // ── PATCH unit ──
   app.patch(`${urlPrefix}/units/:id`, requireAuth, async (req: Request, res: Response) => {

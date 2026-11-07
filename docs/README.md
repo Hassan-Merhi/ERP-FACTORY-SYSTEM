@@ -28,6 +28,8 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [permissions-control-center-phase5.md](permissions-control-center-phase5.md) | Phase 5 company-scoped user overrides and shadow access preview |
 | [permissions-control-center-phase4.md](permissions-control-center-phase4.md) | Phase 4 shadow role permissions matrix and release gates |
 | [permissions-control-center-phase3.md](permissions-control-center-phase3.md) | Permissions Phase 3: fail-closed Create Only writes, reviewed supplier creation and remaining route audits |
+| [permissions-control-center-phase3-route-review.md](permissions-control-center-phase3-route-review.md) | Create Only enforcement layers, verified creates and routes kept denied |
+| [permissions-control-center-activation.md](permissions-control-center-activation.md) | Create Only activation: evidence, staging procedure, rollout, rollback and monitoring |
 | [what-is-this.md](what-is-this.md) | What the system is, in one page |
 | [onboarding.md](onboarding.md) | First login through first transaction |
 | [architecture.md](architecture.md) | How the codebase fits together |
