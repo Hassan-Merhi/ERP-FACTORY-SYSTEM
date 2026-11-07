@@ -48,6 +48,7 @@ import { PaginationBar } from "@/components/PaginationBar";
 import { useTablePrefs } from "@/hooks/use-table-prefs";
 import { useClientTablePagination } from "@/hooks/use-client-table-pagination";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { FactoryCustomerFormDialogs } from "./factorycustomers/FactoryCustomerFormDialogs";
 import type { Customer } from "./factorycustomers/types";
 
@@ -57,6 +58,7 @@ export default function FactoryCustomers() {
   const { formatCashAmount } = useCurrencyContext();
   const [, navigate] = useLocation();
   const { selectedCompany } = useCompany();
+  const recordChanges = useExistingRecordChangeAccess();
   const { prefs, setPrefs } = useTablePrefs("factory-customers", { companyId: selectedCompany?.id });
 
   const pageSize = prefs.pageSize ?? 25;
@@ -402,15 +404,17 @@ export default function FactoryCustomers() {
               {showZeroBalance ? "Hide 0 Balance" : `Show 0 Balance (${zeroBalanceCount})`}
             </Button>
           )}
-          <Button
-            onClick={openCreate}
-            data-testid="button-add-customer"
-            size="sm"
-            className="h-10 gap-2 rounded-xl bg-blue-600 px-4 text-white shadow-sm hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
-          >
-            <Plus className="h-4 w-4" />
-            Add Customer
-          </Button>
+          {!recordChanges.isCreateOnly && (
+            <Button
+              onClick={openCreate}
+              data-testid="button-add-customer"
+              size="sm"
+              className="h-10 gap-2 rounded-xl bg-blue-600 px-4 text-white shadow-sm hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
+            >
+              <Plus className="h-4 w-4" />
+              Add Customer
+            </Button>
+          )}
         </div>
       </div>
 
@@ -620,8 +624,9 @@ export default function FactoryCustomers() {
                             variant="ghost"
                             size="icon"
                             onClick={() => openEdit(customer)}
-                            title="Edit Customer"
-                            aria-label={`Edit ${customer.legalName}`}
+                            disabled={!recordChanges.allowed}
+                            title={recordChanges.reason ?? "Edit Customer"}
+                            aria-label={recordChanges.reason ?? `Edit ${customer.legalName}`}
                             className="h-9 w-9 rounded-xl border border-border/60 hover:border-blue-400/60 hover:text-blue-500"
                             data-testid={`button-edit-customer-${customer.id}`}
                           >
@@ -632,8 +637,9 @@ export default function FactoryCustomers() {
                             variant="ghost"
                             size="icon"
                             onClick={() => setDeletingCustomer(customer)}
-                            title="Delete Customer"
-                            aria-label={`Delete ${customer.legalName}`}
+                            disabled={!recordChanges.allowed}
+                            title={recordChanges.reason ?? "Delete Customer"}
+                            aria-label={recordChanges.reason ?? `Delete ${customer.legalName}`}
                             className="h-9 w-9 rounded-xl border border-destructive/20 text-destructive hover:border-destructive/50 hover:bg-destructive/10"
                             data-testid={`button-delete-customer-${customer.id}`}
                           >
@@ -695,7 +701,8 @@ export default function FactoryCustomers() {
                           variant="outline"
                           size="sm"
                           onClick={() => restoreMutation.mutate(customer.id)}
-                          disabled={restoreMutation.isPending}
+                          disabled={restoreMutation.isPending || !recordChanges.allowed}
+                          title={recordChanges.reason ?? undefined}
                           data-testid={`button-restore-customer-${customer.id}`}
                         >
                           <RotateCcw className="h-3 w-3 mr-1" />

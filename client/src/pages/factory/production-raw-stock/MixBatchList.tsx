@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { formatNumber } from "@/lib/formatNumber";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Layers, Pencil, Trash2, MessageCircle, Loader2, FileSpreadsheet } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -92,6 +93,8 @@ export function MixBatchList({
   reportLoading,
   formatDisplayDate,
 }: MixBatchListProps) {
+  const recordChanges = useExistingRecordChangeAccess();
+  const recordChangeReason = recordChanges.reason ?? undefined;
   const [showAllMixBatches, setShowAllMixBatches] = useState(false);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
   const [exportPeriod, setExportPeriod] = useState<"month" | "all-time">("month");
@@ -111,8 +114,15 @@ export function MixBatchList({
       if (!response.ok) throw new Error("Could not load historical supplier costs. Please try again.");
       const supplierSources = (await response.json()) as import("./mixBatchCostExport").MixBatchCostSourceRow[];
       const { exportMixBatchCostAnalysis } = await import("./mixBatchCostExport");
-      await exportMixBatchCostAnalysis(mixBatches, exportPeriod === "all-time" ? "all-time" : exportMonth, supplierSources);
-      toast({ title: "Excel exported", description: "Supplier-by-day costs, daily totals, monthly averages and source details downloaded." });
+      await exportMixBatchCostAnalysis(
+        mixBatches,
+        exportPeriod === "all-time" ? "all-time" : exportMonth,
+        supplierSources
+      );
+      toast({
+        title: "Excel exported",
+        description: "Supplier-by-day costs, daily totals, monthly averages and source details downloaded.",
+      });
     } catch (error) {
       toast({
         title: "Excel export failed",
@@ -141,7 +151,10 @@ export function MixBatchList({
   const blendedCost = sumTotal > 0 ? weightedCost / sumTotal : 0;
 
   return (
-    <Card className="min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm" data-testid="mix-batch-list">
+    <Card
+      className="min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm"
+      data-testid="mix-batch-list"
+    >
       <CardHeader className="flex flex-col gap-4 border-b border-border/50 bg-linear-to-r from-amber-50/55 via-card to-card p-4 dark:from-amber-500/5 dark:via-card dark:to-card sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:p-5">
         <div className="min-w-0 space-y-1">
           <CardTitle className="flex items-center gap-2.5 text-lg font-bold tracking-tight sm:text-xl">
@@ -202,16 +215,24 @@ export function MixBatchList({
               variant="outline"
               size="sm"
               onClick={handleExportExcel}
-              disabled={isLoading || isExportingExcel || mixBatches.length === 0 || (exportPeriod === "month" && !exportMonth)}
+              disabled={
+                isLoading || isExportingExcel || mixBatches.length === 0 || (exportPeriod === "month" && !exportMonth)
+              }
               className="h-10 gap-2 rounded-xl border-emerald-500/40 bg-emerald-500/5 font-bold text-emerald-700 shadow-sm hover:bg-emerald-500/10 dark:text-emerald-300"
               data-testid="button-export-mix-batch-cost-excel"
             >
-              {isExportingExcel ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+              {isExportingExcel ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="h-4 w-4" />
+              )}
               Export Cost Excel
             </Button>
           </div>
           <span className="text-[10px] text-muted-foreground">
-            {exportPeriod === "all-time" ? "All-time dashboard · all suppliers and production dates" : "Selected month dashboard · full historical supplier detail included"}
+            {exportPeriod === "all-time"
+              ? "All-time dashboard · all suppliers and production dates"
+              : "Selected month dashboard · full historical supplier detail included"}
           </span>
         </div>
 
@@ -289,7 +310,9 @@ export function MixBatchList({
                           size="icon"
                           variant="ghost"
                           onClick={() => onEdit(batch)}
-                          aria-label={`Edit ${batch.batchCode}`}
+                          disabled={!recordChanges.allowed}
+                          title={recordChangeReason}
+                          aria-label={recordChanges.reason ?? `Edit ${batch.batchCode}`}
                           data-testid={`button-edit-mix-batch-mobile-${batch.id}`}
                         >
                           <Pencil className="h-4 w-4" />
@@ -298,7 +321,9 @@ export function MixBatchList({
                           size="icon"
                           variant="ghost"
                           onClick={() => onDelete(batch.id)}
-                          aria-label={`Delete ${batch.batchCode}`}
+                          disabled={!recordChanges.allowed}
+                          title={recordChangeReason}
+                          aria-label={recordChanges.reason ?? `Delete ${batch.batchCode}`}
                           data-testid={`button-delete-mix-batch-mobile-${batch.id}`}
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
@@ -358,7 +383,11 @@ export function MixBatchList({
                   {visibleMixBatches.map((batch) => {
                     const total = parseFloat(batch.totalWeightKg) || 0;
                     return (
-                      <TableRow key={batch.id} className="even:bg-muted/15 transition-colors hover:bg-blue-50/50 dark:hover:bg-blue-400/5" data-testid={`row-mix-batch-${batch.id}`}>
+                      <TableRow
+                        key={batch.id}
+                        className="even:bg-muted/15 transition-colors hover:bg-blue-50/50 dark:hover:bg-blue-400/5"
+                        data-testid={`row-mix-batch-${batch.id}`}
+                      >
                         <TableCell
                           className="font-mono font-medium text-sm cursor-pointer hover:underline text-primary"
                           onClick={() => onViewDetail(batch)}
@@ -385,6 +414,9 @@ export function MixBatchList({
                               size="icon"
                               variant="ghost"
                               onClick={() => onEdit(batch)}
+                              disabled={!recordChanges.allowed}
+                              title={recordChangeReason}
+                              aria-label={recordChangeReason}
                               data-testid={`button-edit-mix-batch-${batch.id}`}
                             >
                               <Pencil className="h-4 w-4" />
@@ -393,6 +425,9 @@ export function MixBatchList({
                               size="icon"
                               variant="ghost"
                               onClick={() => onDelete(batch.id)}
+                              disabled={!recordChanges.allowed}
+                              title={recordChangeReason}
+                              aria-label={recordChangeReason}
                               data-testid={`button-delete-mix-batch-${batch.id}`}
                             >
                               <Trash2 className="h-4 w-4 text-destructive" />
