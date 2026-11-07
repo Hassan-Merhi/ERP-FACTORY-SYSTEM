@@ -19,6 +19,13 @@ import { getErpUserPageAccess } from "../storage/auth";
 import { effectiveErpPageKeys } from "../services/security/erpViewerPagePolicy";
 import { getActiveCompanyPermissionContext } from "../services/security/activeCompanyPermissionContext";
 import { companies } from "@shared/schema";
+import { resolveFactoryPageKey } from "@shared/factoryAccessRegistry";
+import {
+  ERP_POS_ROLE_ROUTES,
+  canonicalErpAccessPath,
+  getErpRouteFeatureKeys,
+  isErpDeveloperOnlyRoute,
+} from "@shared/erpRouteAccess";
 import { eq } from "drizzle-orm";
 import { db } from "../db";
 
@@ -101,8 +108,33 @@ const PAGE_FOR_TOPIC: Readonly<Record<string, { mode: "erp" | "factory"; key?: s
   "erp-reports": { mode: "erp", key: "sales_report" },
 };
 
-async function canStreamTopic(req: Request, topic: string): Promise<boolean> {
-  const destination = PAGE_FOR_TOPIC[topic];
+type TopicDestination = {
+  mode: "erp" | "factory" | "sp";
+  key?: string;
+  erpKeys?: readonly string[];
+  route?: string;
+};
+
+/**
+ * Where a published recording leads. The original tours keep their reviewed
+ * mapping; recordings of any other page carry its route in the manifest and
+ * follow that page's own permission (Factory registry key, ERP page grants,
+ * or the Supplier Partner workspace).
+ */
+function destinationFor(topic: string, route: string | undefined): TopicDestination | null {
+  const reviewed = PAGE_FOR_TOPIC[topic];
+  if (reviewed) return reviewed;
+  if (!route) return null;
+  if (route.startsWith("/factory/")) {
+    const key = resolveFactoryPageKey(route);
+    return key ? { mode: "factory", key } : null;
+  }
+  if (route === "/sp" || route.startsWith("/sp/")) return { mode: "sp" };
+  return { mode: "erp", erpKeys: getErpRouteFeatureKeys(route), route: canonicalErpAccessPath(route) };
+}
+
+async function canStreamTopic(req: Request, topic: string, route?: string): Promise<boolean> {
+  const destination = destinationFor(topic, route);
   if (!destination) return false;
   const context = await getActiveCompanyPermissionContext(req);
   const [company] = await db
@@ -111,8 +143,20 @@ async function canStreamTopic(req: Request, topic: string): Promise<boolean> {
     .where(eq(companies.id, context.companyId))
     .limit(1);
   const isFactory = company?.companyType === "factory" || company?.companyType === "factory_v2";
+  const isSupplierPartner = company?.companyType === "supplier_partner";
   if (destination.mode === "factory" && !isFactory) return false;
   if (destination.mode === "erp" && isFactory) return false;
+  if (destination.mode === "sp") return isSupplierPartner;
+  if (destination.erpKeys && destination.route) {
+    // Same rule as the ERP sidebar (AppSidebar isItemVisible).
+    if (isErpDeveloperOnlyRoute(destination.route)) return context.role === "Developer";
+    if (["Admin", "Owner", "Developer"].includes(context.role)) return true;
+    if (context.role === "POS") return ERP_POS_ROLE_ROUTES.includes(destination.route);
+    const granted = effectiveErpPageKeys(context.role, await getErpUserPageAccess(context.companyId, context.userId));
+    if (destination.erpKeys.length > 0) return destination.erpKeys.some((key) => granted.includes(key));
+    // A page without its own grant is open to anyone who has been given any ERP page.
+    return granted.length > 0;
+  }
   if (!destination.key) return true;
   if (destination.mode === "factory") {
     const decision = await authorizeFactoryPageAccess(req, destination.key);
@@ -265,7 +309,7 @@ async function streamMedia(req: Request, res: Response, kind: "video" | "caption
     return;
   }
   try {
-    if (!(await canStreamTopic(req, topic))) {
+    if (!(await canStreamTopic(req, topic, registry[topic]?.route))) {
       res.status(403).json({ message: "Training page access is required" });
       return;
     }
@@ -366,9 +410,8 @@ async function listPublished(req: Request, res: Response) {
   const registry = await loadPublishedTrainingRegistry();
   const topics: Record<string, unknown> = {};
   for (const [topic, entry] of Object.entries(registry)) {
-    if (!PAGE_FOR_TOPIC[topic]) continue;
     try {
-      if (!(await canStreamTopic(req, topic))) continue;
+      if (!(await canStreamTopic(req, topic, entry.route))) continue;
     } catch {
       continue;
     }
@@ -379,6 +422,7 @@ async function listPublished(req: Request, res: Response) {
       sourceSha: entry.sourceSha ?? null,
       publishedAt: entry.publishedAt ?? null,
       durationSeconds: entry.durationSeconds ?? null,
+      route: entry.route ?? null,
     };
   }
   res.setHeader("Cache-Control", "private, max-age=60");
