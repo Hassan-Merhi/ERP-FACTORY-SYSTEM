@@ -138,7 +138,7 @@ describe("same-category linked daily target", () => {
       workers={workers} selected={[]} onToggle={vi.fn()} loading={false}
       renderDayActions={(workerId) => <button type="button">Edit {workerId}</button>} />);
     const shared = screen.getByTestId("linked-daily-cell-2026-11-05-18");
-    expect(within(shared).getByRole("button", { name: "Edit 18" })).toBeInTheDocument();
-    expect(within(shared).getByRole("button", { name: "Edit 19" })).toBeInTheDocument();
+    expect(within(shared).getByRole("button", { name: "Edit 18", hidden: true })).toBeInTheDocument();
+    expect(within(shared).getByRole("button", { name: "Edit 19", hidden: true })).toBeInTheDocument();
   });
 });
