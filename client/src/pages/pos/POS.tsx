@@ -33,9 +33,11 @@ import { usePosMutations } from "./hooks/usePosMutations";
 import { usePosAutosave } from "./hooks/usePosAutosave";
 import { usePosHandlers } from "./hooks/usePosHandlers";
 
-import { POS_COLUMNS, formatDisplayAmount } from "./utils/posCalculations";
+import { POS_COLUMNS, formatDisplayAmount, getPosPickerInventory } from "./utils/posCalculations";
 import { ErrorState } from "@/components/ui/page-state";
 import { GoldenCoastPosReadinessAlert } from "./pos-components/GoldenCoastPosReadinessAlert";
+
+const POS_PICKER_LIST_ID = "pos-desktop-item-options";
 
 export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; editVoucherId?: string } = {}) {
   const { selectedLocation, setSelectedLocation } = useLocationContext();
@@ -116,6 +118,7 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
     mobileSearchInputRef,
     autoSaveStateRef,
   } = usePosState();
+  const inventoryPickerSearchRef = useRef<HTMLInputElement>(null);
 
   const activeLocation = posUser ? posSelectedLocation : selectedLocation;
   // Zambia posting uses the approved rate of the sale date, never the
@@ -514,6 +517,7 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
     setHighlightedIndex,
     lastSavedFingerprintRef,
     inputRefs,
+    focusInventoryPicker: () => inventoryPickerSearchRef.current?.focus(),
     printRef,
     stockPrintRef,
     clientSaleIdRef,
@@ -539,6 +543,7 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
   });
 
   const handleKeyDown = makeHandleKeyDown(searchTerm);
+  const matchingItemCount = useMemo(() => getPosPickerInventory(inventory, searchTerm).length, [inventory, searchTerm]);
   const fmtAmount = (v: number) => formatDisplayAmount(activeCurrency, v);
   const goldenCoastPosBlocked = isSpCompany && goldenCoastPhase6 && goldenCoastReadiness?.canPost === false;
   const goldenCoastPosSaveDisabled = isSpCompany && (goldenCoastReadinessLoading || goldenCoastPosBlocked);
@@ -756,6 +761,9 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
                 rows={rows}
                 columns={POS_COLUMNS}
                 selectedCell={selectedCell}
+                highlightedIndex={highlightedIndex}
+                matchingItemCount={matchingItemCount}
+                pickerListId={POS_PICKER_LIST_ID}
                 setSelectedCell={setSelectedCell}
                 updateRow={updateRow}
                 handleDeleteRow={(i) => setRows(rows.filter((_, idx) => idx !== i))}
@@ -808,6 +816,9 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
           // blurs when the sidebar is clicked, so activeRow can clear before
           // the click completes; selectedCell is the stable row fallback.
           selectItem={(item) => selectItem(item, activeRow ?? selectedCell.row)}
+          onSearchTermChange={setSearchTerm}
+          searchInputRef={inventoryPickerSearchRef}
+          listId={POS_PICKER_LIST_ID}
           itemListRef={itemListRef}
           highlightedIndex={highlightedIndex}
           setHighlightedIndex={setHighlightedIndex}

@@ -7,7 +7,10 @@ import { getPosPickerInventory } from "../utils/posCalculations";
 
 export interface InventoryPickerProps {
   inventory: InventoryItem[];
-  selectItem: (item: InventoryItem) => void;
+  selectItem: (item: InventoryItem) => boolean | void;
+  onSearchTermChange?: (term: string) => void;
+  searchInputRef?: React.Ref<HTMLInputElement>;
+  listId?: string;
   itemListRef: React.RefObject<HTMLDivElement | null>;
   highlightedIndex: number;
   setHighlightedIndex: React.Dispatch<React.SetStateAction<number>>;
@@ -18,6 +21,9 @@ export interface InventoryPickerProps {
 export function InventoryPicker({
   inventory,
   selectItem,
+  onSearchTermChange,
+  searchInputRef,
+  listId,
   itemListRef,
   highlightedIndex,
   setHighlightedIndex,
@@ -26,16 +32,26 @@ export function InventoryPicker({
 }: InventoryPickerProps) {
   const [localSearch, setLocalSearch] = useState("");
   const pickerId = useId();
-  const listboxId = `${pickerId}-items`;
-
-  useEffect(() => {
-    if (syncTerm !== undefined) setLocalSearch(syncTerm);
-  }, [syncTerm]);
+  const listboxId = listId ?? `${pickerId}-items`;
+  // When the sale row supplies a term, use it directly rather than syncing a
+  // second state after render. Arrows/Enter must always match the visible list.
+  const effectiveSearch = syncTerm !== undefined ? syncTerm : localSearch;
+  const changeSearch = (term: string) => {
+    if (syncTerm !== undefined) onSearchTermChange?.(term);
+    else setLocalSearch(term);
+    setHighlightedIndex(0);
+  };
+  const clearSearch = () => changeSearch("");
+  const chooseItem = (item: InventoryItem) => {
+    // A zero-stock rejection must not erase the query while the cashier is
+    // still choosing from the results.
+    if (selectItem(item) !== false) clearSearch();
+  };
 
   // Use the exact same filtered/sorted list as keyboard navigation. The
   // highlighted index must point to one canonical item regardless of whether
   // the cashier clicks it or confirms it with Enter/Tab.
-  const filteredInventory = getPosPickerInventory(inventory, localSearch);
+  const filteredInventory = getPosPickerInventory(inventory, effectiveSearch);
 
   // Keep the selected option visible when cashiers navigate long lists using
   // the keyboard. This works for the independent right-hand search field,
@@ -51,14 +67,12 @@ export function InventoryPicker({
     else if (optionRect.bottom > listRect.bottom) {
       list.scrollTop += optionRect.bottom - listRect.bottom;
     }
-  }, [highlightedIndex, localSearch, inventory, itemListRef, filteredInventory.length]);
+  }, [highlightedIndex, effectiveSearch, inventory, itemListRef, filteredInventory.length]);
 
   const selectHighlighted = () => {
     const item = filteredInventory[highlightedIndex];
     if (!item) return;
-    selectItem(item);
-    setLocalSearch("");
-    setHighlightedIndex(0);
+    chooseItem(item);
   };
 
   return (
@@ -78,19 +92,17 @@ export function InventoryPicker({
         >
           <Search className={`text-muted-foreground shrink-0 ${mobile ? "h-5 w-5" : "h-4 w-4"}`} />
           <input
+            ref={searchInputRef}
             className={`flex-1 bg-transparent outline-hidden placeholder:text-muted-foreground ${mobile ? "text-base" : "text-sm"}`}
             placeholder="Scan barcode or search..."
             role="combobox"
             aria-autocomplete="list"
             aria-expanded={filteredInventory.length > 0}
             aria-controls={listboxId}
-            aria-activedescendant={filteredInventory.length > 0 ? `${pickerId}-item-${Math.min(highlightedIndex, filteredInventory.length - 1)}` : undefined}
+            aria-activedescendant={filteredInventory.length > 0 ? `${listboxId}-item-${Math.min(highlightedIndex, filteredInventory.length - 1)}` : undefined}
             autoComplete="off"
-            value={localSearch}
-            onChange={(e) => {
-              setLocalSearch(e.target.value);
-              setHighlightedIndex(0);
-            }}
+            value={effectiveSearch}
+            onChange={(e) => changeSearch(e.target.value)}
             onKeyDown={(event) => {
               if (event.key === "ArrowDown" && filteredInventory.length > 0) {
                 event.preventDefault();
@@ -102,8 +114,7 @@ export function InventoryPicker({
                 event.preventDefault();
                 selectHighlighted();
               } else if (event.key === "Escape") {
-                setLocalSearch("");
-                setHighlightedIndex(0);
+                clearSearch();
               }
             }}
             data-testid="input-product-search"
@@ -111,18 +122,12 @@ export function InventoryPicker({
           <MobileBarcodeScanner
             onScan={(code) => {
               const match = inventory.find((item) => item.code?.trim().toUpperCase() === code.trim().toUpperCase());
-              if (match) {
-                selectItem(match);
-                setLocalSearch("");
-                setHighlightedIndex(0);
-              } else {
-                setLocalSearch(code);
-                setHighlightedIndex(0);
-              }
+              if (match) chooseItem(match);
+              else changeSearch(code);
             }}
           />
-          {localSearch && (
-            <button className="text-muted-foreground" onClick={() => { setLocalSearch(""); setHighlightedIndex(0); }} aria-label="Clear search">
+          {effectiveSearch && (
+            <button type="button" className="text-muted-foreground" onClick={clearSearch} aria-label="Clear search">
               ×
             </button>
           )}
@@ -144,18 +149,15 @@ export function InventoryPicker({
           return (
             <button
               key={item.stockItemId ?? item.code}
-              id={`${pickerId}-item-${index}`}
+              id={`${listboxId}-item-${index}`}
               role="option"
               aria-selected={index === highlightedIndex}
               tabIndex={-1}
               className={`w-full text-left flex items-center justify-between gap-2 border-b border-muted/40 transition-colors duration-100 ${
                 mobile ? "px-4 py-3 active:bg-primary/10" : "px-3 py-3"
               } ${index === highlightedIndex ? "bg-primary/25" : "hover:bg-muted/40"} ${isOut ? "opacity-50" : ""}`}
-              onClick={() => {
-                selectItem(item);
-                setLocalSearch("");
-                setHighlightedIndex(0);
-              }}
+              onMouseEnter={() => setHighlightedIndex(index)}
+              onClick={() => chooseItem(item)}
               data-testid={`button-select-item-${item.stockItemId ?? item.code}`}
             >
               <div className="flex min-w-0 items-center gap-3">
