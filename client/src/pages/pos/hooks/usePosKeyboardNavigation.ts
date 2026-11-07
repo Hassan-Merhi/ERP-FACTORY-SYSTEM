@@ -1,11 +1,12 @@
 import type { SaleRow, InventoryItem } from "../pos-components/posTypes";
-import { POS_COLUMNS, getPosPickerInventory } from "../utils/posCalculations";
+import { POS_COLUMNS, getPosPickerInventory, getPosKeyboardHighlightedIndex, stepPosKeyboardHighlight } from "../utils/posCalculations";
 
 interface PosKeyboardNavigationParams {
   rows: SaleRow[];
   activeRow: number | null;
   highlightedIndex: number;
   inventory: InventoryItem[];
+  canSellNegativeStock?: boolean;
   setSelectedCell: React.Dispatch<React.SetStateAction<{ row: number; col: number }>>;
   setHighlightedIndex: React.Dispatch<React.SetStateAction<number>>;
   setRows: React.Dispatch<React.SetStateAction<SaleRow[]>>;
@@ -25,6 +26,7 @@ export function usePosKeyboardNavigation({
   activeRow,
   highlightedIndex,
   inventory,
+  canSellNegativeStock = false,
   setSelectedCell,
   setHighlightedIndex,
   setRows,
@@ -43,21 +45,23 @@ export function usePosKeyboardNavigation({
     // when the cashier types and immediately presses an arrow.
     const visibleTerm = isItemNameField ? (e.currentTarget as HTMLInputElement).value : searchTerm;
     const filteredItems = getPosPickerInventory(inventory, visibleTerm);
+    const selectedIndex = getPosKeyboardHighlightedIndex(filteredItems, highlightedIndex, canSellNegativeStock);
 
     if (isItemNameField && filteredItems.length > 0) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setHighlightedIndex((prev) => Math.min(prev + 1, filteredItems.length - 1));
+        setHighlightedIndex((prev) => stepPosKeyboardHighlight(filteredItems, prev, 1, canSellNegativeStock));
         return;
       }
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        setHighlightedIndex((prev) => Math.max(prev - 1, 0));
+        setHighlightedIndex((prev) => stepPosKeyboardHighlight(filteredItems, prev, -1, canSellNegativeStock));
         return;
       }
       if (e.key === "Enter") {
         e.preventDefault();
-        if (filteredItems[highlightedIndex]) selectItem(filteredItems[highlightedIndex], rowIndex);
+        const item = filteredItems[selectedIndex] ?? (selectedIndex === -1 ? filteredItems[0] : undefined);
+        if (item) selectItem(item, rowIndex);
         return;
       }
     }
@@ -177,7 +181,8 @@ export function usePosKeyboardNavigation({
       case "Tab":
         if (isItemNameField && activeRow === rowIndex && filteredItems.length > 0 && !e.shiftKey) {
           e.preventDefault();
-          if (filteredItems[highlightedIndex]) selectItem(filteredItems[highlightedIndex], rowIndex);
+          const item = filteredItems[selectedIndex] ?? (selectedIndex === -1 ? filteredItems[0] : undefined);
+          if (item) selectItem(item, rowIndex);
           return;
         }
         if (hasUnselectedItem) {
