@@ -31,7 +31,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SkipLink } from "@/components/ui/responsive-accessibility";
 import { WorkspaceRouteBoundary } from "@/components/ui/workspace-route-boundary";
-import { ArrowLeft, LogOut, Search, ShoppingCart, ChevronDown } from "lucide-react";
+import { ArrowLeft, LogOut, Search, ShoppingCart, ChevronDown, TreePine } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { useChristmasMode } from "@/hooks/useChristmasMode";
+import { useToast } from "@/hooks/use-toast";
 import { usePosNavigationItems } from "./usePosNavigationItems";
 import { canUseAdminSearch, type ShellUser } from "./shellUser";
 import "@/styles/pos-sidebar-modern.css";
@@ -79,6 +82,8 @@ export function PosShell({
   const [currentLocation] = useLocation();
   const { selectedCompany } = useCompany();
   const { t } = useApplicationLanguage();
+  const { toast } = useToast();
+  const { settingQuery: seasonalPreferenceQuery, updatePersonalPreference } = useChristmasMode();
   const posNavItems = usePosNavigationItems({
     user,
     posImportEnabled,
@@ -99,6 +104,7 @@ export function PosShell({
     currentLocation === "/pos" ||
     currentLocation === "/pos/" ||
     currentLocation === "/retail/pos" ||
+    currentLocation === "/pos-containers" ||
     currentLocation.startsWith("/pos/edit/");
   const hasAdminSearch = canUseAdminSearch(user);
   const userMenuUser = { username: user.username, role: user.role ?? "POS" };
@@ -259,7 +265,7 @@ export function PosShell({
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <header
               data-slot="pos-top-bar"
-              className="no-print relative flex min-h-14 items-center gap-2 border-b px-2 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:min-h-12 sm:pt-2"
+              className="pos-top-bar no-print relative flex min-h-14 items-center gap-2 border-b px-2 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:min-h-12 sm:pt-2"
             >
               <SidebarTrigger
                 className="h-11 w-11 sm:h-9 sm:w-9"
@@ -272,7 +278,41 @@ export function PosShell({
                 </p>
                 <p className="truncate text-xs text-muted-foreground">{selectedCompany?.name}</p>
               </div>
+              {currentLocation === "/pos-containers" && (
+                <button
+                  type="button"
+                  className="pos-top-search hidden min-w-0 items-center gap-2 lg:flex"
+                  onClick={() => document.querySelector<HTMLInputElement>('[data-testid="input-pos-container-search"]')?.focus()}
+                  aria-label="Focus container search"
+                  data-testid="button-pos-focus-container-search"
+                >
+                  <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 flex-1 truncate text-left">Search containers, suppliers, trucks...</span>
+                  <kbd className="pos-top-search-key">Search</kbd>
+                </button>
+              )}
               <div data-slot="pos-top-bar-actions" className="ml-auto flex min-w-0 items-center gap-1 sm:gap-2">
+                {seasonalPreferenceQuery.data?.available === true && (
+                  <label
+                    className="pos-christmas-switch"
+                    title="Your personal Christmas Mode preference — controlled by the Developer master setting"
+                  >
+                    <TreePine className="h-4 w-4" aria-hidden="true" />
+                    <span className="hidden xl:inline">Christmas Mode</span>
+                    <Switch
+                      aria-label="Show Christmas Mode on my account"
+                      data-testid="switch-pos-christmas-mode"
+                      checked={seasonalPreferenceQuery.data.preferenceEnabled === true}
+                      disabled={updatePersonalPreference.isPending}
+                      onCheckedChange={(enabled) =>
+                        updatePersonalPreference.mutate(enabled, {
+                          onSuccess: () => toast({ title: enabled ? "Christmas Mode preference on" : "Christmas Mode turned off" }),
+                          onError: (error) => toast({ title: "Could not change Christmas Mode", description: error.message, variant: "destructive" }),
+                        })
+                      }
+                    />
+                  </label>
+                )}
                 <PendingSyncIndicator />
                 {hasAdminSearch && (
                   <Button
