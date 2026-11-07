@@ -140,6 +140,50 @@ describe("POS sale-row keyboard and sidebar pointer integration", () => {
     expect(onToast).not.toHaveBeenCalled();
   });
 
+  it("scrolls the Items list to the highlighted result while the sale-row input stays focused", () => {
+    render(<GridToSidebarHarness onSelect={vi.fn()} onToast={vi.fn()} />);
+    const grid = screen.getByTestId("input-grid-item");
+    fireEvent.change(grid, { target: { value: "shirt" } });
+    grid.focus();
+
+    const list = screen.getByRole("listbox");
+    const options = screen.getAllByRole("option");
+    // Give jsdom a small scroll viewport and real option positions; the old
+    // tests checked aria-selected only and missed the actual scrollbar.
+    vi.spyOn(list, "getBoundingClientRect").mockReturnValue({ top: 0, bottom: 60 } as DOMRect);
+    options.forEach((option, index) => {
+      vi.spyOn(option, "getBoundingClientRect").mockReturnValue({
+        top: index * 50,
+        bottom: (index + 1) * 50,
+      } as DOMRect);
+    });
+
+    fireEvent.keyDown(grid, { key: "ArrowDown" });
+    expect(options[1].getAttribute("aria-selected")).toBe("true");
+    expect(list.scrollTop).toBe(40);
+    expect(document.activeElement).toBe(grid);
+    fireEvent.keyDown(grid, { key: "ArrowDown" });
+    expect(options[2].getAttribute("aria-selected")).toBe("true");
+    expect(list.scrollTop).toBeGreaterThan(40);
+  });
+
+  it("does not let stationary mouse hover reset an arrow-key selection", () => {
+    render(<GridToSidebarHarness onSelect={vi.fn()} onToast={vi.fn()} />);
+    const grid = screen.getByTestId("input-grid-item");
+    fireEvent.change(grid, { target: { value: "shirt" } });
+    const options = screen.getAllByRole("option");
+
+    fireEvent.mouseMove(options[0], { clientX: 25, clientY: 40 });
+    fireEvent.keyDown(grid, { key: "ArrowDown" });
+    expect(options[1].getAttribute("aria-selected")).toBe("true");
+    // Browsers can fire a fresh mouseenter after scrolling an item under a
+    // stationary cursor. Only real pointer movement should change selection.
+    fireEvent.mouseEnter(options[0], { clientX: 25, clientY: 40 });
+    expect(options[1].getAttribute("aria-selected")).toBe("true");
+    fireEvent.mouseMove(options[0], { clientX: 26, clientY: 40 });
+    expect(options[0].getAttribute("aria-selected")).toBe("true");
+  });
+
   it("moves focus to the sidebar with Right Arrow without an Invalid item warning", () => {
     const onSelect = vi.fn();
     const onToast = vi.fn();
@@ -159,7 +203,7 @@ describe("POS sale-row keyboard and sidebar pointer integration", () => {
     render(<GridToSidebarHarness onSelect={onSelect} onToast={vi.fn()} />);
     fireEvent.change(screen.getByTestId("input-grid-item"), { target: { value: "shirt" } });
     const options = screen.getAllByRole("option");
-    fireEvent.mouseEnter(options[2]);
+    fireEvent.mouseMove(options[2], { clientX: 25, clientY: 40 });
     expect(options[2].getAttribute("aria-selected")).toBe("true");
     fireEvent.click(options[2]);
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ code: "SH-10" }));
