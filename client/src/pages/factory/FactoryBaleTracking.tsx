@@ -1,3 +1,4 @@
+import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -64,6 +65,7 @@ function fmtNum(n: number | string) {
 }
 
 export default function FactoryBaleTracking() {
+  const mhd = useFactoryMhdView();
   const [, navigate] = useLocation();
   const { data: me } = useQuery<{ role: string }>({ queryKey: ["/api/auth/me"] });
   const isDeveloper = me?.role === "Developer";
@@ -215,7 +217,7 @@ export default function FactoryBaleTracking() {
                     <div className="min-w-0">
                       <p className="text-xs text-muted-foreground">Product</p>
                       <p className="wrap-break-word" data-testid="text-bale-product">
-                        {baleInfo.productName}
+                        {mhd.nameFor(baleInfo.articleCode, baleInfo.productName)}
                       </p>
                     </div>
                   )}

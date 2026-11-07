@@ -82,12 +82,12 @@ export function AgentCardTable(props: AgentCardTableProps) {
   ];
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs whitespace-nowrap border-collapse" {...tableProps}>
+    <div className="mx-3 my-2 overflow-x-auto rounded-xl border border-border/70 shadow-sm dark:border-violet-500/20">
+      <table className="w-full border-collapse whitespace-nowrap text-xs [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:brightness-[0.97] dark:[&_tbody_tr:hover]:brightness-110" {...tableProps}>
         <thead>
-          <tr className="bg-slate-700 dark:bg-slate-800 text-slate-100 border-b border-slate-600">
+          <tr className="border-b border-violet-500/20 bg-slate-100 text-slate-700 dark:bg-violet-950/60 dark:text-violet-100">
             {cols.map((h) => (
-              <th key={h} className="py-1.5 px-2 font-semibold text-center tracking-wide text-[11px]">
+              <th key={h} className="px-2.5 py-2.5 text-center text-[10px] font-bold uppercase tracking-wide sm:text-[11px]">
                 {h}
               </th>
             ))}

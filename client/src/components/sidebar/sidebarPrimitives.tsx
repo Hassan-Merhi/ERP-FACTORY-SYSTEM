@@ -1,11 +1,28 @@
 import { useState, useEffect, useRef, ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { ChevronDown, GripVertical, LogOut, type LucideIcon } from "lucide-react";
+import {
+  ChevronDown,
+  GripVertical,
+  LogOut,
+  Factory,
+  Package,
+  Truck,
+  Wallet,
+  Building2,
+  Sparkles,
+  Landmark,
+  BarChart3,
+  Store,
+  Layers,
+  type LucideIcon,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { SidebarHeader, SidebarFooter } from "@/components/ui/sidebar";
 import { useConnectivity } from "@/contexts/ConnectivityContext";
+import { reconcilePinnedOrder } from "./pinnedOrder";
+import { SeasonalBrandAccent } from "@/components/SeasonalBrandAccent";
 
 /**
  * A navigation glyph. Every call site passes a lucide-react icon, which is a
@@ -30,9 +47,26 @@ export interface NavSection {
   devOnly?: boolean;
 }
 
-const baseLinkClasses = "relative flex items-center gap-2.5 rounded-md py-1.5 pl-3 pr-2.5 text-sm transition-colors";
+const baseLinkClasses =
+  "premium-nav-link relative flex items-center gap-2.5 rounded-md py-1.5 pl-3 pr-2.5 text-sm transition-colors";
 const inactiveClasses = "text-muted-foreground hover:bg-sidebar-accent/40 hover:text-foreground";
-const activeClasses = "bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-2xs";
+const activeClasses = "premium-nav-active bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-2xs";
+
+const SECTION_ICONS: Record<string, LucideIcon> = {
+  production: Factory,
+  inventory: Package,
+  "sales & loading": Truck,
+  "sales & pos": Store,
+  finance: Wallet,
+  accounting: Landmark,
+  "accounting tools": Landmark,
+  analytics: BarChart3,
+  rentals: Building2,
+  intelligence: Sparkles,
+  operations: Layers,
+  reports: BarChart3,
+  "ai tools": Sparkles,
+};
 
 function canonicalSidebarPath(url: string): string {
   const queryIndex = url.indexOf("?");
@@ -53,7 +87,7 @@ function ActiveRail({ color }: ActiveRailProps) {
   return (
     <span
       aria-hidden
-      className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full"
+      className="premium-nav-active-rail absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full"
       style={{ backgroundColor: color }}
     />
   );
@@ -169,6 +203,7 @@ export function SidebarSectionGroup({
 }: SidebarSectionGroupProps) {
   const [location] = useLocation();
   const hasActive = section.items.some((i) => sidebarPathMatches(location, i.url));
+  const SectionIcon = SECTION_ICONS[section.label.toLowerCase()] ?? Layers;
   return (
     <div>
       <button
@@ -176,12 +211,14 @@ export function SidebarSectionGroup({
         onClick={onToggle}
         aria-expanded={isOpen}
         data-testid={sectionTestId}
-        className="flex w-full items-center gap-2 rounded-md px-2.5 py-1 text-left transition-colors hover:bg-sidebar-accent/30"
+        className="premium-nav-section flex w-full items-center gap-2 rounded-md px-2.5 py-1 text-left transition-colors hover:bg-sidebar-accent/30"
       >
         <span
-          className="h-1.5 w-1.5 rounded-full shrink-0 transition-opacity"
-          style={{ backgroundColor: section.color, opacity: hasActive ? 1 : 0.55 }}
-        />
+          className="premium-nav-section-icon flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
+          style={{ color: section.color, backgroundColor: `color-mix(in srgb, ${section.color} 17%, transparent)` }}
+        >
+          <SectionIcon className="h-4 w-4" aria-hidden="true" />
+        </span>
         <span
           className="flex-1 text-[11px] font-semibold uppercase tracking-widest"
           style={{ color: section.color, opacity: hasActive ? 1 : 0.65 }}
@@ -247,12 +284,11 @@ export function usePinnedOrder(storageKey: string, defaults: NavItem[]) {
   const [pinnedOrder, setPinnedOrder] = useState<string[]>(() => {
     try {
       const raw = localStorage.getItem(storageKey);
-      const saved = raw ? (JSON.parse(raw) as string[]) : null;
-      const defaultUrls = defaults.map((i) => i.url);
-      if (saved && defaultUrls.every((u) => saved.includes(u))) {
-        return saved.filter((u) => defaultUrls.includes(u));
-      }
-      return defaultUrls;
+      const saved: unknown = raw ? JSON.parse(raw) : null;
+      return reconcilePinnedOrder(
+        saved,
+        defaults.map((i) => i.url)
+      );
     } catch {
       return defaults.map((i) => i.url);
     }
@@ -370,11 +406,12 @@ export function ModuleHeader({ icon: Icon, label, tagline, accent }: ModuleHeade
   const badgeLabel = tagline.split("/")[0].trim();
   return (
     <SidebarHeader
-      className="px-4 py-4 border-b border-sidebar-border relative overflow-hidden"
+      className="premium-nav-brand px-4 py-4 border-b border-sidebar-border relative overflow-hidden"
       style={{
         background: `linear-gradient(135deg, ${accent}30 0%, ${accent}10 55%, transparent 100%)`,
       }}
     >
+      <SeasonalBrandAccent />
       {/* subtle radial glow behind the icon */}
       <div
         className="absolute -top-4 -left-4 h-20 w-20 rounded-full pointer-events-none"
@@ -383,7 +420,7 @@ export function ModuleHeader({ icon: Icon, label, tagline, accent }: ModuleHeade
       <div className="flex items-center gap-3 relative">
         {/* Icon tile — layered depth */}
         <div
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white"
+          className="premium-nav-brand-tile flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white"
           style={{
             backgroundColor: accent,
             boxShadow: `0 3px 16px ${accent}66, inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -1px 0 rgba(0,0,0,0.15)`,
@@ -395,7 +432,7 @@ export function ModuleHeader({ icon: Icon, label, tagline, accent }: ModuleHeade
           <span className="text-sm font-bold leading-tight">{label}</span>
           {/* Module badge beneath title */}
           <span
-            className="inline-flex w-fit items-center px-1.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-widest"
+            className="premium-nav-brand-tagline inline-flex w-fit items-center px-1.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-widest"
             style={{ backgroundColor: `${accent}22`, color: accent }}
           >
             {badgeLabel}
@@ -434,7 +471,7 @@ export function ModuleFooter({ user, avatarClassName, accent, onLogout }: Module
 
   return (
     <SidebarFooter
-      className="px-4 py-3 border-t border-sidebar-border relative overflow-hidden"
+      className="premium-nav-footer px-4 py-3 border-t border-sidebar-border relative overflow-hidden"
       style={{
         background: accent ? `linear-gradient(to top, ${accent}22 0%, ${accent}08 55%, transparent 100%)` : undefined,
       }}

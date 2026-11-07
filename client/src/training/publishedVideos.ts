@@ -9,6 +9,8 @@
  */
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 
 export interface PublishedTrainingTopic {
   guideSteps: string[];
@@ -54,8 +56,10 @@ export function buildPublishedTrainingMaps(library?: PublishedTrainingLibrary | 
 }
 
 export function usePublishedTrainingMedia(): PublishedTrainingMaps & { loading: boolean } {
+  const { selectedCompany } = useCompany();
   const { data, isLoading } = useQuery<PublishedTrainingLibrary>({
-    queryKey: ["/api/training/media"],
+    // The server filters the listing by the active company's page access.
+    queryKey: companyQueryKey("/api/training/media", selectedCompany?.id),
     staleTime: 60_000,
     retry: 1,
   });

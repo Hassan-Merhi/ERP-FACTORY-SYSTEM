@@ -66,6 +66,7 @@ import {
   FactoryFinancialSnapshot,
   FactoryImport,
   FactoryIntelSettings,
+  FactoryMhdViewManagerPage,
   FactoryInvoiceCreate,
   FactoryInvoiceLoadingScan,
   FactoryInvoicing,
@@ -121,9 +122,19 @@ import {
 
 const FactoryStockQueryWorkspace = lazy(() => import("@/pages/factory/FactoryStockQueryWorkspace"));
 const FactoryMonthlyProductionMatrix = lazy(() => import("@/pages/factory/FactoryMonthlyProductionMatrix"));
-const FactoryMonthlyProductionWorkers = lazy(() => import("@/pages/factory/FactoryMonthlyProductionDrilldown").then((module) => ({ default: module.FactoryMonthlyProductionWorkers })));
-const FactoryMonthlyProductionBales = lazy(() => import("@/pages/factory/FactoryMonthlyProductionDrilldown").then((module) => ({ default: module.FactoryMonthlyProductionBales })));
-const HelpTraining = lazy(() => import("@/pages/HelpTraining"));
+const FactoryMonthlyProductionWorkers = lazy(() =>
+  import("@/pages/factory/FactoryMonthlyProductionDrilldown").then((module) => ({
+    default: module.FactoryMonthlyProductionWorkers,
+  }))
+);
+const FactoryMonthlyProductionBales = lazy(() =>
+  import("@/pages/factory/FactoryMonthlyProductionDrilldown").then((module) => ({
+    default: module.FactoryMonthlyProductionBales,
+  }))
+);
+const FactoryHelpTraining = lazy(() =>
+  import("@/pages/HelpTrainingWorkspaces").then((m) => ({ default: m.FactoryHelpTraining }))
+);
 const AccountGroups = lazy(() => import("@/pages/AccountGroups"));
 const FactoryInvoiceDetailBilingual = lazy(() => import("@/pages/factory/FactoryInvoiceDetailBilingual"));
 const FactoryProductionBonuses = lazy(() => import("@/pages/factory/FactoryProductionBonuses"));
@@ -154,16 +165,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
     <Switch>
       <Route path="/factory/tickets/new">{() => <TicketManagement sourceMode="factory" />}</Route>
       <Route path="/factory/tickets">{() => <TicketManagement sourceMode="factory" />}</Route>
-      <Route path="/factory/help-training">
-        {() => (
-          <HelpTraining
-            mode="factory"
-            role={user?.role}
-            accessKeys={myAccess?.pageKeys}
-            fullAccess={myAccess?.fullAccess}
-          />
-        )}
-      </Route>
+      <Route path="/factory/help-training">{() => <FactoryHelpTraining user={user} />}</Route>
       <Route path="/factory/daybook">
         {() => (isAdminOwnerOrDev ? <FactoryDaybook /> : <Redirect replace to={factoryDefaultPage} />)}
       </Route>
@@ -215,7 +217,10 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       <Route path="/factory/stock-bale-list" component={FactoryStockBaleList} />
       <Route path="/factory/stock-query/:id" component={FactoryStockItemDetail} />
       <Route path="/factory/stock-query" component={FactoryStockQueryWorkspace} />
-      <Route path="/factory/monthly-production-matrix/:productId/bales/:workerId" component={FactoryMonthlyProductionBales} />
+      <Route
+        path="/factory/monthly-production-matrix/:productId/bales/:workerId"
+        component={FactoryMonthlyProductionBales}
+      />
       <Route path="/factory/monthly-production-matrix/:productId/workers" component={FactoryMonthlyProductionWorkers} />
       <Route path="/factory/monthly-production-matrix" component={FactoryMonthlyProductionMatrix} />
       <Route path="/factory/contacts" component={FactoryContacts} />
@@ -337,6 +342,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       <Route path="/factory/bale-ledger">
         {() => <Redirect replace to="/factory/production-report?tab=product-comparison" />}
       </Route>
+      <Route path="/factory/intelligence/mhd-view" component={FactoryMhdViewManagerPage} />
       <Route path="/factory/intelligence/settings" component={FactoryIntelSettings} />
       {isDeveloper && <Route path="/factory/spreadsheet" component={SpreadsheetEditor} />}
       {isDeveloper && <Route path="/factory/chat" component={Chat} />}

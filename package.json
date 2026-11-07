@@ -48,6 +48,7 @@
     "audit:coverage-ratchet": "node scripts/audit-coverage-ratchet.mjs",
     "audit:lint-ratchet": "node scripts/audit-lint-warnings.mjs",
     "audit:ux-consistency": "node scripts/audit-ux-module-consistency.mjs",
+    "audit:access-control-v2-routes": "node scripts/audit-access-control-v2-routes.mjs",
     "report:dead-code": "node scripts/report-dead-code.mjs",
     "start": "node --expose-gc --import ./server/startupPreload.mjs --import ./server/runtimeMemoryGuard.mjs dist/index.js",
     "check": "node --max-old-space-size=4096 node_modules/.bin/tsc --noEmit",

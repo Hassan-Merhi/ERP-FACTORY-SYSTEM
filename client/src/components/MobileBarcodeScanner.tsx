@@ -10,6 +10,7 @@ import {
   type CameraBarcodeDecoder,
 } from "@/pages/factory/pressing-scanner/cameraDecoder";
 import { ContinuousScanGate } from "@/pages/factory/pressing-scanner/continuousScanGate";
+import { pauseSeasonalEffectsForCamera } from "@/lib/seasonalCameraActivity";
 
 export interface CameraScanFeedback {
   type: "success" | "duplicate" | "warn" | "error";
@@ -72,6 +73,7 @@ export function MobileBarcodeScanner({
     let stream: MediaStream | undefined;
     let decoder: CameraBarcodeDecoder | null = null;
     let cameraTrack: MediaStreamTrack | null = null;
+    let resumeSeasonalEffects: (() => void) | null = null;
     const videoElement = videoRef.current;
     const onTrackEnded = () => {
       if (canceled) return;
@@ -84,6 +86,8 @@ export function MobileBarcodeScanner({
       stream?.getTracks().forEach((track) => track.stop());
       stream = undefined;
       trackRef.current = null;
+      resumeSeasonalEffects?.();
+      resumeSeasonalEffects = null;
       if (videoElement) videoElement.srcObject = null;
       setTorchAvailable(false);
       setTorchOn(false);
@@ -140,6 +144,7 @@ export function MobileBarcodeScanner({
           return;
         }
         stream = acquired;
+        resumeSeasonalEffects = pauseSeasonalEffectsForCamera();
         const video = videoRef.current;
         if (!video) throw new Error("Camera preview could not open.");
         video.srcObject = acquired;
@@ -167,14 +172,21 @@ export function MobileBarcodeScanner({
           }
         }
         decoder = await createCameraDecoder();
-        if (canceled) { decoder?.dispose(); return; }
+        if (canceled) {
+          decoder?.dispose();
+          return;
+        }
         if (!decoder) {
           acquired.getTracks().forEach((cameraTrack) => cameraTrack.stop());
+          resumeSeasonalEffects?.();
+          resumeSeasonalEffects = null;
           setError("Barcode decoding is unavailable on this device. Enter the barcode manually.");
           return;
         }
         void tick();
       } catch (cause) {
+        resumeSeasonalEffects?.();
+        resumeSeasonalEffects = null;
         if (canceled) return;
         const name = cause instanceof DOMException ? cause.name : "";
         setError(
@@ -195,6 +207,8 @@ export function MobileBarcodeScanner({
       stream?.getTracks().forEach((track) => track.stop());
       stream = undefined;
       trackRef.current = null;
+      resumeSeasonalEffects?.();
+      resumeSeasonalEffects = null;
       if (videoElement) videoElement.srcObject = null;
       decoder?.dispose();
       decoder = null;
@@ -318,15 +332,22 @@ export function MobileBarcodeScanner({
           )}
           {error && (
             <div className="space-y-2">
-              <p role="alert" className="text-sm text-destructive">{error}</p>
-              <Button type="button" variant="outline" size="sm" className="min-h-11"
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-11"
                 onClick={() => {
                   setError(null);
                   setTorchAvailable(false);
                   setTorchOn(false);
                   setRetryAttempt((attempt) => attempt + 1);
                 }}
-                data-testid="button-mobile-camera-retry">
+                data-testid="button-mobile-camera-retry"
+              >
                 Retry camera
               </Button>
             </div>

@@ -25,7 +25,7 @@ function classify(files) {
   let unknownRoutes = [];
   const all = () => TOPICS.forEach((id) => chosen.add(id));
   for (const f of files) {
-    if (/^(training\/|client\/src\/training\/|scripts\/record-training-guides\.mjs|scripts\/training-narration(?:-tts)?\.(?:mjs|py)|\.github\/workflows\/training-videos\.yml|\.github\/workflows\/nightly-training-audit\.yml|shared\/factoryAccessRegistry\.ts)/.test(f)) { all(); continue; }
+    if (/^(training\/|client\/src\/training\/|scripts\/record-training-guides\.mjs|scripts\/training-screen\.mjs|scripts\/seed-training-demo-data\.mjs|scripts\/prepare-phase7-browser-e2e-fixture\.mjs|scripts\/training-narration(?:-tts)?\.(?:mjs|py)|\.github\/workflows\/training-videos\.yml|\.github\/workflows\/nightly-training-audit\.yml|shared\/factoryAccessRegistry\.ts)/.test(f)) { all(); continue; }
     if (/^(client\/src\/(?:app|components|contexts|hooks|routes|lib|styles)\/|server\/|shared\/|package(?:-lock)?\.json|vite\.config)/.test(f)) { all(); continue; }
     if (f.startsWith("client/src/pages/factory/")) {
       const lower = f.toLowerCase();
@@ -66,6 +66,8 @@ fs.mkdirSync("artifacts/training-plan", { recursive: true });
 fs.writeFileSync("artifacts/training-plan/plan.json", JSON.stringify(payload, null, 2));
 if (process.env.GITHUB_OUTPUT) {
   fs.appendFileSync(process.env.GITHUB_OUTPUT, "record=" + String(plan.topics.length > 0) + "\n");
-  fs.appendFileSync(process.env.GITHUB_OUTPUT, "topics=" + plan.topics.join(",") + "\n");
+  // Any change that needs new recordings re-records every page the training
+  // companies expose (discovered from their navigation), split across shards.
+  fs.appendFileSync(process.env.GITHUB_OUTPUT, "topics=" + (plan.topics.length ? "all-pages" : "") + "\n");
 }
 console.log(JSON.stringify(payload, null, 2));

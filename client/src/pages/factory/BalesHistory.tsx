@@ -1,3 +1,4 @@
+import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { addDays, format } from "date-fns";
 import {
   Printer,
@@ -60,6 +61,7 @@ import { BalesHistoryDialog4 } from "./baleshistory/components/BalesHistoryDialo
 import { BalesHistoryDialog5 } from "./baleshistory/components/BalesHistoryDialog5";
 
 export default function BalesHistory() {
+  const mhd = useFactoryMhdView();
   const model = useBalesHistoryModel();
   const {
     wrapAdminAction,
@@ -157,14 +159,14 @@ export default function BalesHistory() {
           </div>
           <div>
             <h1 className="text-lg font-bold leading-tight">Bales</h1>
-            <p className="text-xs text-muted-foreground leading-tight">
-              Stock history, status management and removal
-            </p>
+            <p className="text-xs text-muted-foreground leading-tight">Stock history, status management and removal</p>
           </div>
         </div>
         <div className="bales-modern-actions">
           <div className="bales-modern-kpi">
-            <span className="bales-modern-kpi-icon"><Boxes className="h-4 w-4" aria-hidden="true" /></span>
+            <span className="bales-modern-kpi-icon">
+              <Boxes className="h-4 w-4" aria-hidden="true" />
+            </span>
             <div>
               <Badge
                 variant="secondary"
@@ -177,7 +179,9 @@ export default function BalesHistory() {
             </div>
           </div>
           <div className="bales-modern-kpi">
-            <span className="bales-modern-kpi-icon weight"><Weight className="h-4 w-4" aria-hidden="true" /></span>
+            <span className="bales-modern-kpi-icon weight">
+              <Weight className="h-4 w-4" aria-hidden="true" />
+            </span>
             <div>
               <Badge
                 variant="outline"
@@ -213,22 +217,40 @@ export default function BalesHistory() {
           aria-label="Bale summary date"
         />
         <div className="bales-modern-stat">
-          <span className="bales-modern-stat-icon stock"><PackageCheck className="h-4 w-4" aria-hidden="true" /></span>
+          <span className="bales-modern-stat-icon stock">
+            <PackageCheck className="h-4 w-4" aria-hidden="true" />
+          </span>
           <span className="bales-modern-stat-label">In Stock</span>
-          <span className="bales-modern-stat-value" data-testid="text-today-qty">{regularQty}</span>
-          <span className="bales-modern-stat-unit" data-testid="text-today-kg">{formatLabelNum(regularKg)} kg</span>
+          <span className="bales-modern-stat-value" data-testid="text-today-qty">
+            {regularQty}
+          </span>
+          <span className="bales-modern-stat-unit" data-testid="text-today-kg">
+            {formatLabelNum(regularKg)} kg
+          </span>
         </div>
         <div className="bales-modern-stat">
-          <span className="bales-modern-stat-icon garbage"><Trash2 className="h-4 w-4" aria-hidden="true" /></span>
+          <span className="bales-modern-stat-icon garbage">
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+          </span>
           <span className="bales-modern-stat-label">Garbage</span>
-          <span className="bales-modern-stat-value" data-testid="text-today-garbage-qty">{garbageQty}</span>
-          <span className="bales-modern-stat-unit" data-testid="text-today-garbage-kg">{formatLabelNum(garbageKg)} kg</span>
+          <span className="bales-modern-stat-value" data-testid="text-today-garbage-qty">
+            {garbageQty}
+          </span>
+          <span className="bales-modern-stat-unit" data-testid="text-today-garbage-kg">
+            {formatLabelNum(garbageKg)} kg
+          </span>
         </div>
         <div className="bales-modern-stat">
-          <span className="bales-modern-stat-icon wipers"><Shirt className="h-4 w-4" aria-hidden="true" /></span>
+          <span className="bales-modern-stat-icon wipers">
+            <Shirt className="h-4 w-4" aria-hidden="true" />
+          </span>
           <span className="bales-modern-stat-label">Wipers</span>
-          <span className="bales-modern-stat-value" data-testid="text-today-wipers-qty">{wipersQty}</span>
-          <span className="bales-modern-stat-unit" data-testid="text-today-wipers-kg">{formatLabelNum(wipersKg)} kg</span>
+          <span className="bales-modern-stat-value" data-testid="text-today-wipers-qty">
+            {wipersQty}
+          </span>
+          <span className="bales-modern-stat-unit" data-testid="text-today-wipers-kg">
+            {formatLabelNum(wipersKg)} kg
+          </span>
         </div>
       </div>
 
@@ -485,271 +507,278 @@ export default function BalesHistory() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {groupedFiltered.map((group) => {
-                  const isExpanded = expandedGroups.has(group.key);
-                  const allGroupSelected = group.rows.every((r) => selectedIds.has(r.bale.id));
-                  const someGroupSelected = group.rows.some((r) => selectedIds.has(r.bale.id));
-                  const uniqueStatuses = [...new Set(group.rows.map((r) => r.bale.status as string))];
+                {mhd
+                  .sortRows(groupedFiltered, (group) => group.articleCode)
+                  .map((group) => {
+                    const isExpanded = expandedGroups.has(group.key);
+                    const allGroupSelected = group.rows.every((r) => selectedIds.has(r.bale.id));
+                    const someGroupSelected = group.rows.some((r) => selectedIds.has(r.bale.id));
+                    const uniqueStatuses = [...new Set(group.rows.map((r) => r.bale.status as string))];
 
-                  return [
-                    // ── Group summary row ──
-                    <TableRow
-                      key={`group-${group.key}`}
-                      className="cursor-pointer"
-                      data-testid={`row-group-${group.key}`}
-                    >
-                      <TableCell>
-                        <Checkbox
-                          checked={allGroupSelected}
-                          data-state={someGroupSelected && !allGroupSelected ? "indeterminate" : undefined}
-                          onCheckedChange={() => {
-                            setSelectedIds((prev) => {
-                              const next = new Set(prev);
-                              if (allGroupSelected) group.rows.forEach((r) => next.delete(r.bale.id));
-                              else group.rows.forEach((r) => next.add(r.bale.id));
-                              return next;
-                            });
-                          }}
-                          data-testid={`checkbox-group-${group.key}`}
-                        />
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground font-mono">
-                        <Badge variant="outline" className="text-xs font-mono">
-                          {group.rows.length} bale{group.rows.length !== 1 ? "s" : ""}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <button
-                          className="flex items-center gap-1.5 text-left font-medium hover:underline"
-                          onClick={() => toggleGroup(group.key)}
-                          data-testid={`button-toggle-group-${group.key}`}
-                        >
-                          {isExpanded ? (
-                            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                          )}
-                          {group.productName}
-                        </button>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{group.articleCode}</TableCell>
-                      <TableCell className="text-right font-semibold">{group.totalQty}</TableCell>
-                      <TableCell className="text-right font-mono font-semibold">
-                        {formatLabelNum(group.totalWeightKg)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {uniqueStatuses.map((s) => (
-                            <Badge
-                              key={s}
-                              variant={
-                                (BALE_STATUS_COLORS[s] || "secondary") as
-                                  | "default"
-                                  | "outline"
-                                  | "secondary"
-                                  | "destructive"
-                                  | "success"
-                                  | "warning"
-                                  | "info"
-                                  | "muted"
-                                  | null
-                                  | undefined
-                              }
-                              className="text-xs"
-                            >
-                              {s.replace(/_/g, " ")}
-                            </Badge>
-                          ))}
-                        </div>
-                      </TableCell>
-                      <TableCell />
-                      <TableCell />
-                    </TableRow>,
-
-                    // ── Expanded individual bale rows ──
-                    ...(isExpanded
-                      ? group.rows.map((row) => {
-                          const bale = row.bale;
-                          const product = row.product;
-                          return (
-                            <TableRow key={bale.id} className="bg-background" data-testid={`row-bale-${bale.id}`}>
-                              <TableCell className="pl-6">
-                                <Checkbox
-                                  checked={selectedIds.has(bale.id)}
-                                  onCheckedChange={() => toggleSelect(bale.id)}
-                                  data-testid={`checkbox-bale-${bale.id}`}
-                                />
-                              </TableCell>
-                              <TableCell className="font-mono text-xs pl-6">
-                                {bale.referenceNumber || bale.baleCode || "-"}
-                              </TableCell>
-                              <TableCell className="pl-8">
-                                {editingNameId === bale.id ? (
-                                  <div className="flex items-center gap-1">
-                                    <Input
-                                      ref={nameInputRef}
-                                      value={editingNameValue}
-                                      onChange={(e) => setEditingNameValue(e.target.value)}
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter") saveEditName(bale.id);
-                                        if (e.key === "Escape") setEditingNameId(null);
-                                      }}
-                                      className="h-7 text-xs w-[160px]"
-                                      data-testid={`input-edit-name-${bale.id}`}
-                                    />
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      onClick={() => saveEditName(bale.id)}
-                                      data-testid={`button-save-name-${bale.id}`}
-                                    >
-                                      <Check className="h-3 w-3" />
-                                    </Button>
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      onClick={() => setEditingNameId(null)}
-                                      data-testid={`button-cancel-name-${bale.id}`}
-                                    >
-                                      <X className="h-3 w-3" />
-                                    </Button>
-                                  </div>
-                                ) : (
-                                  <div
-                                    className="flex items-center gap-1 group cursor-pointer text-sm text-muted-foreground"
-                                    onClick={() => startEditName(bale.id, product?.name || bale.productName || "")}
-                                    data-testid={`text-product-name-${bale.id}`}
-                                  >
-                                    <span>{product?.name || bale.productName || "-"}</span>
-                                    <Pencil className="h-3 w-3 text-muted-foreground visible md:invisible md:group-hover:visible touch:visible" />
-                                  </div>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-xs text-muted-foreground">
-                                {product?.articleCode || bale.category || "-"}
-                              </TableCell>
-                              <TableCell className="text-right">{bale.quantity}</TableCell>
-                              <TableCell className="text-right font-mono">
-                                <button
-                                  className="group flex items-center gap-1 ml-auto hover:text-foreground"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setWeightEditBale({
-                                      id: bale.id,
-                                      referenceNumber: bale.referenceNumber,
-                                      weightKg: bale.weightKg,
-                                    });
-                                  }}
-                                  title="Correct weight"
-                                >
-                                  {formatLabelNum(bale.weightKg)}
-                                  <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-60 shrink-0" />
-                                </button>
-                              </TableCell>
-                              <TableCell>
-                                <Select
-                                  value={bale.status}
-                                  onValueChange={(val) =>
-                                    wrapAdminAction(
-                                      () => updateStatus.mutate({ id: bale.id, status: val }),
-                                      "Update Bale Status"
-                                    )
-                                  }
-                                >
-                                  <SelectTrigger
-                                    className="w-[140px] h-8 text-xs"
-                                    data-testid={`select-status-${bale.id}`}
-                                  >
-                                    <Badge
-                                      variant={
-                                        (BALE_STATUS_COLORS[bale.status] || "secondary") as
-                                          | "default"
-                                          | "outline"
-                                          | "secondary"
-                                          | "destructive"
-                                          | "success"
-                                          | "warning"
-                                          | "info"
-                                          | "muted"
-                                          | null
-                                          | undefined
-                                      }
-                                      className="text-xs"
-                                    >
-                                      {bale.status.replace(/_/g, " ")}
-                                    </Badge>
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="PENDING_PRESSING">Pending Pressing</SelectItem>
-                                    <SelectItem value="LABEL_PRINTED">Label Printed</SelectItem>
-                                    <SelectItem value="PRESSED">Pressed</SelectItem>
-                                    <SelectItem value="FINALIZED">Finalized</SelectItem>
-                                    <SelectItem value="IN_STOCK">In Stock</SelectItem>
-                                    <SelectItem value="RESERVED">Reserved</SelectItem>
-                                    <SelectItem value="SOLD">Sold</SelectItem>
-                                    <SelectItem value="REPACKED">Repacked</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </TableCell>
-                              <TableCell
-                                className="text-xs text-muted-foreground"
-                                data-testid={`text-last-printed-${bale.id}`}
+                    return [
+                      // ── Group summary row ──
+                      <TableRow
+                        key={`group-${group.key}`}
+                        className="cursor-pointer"
+                        data-testid={`row-group-${group.key}`}
+                      >
+                        <TableCell>
+                          <Checkbox
+                            checked={allGroupSelected}
+                            data-state={someGroupSelected && !allGroupSelected ? "indeterminate" : undefined}
+                            onCheckedChange={() => {
+                              setSelectedIds((prev) => {
+                                const next = new Set(prev);
+                                if (allGroupSelected) group.rows.forEach((r) => next.delete(r.bale.id));
+                                else group.rows.forEach((r) => next.add(r.bale.id));
+                                return next;
+                              });
+                            }}
+                            data-testid={`checkbox-group-${group.key}`}
+                          />
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground font-mono">
+                          <Badge variant="outline" className="text-xs font-mono">
+                            {group.rows.length} bale{group.rows.length !== 1 ? "s" : ""}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <button
+                            className="flex items-center gap-1.5 text-left font-medium hover:underline"
+                            onClick={() => toggleGroup(group.key)}
+                            data-testid={`button-toggle-group-${group.key}`}
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                            )}
+                            {mhd.nameFor(group.articleCode, group.productName)}
+                          </button>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{group.articleCode}</TableCell>
+                        <TableCell className="text-right font-semibold">{group.totalQty}</TableCell>
+                        <TableCell className="text-right font-mono font-semibold">
+                          {formatLabelNum(group.totalWeightKg)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {uniqueStatuses.map((s) => (
+                              <Badge
+                                key={s}
+                                variant={
+                                  (BALE_STATUS_COLORS[s] || "secondary") as
+                                    | "default"
+                                    | "outline"
+                                    | "secondary"
+                                    | "destructive"
+                                    | "success"
+                                    | "warning"
+                                    | "info"
+                                    | "muted"
+                                    | null
+                                    | undefined
+                                }
+                                className="text-xs"
                               >
-                                {row.lastPrintedAt ? new Date(row.lastPrintedAt).toLocaleString() : "Never"}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <div className="flex items-center justify-end gap-1">
-                                  {(bale.status === "RESERVED_FOR_ORDER" ||
-                                    bale.status === "RESERVED" ||
-                                    bale.status === "SOLD") && (
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      onClick={() => setReturnToStockBale(row)}
-                                      title="Return bale to stock"
-                                      data-testid={`button-return-to-stock-${bale.id}`}
+                                {s.replace(/_/g, " ")}
+                              </Badge>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell />
+                        <TableCell />
+                      </TableRow>,
+
+                      // ── Expanded individual bale rows ──
+                      ...(isExpanded
+                        ? group.rows.map((row) => {
+                            const bale = row.bale;
+                            const product = row.product;
+                            return (
+                              <TableRow key={bale.id} className="bg-background" data-testid={`row-bale-${bale.id}`}>
+                                <TableCell className="pl-6">
+                                  <Checkbox
+                                    checked={selectedIds.has(bale.id)}
+                                    onCheckedChange={() => toggleSelect(bale.id)}
+                                    data-testid={`checkbox-bale-${bale.id}`}
+                                  />
+                                </TableCell>
+                                <TableCell className="font-mono text-xs pl-6">
+                                  {bale.referenceNumber || bale.baleCode || "-"}
+                                </TableCell>
+                                <TableCell className="pl-8">
+                                  {editingNameId === bale.id ? (
+                                    <div className="flex items-center gap-1">
+                                      <Input
+                                        ref={nameInputRef}
+                                        value={editingNameValue}
+                                        onChange={(e) => setEditingNameValue(e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") saveEditName(bale.id);
+                                          if (e.key === "Escape") setEditingNameId(null);
+                                        }}
+                                        className="h-7 text-xs w-[160px]"
+                                        data-testid={`input-edit-name-${bale.id}`}
+                                      />
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => saveEditName(bale.id)}
+                                        data-testid={`button-save-name-${bale.id}`}
+                                      >
+                                        <Check className="h-3 w-3" />
+                                      </Button>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => setEditingNameId(null)}
+                                        data-testid={`button-cancel-name-${bale.id}`}
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <div
+                                      className="flex items-center gap-1 group cursor-pointer text-sm text-muted-foreground"
+                                      onClick={() => startEditName(bale.id, product?.name || bale.productName || "")}
+                                      data-testid={`text-product-name-${bale.id}`}
                                     >
-                                      <Undo2 className="h-4 w-4 text-blue-500" />
-                                    </Button>
+                                      <span>
+                                        {mhd.nameFor(
+                                          product?.articleCode || "",
+                                          product?.name || bale.productName || "-"
+                                        )}
+                                      </span>
+                                      <Pencil className="h-3 w-3 text-muted-foreground visible md:invisible md:group-hover:visible touch:visible" />
+                                    </div>
                                   )}
-                                  {myAccess?.fullAccess && (
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      onClick={() => setRepackConfirm(row)}
-                                      disabled={bale.status === "REPACKED" || bale.status === "SOLD"}
-                                      title="Repack bale"
-                                      data-testid={`button-repack-${bale.id}`}
-                                    >
-                                      <RefreshCw className="h-4 w-4" />
-                                    </Button>
-                                  )}
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={() => handleReprint(row)}
-                                    data-testid={`button-reprint-${bale.id}`}
+                                </TableCell>
+                                <TableCell className="text-xs text-muted-foreground">
+                                  {product?.articleCode || bale.category || "-"}
+                                </TableCell>
+                                <TableCell className="text-right">{bale.quantity}</TableCell>
+                                <TableCell className="text-right font-mono">
+                                  <button
+                                    className="group flex items-center gap-1 ml-auto hover:text-foreground"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setWeightEditBale({
+                                        id: bale.id,
+                                        referenceNumber: bale.referenceNumber,
+                                        weightKg: bale.weightKg,
+                                      });
+                                    }}
+                                    title="Correct weight"
                                   >
-                                    <Printer className="h-4 w-4" />
-                                  </Button>
-                                  {myAccess?.fullAccess && (
+                                    {formatLabelNum(bale.weightKg)}
+                                    <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-60 shrink-0" />
+                                  </button>
+                                </TableCell>
+                                <TableCell>
+                                  <Select
+                                    value={bale.status}
+                                    onValueChange={(val) =>
+                                      wrapAdminAction(
+                                        () => updateStatus.mutate({ id: bale.id, status: val }),
+                                        "Update Bale Status"
+                                      )
+                                    }
+                                  >
+                                    <SelectTrigger
+                                      className="w-[140px] h-8 text-xs"
+                                      data-testid={`select-status-${bale.id}`}
+                                    >
+                                      <Badge
+                                        variant={
+                                          (BALE_STATUS_COLORS[bale.status] || "secondary") as
+                                            | "default"
+                                            | "outline"
+                                            | "secondary"
+                                            | "destructive"
+                                            | "success"
+                                            | "warning"
+                                            | "info"
+                                            | "muted"
+                                            | null
+                                            | undefined
+                                        }
+                                        className="text-xs"
+                                      >
+                                        {bale.status.replace(/_/g, " ")}
+                                      </Badge>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="PENDING_PRESSING">Pending Pressing</SelectItem>
+                                      <SelectItem value="LABEL_PRINTED">Label Printed</SelectItem>
+                                      <SelectItem value="PRESSED">Pressed</SelectItem>
+                                      <SelectItem value="FINALIZED">Finalized</SelectItem>
+                                      <SelectItem value="IN_STOCK">In Stock</SelectItem>
+                                      <SelectItem value="RESERVED">Reserved</SelectItem>
+                                      <SelectItem value="SOLD">Sold</SelectItem>
+                                      <SelectItem value="REPACKED">Repacked</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </TableCell>
+                                <TableCell
+                                  className="text-xs text-muted-foreground"
+                                  data-testid={`text-last-printed-${bale.id}`}
+                                >
+                                  {row.lastPrintedAt ? new Date(row.lastPrintedAt).toLocaleString() : "Never"}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex items-center justify-end gap-1">
+                                    {(bale.status === "RESERVED_FOR_ORDER" ||
+                                      bale.status === "RESERVED" ||
+                                      bale.status === "SOLD") && (
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => setReturnToStockBale(row)}
+                                        title="Return bale to stock"
+                                        data-testid={`button-return-to-stock-${bale.id}`}
+                                      >
+                                        <Undo2 className="h-4 w-4 text-blue-500" />
+                                      </Button>
+                                    )}
+                                    {myAccess?.fullAccess && (
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => setRepackConfirm(row)}
+                                        disabled={bale.status === "REPACKED" || bale.status === "SOLD"}
+                                        title="Repack bale"
+                                        data-testid={`button-repack-${bale.id}`}
+                                      >
+                                        <RefreshCw className="h-4 w-4" />
+                                      </Button>
+                                    )}
                                     <Button
                                       size="icon"
                                       variant="ghost"
-                                      onClick={() => setDeleteConfirm(bale.id)}
-                                      data-testid={`button-delete-${bale.id}`}
+                                      onClick={() => handleReprint(row)}
+                                      data-testid={`button-reprint-${bale.id}`}
                                     >
-                                      <Trash2 className="h-4 w-4" />
+                                      <Printer className="h-4 w-4" />
                                     </Button>
-                                  )}
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })
-                      : []),
-                  ];
-                })}
+                                    {myAccess?.fullAccess && (
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => setDeleteConfirm(bale.id)}
+                                        data-testid={`button-delete-${bale.id}`}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })
+                        : []),
+                    ];
+                  })}
               </TableBody>
             </Table>
           </div>

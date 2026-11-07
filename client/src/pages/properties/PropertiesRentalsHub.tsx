@@ -1,4 +1,4 @@
-import { Building2, ClipboardList, Store, ArrowLeftRight } from "lucide-react";
+import { Building2, ClipboardList, ArrowLeftRight } from "lucide-react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import type { AuthMe } from "@shared/apiTypes";
@@ -23,7 +23,7 @@ export default function PropertiesRentalsHub() {
   });
 
   return (
-    <div className="space-y-4" data-testid="properties-rentals-hub">
+    <div className="properties-rentals-hub space-y-4" data-testid="properties-rentals-hub">
       {isDeveloper && (
         <nav aria-label="Rental management tools" className="flex justify-end">
           <Link
@@ -38,14 +38,10 @@ export default function PropertiesRentalsHub() {
       )}
       <Tabs value={tab} onValueChange={(value) => setTab(value as RentalTab)}>
         <div className="erp-mobile-scroll-tabs pb-1">
-          <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Rental sections">
+          <TabsList className="properties-rentals-tabs w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Rental sections">
             <TabsTrigger value="warehouses" data-testid="tab-properties-rentals-warehouses">
               <Building2 className="mr-2 h-4 w-4" />
               Warehouses
-            </TabsTrigger>
-            <TabsTrigger value="shops" data-testid="tab-properties-rentals-shops">
-              <Store className="mr-2 h-4 w-4" />
-              Shops
             </TabsTrigger>
             <TabsTrigger value="payments" data-testid="tab-properties-rentals-payments">
               <ClipboardList className="mr-2 h-4 w-4" />

@@ -15,6 +15,8 @@ import {
   Send,
   Loader2,
   ArrowLeft,
+  ChevronRight,
+  Landmark,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +36,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { shouldShowFactoryCustomerDestination } from "./customerDestinationVisibility";
+import "./propertiesLedger.css";
 
 interface AccountStatementRow extends Transaction {
   totalDebit: number;
@@ -122,6 +125,7 @@ export function AccountStatementView({
   const isFactorySupplierAccount = selectedAccount?.type === "factorySupplier";
   const [pdfLang, setPdfLang] = useState<"en" | "fr" | "ar">("en");
   const isPhone = useErpPhoneLayout();
+  const ledgerCompanyLabel = appMode === "properties" ? "Properties" : appMode === "factory" ? "Factory" : "ERP";
   const nativeWallet = selectedAccount.fxWallet;
   const fxWalletId = nativeWallet?.wallet?.id;
   const [fxTabChoice, setFxTabChoice] = useState<{ accountId: number; tab: "eur" | "usd" } | null>(null);
@@ -273,7 +277,7 @@ export function AccountStatementView({
 
   if (isFactorySupplierAccount) {
     return (
-      <div className="space-y-3">
+      <div className="account-ledger-modern space-y-4">
         {/* Account info bar */}
         <div className="flex items-center justify-between gap-2 px-1">
           <div className="flex items-center gap-2 min-w-0">
@@ -313,7 +317,7 @@ export function AccountStatementView({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="account-ledger-modern space-y-4">
       {isPhone ? (
         <div className="space-y-3" data-testid="account-statement-phone-header">
           <div className="rounded-lg border bg-card p-3">
@@ -429,9 +433,14 @@ export function AccountStatementView({
           </div>
         </div>
       ) : (
-        <>
+        <div className="account-ledger-desktop-header">
+          <nav className="account-ledger-breadcrumb" aria-label="Breadcrumb">
+            <span>{ledgerCompanyLabel}</span><ChevronRight className="h-3 w-3" aria-hidden="true" />
+            <span>Accounts</span><ChevronRight className="h-3 w-3" aria-hidden="true" />
+            <strong>Ledger</strong>
+          </nav>
           {/* Compact account info bar */}
-          <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/30 px-3 py-2">
+          <div className="account-ledger-account-bar">
             <div className="flex items-center gap-2 min-w-0 flex-wrap">
               <span className="text-xs text-muted-foreground shrink-0">Account</span>
               <span className="font-semibold truncate max-w-[240px]">{selectedAccount?.name}</span>
@@ -527,8 +536,14 @@ export function AccountStatementView({
           </div>
 
           {/* Ledger heading + filters */}
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <h3 className="font-semibold text-base">Ledger: {selectedAccount?.name}</h3>
+          <div className="account-ledger-heading-row">
+            <div className="account-ledger-heading-title">
+              <div className="account-ledger-heading-icon"><Landmark className="h-6 w-6" aria-hidden="true" /></div>
+              <div className="min-w-0">
+                <p className="account-ledger-subtitle">Account statement · #{selectedAccount.accountId}</p>
+                <h3>Ledger: {selectedAccount?.name}</h3>
+              </div>
+            </div>
             <div className="flex items-center gap-2 flex-wrap">
               {!isEurTab && selectedVoucherIds.size > 0 && (
                 <Button
@@ -553,7 +568,7 @@ export function AccountStatementView({
               </Button>}
             </div>
           </div>
-        </>
+        </div>
       )}
 
       {hasFxTabs && (
@@ -622,29 +637,29 @@ export function AccountStatementView({
         />
       )}
       {!isEurTab && !isPhone && !hideBalances && !transactionsLoading && !transactionError && (
-        <div className="flex flex-wrap gap-3">
-          <div className="rounded-lg border bg-muted/30 px-4 py-2.5 flex items-center gap-3 min-w-[130px]">
+        <div className="account-ledger-metrics">
+          <div className="account-ledger-stat">
             <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
             <div>
               <p className="text-[11px] text-muted-foreground leading-none mb-0.5">Transactions</p>
               <p className="text-base font-semibold leading-none tabular-nums">{transactionCount}</p>
             </div>
           </div>
-          <div className="rounded-lg border bg-muted/30 px-4 py-2.5 flex items-center gap-3 min-w-[150px]">
+          <div className="account-ledger-stat">
             <TrendingUp className="w-4 h-4 text-muted-foreground shrink-0" />
             <div>
               <p className="text-[11px] text-muted-foreground leading-none mb-0.5">{showNativeBalance ? "Historical USD debit" : "Total Debit"}</p>
               <p className="text-base font-semibold leading-none tabular-nums">{formatAmount(totalDebit)}</p>
             </div>
           </div>
-          <div className="rounded-lg border bg-muted/30 px-4 py-2.5 flex items-center gap-3 min-w-[150px]">
+          <div className="account-ledger-stat">
             <TrendingDown className="w-4 h-4 text-muted-foreground shrink-0" />
             <div>
               <p className="text-[11px] text-muted-foreground leading-none mb-0.5">{showNativeBalance ? "Historical USD credit" : "Total Credit"}</p>
               <p className="text-base font-semibold leading-none tabular-nums">{formatAmount(totalCredit)}</p>
             </div>
           </div>
-          <div className="rounded-lg border bg-muted/30 px-4 py-2.5 flex items-center gap-3 min-w-[160px]">
+          <div className="account-ledger-stat">
             <Scale className="w-4 h-4 text-muted-foreground shrink-0" />
             <div>
               <p className="text-[11px] text-muted-foreground leading-none mb-0.5">{showNativeBalance ? "Historical USD closing" : "Closing Balance"}</p>

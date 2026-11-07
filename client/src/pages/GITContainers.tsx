@@ -22,6 +22,7 @@ import {
   Building2,
   Globe,
   SlidersHorizontal,
+  X,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { cn } from "@/lib/utils";
@@ -219,7 +220,29 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
     freightFilter,
     etaFilter,
     notesFilter,
+    sortOrder,
   });
+
+
+  const activeFilterChips: Array<{ key: string; label: string; clear: () => void }> = [];
+  if (companyFilter !== "ALL") activeFilterChips.push({ key: "company", label: `Company: ${companyFilter}`, clear: () => setCompanyFilter("ALL") });
+  const multiChip = (key: string, title: string, selected: string[], reset: () => void) => {
+    if (selected.length) activeFilterChips.push({
+      key, label: `${title}: ${selected.length === 1 ? selected[0] : `${selected.length} selected`}`, clear: reset,
+    });
+  };
+  multiChip("container", "Container", containerFilters, () => setContainerFilters([]));
+  multiChip("supplier", "Supplier", supplierFilters, () => setSupplierFilters([]));
+  multiChip("transporter", "Transporter", transporterFilters, () => setTransporterFilters([]));
+  multiChip("agent", "Agent", agentFilters, () => setAgentFilters([]));
+  multiChip("truck", "Truck", truckFilters, () => setTruckFilters([]));
+  multiChip("location", "Location", locationFilters, () => setLocationFilters([]));
+  if (docsFilter !== "ALL") activeFilterChips.push({ key: "docs", label: `Docs: ${docsFilter}`, clear: () => setDocsFilter("ALL") });
+  if (delayedFilter !== "ALL") activeFilterChips.push({ key: "delayed", label: `Delayed: ${delayedFilter}`, clear: () => setDelayedFilter("ALL") });
+  if (freightFilter !== "ALL") activeFilterChips.push({ key: "freight", label: `Freight: ${freightFilter}`, clear: () => setFreightFilter("ALL") });
+  if (etaFilter !== "ALL") activeFilterChips.push({ key: "eta", label: "ETA: Custom", clear: () => setEtaFilter("ALL") });
+  if (notesFilter !== "ALL") activeFilterChips.push({ key: "notes", label: `Notes: ${notesFilter}`, clear: () => setNotesFilter("ALL") });
+  if (sortOrder !== "DEFAULT") activeFilterChips.push({ key: "sort", label: `Sort: ${sortOrder === "ETA_ASC" ? "Earliest ETA" : "Latest ETA"}`, clear: () => setSortOrder("DEFAULT") });
 
   function clearFilters() {
     setCompanyFilter("ALL");
@@ -303,21 +326,28 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {!embedded && <PageHeader title="Containers OTW" subtitle="Active container logistics and tracking" />}
-
-      <div className="flex-1 overflow-hidden p-4 flex flex-col gap-4">
+      <div className="flex-1 min-h-0 overflow-hidden p-3 sm:p-4 flex flex-col gap-3">
+        {!embedded && (
+          <div className="relative shrink-0 overflow-hidden rounded-2xl border border-violet-200/60 bg-gradient-to-r from-violet-50 via-slate-50 to-sky-100 px-4 pt-4 shadow-sm dark:border-violet-400/20 dark:from-[#1e1644] dark:via-[#161c39] dark:to-[#17335a] sm:px-6">
+            <div aria-hidden="true" className="pointer-events-none absolute -right-12 -top-24 h-64 w-80 rounded-full bg-violet-400/15 blur-3xl dark:bg-violet-500/20" />
+            <div aria-hidden="true" className="pointer-events-none absolute right-20 bottom-0 h-16 w-80 rounded-full bg-sky-500/10 blur-2xl dark:bg-sky-400/15" />
+            <div className="relative z-10">
+              <PageHeader title="Containers OTW" subtitle="Active container logistics and tracking" icon={<Ship className="h-5 w-5 text-violet-600 dark:text-violet-300" />} />
+            </div>
+          </div>
+        )}
         {/* ── Company Mode ── (narrow phones: two equal segments, count underneath) */}
-        <div className="flex items-center gap-2 flex-wrap max-sm:grid max-sm:grid-cols-2 max-sm:[&>*:last-child:nth-child(odd)]:col-span-2">
+        <div className="flex shrink-0 items-center gap-2 flex-wrap max-sm:grid max-sm:grid-cols-2 max-sm:[&>*:last-child:nth-child(odd)]:col-span-2">
           <button
             onClick={() => {
               setAllCompanies(false);
               setCompanyFilter("ALL");
             }}
             className={cn(
-              "flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-colors",
+              "flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold shadow-sm transition-colors",
               !allCompanies
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-background border-border text-muted-foreground hover-elevate"
+                ? "border-violet-600 bg-violet-600 text-white shadow-violet-500/15"
+                : "border-border/80 bg-card/70 text-muted-foreground hover:bg-muted hover:text-foreground"
             )}
             data-testid="button-my-company"
           >
@@ -331,10 +361,10 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
               setCompanyFilter("ALL");
             }}
             className={cn(
-              "flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-colors",
+              "flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold shadow-sm transition-colors",
               allCompanies
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-background border-border text-muted-foreground hover-elevate"
+                ? "border-violet-600 bg-violet-600 text-white shadow-violet-500/15"
+                : "border-border/80 bg-card/70 text-muted-foreground hover:bg-muted hover:text-foreground"
             )}
             data-testid="button-all-companies"
           >
@@ -351,7 +381,7 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
         </div>
 
         {/* ── Summary Cards ── (narrow phones: two columns; landscape keeps the wrapping row) */}
-        <div className="flex flex-wrap gap-2 max-sm:grid max-sm:grid-cols-2">
+        <div className="grid shrink-0 grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 xl:grid-cols-5">
           <SummaryCard
             label="Active"
             value={data?.summary?.total ?? data?.total ?? filteredContainers.length}
@@ -428,20 +458,23 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
         </div>
 
         {/* ── Search + Filters Toggle ── (narrow phones: search row, then paired controls) */}
-        <div className="flex items-center gap-2 flex-wrap max-sm:grid max-sm:grid-cols-2">
+        <div className="flex shrink-0 items-center gap-2 flex-wrap max-sm:grid max-sm:grid-cols-2">
           <div className="relative flex-1 min-w-48 max-sm:col-span-2 max-sm:min-w-0">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search container #, company, truck, transporter, agent…"
-              className="pl-8"
+              className="h-10 rounded-xl border-border/80 bg-card pl-9 shadow-sm dark:border-white/10 sm:h-11"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               data-testid="input-otw-search"
             />
           </div>
           <Button
-            variant="outline"
+            variant={showFilters ? "default" : "outline"}
             size="default"
+            className={cn("h-10 rounded-xl px-4 font-semibold shadow-sm sm:h-11", showFilters ? "bg-violet-600 text-white hover:bg-violet-700" : "border-violet-500/40 text-violet-700 hover:bg-violet-500/10 dark:text-violet-300")}
+            aria-expanded={showFilters}
+            aria-controls="otw-filter-panel"
             onClick={() => setShowFilters((v) => !v)}
             data-testid="button-otw-filters"
           >
@@ -462,7 +495,7 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
 
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" size="default" data-testid="button-otw-columns">
+              <Button variant="outline" size="default" className="h-10 rounded-xl sm:h-11" data-testid="button-otw-columns">
                 <SlidersHorizontal className="h-4 w-4 mr-1" />
                 Columns
                 {otwHiddenCount > 0 && (
@@ -501,11 +534,40 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
           />
         </div>
 
+
+        {activeFilterChips.length > 0 && (
+          <div className="flex shrink-0 min-w-0 flex-wrap items-center gap-1.5" data-testid="otw-active-filter-chips">
+            <span className="mr-1 text-xs text-muted-foreground">Active filters:</span>
+            {activeFilterChips.slice(0, 5).map((chip) => (
+              <button
+                key={chip.key}
+                type="button"
+                onClick={chip.clear}
+                aria-label={`Remove ${chip.label} filter`}
+                data-testid={`otw-filter-chip-${chip.key}`}
+                className="inline-flex max-w-[210px] items-center gap-1.5 rounded-full border border-violet-300/70 bg-violet-100/80 px-2.5 py-1 text-xs font-medium text-violet-800 transition-colors hover:bg-violet-200 dark:border-violet-500/40 dark:bg-violet-500/15 dark:text-violet-200 dark:hover:bg-violet-500/25"
+              >
+                <span className="truncate">{chip.label}</span>
+                <X className="h-3 w-3 shrink-0" aria-hidden="true" />
+              </button>
+            ))}
+            {activeFilterChips.length > 5 && (
+              <button type="button" onClick={() => setShowFilters(true)} className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted">
+                +{activeFilterChips.length - 5} more
+              </button>
+            )}
+            <button type="button" onClick={clearFilters} className="ml-1 px-1 text-xs font-medium text-muted-foreground hover:text-foreground" data-testid="otw-clear-all-chips">
+              Clear all
+            </button>
+          </div>
+        )}
+
         <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx,.xls" onChange={handleFileChange} />
 
         {!isPhoneLayout && (
           <FilterBar
             showFilters={showFilters}
+            onApply={() => setShowFilters(false)}
             companyFilter={companyFilter}
             setCompanyFilter={setCompanyFilter}
             companies={companies}

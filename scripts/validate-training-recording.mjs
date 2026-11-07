@@ -22,9 +22,16 @@ export const MAX_DURATION_SECONDS = 1200;
 const TOPIC_ID = /^[a-z0-9-]{1,80}$/;
 const FILES = ["screen.mp4", "captions.vtt", "guide.md", "screenshot.png"];
 
+/** One report per recording shard (report.json, or report-<n>.json when sharded). */
 export function readReport(root) {
-  const report = JSON.parse(fs.readFileSync(path.join(root, "report.json"), "utf8"));
-  if (!Array.isArray(report)) throw new Error("Missing recording report");
+  const files = fs.readdirSync(root).filter((name) => /^report(-\d+)?\.json$/.test(name)).sort();
+  if (!files.length) throw new Error("Missing recording report");
+  const report = [];
+  for (const name of files) {
+    const part = JSON.parse(fs.readFileSync(path.join(root, name), "utf8"));
+    if (!Array.isArray(part)) throw new Error("Malformed recording report " + name);
+    report.push(...part);
+  }
   return report;
 }
 
@@ -131,7 +138,8 @@ export async function validateTopic(root, topic, sha, report) {
   }
   const steps = guideSteps(fs.readFileSync(path.join(root, topic, "guide.md"), "utf8"));
   const durationSeconds = await probe(path.join(root, topic, "screen.mp4"));
-  return { topic, durationSeconds, guideSteps: steps };
+  const route = typeof entry.route === "string" && /^\/[a-z0-9][a-z0-9/_-]{0,119}$/.test(entry.route) ? entry.route : undefined;
+  return { topic, durationSeconds, guideSteps: steps, route };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === new URL(import.meta.url).pathname) {
