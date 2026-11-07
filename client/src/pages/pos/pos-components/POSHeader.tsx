@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useChristmasMode } from "@/hooks/useChristmasMode";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -90,6 +91,7 @@ export function POSHeader({
   onDetailedExport,
   onExportTransaction,
 }: POSHeaderProps) {
+  const { t } = useApplicationLanguage();
   const autosaveLabel = useRelativeTime(lastAutosaved);
   const { settingQuery } = useChristmasMode();
   const showSeasonalArtwork = settingQuery.data?.enabled === true && (settingQuery.data?.visuals?.effects.gifts ?? true);
@@ -101,7 +103,7 @@ export function POSHeader({
           <div data-pos-title-icon="true"><ShoppingCart className="h-6 w-6" aria-hidden="true" /></div>
           <div className="min-w-0">
             <h1 className="text-2xl font-bold tracking-tight">{editVoucherId ? "Edit Transaction" : "Point of Sale"}</h1>
-            <p className="text-sm text-muted-foreground">{editVoucherId ? "Review and update this sale" : "Create a new sales transaction"}</p>
+            <p className="text-sm text-muted-foreground">{editVoucherId ? t("pos.modern.reviewSale") : t("pos.modern.createSale")}</p>
           </div>
         </div>
         {showSeasonalArtwork && (
