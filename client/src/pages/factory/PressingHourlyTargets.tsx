@@ -36,7 +36,7 @@ function hourLabel(iso: string): string {
     hourCycle: "h23", timeZoneName: "shortOffset",
   });
 }
-type Verdict = "upcoming" | "progress" | "none" | "met" | "above" | "below";
+type Verdict = "off" | "upcoming" | "progress" | "none" | "met" | "above" | "below";
 function resultStatus(kg: number, target: number, bales: number, started: boolean, complete: boolean): Verdict {
   if (!started) return "upcoming";
   if (!complete) return "progress";
@@ -45,6 +45,7 @@ function resultStatus(kg: number, target: number, bales: number, started: boolea
   return kg > target ? "above" : "below";
 }
 const verdictStyle: Record<Verdict, { label: string; pill: string; bar: string }> = {
+  off: { label: "Day off", pill: "bg-slate-500/15 text-muted-foreground", bar: "bg-slate-500" },
   upcoming: { label: "upcoming", pill: "bg-slate-500/10 text-slate-500", bar: "bg-slate-500" },
   progress: { label: "In progress", pill: "bg-sky-500/15 text-sky-600 dark:text-sky-300", bar: "bg-sky-500" },
   none: { label: "No scans", pill: "bg-slate-500/15 text-muted-foreground", bar: "bg-slate-500" },
@@ -116,6 +117,7 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
   const uniformBaseline = baseline.length && baseline.every(v => v === baseline[0]) ? baseline[0] : null;
   const targetText = (hour: string) => {
     const value = configured(hour);
+    if (data?.scheduledWorkday === false && value === undefined) return "";
     return value !== undefined ? String(value) : uniformBaseline !== null ? String(uniformBaseline) : "";
   };
   const valueForHour = (hour: string) => drafts[hour] ?? targetText(hour);
@@ -309,13 +311,20 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
                     {data.workers.map(worker => {
                       const row = data.hours.find(item => item.hourStart === hour && item.userId === worker.userId);
                       const kg = Number(row?.kg || 0);
-                      const target = hourTarget ?? worker.targetKgPerHour;
-                      const verdict = resultStatus(kg, target, Number(row?.bales || 0), started, complete);
+                      // Sundays without an explicit or historical target are off,
+                      // not 0/850 KG misses. Existing historical Sunday targets remain visible.
+                      const scheduled = data.scheduledWorkday !== false || hourTarget !== undefined;
+                      const target = scheduled ? hourTarget ?? worker.targetKgPerHour : 0;
+                      const verdict = scheduled
+                        ? resultStatus(kg, target, Number(row?.bales || 0), started, complete)
+                        : "off";
                       const style = verdictStyle[verdict];
                       const percent = target > 0 ? Math.round(kg / target * 100) : 0;
                       return <td key={worker.userId} className="border-b border-border/50 px-3 py-2.5">
                         <div className="flex flex-wrap items-center justify-between gap-1.5">
-                          <strong className="whitespace-nowrap tabular-nums">{formatKg(kg)} / {formatKg(target)} KG</strong>
+                          <strong className="whitespace-nowrap tabular-nums">
+                            {formatKg(kg)} / {scheduled ? formatKg(target) + " KG" : "Off"}
+                          </strong>
                           <span className={"rounded-full px-2 py-1 text-[10px] font-semibold " + style.pill}>{verdict === "upcoming" || verdict === "above" || verdict === "below" ? t(style.label as "upcoming" | "aboveTarget" | "belowTarget") : style.label}</span>
                         </div>
                         <div className="mt-2 flex items-center gap-2">
@@ -327,7 +336,7 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
                           </div>
                           <span className="w-9 shrink-0 text-right font-medium tabular-nums text-muted-foreground">{percent}%</span>
                         </div>
-                        {complete && Number(row?.bales || 0) > 0 && verdict !== "met" && (
+                        {complete && Number(row?.bales || 0) > 0 && verdict !== "met" && verdict !== "off" && (
                           <div className={"mt-1 text-[10px] " + (verdict === "above" ? "text-emerald-500" : "text-rose-500")}>
                             {formatKg(Math.abs(kg - target))} KG {verdict === "above" ? "over" : "short"}
                           </div>
