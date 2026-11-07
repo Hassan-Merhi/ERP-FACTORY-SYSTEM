@@ -449,3 +449,126 @@ html[data-christmas-mode="on"] [data-pos-sidebar="modern"] [data-pos-sidebar-hea
   [data-pos-shell="true"] .pos-christmas-switch,
   [data-pos-shell="true"] .pos-top-search { display: none !important; }
 }
+
+
+/* POS sidebar refresh: clear neutral surfaces and readable labels in light mode.
+   The desktop sidebar inner element paints its own bg-sidebar; make it transparent
+   so the designed container background actually shows through. */
+[data-pos-sidebar="modern"] [data-sidebar="sidebar"] {
+  background: transparent;
+  color: inherit;
+}
+[data-pos-sidebar="modern"] [data-sidebar="content"] {
+  padding-block: 0.25rem 0.6rem;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, hsl(var(--sidebar-foreground)) 20%, transparent) transparent;
+}
+[data-pos-sidebar="modern"] [data-sidebar="menu"] { gap: 0.25rem; }
+[data-pos-sidebar="modern"] [data-sidebar="menu-button"] {
+  min-height: 2.85rem;
+  border-radius: 0.75rem;
+  font-size: 0.835rem;
+}
+[data-pos-sidebar="modern"] [data-pos-nav-icon] {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.65rem;
+}
+[data-pos-sidebar="modern"] [data-sidebar="menu-button"][data-active="true"] {
+  background: linear-gradient(108deg, #6f2ec5 0%, #a13ec0 57%, #ee903b 100%);
+  box-shadow: 0 5px 15px rgb(116 48 180 / 0.2);
+  color: #fff;
+}
+[data-pos-sidebar="modern"] [data-sidebar="menu-button"]:focus-visible,
+[data-pos-sidebar="modern"] [data-testid="button-pos-more-tools"]:focus-visible {
+  outline: 2px solid #9c67d0;
+  outline-offset: 2px;
+}
+
+html:not(.dark) [data-pos-sidebar="modern"] {
+  --sidebar-foreground: 263 30% 20%;
+  --sidebar-accent: 267 43% 93%;
+  --sidebar-accent-foreground: 268 40% 27%;
+  --sidebar-border: 265 26% 85%;
+  --pos-sidebar-surface: #f7f5fc;
+  --pos-sidebar-card: #ffffff;
+  --pos-sidebar-border: #e3ddef;
+  color: #332643;
+  background:
+    radial-gradient(ellipse at 0% 0%, rgb(165 110 220 / 0.08), transparent 42%),
+    linear-gradient(180deg, #fcfbff, #f3eff9) !important;
+  border-inline-end: 1px solid #e4ddee;
+}
+html:not(.dark) [data-pos-sidebar="modern"] [data-pos-sidebar-header] {
+  border: 1px solid #e7dff0;
+  background: linear-gradient(150deg, #fff, #f9f6fd);
+  box-shadow: 0 5px 17px rgb(92 63 130 / 0.08);
+}
+html:not(.dark) [data-pos-sidebar="modern"] .pos-shell-wordmark {
+  color: #2e2340;
+}
+html:not(.dark) [data-pos-sidebar="modern"] [data-pos-sidebar-header] button {
+  color: #594275;
+  border-color: #e5daf1;
+  background: #f6f0ff;
+}
+html:not(.dark) [data-pos-sidebar="modern"] [data-pos-sidebar-header] button:hover {
+  background: #eaddf9;
+  color: #51228e;
+}
+html:not(.dark) [data-pos-sidebar="modern"] [data-pos-sidebar-header] [class*="text-muted-foreground"] {
+  color: #71637e;
+}
+html:not(.dark) [data-pos-sidebar="modern"] [data-sidebar="menu-button"] {
+  color: #3d3151;
+  background: transparent;
+}
+html:not(.dark) [data-pos-sidebar="modern"] [data-sidebar="menu-button"]:hover:not([data-active="true"]) {
+  color: #57259d;
+  background: #ede5fa;
+  box-shadow: none;
+}
+html:not(.dark) [data-pos-sidebar="modern"] [data-pos-nav-icon] {
+  color: #6947a0;
+  background: #f0e9f9;
+  border-color: #e4d7f1;
+}
+html:not(.dark) [data-pos-sidebar="modern"] [data-sidebar="menu-button"][data-active="true"] {
+  color: #fff;
+  background: linear-gradient(108deg, #7136c7, #a540bd 58%, #ef9441);
+  box-shadow: 0 5px 15px rgb(105 49 162 / 0.2);
+}
+html:not(.dark) [data-pos-sidebar="modern"] [data-sidebar="menu-button"][data-active="true"] [data-pos-nav-icon] {
+  color: #fff;
+  background: rgb(255 255 255 / 0.18);
+  border-color: rgb(255 255 255 / 0.25);
+}
+html:not(.dark) [data-pos-sidebar="modern"] [data-sidebar="group-label"],
+html:not(.dark) [data-pos-sidebar="modern"] [data-testid="button-pos-more-tools"] {
+  color: #766588;
+}
+html:not(.dark) [data-pos-sidebar="modern"] [data-pos-sidebar-footer-card] {
+  background: #fff;
+  border: 1px solid #e5dced;
+  box-shadow: 0 5px 16px rgb(87 55 116 / 0.085);
+}
+html:not(.dark) [data-pos-sidebar="modern"] [data-pos-sidebar-footer-card] .text-muted-foreground {
+  color: #716582;
+}
+html:not(.dark) [data-pos-sidebar="modern"] [data-pos-sidebar-footer-card] button {
+  color: #57436e;
+}
+html:not(.dark) [data-pos-sidebar="modern"] [data-pos-sidebar-footer-card] button:hover {
+  color: #6333a5;
+  background: #f2eafb;
+}
+html.dark [data-pos-sidebar="modern"] [data-sidebar="menu-button"]:hover:not([data-active="true"]) {
+  color: #fff;
+  background: rgb(255 255 255 / 0.11);
+}
+@media (max-width: 767px) {
+  [data-pos-sidebar="modern"] [data-sidebar="menu-button"] { min-height: 3rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-pos-sidebar="modern"] [data-sidebar="menu-button"] { transition: none; }
+}
