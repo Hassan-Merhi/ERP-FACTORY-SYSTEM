@@ -14,6 +14,12 @@ import { PosLocationManager } from "./PosLocationManager";
 import type { Company, LedgerAccount, Location, UserCompanyRole } from "@shared/schema";
 
 const ROLE_OPTIONS = ["Admin", "Owner", "Manager", "POS", "Normal User", "View Only", "ERP Tester"];
+/**
+ * Create Only is offered only when the server reports it is activated for
+ * assignment (or the assignment already holds it). The server refuses the
+ * role while it is not activated, whatever this picker shows.
+ */
+const CREATE_ONLY_ROLE = "Create Only";
 
 interface RolePreset {
   label: string;
@@ -73,6 +79,17 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
 
   const isPOS = role === "POS";
   const isTester = role === "ERP Tester";
+  const isCreateOnly = role === CREATE_ONLY_ROLE;
+  const { data: permissionCatalog } = useQuery<{ createOnlyAssignable?: boolean }>({
+    queryKey: ["/api/permissions-v2/catalog", activeCompanyId],
+    enabled: activeCompanyId > 0,
+    retry: false,
+    staleTime: 0,
+  });
+  const roleOptions =
+    permissionCatalog?.createOnlyAssignable === true || editingRole?.role === CREATE_ONLY_ROLE
+      ? [...ROLE_OPTIONS, CREATE_ONLY_ROLE]
+      : ROLE_OPTIONS;
   // Determine if the current save action needs password re-confirmation
   const isDangerousSave = role === "Admin" || ((role === "Manager" || isTester) && canDeleteRecords);
 
@@ -196,7 +213,8 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
         role,
         assignedLocationId: isPOS ? primary : undefined,
         posStation: isPOS ? posStation : undefined,
-        daybookEditDays,
+        // Create Only never edits existing records, so it never gets a backdating window.
+        daybookEditDays: isCreateOnly ? 0 : daybookEditDays,
         cashAccountId: undefined,
         canSellNegativeStock: canSellNegativeStock,
         posViewOnly: isPOS ? posViewOnly : false,
@@ -262,7 +280,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
             value={role}
             onValueChange={(v) => {
               setRole(v);
-              if (v === "View Only") {
+              if (v === "View Only" || v === CREATE_ONLY_ROLE) {
                 setCanDeleteRecords(false);
                 setCanSellNegativeStock(false);
                 setDaybookEditDays(0);
@@ -275,7 +293,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
               <SelectValue placeholder="Select role" />
             </SelectTrigger>
             <SelectContent>
-              {ROLE_OPTIONS.map((r) => (
+              {roleOptions.map((r) => (
                 <SelectItem key={r} value={r}>
                   {r === "View Only" ? "View Only (ERP + Factory)" : r}
                 </SelectItem>
@@ -287,15 +305,23 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
 
       {role === "View Only" && (
         <p className="text-xs text-muted-foreground" data-testid="view-only-erp-factory-description">
-          Read-only access for this company in both ERP and Factory (when app access is enabled).
-          All ERP business-data pages are browseable except Dashboard, Settings, and Create Voucher. Factory access remains subject to its page permissions. Creating, editing, importing, deleting, and posting are blocked.
+          Read-only access for this company in both ERP and Factory (when app access is enabled). All ERP business-data
+          pages are browseable except Dashboard, Settings, and Create Voucher. Factory access remains subject to its
+          page permissions. Creating, editing, importing, deleting, and posting are blocked.
+        </p>
+      )}
+
+      {isCreateOnly && (
+        <p className="text-xs text-muted-foreground" data-testid="create-only-role-description">
+          Can browse company data and add approved new records. Cannot edit, delete, approve, void, reverse or import
+          any existing record, including records this user created.
         </p>
       )}
 
       {outsideActiveCompany && (
         <p className="text-xs text-destructive" role="alert" data-testid="role-company-scope-warning">
-          Switch to this company before assigning its role. Only Developer accounts can manage
-          another company from the current workspace.
+          Switch to this company before assigning its role. Only Developer accounts can manage another company from the
+          current workspace.
         </p>
       )}
 
@@ -468,7 +494,11 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
           type="button"
           size="sm"
           onClick={handleSave}
-          disabled={saveMutation.isPending || outsideActiveCompany || (isPOS && selectedLocationIds.length === 0 && !posViewOnly)}
+          disabled={
+            saveMutation.isPending ||
+            outsideActiveCompany ||
+            (isPOS && selectedLocationIds.length === 0 && !posViewOnly)
+          }
           data-testid="button-save-role"
         >
           <Check className="h-3.5 w-3.5 mr-1" />
