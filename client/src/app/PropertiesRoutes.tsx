@@ -1,6 +1,10 @@
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { Switch, Route, Redirect } from "wouter";
 import PropertiesRentalsHub from "@/pages/properties/PropertiesRentalsHub";
+import PropertiesContainerTrading from "@/pages/properties/PropertiesContainerTrading";
+import LinkedTradesEditor from "@/pages/intercompany/LinkedTradesEditor";
+import IntercompanyPayments from "@/pages/intercompany/IntercompanyPayments";
+import IntercompanyLifecycle from "@/pages/intercompany/IntercompanyLifecycle";
 import { AccountingToolbox } from "@/lazyPages";
 
 const PropertiesHelpTraining = lazy(() =>
@@ -79,6 +83,18 @@ export function PropertiesRoutes({ user }: PropertiesRoutesProps) {
       <Route path="/properties/agents" component={Agents} />
       <Route path="/properties/daybook" component={PropertiesDaybook} />
 
+      {(user.role === "Owner" || user.role === "Developer") && (
+        <Route path="/properties/container-trading" component={PropertiesContainerTrading} />
+      )}
+      {(user.role === "Owner" || user.role === "Developer") && (
+        <Route path="/properties/linked-trades" component={LinkedTradesEditor} />
+      )}
+      {(user.role === "Owner" || user.role === "Developer") && (
+        <Route path="/properties/intercompany-payments" component={IntercompanyPayments} />
+      )}
+      {(user.role === "Owner" || user.role === "Developer") && (
+        <Route path="/properties/intercompany-lifecycle" component={IntercompanyLifecycle} />
+      )}
       <Route path="/properties/rentals" component={PropertiesRentalsHub} />
       <Route path="/properties/rental/warehouses">{() => <Redirect replace to="/properties/rentals" />}</Route>
       <Route path="/properties/rental/shops">{() => <Redirect replace to="/properties/rentals?tab=shops" />}</Route>

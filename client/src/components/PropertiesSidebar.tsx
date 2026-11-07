@@ -8,6 +8,7 @@ import {
   KeyRound,
   BarChart2,
   UserRound,
+  Package,
 } from "lucide-react";
 import { Sidebar, SidebarContent } from "@/components/ui/sidebar";
 import { useMemo } from "react";
@@ -49,6 +50,16 @@ export const PROPERTIES_NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    label: "Trading",
+    color: NAV_COLOR.finance,
+    items: [
+      { title: "Container Trading", url: "/properties/container-trading", icon: Package },
+      { title: "Linked POs & Freight", url: "/properties/linked-trades", icon: Package },
+      { title: "Intercompany Payments & Credits", url: "/properties/intercompany-payments", icon: Landmark },
+      { title: "Receiving & Cancellation", url: "/properties/intercompany-lifecycle", icon: Package },
+    ],
+  },
+  {
     label: "Accounting Tools",
     color: NAV_COLOR.accounting,
     items: [{ title: "Accounting Toolbox", url: "/properties/accounting/toolbox", icon: ClipboardList }],
@@ -58,10 +69,20 @@ export const PROPERTIES_NAV_SECTIONS: NavSection[] = [
 /** One visibility policy for Properties sidebar and command search.
  * These routes are only registered for Developer in PropertiesRoutes.
  */
-export function getPropertiesVisibleNavSections(isDeveloper: boolean): NavSection[] {
+export function getPropertiesVisibleNavSections(isDeveloper: boolean, canTrade = false): NavSection[] {
   return PROPERTIES_NAV_SECTIONS.map((section) => ({
     ...section,
-    items: section.items.filter((item) => isDeveloper || !item.url.startsWith("/properties/accounting/")),
+    items: section.items.filter(
+      (item) =>
+        (isDeveloper || !item.url.startsWith("/properties/accounting/")) &&
+        (canTrade ||
+          ![
+            "/properties/container-trading",
+            "/properties/linked-trades",
+            "/properties/intercompany-payments",
+            "/properties/intercompany-lifecycle",
+          ].includes(item.url))
+    ),
   })).filter((section) => section.items.length > 0);
 }
 
@@ -77,14 +98,15 @@ export const PROPERTIES_PINNED_DEFAULTS: NavItem[] = [
 export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogout: () => void | Promise<void> }) {
   const isAdmin = user?.role === "Admin" || user?.role === "Developer";
   const isDeveloper = user?.role === "Developer";
+  const canTrade = user?.role === "Developer" || user?.role === "Owner";
   // These pages are pinned at the top and should not also appear in
   // collapsible sections. Keep the registry entries for command search.
   const visibleSections = useMemo(
     () =>
-      getPropertiesVisibleNavSections(isDeveloper).filter(
+      getPropertiesVisibleNavSections(isDeveloper, canTrade).filter(
         (section) => !["Rentals", "Accounting"].includes(section.label)
       ),
-    [isDeveloper]
+    [isDeveloper, canTrade]
   );
 
   const { items: pinnedItems, reorder: reorderPinned } = usePinnedOrder(

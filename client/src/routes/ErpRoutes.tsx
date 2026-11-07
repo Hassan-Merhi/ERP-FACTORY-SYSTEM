@@ -2,6 +2,9 @@ import type { ComponentType } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Switch, Route, Redirect } from "wouter";
 import NotFound from "@/pages/not-found";
+import LinkedTradesEditor from "@/pages/intercompany/LinkedTradesEditor";
+import IntercompanyPayments from "@/pages/intercompany/IntercompanyPayments";
+import IntercompanyLifecycle from "@/pages/intercompany/IntercompanyLifecycle";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 const ErpHelpTraining = lazy(() =>
   import("@/pages/HelpTrainingWorkspaces").then((m) => ({ default: m.ErpHelpTraining }))
@@ -247,6 +250,21 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       {G("/offloads/:id", "containers", OffloadDetail)}
 
       {G("/po-import", "containers", POImport)}
+      {R(
+        "/intercompany/linked-trades",
+        canAccess("containers") && !["POS", "View Only"].includes(effectiveRole),
+        LinkedTradesEditor
+      )}
+      {R(
+        "/intercompany/payments",
+        canAccess("containers") && !["POS", "View Only"].includes(effectiveRole),
+        IntercompanyPayments
+      )}
+      {R(
+        "/intercompany/lifecycle",
+        canAccess("containers") && !["POS", "View Only"].includes(effectiveRole),
+        IntercompanyLifecycle
+      )}
       {R("/ai-validation", isDeveloper, AiValidationPage)}
       {R("/ai-command-center", isDeveloper, AICommandCenter)}
       {G("/pos-import", "pos", POSImport)}

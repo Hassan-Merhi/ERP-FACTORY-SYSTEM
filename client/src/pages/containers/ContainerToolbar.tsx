@@ -68,6 +68,24 @@ export function ContainerToolbar({
         </Button>
       )}
 
+      <Link href="/intercompany/linked-trades">
+        <Button variant="outline" data-testid="button-intercompany-linked-trades">
+          Linked POs & Freight
+        </Button>
+      </Link>
+
+      <Link href="/intercompany/payments">
+        <Button variant="outline" data-testid="button-intercompany-payments">
+          Intercompany Payments
+        </Button>
+      </Link>
+
+      <Link href="/intercompany/lifecycle">
+        <Button variant="outline" data-testid="button-intercompany-lifecycle">
+          Receiving & Cancellation
+        </Button>
+      </Link>
+
       <Link href="/po-import">
         <Button className="gap-2" data-testid="button-add-container">
           <Plus className="h-4 w-4" />
