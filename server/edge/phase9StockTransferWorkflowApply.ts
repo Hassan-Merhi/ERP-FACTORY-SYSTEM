@@ -43,6 +43,7 @@ import {
   type Phase9TransferRef,
   type Phase9TransferSnapshot,
 } from "./phase9StockTransferWorkflowEnvelope.mjs";
+import { throwIfClosedPeriod } from "./phase9ClosedPeriod";
 
 type Queryable = Pick<PoolClient, "query">;
 type Context = { readonly overrideConflicts: readonly string[]; readonly siteId: string };
@@ -230,6 +231,7 @@ function isDatabaseError(error: unknown): boolean {
 }
 
 function refusal(error: unknown, code: string): never {
+  throwIfClosedPeriod(error);
   if (error instanceof Phase9EventConflict || isDatabaseError(error) || !(error instanceof Error)) throw error;
   throw new Phase9EventConflict(code, { reason: error.message });
 }
@@ -315,6 +317,7 @@ async function verifyFinalize(
 // ---- stock.transfer-revision.v1 ---------------------------------------------
 
 function revisionRefusal(error: unknown): never {
+  throwIfClosedPeriod(error);
   const code = String((error as { code?: unknown } | null)?.code ?? "");
   if (REVISION_STALE_CODES.has(code)) {
     throw new Phase9EventConflict(PHASE9_STOCK_TRANSFER_CHANGED_CONFLICT, {

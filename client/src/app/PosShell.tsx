@@ -31,11 +31,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SkipLink } from "@/components/ui/responsive-accessibility";
 import { WorkspaceRouteBoundary } from "@/components/ui/workspace-route-boundary";
-import { ArrowLeft, LogOut, Search, ShoppingCart, ChevronDown } from "lucide-react";
+import { ArrowLeft, LogOut, Search, ShoppingCart, ChevronDown, Snowflake } from "lucide-react";
 import { usePosNavigationItems } from "./usePosNavigationItems";
 import { canUseAdminSearch, type ShellUser } from "./shellUser";
 import "@/styles/pos-sidebar-modern.css";
 import { SeasonalBrandAccent } from "@/components/SeasonalBrandAccent";
+import { useChristmasMode } from "@/hooks/useChristmasMode";
 
 interface PosShellProps {
   user: ShellUser;
@@ -76,7 +77,8 @@ export function PosShell({
   leaveConfirmDialog,
 }: PosShellProps) {
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [currentLocation] = useLocation();
+  const [currentLocation, setLocation] = useLocation();
+  const { settingQuery: christmasSetting } = useChristmasMode();
   const { selectedCompany } = useCompany();
   const { t } = useApplicationLanguage();
   const posNavItems = usePosNavigationItems({
@@ -274,6 +276,22 @@ export function PosShell({
               </div>
               <div data-slot="pos-top-bar-actions" className="ml-auto flex min-w-0 items-center gap-1 sm:gap-2">
                 <PendingSyncIndicator />
+                {christmasSetting.data?.available === true && (
+                  <button
+                    type="button"
+                    data-pos-seasonal-status={christmasSetting.data.enabled ? "on" : "off"}
+                    className="pos-seasonal-status hidden min-h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold sm:inline-flex"
+                    onClick={() => setLocation("/my-settings")}
+                    title="Manage Christmas Mode in My Settings"
+                    aria-label={`Christmas Mode ${christmasSetting.data.enabled ? "on" : "off"}; open My Settings`}
+                  >
+                    <Snowflake className="h-4 w-4" aria-hidden="true" />
+                    <span className="hidden lg:inline">Christmas Mode</span>
+                    <span className="pos-seasonal-status-value rounded-full px-1.5 py-0.5">
+                      {christmasSetting.data.enabled ? "On" : "Off"}
+                    </span>
+                  </button>
+                )}
                 {hasAdminSearch && (
                   <Button
                     variant="ghost"

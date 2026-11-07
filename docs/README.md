@@ -246,6 +246,12 @@ Encrypted checkpoint transfer is not automatic database reconciliation.
 | [operations/factory-lan-phase4-checkpoint-transfer.md](operations/factory-lan-phase4-checkpoint-transfer.md) | Phase 4 cloud write fence and encrypted staging; remaining sync blockers |
 | [operations/factory-lan-phase6-certification.md](operations/factory-lan-phase6-certification.md) | Phase 6 independent release gate; not yet certified |
 | [operations/factory-offline-operations-runbook.md](operations/factory-offline-operations-runbook.md) | Phases 9–11 offline workflows, authority handover, conflicts, backup/restore, monitoring and verification evidence |
+| [operations/offline-drills/README.md](operations/offline-drills/README.md) | Staging drills for the offline plan batches: setup, roles and the common procedure |
+| [operations/offline-drills/batch-2-stock-items.md](operations/offline-drills/batch-2-stock-items.md) | Staging drill script for batch 2 (stock item create and delete) |
+| [operations/offline-drills/batch-3-transfers-imports.md](operations/offline-drills/batch-3-transfers-imports.md) | Staging drill script for batch 3 (transfers and Excel imports) |
+| [operations/offline-drills/batch-4-payments-files.md](operations/offline-drills/batch-4-payments-files.md) | Staging drill script for batch 4 (payment edits and deletes, file renames and moves) |
+| [operations/offline-drills/session-checks.md](operations/offline-drills/session-checks.md) | Checks run in every drill session: read-only laptops, old queues, operator buttons |
+| [operations/offline-drills/drill-record-template.md](operations/offline-drills/drill-record-template.md) | Template for the signed record of each staging drill |
 | [superpowers/plans/2026-10-30-offline-phase5.md](superpowers/plans/2026-10-30-offline-phase5.md) | Phase 5 browser snapshot encryption and limitations |
 | [superpowers/plans/2026-10-30-offline-integrated-roadmap.md](superpowers/plans/2026-10-30-offline-integrated-roadmap.md) | Remaining offline work planned for Phases 7–11 |
 | [superpowers/plans/2026-10-29-offline-phase1.md](superpowers/plans/2026-10-29-offline-phase1.md) | Phase 1 outbox scope and acceptance |
