@@ -52,13 +52,44 @@ describe("Pressing Monday–Saturday recurring KG schedules", () => {
   it("rejects incomplete versions without overriding earlier valid weekday targets", () => {
     const weekly = {
       "2026-11-07": { "1": allHours(900) },
-      "2026-11-11": { "1": { ...allHours(950), "11": 0 } },
+      "2026-11-11": { "1": { ...allHours(950), "11": -1 } },
     };
     expect(pressingWeeklyScheduleForDay(weekly, {}, "2026-11-16")).toEqual({
       hours: allHours(900), effectiveDay: "2026-11-07",
     });
     expect(pressingWeeklyScheduleForWeekday(weekly, {}, "2026-11-16", 0).hours).toEqual({});
     expect(pressingWeeklyScheduleForWeekday(weekly, {}, "2026-11-16", 7).hours).toEqual({});
+  });
+
+  it("accepts zero per-hour values and does not replace them with defaults", () => {
+    const zeroHour = { ...allHours(800), "11": 0, "14": 0 };
+    const legacy = { "2026-11-07": zeroHour };
+    const weekly = { "2026-11-09": { "1": zeroHour } };
+    expect(pressingDailyScheduleForDay(legacy, "2026-11-08").hours).toEqual(zeroHour);
+    expect(pressingWeeklyScheduleForDay(weekly, legacy, "2026-11-16")).toEqual({
+      hours: zeroHour, effectiveDay: "2026-11-09",
+    });
+    expect(pressingWeeklyScheduleForDay(
+      { "2026-11-09": { "1": allHours(0) } }, {}, "2026-11-16"
+    ).hours).toEqual(allHours(0));
+    // Missing values are not silently treated as explicit zero.
+    expect(pressingDailyScheduleForDay({ "2026-11-07": { ...zeroHour, "11": null } }, "2026-11-08").hours).toEqual({});
+    expect(pressingWeeklyScheduleForDay(
+      { "2026-11-09": { "1": { ...zeroHour, "14": "" } } }, {}, "2026-11-16"
+    ).hours).toEqual({});
+  });
+
+  it("validates zero targets in both route types and treats them as no required target", () => {
+    const api = readFileSync("server/routes/factory/factoryPressingReportRoutes.ts", "utf8");
+    const ui = readFileSync("client/src/pages/factory/PressingHourlyTargets.tsx", "utf8");
+    expect(api).toContain("targetsKg: z.array(z.number().finite().min(0).max(100000))");
+    expect(api).toContain("const kgSchema = z.number().finite().min(0).max(100000)");
+    expect(api).toContain("value >= 0 && value <= 100000");
+    expect(api).toContain("rawTarget === undefined || rawTarget === null");
+    expect(ui).toContain('if (target === 0) return "zero"');
+    expect(ui).toContain('zero: { label: "No target"');
+    expect(ui).toContain('target > 0 ? percent + "%" : "—"');
+    expect(ui).toContain('Use 0 KG for an hour with no required target.');
   });
 
   it("requires supervisor writes, saves each weekday atomically, and keeps date overrides", () => {
