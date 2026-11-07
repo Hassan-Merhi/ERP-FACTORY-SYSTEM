@@ -3,7 +3,7 @@ import { logger } from "./lib/logger";
 import { db } from "./db";
 import { userLocations } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
-import { getClientDate } from "./lib/dateUtils";
+import { getClientDate, getTrustedClientDate } from "./lib/dateUtils";
 import { enforceRuntimeSession } from "./services/security/sessionEnforcementAdapter";
 import { hydrateActiveCredentialVersion } from "./services/security/credentialVersionService";
 import { CompanyIsolationError, assertRequestCompanyMatchesSession } from "./services/security/companyIsolationPolicy";
@@ -377,6 +377,15 @@ export function canModifyDate(dateField: string = "voucherDate") {
 
     const recordDate: string | undefined = req.body[dateField];
     if (!recordDate) return next();
+
+    // Create Only never backdates or postdates, and cannot widen "today" with a
+    // forged X-Client-Date header.
+    if (role === "Create Only") {
+      if (recordDate !== getTrustedClientDate(req)) {
+        return res.status(403).json({ message: "You can only create records for today's date" });
+      }
+      return next();
+    }
 
     const today = getClientDate(req);
     if (role === "POS") {

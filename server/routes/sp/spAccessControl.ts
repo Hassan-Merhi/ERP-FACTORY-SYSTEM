@@ -40,6 +40,7 @@ const ROLE_DEFAULTS: Record<string, readonly SpPermission[]> = {
   Manager: ["sp_view", "sp_sales_create", "sp_container_manage", "sp_offload", "sp_reports"],
   POS: ["sp_view", "sp_sales_create"],
   "View Only": ["sp_view", "sp_reports"],
+  "Create Only": ["sp_view", "sp_reports"],
 };
 
 let storageReady: Promise<void> | null = null;

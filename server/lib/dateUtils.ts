@@ -38,3 +38,19 @@ export function getCompanyBusinessDate(timezone: string | null | undefined): str
   }
   return new Date().toISOString().split("T")[0];
 }
+
+/**
+ * Client "today" for roles that must not choose their own date (Create Only).
+ * The browser's X-Client-Date header is honoured only within one day of the
+ * server's UTC date, which covers every real timezone; any other value falls
+ * back to the server date so a forged header cannot backdate or postdate.
+ */
+export function getTrustedClientDate(req: Request, now: Date = new Date()): string {
+  const serverToday = now.toISOString().split("T")[0];
+  const header = req.headers?.["x-client-date"];
+  if (typeof header !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(header)) return serverToday;
+  const headerMs = Date.parse(`${header}T00:00:00Z`);
+  const serverMs = Date.parse(`${serverToday}T00:00:00Z`);
+  if (!Number.isFinite(headerMs)) return serverToday;
+  return Math.abs(headerMs - serverMs) <= 86_400_000 ? header : serverToday;
+}

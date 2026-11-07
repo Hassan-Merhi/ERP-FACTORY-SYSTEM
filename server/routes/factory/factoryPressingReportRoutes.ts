@@ -63,7 +63,8 @@ async function context(req: Request): Promise<QueryCtx> {
   return {
     companyId: ctx.companyId,
     userId: ctx.userId,
-    supervisor: (MANAGER_ROLES.has(ctx.role) && !ctx.posViewOnly) || ctx.role === "View Only",
+    supervisor:
+      (MANAGER_ROLES.has(ctx.role) && !ctx.posViewOnly) || ctx.role === "View Only" || ctx.role === "Create Only",
     canCorrect: (ctx.role === "Admin" || ctx.role === "Owner") && !ctx.posViewOnly,
   };
 }
