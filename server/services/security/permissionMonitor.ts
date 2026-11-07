@@ -15,6 +15,7 @@
  * record and are what alerting should read.
  */
 import { logger } from "../../lib/logger";
+import { recordOperationalEvent, type OperationalEventSeverity } from "../../lib/operationalEvents";
 
 export const PERMISSION_SIGNAL_KINDS = [
   "permission_denied",
@@ -53,6 +54,18 @@ const WARN_KINDS: ReadonlySet<PermissionSignalKind> = new Set([
   "repeated_forbidden_mutation",
   "role_assignment_failed",
 ]);
+
+/**
+ * Signals that also become operational events, so they appear on the
+ * operational monitoring dashboard and reach the configured alert destination
+ * (LOG_ALERT_WEBHOOK_URL, with its own cooldown).
+ */
+const ESCALATED: Partial<Record<PermissionSignalKind, OperationalEventSeverity>> = {
+  repeated_forbidden_mutation: "warning",
+  cross_company_attempt: "warning",
+  permission_service_error: "critical",
+  business_integrity_discrepancy: "critical",
+};
 
 const MAX_PATH = 160;
 const SENSITIVE_DETAIL_KEY = /pass|token|secret|cookie|auth|session|email|phone|name/i;
@@ -106,6 +119,19 @@ export function recordPermissionSignal(signal: PermissionSignal, now: number = D
   else if (WARN_KINDS.has(signal.kind)) logger.warn(message, payload);
   else logger.info(message, payload);
 
+  const escalation = ESCALATED[signal.kind];
+  if (escalation) {
+    recordOperationalEvent({
+      category: signal.kind === "permission_service_error" ? "error" : "integrity",
+      code: `permission_${signal.kind}`,
+      severity: escalation,
+      message: `Permission signal: ${signal.kind} (${payload.code})`,
+      method: signal.method,
+      path,
+      companyId: signal.companyId ?? undefined,
+    });
+  }
+
   const key: CounterKey = `${signal.companyId ?? "none"}:${signal.kind}`;
   counters.set(key, (counters.get(key) ?? 0) + 1);
 
@@ -152,6 +178,15 @@ export function permissionSignalCounts(companyId: number | null): {
     if (companyId === null || company === String(companyId)) counts[kind] += value;
   }
   return { since: startedAt, counts };
+}
+
+/** Thresholds and alert routing, for the monitoring endpoint (no secrets). */
+export function permissionMonitoringConfiguration(env: NodeJS.ProcessEnv = process.env) {
+  return {
+    repeatedForbiddenMutation: { attempts: REPEAT_THRESHOLD, windowMinutes: REPEAT_WINDOW_MS / 60000 },
+    escalatedKinds: Object.keys(ESCALATED),
+    alertDestinationConfigured: env.LOG_ALERTS_ENABLED === "true" && Boolean(env.LOG_ALERT_WEBHOOK_URL?.trim()),
+  };
 }
 
 export function _testOnly_resetPermissionSignals(): void {

@@ -35,7 +35,12 @@ import {
   setV2PolicyMode,
 } from "../../services/security/effectivePermissionStore";
 import { isV2CompanyActivationEnabled, isV2EnforcementEnabled } from "../../services/security/permissionsV2Activation";
-import { recordPermissionSignal } from "../../services/security/permissionMonitor";
+import {
+  permissionMonitoringConfiguration,
+  permissionSignalCounts,
+  recordPermissionSignal,
+} from "../../services/security/permissionMonitor";
+import { getOperationalEventSnapshot } from "../../lib/operationalEvents";
 import { computeEffectivePermissions } from "@shared/effectivePermissions";
 
 const changeSchema = z
@@ -367,6 +372,27 @@ export function registerPermissionControlCenterRoutes(app: Express): void {
         detail: { revision: result.revision, from: result.previousMode, to: result.mode },
       });
       res.json({ companyId: actor.companyId, ...result });
+    })
+  );
+
+  /**
+   * Permission monitoring for the active company: signal counts since the
+   * process started, integrity event totals and whether alerts are routed.
+   * Aggregates only; no user names, request data or secrets.
+   */
+  app.get(
+    "/api/permissions-v2/monitoring",
+    requireAuth,
+    handle(async (req, res) => {
+      const actor = await requirePolicyAdmin(req);
+      const events = getOperationalEventSnapshot();
+      res.json({
+        companyId: actor.companyId,
+        ...permissionSignalCounts(actor.companyId),
+        operationalIntegrityEvents: events.counts.integrity,
+        configuration: permissionMonitoringConfiguration(),
+        policy: await readV2PolicyStatus(actor.companyId),
+      });
     })
   );
 }

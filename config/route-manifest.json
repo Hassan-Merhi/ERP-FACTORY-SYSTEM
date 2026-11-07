@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2358,
+  "routeCount": 2359,
   "middlewareMountCount": 140,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -1932,6 +1932,7 @@
     "GET /api/permissions-v2/users/:userId/effective [requireAuth > <anonymous>]",
     "GET /api/permissions-v2/activation [requireAuth > <anonymous>]",
     "PUT /api/permissions-v2/activation [requireAuth > <anonymous>]",
+    "GET /api/permissions-v2/monitoring [requireAuth > <anonymous>]",
     "POST /api/admin/reset-company-data [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/system/parent-company [requireAuth > <anonymous>]",
     "POST /api/system/parent-company [requireAuth > <anonymous>]",

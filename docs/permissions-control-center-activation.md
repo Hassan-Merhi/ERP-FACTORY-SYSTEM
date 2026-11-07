@@ -25,21 +25,24 @@ Related: [route review](permissions-control-center-phase3-route-review.md) · [a
 
 The migration validation uses a **throwaway** cluster with the application's real company-scope functions. It is evidence about the SQL's behaviour, not a staging certification: it does not use the production schema, data volume, service role or backups.
 
-## Remaining release blockers (not done here)
+## Remaining release blockers
 
-1. **Staging migration** — needs an isolated staging database with a verified backup and the production service role. Not available to this change. Procedure below.
-2. **Staging data-integrity comparison** — before/after snapshots of vouchers, ledger balances, stock/kg/cost, containers and payroll on staging.
-3. **Rollback drill** — performed and recorded on staging by an administrator.
-4. **Full frontend coverage** — pages beyond those listed above rely on the client request guard and the server; their edit buttons still show for Create Only and explain the refusal when used.
-5. **Monitoring owner** — a named operator and escalation path for the 403 and audit signals below.
-6. **Owner sign-off** — explicit approval for merge, the staging run, and each activation step.
+The live list, with evidence and the commit each gate refers to, is `config/permissions-v2-release-readiness.json`. As of 2026-11-07:
+
+1. **Frontend parity** — route-level gating, the read-only voucher redirect and in-page gating on the core pages are done ([page audit](permissions-v2-frontend-page-audit.md)); 33 pages still show some change controls that the server refuses.
+2. **Staging migration, data integrity and rollback drill** — tooling and procedure ready ([staging certification](permissions-v2-staging-certification.md)); needs a staging database and written approval.
+3. **Cross-company matrix on staging** — all nine roles pass locally; the location and lifecycle matrix must be repeated on staging data.
+4. **Monitoring owner and alert destination** — monitoring is implemented; a named owner, escalation path and a confirmed test alert are needed.
+5. **CI on the final release SHA** and **owner sign-off**.
+
+The V2 role/user matrix itself can now be activated per company ([effective engine](permissions-v2-effective-engine.md)), behind two more operator switches that stay off.
 
 ## Staging procedure (operator, not automated)
 
 1. Take and **verify** a backup of the staging database (restore it once to a scratch instance).
 2. Run `npm run verify:permissions-shadow-migration` on the release commit and keep the output.
 3. Snapshot per company: voucher counts and totals, voucher_entries sums, ledger balances, inventory quantity/kg/cost, stock journal, container statuses, payroll accruals and payments, `role_feature_permissions`, `user_company_roles`.
-4. Apply `migrations/20261024_001_permissions_control_center_shadow.sql` with the **service role** in one transaction. Confirm five `access_*` tables with FORCE RLS and the two triggers.
+4. Apply `migrations/20261024_001_permissions_control_center_shadow.sql` and then `migrations/20261107_001_permissions_v2_policy_mode_audit.sql` with the **service role**, each in one transaction (or run `scripts/permissions/staging-certification.sh`, which does every step of this procedure). Confirm five `access_*` tables with FORCE RLS and the two triggers.
 5. Repeat the snapshot; any difference is an automatic stop.
 6. Run the HTTP suite against staging-like data with a test company; confirm 403s and unchanged fingerprints.
 7. Rollback drill (below), then re-apply.

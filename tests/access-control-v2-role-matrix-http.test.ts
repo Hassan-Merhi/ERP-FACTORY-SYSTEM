@@ -366,6 +366,21 @@ describe("Permissions V2 security matrix over HTTP", () => {
     }
   }, 300_000);
 
+  it("records refused requests in the administrator monitoring endpoint", async () => {
+    const admin = agents.get("Admin")!;
+    const before = await admin.get("/api/permissions-v2/monitoring");
+    expect(before.status).toBe(200);
+    await agents.get("View Only")!.delete(`/api/suppliers/${seededSupplierId}`);
+    await agents.get("Manager")!.post("/api/suppliers").send({ legalName: "x", companyId: otherCtx.companyId });
+    const after = await admin.get("/api/permissions-v2/monitoring");
+    expect(after.body.companyId).toBe(ctx.companyId);
+    expect(after.body.counts.permission_denied).toBeGreaterThan(before.body.counts.permission_denied);
+    expect(after.body.counts.cross_company_attempt).toBeGreaterThanOrEqual(before.body.counts.cross_company_attempt);
+    expect(JSON.stringify(after.body)).not.toMatch(/password|token|cookie/i);
+    const refused = await agents.get("Manager")!.get("/api/permissions-v2/monitoring");
+    expect(refused.status).toBe(403);
+  });
+
   it("refuses settings to a session whose role became ERP Tester after sign-in", async () => {
     const ownerAgent = agents.get("Owner")!;
     const change = await agents
