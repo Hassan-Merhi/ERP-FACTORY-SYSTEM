@@ -45,9 +45,11 @@ export function InventoryPicker({
     if (!list || !filteredInventory.length) return;
     const option = list.children.item(highlightedIndex) as HTMLElement | null;
     if (!option) return;
-    if (option.offsetTop < list.scrollTop) list.scrollTop = option.offsetTop;
-    else if (option.offsetTop + option.offsetHeight > list.scrollTop + list.clientHeight) {
-      list.scrollTop = option.offsetTop + option.offsetHeight - list.clientHeight;
+    const listRect = list.getBoundingClientRect();
+    const optionRect = option.getBoundingClientRect();
+    if (optionRect.top < listRect.top) list.scrollTop -= listRect.top - optionRect.top;
+    else if (optionRect.bottom > listRect.bottom) {
+      list.scrollTop += optionRect.bottom - listRect.bottom;
     }
   }, [highlightedIndex, localSearch, inventory, itemListRef, filteredInventory.length]);
 
