@@ -445,59 +445,56 @@ export function registerOrderCrudRoutes(app: Express) {
 
   registerOrderProfitabilityRoute(app);
 
-  app.post(
-    "/api/factory/customer-orders",
-    requireAuth,
-    requireCreateOnlyVerifiedCreate("factoryCustomerOrders"),
-    async (req: Request, res: Response) => {
-      try {
-        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-        if (!companyId) return res.status(400).json({ message: "No company selected" });
+  // Create Only may add a new DRAFT order dated today (createOnlyVerifiedCreates.ts).
+  const createOnlyOrder = requireCreateOnlyVerifiedCreate("factoryCustomerOrders");
+  app.post("/api/factory/customer-orders", requireAuth, createOnlyOrder, async (req: Request, res: Response) => {
+    try {
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-        const parsed = insertCustomerOrderSchema.parse({ ...req.body, companyId, status: "DRAFT" });
+      const parsed = insertCustomerOrderSchema.parse({ ...req.body, companyId, status: "DRAFT" });
 
-        // Guard and insert in one locked transaction. Guarding outside it let two
-        // orders for the same proforma each read the last remaining slot.
-        const creation = await db.transaction(async (tx) => {
-          if (parsed.proformaIdUsed) {
-            await acquireProformaCapacityTransactionLock(tx, {
-              companyId,
-              proformaId: parsed.proformaIdUsed,
-            });
-            const guard = await guardProformaOrderCreation(tx, {
-              companyId,
-              proformaId: parsed.proformaIdUsed,
-              customerId: parsed.customerId,
-            });
-            if (!guard.allowed) return { ok: false, rejection: guard } as const;
-          }
-          const [created] = await tx.insert(customerOrders).values(parsed).returning();
-          // Phase 21 (B): the create audit commits with the order.
-          await logAudit(
-            {
-              userId: req.session.userId!,
-              username: req.session.username || req.session.userId!,
-              companyId,
-              action: "create",
-              tableName: "factory_customer_orders",
-              recordId: created.id,
-              recordIdentifier: orderAuditIdentifier(created, created.id),
-              changes: null,
-            },
-            tx
-          );
-          return { ok: true, order: created } as const;
-        });
+      // Guard and insert in one locked transaction. Guarding outside it let two
+      // orders for the same proforma each read the last remaining slot.
+      const creation = await db.transaction(async (tx) => {
+        if (parsed.proformaIdUsed) {
+          await acquireProformaCapacityTransactionLock(tx, {
+            companyId,
+            proformaId: parsed.proformaIdUsed,
+          });
+          const guard = await guardProformaOrderCreation(tx, {
+            companyId,
+            proformaId: parsed.proformaIdUsed,
+            customerId: parsed.customerId,
+          });
+          if (!guard.allowed) return { ok: false, rejection: guard } as const;
+        }
+        const [created] = await tx.insert(customerOrders).values(parsed).returning();
+        // Phase 21 (B): the create audit commits with the order.
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || req.session.userId!,
+            companyId,
+            action: "create",
+            tableName: "factory_customer_orders",
+            recordId: created.id,
+            recordIdentifier: orderAuditIdentifier(created, created.id),
+            changes: null,
+          },
+          tx
+        );
+        return { ok: true, order: created } as const;
+      });
 
-        if (!creation.ok) return res.status(creation.rejection.status).json(creation.rejection.body);
-        const order = creation.order;
-        res.json(order);
-      } catch (error: unknown) {
-        logger.error("Error creating customer order:", { error: error });
-        res.status(400).json({ message: getErrorMessage(error) });
-      }
+      if (!creation.ok) return res.status(creation.rejection.status).json(creation.rejection.body);
+      const order = creation.order;
+      res.json(order);
+    } catch (error: unknown) {
+      logger.error("Error creating customer order:", { error: error });
+      res.status(400).json({ message: getErrorMessage(error) });
     }
-  );
+  });
 
   app.patch("/api/factory/customer-orders/:id/link-proforma", requireAuth, async (req: Request, res: Response) => {
     try {
