@@ -117,6 +117,10 @@ export function PosShell({
           {selectedCompany?.id && <DailyRateModal companyId={selectedCompany.id} />}
           <Sidebar data-pos-sidebar="modern">
             <SidebarHeader data-pos-sidebar-header>
+              <div className="pos-shell-wordmark" aria-label="Dakzo Systems">
+                <span className="pos-shell-wordmark-mark" aria-hidden="true" />
+                <span>Dakzo Systems</span>
+              </div>
               <SeasonalBrandAccent />
               <div className="flex items-center gap-2">
                 <Button
@@ -278,12 +282,14 @@ export function PosShell({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="flex min-h-11 items-center gap-1.5 px-2 text-muted-foreground sm:min-h-9"
+                    className="flex min-h-11 items-center gap-2 px-3 text-muted-foreground sm:min-h-9"
+                    data-pos-command-search="true"
                     onClick={() => setPaletteOpen(true)}
                     aria-label="Open command search"
                     data-testid="button-open-palette"
                   >
                     <Search className="h-4 w-4" aria-hidden="true" />
+                    <span className="hidden truncate lg:inline">Search anything...</span>
                     <kbd className="hidden h-5 items-center gap-1 rounded-sm border bg-muted px-1.5 font-mono text-[11px] lg:inline-flex">
                       {typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform)
                         ? "⌘ /"
@@ -291,7 +297,7 @@ export function PosShell({
                     </kbd>
                   </Button>
                 )}
-                <UserMenu accentColor="#2563eb" user={userMenuUser} onLogout={handleLogout} />
+                <UserMenu accentColor="#8b5cf6" user={userMenuUser} onLogout={handleLogout} />
               </div>
             </header>
             <OfflineBanner />
