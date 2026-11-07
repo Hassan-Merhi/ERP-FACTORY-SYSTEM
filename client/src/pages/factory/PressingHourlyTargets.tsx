@@ -325,8 +325,8 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
         </>
       )}
       <Dialog open={scheduleOpen} onOpenChange={open => { if (!savingSchedule) setScheduleOpen(open); }}>
-        <DialogContent className="max-h-[90dvh] max-w-lg overflow-hidden rounded-2xl border-border/70 bg-background p-0 shadow-2xl">
-          <DialogHeader className="border-b border-border/60 bg-gradient-to-r from-sky-500/10 via-background to-violet-500/5 px-5 pb-4 pt-5">
+        <DialogContent className="flex max-h-[90dvh] w-[calc(100vw-2rem)] max-w-lg flex-col gap-0 overflow-hidden rounded-2xl border-border/70 bg-background p-0 shadow-2xl">
+          <DialogHeader className="shrink-0 border-b border-border/60 bg-gradient-to-r from-sky-500/10 via-background to-violet-500/5 px-5 pb-4 pt-5">
             <DialogTitle className="flex items-center gap-2 text-lg">
               <CalendarClock className="h-5 w-5 text-sky-500" />
               Fixed daily KG schedule
@@ -337,7 +337,7 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
               Previous days retain their historical schedule.
             </DialogDescription>
           </DialogHeader>
-          <div className="max-h-[min(55dvh,520px)] space-y-2 overflow-y-auto px-5 py-4">
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-4">
             <div className="mb-2 grid grid-cols-[1fr_135px] gap-3 px-2 text-[11px] font-semibold text-muted-foreground">
               <span>Production hour (Beirut)</span><span>Target / worker</span>
             </div>
@@ -359,7 +359,7 @@ export default function PressingHourlyTargets({ active, companyId, serverToday, 
               a specific date will override the fixed schedule on that date only.
             </p>
           </div>
-          <DialogFooter className="flex-row gap-2 border-t border-border/60 bg-muted/20 px-5 py-4 sm:justify-end">
+          <DialogFooter className="shrink-0 flex-row gap-2 border-t border-border/60 bg-muted/20 px-5 py-4 sm:justify-end">
             <Button type="button" variant="outline" disabled={savingSchedule}
               onClick={() => setScheduleOpen(false)}>Cancel</Button>
             <Button type="button" disabled={savingSchedule || !data?.canEdit}
