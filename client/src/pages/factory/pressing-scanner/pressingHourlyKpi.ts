@@ -9,10 +9,10 @@ export type PressingHourlySnapshot = {
   workers: Array<{ userId: string; slot: string; name: string; targetKgPerHour: number }>;
   hours: Array<{ hourStart: string; userId: string; kg: string; bales: number }>;
   hourlyTargetsKg: Record<string, number>;
-  dailyScheduleKg: Record<string, number>;
-  dailyScheduleEffectiveDay: string | null;
-  editableDailyScheduleKg: Record<string, number>;
-  editableDailyScheduleEffectiveDay: string | null;
+  dailyScheduleKg?: Record<string, number>;
+  dailyScheduleEffectiveDay?: string | null;
+  editableDailyScheduleKg?: Record<string, number>;
+  editableDailyScheduleEffectiveDay?: string | null;
 };
 
 const hourFormatter = new Intl.DateTimeFormat("en-GB", {
