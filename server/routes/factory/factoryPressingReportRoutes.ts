@@ -463,7 +463,7 @@ export function registerFactoryPressingReportRoutes(app: Express): void {
         dailyScheduleEffectiveDay: dailySchedule.effectiveDay,
         editableWeeklySchedulesKg,
         editableWeeklyScheduleEffectiveDays,
-        scheduledWorkday: pressingWeekdayFromDate(day) !== 0 || Object.keys(hourlyTargetsKg).length > 0,
+        scheduledWorkday: pressingWeekdayFromDate(day) !== 0 || Object.keys(dailySchedule.hours).length > 0,
       });
     } catch (error) {
       return handleError(res, error);
