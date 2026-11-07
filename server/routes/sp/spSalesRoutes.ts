@@ -22,6 +22,7 @@ import { postFactoryVoucherTx } from "../../services/factory/factoryVoucherPosti
 const num = (value: unknown): Decimal =>
   parseMoneyInput(typeof value === "number" ? value : String(value ?? "0")) ?? toMoney(0);
 import { resultRows } from "../../lib/queryResult";
+import { requireCreateOnlyVerifiedCreate } from "../../services/security/createOnlyVerifiedCreates";
 
 type SpSaleLotRow = {
   id: number;
@@ -72,251 +73,256 @@ export function registerSpSalesRoutes(app: Express) {
     }
   });
 
-  app.post("/api/sp/sales", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = await requireSpCompany(req, res);
-      if (!companyId) return;
+  app.post(
+    "/api/sp/sales",
+    requireAuth,
+    requireCreateOnlyVerifiedCreate("spSales"),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = await requireSpCompany(req, res);
+        if (!companyId) return;
 
-      const { saleDate, customerName, saleLines, bankAccountId, paymentAccountType, paymentAccountId, notes } =
-        req.body;
+        const { saleDate, customerName, saleLines, bankAccountId, paymentAccountType, paymentAccountId, notes } =
+          req.body;
 
-      if (!saleDate || !customerName || !Array.isArray(saleLines) || saleLines.length === 0) {
-        return res.status(400).json({ message: "saleDate, customerName, saleLines required" });
-      }
+        if (!saleDate || !customerName || !Array.isArray(saleLines) || saleLines.length === 0) {
+          return res.status(400).json({ message: "saleDate, customerName, saleLines required" });
+        }
 
-      // The sale voucher now posts exactly two lines — Dr selected Cash/Bank and
-      // Cr Supplier Cash Payable, both = totalSalePrice — so a settlement account
-      // is mandatory; without it the voucher would post an unbalanced single credit line.
-      // paymentAccountType/paymentAccountId is the current (cash-or-bank) contract,
-      // same as normal ERP POS; bankAccountId is kept as a legacy fallback for
-      // any older callers that only ever posted to a bank account.
-      const resolvedAccountId = paymentAccountId ?? bankAccountId;
-      const resolvedAccountType: "cash" | "bank" = paymentAccountType === "cash" ? "cash" : "bank";
-      if (!resolvedAccountId) {
-        return res
-          .status(400)
-          .json({ message: "A cash or bank account is required to record where the sale cash was collected" });
-      }
+        // The sale voucher now posts exactly two lines — Dr selected Cash/Bank and
+        // Cr Supplier Cash Payable, both = totalSalePrice — so a settlement account
+        // is mandatory; without it the voucher would post an unbalanced single credit line.
+        // paymentAccountType/paymentAccountId is the current (cash-or-bank) contract,
+        // same as normal ERP POS; bankAccountId is kept as a legacy fallback for
+        // any older callers that only ever posted to a bank account.
+        const resolvedAccountId = paymentAccountId ?? bankAccountId;
+        const resolvedAccountType: "cash" | "bank" = paymentAccountType === "cash" ? "cash" : "bank";
+        if (!resolvedAccountId) {
+          return res
+            .status(400)
+            .json({ message: "A cash or bank account is required to record where the sale cash was collected" });
+        }
 
-      // Validate the settlement account belongs to this company, and is the
-      // right kind of account for the selected type.
-      let settlementBankAccountId: number | null = null;
-      let settlementLedgerAccountId: number | null = null;
-      if (resolvedAccountType === "cash") {
-        const [cashLedger] = await db
-          .select({ id: ledgerAccounts.id, accountType: ledgerAccounts.accountType })
-          .from(ledgerAccounts)
-          .where(
-            and(
-              eq(ledgerAccounts.id, parseInt(resolvedAccountId)),
-              eq(ledgerAccounts.companyId, companyId),
-              isNull(ledgerAccounts.deletedAt)
+        // Validate the settlement account belongs to this company, and is the
+        // right kind of account for the selected type.
+        let settlementBankAccountId: number | null = null;
+        let settlementLedgerAccountId: number | null = null;
+        if (resolvedAccountType === "cash") {
+          const [cashLedger] = await db
+            .select({ id: ledgerAccounts.id, accountType: ledgerAccounts.accountType })
+            .from(ledgerAccounts)
+            .where(
+              and(
+                eq(ledgerAccounts.id, parseInt(resolvedAccountId)),
+                eq(ledgerAccounts.companyId, companyId),
+                isNull(ledgerAccounts.deletedAt)
+              )
             )
-          )
-          .limit(1);
-        if (!cashLedger || cashLedger.accountType !== "Cash") {
-          return res.status(400).json({ message: "Invalid cash account — account not found for this company" });
-        }
-        settlementLedgerAccountId = cashLedger.id;
-      } else {
-        const [ba] = await db
-          .select({ id: bankAccounts.id, companyId: bankAccounts.companyId })
-          .from(bankAccounts)
-          .where(and(eq(bankAccounts.id, parseInt(resolvedAccountId)), eq(bankAccounts.companyId, companyId)))
-          .limit(1);
-        if (!ba) {
-          return res.status(400).json({ message: "Invalid bank account — account not found for this company" });
-        }
-        settlementBankAccountId = ba.id;
-      }
-
-      // Supplier Partner sale voucher only ever posts against the payable account
-      // (Dr Bank/Cash = totalSalePrice, Cr Supplier Cash Payable = totalSalePrice).
-      // Sales/COGS/Stock/Cost-Clearing accounts are NOT touched by this voucher —
-      // COGS/profit/remaining-stock-value are derived from sp_stock_movements and
-      // spSaleLines.finalUnitCostUsd instead (see totalFinalCost/grossProfit below).
-      const payableAcct = await getSpAccount(companyId, "sp_payable");
-
-      if (!payableAcct) {
-        return res.status(400).json({ message: "SP accounts not configured. Run Setup first." });
-      }
-
-      const result = await db.transaction(async (tx) => {
-        // Phase 22 (C), PE13: exact Decimal money (was parseFloat arithmetic).
-        let totalSalePrice = toMoney(0);
-        let totalBaseCost = toMoney(0);
-        let totalFinalCost = toMoney(0);
-        const postedLines: SpSalePostedLine[] = [];
-
-        for (const sl of saleLines) {
-          const qtySold = num(sl.qtySold);
-          const salePrice = num(sl.salePricePerUnit);
-          if (qtySold.lessThanOrEqualTo(0)) continue;
-
-          const articleCode = sl.articleCode ? String(sl.articleCode).trim() : null;
-          let stockItemId = sl.stockItemId ? parseInt(sl.stockItemId) : null;
-
-          if (!articleCode && !stockItemId) throw new Error("Each sale line needs articleCode or stockItemId");
-
-          // ── Alias resolution: articleCode → stockItemId ───────────────────
-          if (!stockItemId && articleCode) {
-            const aliasRows = await tx
-              .select()
-              .from(stockItemCodeAliases)
-              .where(
-                and(eq(stockItemCodeAliases.companyId, companyId), eq(stockItemCodeAliases.aliasCode, articleCode))
-              );
-            if (aliasRows.length > 0) stockItemId = aliasRows[0].stockItemId;
+            .limit(1);
+          if (!cashLedger || cashLedger.accountType !== "Cash") {
+            return res.status(400).json({ message: "Invalid cash account — account not found for this company" });
           }
+          settlementLedgerAccountId = cashLedger.id;
+        } else {
+          const [ba] = await db
+            .select({ id: bankAccounts.id, companyId: bankAccounts.companyId })
+            .from(bankAccounts)
+            .where(and(eq(bankAccounts.id, parseInt(resolvedAccountId)), eq(bankAccounts.companyId, companyId)))
+            .limit(1);
+          if (!ba) {
+            return res.status(400).json({ message: "Invalid bank account — account not found for this company" });
+          }
+          settlementBankAccountId = ba.id;
+        }
 
-          // ── FIFO lot selection (server-side) ──────────────────────────────
-          let lotsQuery: unknown;
-          if (stockItemId) {
-            lotsQuery = await tx.execute(
-              sql`SELECT * FROM sp_stock_movements
+        // Supplier Partner sale voucher only ever posts against the payable account
+        // (Dr Bank/Cash = totalSalePrice, Cr Supplier Cash Payable = totalSalePrice).
+        // Sales/COGS/Stock/Cost-Clearing accounts are NOT touched by this voucher —
+        // COGS/profit/remaining-stock-value are derived from sp_stock_movements and
+        // spSaleLines.finalUnitCostUsd instead (see totalFinalCost/grossProfit below).
+        const payableAcct = await getSpAccount(companyId, "sp_payable");
+
+        if (!payableAcct) {
+          return res.status(400).json({ message: "SP accounts not configured. Run Setup first." });
+        }
+
+        const result = await db.transaction(async (tx) => {
+          // Phase 22 (C), PE13: exact Decimal money (was parseFloat arithmetic).
+          let totalSalePrice = toMoney(0);
+          let totalBaseCost = toMoney(0);
+          let totalFinalCost = toMoney(0);
+          const postedLines: SpSalePostedLine[] = [];
+
+          for (const sl of saleLines) {
+            const qtySold = num(sl.qtySold);
+            const salePrice = num(sl.salePricePerUnit);
+            if (qtySold.lessThanOrEqualTo(0)) continue;
+
+            const articleCode = sl.articleCode ? String(sl.articleCode).trim() : null;
+            let stockItemId = sl.stockItemId ? parseInt(sl.stockItemId) : null;
+
+            if (!articleCode && !stockItemId) throw new Error("Each sale line needs articleCode or stockItemId");
+
+            // ── Alias resolution: articleCode → stockItemId ───────────────────
+            if (!stockItemId && articleCode) {
+              const aliasRows = await tx
+                .select()
+                .from(stockItemCodeAliases)
+                .where(
+                  and(eq(stockItemCodeAliases.companyId, companyId), eq(stockItemCodeAliases.aliasCode, articleCode))
+                );
+              if (aliasRows.length > 0) stockItemId = aliasRows[0].stockItemId;
+            }
+
+            // ── FIFO lot selection (server-side) ──────────────────────────────
+            let lotsQuery: unknown;
+            if (stockItemId) {
+              lotsQuery = await tx.execute(
+                sql`SELECT * FROM sp_stock_movements
                   WHERE company_id = ${companyId} AND stock_item_id = ${stockItemId} AND qty_remaining > 0
                   ORDER BY created_at ASC, id ASC FOR UPDATE`
-            );
-          } else {
-            lotsQuery = await tx.execute(
-              sql`SELECT * FROM sp_stock_movements
+              );
+            } else {
+              lotsQuery = await tx.execute(
+                sql`SELECT * FROM sp_stock_movements
                   WHERE company_id = ${companyId} AND article_code = ${articleCode} AND qty_remaining > 0
                   ORDER BY created_at ASC, id ASC FOR UPDATE`
-            );
+              );
+            }
+
+            const lots = resultRows<SpSaleLotRow>(lotsQuery);
+            const totalAvail = sumMoney(lots.map((l) => num(l.qty_remaining)));
+            if (qtySold.greaterThan(totalAvail.plus("0.0001"))) {
+              throw new Error(
+                `Insufficient stock for ${articleCode || `item #${stockItemId}`}: available ${totalAvail.toFixed(4)}, requested ${qtySold.toFixed()}`
+              );
+            }
+
+            let qtyLeft = qtySold;
+            for (const lot of lots) {
+              if (qtyLeft.lessThanOrEqualTo("0.0001")) break;
+              const lotRemaining = num(lot.qty_remaining);
+              const qtyFromLot = Decimal.min(qtyLeft, lotRemaining);
+              qtyLeft = qtyLeft.minus(qtyFromLot);
+              const baseUC = num(lot.base_unit_cost_usd);
+              const landedUC = num(lot.landed_unit_cost_usd);
+              const finalUC = num(lot.final_unit_cost_usd);
+              const saleTotal = qtyFromLot.times(salePrice);
+              const baseTotal = qtyFromLot.times(baseUC);
+              const finalTotal = qtyFromLot.times(finalUC);
+
+              totalSalePrice = totalSalePrice.plus(saleTotal);
+              totalBaseCost = totalBaseCost.plus(baseTotal);
+              totalFinalCost = totalFinalCost.plus(finalTotal);
+
+              await tx.execute(
+                sql`UPDATE sp_stock_movements SET qty_remaining = ${lotRemaining.minus(qtyFromLot).toFixed()} WHERE id = ${lot.id}`
+              );
+
+              await adjustSpInventoryAtomic(tx, {
+                companyId,
+                locationId: lot.location_id,
+                stockItemId: lot.stock_item_id,
+                deltaQty: qtyFromLot.negated().toNumber(),
+                context: `SP sale ${articleCode || `item #${stockItemId}`} from lot #${lot.id}`,
+                sourceVoucherType: "SP_SALE",
+              });
+
+              postedLines.push({
+                movementId: lot.id,
+                articleCode: lot.article_code,
+                description: lot.description || null,
+                stockItemId: lot.stock_item_id || null,
+                qtySold: qtyFromLot.toNumber(),
+                salePricePerUnit: salePrice.toNumber(),
+                baseUnitCostUsd: baseUC.toNumber(),
+                landedUnitCostUsd: landedUC.toNumber(),
+                finalUnitCostUsd: finalUC.toNumber(),
+                saleTotal: saleTotal.toNumber(),
+                baseTotal: baseTotal.toNumber(),
+                finalTotal: finalTotal.toNumber(),
+              });
+            }
           }
 
-          const lots = resultRows<SpSaleLotRow>(lotsQuery);
-          const totalAvail = sumMoney(lots.map((l) => num(l.qty_remaining)));
-          if (qtySold.greaterThan(totalAvail.plus("0.0001"))) {
-            throw new Error(
-              `Insufficient stock for ${articleCode || `item #${stockItemId}`}: available ${totalAvail.toFixed(4)}, requested ${qtySold.toFixed()}`
-            );
-          }
+          if (postedLines.length === 0) throw new Error("No valid sale lines");
 
-          let qtyLeft = qtySold;
-          for (const lot of lots) {
-            if (qtyLeft.lessThanOrEqualTo("0.0001")) break;
-            const lotRemaining = num(lot.qty_remaining);
-            const qtyFromLot = Decimal.min(qtyLeft, lotRemaining);
-            qtyLeft = qtyLeft.minus(qtyFromLot);
-            const baseUC = num(lot.base_unit_cost_usd);
-            const landedUC = num(lot.landed_unit_cost_usd);
-            const finalUC = num(lot.final_unit_cost_usd);
-            const saleTotal = qtyFromLot.times(salePrice);
-            const baseTotal = qtyFromLot.times(baseUC);
-            const finalTotal = qtyFromLot.times(finalUC);
+          const grossProfit = totalSalePrice.minus(totalFinalCost);
 
-            totalSalePrice = totalSalePrice.plus(saleTotal);
-            totalBaseCost = totalBaseCost.plus(baseTotal);
-            totalFinalCost = totalFinalCost.plus(finalTotal);
-
-            await tx.execute(
-              sql`UPDATE sp_stock_movements SET qty_remaining = ${lotRemaining.minus(qtyFromLot).toFixed()} WHERE id = ${lot.id}`
-            );
-
-            await adjustSpInventoryAtomic(tx, {
+          const [sale] = await tx
+            .insert(spSales)
+            .values({
               companyId,
-              locationId: lot.location_id,
-              stockItemId: lot.stock_item_id,
-              deltaQty: qtyFromLot.negated().toNumber(),
-              context: `SP sale ${articleCode || `item #${stockItemId}`} from lot #${lot.id}`,
-              sourceVoucherType: "SP_SALE",
-            });
+              saleDate,
+              customerName,
+              totalSalePriceUsd: totalSalePrice.toFixed(),
+              totalBaseCostUsd: totalBaseCost.toFixed(),
+              totalFinalCostUsd: totalFinalCost.toFixed(),
+              grossProfitUsd: grossProfit.toFixed(),
+              status: "posted",
+              notes: notes || null,
+            })
+            .returning();
 
-            postedLines.push({
-              movementId: lot.id,
-              articleCode: lot.article_code,
-              description: lot.description || null,
-              stockItemId: lot.stock_item_id || null,
-              qtySold: qtyFromLot.toNumber(),
-              salePricePerUnit: salePrice.toNumber(),
-              baseUnitCostUsd: baseUC.toNumber(),
-              landedUnitCostUsd: landedUC.toNumber(),
-              finalUnitCostUsd: finalUC.toNumber(),
-              saleTotal: saleTotal.toNumber(),
-              baseTotal: baseTotal.toNumber(),
-              finalTotal: finalTotal.toNumber(),
-            });
-          }
-        }
-
-        if (postedLines.length === 0) throw new Error("No valid sale lines");
-
-        const grossProfit = totalSalePrice.minus(totalFinalCost);
-
-        const [sale] = await tx
-          .insert(spSales)
-          .values({
+          // A settlement account is mandatory (validated above): Dr the bank or the
+          // Cash-type ledger account / Cr Supplier Cash Payable, the selling price
+          // collected (cents). Supplier Partner sale voucher posts ONLY the customer
+          // cash collected — never Bank+COGS; COGS/profit/stock value are derived
+          // from sp_stock_movements and spSaleLines.finalUnitCostUsd. Phase 22 (C):
+          // through the engine with the sale's identity; SP-SALE- family number kept
+          // with the posting generation (was Date.now()).
+          const saleAmount = totalSalePrice.toDecimalPlaces(2);
+          const { voucher } = await postFactoryVoucherTx(tx, {
             companyId,
-            saleDate,
-            customerName,
-            totalSalePriceUsd: totalSalePrice.toFixed(),
-            totalBaseCostUsd: totalBaseCost.toFixed(),
-            totalFinalCostUsd: totalFinalCost.toFixed(),
-            grossProfitUsd: grossProfit.toFixed(),
-            status: "posted",
-            notes: notes || null,
-          })
-          .returning();
+            voucherNumber: (generation) => `SP-SALE-${sale.id}-${generation}`,
+            voucherDate: saleDate,
+            description: `Sale — ${customerName}`,
+            currency: SP_RELEASE_CURRENCY,
+            fxRateToUsd: SP_RELEASE_EXCHANGE_RATE,
+            sourceModule: "SP",
+            source: { sourceType: "sp-sale", sourceId: `${companyId}:${sale.id}`, phase: "voucher" },
+            lines: [
+              {
+                bankAccountId: settlementBankAccountId,
+                ledgerAccountId: settlementLedgerAccountId,
+                debit: saleAmount,
+                narration: `Sale receipts — ${customerName}`,
+              },
+              {
+                ledgerAccountId: payableAcct.id,
+                credit: saleAmount,
+                narration: `Supplier Cash Payable — ${customerName}`,
+              },
+            ],
+          });
 
-        // A settlement account is mandatory (validated above): Dr the bank or the
-        // Cash-type ledger account / Cr Supplier Cash Payable, the selling price
-        // collected (cents). Supplier Partner sale voucher posts ONLY the customer
-        // cash collected — never Bank+COGS; COGS/profit/stock value are derived
-        // from sp_stock_movements and spSaleLines.finalUnitCostUsd. Phase 22 (C):
-        // through the engine with the sale's identity; SP-SALE- family number kept
-        // with the posting generation (was Date.now()).
-        const saleAmount = totalSalePrice.toDecimalPlaces(2);
-        const { voucher } = await postFactoryVoucherTx(tx, {
-          companyId,
-          voucherNumber: (generation) => `SP-SALE-${sale.id}-${generation}`,
-          voucherDate: saleDate,
-          description: `Sale — ${customerName}`,
-          currency: SP_RELEASE_CURRENCY,
-          fxRateToUsd: SP_RELEASE_EXCHANGE_RATE,
-          sourceModule: "SP",
-          source: { sourceType: "sp-sale", sourceId: `${companyId}:${sale.id}`, phase: "voucher" },
-          lines: [
-            {
-              bankAccountId: settlementBankAccountId,
-              ledgerAccountId: settlementLedgerAccountId,
-              debit: saleAmount,
-              narration: `Sale receipts — ${customerName}`,
-            },
-            {
-              ledgerAccountId: payableAcct.id,
-              credit: saleAmount,
-              narration: `Supplier Cash Payable — ${customerName}`,
-            },
-          ],
+          await tx.insert(spSaleLines).values(
+            postedLines.map((pl) => ({
+              saleId: sale.id,
+              companyId,
+              movementId: pl.movementId,
+              articleCode: pl.articleCode,
+              description: pl.description || null,
+              stockItemId: pl.stockItemId || null,
+              qtySold: String(pl.qtySold),
+              salePricePerUnit: String(pl.salePricePerUnit),
+              baseUnitCostUsd: String(pl.baseUnitCostUsd),
+              landedUnitCostUsd: String(pl.landedUnitCostUsd),
+              finalUnitCostUsd: String(pl.finalUnitCostUsd),
+            }))
+          );
+
+          await tx.update(spSales).set({ voucherId: voucher.id }).where(eq(spSales.id, sale.id));
+          return { ...sale, voucherId: voucher.id, lines: postedLines };
         });
 
-        await tx.insert(spSaleLines).values(
-          postedLines.map((pl) => ({
-            saleId: sale.id,
-            companyId,
-            movementId: pl.movementId,
-            articleCode: pl.articleCode,
-            description: pl.description || null,
-            stockItemId: pl.stockItemId || null,
-            qtySold: String(pl.qtySold),
-            salePricePerUnit: String(pl.salePricePerUnit),
-            baseUnitCostUsd: String(pl.baseUnitCostUsd),
-            landedUnitCostUsd: String(pl.landedUnitCostUsd),
-            finalUnitCostUsd: String(pl.finalUnitCostUsd),
-          }))
-        );
-
-        await tx.update(spSales).set({ voucherId: voucher.id }).where(eq(spSales.id, sale.id));
-        return { ...sale, voucherId: voucher.id, lines: postedLines };
-      });
-
-      res.json(result);
-    } catch (error: unknown) {
-      if (respondToSpInventoryIntegrityError(res, error)) return;
-      res.status(500).json({ message: getErrorMessage(error) });
+        res.json(result);
+      } catch (error: unknown) {
+        if (respondToSpInventoryIntegrityError(res, error)) return;
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // ── Stock Movements ───────────────────────────────────────────────────────
 

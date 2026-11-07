@@ -10,7 +10,7 @@ import {
   parseSupplierId,
 } from "./suppliers/supplierRequestContext";
 import { supplierService } from "./suppliers/supplierService";
-import { requireVerifiedBusinessAction } from "../services/security/accessControlV2Enforcement";
+import { requireCreateOnlyVerifiedCreate } from "../services/security/createOnlyVerifiedCreates";
 
 export function registerSupplierRoutes(app: Express) {
   app.get("/api/suppliers", requireAuth, async (req, res) => {
@@ -63,17 +63,7 @@ export function registerSupplierRoutes(app: Express) {
     "/api/suppliers",
     requireAuth,
     requireNonPOS,
-    requireVerifiedBusinessAction({
-      resource: "erp.suppliers",
-      action: "create",
-      handlerVerified: true,
-      hardDenied: (req) => {
-        const raw = (req.body as Record<string, unknown> | null)?.openingBalance;
-        if (raw === undefined || raw === null || raw === "") return false;
-        const value = Number(raw);
-        return !Number.isFinite(value) || value !== 0;
-      },
-    }),
+    requireCreateOnlyVerifiedCreate("suppliers"),
     async (req, res) => {
       try {
         const companyId = getActiveSupplierCompanyId(req);

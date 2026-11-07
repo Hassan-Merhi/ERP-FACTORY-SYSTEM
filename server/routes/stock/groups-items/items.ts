@@ -22,6 +22,7 @@ import {
   stockItemEditRecorder,
   updateStockItemFieldsTx,
 } from "../../../services/inventory/stockItemEditCapture";
+import { requireCreateOnlyVerifiedCreate } from "../../../services/security/createOnlyVerifiedCreates";
 
 export function registerStockItemRoutes(app: Express) {
   // Stock Items
@@ -203,79 +204,85 @@ export function registerStockItemRoutes(app: Express) {
     }
   });
 
-  app.post("/api/stock-items", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      if (!req.session.currentCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
+  app.post(
+    "/api/stock-items",
+    requireAuth,
+    requireNonPOS,
+    requireCreateOnlyVerifiedCreate("stockItems"),
+    async (req, res) => {
+      try {
+        if (!req.session.currentCompanyId) {
+          return res.status(400).json({ message: "No company selected" });
+        }
 
-      // Inject companyId before schema validation
-      const dataWithCompany = {
-        ...req.body,
-        companyId: req.session.currentCompanyId,
-      };
+        // Inject companyId before schema validation
+        const dataWithCompany = {
+          ...req.body,
+          companyId: req.session.currentCompanyId,
+        };
 
-      const parsed = insertStockItemSchema.parse(dataWithCompany);
+        const parsed = insertStockItemSchema.parse(dataWithCompany);
 
-      // Require a valid stock group (no null/uncategorized)
-      if (!parsed.stockGroupId) {
-        return res.status(400).json({ message: "Stock Group is required. Please select a valid stock group." });
-      }
+        // Require a valid stock group (no null/uncategorized)
+        if (!parsed.stockGroupId) {
+          return res.status(400).json({ message: "Stock Group is required. Please select a valid stock group." });
+        }
 
-      // Check for duplicate code within the same company
-      const existing = await storage.getStockItemByCode(parsed.code, req.session.currentCompanyId);
-      if (existing) {
-        return res.status(400).json({ message: "Stock item code already exists in this company" });
-      }
+        // Check for duplicate code within the same company
+        const existing = await storage.getStockItemByCode(parsed.code, req.session.currentCompanyId);
+        if (existing) {
+          return res.status(400).json({ message: "Stock item code already exists in this company" });
+        }
 
-      // Calculate opening value if qty and rate provided
-      if (parsed.openingQty && parsed.openingRate) {
-        const qty = toMoney(parsed.openingQty).toNumber();
-        const rate = toMoney(parsed.openingRate).toNumber();
-        parsed.openingValue = (qty * rate).toFixed(2);
-      }
+        // Calculate opening value if qty and rate provided
+        if (parsed.openingQty && parsed.openingRate) {
+          const qty = toMoney(parsed.openingQty).toNumber();
+          const rate = toMoney(parsed.openingRate).toNumber();
+          parsed.openingValue = (qty * rate).toFixed(2);
+        }
 
-      // Plan batch 2: on the factory LAN server during an outage the item takes
-      // its id from the reserved LAN range and is recorded for the cloud.
-      const lanCapture = isPhase9LanPrimary();
-      // Phase 21 (B): the write and its audit commit together.
-      const item = await db.transaction(async (tx) => {
-        const written = lanCapture
-          ? (
-              await tx
-                .insert(stockItems)
-                .values({ ...parsed, id: await nextPhase9LanStockItemIdTx(tx) })
-                .returning()
-            )[0]
-          : await storage.createStockItem(parsed, tx);
-        if (lanCapture) await capturePhase9StockItemCreateTx(tx, stockItemCreateEvidence(req, written));
-        await logAudit(
-          {
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId: req.session.currentCompanyId!,
-            action: "create",
-            tableName: "stock_items",
-            recordId: written.id,
-            recordIdentifier: written.name,
-            changes: {
-              name: { new: written.name },
-              code: { new: written.code },
-              uom: { new: written.uom },
-              sellingPrice: { new: written.sellingPrice || "0" },
-              openingQty: { new: written.openingQty || "0" },
-              openingRate: { new: written.openingRate || "0" },
+        // Plan batch 2: on the factory LAN server during an outage the item takes
+        // its id from the reserved LAN range and is recorded for the cloud.
+        const lanCapture = isPhase9LanPrimary();
+        // Phase 21 (B): the write and its audit commit together.
+        const item = await db.transaction(async (tx) => {
+          const written = lanCapture
+            ? (
+                await tx
+                  .insert(stockItems)
+                  .values({ ...parsed, id: await nextPhase9LanStockItemIdTx(tx) })
+                  .returning()
+              )[0]
+            : await storage.createStockItem(parsed, tx);
+          if (lanCapture) await capturePhase9StockItemCreateTx(tx, stockItemCreateEvidence(req, written));
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId: req.session.currentCompanyId!,
+              action: "create",
+              tableName: "stock_items",
+              recordId: written.id,
+              recordIdentifier: written.name,
+              changes: {
+                name: { new: written.name },
+                code: { new: written.code },
+                uom: { new: written.uom },
+                sellingPrice: { new: written.sellingPrice || "0" },
+                openingQty: { new: written.openingQty || "0" },
+                openingRate: { new: written.openingRate || "0" },
+              },
             },
-          },
-          tx
-        );
-        return written;
-      });
-      res.status(201).json(item);
-    } catch (error: unknown) {
-      const dbError = masterDataDbErrorResponse(error, "stock-item", req.session.currentCompanyId);
-      if (dbError) return res.status(dbError.status).json(dbError.body);
-      res.status(400).json({ message: getErrorMessage(error) });
+            tx
+          );
+          return written;
+        });
+        res.status(201).json(item);
+      } catch (error: unknown) {
+        const dbError = masterDataDbErrorResponse(error, "stock-item", req.session.currentCompanyId);
+        if (dbError) return res.status(dbError.status).json(dbError.body);
+        res.status(400).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 }
