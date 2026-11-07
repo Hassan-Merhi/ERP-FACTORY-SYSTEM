@@ -6,6 +6,9 @@
  *   - every catalogued path is a registered client route;
  *   - every page marked "component" names files that exist and read the
  *     shared role helpers;
+ *   - every "read_only" page has no business write anywhere in its import
+ *     graph (app-wide contexts, lib and api infrastructure excluded), apart
+ *     from reviewed exceptions;
  *   - every "change" page is unavailable to View Only and Create Only, and
  *     every "create" page is unavailable to Create Only unless it submits to a
  *     handler-verified create.
@@ -16,8 +19,8 @@
  *
  * Read-only apart from --write; touches no database or permission data.
  */
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname, relative, resolve } from "node:path";
 import {
   PERMISSION_PAGE_CATALOG,
   decideReadOnlyRoleRoute,
@@ -47,6 +50,43 @@ const catalogRows = (
   }
 ).pages;
 const notes = { pages: Object.fromEntries(catalogRows.map((row) => [row.id, { label: row.label, note: row.note }])) };
+// Business write call sites. Session, preference and offline-transport
+// writes live in contexts/, lib/ and api/ infrastructure and are excluded.
+const WRITE_CALL =
+  /\b(?:apiRequest|apiRequestPrivileged|modeApiRequest|factoryApiRequest)\(\s*["'`](?:POST|PUT|PATCH|DELETE)|\buseMutation\s*[(<]|method:\s*["'](?:POST|PUT|PATCH|DELETE)["']/;
+const SCAN_EXCLUDED = /\/(?:contexts|lib|api|i18n)\/|\/components\/ui\/|\.test\.tsx?$/;
+
+function resolveImport(from: string, spec: string): string | null {
+  let base: string;
+  if (spec.startsWith("@/")) base = resolve(root, "client/src", spec.slice(2));
+  else if (spec.startsWith(".")) base = resolve(dirname(from), spec);
+  else return null;
+  for (const candidate of [base, `${base}.tsx`, `${base}.ts`, resolve(base, "index.tsx"), resolve(base, "index.ts")]) {
+    if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
+  }
+  return null;
+}
+
+/** Files in the import graph of `entries` that contain a business write call. */
+function writeCallFiles(entries: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const stack = entries.map((file) => resolve(root, file));
+  const hits = new Set<string>();
+  while (stack.length > 0) {
+    const file = stack.pop()!;
+    if (seen.has(file)) continue;
+    seen.add(file);
+    if (SCAN_EXCLUDED.test(file)) continue;
+    const source = readFileSync(file, "utf8");
+    if (WRITE_CALL.test(source)) hits.add(relative(root, file));
+    for (const match of source.matchAll(/(?:import|export)\s[^"']*?from\s+["']([^"']+)["']|import\(\s*["']([^"']+)["']\s*\)/g)) {
+      const next = resolveImport(file, match[1] ?? match[2] ?? "");
+      if (next) stack.push(next);
+    }
+  }
+  return [...hits].sort();
+}
+
 const routeSource = ROUTE_SOURCES.map((file) => readFileSync(resolve(root, file), "utf8")).join("\n");
 const failures: string[] = [];
 
@@ -71,6 +111,16 @@ for (const entry of PERMISSION_PAGE_CATALOG) {
   for (const pattern of entry.paths) {
     const needle = PREFIX_ROUTES[pattern] ?? `"${pattern}"`;
     if (!routeSource.includes(needle)) failures.push(`${entry.id}: route ${pattern} is not registered`);
+  }
+  for (const file of entry.pageFiles ?? []) {
+    if (!existsSync(resolve(root, file))) failures.push(`${entry.id}: page file ${file} does not exist`);
+  }
+  if (entry.inPage === "read_only") {
+    const reviewed = new Set((entry.reviewedMutations ?? []).map((item) => item.file));
+    const unreviewed = writeCallFiles(entry.pageFiles ?? []).filter((file) => !reviewed.has(file));
+    if (unreviewed.length > 0) {
+      failures.push(`${entry.id}: read-only page has business writes in ${unreviewed.join(", ")}`);
+    }
   }
   if (entry.inPage === "component") {
     if (!entry.files?.length) failures.push(`${entry.id}: component gating needs files`);
@@ -119,6 +169,7 @@ const AREA_LABEL: Record<string, string> = {
 };
 const GATING_LABEL: Record<string, string> = {
   component: "Gated in page",
+  read_only: "Read-only page (verified by import scan)",
   route: "Gated at route",
   role_restricted: "Admin/Owner/Developer only",
   server_enforced: "Server and request guard only (UI work remaining)",

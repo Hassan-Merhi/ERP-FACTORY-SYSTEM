@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Package, ChevronRight, RefreshCw, Calendar } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import {
   Dialog,
@@ -67,6 +68,8 @@ export default function ClosingStockSummary() {
   const [, navigate] = useLocation();
   const { selectedCompany } = useCompany();
   const { formatAmount } = useCurrencyContext();
+  // View Only and Create Only cannot carry stock forward as opening stock.
+  const { allowed: canChangeExistingRecords } = useExistingRecordChangeAccess();
   const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>(getDefaultPeriodValue("today"));
   useDateJump((date) => setPeriodFilter({ fromDate: date, toDate: date, preset: "custom" }));
 
@@ -121,7 +124,7 @@ export default function ClosingStockSummary() {
       >
         <PageActions>
           <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="period-filter-closing-stock" />
-          {data?.grandTotal && data.grandTotal.value > 0 ? (
+          {canChangeExistingRecords && data?.grandTotal && data.grandTotal.value > 0 ? (
             <Button onClick={() => setShowCarryForwardDialog(true)} data-testid="button-carryforward-stock">
               <RefreshCw className="mr-2 h-4 w-4" />
               Set as Opening Stock

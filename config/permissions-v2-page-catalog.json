@@ -10,6 +10,9 @@
       "paths": [
         "/accounts"
       ],
+      "pageFiles": [
+        "client/src/pages/Accounts.tsx"
+      ],
       "resource": "erp.accounts",
       "actions": [
         "view",
@@ -32,6 +35,9 @@
       "paths": [
         "/accounts/historical-openings"
       ],
+      "pageFiles": [
+        "client/src/pages/accounts/HistoricalOpenings.tsx"
+      ],
       "resource": "erp.accounts",
       "actions": [
         "view",
@@ -48,13 +54,17 @@
         "/ledger-monthly/:accountId",
         "/ledger-vouchers/:accountId/:year/:month"
       ],
+      "pageFiles": [
+        "client/src/pages/LedgerMonthlySummary.tsx",
+        "client/src/pages/LedgerVouchers.tsx"
+      ],
       "resource": "erp.accounts",
       "actions": [
         "view",
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "read_only"
     },
     {
       "id": "erp.vouchers.create",
@@ -63,6 +73,9 @@
       "note": "Voucher creation is not a handler-verified Create Only create.",
       "paths": [
         "/vouchers"
+      ],
+      "pageFiles": [
+        "client/src/pages/Vouchers.tsx"
       ],
       "resource": "erp.vouchers",
       "actions": [
@@ -86,6 +99,9 @@
       "paths": [
         "/vouchers/:id/edit"
       ],
+      "pageFiles": [
+        "client/src/pages/VoucherEdit.tsx"
+      ],
       "resource": "erp.vouchers",
       "actions": [
         "view",
@@ -101,9 +117,11 @@
       "id": "erp.vouchers.detail",
       "area": "erp",
       "label": "Voucher detail",
-      "note": "Read view; cost-centre allocation is refused by the server for read-only roles.",
       "paths": [
         "/voucher-detail/:voucherId"
+      ],
+      "pageFiles": [
+        "client/src/pages/VoucherDetail.tsx"
       ],
       "resource": "erp.vouchers",
       "actions": [
@@ -111,7 +129,13 @@
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "read_only",
+      "reviewedMutations": [
+        {
+          "file": "client/src/components/financial/VoucherCostCenters.tsx",
+          "reason": "Cost-centre allocation editing renders only for the Developer role."
+        }
+      ]
     },
     {
       "id": "erp.vouchers.optional",
@@ -119,6 +143,9 @@
       "label": "Optional vouchers",
       "paths": [
         "/optional-vouchers"
+      ],
+      "pageFiles": [
+        "client/src/pages/OptionalVouchers.tsx"
       ],
       "resource": "erp.vouchers",
       "actions": [
@@ -138,6 +165,9 @@
       "paths": [
         "/create"
       ],
+      "pageFiles": [
+        "client/src/pages/AccountingCreate.tsx"
+      ],
       "resource": "erp.accounts",
       "actions": [
         "view",
@@ -156,6 +186,9 @@
       "label": "Customers and suppliers",
       "paths": [
         "/parties"
+      ],
+      "pageFiles": [
+        "client/src/pages/PartiesHub.tsx"
       ],
       "resource": "erp.customers",
       "actions": [
@@ -180,6 +213,9 @@
       "paths": [
         "/suppliers/:id/edit"
       ],
+      "pageFiles": [
+        "client/src/pages/EditSupplier.tsx"
+      ],
       "resource": "erp.suppliers",
       "actions": [
         "view",
@@ -194,6 +230,9 @@
       "label": "Supplier proformas",
       "paths": [
         "/suppliers/:supplierId/proformas"
+      ],
+      "pageFiles": [
+        "client/src/pages/SupplierProformas.tsx"
       ],
       "resource": "erp.suppliers",
       "actions": [
@@ -213,6 +252,9 @@
       "paths": [
         "/po-import"
       ],
+      "pageFiles": [
+        "client/src/pages/POImport.tsx"
+      ],
       "resource": "erp.purchase_orders",
       "actions": [
         "view",
@@ -227,6 +269,9 @@
       "label": "Edit purchase order",
       "paths": [
         "/purchase-orders/:id/edit"
+      ],
+      "pageFiles": [
+        "client/src/pages/PurchaseOrderEdit.tsx"
       ],
       "resource": "erp.purchase_orders",
       "actions": [
@@ -245,6 +290,11 @@
       "paths": [
         "/pos"
       ],
+      "pageFiles": [
+        "client/src/pages/pos/POS.tsx",
+        "client/src/pages/pos/POSPage.tsx",
+        "client/src/pages/pos/RetailPOS.tsx"
+      ],
       "resource": "erp.sales",
       "actions": [
         "view",
@@ -259,6 +309,9 @@
       "label": "Edit POS sale",
       "paths": [
         "/pos/edit/:id"
+      ],
+      "pageFiles": [
+        "client/src/pages/pos/POS.tsx"
       ],
       "resource": "erp.sales",
       "actions": [
@@ -277,6 +330,9 @@
       "paths": [
         "/pos-item-replacement"
       ],
+      "pageFiles": [
+        "client/src/pages/POSItemReplacement.tsx"
+      ],
       "resource": "erp.sales",
       "actions": [
         "view",
@@ -291,6 +347,9 @@
       "label": "POS import",
       "paths": [
         "/pos-import"
+      ],
+      "pageFiles": [
+        "client/src/pages/pos/POSImport.tsx"
       ],
       "resource": "erp.sales",
       "actions": [
@@ -309,9 +368,35 @@
         "/sales-report/detail",
         "/sales-report/comparison",
         "/stock-in-sales-report",
+        "/supplier-profit-reconciliation"
+      ],
+      "pageFiles": [
+        "client/src/pages/SalesReport.tsx",
+        "client/src/pages/SalesReportComparison.tsx",
+        "client/src/pages/SalesReportDetail.tsx",
+        "client/src/pages/StockInSalesReport.tsx",
+        "client/src/pages/SupplierProfitReconciliation.tsx"
+      ],
+      "resource": "erp.sales",
+      "actions": [
+        "view",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "read_only"
+    },
+    {
+      "id": "erp.sales.analysis",
+      "area": "erp",
+      "label": "Item market analysis and supplier profit check",
+      "note": "Offers sale-price export and profit-check actions; the server refuses them for read-only roles.",
+      "paths": [
         "/item-market-analysis",
-        "/supplier-profit-reconciliation",
         "/supplier-profit-check"
+      ],
+      "pageFiles": [
+        "client/src/pages/ItemMarketAnalysis.tsx",
+        "client/src/pages/SupplierProfitCheck.tsx"
       ],
       "resource": "erp.sales",
       "actions": [
@@ -327,6 +412,9 @@
       "label": "Sales tools (daybook, price list, transfers)",
       "paths": [
         "/sales-tools"
+      ],
+      "pageFiles": [
+        "client/src/pages/SalesToolsHub.tsx"
       ],
       "resource": "erp.sales",
       "actions": [
@@ -346,6 +434,9 @@
       "paths": [
         "/inventory"
       ],
+      "pageFiles": [
+        "client/src/pages/InventoryHub.tsx"
+      ],
       "resource": "erp.inventory",
       "actions": [
         "view",
@@ -360,6 +451,9 @@
       "label": "Stock items",
       "paths": [
         "/stock"
+      ],
+      "pageFiles": [
+        "client/src/pages/StockHub.tsx"
       ],
       "resource": "erp.stock_items",
       "actions": [
@@ -389,13 +483,20 @@
         "/locations/:locationId/stock-items/:stockItemId/history",
         "/locations/:locationId/stock-items/:stockItemId/vouchers/:year/:month"
       ],
+      "pageFiles": [
+        "client/src/pages/LocationMonthlySummary.tsx",
+        "client/src/pages/LocationVouchers.tsx",
+        "client/src/pages/StockItemDetail.tsx",
+        "client/src/pages/StockItemHistory.tsx",
+        "client/src/pages/StockItemVouchers.tsx"
+      ],
       "resource": "erp.stock_items",
       "actions": [
         "view",
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "read_only"
     },
     {
       "id": "erp.stock.import",
@@ -403,6 +504,9 @@
       "label": "Import stock items",
       "paths": [
         "/import-stock-items"
+      ],
+      "pageFiles": [
+        "client/src/pages/ImportStockItems.tsx"
       ],
       "resource": "erp.stock_items",
       "actions": [
@@ -419,9 +523,14 @@
       "paths": [
         "/opening-stock",
         "/opening-stock/:groupId",
-        "/closing-stock-summary",
         "/closing-stock/:groupId",
         "/bale-ledger"
+      ],
+      "pageFiles": [
+        "client/src/pages/BaleLedger.tsx",
+        "client/src/pages/ClosingStockDetail.tsx",
+        "client/src/pages/OpeningStockDetail.tsx",
+        "client/src/pages/OpeningStockSummary.tsx"
       ],
       "resource": "erp.inventory",
       "actions": [
@@ -429,7 +538,30 @@
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "read_only"
+    },
+    {
+      "id": "erp.stock.closing-summary",
+      "area": "erp",
+      "label": "Closing stock summary",
+      "note": "Carry-forward to opening stock is hidden for read-only roles.",
+      "paths": [
+        "/closing-stock-summary"
+      ],
+      "pageFiles": [
+        "client/src/pages/ClosingStockSummary.tsx"
+      ],
+      "resource": "erp.inventory",
+      "actions": [
+        "view",
+        "edit",
+        "export"
+      ],
+      "mode": "browse",
+      "inPage": "component",
+      "files": [
+        "client/src/pages/ClosingStockSummary.tsx"
+      ]
     },
     {
       "id": "erp.stock.barcodes",
@@ -437,6 +569,9 @@
       "label": "Barcode manager",
       "paths": [
         "/barcode-manager"
+      ],
+      "pageFiles": [
+        "client/src/pages/BarcodeManager.tsx"
       ],
       "resource": "erp.stock_items",
       "actions": [
@@ -452,6 +587,9 @@
       "label": "Stock transfer order",
       "paths": [
         "/stock-transfer-order"
+      ],
+      "pageFiles": [
+        "client/src/pages/StockTransferOrder.tsx"
       ],
       "resource": "erp.stock_transfers",
       "actions": [
@@ -469,6 +607,9 @@
       "note": "Container renaming and voucher re-sync are hidden for read-only roles.",
       "paths": [
         "/containers"
+      ],
+      "pageFiles": [
+        "client/src/pages/ContainersPage.tsx"
       ],
       "resource": "erp.containers",
       "actions": [
@@ -496,6 +637,10 @@
         "/containers/:id",
         "/offloads/:id"
       ],
+      "pageFiles": [
+        "client/src/pages/ContainerDetailPage.tsx",
+        "client/src/pages/OffloadDetail.tsx"
+      ],
       "resource": "erp.containers",
       "actions": [
         "view",
@@ -518,6 +663,9 @@
       "paths": [
         "/containers/:containerId/verification"
       ],
+      "pageFiles": [
+        "client/src/pages/ContainerVerification.tsx"
+      ],
       "resource": "erp.containers",
       "actions": [
         "view",
@@ -535,6 +683,10 @@
         "/mock-git",
         "/containers-otw",
         "/mock-containers-otw"
+      ],
+      "pageFiles": [
+        "client/src/pages/GITContainers.tsx",
+        "client/src/pages/GITMockup.tsx"
       ],
       "resource": "erp.containers",
       "actions": [
@@ -559,6 +711,9 @@
       "label": "Daybook",
       "paths": [
         "/daybook"
+      ],
+      "pageFiles": [
+        "client/src/pages/Daybook.tsx"
       ],
       "resource": "erp.vouchers",
       "actions": [
@@ -585,13 +740,22 @@
       "paths": [
         "/transaction-journal"
       ],
+      "pageFiles": [
+        "client/src/pages/TransactionJournal.tsx"
+      ],
       "resource": "erp.vouchers",
       "actions": [
         "view",
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "read_only",
+      "reviewedMutations": [
+        {
+          "file": "client/src/pages/transactionjournal/useTransactionJournalModel.ts",
+          "reason": "Writes only the person's own hidden-row preference and the company switch, not business records."
+        }
+      ]
     },
     {
       "id": "erp.reports.analytics",
@@ -600,13 +764,16 @@
       "paths": [
         "/analytics"
       ],
+      "pageFiles": [
+        "client/src/pages/Analytics.tsx"
+      ],
       "resource": "erp.analytics",
       "actions": [
         "view",
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "read_only"
     },
     {
       "id": "erp.reports.financial-overview",
@@ -615,6 +782,9 @@
       "note": "Hidden for read-only roles since the Create Only activation change.",
       "paths": [
         "/financial-overview"
+      ],
+      "pageFiles": [
+        "client/src/pages/Dashboard.tsx"
       ],
       "resource": "erp.analytics",
       "actions": [
@@ -630,6 +800,9 @@
       "label": "Tracking hub and transporter statement",
       "paths": [
         "/tracking"
+      ],
+      "pageFiles": [
+        "client/src/pages/TrackingHub.tsx"
       ],
       "resource": "erp.accounts",
       "actions": [
@@ -653,6 +826,9 @@
       "paths": [
         "/payroll"
       ],
+      "pageFiles": [
+        "client/src/pages/Payroll.tsx"
+      ],
       "resource": "erp.payroll",
       "actions": [
         "view",
@@ -670,6 +846,10 @@
       "paths": [
         "/erp/rental/warehouses",
         "/erp/rental/shops"
+      ],
+      "pageFiles": [
+        "client/src/pages/erp/ErpRentalShops.tsx",
+        "client/src/pages/erp/ErpRentalWarehouses.tsx"
       ],
       "resource": "properties.units",
       "actions": [
@@ -697,6 +877,9 @@
       "paths": [
         "/erp/rental/payments"
       ],
+      "pageFiles": [
+        "client/src/pages/erp/ErpRentalPayments.tsx"
+      ],
       "resource": "properties.payments",
       "actions": [
         "view",
@@ -712,6 +895,9 @@
       "label": "Offline conflict center",
       "paths": [
         "/conflicts"
+      ],
+      "pageFiles": [
+        "client/src/pages/ConflictCenter.tsx"
       ],
       "resource": "system.maintenance",
       "actions": [
@@ -731,6 +917,13 @@
         "/chatbot-settings",
         "/notification-settings",
         "/account-groups"
+      ],
+      "pageFiles": [
+        "client/src/pages/AccountGroups.tsx",
+        "client/src/pages/ChatbotSettings.tsx",
+        "client/src/pages/IntercompanyLinks.tsx",
+        "client/src/pages/NotificationSettings.tsx",
+        "client/src/pages/Settings.tsx"
       ],
       "resource": "system.settings",
       "actions": [
@@ -756,6 +949,18 @@
         "/account-transfer",
         "/company-transfer"
       ],
+      "pageFiles": [
+        "client/src/pages/AccountMigration.tsx",
+        "client/src/pages/AccountTransfer.tsx",
+        "client/src/pages/BalanceRepair.tsx",
+        "client/src/pages/CompanyDataReset.tsx",
+        "client/src/pages/CompanyTransfer.tsx",
+        "client/src/pages/ConvergenceReconciliation.tsx",
+        "client/src/pages/DeletedItems.tsx",
+        "client/src/pages/ImportCycleDiagnostics.tsx",
+        "client/src/pages/InventoryRepair.tsx",
+        "client/src/pages/OrphanedRecords.tsx"
+      ],
       "resource": "system.maintenance",
       "actions": [
         "view",
@@ -776,6 +981,13 @@
         "/factory/stock-query/:id",
         "/factory/stock-otw"
       ],
+      "pageFiles": [
+        "client/src/pages/factory/FactoryLocationInventory.tsx",
+        "client/src/pages/factory/FactoryRawMaterialsHub.tsx",
+        "client/src/pages/factory/FactoryStockItemDetail.tsx",
+        "client/src/pages/factory/FactoryStockQueryWorkspace.tsx",
+        "client/src/pages/factory/ProductionRawStock.tsx"
+      ],
       "resource": "factory.raw_stock",
       "actions": [
         "view",
@@ -794,6 +1006,9 @@
       "paths": [
         "/factory/raw-stock/opening-balance/:id/edit"
       ],
+      "pageFiles": [
+        "client/src/pages/factory/FactoryOpeningBalanceEdit.tsx"
+      ],
       "resource": "factory.raw_stock",
       "actions": [
         "view",
@@ -808,6 +1023,9 @@
       "label": "Raw-stock recalculation",
       "paths": [
         "/factory/raw-stock/recalculate"
+      ],
+      "pageFiles": [
+        "client/src/pages/factory/production-raw-stock/RawStockRecalculate.tsx"
       ],
       "resource": "factory.raw_stock",
       "actions": [
@@ -827,6 +1045,11 @@
         "/factory/stock-allocation-v3",
         "/factory/stock-allocation-v5"
       ],
+      "pageFiles": [
+        "client/src/pages/factory/FactoryStockAllocationV2.tsx",
+        "client/src/pages/factory/FactoryStockAllocationV3.tsx",
+        "client/src/pages/factory/FactoryStockAllocationV5.tsx"
+      ],
       "resource": "factory.customer_orders",
       "actions": [
         "view",
@@ -843,6 +1066,9 @@
       "label": "New proforma",
       "paths": [
         "/factory/stock-allocation-v5/proformas/new"
+      ],
+      "pageFiles": [
+        "client/src/pages/factory/FactoryStockAllocationV5CreateProforma.tsx"
       ],
       "resource": "factory.customer_orders",
       "actions": [
@@ -861,6 +1087,10 @@
         "/factory/invoicing/proformas/:id/edit",
         "/factory/sales/proformas/:proformaId/add-line"
       ],
+      "pageFiles": [
+        "client/src/pages/factory/FactoryStockAllocationV5EditProforma.tsx",
+        "client/src/pages/factory/ProformaAddLine.tsx"
+      ],
       "resource": "factory.customer_orders",
       "actions": [
         "view",
@@ -877,6 +1107,11 @@
         "/factory/invoicing",
         "/factory/sales/invoices/:id",
         "/factory/price-list"
+      ],
+      "pageFiles": [
+        "client/src/pages/factory/FactoryInvoiceDetailBilingual.tsx",
+        "client/src/pages/factory/FactoryInvoicing.tsx",
+        "client/src/pages/factory/FactoryPriceList.tsx"
       ],
       "resource": "factory.customer_orders",
       "actions": [
@@ -900,6 +1135,9 @@
       "paths": [
         "/factory/sales/new"
       ],
+      "pageFiles": [
+        "client/src/pages/factory/FactoryInvoiceCreate.tsx"
+      ],
       "resource": "factory.customer_orders",
       "actions": [
         "view",
@@ -915,6 +1153,9 @@
       "label": "Verify pending invoice",
       "paths": [
         "/factory/sales/pending-invoices/:id/verify"
+      ],
+      "pageFiles": [
+        "client/src/pages/factory/FactoryPendingInvoiceVerify.tsx"
       ],
       "resource": "factory.customer_orders",
       "actions": [
@@ -941,6 +1182,15 @@
         "/factory/reprint-labels",
         "/factory/bale-products"
       ],
+      "pageFiles": [
+        "client/src/pages/BaleProducts.tsx",
+        "client/src/pages/factory/BalesHistory.tsx",
+        "client/src/pages/factory/FactoryBaleProductHistory.tsx",
+        "client/src/pages/factory/FactoryBaleTracking.tsx",
+        "client/src/pages/factory/FactoryBalesHub.tsx",
+        "client/src/pages/factory/FactoryReprintLabels.tsx",
+        "client/src/pages/factory/FactoryStockBaleList.tsx"
+      ],
       "resource": "factory.bales",
       "actions": [
         "view",
@@ -961,6 +1211,11 @@
         "/factory/bale-relabeling/wipers-re-entry",
         "/factory/merge-bale-products"
       ],
+      "pageFiles": [
+        "client/src/pages/factory/FactoryBaleRelabeling.tsx",
+        "client/src/pages/factory/MergeBaleProducts.tsx",
+        "client/src/pages/factory/WipersReEntry.tsx"
+      ],
       "resource": "factory.bales",
       "actions": [
         "view",
@@ -976,6 +1231,9 @@
       "note": "Production positions were reviewed and kept denied for Create Only.",
       "paths": [
         "/factory/stock-entry"
+      ],
+      "pageFiles": [
+        "client/src/pages/factory/BaleStockEntry.tsx"
       ],
       "resource": "factory.production",
       "actions": [
@@ -1032,6 +1290,12 @@
         "/factory/monthly-production-matrix/:productId/workers",
         "/factory/monthly-production-matrix/:productId/bales/:workerId"
       ],
+      "pageFiles": [
+        "client/src/pages/factory/DailyProductionReport.tsx",
+        "client/src/pages/factory/FactoryMonthlyProductionDrilldown.tsx",
+        "client/src/pages/factory/FactoryMonthlyProductionMatrix.tsx",
+        "client/src/pages/factory/ProductionComparison.tsx"
+      ],
       "resource": "factory.production",
       "actions": [
         "view",
@@ -1065,6 +1329,9 @@
         "/factory/containers",
         "/factory/containers-hub"
       ],
+      "pageFiles": [
+        "client/src/pages/factory/FactoryContainersHub.tsx"
+      ],
       "resource": "factory.containers",
       "actions": [
         "view",
@@ -1091,6 +1358,9 @@
       "paths": [
         "/factory/containers/new"
       ],
+      "pageFiles": [
+        "client/src/pages/factory/FactoryContainerCreate.tsx"
+      ],
       "resource": "factory.containers",
       "actions": [
         "view",
@@ -1108,6 +1378,11 @@
         "/factory/sales/loading/pending",
         "/factory/dispatch-batches",
         "/factory/dispatch-batches/:id"
+      ],
+      "pageFiles": [
+        "client/src/pages/factory/FactoryDispatchBatchDetail.tsx",
+        "client/src/pages/factory/FactoryDispatchBatches.tsx",
+        "client/src/pages/factory/FactoryLoadingsHub.tsx"
       ],
       "resource": "factory.containers",
       "actions": [
@@ -1128,6 +1403,11 @@
         "/factory/invoices/:id/loading-scan",
         "/factory/dispatch-batches/:batchId/rides/:rideId/scan"
       ],
+      "pageFiles": [
+        "client/src/pages/factory/FactoryContainerLoadingScan.tsx",
+        "client/src/pages/factory/FactoryDispatchBatchScan.tsx",
+        "client/src/pages/factory/FactoryInvoiceLoadingScan.tsx"
+      ],
       "resource": "factory.containers",
       "actions": [
         "view",
@@ -1147,6 +1427,10 @@
         "/factory/workers",
         "/factory/workers/:id",
         "/factory/insurance"
+      ],
+      "pageFiles": [
+        "client/src/pages/factory/FactoryEmployeeDetail.tsx",
+        "client/src/pages/factory/FactoryWorkerDetail.tsx"
       ],
       "resource": "factory.employees",
       "actions": [
@@ -1170,6 +1454,11 @@
         "/factory/payroll",
         "/factory/production-bonuses"
       ],
+      "pageFiles": [
+        "client/src/pages/Payroll.tsx",
+        "client/src/pages/factory/FactoryPayrollHub.tsx",
+        "client/src/pages/factory/FactoryProductionBonuses.tsx"
+      ],
       "resource": "factory.payroll",
       "actions": [
         "view",
@@ -1187,6 +1476,9 @@
       "label": "Barcode lookup",
       "paths": [
         "/factory/barcode-lookup"
+      ],
+      "pageFiles": [
+        "client/src/pages/BarcodeLookup.tsx"
       ],
       "resource": "factory.bales",
       "actions": [
@@ -1209,6 +1501,15 @@
         "/factory/customers/:id",
         "/factory/transporters"
       ],
+      "pageFiles": [
+        "client/src/pages/LedgerMonthlySummary.tsx",
+        "client/src/pages/LedgerVouchers.tsx",
+        "client/src/pages/factory/FactoryAccounts.tsx",
+        "client/src/pages/factory/FactoryContacts.tsx",
+        "client/src/pages/factory/FactoryCustomerStatement.tsx",
+        "client/src/pages/factory/FactoryPartiesHub.tsx",
+        "client/src/pages/factory/FactoryTransporters.tsx"
+      ],
       "resource": "factory.accounting",
       "actions": [
         "view",
@@ -1226,6 +1527,9 @@
       "label": "Factory vouchers",
       "paths": [
         "/factory/vouchers"
+      ],
+      "pageFiles": [
+        "client/src/pages/factory/FactoryVouchers.tsx"
       ],
       "resource": "factory.accounting",
       "actions": [
@@ -1249,6 +1553,9 @@
       "paths": [
         "/factory/vouchers/:id/edit"
       ],
+      "pageFiles": [
+        "client/src/pages/VoucherEdit.tsx"
+      ],
       "resource": "factory.accounting",
       "actions": [
         "view",
@@ -1267,13 +1574,22 @@
       "paths": [
         "/factory/voucher-detail/:voucherId"
       ],
+      "pageFiles": [
+        "client/src/pages/VoucherDetail.tsx"
+      ],
       "resource": "factory.accounting",
       "actions": [
         "view",
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "read_only",
+      "reviewedMutations": [
+        {
+          "file": "client/src/components/financial/VoucherCostCenters.tsx",
+          "reason": "Cost-centre allocation editing renders only for the Developer role."
+        }
+      ]
     },
     {
       "id": "factory.accounting.create",
@@ -1281,6 +1597,9 @@
       "label": "Factory create master data",
       "paths": [
         "/factory/create"
+      ],
+      "pageFiles": [
+        "client/src/pages/AccountingCreate.tsx"
       ],
       "resource": "factory.accounting",
       "actions": [
@@ -1335,6 +1654,18 @@
         "/factory/financial-snapshot",
         "/factory/broker-visual-statement"
       ],
+      "pageFiles": [
+        "client/src/pages/Analytics.tsx",
+        "client/src/pages/factory/FactoryAlerts.tsx",
+        "client/src/pages/factory/FactoryBrokerVisualStatement.tsx",
+        "client/src/pages/factory/FactoryDashboard.tsx",
+        "client/src/pages/factory/FactoryFinancialHub.tsx",
+        "client/src/pages/factory/FactoryFinancialSnapshot.tsx",
+        "client/src/pages/factory/FactoryKpis.tsx",
+        "client/src/pages/factory/FactoryNetPositionDetails.tsx",
+        "client/src/pages/factory/FactoryProductionIntelHub.tsx",
+        "client/src/pages/factory/FactorySupplierHub.tsx"
+      ],
       "resource": "factory.analytics",
       "actions": [
         "view",
@@ -1349,6 +1680,9 @@
       "label": "Factory POS",
       "paths": [
         "/factory/pos"
+      ],
+      "pageFiles": [
+        "client/src/pages/factory/FactoryPOS.tsx"
       ],
       "resource": "retail.pos",
       "actions": [
@@ -1365,6 +1699,9 @@
       "paths": [
         "/factory/import"
       ],
+      "pageFiles": [
+        "client/src/pages/factory/FactoryImport.tsx"
+      ],
       "resource": "factory.raw_stock",
       "actions": [
         "view",
@@ -1380,6 +1717,10 @@
       "paths": [
         "/factory/rental/warehouses",
         "/factory/rental/shops"
+      ],
+      "pageFiles": [
+        "client/src/pages/factory/FactoryRentalShops.tsx",
+        "client/src/pages/factory/FactoryRentalWarehouses.tsx"
       ],
       "resource": "properties.units",
       "actions": [
@@ -1405,6 +1746,9 @@
       "paths": [
         "/factory/rental/payments"
       ],
+      "pageFiles": [
+        "client/src/pages/factory/FactoryRentalPayments.tsx"
+      ],
       "resource": "properties.payments",
       "actions": [
         "view",
@@ -1429,6 +1773,16 @@
         "/factory/account-groups",
         "/factory/chatbot-settings"
       ],
+      "pageFiles": [
+        "client/src/pages/AccountGroups.tsx",
+        "client/src/pages/ChatbotSettings.tsx",
+        "client/src/pages/Settings.tsx",
+        "client/src/pages/factory/BaleProductImages.tsx",
+        "client/src/pages/factory/CustomerLogosSettings.tsx",
+        "client/src/pages/factory/FactoryCatalogTranslations.tsx",
+        "client/src/pages/factory/FactorySettings.tsx",
+        "client/src/pages/factory/LabelBannersSettings.tsx"
+      ],
       "resource": "system.settings",
       "actions": [
         "view",
@@ -1450,6 +1804,15 @@
         "/factory/balance-repair",
         "/factory/conflicts"
       ],
+      "pageFiles": [
+        "client/src/pages/BalanceRepair.tsx",
+        "client/src/pages/CompanyDataReset.tsx",
+        "client/src/pages/ConflictCenter.tsx",
+        "client/src/pages/DeletedItems.tsx",
+        "client/src/pages/ImportCycleDiagnostics.tsx",
+        "client/src/pages/InventoryRepair.tsx",
+        "client/src/pages/OrphanedRecords.tsx"
+      ],
       "resource": "system.maintenance",
       "actions": [
         "view",
@@ -1465,6 +1828,9 @@
       "note": "Retail POS sales were reviewed and kept denied for Create Only.",
       "paths": [
         "/retail/pos"
+      ],
+      "pageFiles": [
+        "client/src/pages/pos/RetailPOS.tsx"
       ],
       "resource": "retail.pos",
       "actions": [
@@ -1508,6 +1874,9 @@
       "paths": [
         "/retail/stock-count"
       ],
+      "pageFiles": [
+        "client/src/pages/retail/RetailStockCount.tsx"
+      ],
       "resource": "retail.stock_items",
       "actions": [
         "view",
@@ -1523,6 +1892,10 @@
       "paths": [
         "/retail/history",
         "/retail/reports"
+      ],
+      "pageFiles": [
+        "client/src/pages/retail/RetailDashboard.tsx",
+        "client/src/pages/retail/RetailSalesHistory.tsx"
       ],
       "resource": "retail.pos",
       "actions": [
@@ -1548,6 +1921,16 @@
         "/pos-containers",
         "/pos-containers/:id"
       ],
+      "pageFiles": [
+        "client/src/pages/pos/POSContainerDetail.tsx",
+        "client/src/pages/pos/POSContainerTracking.tsx",
+        "client/src/pages/pos/POSCustomers.tsx",
+        "client/src/pages/pos/POSDashboard.tsx",
+        "client/src/pages/pos/POSDaybook.tsx",
+        "client/src/pages/pos/POSPriceList.tsx",
+        "client/src/pages/pos/POSSettings.tsx",
+        "client/src/pages/pos/PosTransferOrders.tsx"
+      ],
       "resource": "retail.pos",
       "actions": [
         "view",
@@ -1568,6 +1951,10 @@
         "/properties/dashboard",
         "/properties/analytics"
       ],
+      "pageFiles": [
+        "client/src/pages/properties/PropertiesAnalytics.tsx",
+        "client/src/pages/properties/PropertiesDashboard.tsx"
+      ],
       "resource": "properties.analytics",
       "actions": [
         "view",
@@ -1582,6 +1969,9 @@
       "label": "Properties, units, tenants and contracts",
       "paths": [
         "/properties/rentals"
+      ],
+      "pageFiles": [
+        "client/src/pages/properties/PropertiesRentalsHub.tsx"
       ],
       "resource": "properties.contracts",
       "actions": [
@@ -1610,6 +2000,11 @@
         "/properties/ledger-monthly/:accountId",
         "/properties/ledger-vouchers/:accountId/:year/:month"
       ],
+      "pageFiles": [
+        "client/src/pages/properties/PropertiesAccounts.tsx",
+        "client/src/pages/properties/PropertiesLedgerMonthly.tsx",
+        "client/src/pages/properties/PropertiesLedgerVouchers.tsx"
+      ],
       "resource": "properties.payments",
       "actions": [
         "view",
@@ -1627,6 +2022,9 @@
       "label": "Properties daybook",
       "paths": [
         "/properties/daybook"
+      ],
+      "pageFiles": [
+        "client/src/pages/properties/PropertiesDaybook.tsx"
       ],
       "resource": "properties.payments",
       "actions": [
@@ -1652,6 +2050,10 @@
         "/properties/vouchers",
         "/properties/create"
       ],
+      "pageFiles": [
+        "client/src/pages/properties/PropertiesCreate.tsx",
+        "client/src/pages/properties/PropertiesVouchers.tsx"
+      ],
       "resource": "properties.payments",
       "actions": [
         "view",
@@ -1674,6 +2076,9 @@
       "paths": [
         "/properties/vouchers/:id/edit"
       ],
+      "pageFiles": [
+        "client/src/pages/properties/PropertiesVoucherEdit.tsx"
+      ],
       "resource": "properties.payments",
       "actions": [
         "view",
@@ -1692,13 +2097,22 @@
       "paths": [
         "/properties/voucher-detail/:voucherId"
       ],
+      "pageFiles": [
+        "client/src/pages/properties/PropertiesVoucherDetail.tsx"
+      ],
       "resource": "properties.payments",
       "actions": [
         "view",
         "export"
       ],
       "mode": "browse",
-      "inPage": "server_enforced"
+      "inPage": "read_only",
+      "reviewedMutations": [
+        {
+          "file": "client/src/components/financial/VoucherCostCenters.tsx",
+          "reason": "Cost-centre allocation editing renders only for the Developer role."
+        }
+      ]
     },
     {
       "id": "properties.settings",
@@ -1708,6 +2122,11 @@
         "/properties/settings",
         "/properties/transfer",
         "/properties/balance-repair"
+      ],
+      "pageFiles": [
+        "client/src/pages/BalanceRepair.tsx",
+        "client/src/pages/CompanyTransfer.tsx",
+        "client/src/pages/properties/PropertiesSettings.tsx"
       ],
       "resource": "system.settings",
       "actions": [
@@ -1725,6 +2144,11 @@
         "/sp",
         "/sp/golden-coast",
         "/sp/reports"
+      ],
+      "pageFiles": [
+        "client/src/pages/sp/SpGoldenCoast.tsx",
+        "client/src/pages/sp/SpOverview.tsx",
+        "client/src/pages/sp/SpReports.tsx"
       ],
       "resource": "retail.pos",
       "actions": [
@@ -1744,6 +2168,11 @@
         "/sp/opening-stock",
         "/sp/aliases",
         "/sp/setup"
+      ],
+      "pageFiles": [
+        "client/src/pages/sp/SpAliases.tsx",
+        "client/src/pages/sp/SpOpeningStock.tsx",
+        "client/src/pages/sp/SpSetup.tsx"
       ],
       "resource": "system.settings",
       "actions": [

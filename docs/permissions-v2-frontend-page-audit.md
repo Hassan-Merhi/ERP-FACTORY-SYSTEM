@@ -6,12 +6,13 @@ Read-only roles are View Only and Create Only. The server refuses every write th
 
 | Measure | Count |
 |---|---|
-| Pages catalogued | 92 |
+| Pages catalogued | 94 |
 | Routes catalogued | 216 |
-| Gated in page | 16 |
+| Gated in page | 17 |
+| Read-only page (verified by import scan) | 9 |
 | Gated at route | 40 |
 | Admin/Owner/Developer only | 3 |
-| Server and request guard only (UI work remaining) | 33 |
+| Server and request guard only (UI work remaining) | 25 |
 | Audit failures | 0 |
 
 ## ERP
@@ -20,10 +21,10 @@ Read-only roles are View Only and Create Only. The server refuses every write th
 |---|---|---|---|---|---|
 | Accounts | `/accounts` | view, create, edit, delete, export | opens | opens | Gated in page. Account edit, reorder and bulk voucher delete are hidden for read-only roles. |
 | Historical opening balances | `/accounts/historical-openings` | view, edit | explained | explained | Gated at route |
-| Account ledger | `/ledger-monthly/:accountId`<br>`/ledger-vouchers/:accountId/:year/:month` | view, export | opens | opens | Server and request guard only (UI work remaining) |
+| Account ledger | `/ledger-monthly/:accountId`<br>`/ledger-vouchers/:accountId/:year/:month` | view, export | opens | opens | Read-only page (verified by import scan) |
 | Vouchers (journal, transfer, adjustment forms) | `/vouchers` | view, create, edit, delete, approve, finalize, reverse, void, export | opens | explained (create not verified) | Gated at route. Voucher creation is not a handler-verified Create Only create. |
 | Edit voucher | `/vouchers/:id/edit` | view, edit, delete, reverse | read view | read view | Gated at route |
-| Voucher detail | `/voucher-detail/:voucherId` | view, export | opens | opens | Server and request guard only (UI work remaining). Read view; cost-centre allocation is refused by the server for read-only roles. |
+| Voucher detail | `/voucher-detail/:voucherId` | view, export | opens | opens | Read-only page (verified by import scan) |
 | Optional vouchers | `/optional-vouchers` | view, approve, finalize, delete | explained | explained | Gated at route |
 | Create master data | `/create` | view, create | opens | opens (verified create: suppliers) | Gated in page. Create Only sees only the supplier and stock item forms (verified creates). |
 | Customers and suppliers | `/parties` | view, create, edit, delete, export | opens | opens (verified create: customers) | Gated in page |
@@ -35,13 +36,15 @@ Read-only roles are View Only and Create Only. The server refuses every write th
 | Edit POS sale | `/pos/edit/:id` | view, edit, void | read view | read view | Gated at route |
 | POS item replacement | `/pos-item-replacement` | view, edit | explained | explained | Gated at route |
 | POS import | `/pos-import` | view, import | explained | explained | Gated at route |
-| Sales reports | `/sales-report`<br>`/sales-report/detail`<br>`/sales-report/comparison`<br>`/stock-in-sales-report`<br>`/item-market-analysis`<br>`/supplier-profit-reconciliation`<br>`/supplier-profit-check` | view, export | opens | opens | Server and request guard only (UI work remaining) |
+| Sales reports | `/sales-report`<br>`/sales-report/detail`<br>`/sales-report/comparison`<br>`/stock-in-sales-report`<br>`/supplier-profit-reconciliation` | view, export | opens | opens | Read-only page (verified by import scan) |
+| Item market analysis and supplier profit check | `/item-market-analysis`<br>`/supplier-profit-check` | view, export | opens | opens | Server and request guard only (UI work remaining). Offers sale-price export and profit-check actions; the server refuses them for read-only roles. |
 | Sales tools (daybook, price list, transfers) | `/sales-tools` | view, create, edit, approve, export | opens | opens | Server and request guard only (UI work remaining) |
 | Inventory | `/inventory` | view, export | opens | opens | Server and request guard only (UI work remaining) |
 | Stock items | `/stock` | view, create, edit, delete, export | opens | opens (verified create: stockItems) | Gated in page |
-| Stock item detail and history | `/stock-query/:id`<br>`/stock-items/:id/history`<br>`/stock-items/:id/history/:year/:month`<br>`/stock-items/:stockItemId/monthly-summary`<br>`/locations/:locationId/stock-items/:stockItemId/history`<br>`/locations/:locationId/stock-items/:stockItemId/vouchers/:year/:month` | view, export | opens | opens | Server and request guard only (UI work remaining). Edit links resolve to the read-only voucher view for read-only roles. |
+| Stock item detail and history | `/stock-query/:id`<br>`/stock-items/:id/history`<br>`/stock-items/:id/history/:year/:month`<br>`/stock-items/:stockItemId/monthly-summary`<br>`/locations/:locationId/stock-items/:stockItemId/history`<br>`/locations/:locationId/stock-items/:stockItemId/vouchers/:year/:month` | view, export | opens | opens | Read-only page (verified by import scan). Edit links resolve to the read-only voucher view for read-only roles. |
 | Import stock items | `/import-stock-items` | view, import | explained | explained | Gated at route |
-| Opening and closing stock | `/opening-stock`<br>`/opening-stock/:groupId`<br>`/closing-stock-summary`<br>`/closing-stock/:groupId`<br>`/bale-ledger` | view, export | opens | opens | Server and request guard only (UI work remaining) |
+| Opening and closing stock | `/opening-stock`<br>`/opening-stock/:groupId`<br>`/closing-stock/:groupId`<br>`/bale-ledger` | view, export | opens | opens | Read-only page (verified by import scan) |
+| Closing stock summary | `/closing-stock-summary` | view, edit, export | opens | opens | Gated in page. Carry-forward to opening stock is hidden for read-only roles. |
 | Barcode manager | `/barcode-manager` | view, edit | explained | explained | Gated at route |
 | Stock transfer order | `/stock-transfer-order` | view, create, approve | opens | explained (create not verified) | Gated at route |
 | Containers | `/containers` | view, create, edit, delete, approve, finalize, reverse, void, export | opens | opens | Gated in page. Container renaming and voucher re-sync are hidden for read-only roles. |
@@ -49,8 +52,8 @@ Read-only roles are View Only and Create Only. The server refuses every write th
 | Container verification | `/containers/:containerId/verification` | view, approve | explained | explained | Gated at route |
 | Goods in transit containers | `/git`<br>`/mock-git`<br>`/containers-otw`<br>`/mock-containers-otw` | view, create, edit, delete, export | opens | opens | Gated in page |
 | Daybook | `/daybook` | view, create, edit, delete, approve, finalize, reverse, void, export | opens | opens | Gated in page |
-| Transaction journal | `/transaction-journal` | view, export | opens | opens | Server and request guard only (UI work remaining) |
-| Analytics | `/analytics` | view, export | opens | opens | Server and request guard only (UI work remaining) |
+| Transaction journal | `/transaction-journal` | view, export | opens | opens | Read-only page (verified by import scan) |
+| Analytics | `/analytics` | view, export | opens | opens | Read-only page (verified by import scan) |
 | Financial overview | `/financial-overview` | view, export | explained | explained | Gated at route. Hidden for read-only roles since the Create Only activation change. |
 | Tracking hub and transporter statement | `/tracking` | view, create, edit, delete, export | opens | opens | Gated in page |
 | Payroll | `/payroll` | view, create, approve, export | opens | opens | Server and request guard only (UI work remaining). Bulk payroll was reviewed and kept denied for Create Only. |
@@ -90,7 +93,7 @@ Read-only roles are View Only and Create Only. The server refuses every write th
 | Factory accounts and ledger | `/factory/accounts`<br>`/factory/ledger-monthly/:accountId`<br>`/factory/ledger-vouchers/:accountId/:year/:month`<br>`/factory/contacts`<br>`/factory/parties`<br>`/factory/customers/:id`<br>`/factory/transporters` | view, create, edit, delete, export | opens | opens | Server and request guard only (UI work remaining) |
 | Factory vouchers | `/factory/vouchers` | view, create, edit, delete, approve, finalize, reverse, void, export | opens | explained (create not verified) | Gated at route |
 | Edit factory voucher | `/factory/vouchers/:id/edit` | view, edit, delete, reverse | read view | read view | Gated at route |
-| Factory voucher detail | `/factory/voucher-detail/:voucherId` | view, export | opens | opens | Server and request guard only (UI work remaining) |
+| Factory voucher detail | `/factory/voucher-detail/:voucherId` | view, export | opens | opens | Read-only page (verified by import scan) |
 | Factory create master data | `/factory/create` | view, create | opens | opens (verified create: suppliers) | Gated in page |
 | Factory daybook | `/factory/daybook` | view, create, edit, delete, approve, finalize, reverse, void, export | opens | opens | Gated in page |
 | Factory analytics and intelligence | `/factory/analytics`<br>`/factory/intelligence/dashboard`<br>`/factory/intelligence/kpis`<br>`/factory/intelligence/alerts`<br>`/factory/intelligence/supplier-hub`<br>`/factory/intelligence/financial-hub`<br>`/factory/intelligence/production-hub`<br>`/factory/net-position-details`<br>`/factory/financial-snapshot`<br>`/factory/broker-visual-statement` | view, export | opens | opens | Server and request guard only (UI work remaining) |
@@ -121,7 +124,7 @@ Read-only roles are View Only and Create Only. The server refuses every write th
 | Properties daybook | `/properties/daybook` | view, create, edit, delete, approve, finalize, reverse, void, export | opens | opens | Server and request guard only (UI work remaining) |
 | Properties vouchers and payments | `/properties/vouchers`<br>`/properties/create` | view, create, edit, delete, approve, finalize, reverse, void, export | opens | explained (create not verified) | Gated at route. Rental payments were reviewed and kept denied for Create Only. |
 | Edit properties voucher | `/properties/vouchers/:id/edit` | view, edit, delete, reverse | read view | read view | Gated at route |
-| Properties voucher detail | `/properties/voucher-detail/:voucherId` | view, export | opens | opens | Server and request guard only (UI work remaining) |
+| Properties voucher detail | `/properties/voucher-detail/:voucherId` | view, export | opens | opens | Read-only page (verified by import scan) |
 | Properties settings and transfer | `/properties/settings`<br>`/properties/transfer`<br>`/properties/balance-repair` | view, manage_settings | explained | explained | Admin/Owner/Developer only |
 
 ## Supplier Partner

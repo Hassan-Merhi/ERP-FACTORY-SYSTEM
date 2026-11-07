@@ -28,6 +28,9 @@
  * In-page gating status (`inPage`):
  * - "component": the listed files read the shared role helpers and hide or
  *   disable controls that change existing records (checked by tests).
+ * - "read_only": the page offers no business write at all. The audit follows
+ *   every import from `pageFiles` and fails if any write call appears, apart
+ *   from `reviewedMutations` that are unreachable for read-only roles.
  * - "route": the whole page is unavailable to read-only roles.
  * - "role_restricted": the route only renders for Admin/Owner/Developer.
  * - "server_enforced": the page still shows some change controls to
@@ -50,7 +53,7 @@ import {
 
 export type PermissionPageArea = "erp" | "factory" | "pos_retail" | "properties" | "supplier_partner";
 export type ReadOnlyRouteMode = "browse" | "change" | "create";
-export type InPageGating = "component" | "route" | "role_restricted" | "server_enforced";
+export type InPageGating = "component" | "read_only" | "route" | "role_restricted" | "server_enforced";
 
 export interface PermissionPageEntry {
   id: string;
@@ -64,6 +67,10 @@ export interface PermissionPageEntry {
   inPage: InPageGating;
   /** Files whose controls are gated; required when inPage is "component". */
   files?: readonly string[];
+  /** Route components, used by the audit's import scan. */
+  pageFiles?: readonly string[];
+  /** Write calls reviewed as unreachable for read-only roles, with the reason. */
+  reviewedMutations?: readonly { file: string; reason: string }[];
   /** Handler-verified create this page submits to (Create Only may open it). */
   createOnlyCreate?: CreateOnlyVerifiedCreateName;
   /** Read-only view for "change" pages: `:param` values are copied across. */
@@ -74,7 +81,7 @@ const ACTIONS: ReadonlySet<string> = new Set(ACCESS_CONTROL_ACTIONS);
 const RESOURCES: ReadonlySet<string> = new Set(ACCESS_CONTROL_RESOURCES);
 const AREAS: ReadonlySet<string> = new Set(["erp", "factory", "pos_retail", "properties", "supplier_partner"]);
 const MODES: ReadonlySet<string> = new Set(["browse", "change", "create"]);
-const GATING: ReadonlySet<string> = new Set(["component", "route", "role_restricted", "server_enforced"]);
+const GATING: ReadonlySet<string> = new Set(["component", "read_only", "route", "role_restricted", "server_enforced"]);
 
 type RawPage = Record<string, unknown>;
 
@@ -88,6 +95,19 @@ function parsePage(raw: RawPage): PermissionPageEntry {
   const paths = stringList(raw.paths);
   const actions = stringList(raw.actions);
   const files = raw.files === undefined ? undefined : stringList(raw.files);
+  const pageFiles = raw.pageFiles === undefined ? undefined : stringList(raw.pageFiles);
+  const reviewed = raw.reviewedMutations === undefined ? undefined : raw.reviewedMutations;
+  const reviewedValid =
+    reviewed === undefined ||
+    (Array.isArray(reviewed) &&
+      reviewed.every(
+        (item) =>
+          typeof item === "object" &&
+          item !== null &&
+          typeof (item as { file?: unknown }).file === "string" &&
+          typeof (item as { reason?: unknown }).reason === "string" &&
+          (item as { reason: string }).reason.length > 10
+      ));
   if (
     !id ||
     !AREAS.has(String(raw.area)) ||
@@ -99,7 +119,10 @@ function parsePage(raw: RawPage): PermissionPageEntry {
     !MODES.has(String(raw.mode)) ||
     !GATING.has(String(raw.inPage)) ||
     files === null ||
+    pageFiles === null ||
+    !reviewedValid ||
     (raw.inPage === "component" && !files?.length) ||
+    (raw.inPage === "read_only" && !pageFiles?.length) ||
     (raw.createOnlyCreate !== undefined && !isCreateOnlyVerifiedCreateName(String(raw.createOnlyCreate))) ||
     (raw.readView !== undefined && (typeof raw.readView !== "string" || !raw.readView.startsWith("/")))
   ) {
@@ -114,6 +137,8 @@ function parsePage(raw: RawPage): PermissionPageEntry {
     mode: raw.mode as ReadOnlyRouteMode,
     inPage: raw.inPage as InPageGating,
     ...(files ? { files } : {}),
+    ...(pageFiles ? { pageFiles } : {}),
+    ...(reviewed ? { reviewedMutations: reviewed as { file: string; reason: string }[] } : {}),
     ...(raw.createOnlyCreate !== undefined
       ? { createOnlyCreate: raw.createOnlyCreate as CreateOnlyVerifiedCreateName }
       : {}),
@@ -209,7 +234,13 @@ export function permissionPageCatalogSummary() {
     properties: 0,
     supplier_partner: 0,
   };
-  const byInPage: Record<InPageGating, number> = { component: 0, route: 0, role_restricted: 0, server_enforced: 0 };
+  const byInPage: Record<InPageGating, number> = {
+    component: 0,
+    read_only: 0,
+    route: 0,
+    role_restricted: 0,
+    server_enforced: 0,
+  };
   let routes = 0;
   for (const entry of PERMISSION_PAGE_CATALOG) {
     byArea[entry.area] += 1;
