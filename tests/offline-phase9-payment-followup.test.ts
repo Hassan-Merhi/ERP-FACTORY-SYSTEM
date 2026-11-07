@@ -46,6 +46,7 @@ import {
   phase9PaymentEditApplyHandler,
 } from "../server/edge/phase9PaymentFollowUpApply";
 import { phase9PaymentSnapshotTx } from "../server/edge/phase9PaymentSnapshot";
+import { PHASE9_PERIOD_CLOSED } from "../server/edge/phase9ClosedPeriod";
 import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,
@@ -339,6 +340,56 @@ describe("Cloud replay of payment edits and deletes", () => {
         "PHASE9_PAYMENT_RECONCILED"
       );
       expect(phase9OverridableConflicts("payments", event.kind)).not.toContain("PHASE9_PAYMENT_RECONCILED");
+    });
+  });
+
+  it("holds a payment create, edit or delete dated in a closed period as reject-only instead of stopping the stream", async () => {
+    const voucherId = await postPayment("70");
+    const before = await snapshot(voucherId);
+    await inRolledBackTx(async (client) => {
+      const retained = await client.query("SELECT id FROM ledger_accounts WHERE company_id = $1 ORDER BY id LIMIT 1", [
+        ctx.companyId,
+      ]);
+      await client.query(
+        `INSERT INTO fiscal_period_closures (company_id, period_start_date, period_end_date, closed_by_user_id,
+           closing_voucher_id, retained_earnings_account_id, total_income, total_expense, net_income, status)
+         VALUES ($1, '2026-11-01', '2026-11-30', $2, $3, $4, 0, 0, 0, 'CLOSED')`,
+        [ctx.companyId, ctx.userId, voucherId, retained.rows[0].id]
+      );
+      edge.config = LAN;
+      let lanVoucherId: number;
+      try {
+        lanVoucherId = await postPayment("71");
+      } finally {
+        edge.config = CLOUD;
+      }
+      const [created] = (await outbox("voucher.payment-receipt.v1")).filter(
+        (row: { localVoucherId: number }) => row.localVoucherId === lanVoucherId
+      );
+      await client.query("SAVEPOINT closed_create");
+      expect(
+        await conflictCode(phase9PaymentApplyHandler.apply(client, wrap(created) as unknown as Phase9PaymentEvent))
+      ).toBe(PHASE9_PERIOD_CLOSED);
+      await client.query("ROLLBACK TO SAVEPOINT closed_create");
+      const edit = editEvent({ origin: "cloud", voucherId }, voucherId, before, "75");
+      await client.query("SAVEPOINT closed_edit");
+      // The edit and delete services refuse a closed-period voucher themselves.
+      const editCode = await conflictCode(replay(client, phase9PaymentEditApplyHandler, edit));
+      expect(editCode).toBe("PHASE9_PAYMENT_EDIT_REFUSED");
+      expect(phase9OverridableConflicts("payments", edit.kind)).not.toContain(editCode);
+      expect(phase9OverridableConflicts("payments", "voucher.payment-receipt.v1")).not.toContain(PHASE9_PERIOD_CLOSED);
+      await client.query("ROLLBACK TO SAVEPOINT closed_edit");
+      const remove = wrap(
+        phase9PaymentDeleteEnvelope({
+          ...actor(),
+          localVoucherId: voucherId,
+          voucherRef: { origin: "cloud", voucherId },
+          beforeSha256: before,
+        })
+      );
+      const deleteCode = await conflictCode(replay(client, phase9PaymentDeleteApplyHandler, remove));
+      expect(["PHASE9_PAYMENT_DELETE_REFUSED", PHASE9_PERIOD_CLOSED]).toContain(deleteCode);
+      expect(phase9OverridableConflicts("payments", remove.kind)).not.toContain(deleteCode);
     });
   });
 
