@@ -20,6 +20,7 @@ import type {
   PayableAccount,
   ProfitData,
 } from "./types";
+import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
 
 type GlobalErrorMarker = {
   _handledGlobally?: unknown;
@@ -48,7 +49,7 @@ export function useDashboard() {
   const [, setLocation] = useLocation();
   const isFactoryMode = appMode === "factory";
   const { data: viewer } = useQuery(authenticatedUserQueryOptions());
-  const isViewer = (viewer?.currentRole ?? viewer?.role) === "View Only";
+  const isViewer = isExistingRecordReadOnlyRole(viewer?.currentRole ?? viewer?.role);
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isAddPayableDialogOpen, setIsAddPayableDialogOpen] = useState(false);

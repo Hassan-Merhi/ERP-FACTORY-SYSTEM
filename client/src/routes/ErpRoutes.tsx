@@ -112,6 +112,7 @@ import {
   VoucherEdit,
   Vouchers,
 } from "@/lazyPages";
+import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
 
 interface ErpRouteUser {
   role?: string | null;
@@ -161,7 +162,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       <Route path="/">{() => (isAdminOrDev ? <ContainersOTW /> : <Redirect replace to="/tracking" />)}</Route>
       <Route path="/tracking" component={TrackingHub} />
       <Route path="/help-training">{() => <ErpHelpTraining user={user} />}</Route>
-      {R("/financial-overview", effectiveRole !== "View Only" && canAccess("dashboard"), Dashboard)}
+      {R("/financial-overview", !isExistingRecordReadOnlyRole(effectiveRole) && canAccess("dashboard"), Dashboard)}
 
       {canAccess("pos") ? (
         <Route path="/pos">{() => <POSPage />}</Route>

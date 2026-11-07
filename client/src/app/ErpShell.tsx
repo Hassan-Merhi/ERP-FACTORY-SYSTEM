@@ -23,6 +23,7 @@ import { canUseAdminSearch, type ShellUser } from "./shellUser";
 import { ErpAccessBoundary } from "./ErpAccessBoundary";
 import { MODULE_ACCENT } from "@/components/sidebar/sidebarPrimitives";
 import "@/erp-mobile-operations.css";
+import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
 
 interface ErpShellProps {
   user: ShellUser;
@@ -74,7 +75,7 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
           <SkipLink>{t("accessibility.skipToMainContent")}</SkipLink>
           <SidebarProvider style={style as React.CSSProperties}>
             <div ref={erpContainerRef} data-erp-shell="" className="flex h-full w-full min-w-0 overflow-hidden">
-              {user.role !== "View Only" && <CompanyDailyRateModal />}
+              {!isExistingRecordReadOnlyRole(user.role) && <CompanyDailyRateModal />}
               <AppSidebar user={user} onLogout={handleLogout} />
               <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
                 <OfflineBanner />
@@ -86,6 +87,17 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
                   >
                     <strong className="font-semibold text-foreground">ERP · View Only.</strong> You can browse company
                     information, but creating, editing, importing, posting and deleting are disabled.
+                  </div>
+                )}
+                {user.role === "Create Only" && (
+                  <div
+                    role="status"
+                    data-testid="erp-create-only-banner"
+                    className="border-b bg-muted/50 px-4 py-2 text-xs text-muted-foreground sm:text-sm"
+                  >
+                    <strong className="font-semibold text-foreground">ERP · Create Only.</strong> You can browse company
+                    information and add approved new records, but changing, deleting, approving and importing are
+                    disabled.
                   </div>
                 )}
                 <AppTopBar
