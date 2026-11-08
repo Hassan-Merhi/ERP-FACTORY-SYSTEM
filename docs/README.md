@@ -22,6 +22,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [permissions-control-center-phase1.md](permissions-control-center-phase1.md) | Route inventory, candidate mappings and policy model |
 | [permissions-control-center-phase2.md](permissions-control-center-phase2.md) | Shadow policy API, migration and audit foundation |
 | [permissions-control-center-phase8.md](permissions-control-center-phase8.md) | Phase 8 release gate, audit, monitored rollout and rollback runbook |
+| [security-posture.md](security-posture.md) | Current security controls, residual risks and how the posture is measured |
 | [permissions-v2-security-test-report.md](permissions-v2-security-test-report.md) | Role security matrix, business-integrity and regression results for Permissions V2 |
 | [permissions-v2-staging-certification.md](permissions-v2-staging-certification.md) | Staging migration, backup, data-integrity and rollback certification procedure and tooling |
 | [permissions-v2-effective-engine.md](permissions-v2-effective-engine.md) | Effective permission precedence, endpoints, company activation, enforcement switch and administrator safety rules |
