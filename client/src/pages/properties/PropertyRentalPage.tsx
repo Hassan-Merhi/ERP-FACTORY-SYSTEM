@@ -132,7 +132,7 @@ export default function PropertyRentalPage({
   const paidFigure = rentalReportingFigure(
     showHistoricalPaid ? (reconciledAccountTotalsReady ? summaryPaid : null) : (contractTotalsAreUsd ? summaryPaid : null),
     showHistoricalPaid ? "reconciled-account-balances" : "contract-paid",
-    showHistoricalPaid ? "2026-10-26" : null,
+    null, // mixed historical-cutoff withdrawal and current cash/deposit balances have no single as-of date
   );
   const summaryMoney = (amount: number) => contractTotalsAreUsd
     ? formatMoneyDisplay(amount, { currency: "USD" })
