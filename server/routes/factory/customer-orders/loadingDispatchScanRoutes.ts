@@ -216,7 +216,10 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
           return { scan };
         });
         if ("status" in result && typeof result.status === "number") {
-          return res.status(result.status).json({ code: result.code, message: result.message, previous: result.previous });
+          return res.status(result.status).json({
+            code: result.code, message: result.message,
+            previous: "previous" in result ? result.previous : undefined,
+          });
         }
         if (!("scan" in result) || !result.scan) throw new Error("Scan insert returned no row");
         return res.status(201).json({ ...result.scan, status: "VERIFIED" });
@@ -280,6 +283,9 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
         });
         if ("status" in result && typeof result.status === "number") {
           return res.status(result.status).json({ message: result.message });
+        }
+        if (!("scan" in result) || !result.scan) {
+          throw new Error("Dispatch scan correction returned no record");
         }
         return res.json({ success: true, scan: result.scan });
       } catch (error) {
