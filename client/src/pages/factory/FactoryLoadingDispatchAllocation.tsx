@@ -304,11 +304,25 @@ export default function FactoryLoadingDispatchAllocation({
                   Keep already scanned bales here, then reserve available references in article/proforma order to fill the quantities.
                 </p>
               </div>
-              <label className="flex items-center gap-2 text-sm font-medium">
-                <Checkbox checked={autoPick} onCheckedChange={(checked) => { setAutoPick(checked === true); setDirty(true); }}
-                  disabled={!editable || save.isPending} data-testid="checkbox-dispatch-autopick" />
-                Auto-pick
-              </label>
+              <div className="flex flex-wrap items-center gap-3">
+                {editable && (
+                  <Button type="button" size="sm" variant="outline" disabled={save.isPending}
+                    onClick={() => {
+                      setBaleIds(candidates.filter((bale) => bale.scannedHere).map((bale) => bale.baleId));
+                      setAutoPick(true);
+                      setDirty(true);
+                    }}
+                    title="Clear unscanned exact reservations and rebuild using current targets when saved"
+                    data-testid="button-rebalance-dispatch-plan">
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Rebalance refs
+                  </Button>
+                )}
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <Checkbox checked={autoPick} onCheckedChange={(checked) => { setAutoPick(checked === true); setDirty(true); }}
+                    disabled={!editable || save.isPending} data-testid="checkbox-dispatch-autopick" />
+                  Auto-pick
+                </label>
+              </div>
             </div>
 
             <div className="overflow-hidden rounded-xl border dark:border-slate-700">
