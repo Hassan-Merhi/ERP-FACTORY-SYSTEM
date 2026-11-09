@@ -13,12 +13,13 @@ export function erpReportFileName(
   label: string,
   extension: ErpReportFileExtension,
   date: Date = new Date(),
+  separator: "_" | "-" = "_",
 ): string {
   const prefix = label
     .replace(/[\\/<>:"|?*\x00-\x1f]+/g, "_")
     .replace(/[.\s]+$/g, "")
     .trim() || "ERP_Report";
-  return `${prefix}_${format(date, "yyyy-MM-dd")}.${extension}`;
+  return `${prefix}${separator}${format(date, "yyyy-MM-dd")}.${extension}`;
 }
 
 /** Existing ExcelJS worksheet compatibility (headers and values unchanged). */
