@@ -74,7 +74,7 @@ SELECT id,contract_id,unit_id,year,month,expected_amount,paid_amount,
 used_prepaid_account,used_advance_account,accrual_voucher_id
 FROM property_monthly_ledger WHERE company_id=${company} AND contract_id=${contract}
 ORDER BY year,month,id FOR UPDATE
-   `)).rows as PosJnahMonth[];
+   `)).rows as unknown as PosJnahMonth[];
    const links=verifyPosJnahPrepaidMonths(monthly,done?"after":"before");
    const companyRow=(await tx.execute(sql`
 SELECT id,name,active FROM companies WHERE id=${company}
