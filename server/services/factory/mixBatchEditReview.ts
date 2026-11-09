@@ -228,6 +228,9 @@ export async function prepareMixSourceEditReview(
     }
     const oldKg = oldByBatch.get(upstreamId) ?? new MoneyDecimal(0);
     const requestedKg = proposedBatches.get(upstreamId) ?? new MoneyDecimal(0);
+    if (!["OPEN", "ACTIVE", "CARRY_FORWARD"].includes(upstream.status) && !requestedKg.eq(oldKg)) {
+      warnings.push(`Source batch ${upstream.batchCode} is completed/closed; its historical usage cannot be changed in this workflow.`);
+    }
     if (toMoney(upstream.usedKg).lt(oldKg)) {
       warnings.push(`Source batch ${upstream.batchCode} has less used material than this mix references.`);
     }
