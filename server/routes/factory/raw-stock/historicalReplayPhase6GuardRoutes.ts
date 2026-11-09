@@ -375,6 +375,13 @@ export function registerHistoricalReplayPhase6GuardRoutes(app: Express): void {
       const originalJson = res.json.bind(res);
       res.json = (payload) => {
         if (!payload?.dryRun) return originalJson(payload);
+        if (payload.downstreamSafety?.safeToApply === false) {
+          return originalJson({
+            ...payload,
+            financialImpact: undefined,
+            projectionError: "Downstream production/COGS/GL safeguards blocked this historical replay. Review downstreamSafety.blockers before preparing another scope.",
+          });
+        }
         const expandedSupplierIds = parsePositiveIntegerIds(payload.safeSupplierIds) ?? supplierIds;
         let batchIds: number[];
         try {
