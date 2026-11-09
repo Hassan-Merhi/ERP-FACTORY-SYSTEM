@@ -73,6 +73,12 @@ export async function prepareMixSourceEditReview(
   const oldByBatch = new Map<number, ReturnType<typeof toMoney>>();
 
   for (const source of oldSources) {
+    if (source.containerId !== null && source.supplierId === null) {
+      warnings.push("An original container source has no supplier attribution. It requires an audited historical correction.");
+    }
+    if (source.containerId !== null && source.sourceBatchId !== null) {
+      warnings.push("An original row has conflicting container and source-batch references.");
+    }
     if (source.containerId !== null) {
       oldByContainer.set(
         source.containerId,
