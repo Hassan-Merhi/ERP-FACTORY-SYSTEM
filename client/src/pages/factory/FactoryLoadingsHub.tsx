@@ -34,7 +34,7 @@ export default function FactoryLoadingsHub() {
     enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60000,
   });
-  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess.hasFactoryAccess
+  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
     ? myAccess.hiddenCostFields
     : ["hide_invoicing_loadings_tab","hide_tab_loadings_pending"];
 
