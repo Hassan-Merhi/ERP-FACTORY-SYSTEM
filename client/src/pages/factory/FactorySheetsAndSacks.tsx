@@ -1,7 +1,8 @@
 import { downloadBlob } from "@/lib/downloadBlob";
 import { TabsList, PillTabButton } from "@/components/ui/tabs";
 import type { ClientErrorLike } from "@/lib/clientError";
-import { useState, useMemo, useEffect } from "react";
+import { Suspense, useState, useMemo, useEffect } from "react";
+import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -46,10 +47,19 @@ import {
 
 import type { SheetsAndSacksItem } from "./factorysheetsandsacks/types";
 import { TYPES, fmt, fmtInt } from "./factorysheetsandsacks/utils";
-import { ItemFormDialog } from "./factorysheetsandsacks/components/ItemFormDialog";
-import { DeductDialog } from "./factorysheetsandsacks/components/DeductDialog";
-import { RestockDialog } from "./factorysheetsandsacks/components/RestockDialog";
-import { MovementLog } from "./factorysheetsandsacks/components/MovementLog";
+// Optional workflows should not extend the initial stock tab's JavaScript load.
+const ItemFormDialog = lazy(() =>
+  import("./factorysheetsandsacks/components/ItemFormDialog").then((module) => ({ default: module.ItemFormDialog }))
+);
+const DeductDialog = lazy(() =>
+  import("./factorysheetsandsacks/components/DeductDialog").then((module) => ({ default: module.DeductDialog }))
+);
+const RestockDialog = lazy(() =>
+  import("./factorysheetsandsacks/components/RestockDialog").then((module) => ({ default: module.RestockDialog }))
+);
+const MovementLog = lazy(() =>
+  import("./factorysheetsandsacks/components/MovementLog").then((module) => ({ default: module.MovementLog }))
+);
 // Presentation preferences only. The data model, financial calculations, and stock APIs are unchanged.
 const OPTIONAL_COLUMNS = [
   { key: "type", label: "Type" },
@@ -447,9 +457,14 @@ export default function FactorySheetsAndSacks() {
       )}
 
       {/* ─── MOVEMENT LOG TAB ─────────────────────────────────────────────── */}
-      {effectiveTab === "movements" && <MovementLog items={items} />}
+      {effectiveTab === "movements" && (
+        <Suspense fallback={<div className="p-4 text-sm text-muted-foreground">Loading movements...</div>}>
+          <MovementLog items={items} />
+        </Suspense>
+      )}
 
       {/* Dialogs */}
+      <Suspense fallback={<div className="p-4 text-sm text-muted-foreground">Loading editor...</div>}>
       {(showAddDialog || editItem) && (
         <ItemFormDialog
           open={showAddDialog || !!editItem}
@@ -462,6 +477,7 @@ export default function FactorySheetsAndSacks() {
       )}
       {deductItem && <DeductDialog open={!!deductItem} onClose={() => setDeductItem(null)} item={deductItem} />}
       {restockItem && <RestockDialog open={!!restockItem} onClose={() => setRestockItem(null)} item={restockItem} />}
+      </Suspense>
 
       <AlertDialog open={!!deleteItem} onOpenChange={(v) => !v && setDeleteItem(null)}>
         <AlertDialogContent>

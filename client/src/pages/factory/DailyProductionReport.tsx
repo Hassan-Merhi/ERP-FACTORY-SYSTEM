@@ -1,4 +1,7 @@
 import { Suspense } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import FactoryShippingContainers from "@/pages/factory/FactoryShippingContainers";
 import FactoryStatusBuilder from "@/pages/factory/FactoryStatusBuilder";
@@ -12,8 +15,10 @@ import { useDailyProductionReport } from "./dailyproductionreport/useDailyProduc
 import { ProductionTabPanel } from "./dailyproductionreport/components/ProductionTabPanel";
 import "./factoryshippingcontainers/shipping-redesign.css";
 
-const FactoryMonthlyProductionMatrix = lazy(() => import("./FactoryMonthlyProductionMatrix"));
-const FactorySheetsAndSacks = lazy(() => import("./FactorySheetsAndSacks"));
+const loadMonthlyProduction = () => import("./FactoryMonthlyProductionMatrix");
+const loadSheetsAndSacks = () => import("./FactorySheetsAndSacks");
+const FactoryMonthlyProductionMatrix = lazy(loadMonthlyProduction);
+const FactorySheetsAndSacks = lazy(loadSheetsAndSacks);
 
 type OverviewTab = "otw-tracking" | "production" | "monthly-production" | "shipping" | "sheets-sacks" | "sheets";
 const OVERVIEW_TABS: readonly OverviewTab[] = [
@@ -36,8 +41,38 @@ const HIDDEN_KEYS: Record<OverviewTab, string> = {
 // Keep page permissions for Monthly Production and Sheets & Sacks when embedding
 // them in Overview. Moving navigation must not grant access to either workflow.
 export default function DailyProductionReport() {
-  const report = useDailyProductionReport();
   const { ready, canOpen, access, isPrivileged } = useFactoryNavigationAccess();
+  const { selectedCompany } = useCompany();
+  const queryClient = useQueryClient();
+
+  // Start downloading the component and its data before opening the tab.
+  // React Query deduplicates the pending fetch with the eventual page mount.
+  const warmMonthlyProduction = () => {
+    void loadMonthlyProduction().catch(() => undefined);
+    if (!selectedCompany?.id || !canOpen("/factory/monthly-production-matrix")) return;
+    void queryClient.prefetchQuery({
+      queryKey: companyQueryKey("/api/factory/monthly-production-matrix", selectedCompany.id),
+      staleTime: 60_000,
+      queryFn: async () => {
+        const res = await fetch("/api/factory/monthly-production-matrix", { credentials: "include" });
+        if (!res.ok) throw new Error("Unable to preload monthly production");
+        return res.json();
+      },
+    }).catch(() => undefined);
+  };
+  const warmSheetsAndSacks = () => {
+    void loadSheetsAndSacks().catch(() => undefined);
+    if (!selectedCompany?.id || !canOpen("/factory/sheets-sacks")) return;
+    void queryClient.prefetchQuery({
+      queryKey: ["/api/factory/sheets-sacks"],
+      staleTime: 5 * 60_000,
+      queryFn: async () => {
+        const res = await fetch("/api/factory/sheets-sacks", { credentials: "include" });
+        if (!res.ok) throw new Error("Unable to preload sheets and sacks");
+        return res.json();
+      },
+    }).catch(() => undefined);
+  };
   const hidden = isPrivileged ? [] : (access?.hiddenCostFields ?? []);
   const visibleTabs = OVERVIEW_TABS.filter((tab) => {
     if (hidden.includes(HIDDEN_KEYS[tab])) return false;
@@ -52,6 +87,7 @@ export default function DailyProductionReport() {
     knownValues: OVERVIEW_TABS,
     defaultValue: visibleTabs.includes("production") ? "production" : (visibleTabs[0] ?? "production"),
   });
+  const report = useDailyProductionReport(ready && activeTab === "production");
   const show = (tab: OverviewTab) => ready && visibleTabs.includes(tab);
 
   if (!ready) return <div className="p-5 text-sm text-muted-foreground">Loading access...</div>;
@@ -83,7 +119,7 @@ export default function DailyProductionReport() {
                 </TabsTrigger>
               )}
               {show("monthly-production") && (
-                <TabsTrigger value="monthly-production" data-testid="tab-monthly-production">
+                <TabsTrigger value="monthly-production" data-testid="tab-monthly-production" onPointerEnter={warmMonthlyProduction} onFocus={warmMonthlyProduction} onPointerDown={warmMonthlyProduction}>
                   <BarChart3 className="mr-1.5 h-4 w-4" /> Monthly Production
                 </TabsTrigger>
               )}
@@ -93,7 +129,7 @@ export default function DailyProductionReport() {
                 </TabsTrigger>
               )}
               {show("sheets-sacks") && (
-                <TabsTrigger value="sheets-sacks" data-testid="tab-sheets-sacks">
+                <TabsTrigger value="sheets-sacks" data-testid="tab-sheets-sacks" onPointerEnter={warmSheetsAndSacks} onFocus={warmSheetsAndSacks} onPointerDown={warmSheetsAndSacks}>
                   <Layers className="mr-1.5 h-4 w-4" /> Sheets & Sacks
                 </TabsTrigger>
               )}
