@@ -11,7 +11,6 @@ import { resultRows } from "../../../lib/queryResult";
 import {
   compareFactoryLoadingDispatch,
   type ComparisonScan,
-  type ComparisonTrip,
   type LoadingDispatchComparison,
 } from "./loadingDispatchComparison";
 import { loadFactoryLoadingDispatchComparisonSnapshot } from "./loadingDispatchComparisonRoutes";
@@ -156,6 +155,7 @@ export async function loadFactoryDispatchReport(input: {
     let frozenComparison: LoadingDispatchComparison | null = null;
     let frozenScans: ComparisonScan[] | null = null;
     let manifestAvailable = true;
+    let archivedLoading: Raw | null = null;
 
     if (input.closureId !== undefined && !selected) {
       throw new DispatchReportError(400, "CLOSURE_REQUIRES_TRIP", "A historical closure must specify its truck");
@@ -200,6 +200,10 @@ export async function loadFactoryDispatchReport(input: {
       const oldTruck = record.truck && typeof record.truck === "object" &&
         !Array.isArray(record.truck) ? record.truck as Raw : null;
       if (oldTruck && trip) {
+        const labels = oldTruck.loadingMetadata;
+        if (labels && typeof labels === "object" && !Array.isArray(labels)) {
+          archivedLoading = labels as Raw;
+        }
         trip = {
           ...trip, dispatchNumber: num(oldTruck.dispatchNumber),
           truckPlate: nullable(oldTruck.truckPlate),
@@ -273,9 +277,12 @@ export async function loadFactoryDispatchReport(input: {
     return {
       source, generatedAt: new Date().toISOString(),
       loading: {
-        orderId: input.orderId, companyName: str(meta.companyName),
-        customerName: nullable(meta.customerName), proformaName: nullable(meta.proformaName),
-        containerNumber: nullable(meta.containerNumber), status: str(meta.status),
+        orderId: input.orderId,
+        companyName: archivedLoading ? str(archivedLoading.companyName) : str(meta.companyName),
+        customerName: archivedLoading ? nullable(archivedLoading.customerName) : nullable(meta.customerName),
+        proformaName: archivedLoading ? nullable(archivedLoading.proformaName) : nullable(meta.proformaName),
+        containerNumber: archivedLoading ? nullable(archivedLoading.containerNumber) : nullable(meta.containerNumber),
+        status: archivedLoading ? str(archivedLoading.status) : str(meta.status),
       },
       trip, closure, comparison, scans,
       manifestAvailable, notices, audit, auditTruncated,
