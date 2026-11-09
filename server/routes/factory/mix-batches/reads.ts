@@ -25,6 +25,11 @@ export function registerFactoryMixBatchReadRoutes(app: Express) {
       // Reuse this existing authenticated URL (profile switch) to avoid
       // adding an unregistered dynamic route or changing route order.
       if (req.query.profile === "historical-audit") {
+        // Deleted mix source rows and complete costing provenance are sensitive.
+        const role = String(req.session.currentRole || req.session.role || "").trim().toLowerCase();
+        if (!["admin", "owner", "developer", "dev"].includes(role)) {
+          return res.status(403).json({ message: "Historical reconciliation requires Admin, Owner or Developer access." });
+        }
         const report = await getHistoricalMixBatchReconciliation(companyId);
         res.set("Cache-Control", "private, no-store");
         res.set("X-ERP-Payload-Profile", "historical-mix-batch-audit-read-only");
