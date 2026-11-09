@@ -30,7 +30,6 @@ import {
   reconciledHistoryTsv,
   receiptTotals,
 } from "./property-rental/paymentsReceiptMath";
-import { belongsToHistoricalRentSnapshot } from "./property-rental/historicalRentSnapshot";
 import { hasHassanPropertiesHistoricalReportingPolicy } from "@/properties/config/historicalRentReportingPolicy";
 import { useRentalPayments, rentalPaymentsQueryKey } from "@/properties/hooks/useRentalPayments";
 import { useWarehousePaidTotals } from "@/properties/hooks/useRentalUnits";
@@ -309,12 +308,10 @@ export default function RentalPaymentsLog({
       )}
       {isPropertiesPayments && !isHassanProperties && (
         <div className="flex flex-wrap gap-2" role="group" aria-label="Payment type">
-          {RECONCILIATION_VIEWS.filter((view) => isHassanProperties || view.key !== "HISTORICAL_RENT").map((view) => {
+          {RECONCILIATION_VIEWS.filter((view) => view.key !== "HISTORICAL_RENT").map((view) => {
             const count =
               view.key === "ALL"
                 ? payments.length
-                : view.key === "HISTORICAL_RENT"
-                  ? payments.filter(belongsToHistoricalRentSnapshot).length
                   : view.key === "OTHER"
                     ? payments.filter(
                         (payment) =>
@@ -345,13 +342,6 @@ export default function RentalPaymentsLog({
           isError={paymentsError}
           onReconciliationChange={setReconciliation}
         />
-      )}
-
-      {isHassanProperties && effectiveView === "OTHER" && (
-        <p className="text-xs text-muted-foreground">
-          STE SIARSEGO's $800 billing transition adjustment has no payment voucher. It remains in the original records
-          but is not counted as voucher-backed rent paid.
-        </p>
       )}
 
       {isHassanProperties && (
