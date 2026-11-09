@@ -26,7 +26,6 @@ import { PhoneSheetDialogs } from "@/components/ui/phone-sheet";
 import { useDocumentAppShell } from "@/hooks/use-document-app-shell";
 import { useVisualViewportMetrics } from "@/hooks/use-visual-viewport-metrics";
 import "@/factory-mobile-operations.css";
-import "@/styles/factory-theme.css";
 import "@/styles/factory-unified-theme.css";
 
 const FactoryFrenchCatalogManager = lazy(() =>
@@ -110,7 +109,7 @@ export function FactoryShell({
       <AppModeProvider mode="factory">
         <SkipLink>{t("accessibility.skipToMainContent")}</SkipLink>
         <SidebarProvider style={style as React.CSSProperties}>
-          <div ref={factoryContainerRef} className="factory-theme flex h-full w-full min-w-0 overflow-hidden">
+          <div ref={factoryContainerRef} className="flex h-full w-full min-w-0 overflow-hidden">
             {selectedCompany?.id && <DailyRateModal companyId={selectedCompany.id} />}
             <FactorySidebar user={user} onLogout={handleLogout} />
             <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
