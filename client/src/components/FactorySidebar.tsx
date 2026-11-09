@@ -42,6 +42,7 @@ import { companyQueryKey } from "@/lib/companyQueryScope";
 import { accessQueryPolicy, liveCountQueryPolicy, stableSettingsQueryPolicy } from "@/lib/queryPolicies";
 import { useConnectivity } from "@/contexts/ConnectivityContext";
 import { useRef, useEffect, useMemo } from "react";
+import { useLocation } from "wouter";
 import { useRecentNav } from "@/hooks/use-recent-nav";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Clock } from "lucide-react";
@@ -198,6 +199,20 @@ export const FACTORY_NAV_SECTIONS: FactoryNavSection[] = FACTORY_SIDEBAR_GROUP_O
   };
 }).filter((section) => section.items.length > 0);
 
+/**
+ * A single sidebar entry represents POS and Waste Dispatch, but keeps whichever
+ * direct route is active highlighted. Each route still enforces its own grants.
+ */
+export function collapseFactorySalesDispatchNav<T extends { accessKey: string }>(
+  items: T[],
+  location: string,
+): T[] {
+  if (!items.some((item) => item.accessKey === "factory/pos") ||
+      !items.some((item) => item.accessKey === "factory/waste-dispatch")) return items;
+  const hide = location.startsWith("/factory/waste-dispatch") ? "factory/pos" : "factory/waste-dispatch";
+  return items.filter((item) => item.accessKey !== hide);
+}
+
 const FACTORY_PINNED_DEFAULTS: NavItem[] = FACTORY_PINNED_PAGES.map((page) => ({
   title: page.label,
   url: page.route,
@@ -222,6 +237,7 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
   seesAllTabs: boolean;
 } {
   const { selectedCompany } = useCompany();
+  const [currentLocation] = useLocation();
   const isDeveloper = user?.role === "Developer";
   const isAdmin = user?.role === "Admin" || isDeveloper;
 
@@ -334,11 +350,10 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
         // Preserve all authorized pages in the sidebar, including those accessible
         // from a parent hub. Visibility remains controlled by the access registry.
         return true;
-      }).filter((item, _index, items) =>
-        s.label !== "Sales & Loading" ||
-        item.accessKey !== "factory/waste-dispatch" ||
-        !items.some((other) => other.accessKey === "factory/pos")
-      ),
+      }).filter((item) => item.accessKey !== "factory/production-report" || !item.hideKey || !myAccess?.hiddenCostFields?.includes(item.hideKey)),
+    })).map((s) => ({
+      ...s,
+      items: s.label === "Sales & Loading" ? collapseFactorySalesDispatchNav(s.items, currentLocation) : s.items,
     }))
     .filter((s) => s.items.length > 0);
 
