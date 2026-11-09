@@ -45,7 +45,7 @@ vi.mock("../server/db", async () => {
   const dialect = new PgDialect();
   const chain = (value: unknown) => {
     const q: Record<string, unknown> = {};
-    for (const step of ["where", "for", "returning"]) q[step] = () => q;
+    for (const step of ["where", "for", "returning", "limit"]) q[step] = () => q;
     q.then = (resolve: (v: unknown) => unknown, reject: (r: unknown) => unknown) =>
       Promise.resolve(value).then(resolve, reject);
     return q;
