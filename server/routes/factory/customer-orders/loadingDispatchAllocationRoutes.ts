@@ -20,7 +20,7 @@ const MAX_LINES = 2000;
 const MAX_BALES = 10000;
 const MAX_RESERVE = 10000;
 type Raw = Record<string, unknown>;
-function rows(value: unknown): Raw[] { return resultRows(value) as Raw[]; }
+function rows(value: unknown): Raw[] { return resultRows(value); }
 function str(value: unknown): string { return value == null ? "" : String(value); }
 function num(value: unknown): number { const n = Number(value ?? 0); return Number.isFinite(n) ? n : 0; }
 function code(value: unknown): string { return str(value).trim().toUpperCase(); }
@@ -223,7 +223,7 @@ function buildOverview(s: Source, dispatchId: number, orderId: number) {
   }
   for (const trip of otherByTrip.values()) for (const [article, r] of trip) {
     const a = articles.get(article);
-    if (a) a.reservedOtherQty += Math.max(r.planned, r.exact.size, r.scanned.size);
+    if (a) a.reservedOtherQty += Math.max(r.planned, new Set([...r.exact, ...r.scanned]).size);
   }
   const list = [...articles.values()].map((a) => ({
     ...a,
@@ -257,7 +257,7 @@ function buildOverview(s: Source, dispatchId: number, orderId: number) {
     otherTrips: [...otherByTrip].map(([trip, map]) => ({
       dispatchId: trip,
       reservedArticles: [...map].map(([articleCode, v]) => ({
-        articleCode, reservedQty: Math.max(v.planned, v.exact.size, v.scanned.size),
+        articleCode, reservedQty: Math.max(v.planned, new Set([...v.exact, ...v.scanned]).size),
       })),
     })),
   };
