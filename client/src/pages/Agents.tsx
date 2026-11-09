@@ -151,7 +151,7 @@ export default function Agents() {
   };
 
   const listPanel = (
-    <div className="flex min-w-0 flex-col gap-2">
+    <div className={isPhone ? "flex w-full min-w-0 flex-col gap-2" : "flex w-80 shrink-0 min-w-0 flex-col gap-2 max-md:w-full"}>
     {(accountsError || agentsError) && (
       <div role="alert" className="rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-sm">
         Unable to load some agent accounts. Check the connection and retry.
