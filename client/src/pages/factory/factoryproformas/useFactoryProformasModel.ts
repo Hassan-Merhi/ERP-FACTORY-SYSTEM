@@ -175,8 +175,8 @@ export function useFactoryProformasModel() {
   const priceListMap = Object.fromEntries(customerPriceList.map((p) => [p.article_code, p.price_per_bale]));
 
   const { data: locations = [] } = useQuery<{ id: number; name: string; code: string }[]>({
-    queryKey: ["/api/locations"],
-    enabled: !!createLoadingProforma,
+    queryKey: companyQueryKey("/api/locations", selectedCompany?.id),
+    enabled: !!createLoadingProforma && Boolean(selectedCompany?.id),
   });
 
   const createLoadingMutation = useMutation({
