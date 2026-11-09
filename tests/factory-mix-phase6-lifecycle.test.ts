@@ -37,6 +37,7 @@ import {
   requireMixLifecycleAvailable,
   requireMixLifecycleUsage,
   requireMixFinalizeDecision,
+  requireMixDeletionSafe,
   validateMixLifecycleUsageRequest,
 } from "../server/services/factory/mixLifecyclePhase6";
 import {
@@ -123,6 +124,14 @@ describe("Phase 6 exact-kg mix lifecycle guards", () => {
     expect(approved.remainingKg.toFixed(3)).toBe("60.000");
     expect(approved.wasteReason).toContain("production sheet");
     expect(requireMixFinalizeDecision(openBatch({ usedKg: "100.000" }), {}).remainingKg.toFixed(3)).toBe("0.000");
+  });
+  it("blocks deletion of completed, consumed, linked or carried mixes before raw-stock recredit", () => {
+    expect(() => requireMixDeletionSafe(openBatch({ usedKg: "0" }), false)).not.toThrow();
+    expect(() => requireMixDeletionSafe(openBatch({ status: "COMPLETED" }), false)).toThrow(MixLifecycleRefusal);
+    expect(() => requireMixDeletionSafe(openBatch({ status: "CLOSED" }), false)).toThrow(MixLifecycleRefusal);
+    expect(() => requireMixDeletionSafe(openBatch({ usedKg: "1.000" }), false)).toThrow(MixLifecycleRefusal);
+    expect(() => requireMixDeletionSafe(openBatch({ usedKg: "0", carryForwardFromId: 4 }), false)).toThrow(MixLifecycleRefusal);
+    expect(() => requireMixDeletionSafe(openBatch({ usedKg: "0" }), true)).toThrow(MixLifecycleRefusal);
   });
 });
 
