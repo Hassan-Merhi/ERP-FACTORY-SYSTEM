@@ -116,7 +116,10 @@ export function buildMixMonitorSnapshot(
             .minus(new Decimal(source.weightKg).times(source.recordedRateUsdPerKg)).abs();
         } else if (issue.code === "HEADER_BLENDED_RATE_MISMATCH" &&
           batch.reconstructedBlendedUsdPerKg != null) {
-          delta = new Decimal(batch.recordedBlendedUsdPerKg).minus(batch.reconstructedBlendedUsdPerKg).abs();
+          // Convert rate-only drift to the corresponding batch USD difference so
+          // the monitor's 2-cent threshold has the correct unit.
+          delta = new Decimal(batch.recordedBlendedUsdPerKg)
+            .minus(batch.reconstructedBlendedUsdPerKg).abs().times(batch.recordedWeightKg);
         }
         if (delta?.isFinite()) metric = { value: delta.toFixed(7), unit };
       } catch { /* keep invalid historical numeric inputs as issues, never fake a zero magnitude */ }
