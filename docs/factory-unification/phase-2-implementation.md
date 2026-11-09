@@ -78,3 +78,15 @@ A further set of targeted high-impact fixes is committed in the same branch:
 5. Financial, dispatch, stock and payroll mutations were deliberately not modified; behavior and data-parity claims require independent nonproduction tests.
 
 **Honest current state:** Extensive additional Phase 2 source hardening committed; **Phase 2 is NOT fully verified or complete**. This is a stop/go release gate for the user-controlled future merge. No CI, production DB action or main merge.
+
+
+## 2026-11-09 employee attendance / finance isolation continuation
+
+Additional source-level changes landed on the same branch:
+
+- `FactoryEmployeeAttendanceTab.tsx`: company-scoped daily attendance, per-employee history, employee picker and their mutation invalidations. No-company reads are disabled. The per-employee view remounts for selected-company transitions, and the daily view clears editable maps and approval state on company change. Server approval/attendance rules are untouched.
+- `FactoryEmployeeAdvancesTab.tsx`, `FactoryEmployeeBonusesTab.tsx`, `FactoryEmployeeWithdrawalsTab.tsx`: company-scoped employee, cash account, advance/repayment and bonus cache keys, with company-aware query enabling and invalidations. Financial mutation functions and amounts were not changed.
+- `FactoryEmployees.tsx` and `FactoryEmployeeDetail.tsx`: list, detail, statement and ledger-picker caches isolated by selected-company key; no-company reads disabled. Endpoint authorization remains server-owned.
+- `tests/factory-unification-phase2-employee-scoping.test.ts` added as a **source characterization test only; not executed**.
+
+**Validation actually performed:** GitHub post-write source fetches verified scoped query expressions and imports. Git transport and a runnable checkout were unavailable; TypeScript, Vitest, the repo-wide audit tool, browser, API and real-role checks **were not executed**. This is not an exhaustive audit. Other Factory and shared-domain modules still require review, and the A→B→A delayed-query/active-edit acceptance test remains open. **Phase 2 remains IN PROGRESS / NOT FULLY VERIFIED**. No CI or merge.
