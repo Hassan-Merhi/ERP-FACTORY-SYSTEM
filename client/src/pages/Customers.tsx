@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/PageHeader";
-import { DataTableToolbar } from "@/components/DataTableToolbar";
+import { ErpListFilters, ErpListTable } from "@/erp-core";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { insertCustomerSchema, type Customer } from "@shared/schema";
@@ -389,7 +389,7 @@ function CompanyCustomers() {
       </div>
 
       {/* Shared search and phone filter sheet; original persisted filters remain unchanged. */}
-      <DataTableToolbar
+      <ErpListFilters
         search={searchQuery}
         onSearchChange={(value) => setFilter("searchQuery", value)}
         searchPlaceholder="Search customers..."
@@ -420,7 +420,7 @@ function CompanyCustomers() {
 
       {/* Table */}
       <div className="border rounded-xl overflow-hidden">
-        <Table mobileLayout="cards">
+        <ErpListTable pageKey="customers" companyId={selectedCompany?.id} mobileLayout="cards" scrollLabel="Customer accounts">
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
               <TableHead className="text-xs h-9 font-semibold">Customer</TableHead>
@@ -518,7 +518,7 @@ function CompanyCustomers() {
               ))
             )}
           </TableBody>
-        </Table>
+        </ErpListTable>
       </div>
 
       {/* Edit Dialog */}
