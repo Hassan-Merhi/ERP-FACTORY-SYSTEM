@@ -88,25 +88,37 @@ function printNumber(n: number, digits = 0): string {
 }
 
 async function getJson<T>(url: string): Promise<T> {
-  // Dispatch evidence must never be substituted with the SPA index.html by
-  // a stale browser/proxy cache. Expect the API's JSON response explicitly.
-  const response = await fetch(url, {
-    credentials: "include",
-    cache: "no-store",
-    headers: { Accept: "application/json" },
-  });
-  const contentType = response.headers.get("content-type") || "";
-  if (!contentType.toLowerCase().includes("application/json")) {
-    throw new Error(
-      "Dispatch API returned a webpage instead of data (HTTP " +
-      response.status + "). Check the backend deployment and refresh the page."
-    );
+  // After a rolling deployment some intermediaries can briefly return the
+  // SPA HTML shell for an API GET. Never interpret it as dispatch evidence.
+  // One cache-busted retry allows the client to recover without operator
+  // action while preserving real JSON errors and authorization responses.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const requestUrl = attempt === 0
+      ? url
+      : url + (url.includes("?") ? "&" : "?") + "_dispatch_retry=" + Date.now();
+    const response = await fetch(requestUrl, {
+      credentials: "include",
+      cache: "no-store",
+      headers: { Accept: "application/json", "Cache-Control": "no-cache" },
+    });
+    const contentType = (response.headers.get("content-type") || "").toLowerCase();
+    if (!contentType.includes("application/json")) {
+      // Retry only successful non-JSON responses. A 401, 403, 404, or 5xx
+      // should not be masked by retrying an unrelated fallback page.
+      if (response.ok && attempt === 0) continue;
+      throw new Error(
+        "Dispatch API returned " + (contentType || "an unknown content type") +
+        " instead of JSON (HTTP " + response.status + "). " +
+        "The server or proxy served an invalid API response; please retry."
+      );
+    }
+    const body = await response.json();
+    if (!response.ok) {
+      throw new Error(body?.message || "Unable to load dispatch information (HTTP " + response.status + ")");
+    }
+    return body as T;
   }
-  const body = await response.json();
-  if (!response.ok) {
-    throw new Error(body?.message || "Unable to load dispatch information (HTTP " + response.status + ")");
-  }
-  return body as T;
+  throw new Error("Dispatch API did not return JSON after retry");
 }
 
 function getError(error: unknown): string {
