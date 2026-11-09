@@ -751,9 +751,7 @@ export default function FactoryLoadingDispatchCompare() {
                             <span className="block truncate text-sm font-semibold">
                               {tripLabel(trip.dispatchNumber)}
                             </span>
-                            <span className="block truncate text-xs text-muted-foreground">
-                              {trip.truckPlate || "Truck not assigned"} · {trip.status}
-                            </span>
+                            <span className="block truncate text-xs text-muted-foreground">{trip.status}</span>
                           </span>
                         </span>
                         <span className="flex shrink-0 items-center gap-1 font-mono text-xs">

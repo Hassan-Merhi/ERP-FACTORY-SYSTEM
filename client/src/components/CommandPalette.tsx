@@ -43,6 +43,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { getAccountingToolLinks, getDeveloperMaintenanceLinks } from "@/lib/accountingToolboxNavigation";
 import { useFactoryVisibleSections } from "@/components/FactorySidebar";
 import { getPropertiesVisibleNavSections } from "@/components/PropertiesSidebar";
+import { canNavigateProperties, canUsePropertiesCapability } from "@/properties/config/propertiesNavigation";
 import type { NavItem, NavSection } from "@/components/sidebar/sidebarPrimitives";
 
 interface CommandPaletteUser {
@@ -363,12 +364,6 @@ const FACTORY_HUB_TABS: PageEntry[] = [
 
 const PROPERTIES_EXTRAS: PageEntry[] = [
   { label: "Properties Daybook", description: "Daily transaction log", path: "/properties/daybook", icon: Calendar },
-  {
-    label: "Properties Dashboard",
-    description: "Properties overview",
-    path: "/properties/dashboard",
-    icon: LayoutDashboard,
-  },
   { label: "Properties Analytics", description: "Properties analytics", path: "/properties/analytics", icon: PieChart },
   { label: "Rental Shops", description: "Shops rented out", path: "/properties/rentals?tab=shops", icon: Users },
   {
@@ -697,17 +692,20 @@ export function CommandPalette({
     ]);
   }, [factorySections, factoryIsPinnedVisible, factoryIsHubTabVisible, shellRole]);
 
-  const propertiesPages = useMemo(
-    () =>
-      buildEntries(getPropertiesVisibleNavSections(shellRole === "Developer"), [
-        ...PROPERTIES_EXTRAS.filter((entry) => shellRole !== "ERP Tester" || entry.path !== "/properties/my-settings"),
-        ...(shellRole === "Developer"
-          ? [...PROPERTIES_DEVELOPER_EXTRAS, ...PROPERTIES_ACCOUNTING_CONTEXT, ...PROPERTIES_MAINTENANCE_CONTEXT]
-          : []),
-        ...(canSeeAdminCommands ? PROPERTIES_ADMIN_EXTRAS : []),
-      ]),
-    [canSeeAdminCommands, shellRole]
-  );
+  const propertiesPages = useMemo(() => {
+    const canDeveloper = canUsePropertiesCapability("developer", user, selectedCompany);
+    const canAdmin = canUsePropertiesCapability("admin", user, selectedCompany);
+    const candidateExtras = [
+      ...PROPERTIES_EXTRAS,
+      ...(canDeveloper
+        ? [...PROPERTIES_DEVELOPER_EXTRAS, ...PROPERTIES_ACCOUNTING_CONTEXT, ...PROPERTIES_MAINTENANCE_CONTEXT]
+        : []),
+      ...(canAdmin ? PROPERTIES_ADMIN_EXTRAS : []),
+    ];
+    return buildEntries(getPropertiesVisibleNavSections(canDeveloper), candidateExtras.filter(
+      (entry) => canNavigateProperties(entry.path, user, selectedCompany)
+    ));
+  }, [user?.role, user?.currentRole, selectedCompany?.role, selectedCompany?.companyType]);
 
   const showErp = !isPOS && hasErpAccess;
   const showFactory = !isPOS && hasFactoryAccess;

@@ -1,0 +1,93 @@
+import type { Company } from "@/contexts/CompanyContext";
+
+export type PropertiesCapability = "workspace" | "admin" | "developer" | "personal";
+export const PROPERTIES_RENTAL_TABS = [
+  { value: "warehouses", label: "Warehouses", path: "/properties/rentals" },
+  { value: "shops", label: "Shops", path: "/properties/rentals?tab=shops" },
+  { value: "payments", label: "Payments", path: "/properties/rentals?tab=payments" },
+] as const;
+export type PropertiesRentalTab = (typeof PROPERTIES_RENTAL_TABS)[number]["value"];
+
+type NavEntry = Readonly<{
+  path: string;
+  label: string;
+  parent: string | null;
+  capability: PropertiesCapability;
+  navigation?: "pinned" | "tab" | "tool" | "footer" | "hidden";
+}>;
+/** Canonical Properties routes and tab metadata for sidebar/search/route gates. */
+export const PROPERTIES_NAVIGATION: readonly NavEntry[] = [
+  { path: "/properties/daybook", label: "Daybook", parent: null, capability: "workspace", navigation: "pinned" },
+  { path: "/properties/agents", label: "Agent Ledger", parent: null, capability: "workspace", navigation: "pinned" },
+  { path: "/properties/rentals", label: "Rentals", parent: null, capability: "workspace", navigation: "pinned" },
+  { path: "/properties/rentals?tab=shops", label: "Shops", parent: "/properties/rentals", capability: "workspace", navigation: "tab" },
+  { path: "/properties/rentals?tab=payments", label: "Payments", parent: "/properties/rentals", capability: "workspace", navigation: "tab" },
+  { path: "/properties/accounts", label: "Accounts", parent: null, capability: "workspace", navigation: "pinned" },
+  { path: "/properties/vouchers", label: "Vouchers", parent: null, capability: "workspace", navigation: "pinned" },
+  { path: "/properties/analytics", label: "Analytics", parent: null, capability: "workspace", navigation: "pinned" },
+  { path: "/properties/help-training", label: "Help & Training", parent: null, capability: "workspace", navigation: "footer" },
+  { path: "/properties/my-settings", label: "My Settings", parent: null, capability: "personal", navigation: "footer" },
+  { path: "/properties/settings", label: "Settings", parent: null, capability: "admin", navigation: "footer" },
+  { path: "/properties/transfer", label: "Cash Transfer", parent: "/properties/rentals", capability: "developer", navigation: "tool" },
+  ...["toolbox", "open-items", "cash-bank", "monetary-fx", "rentals", "consolidation", "history", "statements", "fiscal-review", "dashboard", "rollout"].map((name) => ({
+    path: `/properties/accounting/${name}`, label: name, parent: "/properties/accounts",
+    capability: "developer" as const, navigation: "tool" as const,
+  })),
+  ...["net-position-details", "deleted-items", "orphaned-records", "chatbot-settings", "import-cycle-diagnostics", "inventory-repair", "company-data-reset", "account-groups", "balance-repair"].map((name) => ({
+    path: `/properties/${name}`, label: name, parent: "/properties/settings",
+    capability: "admin" as const, navigation: "hidden" as const,
+  })),
+  { path: "/properties/dashboard", label: "Compatibility Dashboard", parent: null, capability: "workspace", navigation: "hidden" },
+  { path: "/properties/create", label: "Create Property", parent: "/properties/rentals", capability: "workspace", navigation: "hidden" },
+  { path: "/properties/vouchers/:id/edit", label: "Edit Voucher", parent: "/properties/vouchers", capability: "workspace", navigation: "hidden" },
+  { path: "/properties/voucher-detail/:voucherId", label: "Voucher Detail", parent: "/properties/vouchers", capability: "workspace", navigation: "hidden" },
+  { path: "/properties/ledger-monthly/:accountId", label: "Account Ledger", parent: "/properties/accounts", capability: "workspace", navigation: "hidden" },
+  { path: "/properties/ledger-vouchers/:accountId/:year/:month", label: "Ledger Vouchers", parent: "/properties/accounts", capability: "workspace", navigation: "hidden" },
+];
+
+/** Retain replacement redirects; no history entries should be added. */
+export const PROPERTIES_LEGACY_RENTAL_REDIRECTS = {
+  "/properties/rental/warehouses": "/properties/rentals",
+  "/properties/rental/shops": "/properties/rentals?tab=shops",
+  "/properties/rental/payments": "/properties/rentals?tab=payments",
+} as const;
+
+export type PropertiesSessionIdentity = {
+  role?: string | null;
+  currentRole?: string | null;
+};
+
+/**
+ * Selected-company assignments take precedence when available, rather than
+ * treating a global role as company-wide authorization. UI gates only.
+ * The server must still authorize every request in its company session.
+ */
+export function propertiesEffectiveRole(
+  user: PropertiesSessionIdentity | null | undefined,
+  selectedCompany: Pick<Company, "companyType" | "role"> | null | undefined,
+): string | null {
+  if (selectedCompany && selectedCompany.companyType !== "properties") return null;
+  return selectedCompany?.role ?? user?.currentRole ?? user?.role ?? null;
+}
+
+export function canUsePropertiesCapability(
+  capability: PropertiesCapability,
+  user: PropertiesSessionIdentity | null | undefined,
+  selectedCompany: Pick<Company, "companyType" | "role"> | null | undefined,
+): boolean {
+  const role = propertiesEffectiveRole(user, selectedCompany);
+  if (role === null) return false;
+  if (capability === "workspace") return true;
+  if (capability === "personal") return role !== "ERP Tester";
+  if (capability === "admin") return role === "Admin" || role === "Developer";
+  return role === "Developer";
+}
+
+export function canNavigateProperties(
+  path: string,
+  user: PropertiesSessionIdentity | null | undefined,
+  company: Pick<Company, "companyType" | "role"> | null | undefined,
+): boolean {
+  const entry = PROPERTIES_NAVIGATION.find((item) => item.path === path);
+  return entry ? canUsePropertiesCapability(entry.capability, user, company) : false;
+}

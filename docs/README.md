@@ -71,6 +71,8 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [factory-loading-dispatch-phase5.md](factory-loading-dispatch-phase5.md) | Factory Loading Dispatch — Phase 5: Priority allocation and cross-trip coordination |
 | [factory-loading-dispatch-phase6.md](factory-loading-dispatch-phase6.md) | Factory Loading Dispatch — Phase 6: End Dispatch and audit controls |
 | [factory-loading-dispatch-phase7.md](factory-loading-dispatch-phase7.md) | Factory Loading Dispatch — Phase 7: Reports, manifests and exports |
+| [properties-unification-phase6-handoff.md](properties-unification-phase6-handoff.md) | Properties Unification — Phase 6 Parity Audit and Claude Merge Handoff |
+| [properties-unification-execution-tracker.md](properties-unification-execution-tracker.md) | Properties Mode — Unification Execution Tracker |
 | [audits/mali-hmd-cost-repair-procedure.md](audits/mali-hmd-cost-repair-procedure.md) | Evidence-gated MALI/HMD landed-cost, adjustment, transfer and COGS repair procedure (backend-only) |
 | [audits/historical-sold-bale-cost-reconciliation-review.md](audits/historical-sold-bale-cost-reconciliation-review.md) | Review-only reconciliation of historical sold-bale costs and the guarded pre-invoice recost |
 | [inventory-flow.md](inventory-flow.md) | Stock data model and cost calculation |

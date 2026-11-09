@@ -6,6 +6,16 @@ This document is the authoritative navigation contract for the Properties compan
 
 The audit is navigation-only. It does not change rental, property, voucher, accounting, ledger, analytics, or administrative business logic.
 
+## Implemented frontend registry (2026-11-09 — unification Phase 5)
+
+The executable navigation manifest lives in `client/src/properties/config/propertiesNavigation.ts`. It defines canonical route labels, deterministic parents, required capabilities, pinned root order, rental tab names/query URLs and legacy rental redirects. Its capability helpers are consumed by `PropertiesRoutes.tsx`, `PropertiesSidebar.tsx`, `PropertiesRentalsHub.tsx`, command search and the Properties Help & Training catalog.
+
+**Selected-company policy:** where an active Properties company has an assigned role, that role determines frontend visibility; otherwise the active session role (or legacy role fallback) applies. A selected non-Properties company does not receive Properties capability visibility. This policy is strictly client-side and **does not authorize any API write**. Company/session authorization in the backend remains authoritative. The rental-reconciliation backend `currentRole ?? role` compatibility fallback was not modified in this navigation-only phase; its appropriate company-scope handling remains a backend review concern.
+
+Legacy rental routes keep replacement-history redirects. The Phase 1 Shops tab and `?tab=shops` deep link remain supported. Permission-gated route components are not mounted by the Properties route switch when capability checks fail.
+
+**Verification scope:** structural source inspection only; runtime navigation, selected-company role switching, command palette behavior and backend authorization must be independently verified before merge. No CI, tests, deployment or merge were run.
+
 ## Shell and fallback behavior
 
 | Concern | Final behavior |
