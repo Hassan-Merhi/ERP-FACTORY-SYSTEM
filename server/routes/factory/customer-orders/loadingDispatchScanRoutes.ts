@@ -181,19 +181,6 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
             };
           }
 
-          // Flag exact bales allocated to a different truck while preserving
-          // their actual physical verification for the Compare discrepancy.
-          const otherPlanRows = await tx.execute(sql`
-            SELECT d.dispatch_number AS "expectedDispatchNumber", d.id AS "expectedDispatchId"
-              FROM factory_loading_dispatch_expected_bales e
-              JOIN factory_loading_dispatches d ON d.id = e.dispatch_id
-                AND d.company_id = e.company_id AND d.order_id = e.order_id
-             WHERE e.company_id = ${companyId} AND e.order_id = ${orderId}
-               AND e.bale_id = ${bale.baleId} AND e.removed_at IS NULL
-               AND e.dispatch_id <> ${dispatchId} LIMIT 1
-          `);
-          const assignedOther = resultRows(otherPlanRows)[0] ?? null;
-
           // DO NOTHING handles a race with a different open dispatch. This
           // prevents a failed insert from aborting the surrounding PG tx.
           const inserted = await tx.execute(sql`
@@ -232,21 +219,7 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
                       baleReference: String(bale.baleReference),
                     })}::jsonb)
           `);
-          if (assignedOther) {
-            await tx.execute(sql`
-              INSERT INTO factory_loading_dispatch_events
-                (company_id, order_id, dispatch_id, event_type, actor_user_id,
-                 actor_username, event_data)
-              VALUES (${companyId}, ${orderId}, ${dispatchId},
-                'WRONG_TRIP_BALE_VERIFIED', ${userId}, ${username},
-                ${JSON.stringify({
-                    baleId: Number(bale.baleId),
-                    expectedDispatchId: String(assignedOther.expectedDispatchId),
-                    expectedDispatchNumber: Number(assignedOther.expectedDispatchNumber),
-                  })}::jsonb)
-            `);
-          }
-          return { scan, assignedOther };
+          return { scan };
         });
         if ("status" in result && typeof result.status === "number") {
           return res.status(result.status).json({
@@ -256,12 +229,8 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
         }
         if (!("scan" in result) || !result.scan) throw new Error("Scan insert returned no row");
         return res.status(201).json({
-          ...result.scan, status: result.assignedOther ? "REVIEW_REQUIRED" : "VERIFIED",
-          ...(result.assignedOther ? {
-            warningMessage: "Bale verified on this truck but allocated to Dispatch #" +
-              result.assignedOther.expectedDispatchNumber + ". Check comparison.",
-            expectedDispatchNumber: result.assignedOther.expectedDispatchNumber,
-          } : {}),
+          ...result.scan,
+          status: "VERIFIED",
         });
       } catch (error) {
         logger.error("Error recording truck dispatch verification scan", { error });
