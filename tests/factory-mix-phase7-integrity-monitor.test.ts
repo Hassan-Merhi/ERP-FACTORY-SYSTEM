@@ -35,7 +35,7 @@ vi.mock("../server/db", () => ({
         if (sql.startsWith("UPDATE factory_alerts SET is_read=true")) {
           const key = String(values[2]);
           for (const row of memory.rows) if (row.type === "MIX_INTEGRITY" &&
-            !row.isRead && row.message?.startsWith(key + " ")) row.isRead = true;
+            !row.isRead && row.message?.startsWith(key)) row.isRead = true;
           return { rows: [] };
         }
         return { rows: [] };
