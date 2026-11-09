@@ -4,6 +4,7 @@ import { summarizeRecordedMixBatches, recordedMixBatchCost } from "@/lib/recorde
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
+import { useOptionalCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Layers, Pencil, Trash2, MessageCircle, Loader2, FileSpreadsheet, ShieldCheck, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -123,6 +124,8 @@ export function MixBatchList({
 }: MixBatchListProps) {
   const recordChanges = useExistingRecordChangeAccess();
   const recordChangeReason = recordChanges.reason ?? undefined;
+  const selectedRole = String(useOptionalCompany()?.selectedCompany?.role ?? "").trim().toLowerCase();
+  const canAuditHistoricalMixes = ["admin", "owner", "developer", "dev"].includes(selectedRole);
   const [showAllMixBatches, setShowAllMixBatches] = useState(false);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
   const [isAuditingMixes, setIsAuditingMixes] = useState(false);
@@ -307,6 +310,7 @@ export function MixBatchList({
           </span>
         </div>
 
+        {canAuditHistoricalMixes && (
         <div className="flex w-full flex-col gap-2 rounded-xl border border-border/70 bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between" data-testid="mix-historical-audit-controls">
           <div>
             <p className="text-sm font-semibold">Historical Mix Cost Integrity</p>
@@ -330,6 +334,7 @@ export function MixBatchList({
             </Button>
           </div>
         </div>
+        )}
 
         <MixBatchWhatsAppPreview
           reportRef={mixBatchPrintRef}
