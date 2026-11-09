@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ErpField, ErpNativeSelect } from "@/erp-core";
 
 type Options = {
   suppliers: { id: number; name: string; stock_group_id: number | null }[];
@@ -50,7 +51,6 @@ const lastDay = (p: string) => {
   const [year, month] = p.split("-").map(Number);
   return isoLocal(new Date(year, month, 0));
 };
-const cls = "h-9 w-full rounded-md border border-input bg-background px-3 text-sm";
 
 function SummaryRow({
   label,
@@ -202,85 +202,76 @@ export default function SupplierProfitReconciliation() {
         <div className="mx-auto max-w-4xl space-y-4">
           <Card>
             <CardContent className="grid gap-3 p-4 sm:grid-cols-3">
-              <label className="space-y-1 text-xs font-medium">
-                <span>Supplier</span>
-                <select
-                  aria-label="Supplier"
-                  className={cls}
-                  value={supplierId}
-                  onChange={(event) => {
-                    setSupplierId(event.target.value);
-                    setGroupId("");
-                  }}
-                >
-                  <option value="">Select supplier</option>
-                  {options?.suppliers.map((supplier) => (
-                    <option key={supplier.id} value={supplier.id}>
-                      {supplier.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="space-y-1 text-xs font-medium">
-                <span>Stock group</span>
-                <select
-                  aria-label="Stock group"
-                  className={cls}
-                  value={groupId}
-                  onChange={(event) => setGroupId(event.target.value)}
-                >
-                  <option value="">All groups (items received from supplier)</option>
-                  {options?.groups.map((group) => (
-                    <option key={group.id} value={group.id}>
-                      {group.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="space-y-1 text-xs font-medium">
-                <span>Date selection</span>
-                <select className={cls} value={period} onChange={(event) => setPeriod(event.target.value as Period)}>
-                  <option value="all">All time</option>
-                  <option value="day">Specific day</option>
-                  <option value="month">Specific month</option>
-                  <option value="year">Specific year</option>
-                  <option value="custom">Custom date range</option>
-                </select>
-              </label>
+              <ErpField id="profit-supplier" label="Supplier">
+                {(control) => (
+                  <ErpNativeSelect
+                    {...control}
+                    value={supplierId}
+                    onChange={(event) => {
+                      setSupplierId(event.target.value);
+                      setGroupId("");
+                    }}
+                  >
+                    <option value="">Select supplier</option>
+                    {options?.suppliers.map((supplier) => (
+                      <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
+                    ))}
+                  </ErpNativeSelect>
+                )}
+              </ErpField>
+              <ErpField id="profit-stock-group" label="Stock group">
+                {(control) => (
+                  <ErpNativeSelect {...control} value={groupId} onChange={(event) => setGroupId(event.target.value)}>
+                    <option value="">All groups (items received from supplier)</option>
+                    {options?.groups.map((group) => (
+                      <option key={group.id} value={group.id}>{group.name}</option>
+                    ))}
+                  </ErpNativeSelect>
+                )}
+              </ErpField>
+              <ErpField id="profit-period" label="Date selection">
+                {(control) => (
+                  <ErpNativeSelect {...control} value={period} onChange={(event) => setPeriod(event.target.value as Period)}>
+                    <option value="all">All time</option>
+                    <option value="day">Specific day</option>
+                    <option value="month">Specific month</option>
+                    <option value="year">Specific year</option>
+                    <option value="custom">Custom date range</option>
+                  </ErpNativeSelect>
+                )}
+              </ErpField>
               {period === "day" && (
-                <label className="space-y-1 text-xs font-medium">
-                  <span>Day</span>
-                  <Input type="date" value={day} onChange={(event) => setDay(event.target.value)} />
-                </label>
+                <ErpField id="profit-day" label="Day">
+                  {(control) => <Input {...control} type="date" value={day} onChange={(event) => setDay(event.target.value)} />}
+                </ErpField>
               )}
               {period === "month" && (
-                <label className="space-y-1 text-xs font-medium">
-                  <span>Month</span>
-                  <Input type="month" value={month} onChange={(event) => setMonth(event.target.value)} />
-                </label>
+                <ErpField id="profit-month" label="Month">
+                  {(control) => <Input {...control} type="month" value={month} onChange={(event) => setMonth(event.target.value)} />}
+                </ErpField>
               )}
               {period === "year" && (
-                <label className="space-y-1 text-xs font-medium">
-                  <span>Year</span>
-                  <Input
-                    type="number"
-                    min="2000"
-                    max="2100"
-                    value={year}
-                    onChange={(event) => setYear(event.target.value)}
-                  />
-                </label>
+                <ErpField id="profit-year" label="Year">
+                  {(control) => (
+                    <Input
+                      {...control}
+                      type="number"
+                      min="2000"
+                      max="2100"
+                      value={year}
+                      onChange={(event) => setYear(event.target.value)}
+                    />
+                  )}
+                </ErpField>
               )}
               {period === "custom" && (
                 <>
-                  <label className="space-y-1 text-xs font-medium">
-                    <span>From</span>
-                    <Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
-                  </label>
-                  <label className="space-y-1 text-xs font-medium">
-                    <span>To</span>
-                    <Input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
-                  </label>
+                  <ErpField id="profit-from" label="From">
+                    {(control) => <Input {...control} type="date" value={from} onChange={(event) => setFrom(event.target.value)} />}
+                  </ErpField>
+                  <ErpField id="profit-to" label="To">
+                    {(control) => <Input {...control} type="date" value={to} onChange={(event) => setTo(event.target.value)} />}
+                  </ErpField>
                 </>
               )}
             </CardContent>
