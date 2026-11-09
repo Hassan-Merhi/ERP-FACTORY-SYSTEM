@@ -6,6 +6,7 @@
  */
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
+import { logAudit } from "../../helpers/auditHelpers";
 import { logger } from "../../../lib/logger";
 import { parseId } from "../../../lib/parseId";
 import { db } from "../../../db";
@@ -78,6 +79,18 @@ export function registerFactoryMixBatchConsumeRoutes(app: Express) {
               .update(factoryMixBatches)
               .set({ usedKg: batch.totalWeightKg, status: "CLOSED", updatedAt: now })
               .where(eq(factoryMixBatches.id, batchId));
+            await logAudit({
+              userId: req.session.userId!,
+              username: req.session.username || req.session.userId!,
+              companyId, action: "update", tableName: "factory_mix_batches",
+              recordId: batchId, recordIdentifier: batch.batchCode,
+              changes: {
+                status: { old: batch.status, new: "CLOSED" },
+                usedKg: { old: batch.usedKg, new: batch.totalWeightKg },
+                consumedKg: { old: null, new: used.toFixed(3) },
+                usedDate: { old: null, new: usedDate },
+              },
+            }, tx);
             results.push({ batchId, action: "closed", carryForwardId: null });
           } else {
             // total_weight_kg holds 3dp.
@@ -141,6 +154,31 @@ export function registerFactoryMixBatchConsumeRoutes(app: Express) {
               notes: `Carry-forward of ${leftoverKg.toFixed(3)} kg from ${batch.batchCode} after daily usage ${used.toFixed(3)} kg on ${usedDate}`,
             });
 
+            await logAudit({
+              userId: req.session.userId!,
+              username: req.session.username || req.session.userId!,
+              companyId, action: "update", tableName: "factory_mix_batches",
+              recordId: batchId, recordIdentifier: batch.batchCode,
+              changes: {
+                status: { old: batch.status, new: "CLOSED" },
+                usedKg: { old: batch.usedKg, new: batch.totalWeightKg },
+                consumedKg: { old: null, new: used.toFixed(3) },
+                carriedKg: { old: null, new: leftoverKg.toFixed(3) },
+                carryForwardId: { old: null, new: cfBatch.id },
+                usedDate: { old: null, new: usedDate },
+              },
+            }, tx);
+            await logAudit({
+              userId: req.session.userId!,
+              username: req.session.username || req.session.userId!,
+              companyId, action: "create", tableName: "factory_mix_batches",
+              recordId: cfBatch.id, recordIdentifier: cfBatch.batchCode,
+              changes: {
+                parentBatchId: { old: null, new: batchId },
+                carriedKg: { old: null, new: leftoverKg.toFixed(3) },
+                carriedValueUsd: { old: null, new: leftoverCost.toDecimalPlaces(7).toFixed(7) },
+              },
+            }, tx);
             results.push({
               batchId,
               action: "carry_forward",
