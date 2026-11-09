@@ -1,4 +1,4 @@
-# ERP Core UI — Phases 1–5
+# ERP Core UI — Phases 1–6
 
 Use `@/erp-core` for new ERP-mode page presentation. This folder is a **composition/adoption layer**, not a new visual framework.
 
@@ -80,9 +80,26 @@ import { ErpPage, ErpPageActions, ErpDataTableToolbar, ErpEmptyState } from "@/e
 
 **Tests:** `erpData.test.ts` covers URL normalization, company isolation, legacy/filter invalidation and display precision; `useErpServerPagination.test.tsx` covers company/filter reset and page bounds. CI type-check, build and frontend test suites still need to pass before merging the combined branch.
 
+
+## Phase 6: unified report and export presentation
+
+The report controls share one contract without centralizing any financial calculations.
+
+- `ErpReportExportMenu` renders consistent responsive Excel, CSV and Print / Save PDF actions. Each page still owns its filters, permissions, report queries, error handling, and export callbacks. Existing action test IDs can be forwarded through option `testId`.
+- `exportErpReportRowsExcel` writes the same JSON-to-sheet representation as the existing `excelHelper` functions, with **lazy-loaded ExcelJS** so opening an ERP page does not load workbook code. It is for simple flat statements, not custom multi-sheet reports.
+- `buildErpReportCsv` and `exportErpReportCsv` centralize CSV encoding, UTF-8 BOM, quoting and spreadsheet-formula protection. A headerless mode preserves the Financial Statements report's metadata/title rows; signed numeric text stays numeric.
+- `erpReportFileName` sanitizes OS-invalid filename characters while preserving existing report name and date separators.
+- `ErpReportPrintFooter` identifies the report, active company, selected date period and generated time using the user's date-format preference. Browsers' **Print / Save PDF** flow is kept; this component does not claim to generate a PDF directly.
+- Initial migrations: **Daybook** summary/detailed Excel, **Suppliers** ledger Excel, **Stock & Sales** Excel/CSV/print, **Stock Flow Detail** Excel/print, **Sales Report** Excel/print, **Professional Financial Statements** CSV/print, and **Item Market Analysis** pending-state export button.
+- **Intentionally not rewritten:** complex Item Market workbook, Stock Flow Detail multi-sheet workbook, legacy Sales Report workbook styling, or the Net Profit server-produced Excel. Their accounting logic, calculations and output columns remain the same. Specialized Factory/Properties reports stay separate.
+
+**Export correctness:** Export the page's full authorized filtered dataset, never the visible 100/250-row UI slice unless that is the intended report scope. Do not round underlying balances, revalue historical FX amounts, create vouchers, or alter any supplier/customer account entries. Users can still select print-to-PDF in the browser, and the provisional financial statements disclaimer must remain prominent.
+
+Tests cover filename compatibility, multiline/quoted CSV, formula-safe labels, preserved negative numeric amounts, headerless financial CSV, export menu disabled/busy behavior and print footer identity.
+
 ## Rollout rules
 
 1. Phase 1 sets the stable API and migrates Opening/Closing Stock Summary as non-accounting pilot pages, retaining their existing shell spacing and header semantics.
-2. Phase 2 introduces the standard list table, shared filter toolbar, and pagination controls. Phase 3 standardizes controlled fields, async form actions, row buttons and confirmations; Phase 4 centralizes ERP route/navigation roles and company-scoped page grants; Phase 5 standardizes queries, server paging and number/date display; Phase 6 handles reports/export; Phase 7 removes proven duplicates.
+2. Phase 2 introduces the standard list table, shared filter toolbar, and pagination controls. Phase 3 standardizes controlled fields, async form actions, row buttons and confirmations; Phase 4 centralizes ERP route/navigation roles and company-scoped page grants; Phase 5 standardizes queries, server paging and number/date display; Phase 6 unifies reports/export controls; Phase 7 removes proven duplicates.
 3. Never move voucher posting, ledger calculations, stock valuation, payroll arithmetic, or company authorization into UI components. Server authorization remains definitive.
 4. Do not change data-testid, route URLs, stock balance calculations, or create/edit behavior as part of a presentational migration. Stock Query's former 200-result cap is separately replaced by explicit company-aware server pagination.
