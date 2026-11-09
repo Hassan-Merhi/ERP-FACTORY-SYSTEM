@@ -134,8 +134,9 @@ export default function PropertyRentalPage({
     showHistoricalPaid ? "reconciled-account-balances" : "contract-paid",
     null, // mixed historical-cutoff withdrawal and current cash/deposit balances have no single as-of date
   );
+  const ledgerUsdMoney = (amount: number) => formatMoneyDisplay(amount, { currency: "USD" });
   const summaryMoney = (amount: number) => contractTotalsAreUsd
-    ? formatMoneyDisplay(amount, { currency: "USD" })
+    ? ledgerUsdMoney(amount)
     : "Non-USD or mixed currencies — see contracts";
   const paidValue = paidFigure.amount === null
     ? (showHistoricalPaid ? "Unavailable" : "Non-USD or mixed currencies — see contracts")
@@ -433,13 +434,13 @@ export default function PropertyRentalPage({
           <p className="text-xs text-muted-foreground" data-testid="properties-rent-account-balance-explanation">
             Combined account balances:{" "}
             <span className="font-semibold tabular-nums">
-              {summaryMoney(historyReconciliation!.accountSum! / 100)}
+              {ledgerUsdMoney(historyReconciliation!.accountSum! / 100)}
             </span>{" "}
             (historical rent withdrawal through 26 Oct 2026; current ALI cash, Properties cashbox if present, and tenant deposits). These are account balances, not unique rent receipts.
             {historyReconciliation!.guaranteeCashOverlap != null && historyReconciliation!.guaranteeCashOverlap > 0 && (
               <>
                 {" "}
-                Guarantee cash of {summaryMoney(historyReconciliation!.guaranteeCashOverlap / 100)} appears in both a cash account and the
+                Guarantee cash of {ledgerUsdMoney(historyReconciliation!.guaranteeCashOverlap / 100)} appears in both a cash account and the
                 deposit liability; these are not unique receipts.
               </>
             )}
