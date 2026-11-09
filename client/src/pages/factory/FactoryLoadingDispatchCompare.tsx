@@ -426,6 +426,80 @@ export default function FactoryLoadingDispatchCompare() {
               <Metric label="Unexpected refs" value={printNumber(s?.unexpectedBales ?? null)} icon={AlertTriangle} emphasis="warning" />
             </div>
 
+            {!selectedId && (
+              <Card className="border-blue-200 bg-white dark:border-blue-500/25 dark:bg-[#101c34]"
+                data-testid="pending-loading-final-reconciliation">
+                <CardContent className="space-y-4 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <h2 className="text-base font-bold">Final Pending Loading reconciliation</h2>
+                      <p className="text-xs text-muted-foreground">
+                        These are the exact bales still in Pending Loading but not scanned on any dispatch trip.
+                        Selecting a bale does not change anything until you confirm removal.
+                      </p>
+                    </div>
+                    <Badge variant="outline">{printNumber(missingFromLoading.length)} not scanned</Badge>
+                  </div>
+                  {!allTripsEnded && (
+                    <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-600/30 dark:bg-amber-950/20 dark:text-amber-200">
+                      You can review missing bales now. To remove them from Pending Loading, finish all open dispatch trips first.
+                    </p>
+                  )}
+                  {missingFromLoading.length === 0 ? (
+                    <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-200">
+                      No missing bale references. Every bale in the current loading is verified on a trip.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <Button type="button" size="sm" variant="outline" onClick={selectAllMissing}
+                          disabled={!canReconcile || removing} data-testid="button-select-all-missing-bales">
+                          {selectedCurrent.length === missingFromLoading.length ? "Clear selection" : "Select all missing"}
+                        </Button>
+                        <Button type="button" size="sm" disabled={!canReconcile || removing || selectedCurrent.length === 0}
+                          onClick={() => setRemoveOpen(true)} data-testid="button-remove-selected-missing-bales">
+                          Remove {selectedCurrent.length} selected from loading
+                        </Button>
+                      </div>
+                      <div className="max-h-[360px] overflow-auto rounded-lg border dark:border-slate-700">
+                        <table className="w-full min-w-[480px] text-left text-xs">
+                          <thead className="sticky top-0 bg-slate-100 dark:bg-[#0b162a]">
+                            <tr>
+                              <th className="px-3 py-2">Select</th>
+                              <th className="px-3 py-2">Bale reference</th>
+                              <th className="px-3 py-2">Article</th>
+                              <th className="px-3 py-2 text-right">KG</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {missingFromLoading.map((bale) => (
+                              <tr key={bale.orderBaleId} className="border-t dark:border-slate-700">
+                                <td className="px-3 py-2">
+                                  <Checkbox checked={selectedCurrent.includes(bale.orderBaleId!)}
+                                    disabled={!canReconcile || removing}
+                                    onCheckedChange={(value) => setSelectedMissing((ids) => value === true
+                                      ? [...ids.filter((id) => id !== bale.orderBaleId), bale.orderBaleId!]
+                                      : ids.filter((id) => id !== bale.orderBaleId))}
+                                    aria-label={"Select missing bale " + bale.baleReference} />
+                                </td>
+                                <td className="px-3 py-2 font-mono font-semibold">{bale.baleReference}</td>
+                                <td className="px-3 py-2">{bale.articleCode} <span className="text-muted-foreground">{bale.productName}</span></td>
+                                <td className="px-3 py-2 text-right font-mono">{printNumber(bale.weightKg, 3)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
+                  <p className="text-[11px] text-muted-foreground">
+                    Removal is restricted to Admin, Owner and Developer, and only for unscanned bales in active loading orders.
+                    It uses the regular audited loading correction and returns the removed bales to stock.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
             <Card className="border-blue-100 bg-white dark:border-blue-500/20 dark:bg-[#101c34]">
               <CardContent className="space-y-3 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -573,6 +647,26 @@ export default function FactoryLoadingDispatchCompare() {
           </>
         )}
       </div>
+      <Dialog open={removeOpen} onOpenChange={(open) => { if (!removing) setRemoveOpen(open); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm missing-bale removal</DialogTitle>
+            <DialogDescription>
+              Remove {selectedCurrent.length} unscanned bale(s), totalling {printNumber(selectedKg, 3)} kg,
+              from Pending Loading? They will return to stock using the existing loading correction process.
+              Dispatch scan history remains unchanged.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" disabled={removing} onClick={() => setRemoveOpen(false)}>Cancel</Button>
+            <Button variant="destructive" disabled={!canReconcile || removing || selectedCurrent.length === 0}
+              onClick={() => void removeSelected()} data-testid="button-confirm-remove-missing-bales">
+              {removing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirm removal
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
