@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { factoryApiRequest } from "@/lib/factoryApi";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -57,6 +59,7 @@ interface AttendanceWhatsappSettings {
 
 export default function FactoryAttendance() {
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   // View Only / Create Only roles read attendance but never save or bulk-mark it.
   const recordChanges = useExistingRecordChangeAccess();
   const [mode, setMode] = useState<ViewMode>(getInitialMode);
@@ -86,7 +89,8 @@ export default function FactoryAttendance() {
   const attendanceReportRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading } = useQuery<{ workers: WorkerRow[]; attendance: AttendanceRecord[] }>({
-    queryKey: ["/api/factory/attendance", selectedDate],
+    queryKey: companyQueryKey("/api/factory/attendance", selectedCompany?.id, selectedDate),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch(`/api/factory/attendance?date=${selectedDate}`, { credentials: "include" });
       if (!res.ok) throw new Error((await res.json()).message || "Failed to fetch attendance");
@@ -95,7 +99,8 @@ export default function FactoryAttendance() {
   });
 
   const { data: attendanceWhatsappSettings } = useQuery<AttendanceWhatsappSettings>({
-    queryKey: ["/api/factory/settings?scope=attendance"],
+    queryKey: companyQueryKey("/api/factory/settings?scope=attendance", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await factoryApiRequest("GET", "/api/factory/settings?scope=attendance");
       if (!res.ok) throw new Error("Failed to load Attendance WhatsApp settings");
@@ -164,7 +169,7 @@ export default function FactoryAttendance() {
     onSuccess: () => {
       setApprovalOpen(false);
       setPendingApprovalRecords(null);
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/attendance", selectedDate] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/attendance", selectedCompany?.id, selectedDate) });
       toast({ title: "Attendance saved", description: `Saved for ${selectedDate}` });
     },
     onError: (err: ClientErrorLike) => {
