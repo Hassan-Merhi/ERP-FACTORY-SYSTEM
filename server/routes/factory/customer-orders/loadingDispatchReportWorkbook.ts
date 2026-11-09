@@ -29,7 +29,7 @@ function round(value: unknown, digits = 3): number | null {
   return Number.isFinite(n) ? Math.round(n * 10 ** digits) / 10 ** digits : null;
 }
 
-type SheetCell = string | number | null;
+type SheetCell = string | number | boolean | null;
 function makeSheet(workbook: ExcelJS.Workbook, name: string, headers: string[], rows: SheetCell[][],
   numericColumns: number[] = []) {
   const ws = workbook.addWorksheet(name, { views: [{ state: "frozen", ySplit: 1 }] });
