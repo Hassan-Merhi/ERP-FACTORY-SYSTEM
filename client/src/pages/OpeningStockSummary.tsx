@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Package, ChevronRight } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { ErpPage } from "@/erp-core";
+import { ErpPage, formatErpFixedQuantity, erpCompanyDataKey } from "@/erp-core";
 import { EmptyState, LoadingRows } from "@/components/ui/display-state";
 import { financialNumberClassName } from "@/components/ui/page-shell";
 import { cn } from "@/lib/utils";
@@ -34,16 +34,9 @@ interface OpeningStockData {
   };
 }
 
-function formatNumber(value: number, decimals: number = 2): string {
-  return value.toLocaleString("en-US", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
-}
-
 function formatQty(value: number): string {
   if (value === 0) return "";
-  return `${formatNumber(value)} BL`;
+  return `${formatErpFixedQuantity(value)} BL`;
 }
 
 export default function OpeningStockSummary() {
@@ -52,7 +45,7 @@ export default function OpeningStockSummary() {
   const { formatAmount } = useCurrencyContext();
 
   const { data, isLoading } = useQuery<OpeningStockData>({
-    queryKey: ["/api/reports/opening-stock-summary", selectedCompany?.id],
+    queryKey: erpCompanyDataKey("/api/reports/opening-stock-summary", selectedCompany?.id),
     enabled: !!selectedCompany?.id,
   });
 
@@ -143,7 +136,7 @@ export default function OpeningStockSummary() {
           <div className="border-t-2 border-primary bg-muted/50">
             <div className="grid grid-cols-2 p-2 font-bold sm:grid-cols-7 phone-land:grid-cols-2 sm:p-3">
               <div className="text-xs sm:text-sm">Grand Total</div>
-              <div className={financialNumberClassName}>{formatNumber(data.grandTotal.opening.quantity)} BL</div>
+              <div className={financialNumberClassName}>{formatErpFixedQuantity(data.grandTotal.opening.quantity)} BL</div>
               <div className={cn(financialNumberClassName, "hidden sm:block phone-land:hidden")}>
                 {openingRate === 0 ? "" : formatAmount(openingRate)}
               </div>
@@ -151,7 +144,7 @@ export default function OpeningStockSummary() {
                 {data.grandTotal.opening.value === 0 ? "" : formatAmount(data.grandTotal.opening.value)}
               </div>
               <div className={cn(financialNumberClassName, "hidden border-l pl-2 sm:block")}>
-                {formatNumber(data.grandTotal.closing.quantity)} BL
+                {formatErpFixedQuantity(data.grandTotal.closing.quantity)} BL
               </div>
               <div className={cn(financialNumberClassName, "hidden sm:block phone-land:hidden")}>
                 {closingRate === 0 ? "" : formatAmount(closingRate)}
