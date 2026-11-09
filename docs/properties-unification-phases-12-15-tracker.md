@@ -8,7 +8,7 @@
 | Phase | Scope | Status |
 | --- | --- | --- |
 | 12 | Date boundaries and rental filter consistency | **Source implementation and focused tests committed; runtime execution pending** |
-| 13 | Parent-route and navigation registry convergence | Not started |
+| 13 | Parent-route and navigation registry convergence | **Source implementation and regression additions committed; runtime execution pending** |
 | 14 | Company-role and historical currency/financial parity | Not started |
 | 15 | Integrated TypeScript, regression, browser/API and finance certification | Not started |
 
@@ -44,3 +44,34 @@ npx vitest run tests/properties-unification-phase8-presentation.test.ts
 ```
 
 **Phase 12 disposition:** Implementation complete at source level; runtime and integration verification must be completed before production release.
+
+## Phase 13 — changes and verification
+
+1. `client/src/properties/config/propertiesNavigation.ts`: canonical registry now owns the deterministic Properties parent-route contract, including matched dynamic account-ledger details and compatibility aliases. Corrected Account Groups parent to Accounts, Create Property parent to the Warehouses tab, and ledger vouchers parent to the precise monthly ledger.
+2. `client/src/lib/parent-routes.ts`: all Properties parent lookups delegate to `getPropertiesParentRoute`. ERP and Factory parent logic is unchanged.
+3. `tests/properties-parent-routes.test.ts`: expanded test matrix for registry metadata parity, root pages, deep links, legacy aliases, query/hash, trailing slashes, malformed and unknown URLs.
+4. `docs/properties-navigation-registry.md`: documented single-source Back/Escape logic and intentionally preserved compatibility behavior.
+
+### Phase 13 acceptance
+
+- [x] One canonical Properties parent resolver is used by the shared Back/Escape helper.
+- [x] Registry metadata matches the deterministic parent destinations for concrete routes.
+- [x] Account Groups, Create Property and ledger voucher parents match the existing intended navigation.
+- [x] Existing `/properties/rental/*` bookmarks preserve tab destinations.
+- [x] Unknown and malformed paths receive no invented parent; root pages remain roots.
+- [x] Factory and ERP parent routing is unchanged.
+- [x] Tests and documentation are committed.
+- [ ] Execute Vitest and TypeScript in a runnable checkout.
+- [ ] Browser-test Escape, Back/Forward, dynamic ledger URLs, and compatibility redirects.
+
+Verification: GitHub source read-back and static invariants only. No CI, browser QA, Vitest, TypeScript run, production data modification or merge performed.
+
+Run in a runnable checkout:
+
+```bash
+npm run check
+npx vitest run tests/properties-parent-routes.test.ts
+npx vitest run --config vitest.config.frontend.ts tests/ui/parent-routes-behavior.test.ts
+```
+
+**Phase 13 disposition:** Source implementation complete; automated and runtime certification pending.
