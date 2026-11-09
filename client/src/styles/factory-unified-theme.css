@@ -6,6 +6,7 @@
  * ERP, POS and Properties modes remain unchanged.
  *
  * To change the Factory brand hue everywhere, edit ONLY --factory-hue.
+ * Factory-specific page styles derive their chromatic colors from this hue.
  * 217 = blue. All shades, page backgrounds, navigation and legacy
  * blue/indigo/purple/violet/sky/fuchsia Tailwind utilities follow it.
  * Status colors (green/yellow/red) and chart data colors are NOT remapped.
@@ -190,8 +191,8 @@
   --pnav-violet-text: hsl(var(--factory-brand-ink));
   --pnav-surface: hsl(var(--sidebar));
   --pnav-raised: hsl(var(--card));
-  --pnav-border: hsl(var(--factory-brand) / .18);
-  --pnav-hover: hsl(var(--factory-brand) / .075);
+  --pnav-border: hsl(var(--factory-brand) / 0.18);
+  --pnav-hover: hsl(var(--factory-brand) / 0.075);
   --pnav-active: linear-gradient(100deg, var(--factory-color-100), hsl(var(--background)));
   --pnav-brand: linear-gradient(120deg, var(--factory-color-100), hsl(var(--card)));
   --pnav-top: linear-gradient(105deg, hsl(var(--card)), var(--factory-color-100));
@@ -208,9 +209,9 @@
   --pnav-violet-text: hsl(var(--factory-brand-ink));
   --pnav-surface: hsl(var(--sidebar));
   --pnav-raised: hsl(var(--card));
-  --pnav-border: hsl(var(--factory-brand) / .22);
-  --pnav-hover: hsl(var(--factory-brand) / .14);
-  --pnav-active: linear-gradient(105deg, hsl(var(--factory-brand-strong) / .7), hsl(var(--factory-brand-soft)));
+  --pnav-border: hsl(var(--factory-brand) / 0.22);
+  --pnav-hover: hsl(var(--factory-brand) / 0.14);
+  --pnav-active: linear-gradient(105deg, hsl(var(--factory-brand-strong) / 0.7), hsl(var(--factory-brand-soft)));
   --pnav-brand: linear-gradient(120deg, hsl(var(--factory-brand-soft)), hsl(var(--sidebar)));
   --pnav-top: linear-gradient(105deg, hsl(var(--sidebar)), hsl(var(--factory-brand-soft)));
 }
@@ -223,7 +224,9 @@
   border-color: hsl(var(--factory-brand-border));
   color: hsl(var(--factory-brand-ink));
 }
-:root[data-app-shell="factory"] .factory-brand-text { color: hsl(var(--factory-brand-ink)); }
+:root[data-app-shell="factory"] .factory-brand-text {
+  color: hsl(var(--factory-brand-ink));
+}
 :root[data-app-shell="factory"] .factory-brand-surface {
   background: hsl(var(--card));
   border-color: hsl(var(--border));
@@ -232,52 +235,62 @@
 /* Production Targets preserves categorical/status KPI colors; large surfaces
  * and buttons follow the single blue brand instead of mixed blue and purple. */
 :root[data-app-shell="factory"] .production-targets-modern {
-  background: radial-gradient(ellipse at 55% 0%, hsl(var(--factory-brand) / .15), transparent 45%), #101a2e;
-  border-color: hsl(var(--factory-brand) / .22);
+  background:
+    radial-gradient(ellipse at 55% 0%, hsl(var(--factory-brand) / 0.15), transparent 45%),
+    hsl(var(--factory-hue) 48% 12%);
+  border-color: hsl(var(--factory-brand) / 0.22);
 }
 :root[data-app-shell="factory"] .production-targets-modern .pt-hero {
-  background: linear-gradient(112deg, #1b3c70, #14233e 65%, #1c3152);
-  border-color: hsl(var(--factory-brand) / .48);
+  background: linear-gradient(
+    112deg,
+    hsl(var(--factory-hue) 61% 27%),
+    hsl(var(--factory-hue) 51% 16%) 65%,
+    hsl(var(--factory-hue) 49% 22%)
+  );
+  border-color: hsl(var(--factory-brand) / 0.48);
 }
 :root[data-app-shell="factory"] .production-targets-modern .pt-hero-icon {
-  background: linear-gradient(145deg, #2056ac, #153971);
+  background: linear-gradient(145deg, hsl(var(--factory-hue) 69% 40%), hsl(var(--factory-hue) 69% 26%));
 }
 :root[data-app-shell="factory"] .production-targets-modern .pt-btn-primary,
 :root[data-app-shell="factory"] .production-targets-modern .pt-btn-violet {
-  background: #205ec5;
-  border-color: #6199ed;
+  background: hsl(var(--factory-hue) 72% 45%);
+  border-color: hsl(var(--factory-hue) 80% 65%);
   color: white;
-  box-shadow: 0 5px 15px rgba(25, 85, 184, .26);
+  box-shadow: 0 5px 15px hsl(var(--factory-hue) 76% 41% / 0.26);
 }
 :root[data-app-shell="factory"] .production-targets-modern .pt-btn-primary:hover:not(:disabled),
 :root[data-app-shell="factory"] .production-targets-modern .pt-btn-violet:hover:not(:disabled) {
-  background: #2f70d5;
+  background: hsl(var(--factory-hue) 66% 51%);
 }
 :root[data-app-shell="factory"] .production-targets-modern .pt-hero-controls,
 :root[data-app-shell="factory"] .production-targets-modern .pt-filters input,
 :root[data-app-shell="factory"] .production-targets-modern .pt-filters [role="combobox"],
 :root[data-app-shell="factory"] .production-targets-modern .pt-hero-controls input,
 :root[data-app-shell="factory"] .production-targets-modern .pt-hero-controls [role="combobox"],
-:root[data-app-shell="factory"] .production-targets-modern .pt-hero-controls button:not(.pt-btn-primary):not(.pt-btn-gold):not(.pt-btn-wa) {
-  background: #182a48;
-  border-color: rgba(116, 160, 230, .30);
+:root[data-app-shell="factory"]
+  .production-targets-modern
+  .pt-hero-controls
+  button:not(.pt-btn-primary):not(.pt-btn-gold):not(.pt-btn-wa) {
+  background: hsl(var(--factory-hue) 50% 19%);
+  border-color: hsl(var(--factory-hue) 70% 68% / 0.3);
 }
 :root[data-app-shell="factory"] .production-targets-modern .pt-kpi {
-  background: linear-gradient(120deg, var(--pt-tint), #18263d 82%);
+  background: linear-gradient(120deg, var(--pt-tint), hsl(var(--factory-hue) 44% 17%) 82%);
 }
 :root[data-app-shell="factory"] .production-targets-modern .pt-bonus-banner {
-  background: linear-gradient(110deg, #182c51, #18263f);
+  background: linear-gradient(110deg, hsl(var(--factory-hue) 54% 21%), hsl(var(--factory-hue) 45% 17%));
 }
 :root[data-app-shell="factory"] .production-targets-modern .pt-staff-table {
-  background: #142239;
-  border-color: rgba(116, 160, 230, .32);
+  background: hsl(var(--factory-hue) 48% 15%);
+  border-color: hsl(var(--factory-hue) 70% 68% / 0.32);
 }
 :root[data-app-shell="factory"] .production-targets-modern .pt-staff-table thead tr {
-  background: #203858;
+  background: hsl(var(--factory-hue) 47% 24%);
 }
 :root[data-app-shell="factory"] .production-targets-modern .pt-staff-table .pt-worker-row {
-  background: #172942;
+  background: hsl(var(--factory-hue) 48% 17%);
 }
 :root[data-app-shell="factory"] .production-targets-modern .pt-staff-table .pt-worker-row:hover {
-  background: #223956;
+  background: hsl(var(--factory-hue) 43% 24%);
 }
