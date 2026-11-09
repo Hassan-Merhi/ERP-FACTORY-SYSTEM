@@ -52,18 +52,9 @@ export { ErpFormActions, ErpPendingButton } from "./ErpFormActions";
 export type { ErpFormActionsProps, ErpPendingButtonProps } from "./ErpFormActions";
 export { ConfirmDialog as ErpConfirmDialog } from "@/components/ConfirmDialog";
 export type { ConfirmDialogProps as ErpConfirmDialogProps } from "@/components/ConfirmDialog";
-export {
-  Form as ErpFormProvider,
-  FormField as ErpControlledField,
-  FormItem as ErpFormItem,
-  FormControl as ErpFormControl,
-  FormLabel as ErpFormLabel,
-  FormMessage as ErpFormMessage,
-  FormDescription as ErpFormDescription,
-  FormGrid as ErpFormGrid,
-  FormSection as ErpFormSection,
-  FormSectionLegend as ErpFormSectionLegend,
-} from "@/components/ui/form";
+// Keep React Hook Form exports out of this barrel: eager evaluation can
+// break lightweight pages and tests that mock only the hooks. Import the
+// existing canonical form primitives directly from components/ui/form.
 export { ErpNativeSelect } from "./ErpNativeSelect";
 export { ErpRecordAction } from "./ErpRecordAction";
 export type { ErpRecordActionProps } from "./ErpRecordAction";
