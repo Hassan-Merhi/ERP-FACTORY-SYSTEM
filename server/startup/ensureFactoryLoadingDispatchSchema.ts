@@ -157,6 +157,41 @@ export async function ensureFactoryLoadingDispatchSchema(pool: Pick<Pool, "query
       WHERE removed_at IS NULL
   `);
 
+  // Immutable-by-revision closure evidence. Reopen updates only its review
+  // metadata; the signed snapshot and the original actor/time never change.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS factory_loading_dispatch_closure_history (
+      id BIGSERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      order_id INTEGER NOT NULL,
+      dispatch_id BIGINT NOT NULL,
+      revision INTEGER NOT NULL CHECK (revision > 0),
+      close_fingerprint VARCHAR(64) NOT NULL,
+      comparison_snapshot JSONB NOT NULL,
+      summary_snapshot JSONB NOT NULL,
+      issues_snapshot JSONB NOT NULL DEFAULT '[]'::jsonb,
+      approved_with_discrepancies BOOLEAN NOT NULL DEFAULT FALSE,
+      discrepancy_reason TEXT,
+      closed_by_user_id TEXT NOT NULL,
+      closed_by_username TEXT NOT NULL,
+      closed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      reopened_at TIMESTAMPTZ,
+      reopened_by_user_id TEXT,
+      reopened_by_username TEXT,
+      reopen_reason TEXT,
+      CONSTRAINT factory_loading_dispatch_closure_parent_fk
+        FOREIGN KEY (dispatch_id, company_id, order_id)
+        REFERENCES factory_loading_dispatches(id, company_id, order_id) ON DELETE RESTRICT,
+      CONSTRAINT factory_loading_dispatch_closure_revision_uq
+        UNIQUE (dispatch_id, revision)
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS factory_loading_dispatch_closure_order_idx
+      ON factory_loading_dispatch_closure_history
+        (company_id, order_id, dispatch_id, closed_at DESC)
+  `);
+
   // Append-only operational events (create, assign, scan, close, reopen etc.).
   await pool.query(`
     CREATE TABLE IF NOT EXISTS factory_loading_dispatch_events (
