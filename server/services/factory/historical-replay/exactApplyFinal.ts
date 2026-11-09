@@ -146,6 +146,11 @@ export async function applyExactHistoricalCostReplayV6(
       throw new StaleTokenError("No selected supplier remains safe under the locked replay snapshot. Re-run Prepare.");
     }
 
+    // Phase 5: hard fail closed on unlinked consumed mixes, protected sales,
+    // and perpetual inventory GL changes with no atomic matching journal.
+    // Evaluate under SERIALIZABLE and before token consumption or any write.
+    await assertPhase5ReplayScopeSafe(executor, companyId, publicScope);
+
     const consumed = await client.query(
       `INSERT INTO factory_replay_consumed_tokens
          (token_hash, company_id, user_id, replay_algorithm_version, scope_fingerprint)
