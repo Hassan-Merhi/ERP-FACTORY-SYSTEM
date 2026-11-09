@@ -63,7 +63,10 @@ if (!/const CACHE_VERSION = "erp-v\d+"/.test(serviceWorker)) {
 // installed PWA worker changes, iOS gets a NEW marker, and no refresh loop
 // can be caused by normal application deployments after this campaign.
 for (const token of [
-  'const CACHE_VERSION = "erp-v14"',
+  // The one-time iOS marker is fixed. Cache versions can advance during a
+  // verified incident recovery without undoing the original refresh campaign.
+  // Version number is validated separately; never require the obsolete v14.
+
   'const IOS_FORCE_UPDATE_CAMPAIGN = "ios-pwa-2026-10-28-v3"',
   'if (await markerCache.match(IOS_FORCE_UPDATE_MARKER_URL)) return',
   'await markerCache.put(',
