@@ -17,6 +17,23 @@ export function runPostStartupJobs(): void {
   if (installed) return;
   installed = true;
 
+  // Explicitly approved Factory rent cleanup, company 12 only. All voucher
+  // changes are to existing IDs; no cash or prepaid ledger lines are edited.
+  // Opt-in is one-shot; after verifying the live balances, remove the flag.
+  if (process.env.ERP_REPAIR_FACTORY_RENT_SAFE_20261109 === "company12-keep-prepaid29566.66-retire13139-fix-memos") {
+    const factoryRentTimer = setTimeout(async () => {
+      try {
+        const { runApprovedFactoryRentSafeRepair } = await import("./runApprovedFactoryRentSafeRepair");
+        await runApprovedFactoryRentSafeRepair();
+      } catch (error: unknown) {
+        logger.error("[FactoryRentSafeRepair] Refused or rolled back historical correction", {
+          error: getErrorMessage(error),
+        });
+      }
+    }, 3000);
+    unrefTimer(factoryRentTimer);
+  }
+
   // Owner-approved, single-use POS Jnah in-place historical voucher reconciliation.
   // The old extra-journal posting is retired and cannot run again.
   if (process.env.ERP_REWORK_POS_JNAH_VOUCHERS_20261109 === "approved-company17-original10613-retire17399") {
