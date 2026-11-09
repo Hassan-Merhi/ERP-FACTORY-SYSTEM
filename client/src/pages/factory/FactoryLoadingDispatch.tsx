@@ -24,6 +24,7 @@ import { TabsList, PillTabButton } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
+import { FACTORY_DISPATCH_TRIP_STATUS_LABELS, type FactoryDispatchTripStatus } from "@shared/factoryStatusPresentation";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import FactoryLoadingDispatchScanner from "./FactoryLoadingDispatchScanner";
 import FactoryLoadingDispatchAllocation from "./FactoryLoadingDispatchAllocation";
@@ -41,7 +42,7 @@ interface LoadingOrder {
   containerNumber?: string | null;
   bales: OrderBale[];
 }
-type TripStatus = "OPEN" | "CLOSED" | "CANCELLED";
+type TripStatus = FactoryDispatchTripStatus;
 interface DispatchTrip {
   id: number;
   orderId: number;
@@ -130,7 +131,7 @@ function TripStatusBadge({ status }: { status: TripStatus }) {
       : status === "CLOSED"
         ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-200"
         : "border-red-300 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-200";
-  return <Badge variant="outline" className={statusStyle}>{status === "OPEN" ? "Open" : status === "CLOSED" ? "Closed" : "Cancelled"}</Badge>;
+  return <Badge variant="outline" className={statusStyle}>{FACTORY_DISPATCH_TRIP_STATUS_LABELS[status]}</Badge>;
 }
 
 function StatCard({ label, value, unit, icon: Icon }: {
