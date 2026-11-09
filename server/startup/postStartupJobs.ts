@@ -17,6 +17,23 @@ export function runPostStartupJobs(): void {
   if (installed) return;
   installed = true;
 
+  // One-time, owner-approved POS Jnah 2026/27 rent correction (company 17).
+  // Locked and audited; only runs in the verified production database/service,
+  // with an explicit opt-in and exact before-image guards.
+  if (process.env.ERP_REPAIR_POS_JNAH_PREPAID_20261109 === "approved-company17-contract36-20000") {
+    const posJnahRentTimer = setTimeout(async () => {
+      try {
+        const { runApprovedPosJnahPrepaidRepair } = await import("./runApprovedPosJnahPrepaidRepair");
+        await runApprovedPosJnahPrepaidRepair();
+      } catch (error: unknown) {
+        logger.error("[PosJnahPrepaidRepair] Refused or rolled back without partial changes", {
+          error: getErrorMessage(error),
+        });
+      }
+    }, 3000);
+    unrefTimer(posJnahRentTimer);
+  }
+
   // Owner-requested HADI L'SHI ERP rent expense consolidation. Never rewrites
   // historical vouchers: moves the source opening to the survivor and retires
   // its zero-net historical master. Disabled unless the exact scoped opt-in is

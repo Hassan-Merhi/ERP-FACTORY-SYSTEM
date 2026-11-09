@@ -186,6 +186,15 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
       String(req.query.page || req.body?.page || "") === "attendance") ||
     (hasPrefix(path, "/settings") && String(req.query.scope || "") === "attendance")
   ) {
+    // The monthly Workers Report offers an attendance editor. Permit its
+    // existing report-tab permission as an alternative for the same bulk save.
+    // Existing-record and historical-date Admin approval rules still apply.
+    if (req.method === "POST" && path === "/attendance/bulk") {
+      return anyOf(
+        attendanceRequirement(),
+        requirement("factory/payroll-hub", [PAYROLL_WORKERS, WORKERS_REPORT])
+      );
+    }
     return attendanceRequirement();
   }
 

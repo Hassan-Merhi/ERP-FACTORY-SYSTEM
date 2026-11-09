@@ -41,8 +41,19 @@ import {
   workerCodeNum,
 } from "./factoryworkerattendancereport/utils";
 import { StatusPill } from "./factoryworkerattendancereport/components/StatusPill";
+import { AttendanceAdminApprovalDialog } from "./factoryattendance/components/AttendanceAdminApprovalDialog";
+import { attendancePastDates, attendanceToday, type AttendanceAdminCredentials } from "./factoryattendance/attendanceEditPolicy";
+import { useToast } from "@/hooks/use-toast";
+
+type AttendanceReportRecord = { workerId: number; attendanceDate: string; status: string };
+type AttendanceReportSavePayload = {
+  records: AttendanceReportRecord[];
+  credentials?: AttendanceAdminCredentials;
+};
+
 export default function FactoryWorkerAttendanceReport() {
   const qc = useQueryClient();
+  const { toast } = useToast();
 
   /* Date mode state */
   const [mode, setMode] = useState<DateMode>("today");
@@ -57,6 +68,9 @@ export default function FactoryWorkerAttendanceReport() {
 
   /* Pending optimistic edits: "workerId|date" → status */
   const [pending, setPending] = useState<Record<string, string | undefined>>({});
+  const [approvalOpen, setApprovalOpen] = useState(false);
+  const [approvalDates, setApprovalDates] = useState<string[]>([]);
+  const [approvalRecords, setApprovalRecords] = useState<AttendanceReportRecord[] | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /* Helper: navigate month offset for thisMonth mode */
@@ -108,48 +122,78 @@ export default function FactoryWorkerAttendanceReport() {
     retryDelay: (failureCount) => Math.min(1000 * 2 ** failureCount, 3000),
   });
 
-  /* Mutation: save single cell */
+  /* Save changes using the same historical-date approval rule as the daily Attendance page. */
   const saveMutation = useMutation({
-    mutationFn: async (records: Array<{ workerId: number; attendanceDate: string; status: string }>) => {
+    // Save sequentially: a delayed response must never overwrite a newer status.
+    scope: { id: "factory-worker-attendance-report" },
+    mutationFn: async ({ records, credentials }: AttendanceReportSavePayload) => {
       const validRecords = records.filter((r) => r.status !== "");
       const blankRecords = records.filter((r) => r.status === "");
-      const promises = [];
+      const promises: Promise<unknown>[] = [];
       if (validRecords.length > 0) {
         promises.push(
           apiRequest("POST", "/api/factory/attendance/bulk", {
-            records: validRecords.map((r) => ({
-              workerId: r.workerId,
-              attendanceDate: r.attendanceDate,
-              status: r.status,
-            })),
+            records: validRecords,
+            ...credentials,
           })
         );
       }
-      if (blankRecords.length > 0) {
-        for (const r of blankRecords) {
-          promises.push(
-            fetch(`/api/factory/attendance/clear`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              credentials: "include",
-              body: JSON.stringify({ workerId: r.workerId, attendanceDate: r.attendanceDate }),
-            }).catch(() => {})
-          );
-        }
+      // Do not silently ignore a failed clear request (including a 404).
+      for (const record of blankRecords) {
+        promises.push(
+          apiRequest("POST", "/api/factory/attendance/clear", {
+            workerId: record.workerId,
+            attendanceDate: record.attendanceDate,
+            ...credentials,
+          })
+        );
       }
       await Promise.all(promises);
     },
-    onSuccess: () => {
-      setPending({});
-      qc.invalidateQueries({ queryKey });
+    onSuccess: async (_result, { records, credentials }: AttendanceReportSavePayload) => {
+      // Keep optimistic edits displayed until the refreshed server report arrives.
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["/api/factory/workers/attendance-report"] }),
+        qc.invalidateQueries({ queryKey: ["/api/factory/attendance"] }),
+      ]);
+      // A newer edit to the same cell must not be discarded by an older response.
+      setPending((current) => {
+        const next = { ...current };
+        for (const record of records) {
+          const key = `${record.workerId}|${record.attendanceDate}`;
+          if (next[key] === record.status) delete next[key];
+        }
+        return next;
+      });
+      if (credentials) {
+        setApprovalOpen(false);
+        setApprovalRecords(null);
+        setApprovalDates([]);
+      }
     },
-    onError: () => {
-      setPending({});
-      qc.invalidateQueries({ queryKey });
+    onError: (error: Error, { records, credentials }: AttendanceReportSavePayload) => {
+      // A declined historical edit remains visible while the Admin retries.
+      // For other failures, revert the rejected optimistic cells explicitly.
+      if (!credentials) {
+        setPending((current) => {
+          const next = { ...current };
+          for (const record of records) {
+            const key = `${record.workerId}|${record.attendanceDate}`;
+            if (next[key] === record.status) delete next[key];
+          }
+          return next;
+        });
+      }
+      toast({
+        title: "Attendance was not saved",
+        description: error.message || "The attendance change was rejected. Please try again.",
+        variant: "destructive",
+      });
+      qc.invalidateQueries({ queryKey: ["/api/factory/workers/attendance-report"] });
     },
   });
 
-  /* Batch-save pending edits after short debounce */
+  /* Batch-save pending edits after short debounce, requesting Admin approval for earlier dates. */
   const flushPending = useCallback(
     (newPending: Record<string, string | undefined>) => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -160,7 +204,14 @@ export default function FactoryWorkerAttendanceReport() {
           const [workerId, attendanceDate] = key.split("|");
           return { workerId: Number(workerId), attendanceDate, status: status ?? "" };
         });
-        saveMutation.mutate(records);
+        const priorDates = attendancePastDates(records.map((record) => record.attendanceDate));
+        if (priorDates.length > 0) {
+          setApprovalDates(priorDates);
+          setApprovalRecords(records);
+          setApprovalOpen(true);
+        } else {
+          saveMutation.mutate({ records });
+        }
       }, 800);
     },
     [saveMutation]
@@ -168,14 +219,39 @@ export default function FactoryWorkerAttendanceReport() {
 
   const cycleCell = useCallback(
     (workerId: number, date: string, currentStatus?: string) => {
+      if (date > attendanceToday()) {
+        toast({ title: "Future dates cannot be edited", variant: "destructive" });
+        return;
+      }
       const key = `${workerId}|${date}`;
       const next = CYCLE[currentStatus ?? ""] ?? "Present";
       const newPending = { ...pending, [key]: next };
       setPending(newPending);
       flushPending(newPending);
     },
-    [pending, flushPending]
+    [pending, flushPending, toast]
   );
+
+  const approveAttendanceSave = (credentials: AttendanceAdminCredentials) => {
+    if (approvalRecords) saveMutation.mutate({ records: approvalRecords, credentials });
+  };
+
+  const handleApprovalOpenChange = (open: boolean) => {
+    if (!open && approvalRecords) {
+      // Cancelling the approval must also cancel uncommitted optimistic changes.
+      setPending((current) => {
+        const next = { ...current };
+        for (const record of approvalRecords) {
+          const key = `${record.workerId}|${record.attendanceDate}`;
+          if (next[key] === record.status) delete next[key];
+        }
+        return next;
+      });
+      setApprovalRecords(null);
+      setApprovalDates([]);
+    }
+    setApprovalOpen(open);
+  };
 
   /* Get effective status for a cell (optimistic override or server data) */
   const effectiveStatus = useCallback(
@@ -254,6 +330,13 @@ export default function FactoryWorkerAttendanceReport() {
 
   return (
     <div className="flex flex-col gap-5 rounded-2xl bg-gradient-to-b from-blue-50/50 via-background to-background px-2 pb-4 text-foreground dark:from-[#0b172b] dark:via-[#0b1220] dark:to-[#0b1220] sm:px-4 sm:py-4 print:gap-3 print:rounded-none print:bg-white print:p-0 print:text-black">
+      <AttendanceAdminApprovalDialog
+        open={approvalOpen}
+        onOpenChange={handleApprovalOpenChange}
+        onApprove={approveAttendanceSave}
+        isPending={saveMutation.isPending}
+        dates={approvalDates}
+      />
       {/* ── Header bar ─────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3 print:hidden">
         <div className="flex items-center gap-3">
@@ -731,14 +814,14 @@ export default function FactoryWorkerAttendanceReport() {
                               <StatusPill
                                 status={status}
                                 absentsOnly={filter === "absent"}
-                                editable={editMode && worker.active !== false}
+                                editable={editMode && worker.active !== false && date <= attendanceToday()}
                                 onClick={
-                                  editMode && worker.active !== false
+                                  editMode && worker.active !== false && date <= attendanceToday()
                                     ? () => cycleCell(worker.id, date, status)
                                     : undefined
                                 }
                                 onKeyDown={
-                                  editMode && worker.active !== false
+                                  editMode && worker.active !== false && date <= attendanceToday()
                                     ? (e) => {
                                         const setStatus = (val: string) => {
                                           e.preventDefault();
