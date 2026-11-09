@@ -119,7 +119,8 @@ async function getJson<T>(url: string): Promise<T> {
   if (!contentType.toLowerCase().includes("application/json")) {
     throw new Error(
       "Dispatch API returned a webpage instead of data (HTTP " +
-      response.status + "). Check the backend deployment and refresh the page."
+        response.status +
+        "). Check the backend deployment and refresh the page."
     );
   }
   const body = await response.json();
