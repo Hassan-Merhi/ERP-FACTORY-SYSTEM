@@ -144,6 +144,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 |---|---|
 | [permissions-security.md](permissions-security.md) | Roles and permission model |
 | [security-privacy.md](security-privacy.md) | Authentication, sessions, data handling |
+| [security-posture.md](security-posture.md) | Current security controls, remaining risks and verification scorecard |
 | [security-company-isolation-wave3.md](security-company-isolation-wave3.md) | Company isolation, RLS, and privileged maintenance boundaries |
 | [program-8b-approval-exception-workflows.md](program-8b-approval-exception-workflows.md) | Control model for high-risk actions |
 | [audit-framework.md](audit-framework.md) | Server-side audit foundation |
