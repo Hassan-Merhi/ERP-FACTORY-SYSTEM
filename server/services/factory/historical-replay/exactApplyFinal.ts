@@ -16,6 +16,7 @@ import {
   replayBaleIdsForScope,
   type ExactReplaySnapshot,
 } from "./exactSnapshot";
+import { assertPhase5ReplayScopeSafe } from "./downstreamGatePhase5";
 import {
   assertExactReplayNonCostInvariants,
   assertPersistedReplaySourceTotals,
