@@ -233,7 +233,7 @@ export function PropertiesPaymentsPremium({
                       </td>
                       <td data-label="Cash Received" className="properties-payments-right">
                         {cashCents(p) !== 0 ? (
-                          <span className="properties-payments-cash"><MoneyAmount amount={cashCents(p) / 100} currency={p.currency ?? "USD"} /></span>
+                          <span className="properties-payments-cash">{p.currency?.trim() ? <MoneyAmount amount={cashCents(p) / 100} currency={p.currency} /> : <span title="Recorded currency not verified">{(cashCents(p) / 100).toFixed(2)} (currency unverified)</span>}</span>
                         ) : <span className="properties-payments-empty">—</span>}
                       </td>
                       <td data-label="For Month"><span className="properties-payments-month">{MONTH_NAMES[p.forMonth]} {p.forYear}</span></td>
