@@ -3,6 +3,8 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAdminOverride } from "@/hooks/use-admin-override";
 import { queryClient } from "@/lib/queryClient";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { Plus, Trash2, Gift, Loader2, Columns3, Filter, Download, CalendarDays, UserRound, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -81,6 +83,7 @@ function csvCell(value: string | number) {
 export default function FactoryEmployeeBonusesTab() {
   const { wrapAdminAction, AdminDialog } = useAdminOverride();
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   const [empFilter, setEmpFilter] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
   const [search, setSearch] = useState("");
@@ -92,7 +95,8 @@ export default function FactoryEmployeeBonusesTab() {
   const [addForm, setAddForm] = useState({ employeeId: "", bonusDate: today(), amount: "", notes: "" });
 
   const { data: employees = [] } = useQuery<Employee[]>({
-    queryKey: ["/api/factory/employees"],
+    queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await fetch("/api/factory/employees", { credentials: "include" });
       if (!res.ok) throw new Error("Failed");
@@ -100,10 +104,11 @@ export default function FactoryEmployeeBonusesTab() {
     },
   });
 
-  const qKey = useMemo(() => ["/api/factory/employee-bonuses", empFilter], [empFilter]);
+  const qKey = useMemo(() => companyQueryKey("/api/factory/employee-bonuses", selectedCompany?.id, empFilter), [selectedCompany?.id, empFilter]);
 
   const { data: bonuses = [], isLoading } = useQuery<BonusRecord[]>({
     queryKey: qKey,
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const params = new URLSearchParams();
       if (empFilter !== "all") params.set("employeeId", empFilter);
@@ -165,8 +170,8 @@ export default function FactoryEmployeeBonusesTab() {
       toast({ title: "Bonus credited to employee account" });
       setAddOpen(false);
       setAddForm({ employeeId: "", bonusDate: today(), amount: "", notes: "" });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employee-bonuses"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employees"] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employee-bonuses", selectedCompany?.id) });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
     },
     onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -182,8 +187,8 @@ export default function FactoryEmployeeBonusesTab() {
     onSuccess: () => {
       toast({ title: "Bonus reversed and deleted" });
       setDeleteConfirm(null);
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employee-bonuses"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/employees"] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employee-bonuses", selectedCompany?.id) });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/employees", selectedCompany?.id) });
     },
     onError: (e: ClientErrorLike) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
