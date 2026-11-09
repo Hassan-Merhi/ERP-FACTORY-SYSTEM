@@ -41,9 +41,10 @@ import { Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { companyQueryKey } from "@/lib/companyQueryScope";
-import { accessQueryPolicy, liveCountQueryPolicy, stableSettingsQueryPolicy } from "@/lib/queryPolicies";
+import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
+import { effectiveErpRole, ERP_PERSONAL_SETTINGS_HIDDEN_ROLES, ERP_RETAIL_HIDDEN_ROUTES, isErpNavigationItemVisible, isErpRetailHiddenPath } from "@shared/erpNavigationPolicy";
+import { liveCountQueryPolicy, stableSettingsQueryPolicy } from "@/lib/queryPolicies";
 import { SUPPLIER_PARTNER_RECENT_ITEMS, SUPPLIER_PARTNER_SECTIONS } from "@/lib/supplier-partner-navigation";
-import { getErpRouteFeatureKeys } from "@/app/erpAccess";
 import {
   ModuleHeader,
   ModuleFooter,
@@ -57,7 +58,6 @@ import {
   type NavItem,
   type NavSection,
 } from "@/components/sidebar/sidebarPrimitives";
-import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
 
 const defaultPinnedItems: NavItem[] = [
   { title: "Tracking", url: "/tracking", icon: Ship },
@@ -68,7 +68,7 @@ const defaultPinnedItems: NavItem[] = [
   { title: "Vouchers", url: "/vouchers", icon: Receipt },
 ];
 
-export const SETTINGS_HIDDEN_ROLES = new Set(["Admin", "Developer", "ERP Tester"]);
+export const SETTINGS_HIDDEN_ROLES = ERP_PERSONAL_SETTINGS_HIDDEN_ROLES;
 
 export const ERP_NAV_SECTIONS: NavSection[] = [
   {
@@ -146,26 +146,11 @@ const utilityItems: NavItem[] = [
   { title: "Live Sheets", url: "/live-sheets", icon: ExternalLink },
 ];
 
-export const RETAIL_HIDDEN_ERP_ROUTES = new Set([
-  "/tracking",
-  "/agents",
-  "/transaction-journal",
-  "/stock-transfer-order",
-  "/optional-vouchers",
-  "/stock",
-  "/supplier-profit-check",
-  "/pos-item-replacement",
-  "/sales-tools",
-  "/stock-in-sales-report",
-  "/supplier-profit-reconciliation",
-  "/erp/rental/shops",
-  "/ai-command-center",
-  "/ai-validation",
-]);
+export const RETAIL_HIDDEN_ERP_ROUTES = ERP_RETAIL_HIDDEN_ROUTES;
 
-/** True when a palette or nav path (query string ignored) belongs to an ERP page retail companies hide. */
+/** Legacy export retained for mobile/command consumers; uses shared policy. */
 export function isRetailHiddenErpPath(path: string): boolean {
-  return RETAIL_HIDDEN_ERP_ROUTES.has(path.split("?")[0]);
+  return isErpRetailHiddenPath(path);
 }
 
 export const ERP_PINNED_ITEMS = defaultPinnedItems;
@@ -190,9 +175,7 @@ export function useErpVisibleSections(user?: SidebarUser): {
   const { selectedCompany } = useCompany();
 
   const { data: myErpPages } = useQuery<{ pageKeys: string[]; fullAccess: boolean }>({
-    queryKey: companyQueryKey("/api/my-erp-pages", selectedCompany?.id),
-    ...accessQueryPolicy,
-    enabled: !!user && !!selectedCompany?.id,
+    ...erpPageAccessQueryOptions(selectedCompany?.id, !!user),
   });
 
   const { data: companySettings } = useQuery<SidebarCompanySettings>({
@@ -201,74 +184,18 @@ export function useErpVisibleSections(user?: SidebarUser): {
     enabled: !!selectedCompany?.id && (user?.currentRole ?? user?.role) !== "ERP Tester",
   });
 
-  const allowedPages = new Set<string>(myErpPages?.pageKeys || []);
+  const role = effectiveErpRole(user);
 
-  const isItemVisible = (item: NavItem): boolean => {
-    const effectiveRole = user?.currentRole ?? user?.role ?? "";
-    const isPOSUser = effectiveRole === "POS";
-    const isAdmin = effectiveRole === "Admin" || effectiveRole === "Developer";
-    const isDeveloper = effectiveRole === "Developer";
-    const isOwner = effectiveRole === "Owner";
-    const featureKeys = getErpRouteFeatureKeys(item.url);
+  const isItemVisible = (item: NavItem): boolean =>
+    isErpNavigationItemVisible({
+      path: item.url,
+      role,
+      companyType: selectedCompany?.companyType,
+      access: myErpPages,
+      posExcelImportEnabled: companySettings?.posExcelImportEnabled,
+    });
 
-    // Match the View Only Dashboard restriction already enforced on main.
-    // Shared by desktop, mobile, recent links and command search.
-    if (isExistingRecordReadOnlyRole(effectiveRole) && item.url === "/financial-overview") return false;
-    if (selectedCompany?.companyType === "retail" && RETAIL_HIDDEN_ERP_ROUTES.has(item.url)) return false;
-    if (effectiveRole === "ERP Tester" && item.url === "/transaction-journal") return false;
-    if (item.url === "/tracking") return !isPOSUser;
-    if (item.url === "/cost-centers") return isDeveloper;
-    if (isPOSUser && item.url === "/pos-item-replacement") return false;
-
-    if (
-      item.url === "/factory/raw-stock" &&
-      selectedCompany?.companyType !== "factory" &&
-      selectedCompany?.companyType !== "factory_v2"
-    )
-      return false;
-    if (item.url === "/accounting/toolbox") return isDeveloper;
-    if (item.url === "/net-profit-report") return isDeveloper;
-    if (item.url === "/company-transfer") return isDeveloper;
-    if (item.url === "/spreadsheet") return isDeveloper;
-    if (item.url === "/live-sheets") return isDeveloper;
-    if (item.url === "/chat") return isDeveloper;
-    if (item.url === "/item-market-analysis" && selectedCompany?.companyType !== "erp") return false;
-    if (
-      (item.url === "/accounting/open-items" ||
-        item.url === "/accounting/cash-bank" ||
-        item.url === "/accounting/monetary-fx" ||
-        item.url === "/accounting/erp-inventory" ||
-        item.url === "/accounting/factory-production" ||
-        item.url === "/accounting/rentals" ||
-        item.url === "/accounting/consolidation" ||
-        item.url === "/accounting/history" ||
-        item.url === "/accounting/statements" ||
-        item.url === "/accounting/fiscal-review" ||
-        item.url === "/accounting/dashboard" ||
-        item.url === "/accounting/rollout") &&
-      !isDeveloper
-    )
-      return false;
-    if (item.url === "/settings" && isOwner) return false;
-
-    if (isDeveloper || isAdmin || myErpPages?.fullAccess) return true;
-
-    if (isPOSUser) {
-      const posRoutes = ["/pos", "/pos-dashboard", "/pos-daybook", "/sales-tools", "/location-inventory"];
-      if (companySettings?.posExcelImportEnabled) posRoutes.push("/pos-import");
-      return posRoutes.includes(item.url);
-    }
-
-    if (featureKeys.length > 0 && myErpPages) {
-      return featureKeys.some((featureKey) => allowedPages.has(featureKey));
-    }
-    if (allowedPages.size === 0 && myErpPages) return false;
-    if (item.url === "/settings") return false;
-
-    return true;
-  };
-
-  const isDeveloper = (user?.currentRole ?? user?.role) === "Developer";
+  const isDeveloper = role === "Developer";
 
   // Keep authorized standalone pages visible even when they also exist inside a hub.
   // A hub must be an additional navigation path, not a replacement for existing tabs.
