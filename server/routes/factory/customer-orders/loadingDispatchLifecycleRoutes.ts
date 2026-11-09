@@ -14,6 +14,7 @@ import { parseId } from "../../../lib/parseId";
 import { resultRows } from "../../../lib/queryResult";
 import { logger } from "../../../lib/logger";
 import { compareFactoryLoadingDispatch } from "./loadingDispatchComparison";
+import { assessFactoryLoadingDispatchClose } from "./loadingDispatchClosePolicy";
 import { loadFactoryLoadingDispatchComparisonSnapshot } from "./loadingDispatchComparisonRoutes";
 
 const access = requireFactoryTabAccess("factory/invoicing", "hide_invoicing_loadings_tab");
@@ -34,7 +35,6 @@ function writable(role: string) {
   return !["view only", "create only"].includes(role.trim().toLowerCase());
 }
 function rows(result: unknown): Raw[] { return resultRows(result); }
-function textValue(value: unknown): string { return value == null ? "" : String(value); }
 function reason(raw: unknown, min: number): string | null {
   if (typeof raw !== "string") return null;
   const value = raw.trim();
@@ -75,26 +75,7 @@ function evaluate(snapshot: Exclude<LoadedSnapshot, { notFoundTrip: true }>, dis
     selectedDispatchId: id,
   });
   const s = comparison.summary;
-  const issues: Array<{ code: string; label: string; count?: number }> = [];
-  if (!comparison.hasTripPlan) issues.push({ code: "NO_EXPECTED_PLAN", label: "No expected truck allocation has been saved" });
-  if (s.missingBales !== null && s.missingBales > 0) {
-    issues.push({ code: "MISSING_BALES", label: "Missing expected bales", count: s.missingBales });
-  }
-  if (s.unexpectedBales > 0) {
-    issues.push({ code: "UNEXPECTED_SCANS", label: "Unplanned or wrong-truck verified bales", count: s.unexpectedBales });
-  }
-  if (s.crossTripMisplacedBales > 0) {
-    issues.push({ code: "CROSS_TRIP_MISMATCH", label: "Assigned here but verified on another truck", count: s.crossTripMisplacedBales });
-  }
-  if (s.duplicateBales > 0) {
-    issues.push({ code: "DUPLICATE_ACTIVE_SCANS", label: "Duplicate active verification anomalies", count: s.duplicateBales });
-  }
-  if (s.expectedWeightKg !== null && s.weightDifferenceKg !== null && Math.abs(s.weightDifferenceKg) > 0.001) {
-    issues.push({ code: "WEIGHT_MISMATCH", label: "Expected versus scanned KG differs" });
-  }
-  if (s.exactMissingBales > 0 && (s.missingBales ?? 0) === 0) {
-    issues.push({ code: "EXACT_MISSING_BALES", label: "Exact planned barcode references were not verified", count: s.exactMissingBales });
-  }
+  const policy = assessFactoryLoadingDispatchClose(comparison);
 
   // Hash all mutable data that influences a closure. A user must acknowledge
   // the CURRENT preview, never a stale one while other trucks are scanning.
@@ -105,10 +86,10 @@ function evaluate(snapshot: Exclude<LoadedSnapshot, { notFoundTrip: true }>, dis
   })).digest("hex");
   return {
     dispatchId, dispatchNumber: trip.dispatchNumber, status: trip.status,
-    fingerprint, issues,
-    needsApproval: issues.length > 0,
-    canCloseClean: s.verifiedBales > 0 && issues.length === 0,
-    hasAnyScans: s.verifiedBales > 0,
+    fingerprint, issues: policy.issues,
+    needsApproval: policy.needsApproval,
+    canCloseClean: policy.canCloseClean,
+    hasAnyScans: policy.hasAnyScans,
     summary: s, comparison,
   };
 }
