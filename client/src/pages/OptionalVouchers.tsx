@@ -1,4 +1,4 @@
-import { ErpListFilters, ErpListTable, ErpConfirmDialog } from "@/erp-core";
+import { ErpListFilters, ErpListTable, ErpConfirmDialog, ErpRecordAction } from "@/erp-core";
 import { TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCompany } from "@/contexts/CompanyContext";
 import type { ClientErrorLike } from "@/lib/clientError";
@@ -324,7 +324,7 @@ export default function OptionalVouchers() {
                     </TableCell>
                     <TableCell className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        <Button
+                        <ErpRecordAction
                           size="icon"
                           variant="ghost"
                           onClick={() => setViewVoucher(v)}
@@ -334,8 +334,8 @@ export default function OptionalVouchers() {
                           aria-label="View voucher details"
                         >
                           <Eye className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
+                        </ErpRecordAction>
+                        <ErpRecordAction
                           size="sm"
                           variant="ghost"
                           onClick={() => handleEdit(v)}
@@ -344,8 +344,8 @@ export default function OptionalVouchers() {
                         >
                           <Pencil className="h-3.5 w-3.5" />
                           Edit
-                        </Button>
-                        <Button
+                        </ErpRecordAction>
+                        <ErpRecordAction
                           size="sm"
                           variant="ghost"
                           onClick={() => setFinalizeVoucherId(v.id)}
@@ -354,8 +354,8 @@ export default function OptionalVouchers() {
                         >
                           <Check className="h-3.5 w-3.5" />
                           Finalize
-                        </Button>
-                        <Button
+                        </ErpRecordAction>
+                        <ErpRecordAction
                           size="icon"
                           variant="ghost"
                           onClick={() => setDeleteVoucherId(v.id)}
@@ -363,7 +363,7 @@ export default function OptionalVouchers() {
                           className="h-8 w-8 text-destructive"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        </ErpRecordAction>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -409,7 +409,7 @@ export default function OptionalVouchers() {
                   </span>
                 </div>
                 <div className="flex items-center gap-1 pt-1 border-t">
-                  <Button
+                  <ErpRecordAction
                     size="icon"
                     variant="ghost"
                     onClick={() => setViewVoucher(v)}
@@ -419,8 +419,8 @@ export default function OptionalVouchers() {
                     aria-label="View voucher details"
                   >
                     <Eye className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
+                  </ErpRecordAction>
+                  <ErpRecordAction
                     size="sm"
                     variant="ghost"
                     onClick={() => handleEdit(v)}
@@ -429,8 +429,8 @@ export default function OptionalVouchers() {
                   >
                     <Pencil className="h-3.5 w-3.5" />
                     Edit
-                  </Button>
-                  <Button
+                  </ErpRecordAction>
+                  <ErpRecordAction
                     size="sm"
                     variant="ghost"
                     onClick={() => setFinalizeVoucherId(v.id)}
@@ -439,8 +439,8 @@ export default function OptionalVouchers() {
                   >
                     <Check className="h-3.5 w-3.5" />
                     Finalize
-                  </Button>
-                  <Button
+                  </ErpRecordAction>
+                  <ErpRecordAction
                     size="icon"
                     variant="ghost"
                     onClick={() => setDeleteVoucherId(v.id)}
@@ -448,7 +448,7 @@ export default function OptionalVouchers() {
                     className="h-8 w-8 text-destructive"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  </ErpRecordAction>
                 </div>
               </div>
             ))}
