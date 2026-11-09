@@ -92,7 +92,7 @@ export default function RentalPaymentsLog({
     search, setSearch, period, setPeriod, selectedUnit, setSelectedUnit,
     selectedTenant, setSelectedTenant,
     unitOptions, tenantOptions, filtered, noFilters,
-  } = useRentalPaymentsFilters(payments, isPropertiesPayments);
+  } = useRentalPaymentsFilters(payments, isPropertiesPayments, selectedCompany?.id);
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `${apiBase}/payments/${id}`),
