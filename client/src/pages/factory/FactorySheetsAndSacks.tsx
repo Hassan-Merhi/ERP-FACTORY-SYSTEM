@@ -4,6 +4,9 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { Suspense, useState, useMemo, useEffect } from "react";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -82,6 +85,7 @@ function csvCell(value: string | number | null | undefined) {
 }
 
 export default function FactorySheetsAndSacks() {
+  const { selectedCompany } = useCompany();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"stock" | "movements">("stock");
   const [search, setSearch] = useState("");
@@ -114,18 +118,21 @@ export default function FactorySheetsAndSacks() {
   }, [hiddenColumns]);
 
   const { data: items = [], isLoading } = useQuery<SheetsAndSacksItem[]>({
-    queryKey: ["/api/factory/sheets-sacks"],
+    queryKey: companyQueryKey("/api/factory/sheets-sacks", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
 
-  const { data: myAccess } = useQuery<{ fullAccess: boolean; pageKeys: string[]; hiddenCostFields?: string[] }>({
-    queryKey: ["/api/factory/my-access"],
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     staleTime: 30000,
   });
 
-  const canEdit = !myAccess || myAccess.fullAccess || myAccess.pageKeys.includes("factory/sheets-sacks");
-  const hiddenTabs = myAccess?.hiddenCostFields ?? [];
+  const accessReady = myAccess?.companyId === selectedCompany?.id && myAccess.hasFactoryAccess;
+  const canEdit = Boolean(accessReady && (myAccess.fullAccess || myAccess.pageKeys.includes("factory/sheets-sacks")));
+  const hiddenTabs = accessReady ? myAccess.hiddenCostFields : ["hide_tab_sheets_stock", "hide_tab_sheets_movements"];
   const showStock = !hiddenTabs.includes("hide_tab_sheets_stock");
   const showMovements = !hiddenTabs.includes("hide_tab_sheets_movements");
   const effectiveTab =
