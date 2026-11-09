@@ -34,7 +34,7 @@ describe("Phase 6 mix quantity writer guards", () => {
 
   it("rejects multi-row container reversal and never silently clamps raw used kg", () => {
     const source = read("server/routes/factory/mix-batches/finalize-delete.ts");
-    expect(source).toContain("requireMixDeletionSafe(batch");
+    expect(source).toMatch(/requireMixDeletionSafe\(\s*batch\s*,/);
     expect(source).toContain("rawRows.length !== 1");
     expect(source).toContain("currentUsed.lt(weight)");
     expect(source).not.toContain("GREATEST(");
