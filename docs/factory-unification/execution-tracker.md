@@ -8,7 +8,7 @@
 
 | Phase | Name | State | Evidence / next gate |
 |---|---|---|---|
-| 1 | Inventory & baseline | **IN PROGRESS** | `docs/factory-unification/phase-1-baseline.md` contains 62 registry keys, 151 route declarations and targeted cache/default/capability evidence; exhaustive source inventory and UI/API fixture capture remain |
+| 1 | Inventory & baseline | **SOURCE DONE — RUNTIME UNVERIFIED** | Complete pinned 62-key access registry, 151-route inventory and 7 source blob SHAs in `phase-1-source-fixture.json`; focused Vitest baseline authored (not run); 12-case manual UI/API capture protocol authored (not captured). See `phase-1-baseline.md` and `phase-1-manual-baseline-protocol.md` |
 | 2 | Permissions & cache isolation | **IN PROGRESS** | Shared capability map, dispatch/server role policy, selected-company Containers/OTW/inventory keys and characterization tests committed. Exhaustive key audit and real-role/runtime checks outstanding; see `docs/factory-unification/phase-2-implementation.md` |
 | 3 | Config & status presentation | **SOURCE DONE — RUNTIME UNVERIFIED** | Shared typed UI defaults and independent V5/dispatch/container labels adopted; no migration. Source checks complete, parity tests authored but not run. See `docs/factory-unification/phase-3-implementation.md` |
 | 4 | Navigation & common UI | **SOURCE DONE — RUNTIME UNVERIFIED** | Shared nested-nav metadata consumed by sidebar, Workers hub and POS/Dispatch switcher; Daybook debounce and Inventory/Production search controls reuse existing hooks/components. Source review and tests authored (not run); see `docs/factory-unification/phase-4-implementation.md` |
@@ -24,6 +24,7 @@
 - Keep all work on the same branch. Any future merge or production changes are outside this tracker.
 
 ## History
+- 2026-11-09: Continued Phase 1: corrected source parser for commented Production Bonuses entry, pinned all 62 registry pages / 151 routes, created read-only regression test and non-CI manual capture matrix; source inventory complete while UI/API fixtures and runtime checks remain unverified.
 - 2026-11-09: Phase 7 source consolidation committed: common Net Position date navigation and supplier report calendar validation. Historical as-of and financial posting/valuation are unchanged; runtime and historical parity unverified. No CI.
 - 2026-11-09: Phase 6 source-level V5/proforma read-model consolidation committed; V2/V3 retained and all financial/stock mutation paths preserved. Runtime precision/concurrency parity remains outstanding. No CI.
 - 2026-11-09: Phase 5 source-level attendance/scanner UI unification committed; preserving authoritative prior-day approval, pressing queue/idempotency and dispatch stock/accounting isolation. Runtime tests pending; no CI.
