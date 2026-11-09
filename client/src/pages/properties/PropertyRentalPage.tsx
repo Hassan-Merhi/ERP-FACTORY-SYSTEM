@@ -57,7 +57,6 @@ import { ErpMobileActionsMenu, ErpMobileSummaryGrid } from "@/components/ui/erp-
 import {
   PaymentsReconciliation,
   type ReconciliationSnapshot,
-  type ReconciliationPayment,
 } from "./property-rental/components/PaymentsReconciliation";
 export default function PropertyRentalPage({
   rentalModule,
