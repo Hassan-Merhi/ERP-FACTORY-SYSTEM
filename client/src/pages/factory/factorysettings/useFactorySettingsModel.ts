@@ -6,6 +6,8 @@ import { factoryApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
 import type { FactorySettingsData, Location, RenamePreviewItem, WaChat } from "./types";
 import { defaultSettings } from "./utils";
+import { factoryRenameDefaults, type FactoryCompanyUiSettings } from "@shared/factoryUiDefaults";
+import { useCompany } from "@/contexts/CompanyContext";
 
 type OcContainer = {
   containerId: number;
@@ -32,6 +34,7 @@ type BaleValidationResult = {
 
 export function useFactorySettingsModel() {
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   const { data: currentUser } = useQuery<{ role?: string }>({ queryKey: ["/api/auth/me"] });
   const isDeveloper = currentUser?.role === "Developer";
   const [settings, setSettings] = useState<FactorySettingsData>(defaultSettings);
@@ -46,9 +49,10 @@ export function useFactorySettingsModel() {
   const [attendanceWaSearch, setAttendanceWaSearch] = useState("");
   const [attendanceWaPickerOpen, setAttendanceWaPickerOpen] = useState(false);
 
-  const [codePrefix, setCodePrefix] = useState("HMD13");
-  const [findStr, setFindStr] = useState("-");
-  const [replaceStr, setReplaceStr] = useState(" ");
+  const initialRenameDefaults = factoryRenameDefaults();
+  const [codePrefix, setCodePrefix] = useState(initialRenameDefaults.codePrefix);
+  const [findStr, setFindStr] = useState(initialRenameDefaults.find);
+  const [replaceStr, setReplaceStr] = useState(initialRenameDefaults.replace);
   const [renamePreview, setRenamePreview] = useState<RenamePreviewItem[] | null>(null);
 
   const [excelFile, setExcelFile] = useState<File | null>(null);
@@ -260,10 +264,16 @@ export function useFactorySettingsModel() {
   });
 
   const { data: locations } = useQuery<Location[]>({ queryKey: ["/api/locations"] });
-  const { data, isLoading } = useQuery<FactorySettingsData>({ queryKey: ["/api/factory/settings"] });
+  const { data, isLoading } = useQuery<FactorySettingsData & FactoryCompanyUiSettings>({ queryKey: ["/api/factory/settings"] });
 
   useEffect(() => {
     if (data) {
+      // Select company-specific rename UI default only if the existing settings API provides it.
+      // Never write a legacy default to stock codes or backfill database settings.
+      setCodePrefix(factoryRenameDefaults(data).codePrefix);
+      setFindStr(factoryRenameDefaults(data).find);
+      setReplaceStr(factoryRenameDefaults(data).replace);
+      setRenamePreview(null);
       // The automatic allocation flag has its own protected editor and must
       // never leak into the generic bulk settings Save payload.
       const { automaticPriorityPrintingEnabled: _automaticMode, ...bulkSettings } = data as FactorySettingsData & {
