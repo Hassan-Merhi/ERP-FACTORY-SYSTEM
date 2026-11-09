@@ -48,7 +48,17 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
       const id = parseId(req.params.id);
 
       if (id === null) return res.status(400).json({ message: "Invalid id" });
+      if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+        throw new MixEditRequestError("An edit request body is required.");
+      }
       const { name, notes, batchDate, supplierSources, batchSources } = req.body;
+      if ((name !== undefined && name !== null && typeof name !== "string") ||
+          (notes !== undefined && notes !== null && typeof notes !== "string")) {
+        throw new MixEditRequestError("Name and notes must be text.");
+      }
+      if (typeof name === "string" && name.length > 500) {
+        throw new MixEditRequestError("Batch name is too long.");
+      }
       if (batchDate !== undefined && batchDate !== null && batchDate !== "") {
         const iso = String(batchDate);
         if (typeof batchDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(iso) ||
