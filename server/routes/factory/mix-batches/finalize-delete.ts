@@ -62,8 +62,8 @@ export function registerFactoryMixBatchFinalizeDeleteRoutes(app: Express) {
               changes: {
                 status: { old: batch.status, new: "COMPLETED" },
                 usedKg: { old: batch.usedKg, new: batch.totalWeightKg },
-                confirmedWasteKg: remainingKg.toFixed(3),
-                wasteReason,
+                confirmedWasteKg: { old: null, new: remainingKg.toFixed(3) },
+                wasteReason: { old: null, new: wasteReason },
               },
             }, tx);
             return record;
