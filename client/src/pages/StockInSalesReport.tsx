@@ -39,6 +39,7 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useToast } from "@/hooks/use-toast";
 import { ExcelJS, writeFile } from "@/lib/excelHelper";
 import { formatNumber } from "@/lib/formatNumber";
+import { erpCompanyDataKey, erpReferenceKeys } from "@/erp-core";
 import StockInSalesReportComparison from "./StockInSalesReportComparison";
 import StockInSalesReportDetail from "./StockInSalesReportDetail";
 
@@ -253,13 +254,13 @@ function StockInSalesReportSummary() {
   }, [selectedCompany?.id]);
 
   const { data: locations = [] } = useQuery<LocationOption[]>({
-    queryKey: ["/api/locations", selectedCompany?.id],
+    queryKey: erpReferenceKeys.locations(selectedCompany?.id),
     enabled: !!selectedCompany?.id,
     staleTime: 5 * 60 * 1000,
   });
 
   const { data: stockGroups = [] } = useQuery<StockGroupOption[]>({
-    queryKey: ["/api/stock-groups", selectedCompany?.id],
+    queryKey: erpReferenceKeys.stockGroups(selectedCompany?.id),
     enabled: !!selectedCompany?.id,
     staleTime: 5 * 60 * 1000,
   });
@@ -282,7 +283,7 @@ function StockInSalesReportSummary() {
   }, [periodFilter, grouping, selectedLocations, selectedStockGroups, debouncedSearch]);
 
   const { data, isLoading, isFetching, isError, error, refetch } = useQuery<StockInSalesResponse, Error>({
-    queryKey: [queryUrl, selectedCompany?.id],
+    queryKey: erpCompanyDataKey(queryUrl, selectedCompany?.id),
     enabled: !!selectedCompany?.id,
     staleTime: 30_000,
   });
