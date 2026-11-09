@@ -1,172 +1,144 @@
-import { useQuery } from "@tanstack/react-query";
+import { Suspense } from "react";
+import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import FactoryShippingContainers from "@/pages/factory/FactoryShippingContainers";
 import FactoryStatusBuilder from "@/pages/factory/FactoryStatusBuilder";
-import FactoryContainerTracking from "@/pages/factory/FactoryContainerTracking";
 import FactoryOtwTrackingTab from "@/pages/factory/FactoryOtwTrackingTab";
-import ProductionComparison from "@/pages/factory/ProductionComparison";
 import { PageHeader } from "@/components/PageHeader";
-import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
-import { getFactoryProductComparisonCopy } from "@/i18n/factoryProductComparisonTranslations";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BarChart3, FlaskConical, Ship, Tag, Truck } from "lucide-react";
-import type { FactoryMyAccess } from "@shared/apiTypes";
+import { BarChart3, FlaskConical, Layers, Ship, TableProperties, Truck } from "lucide-react";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
-
+import { useFactoryNavigationAccess } from "@/hooks/useFactoryNavigationAccess";
 import { useDailyProductionReport } from "./dailyproductionreport/useDailyProductionReport";
 import { ProductionTabPanel } from "./dailyproductionreport/components/ProductionTabPanel";
-import ProductComparisonCharts from "./productcomparison/ProductComparisonCharts";
 import "./factoryshippingcontainers/shipping-redesign.css";
 
-type OverviewTab = "otw-tracking" | "production" | "comparison" | "product-comparison" | "shipping" | "sheets";
+const FactoryMonthlyProductionMatrix = lazy(() => import("./FactoryMonthlyProductionMatrix"));
+const FactorySheetsAndSacks = lazy(() => import("./FactorySheetsAndSacks"));
 
-const OVERVIEW_TABS: OverviewTab[] = [
+type OverviewTab = "otw-tracking" | "production" | "monthly-production" | "shipping" | "sheets-sacks" | "sheets";
+const OVERVIEW_TABS: readonly OverviewTab[] = [
   "otw-tracking",
   "production",
-  "comparison",
-  "product-comparison",
+  "monthly-production",
   "shipping",
+  "sheets-sacks",
   "sheets",
 ];
-
 const HIDDEN_KEYS: Record<OverviewTab, string> = {
   "otw-tracking": "hide_tab_overview_otw_tracking",
   production: "hide_tab_overview_production",
-  comparison: "hide_tab_overview_comparison",
-  "product-comparison": "hide_tab_overview_product_comparison",
+  "monthly-production": "hide_tab_overview_monthly_production",
   shipping: "hide_tab_overview_shipping",
+  "sheets-sacks": "hide_tab_overview_sheets_sacks",
   sheets: "hide_tab_overview_sheets",
 };
 
-// The page is a layout shell: tab chrome plus the panels. All state, queries and
-// derived values live in useDailyProductionReport, with heavy panels kept in
-// their own components.
+// Keep page permissions for Monthly Production and Sheets & Sacks when embedding
+// them in Overview. Moving navigation must not grant access to either workflow.
 export default function DailyProductionReport() {
   const report = useDailyProductionReport();
-  const { language } = useApplicationLanguage();
-  const productComparisonCopy = getFactoryProductComparisonCopy(language);
-  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
-  const hidden = myAccess?.hiddenCostFields ?? [];
-  const visibleTabs = OVERVIEW_TABS.filter((tab) => !hidden.includes(HIDDEN_KEYS[tab]));
-  const [effectiveActiveTab, setActiveTab] = useHubQueryState<OverviewTab>({
+  const { ready, canOpen, access } = useFactoryNavigationAccess();
+  const hidden = access?.hiddenCostFields ?? [];
+  const visibleTabs = OVERVIEW_TABS.filter((tab) => {
+    if (hidden.includes(HIDDEN_KEYS[tab])) return false;
+    if (tab === "monthly-production") return canOpen("/factory/monthly-production-matrix");
+    if (tab === "sheets-sacks") return canOpen("/factory/sheets-sacks");
+    return true;
+  });
+  // Before access resolves, preserve deep-linked tabs instead of stripping the query.
+  const [activeTab, setActiveTab] = useHubQueryState<OverviewTab>({
     key: "tab",
-    allowedValues: visibleTabs,
+    allowedValues: ready ? visibleTabs : OVERVIEW_TABS,
     knownValues: OVERVIEW_TABS,
     defaultValue: visibleTabs.includes("production") ? "production" : (visibleTabs[0] ?? "production"),
   });
+  const show = (tab: OverviewTab) => ready && visibleTabs.includes(tab);
 
-  const show = (tab: OverviewTab) => visibleTabs.includes(tab);
+  if (!ready) return <div className="p-5 text-sm text-muted-foreground">Loading access...</div>;
 
   return (
-    <div className={`flex flex-col h-full overflow-hidden ${effectiveActiveTab === "shipping" ? "shipping-overview-shell" : ""}`}>
-      <div className={effectiveActiveTab === "shipping" ? "shipping-overview-header shrink-0 px-5 pt-5 pb-4" : "px-4 pt-4 pb-3 border-b shrink-0"}>
+    <div className={`flex h-full min-w-0 flex-col overflow-hidden ${activeTab === "shipping" ? "shipping-overview-shell" : ""}`}>
+      <div className={activeTab === "shipping" ? "shipping-overview-header shrink-0 px-5 pt-5 pb-4" : "shrink-0 border-b px-4 pt-4 pb-3"}>
         <PageHeader
           title="Overview"
-          subtitle="Manufacturing overview — output metrics &amp; bale lifecycle"
-          icon={effectiveActiveTab === "shipping" ? <span className="shipping-overview-icon"><Ship className="h-5 w-5" /></span> : undefined}
+          subtitle="Manufacturing overview — output metrics & bale lifecycle"
+          icon={activeTab === "shipping" ? <span className="shipping-overview-icon"><Ship className="h-5 w-5" /></span> : undefined}
         />
       </div>
 
       {visibleTabs.length === 0 ? (
         <div className="p-6 text-sm text-muted-foreground">No Overview tabs are available for this user.</div>
       ) : (
-        <Tabs
-          value={effectiveActiveTab}
-          onValueChange={(value) => setActiveTab(value as OverviewTab)}
-          className="flex flex-col flex-1 overflow-hidden"
-        >
-          <div className={`erp-mobile-scroll-tabs mx-4 mt-3 mb-0 shrink-0 pb-1 ${effectiveActiveTab === "shipping" ? "shipping-overview-tabs" : ""}`}>
-            <TabsList
-              className="w-max min-w-full sm:min-w-0 sm:w-fit"
-              aria-label="Production reports"
-              data-testid="tabs-production-analytics"
-            >
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as OverviewTab)} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className={`erp-mobile-scroll-tabs mx-4 mt-3 shrink-0 pb-1 ${activeTab === "shipping" ? "shipping-overview-tabs" : ""}`}>
+            <TabsList className="w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Factory overview" data-testid="tabs-production-analytics">
               {show("otw-tracking") && (
                 <TabsTrigger value="otw-tracking" data-testid="tab-otw-tracking">
-                  <Truck className="h-4 w-4 mr-1.5" /> OTW Tracking
+                  <Truck className="mr-1.5 h-4 w-4" /> OTW Tracking
                 </TabsTrigger>
               )}
               {show("production") && (
                 <TabsTrigger value="production" data-testid="tab-production">
-                  <FlaskConical className="h-4 w-4 mr-1.5" /> Production
+                  <FlaskConical className="mr-1.5 h-4 w-4" /> Production
                 </TabsTrigger>
               )}
-              {show("comparison") && (
-                <TabsTrigger value="comparison" data-testid="tab-comparison">
-                  <Tag className="h-4 w-4 mr-1.5" /> Comparison
-                </TabsTrigger>
-              )}
-              {show("product-comparison") && (
-                <TabsTrigger value="product-comparison" data-testid="tab-product-comparison">
-                  <BarChart3 className="h-4 w-4 mr-1.5" /> {productComparisonCopy.tabLabel}
+              {show("monthly-production") && (
+                <TabsTrigger value="monthly-production" data-testid="tab-monthly-production">
+                  <BarChart3 className="mr-1.5 h-4 w-4" /> Monthly Production
                 </TabsTrigger>
               )}
               {show("shipping") && (
                 <TabsTrigger value="shipping" data-testid="tab-shipping">
-                  <Ship className="h-4 w-4 mr-1.5" /> Shipping
+                  <Ship className="mr-1.5 h-4 w-4" /> Shipping
+                </TabsTrigger>
+              )}
+              {show("sheets-sacks") && (
+                <TabsTrigger value="sheets-sacks" data-testid="tab-sheets-sacks">
+                  <Layers className="mr-1.5 h-4 w-4" /> Sheets & Sacks
                 </TabsTrigger>
               )}
               {show("sheets") && (
                 <TabsTrigger value="sheets" data-testid="tab-sheets">
-                  Sheets
+                  <TableProperties className="mr-1.5 h-4 w-4" /> Sheets
                 </TabsTrigger>
               )}
-              <TabsTrigger value="container-tracking" data-testid="tab-container-tracking" className="hidden">
-                Container Tracking
-              </TabsTrigger>
             </TabsList>
           </div>
 
           {show("otw-tracking") && (
-            <TabsContent value="otw-tracking" className="flex-1 overflow-y-auto p-4 mt-0 data-[state=inactive]:hidden">
+            <TabsContent value="otw-tracking" className="mt-0 flex-1 overflow-y-auto p-4 data-[state=inactive]:hidden">
               <FactoryOtwTrackingTab />
             </TabsContent>
           )}
-
           {show("production") && (
-            <TabsContent
-              value="production"
-              className="flex-1 overflow-y-auto p-4 gap-4 flex flex-col mt-0 data-[state=inactive]:hidden"
-            >
+            <TabsContent value="production" className="mt-0 flex flex-1 flex-col gap-4 overflow-y-auto p-4 data-[state=inactive]:hidden">
               <ProductionTabPanel report={report} />
             </TabsContent>
           )}
-
-          {show("product-comparison") && (
-            <TabsContent
-              value="product-comparison"
-              className="flex-1 overflow-y-auto p-4 mt-0 data-[state=inactive]:hidden"
-            >
-              <ProductComparisonCharts />
+          {show("monthly-production") && (
+            <TabsContent value="monthly-production" className="mt-0 min-h-0 flex-1 overflow-y-auto p-4 data-[state=inactive]:hidden">
+              <Suspense fallback={<div className="p-4 text-sm text-muted-foreground">Loading monthly production...</div>}>
+                <FactoryMonthlyProductionMatrix />
+              </Suspense>
             </TabsContent>
           )}
-
-          {show("comparison") && (
-            <TabsContent value="comparison" className="flex-1 overflow-y-auto p-4 mt-0 data-[state=inactive]:hidden">
-              <ProductionComparison />
-            </TabsContent>
-          )}
-
           {show("shipping") && (
-            <TabsContent value="shipping" className="flex-1 overflow-y-auto p-4 mt-0 data-[state=inactive]:hidden">
+            <TabsContent value="shipping" className="mt-0 flex-1 overflow-y-auto p-4 data-[state=inactive]:hidden">
               <FactoryShippingContainers />
             </TabsContent>
           )}
-
+          {show("sheets-sacks") && (
+            <TabsContent value="sheets-sacks" className="mt-0 min-h-0 flex-1 overflow-y-auto p-4 data-[state=inactive]:hidden">
+              <Suspense fallback={<div className="p-4 text-sm text-muted-foreground">Loading sheets and sacks...</div>}>
+                <FactorySheetsAndSacks />
+              </Suspense>
+            </TabsContent>
+          )}
           {show("sheets") && (
-            <TabsContent
-              value="sheets"
-              className="flex-1 overflow-hidden flex flex-col mt-0 data-[state=inactive]:hidden"
-            >
+            <TabsContent value="sheets" className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden">
               <FactoryStatusBuilder />
             </TabsContent>
           )}
-
-          <TabsContent
-            value="container-tracking"
-            className="flex-1 overflow-y-auto p-4 mt-0 data-[state=inactive]:hidden"
-          >
-            <FactoryContainerTracking />
-          </TabsContent>
         </Tabs>
       )}
     </div>
