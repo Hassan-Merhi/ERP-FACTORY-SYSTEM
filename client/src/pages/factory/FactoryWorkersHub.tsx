@@ -73,7 +73,7 @@ export default function FactoryWorkersHub() {
   });
 
   const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
-  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess.hasFactoryAccess
+  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
     ? myAccess.hiddenCostFields
     : Object.values(FACTORY_WORKERS_HUB_TABS);
 
