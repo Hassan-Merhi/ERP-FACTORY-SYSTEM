@@ -52,7 +52,9 @@ import {
 import { ChevronDown } from "lucide-react";
 import "./productiontargets/productionTargetsPremium.css";
 import { useLocation } from "wouter";
-import type { AuthMe } from "@shared/apiTypes";
+import type { AuthMe, FactoryMyAccess } from "@shared/apiTypes";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 
 import { exportWeeklyProductionExcel, ProductionDateRangeError } from "./productiontargets/productionWeeklyExcel";
 import { ProductionTargetKpiGrid } from "./productiontargets/ProductionTargetKpiGrid";
@@ -62,9 +64,17 @@ import { ProductionTargetNotices } from "./productiontargets/ProductionTargetNot
 export default function FactoryProductionTargets() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
+  const { selectedCompany } = useCompany();
+  const { data: access } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
+  });
   const { data: session } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"], staleTime: 60000 });
   const bonusRole = session?.currentRole ?? session?.role;
-  const canManageBonuses = factoryActionCapabilities({ role: bonusRole })["production.manage-bonuses"];
+  const canManageBonuses = factoryActionCapabilities({
+    role: bonusRole,
+    hasFactoryAccess: access?.companyId === selectedCompany?.id && access.hasFactoryAccess,
+  })["production.manage-bonuses"];
   const { language } = useApplicationLanguage();
   const tr = (key: FactoryStaffTrackingTranslationKey) => translateFactoryStaffTrackingText(key, language);
   const [periodType, setPeriodType] = useState<PeriodType>("daily");
@@ -89,7 +99,8 @@ export default function FactoryProductionTargets() {
   );
 
   const { data, isLoading } = useQuery<ProductionResponse>({
-    queryKey: ["/api/factory/staff-tracking", "production", periodType, period.start, period.end],
+    queryKey: companyQueryKey("/api/factory/staff-tracking", selectedCompany?.id, "production", periodType, period.start, period.end),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: () => fetchProduction(periodType, period.start, period.end),
   });
 
