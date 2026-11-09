@@ -13,7 +13,8 @@
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join, relative } from "node:path";
 
-const roots = ["client/src/pages/factory", "client/src/factory", "client/src/components", "client/src/hooks", "client/src/contexts", "client/src/lib"];
+// Scan all client source: some Factory components live outside pages/factory.
+const roots = ["client/src"];
 const files = [];
 function visit(dir) {
   if (!existsSync(dir)) return;
