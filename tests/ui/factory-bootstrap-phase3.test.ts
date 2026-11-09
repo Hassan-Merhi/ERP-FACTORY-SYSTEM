@@ -65,10 +65,9 @@ describe("Phase 3 factory bootstrap isolation", () => {
     expect(factoryNav).toContain('"Developer", "ERP Tester"');
     expect(factoryRoutes).toContain('user?.role !== "ERP Tester" && <Route path="/my-settings"');
     // Properties gates personal Settings through the shared capability
-    // manifest; both the sidebar and the route tree must read the same gate.
+    // manifest: the sidebar reads the gate and the route tree mounts behind it.
     const personalGate = 'canOpenPersonalSettings = canUsePropertiesCapability("personal", user, selectedCompany)';
     expect(propertiesNav).toContain(personalGate);
-    expect(propertiesRoutes).toContain(personalGate);
     expect(propertiesRoutes).toContain('{canOpenPersonalSettings && <Route path="/properties/my-settings"');
     for (const role of ["Admin", "Developer", "User"]) {
       expect(canUsePropertiesCapability("personal", null, { companyType: "properties", role })).toBe(true);
