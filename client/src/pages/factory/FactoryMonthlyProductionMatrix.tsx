@@ -11,12 +11,20 @@ import { duoMobileText } from "@/i18n/iphoneDuoMobileTranslations";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { moveProductNearItem, moveProductToPosition } from "./monthlyProductionRowOrder";
 import { useToast } from "@/hooks/use-toast";
 import type { MonthlyProductionExportBale } from "./monthlyProductionWorkbookDrilldown";
-import { ArrowDown, ArrowUp, Download, GripVertical, ListOrdered, Plus, RotateCcw, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, Download, GripVertical, ListOrdered, Plus, RotateCcw, Search, X } from "lucide-react";
 
 type Product = { id: number; name: string; articleCode: string; categoryName: string };
 type MonthValue = { productId: number; month: string; quantity: number };
@@ -59,7 +67,7 @@ export default function FactoryMonthlyProductionMatrix() {
     staleTime: 60_000,
   });
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [mode, setMode] = useState<"all" | "selected">(returnMonths.length ? "selected" : "all");
   const [pickedMonth, setPickedMonth] = useState(currentMonth);
   const [pickedMonths, setPickedMonths] = useState<string[]>([...new Set(returnMonths)].sort());
@@ -114,6 +122,11 @@ export default function FactoryMonthlyProductionMatrix() {
     () => [...new Set((data?.products ?? []).map((p) => p.categoryName))].sort(),
     [data?.products]
   );
+  const toggleCategory = (value: string) => {
+    setSelectedCategories((previous) =>
+      previous.includes(value) ? previous.filter((item) => item !== value) : [...previous, value]
+    );
+  };
   const orderedProducts = useMemo(() => {
     const positions = new Map(orderedIds.map((id, i) => [id, i]));
     return [...(data?.products ?? [])].sort((a, b) => {
@@ -130,14 +143,14 @@ export default function FactoryMonthlyProductionMatrix() {
   const visibleProducts = mhdOrderedProducts.filter((product) => {
     const q = search.trim().toLowerCase();
     return (
-      (!category || product.categoryName === category) &&
+      (selectedCategories.length === 0 || selectedCategories.includes(product.categoryName)) &&
       (!q ||
         [mhd.nameFor(product.articleCode, product.name), product.articleCode, product.categoryName].some((v) =>
           v.toLowerCase().includes(q)
         ))
     );
   });
-  const canReorder = mhd.mode === "standard" && !search.trim() && !category && !saving;
+  const canReorder = mhd.mode === "standard" && !search.trim() && selectedCategories.length === 0 && !saving;
   const byId = (productId: number, month: string) => counts.get(productId)?.get(month) ?? 0;
   const openWorkerBreakdown = (productId: number, selectedMonths: string[]) => {
     if (selectedMonths.length === 0) return;
@@ -319,7 +332,7 @@ export default function FactoryMonthlyProductionMatrix() {
         rows,
         months,
         monthLabels: months.map(monthLabel),
-        category,
+        category: selectedCategories.join(", "),
         search,
         bales,
       });
@@ -397,19 +410,50 @@ export default function FactoryMonthlyProductionMatrix() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <select
-            aria-label={t("monthlyProduction.categoryFilter")}
-            className="h-9 rounded-md border bg-background px-2 text-sm"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-          >
-            <option value="">{t("monthlyProduction.allCategories")}</option>
-            {categories.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                aria-label={t("monthlyProduction.categoryFilter")}
+                data-testid="monthly-production-category-filter"
+                className="h-9 w-full justify-between gap-2 sm:w-56"
+              >
+                <span className="truncate text-left">
+                  {selectedCategories.length === 0
+                    ? t("monthlyProduction.allCategories")
+                    : selectedCategories.join(", ")}
+                </span>
+                <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="max-h-[min(60vh,400px)] w-64 overflow-y-auto">
+              <DropdownMenuItem
+                className="cursor-pointer gap-2"
+                onSelect={(event) => {
+                  event.preventDefault();
+                  setSelectedCategories([]);
+                }}
+              >
+                <Checkbox checked={selectedCategories.length === 0} className="pointer-events-none" />
+                <span>{t("monthlyProduction.allCategories")}</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {categories.map((value) => (
+                <DropdownMenuItem
+                  key={value}
+                  className="cursor-pointer gap-2"
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    toggleCategory(value);
+                  }}
+                >
+                  <Checkbox checked={selectedCategories.includes(value)} className="pointer-events-none" />
+                  <span className="truncate" title={value}>{value}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
         {mode === "selected" && (
           <div className="flex flex-wrap items-center gap-1.5">
