@@ -23,6 +23,7 @@ import { canUseAdminSearch, type ShellUser } from "./shellUser";
 import { ErpAccessBoundary } from "./ErpAccessBoundary";
 import { MODULE_ACCENT } from "@/components/sidebar/sidebarPrimitives";
 import "@/erp-mobile-operations.css";
+import "@/styles/erp-unified-theme.css";
 import { isExistingRecordReadOnlyRole } from "@shared/createOnlyRolePolicy";
 
 interface ErpShellProps {

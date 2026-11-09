@@ -1,0 +1,275 @@
+/*
+ * normal ERP unified blue theme. This file is independent of Factory and Properties themes.
+ *
+ * Single edit point: --erp-hue: 217; (blue).
+ * Scope: html[data-app-shell="erp"], including portalled dialogs.
+ * Keep business/status meanings (green = success, red = warning/debit, amber =
+ * caution) and chart categories intact. These aliases target only the
+ * existing blue/indigo/purple/violet/sky/fuchsia utility families.
+ * Prefer semantic bg-background, bg-card and bg-primary in new pages.
+ */
+:root[data-app-shell="erp"] {
+  --erp-hue: 217;
+
+  /* 11 stops of one blue hue: legacy utility classes inherit this palette. */
+  --erp-color-50: hsl(var(--erp-hue) 100% 98%);
+  --erp-color-100: hsl(var(--erp-hue) 95% 95%);
+  --erp-color-200: hsl(var(--erp-hue) 93% 89%);
+  --erp-color-300: hsl(var(--erp-hue) 89% 80%);
+  --erp-color-400: hsl(var(--erp-hue) 86% 69%);
+  --erp-color-500: hsl(var(--erp-hue) 82% 59%);
+  --erp-color-600: hsl(var(--erp-hue) 78% 51%);
+  --erp-color-700: hsl(var(--erp-hue) 73% 43%);
+  --erp-color-800: hsl(var(--erp-hue) 65% 34%);
+  --erp-color-900: hsl(var(--erp-hue) 60% 26%);
+  --erp-color-950: hsl(var(--erp-hue) 66% 15%);
+
+  --color-blue-50: var(--erp-color-50);
+  --color-blue-100: var(--erp-color-100);
+  --color-blue-200: var(--erp-color-200);
+  --color-blue-300: var(--erp-color-300);
+  --color-blue-400: var(--erp-color-400);
+  --color-blue-500: var(--erp-color-500);
+  --color-blue-600: var(--erp-color-600);
+  --color-blue-700: var(--erp-color-700);
+  --color-blue-800: var(--erp-color-800);
+  --color-blue-900: var(--erp-color-900);
+  --color-blue-950: var(--erp-color-950);
+
+  --color-indigo-50: var(--erp-color-50);
+  --color-indigo-100: var(--erp-color-100);
+  --color-indigo-200: var(--erp-color-200);
+  --color-indigo-300: var(--erp-color-300);
+  --color-indigo-400: var(--erp-color-400);
+  --color-indigo-500: var(--erp-color-500);
+  --color-indigo-600: var(--erp-color-600);
+  --color-indigo-700: var(--erp-color-700);
+  --color-indigo-800: var(--erp-color-800);
+  --color-indigo-900: var(--erp-color-900);
+  --color-indigo-950: var(--erp-color-950);
+
+  --color-purple-50: var(--erp-color-50);
+  --color-purple-100: var(--erp-color-100);
+  --color-purple-200: var(--erp-color-200);
+  --color-purple-300: var(--erp-color-300);
+  --color-purple-400: var(--erp-color-400);
+  --color-purple-500: var(--erp-color-500);
+  --color-purple-600: var(--erp-color-600);
+  --color-purple-700: var(--erp-color-700);
+  --color-purple-800: var(--erp-color-800);
+  --color-purple-900: var(--erp-color-900);
+  --color-purple-950: var(--erp-color-950);
+
+  --color-violet-50: var(--erp-color-50);
+  --color-violet-100: var(--erp-color-100);
+  --color-violet-200: var(--erp-color-200);
+  --color-violet-300: var(--erp-color-300);
+  --color-violet-400: var(--erp-color-400);
+  --color-violet-500: var(--erp-color-500);
+  --color-violet-600: var(--erp-color-600);
+  --color-violet-700: var(--erp-color-700);
+  --color-violet-800: var(--erp-color-800);
+  --color-violet-900: var(--erp-color-900);
+  --color-violet-950: var(--erp-color-950);
+
+  --color-sky-50: var(--erp-color-50);
+  --color-sky-100: var(--erp-color-100);
+  --color-sky-200: var(--erp-color-200);
+  --color-sky-300: var(--erp-color-300);
+  --color-sky-400: var(--erp-color-400);
+  --color-sky-500: var(--erp-color-500);
+  --color-sky-600: var(--erp-color-600);
+  --color-sky-700: var(--erp-color-700);
+  --color-sky-800: var(--erp-color-800);
+  --color-sky-900: var(--erp-color-900);
+  --color-sky-950: var(--erp-color-950);
+
+  --color-fuchsia-50: var(--erp-color-50);
+  --color-fuchsia-100: var(--erp-color-100);
+  --color-fuchsia-200: var(--erp-color-200);
+  --color-fuchsia-300: var(--erp-color-300);
+  --color-fuchsia-400: var(--erp-color-400);
+  --color-fuchsia-500: var(--erp-color-500);
+  --color-fuchsia-600: var(--erp-color-600);
+  --color-fuchsia-700: var(--erp-color-700);
+  --color-fuchsia-800: var(--erp-color-800);
+  --color-fuchsia-900: var(--erp-color-900);
+  --color-fuchsia-950: var(--erp-color-950);
+
+  /* Light surfaces, buttons and navigation derive from the same hue. */
+  --erp-brand: var(--erp-hue) 78% 50%;
+  --erp-brand-strong: var(--erp-hue) 75% 42%;
+  --erp-brand-soft: var(--erp-hue) 100% 96%;
+  --erp-brand-ink: var(--erp-hue) 77% 34%;
+  --erp-brand-border: var(--erp-hue) 65% 84%;
+  --background: var(--erp-hue) 35% 98%;
+  --card: 0 0% 100%;
+  --popover: 0 0% 100%;
+  --sidebar: var(--erp-hue) 35% 97%;
+  --secondary: var(--erp-hue) 30% 94%;
+  --muted: var(--erp-hue) 23% 94%;
+  --accent: var(--erp-hue) 32% 93%;
+  --border: var(--erp-hue) 20% 87%;
+  --card-border: var(--erp-hue) 20% 87%;
+  --sidebar-border: var(--erp-hue) 20% 87%;
+  --sidebar-accent: var(--erp-hue) 34% 92%;
+  --input: var(--erp-hue) 18% 82%;
+  --primary: var(--erp-hue) 78% 45%;
+  --primary-foreground: 0 0% 100%;
+  --primary-border: var(--erp-hue) 75% 35%;
+  --ring: var(--erp-hue) 78% 48%;
+  --sidebar-primary: var(--erp-hue) 78% 45%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-ring: var(--erp-hue) 78% 48%;
+  --module-erp: var(--erp-hue) 78% 45%;
+  --nav-overview: var(--erp-hue) 75% 43%;
+  --nav-pinned: var(--erp-hue) 75% 43%;
+  --nav-inventory: var(--erp-hue) 75% 43%;
+  --nav-sales: var(--erp-hue) 75% 43%;
+  --nav-accounting: var(--erp-hue) 75% 43%;
+  --nav-analytics: var(--erp-hue) 75% 43%;
+  --nav-rentals: var(--erp-hue) 75% 43%;
+  --nav-finance: var(--erp-hue) 75% 43%;
+  --nav-operations: var(--erp-hue) 75% 43%;
+  --nav-bales: var(--erp-hue) 75% 43%;
+  --nav-reports: var(--erp-hue) 75% 43%;
+  --nav-intelligence: var(--erp-hue) 75% 43%;
+  --nav-utility: var(--erp-hue) 75% 43%;
+
+  /* Premium sidebar/topbar use a separate set of tokens. */
+  --pnav-violet: var(--erp-color-600);
+  --pnav-violet-text: hsl(var(--erp-brand-ink));
+  --pnav-surface: hsl(var(--sidebar));
+  --pnav-raised: hsl(var(--card));
+  --pnav-text: hsl(var(--foreground));
+  --pnav-muted: hsl(var(--muted-foreground));
+  --pnav-border: hsl(var(--erp-brand) / .17);
+  --pnav-hover: hsl(var(--erp-brand) / .075);
+  --pnav-active: linear-gradient(100deg, var(--erp-color-100), hsl(var(--background)));
+  --pnav-brand: linear-gradient(120deg, var(--erp-color-100), hsl(var(--card)));
+  --pnav-top: linear-gradient(105deg, hsl(var(--card)), var(--erp-color-100));
+}
+
+:root.dark[data-app-shell="erp"] {
+  --erp-brand: var(--erp-hue) 80% 51%;
+  --erp-brand-strong: var(--erp-hue) 76% 41%;
+  --erp-brand-soft: var(--erp-hue) 33% 19%;
+  --erp-brand-ink: var(--erp-hue) 89% 83%;
+  --erp-brand-border: var(--erp-hue) 36% 36%;
+  --background: var(--erp-hue) 20% 9%;
+  --card: var(--erp-hue) 17% 12%;
+  --popover: var(--erp-hue) 18% 15%;
+  --sidebar: var(--erp-hue) 19% 11%;
+  --secondary: var(--erp-hue) 18% 19%;
+  --muted: var(--erp-hue) 17% 18%;
+  --accent: var(--erp-hue) 23% 21%;
+  --border: var(--erp-hue) 15% 24%;
+  --card-border: var(--erp-hue) 15% 22%;
+  --sidebar-border: var(--erp-hue) 15% 24%;
+  --sidebar-accent: var(--erp-hue) 22% 20%;
+  --input: var(--erp-hue) 18% 28%;
+  --primary: var(--erp-hue) 80% 49%;
+  --primary-foreground: 0 0% 100%;
+  --primary-border: var(--erp-hue) 76% 39%;
+  --ring: var(--erp-hue) 88% 70%;
+  --sidebar-primary: var(--erp-hue) 80% 49%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-ring: var(--erp-hue) 88% 70%;
+  --module-erp: var(--erp-hue) 88% 70%;
+  --nav-overview: var(--erp-hue) 86% 74%;
+  --nav-pinned: var(--erp-hue) 86% 74%;
+  --nav-inventory: var(--erp-hue) 86% 74%;
+  --nav-sales: var(--erp-hue) 86% 74%;
+  --nav-accounting: var(--erp-hue) 86% 74%;
+  --nav-analytics: var(--erp-hue) 86% 74%;
+  --nav-rentals: var(--erp-hue) 86% 74%;
+  --nav-finance: var(--erp-hue) 86% 74%;
+  --nav-operations: var(--erp-hue) 86% 74%;
+  --nav-bales: var(--erp-hue) 86% 74%;
+  --nav-reports: var(--erp-hue) 86% 74%;
+  --nav-intelligence: var(--erp-hue) 86% 74%;
+  --nav-utility: var(--erp-hue) 86% 74%;
+
+  --pnav-violet: var(--erp-color-400);
+  --pnav-violet-text: hsl(var(--erp-brand-ink));
+  --pnav-surface: hsl(var(--sidebar));
+  --pnav-raised: hsl(var(--card));
+  --pnav-text: hsl(var(--foreground));
+  --pnav-muted: hsl(var(--muted-foreground));
+  --pnav-border: hsl(var(--erp-brand) / .25);
+  --pnav-hover: hsl(var(--erp-brand) / .16);
+  --pnav-active: linear-gradient(105deg, hsl(var(--erp-brand-strong) / .72), hsl(var(--erp-brand-soft)));
+  --pnav-brand: linear-gradient(120deg, hsl(var(--erp-brand-soft)), hsl(var(--sidebar)));
+  --pnav-top: linear-gradient(105deg, hsl(var(--sidebar)), hsl(var(--erp-brand-soft)));
+}
+
+/* Shared canvas and reusable branded elements for future normal ERP pages. */
+:root[data-app-shell="erp"] [data-erp-shell],
+:root[data-app-shell="erp"] #main-content {
+  background-color: hsl(var(--background));
+}
+:root[data-app-shell="erp"] .erp-brand-gradient {
+  background: linear-gradient(115deg, hsl(var(--erp-brand-strong)), hsl(var(--erp-brand)));
+  color: white;
+}
+:root[data-app-shell="erp"] .erp-brand-soft {
+  background: hsl(var(--erp-brand-soft));
+  border-color: hsl(var(--erp-brand-border));
+  color: hsl(var(--erp-brand-ink));
+}
+:root[data-app-shell="erp"] .erp-brand-text { color: hsl(var(--erp-brand-ink)); }
+
+/* Account ledger is a shared component. Only this mode is recolored. */
+:root[data-app-shell="erp"] .account-ledger-modern .account-ledger-heading-icon {
+  background: linear-gradient(135deg, hsl(var(--erp-brand-strong)), hsl(var(--erp-brand)));
+}
+:root[data-app-shell="erp"] .account-ledger-modern .account-ledger-subtitle {
+  color: hsl(var(--erp-brand-ink));
+}
+:root.dark[data-app-shell="erp"] .account-ledger-modern .account-ledger-subtitle {
+  color: hsl(var(--erp-brand-ink));
+}
+
+/* ERP Daybook had its own hard-coded purple background and action buttons. */
+:root[data-app-shell="erp"] .daybook-premium {
+  --daybook-stroke: hsl(var(--erp-brand) / .23);
+  --daybook-panel: hsl(var(--card) / .87);
+  --daybook-soft: hsl(var(--erp-brand-soft) / .85);
+  --daybook-table-head: var(--erp-color-100);
+  background: radial-gradient(ellipse 65% 27% at 84% 3%, hsl(var(--erp-brand) / .09), transparent 70%);
+}
+:root[data-app-shell="erp"] .daybook-hero {
+  background: linear-gradient(115deg, var(--erp-color-50), var(--erp-color-100) 68%, hsl(var(--card)));
+  box-shadow: 0 12px 35px -27px hsl(var(--erp-brand) / .28);
+}
+:root[data-app-shell="erp"] .daybook-hero::before {
+  border-color: hsl(var(--erp-brand) / .20);
+  background: linear-gradient(145deg, hsl(var(--erp-brand) / .14), transparent 70%);
+}
+:root[data-app-shell="erp"] .daybook-hero::after {
+  background: linear-gradient(90deg, transparent, hsl(var(--erp-brand) / .55), transparent);
+  box-shadow: 0 0 22px hsl(var(--erp-brand) / .2);
+}
+:root[data-app-shell="erp"] .daybook-hero [data-testid="page-header"] > div[class*="border-l"] {
+  border-left-color: hsl(var(--erp-brand));
+}
+:root[data-app-shell="erp"] .daybook-hero [data-testid="text-page-title"] > span:first-child {
+  color: hsl(var(--erp-brand-ink));
+}
+:root[data-app-shell="erp"] .daybook-hero .daybook-new-voucher,
+:root[data-app-shell="erp"] .daybook-hero .daybook-new-voucher:hover,
+:root[data-app-shell="erp"] .daybook-premium .daybook-new-voucher {
+  background: linear-gradient(130deg, hsl(var(--erp-brand)), hsl(var(--erp-brand-strong)));
+  border-color: hsl(var(--erp-brand-border));
+  color: white;
+}
+:root.dark[data-app-shell="erp"] .daybook-premium {
+  --daybook-stroke: hsl(var(--erp-brand) / .29);
+  --daybook-panel: hsl(var(--card) / .88);
+  --daybook-soft: hsl(var(--erp-brand-soft) / .75);
+  --daybook-table-head: hsl(var(--erp-brand-soft));
+  background: radial-gradient(ellipse 64% 32% at 85% 3%, hsl(var(--erp-brand) / .15), transparent 74%);
+}
+:root.dark[data-app-shell="erp"] .daybook-hero {
+  background: linear-gradient(112deg, #101c32, #162443 54%, #1d3355);
+}
