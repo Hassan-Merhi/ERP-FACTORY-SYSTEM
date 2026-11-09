@@ -47,6 +47,7 @@ export interface MixMonitorStatus {
   companyId: number;
   initialized: boolean;
   lastSuccessAt: string | null;
+  stale: boolean;
   summary: MixMonitorSnapshot["summary"] | null;
   unreadAlerts: number;
   monitoringEnabled: boolean;
@@ -345,7 +346,10 @@ export async function getMixMonitorStatus(companyId: number): Promise<MixMonitor
   const baseline = parseState(r.rows[0]?.message ?? null);
   return {
     companyId, initialized: baseline !== null,
-    lastSuccessAt: baseline?.lastSuccessAt ?? null, summary: baseline?.summary ?? null,
+    lastSuccessAt: baseline?.lastSuccessAt ?? null,
+    stale: baseline !== null && (!Number.isFinite(Date.parse(baseline.lastSuccessAt)) ||
+      Date.now() - Date.parse(baseline.lastSuccessAt) > 48 * 60 * 60 * 1000),
+    summary: baseline?.summary ?? null,
     unreadAlerts: Number(r.rows[0]?.unread_alerts ?? 0),
     monitoringEnabled: process.env.ENABLE_SCHEDULERS !== "false" && process.env.FACTORY_MIX_INTEGRITY_MONITOR_ENABLED !== "false",
     nextCheck: "Daily at 01:35 UTC when server schedulers are enabled",
