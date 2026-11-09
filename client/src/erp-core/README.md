@@ -102,6 +102,7 @@ Tests cover filename compatibility, multiline/quoted CSV, formula-safe labels, p
 
 - Consolidated repeated `@/erp-core` imports in Customers, Suppliers, Stock & Sales and Market Analysis; preserved all other existing imports and page-specific behavior.
 - Removed the redundant eager React Hook Form export surface from `@/erp-core`. The canonical `@/components/ui/form` remains the single implementation; callers choose it directly. This prevents Daybook's isolated Vitest hook mocks from failing just by importing the generic ERP barrel.
+- Removed eager `erpData` exports from the generic UI barrel as well: report/menu pages must not load all company data/cache helpers or require their mocked APIs during isolated tests. Pages importing query helpers now use `@/erp-core/erpData` directly; their actual URL-first/company-second keys and invalidation behavior are unchanged.
 - Kept **company-scoped** access grants and supplier ledger query identities. Updated test fixtures to use the actual selected-company key rather than weakening production isolation. Isolated route tests supply a company context.
 - Hardened `ErpReportPrintFooter` for older embedded report tests that mock date-only preferences; the real date-format context retains full date/time formatting.
 - Removed the CSV filename sanitizer's ESLint control-regex warning while still replacing unsafe characters.
