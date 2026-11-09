@@ -40,10 +40,10 @@ async function resolveOrder(req: Request, res: Response) {
 
   const result = await db.execute(sql`
     SELECT id, status, container_number AS "containerNumber",
-           customer_id AS "customerId", proforma_id_used AS "proformaIdUsed"
+           customer_id AS "customerId", proforma_id_used AS "proformaIdUsed",
+           deleted_at AS "deletedAt"
       FROM customer_orders
      WHERE id = ${orderId} AND company_id = ${state.companyId}
-       AND deleted_at IS NULL
      LIMIT 1
   `);
   const order = resultRows(result)[0];
@@ -64,6 +64,7 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
       const rows = await db.execute(sql`
         SELECT d.id, d.company_id AS "companyId", d.order_id AS "orderId",
                d.dispatch_number AS "dispatchNumber", d.status,
+               d.container_number_snapshot AS "containerNumberSnapshot",
                d.truck_plate AS "truckPlate", d.driver_name AS "driverName",
                d.destination, d.notes,
                d.created_by_user_id AS "createdByUserId",
@@ -150,7 +151,7 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
       const created = await db.transaction(async (tx) => {
         // A row lock prevents concurrent trips from receiving the same number.
         const orderRows = await tx.execute(sql`
-          SELECT id, status FROM customer_orders
+          SELECT id, status, container_number AS "containerNumber" FROM customer_orders
            WHERE id = ${scope.orderId} AND company_id = ${scope.state.companyId}
              AND deleted_at IS NULL
            FOR UPDATE
@@ -169,16 +170,18 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
         const nextNumber = Number(resultRows(nextRows)[0]?.nextNumber || 1);
         const rows = await tx.execute(sql`
           INSERT INTO factory_loading_dispatches
-            (company_id, order_id, dispatch_number, status, truck_plate,
+            (company_id, order_id, container_number_snapshot, dispatch_number, status, truck_plate,
              driver_name, destination, notes, created_by_user_id, created_by_username)
-          VALUES (${scope.state.companyId}, ${scope.orderId}, ${nextNumber}, 'OPEN',
+          VALUES (${scope.state.companyId}, ${scope.orderId}, ${order.containerNumber ?? null}, ${nextNumber}, 'OPEN',
                   ${truckPlate}, ${driverName}, ${destination}, ${notes},
                   ${actorUserId}, ${actorUsername})
           RETURNING id, order_id AS "orderId", dispatch_number AS "dispatchNumber",
+                    container_number_snapshot AS "containerNumberSnapshot",
                     status, truck_plate AS "truckPlate", driver_name AS "driverName",
                     destination, notes, created_at AS "createdAt"
         `);
         const dispatch = resultRows(rows)[0];
+        if (!dispatch) throw new Error("Dispatch insert returned no record");
         await tx.execute(sql`
           INSERT INTO factory_loading_dispatch_events
             (company_id, order_id, dispatch_id, event_type,
