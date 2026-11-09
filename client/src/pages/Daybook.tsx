@@ -80,6 +80,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
   const hiddenErpCosts = myErpPages?.hiddenErpCostFields ?? [];
   const hideAmounts = hiddenErpCosts.includes("daybook_amounts");
   const [activeDaybookTab, setActiveDaybookTab] = useState<"transactions" | "activity">("transactions");
+  const [isExportingReport, setIsExportingReport] = useState(false);
   const {
     periodFilter,
     filters,
@@ -634,15 +635,32 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
     toast({ title: "Export complete", description: `${detailRows.length} detail rows exported.` });
   };
 
+  const runDaybookExport = async (exportAction: () => Promise<void>) => {
+    if (isExportingReport) return;
+    setIsExportingReport(true);
+    try {
+      await exportAction();
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Unable to export the Daybook.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExportingReport(false);
+    }
+  };
+
   return (
     <div className="daybook-premium flex min-w-0 flex-col gap-4 p-3 md:gap-5 md:p-6">
       <section className="daybook-hero" aria-label="Daybook heading">
       <PageHeader title="Daybook" subtitle={routineAccountingViewFiltered ? "Operational activity view" : "View all accounting transactions chronologically"} icon={<BookOpen className="h-6 w-6" />} showBackButton>
         <ErpReportExportMenu
           className="daybook-export gap-2"
+          busy={isExportingReport}
           options={[
-            { id: "daybook-summary", label: "Summary", kind: "excel", onSelect: handleExportToExcel },
-            { id: "daybook-detail", label: "Detailed", kind: "excel", onSelect: handleExportDetailedToExcel },
+            { id: "daybook-summary", label: "Summary", kind: "excel", onSelect: () => runDaybookExport(handleExportToExcel) },
+            { id: "daybook-detail", label: "Detailed", kind: "excel", onSelect: () => runDaybookExport(handleExportDetailedToExcel) },
           ]}
         />
         <Button onClick={() => navigate(vouchersBase)} className="daybook-new-voucher gap-2">
