@@ -17,7 +17,7 @@ export default function FactoryOthers() {
   );
   const [activeTab, setActiveTab] = useHubQueryState<OthersTab>({
     key: "tab",
-    allowedValues: ready ? visibleTabs : [],
+    allowedValues: ready ? visibleTabs : ALL_TABS,
     knownValues: ALL_TABS,
     defaultValue: visibleTabs[0] ?? "comparison",
   });
