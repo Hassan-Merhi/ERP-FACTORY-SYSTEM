@@ -10,13 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTableToolbar } from "@/components/DataTableToolbar";
-
 import { MoneyAmount } from "@/components/MoneyAmount";
 import { formatMoneyNumber, formatMoneyDisplay } from "@/lib/moneyDisplay";
 import { hasSingleUsdBasis, rentalReportingFigure } from "@/properties/config/rentalReportingPresentation";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { useMobileCardTable } from "@/components/ui/mobile-card-table";
-import { AlertTriangle, ClipboardList, Copy, Trash2 } from "lucide-react";
+import { AlertTriangle, ClipboardList, Trash2 } from "lucide-react";
 import { rentalPaymentDateLabel, mayOfferRentalPaymentDelete } from "@/properties/config/rentalPaymentPresentation";
 import { PropertiesPaymentsPremium } from "./property-rental/components/PropertiesPaymentsPremium";
 import { RentalPaymentDeleteDialog } from "./property-rental/components/RentalPaymentDeleteDialog";
@@ -26,14 +25,12 @@ import {
   type ReconciliationSnapshot,
 } from "./property-rental/components/PaymentsReconciliation";
 import {
-  cashCents,
   paymentHistoryTsv,
   reconciledHistoryTsv,
   receiptTotals,
 } from "./property-rental/paymentsReceiptMath";
 import { hasHassanPropertiesHistoricalReportingPolicy } from "@/properties/config/historicalRentReportingPolicy";
 import { useRentalPayments, rentalPaymentsQueryKey } from "@/properties/hooks/useRentalPayments";
-
 import { useRentalPaymentsFilters } from "@/properties/hooks/useRentalPaymentsFilters";
 
 const MONTH_NAMES = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
