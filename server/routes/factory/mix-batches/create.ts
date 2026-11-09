@@ -168,7 +168,7 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
           // The system's ADD adjustment ledger represents genuine supplier
           // stock that is not included in container receivedKg. Permit only
           // the unused adjustment-backed part, never an unsupported shortage.
-          const addAllowance = await availableSupplierAddAllowance(tx, companyId, supplierId, supplierRawStocks);
+          const addAllowance = await availableSupplierAddAllowance(tx, companyId, supplierId, supplierRawStocks, batchDate || getClientDate(req));
           if (supplierRawStocks.length > 0 && remaining.gt(0)) {
             requireMixFifoFullyAllocated(remaining.toFixed(3), supplierId, addAllowance.toFixed(3));
             const last = supplierRawStocks[supplierRawStocks.length - 1];
