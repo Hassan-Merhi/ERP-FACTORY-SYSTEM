@@ -10,7 +10,7 @@ import { useLocation, useParams } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft, ArrowRight, ClipboardCheck, Clock3, Edit3, FileSearch,
-  Info, Loader2, Package, Plus, RefreshCw, Route, ShieldCheck, Truck,
+  Loader2, Package, Plus, RefreshCw, Route, ShieldCheck, Truck,
   Weight,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +27,7 @@ import { companyQueryKey } from "@/lib/companyQueryScope";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import FactoryLoadingDispatchScanner from "./FactoryLoadingDispatchScanner";
 import FactoryLoadingDispatchAllocation from "./FactoryLoadingDispatchAllocation";
+import FactoryLoadingDispatchLifecycle from "./FactoryLoadingDispatchLifecycle";
 
 interface OrderBale {
   id: number;
@@ -511,10 +512,18 @@ export default function FactoryLoadingDispatch() {
                       </Button>
                     </CardContent>
                   </Card>
-                  <div className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 text-xs text-muted-foreground dark:border-slate-700">
-                    <Info className="mt-0.5 h-4 w-4 shrink-0" />
-                    Trip closing, discrepancy approvals and reopening will be introduced in Phase 6.
-                  </div>
+                  <FactoryLoadingDispatchLifecycle
+                    key={dispatchId}
+                    orderId={orderId}
+                    dispatchId={dispatchId}
+                    companyId={companyId}
+                    status={selectedTrip.status}
+                    role={user?.currentRole ?? user?.role ?? ""}
+                    onChanged={() => {
+                      void queryClient.invalidateQueries({ queryKey: companyQueryKey(listUrl, companyId) });
+                      if (selectedUrl) void queryClient.invalidateQueries({ queryKey: companyQueryKey(selectedUrl, companyId) });
+                    }}
+                  />
                 </div>
                 <div className="xl:col-span-2">
                   <FactoryLoadingDispatchAllocation
