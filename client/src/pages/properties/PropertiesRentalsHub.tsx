@@ -43,6 +43,10 @@ export default function PropertiesRentalsHub() {
               <Building2 className="mr-2 h-4 w-4" />
               Warehouses
             </TabsTrigger>
+            <TabsTrigger value="shops" data-testid="tab-properties-rentals-shops">
+              <Building2 className="mr-2 h-4 w-4" />
+              Shops
+            </TabsTrigger>
             <TabsTrigger value="payments" data-testid="tab-properties-rentals-payments">
               <ClipboardList className="mr-2 h-4 w-4" />
               Payments
