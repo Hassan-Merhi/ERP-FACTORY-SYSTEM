@@ -258,6 +258,19 @@ export function compareFactoryLoadingDispatch(input: {
     }
   }
 
+  // Exact assigned references must override a superficial article-level
+  // quantity match: 6 different scanned bales cannot satisfy 6 planned IDs.
+  const exactMissingByArticle = new Map<string, number>();
+  for (const bale of missingBales) {
+    const k = articleKey(bale.articleCode);
+    exactMissingByArticle.set(k, (exactMissingByArticle.get(k) ?? 0) + 1);
+  }
+  const unexpectedByArticle = new Map<string, number>();
+  for (const bale of unexpectedBales) {
+    const k = articleKey(bale.articleCode);
+    unexpectedByArticle.set(k, (unexpectedByArticle.get(k) ?? 0) + 1);
+  }
+
   const articles: ComparisonArticleRow[] = [...groups.values()]
     .filter((g) => !byTrip || g.scannedQty > 0 || g.plannedQty !== null)
     .map((g) => {
@@ -266,17 +279,23 @@ export function compareFactoryLoadingDispatch(input: {
     // A trip without a plan has no meaningful missing/extra count for
     // individual article types: 0 expected would incorrectly mean "extra".
     const missingQty = expectedQty === null ? null
-      : Math.max(0, expectedQty - (byTrip ? g.scannedQty : g.matchedQty));
+      : Math.max(
+          0, expectedQty - (byTrip ? g.scannedQty : g.matchedQty),
+          byTrip ? (exactMissingByArticle.get(g.articleCode) ?? 0) : 0
+        );
     const extraQty = expectedQty === null ? 0
-      : byTrip ? Math.max(0, g.scannedQty - expectedQty)
+      : byTrip ? Math.max(0, g.scannedQty - expectedQty,
+          unexpectedByArticle.get(g.articleCode) ?? 0)
       : Math.max(0, g.scannedQty - g.matchedQty);
+    const matchedQty = expectedQty === null ? g.matchedQty
+      : Math.max(0, expectedQty - (missingQty ?? 0));
     const status: ComparisonArticleRow["status"] = expectedQty === null ? "UNPLANNED"
       : missingQty! > 0 && extraQty > 0 ? "BOTH"
       : missingQty! > 0 ? "MISSING"
       : extraQty > 0 ? "EXTRA" : "MATCH";
     return {
       articleCode: g.articleCode, productName: g.productName,
-      expectedQty, scannedQty: g.scannedQty, matchedQty: g.matchedQty,
+      expectedQty, scannedQty: g.scannedQty, matchedQty,
       missingQty, extraQty,
       expectedWeightKg: byTrip ? (g.hasExactPlan ? roundKg(g.plannedWeightKg) : null)
         : roundKg(g.loadedWeightKg),
@@ -304,7 +323,7 @@ export function compareFactoryLoadingDispatch(input: {
   const matchedBales = !byTrip
     ? [...scopedByBale.keys()].filter((id) => loadedMap.has(id)).length
     : !hasTripPlan ? [...scopedByBale.keys()].filter((id) => loadedMap.has(id)).length
-    : articles.reduce((sum, row) => sum + Math.min(row.scannedQty, row.expectedQty ?? 0), 0);
+    : articles.reduce((sum, row) => sum + row.matchedQty, 0);
   const missingQtyTotal = expectedBalesCount === null ? null
     : articles.reduce((sum, row) => sum + (row.missingQty ?? 0), 0);
 
