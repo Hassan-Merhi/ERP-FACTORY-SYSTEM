@@ -1,4 +1,4 @@
-# ERP Core UI — Phase 1
+# ERP Core UI — Phases 1–2
 
 Use `@/erp-core` for new ERP-mode page presentation. This folder is a **composition/adoption layer**, not a new visual framework.
 
@@ -28,9 +28,20 @@ import { ErpPage, ErpPageActions, ErpDataTableToolbar, ErpEmptyState } from "@/e
 </ErpPage>;
 ```
 
+
+## Phase 2: canonical tables, filters and pagination
+
+- `ErpListTable` wraps the existing responsive `Table` implementation, including sticky headings, horizontal overflow, and optional mobile card presentation. It defaults to **compact** density, persisting user choices through the existing `useTablePrefs` hook. Use a unique `pageKey`, and pass `companyId` whenever available. For nested previews, set `showDensityControl={false}` to avoid duplicate selectors.
+- `ErpListFilters` reuses the existing `DataTableToolbar` and `ErpMobileFilters` so there is one controlled search/filter experience across desktops and phones. Pages still own their own filter values, query semantics, business sorting and available actions.
+- `ErpListPagination` is a presentation-only bounded pager. Stock Query now requests server pages of 100 instead of silently truncating the first 200 items. Search changes and company changes reset its page, and shrinking results recover a valid page.
+- Standardized list surfaces: Stock Query, Stock Items, Optional Vouchers, Customers, Suppliers, Stock Transfers, Accounts, condensed and detailed Daybook, Stock & Sales Report, Market Price Analysis, PO Import preview, Supplier Profit Check, Ledger Vouchers and Stock Item History. Existing responsive cards and interactive row actions were retained.
+- Specialized **Location Inventory**, stock entry history and voucher forms use bespoke scanning, editable and/or synchronized layouts; preserve their dedicated table/mobile logic until a dedicated regression-tested migration. Do not force these through generic list tables.
+
+**Verification**: unit tests cover ERP page composition, table density persistence, filter delegation, and pagination bounds. Run the frontend Vitest suite and TypeScript checks before merging; the migration itself does not change ledger/voucher arithmetic or stock posting.
+
 ## Rollout rules
 
 1. Phase 1 sets the stable API and migrates Opening/Closing Stock Summary as non-accounting pilot pages, retaining their existing shell spacing and header semantics.
-2. Phase 2 migrates actual table and filter implementations; Phase 3 handles forms/actions; Phase 4 centralizes permissions/route visibility; Phase 5 standardizes queries and number/date display; Phase 6 handles reports/export; Phase 7 removes proven duplicates.
+2. Phase 2 introduces the standard list table, shared filter toolbar, and pagination controls. Phase 3 handles forms/actions; Phase 4 centralizes permissions/route visibility; Phase 5 standardizes queries and number/date display; Phase 6 handles reports/export; Phase 7 removes proven duplicates.
 3. Never move voucher posting, ledger calculations, stock valuation, payroll arithmetic, or company authorization into UI components. Server authorization remains definitive.
-4. Do not change data-testid, route URLs, state/query identity, stock balance calculations, or create/edit behavior as part of presentational migration.
+4. Do not change data-testid, route URLs, stock balance calculations, or create/edit behavior as part of a presentational migration. Stock Query's former 200-result cap is separately replaced by explicit company-aware server pagination.
