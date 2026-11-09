@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { PeriodFilter, type PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
 import { useDateJump } from "@/hooks/use-date-jump";
-import { ErpPage } from "@/erp-core";
+import { ErpPage, formatErpFixedQuantity, erpCompanyDataKey, erpRequestUrl, invalidateErpDataFamilies } from "@/erp-core";
 import { EmptyState, LoadingRows } from "@/components/ui/display-state";
 import { PageActions, financialNumberClassName } from "@/components/ui/page-shell";
 import { cn } from "@/lib/utils";
@@ -51,16 +51,9 @@ interface MutationError extends Error {
   _handledGlobally?: boolean;
 }
 
-function formatNumber(value: number, decimals: number = 2): string {
-  return value.toLocaleString("en-US", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
-}
-
 function formatQty(value: number): string {
   if (value === 0) return "";
-  return `${formatNumber(value)} BL`;
+  return `${formatErpFixedQuantity(value)} BL`;
 }
 
 export default function ClosingStockSummary() {
@@ -70,17 +63,18 @@ export default function ClosingStockSummary() {
   const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>(getDefaultPeriodValue("today"));
   useDateJump((date) => setPeriodFilter({ fromDate: date, toDate: date, preset: "custom" }));
 
+  const closingQueryUrl = erpRequestUrl("/api/reports/closing-stock-summary", {
+    fromDate: periodFilter.fromDate,
+    toDate: periodFilter.toDate,
+  });
   const { data, isLoading } = useQuery<ClosingStockData>({
-    queryKey: ["/api/reports/closing-stock-summary", selectedCompany?.id, periodFilter.fromDate, periodFilter.toDate],
+    queryKey: erpCompanyDataKey(closingQueryUrl, selectedCompany?.id),
     queryFn: async () => {
-      const params = new URLSearchParams();
-      if (periodFilter.fromDate) params.append("fromDate", periodFilter.fromDate);
-      if (periodFilter.toDate) params.append("toDate", periodFilter.toDate);
-      const response = await fetch(`/api/reports/closing-stock-summary?${params.toString()}`);
+      const response = await fetch(closingQueryUrl);
       if (!response.ok) throw new Error("Failed to fetch closing stock summary");
       return response.json();
     },
-    enabled: !!selectedCompany?.id,
+    enabled: selectedCompany?.id != null,
   });
 
   const { toast } = useToast();
@@ -95,8 +89,10 @@ export default function ClosingStockSummary() {
     onSuccess: (result) => {
       toast({ title: "Success", description: result.message });
       setShowCarryForwardDialog(false);
-      queryClient.invalidateQueries({ queryKey: ["/api/reports/closing-stock-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/reports/opening-stock-summary"] });
+      void invalidateErpDataFamilies(queryClient, [
+        "/api/reports/closing-stock-summary",
+        "/api/reports/opening-stock-summary",
+      ]);
     },
     onError: (error: MutationError) => {
       if (error._handledGlobally) return;
@@ -238,7 +234,7 @@ export default function ClosingStockSummary() {
           <div className="border-t-2 border-primary bg-muted/50">
             <div className="grid grid-cols-2 p-2 font-bold sm:grid-cols-4 phone-land:grid-cols-2 sm:p-3">
               <div className="text-xs sm:text-sm">Grand Total</div>
-              <div className={financialNumberClassName}>{formatNumber(data.grandTotal.quantity)} BL</div>
+              <div className={financialNumberClassName}>{formatErpFixedQuantity(data.grandTotal.quantity)} BL</div>
               <div className={cn(financialNumberClassName, "hidden sm:block phone-land:hidden")}>
                 {formatAmount(data.grandTotal.rate)}
               </div>
