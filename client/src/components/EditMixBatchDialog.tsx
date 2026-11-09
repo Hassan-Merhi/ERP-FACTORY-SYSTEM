@@ -850,11 +850,11 @@ export function EditMixBatchDialog({
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Estimated total cost if saved</p>
-                <p className="text-2xl font-bold font-mono">{hasMissingCurrentRates ? "Unavailable" : `${formatNumber(totalCost, 4)}`}</p>
+                <p className="text-2xl font-bold font-mono">{hasMissingCurrentRates ? "Unavailable" : "$" + formatNumber(totalCost, 4)}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Estimated blended cost/kg if saved</p>
-                <p className="text-2xl font-bold font-mono" data-testid="text-edit-current-estimate">{hasMissingCurrentRates ? "Unavailable" : `${blendedCostPerKg.toFixed(4)}`}</p>
+                <p className="text-2xl font-bold font-mono" data-testid="text-edit-current-estimate">{hasMissingCurrentRates ? "Unavailable" : "$" + blendedCostPerKg.toFixed(4)}</p>
               </div>
             </div>
 
