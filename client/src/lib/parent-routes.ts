@@ -181,7 +181,14 @@ export function getParentRoute(pathname: string): string | null {
   return null;
 }
 
-const FACTORY_TOP_LEVEL_ROUTES: ReadonlySet<string> = new Set(FACTORY_ACCESS_REGISTRY.map((page) => page.route));
+// Others (#3050) is a canonical top-level page that shares Overview's access key, so the
+// registry lists it as an alias rather than a route of its own.
+const CANONICAL_ALIAS_TOP_LEVEL_ROUTES = ["/factory/others"];
+
+const FACTORY_TOP_LEVEL_ROUTES: ReadonlySet<string> = new Set([
+  ...FACTORY_ACCESS_REGISTRY.map((page) => page.route),
+  ...CANONICAL_ALIAS_TOP_LEVEL_ROUTES,
+]);
 
 /**
  * True for a top-level Factory destination (a registry page, any hub section or query state).
