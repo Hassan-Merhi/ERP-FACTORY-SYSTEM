@@ -673,35 +673,34 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
                   ) : (
                     <>
                       {mhd.sortRows(regularProducts, (prod) => prod.articleCode).map((prod) => renderProductRow(prod))}
-
                     </>
                   )}
                 </tbody>
                 <tfoot>
-                      {regularProducts.length > 0 && (
-                        <tr className="inventory-section-total border-t bg-muted/50 h-12 font-bold">
-                          {proformaMode && <td></td>}
-                          <td className="px-3" colSpan={col("category") ? 2 : 1}>
-                            Total ({regularProducts.length} products)
-                          </td>
-                          <td className="text-right px-3 font-mono">{totalBales.toLocaleString()}</td>
-                          {proformaMode && <td></td>}
-                          {proformaMode && <td></td>}
-                          {col("avg_kg") && (
-                            <td className="text-right px-3 font-mono">{proformaMode ? fmt(totalKg) : ""}</td>
-                          )}
-                          {!hideSellingPrice && col("sell_price") && <td></td>}
-                          {!hideSellingPrice && col("sell_value") && (
-                            <td className="text-right px-3 font-mono">{formatAmount(totalSellValue)}</td>
-                          )}
-                          {!hideSellingPrice && col("cost_price") && <td></td>}
-                          {!hideSellingPrice && col("cost_value") && (
-                            <td className="text-right px-3 font-mono">{formatAmount(totalProdValue)}</td>
-                          )}
-                          {col("total_kg") && <td className="text-right px-3 font-mono">{fmt(totalKg)}</td>}
-                          {!proformaMode && col("actions") && <td></td>}
-                        </tr>
+                  {regularProducts.length > 0 && (
+                    <tr className="inventory-section-total border-t bg-muted/50 h-12 font-bold">
+                      {proformaMode && <td></td>}
+                      <td className="px-3" colSpan={col("category") ? 2 : 1}>
+                        Total ({regularProducts.length} products)
+                      </td>
+                      <td className="text-right px-3 font-mono">{totalBales.toLocaleString()}</td>
+                      {proformaMode && <td></td>}
+                      {proformaMode && <td></td>}
+                      {col("avg_kg") && (
+                        <td className="text-right px-3 font-mono">{proformaMode ? fmt(totalKg) : ""}</td>
                       )}
+                      {!hideSellingPrice && col("sell_price") && <td></td>}
+                      {!hideSellingPrice && col("sell_value") && (
+                        <td className="text-right px-3 font-mono">{formatAmount(totalSellValue)}</td>
+                      )}
+                      {!hideSellingPrice && col("cost_price") && <td></td>}
+                      {!hideSellingPrice && col("cost_value") && (
+                        <td className="text-right px-3 font-mono">{formatAmount(totalProdValue)}</td>
+                      )}
+                      {col("total_kg") && <td className="text-right px-3 font-mono">{fmt(totalKg)}</td>}
+                      {!proformaMode && col("actions") && <td></td>}
+                    </tr>
+                  )}
                 </tfoot>
               </table>
             </div>
@@ -711,11 +710,13 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
                 <p className="inventory-special-heading text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
                   <Layers className="inventory-special-icon h-4 w-4" /> Wipers &amp; Garbage
                 </p>
-                <div className="inventory-table-frame inventory-scroll-frame rounded-md border w-full overflow-auto"
+                <div
+                  className="inventory-table-frame inventory-scroll-frame rounded-md border w-full overflow-auto"
                   role="region"
                   aria-label="Wipers and garbage inventory items"
                   tabIndex={0}
-                  data-testid="location-inventory-special-scroll">
+                  data-testid="location-inventory-special-scroll"
+                >
                   <table
                     className="inventory-stock-table table-fixed text-sm"
                     style={{ minWidth: "820px", width: "100%" }}
@@ -725,7 +726,6 @@ export function FactoryLocationInventoryProductView({ inventory }: { inventory: 
                       {mhd
                         .sortRows(specialProducts, (prod) => prod.articleCode)
                         .map((prod) => renderProductRow(prod, "-sp"))}
-
                     </tbody>
                     <tfoot>
                       <tr className="inventory-section-total border-t bg-muted/50 h-12 font-bold">

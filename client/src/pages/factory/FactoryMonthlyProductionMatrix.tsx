@@ -102,7 +102,12 @@ export default function FactoryMonthlyProductionMatrix() {
   const monthKey = months.join("|");
   const monthLabels = useMemo(() => {
     const locale = language === "ar" ? "ar" : language === "fr" ? "fr" : "en";
-    return new Map(monthKey.split("|").filter(Boolean).map((month) => [month, prettyMonth(month, locale)]));
+    return new Map(
+      monthKey
+        .split("|")
+        .filter(Boolean)
+        .map((month) => [month, prettyMonth(month, locale)])
+    );
   }, [monthKey, language]);
   const monthLabel = (month: string) => monthLabels.get(month) ?? month;
   const counts = useMemo(() => {
