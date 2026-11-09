@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export interface ErpServerPaginationOptions {
   /** Active company, or other server identity defining the list scope. */
@@ -36,11 +36,12 @@ export function useErpServerPagination({
     setPage((current) => (current > lastPage ? lastPage : current));
   }, [lastPage]);
 
-  const onPageChange = (nextPage: number) => {
+  const onPageChange = useCallback((nextPage: number) => {
+    if (!Number.isFinite(nextPage)) return;
     const safe = Math.max(1, Math.floor(nextPage));
     setPage(lastPage == null ? safe : Math.min(safe, lastPage));
-  };
+  }, [lastPage]);
 
-  const resetPage = () => setPage(1);
+  const resetPage = useCallback(() => setPage(1), []);
   return { page, pageSize, onPageChange, resetPage };
 }
