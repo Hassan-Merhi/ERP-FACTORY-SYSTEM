@@ -29,6 +29,10 @@ import { closedPeriodErrorResponse } from "../../../../lib/closedPeriodError";
 import { getFactoryAccessState } from "../../../../lib/factoryAccessControl";
 import { canEmptyFactoryLoadingContainer } from "@shared/factoryPermissionCatalog";
 
+class DispatchReconciliationRefusal extends Error {
+  constructor(readonly statusCode: number, message: string) { super(message); }
+}
+
 export function registerOrderBaleRemovalRoutes(app: Express) {
   // POST /api/factory/customer-orders/:id/bales/empty — return every scanned bale to stock
   // without cancelling the loading order, so the loader can start the container again from zero.
@@ -162,7 +166,12 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
 
   app.delete("/api/factory/customer-orders/:id/bales/:baleId", requireAuth, async (req: Request, res: Response) => {
     try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      const reconciliation = req.query.source === "dispatch-reconciliation";
+      const access = reconciliation ? await getFactoryAccessState(req) : null;
+      if (reconciliation && (!access || !["admin", "owner", "developer"].includes(access.role.toLowerCase()))) {
+        return res.status(403).json({ message: "Only Admin, Owner or Developer can reconcile missing dispatch bales" });
+      }
+      const companyId = reconciliation ? access!.companyId : req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
       const orderId = parseId(req.params.id);
@@ -190,10 +199,47 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
 
         // Phase 22 (C), DI7: the order row is locked before it changes.
         await lockCustomerOrderTx(tx, companyId, orderId);
+        if (reconciliation) {
+          // This check is inside the same order lock used by physical scanners.
+          // A bale cannot be removed if it was scanned or if a trip is still open.
+          const currentRows = await tx.execute(sql`
+            SELECT status FROM customer_orders
+             WHERE company_id = ${companyId} AND id = ${orderId}
+               AND deleted_at IS NULL
+          `);
+          const status = (currentRows.rows?.[0] as { status?: string } | undefined)?.status;
+          if (!["LOADING", "PENDING_VERIFICATION"].includes(status || "")) {
+            throw new DispatchReconciliationRefusal(409, "Only active Pending Loading orders can be reconciled");
+          }
+          const tripRows = await tx.execute(sql`
+            SELECT id, status FROM factory_loading_dispatches
+             WHERE company_id = ${companyId} AND order_id = ${orderId}
+             LIMIT 10000
+          `);
+          const tripStatuses = tripRows.rows as Array<{ status: string }>;
+          if (!tripStatuses.length || tripStatuses.some((trip) => trip.status === "OPEN")) {
+            throw new DispatchReconciliationRefusal(409, "Finish all dispatch trips before removing missing bales");
+          }
+        }
         const [orderBale] = await tx
           .select()
           .from(customerOrderBales)
           .where(and(eq(customerOrderBales.orderId, orderId), eq(customerOrderBales.id, baleId)));
+
+        if (reconciliation) {
+          if (!orderBale) {
+            throw new DispatchReconciliationRefusal(409, "Bale is no longer in this loading. Refresh comparison.");
+          }
+          const scanned = await tx.execute(sql`
+            SELECT id FROM factory_loading_dispatch_scans
+             WHERE company_id = ${companyId} AND order_id = ${orderId}
+               AND bale_id = ${orderBale.baleId} AND removed_at IS NULL
+             LIMIT 1
+          `);
+          if (scanned.rows?.length) {
+            throw new DispatchReconciliationRefusal(409, "This bale was verified on a trip and cannot be removed as missing");
+          }
+        }
 
         let baleDetails: typeof factoryBales.$inferSelect | undefined;
         if (orderBale) {
@@ -259,6 +305,9 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
 
       res.json(updatedPayload);
     } catch (error: unknown) {
+      if (error instanceof DispatchReconciliationRefusal) {
+        return res.status(error.statusCode).json({ message: error.message });
+      }
       if (error instanceof FactoryInvoiceRateRefusalError) return res.status(409).json(error.body);
       const closed = closedPeriodErrorResponse(error);
       if (closed) return res.status(closed.status).json(closed.body);
