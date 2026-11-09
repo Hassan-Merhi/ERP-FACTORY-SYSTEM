@@ -51,6 +51,7 @@ export interface MixMonitorStatus {
 }
 const MONITOR_STATE_TYPE = "MIX_MONITOR_STATE";
 const MONITOR_ALERT_TYPE = "MIX_INTEGRITY";
+const MONITOR_FAILURE_TYPE = "MIX_MONITOR_FAILURE";
 const MONITOR_ENTITY_TYPE = "mix_monitor";
 const MAX_FINDINGS = 20_000;
 const severityLevel: Record<MixMonitorSeverity, number> = { review: 1, warning: 2, critical: 3 };
@@ -253,6 +254,11 @@ export async function persistMixMonitorSnapshot(snapshot: MixMonitorSnapshot): P
         [snapshot.companyId, MONITOR_ALERT_TYPE, "[" + key + "] "],
       );
     }
+    // A fresh successful check also clears a prior incomplete-monitor alert.
+    await client.query(
+      "UPDATE factory_alerts SET is_read=true WHERE company_id=$1 AND type=$2 AND is_read=false",
+      [snapshot.companyId, MONITOR_FAILURE_TYPE],
+    );
     const state: StoredMonitorState = {
       version: 1, lastSuccessAt: snapshot.generatedAt,
       findings: snapshot.findings.map(({ key, severity }) => ({ key, severity })),
@@ -307,6 +313,33 @@ export async function getMixMonitorStatus(companyId: number): Promise<MixMonitor
   };
 }
 
+/** Emit one diagnostic warning per unread failure, without touching the
+ * last successful baseline or making up a clean scan result. */
+export async function recordFactoryMixMonitorFailure(companyId: number): Promise<void> {
+  const client = await pool.connect();
+  let open = false;
+  try {
+    await client.query("BEGIN");
+    open = true;
+    await client.query("SELECT set_config('app.current_company_id', $1, true)", [String(companyId)]);
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('factory_mix_monitor_v1'), $1::integer)", [companyId]);
+    await client.query(
+      "INSERT INTO factory_alerts(company_id,type,severity,title,message,entity_type,entity_id,is_read) " +
+      "SELECT $1,$2,'warning','Factory mix integrity scan failed',$3,$4,$1,false " +
+      "WHERE NOT EXISTS(SELECT 1 FROM factory_alerts WHERE company_id=$1 AND type=$2 " +
+      "AND entity_type=$4 AND entity_id=$1 AND is_read=false)",
+      [companyId, MONITOR_FAILURE_TYPE,
+        "The scheduled Factory mix audit was incomplete. The last successful baseline is preserved. Review server logs; no inventory or accounting repair was attempted.",
+        MONITOR_ENTITY_TYPE],
+    );
+    await client.query("COMMIT");
+    open = false;
+  } catch (error) {
+    if (open) await client.query("ROLLBACK");
+    throw error;
+  } finally { client.release(); }
+}
+
 export async function runScheduledFactoryMixIntegrityMonitoring(): Promise<{
   companies: number; succeeded: number; failed: number; initialized: number;
   newAlerts: number; resolved: number;
@@ -333,6 +366,13 @@ export async function runScheduledFactoryMixIntegrityMonitoring(): Promise<{
       }
     } catch (error: unknown) {
       summary.failed++;
+      try {
+        await recordFactoryMixMonitorFailure(companyId);
+      } catch (notificationError) {
+        logger.error("Factory mix audit failed and monitoring failure alert could not be recorded", {
+          module: "factoryMixIntegrityMonitor", companyId, error: notificationError,
+        });
+      }
       logger.error("Factory mix integrity scan failed without changing baseline", {
         module: "factoryMixIntegrityMonitor", companyId, error,
       });
