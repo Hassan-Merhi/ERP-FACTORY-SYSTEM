@@ -6,12 +6,12 @@
  * ERP, POS and Properties modes remain unchanged.
  *
  * To change the Factory brand hue everywhere, edit ONLY --factory-hue.
- * 270 = purple. All shades, page backgrounds, navigation and legacy
+ * 217 = blue. All shades, page backgrounds, navigation and legacy
  * blue/indigo/purple/violet/sky/fuchsia Tailwind utilities follow it.
  * Status colors (green/yellow/red) and chart data colors are NOT remapped.
  */
 :root[data-app-shell="factory"] {
-  --factory-hue: 270;
+  --factory-hue: 217;
 
   /* Shared 11-shade scale used by all existing Factory blue/purple utilities. */
   --factory-color-50: hsl(var(--factory-hue) 100% 98%);
