@@ -63,6 +63,13 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [unified-accounting-phase13.md](unified-accounting-phase13.md) | Unified accounting (ERP, Factory, Rentals): Phase 13: Fiscal Period Closing & Audit Controls |
 | [unified-accounting-phase14.md](unified-accounting-phase14.md) | Unified accounting (ERP, Factory, Rentals): Phase 14: Unified Net Position & Accounting Dashboard |
 | [unified-accounting-phase15.md](unified-accounting-phase15.md) | Unified accounting (ERP, Factory, Rentals): Phase 15: Integration, Permissions & Controlled Rollout |
+| [factory-loading-dispatch-phase1.md](factory-loading-dispatch-phase1.md) | Factory Loading Dispatch — Phase 1 (Verification Only) |
+| [factory-loading-dispatch-phase2.md](factory-loading-dispatch-phase2.md) | Factory Loading Dispatch — Phase 2 implementation |
+| [factory-loading-dispatch-phase3.md](factory-loading-dispatch-phase3.md) | Factory Loading Dispatch — Phase 3: Barcode verification |
+| [factory-loading-dispatch-phase4.md](factory-loading-dispatch-phase4.md) | Factory Loading Dispatch — Phase 4: Comparison |
+| [factory-loading-dispatch-phase5.md](factory-loading-dispatch-phase5.md) | Factory Loading Dispatch — Phase 5: Priority allocation and cross-trip coordination |
+| [factory-loading-dispatch-phase6.md](factory-loading-dispatch-phase6.md) | Factory Loading Dispatch — Phase 6: End Dispatch and audit controls |
+| [factory-loading-dispatch-phase7.md](factory-loading-dispatch-phase7.md) | Factory Loading Dispatch — Phase 7: Reports, manifests and exports |
 | [audits/mali-hmd-cost-repair-procedure.md](audits/mali-hmd-cost-repair-procedure.md) | Evidence-gated MALI/HMD landed-cost, adjustment, transfer and COGS repair procedure (backend-only) |
 | [audits/historical-sold-bale-cost-reconciliation-review.md](audits/historical-sold-bale-cost-reconciliation-review.md) | Review-only reconciliation of historical sold-bale costs and the guarded pre-invoice recost |
 | [inventory-flow.md](inventory-flow.md) | Stock data model and cost calculation |
