@@ -65,3 +65,5 @@ export {
   FormSectionLegend as ErpFormSectionLegend,
 } from "@/components/ui/form";
 export { ErpNativeSelect } from "./ErpNativeSelect";
+export { ErpRecordAction } from "./ErpRecordAction";
+export type { ErpRecordActionProps } from "./ErpRecordAction";
