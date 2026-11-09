@@ -17,14 +17,18 @@
  * drift, a closed fiscal period or a duplicate correction.
  */
 import { sql } from "drizzle-orm";
-import { db, pool, type DbTransaction } from "../db";
+import { db, pool, type DbTransaction, type RawQueryRow } from "../db";
 import { logger } from "../lib/logger";
 import { toMoney } from "../lib/money";
 import { writeAuditEvent } from "../services/audit";
 import { runAsSystemAuditActor, runWithAuditReason } from "../services/audit/auditActorContext";
 import { companyBusinessDate } from "../services/accounting/companyBusinessDate";
 import { postErpVoucherTx } from "../services/accounting/erpVoucherPosting";
-import { companyClosedThrough, isDateInClosedPeriod, runInCompanyPostingScope } from "../services/accounting/scheduledPostingScope";
+import {
+  companyClosedThrough,
+  isDateInClosedPeriod,
+  runInCompanyPostingScope,
+} from "../services/accounting/scheduledPostingScope";
 import { planPosJnahPrepaidMonths, type PosJnahMonth } from "./posJnahPrepaidPlan";
 
 const ENV = "ERP_REPAIR_POS_JNAH_PREPAID_20261109";
@@ -48,7 +52,8 @@ const number = (value: unknown) => Number(value);
 const money = (value: unknown) => toMoney(String(value ?? 0)).toFixed(2);
 
 async function ledgerBalance(tx: DbTransaction, accountId: number): Promise<string> {
-  const rows = (await tx.execute(sql`
+  const rows = (
+    await tx.execute(sql`
     SELECT CASE WHEN la.opening_balance_side = 'Cr'
              THEN -COALESCE(la.opening_balance,0)
              ELSE COALESCE(la.opening_balance,0) END
@@ -61,44 +66,66 @@ async function ledgerBalance(tx: DbTransaction, accountId: number): Promise<stri
     FROM ledger_accounts la
     WHERE la.company_id = ${COMPANY} AND la.id = ${accountId}
       AND la.deleted_at IS NULL AND la.active = TRUE
-  `)).rows as Row[];
+  `)
+  ).rows as Row[];
   requireMatch(rows.length === 1, "ACCOUNT_BALANCE_MISSING_" + accountId);
   return money(rows[0].balance);
 }
 
-async function correct(tx: DbTransaction): Promise<{ applied: boolean; voucherId: number; prepaid: string; expense: string }> {
+async function correct(
+  tx: DbTransaction
+): Promise<{ applied: boolean; voucherId: number; prepaid: string; expense: string }> {
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('pos-jnah-prepaid-20261109'))`);
 
   // Check the repair identity first, so a second startup cannot re-post it
   // even after monthly recognition has legitimately moved the GL balance.
-  const prior = (await tx.execute(sql`
+  const prior = (
+    await tx.execute(sql`
     SELECT v.id, v.deleted_at, v.optional, v.voucher_type, v.currency,
            e.ledger_account_id, e.debit_amount, e.credit_amount
     FROM vouchers v JOIN voucher_entries e ON e.voucher_id = v.id
     WHERE v.company_id = ${COMPANY} AND v.voucher_number = ${POSTING_NUMBER}
     ORDER BY e.id FOR SHARE OF v, e
-  `)).rows as Row[];
+  `)
+  ).rows as Row[];
   if (prior.length > 0) {
     requireMatch(
       prior.length === 2 &&
-      prior.every(r => r.deleted_at == null && r.optional === false &&
-        r.voucher_type === "Journal" && r.currency === "USD") &&
-      prior.some(r => number(r.ledger_account_id) === PREPAID &&
-        money(r.debit_amount) === AMOUNT && money(r.credit_amount) === "0.00") &&
-      prior.some(r => number(r.ledger_account_id) === EXPENSE &&
-        money(r.credit_amount) === AMOUNT && money(r.debit_amount) === "0.00"),
+        prior.every(
+          (r) => r.deleted_at == null && r.optional === false && r.voucher_type === "Journal" && r.currency === "USD"
+        ) &&
+        prior.some(
+          (r) =>
+            number(r.ledger_account_id) === PREPAID &&
+            money(r.debit_amount) === AMOUNT &&
+            money(r.credit_amount) === "0.00"
+        ) &&
+        prior.some(
+          (r) =>
+            number(r.ledger_account_id) === EXPENSE &&
+            money(r.credit_amount) === AMOUNT &&
+            money(r.debit_amount) === "0.00"
+        ),
       "PREVIOUS_REPAIR_CHANGED"
     );
-    const future = (await tx.execute(sql`
+    const future = (
+      await tx.execute(sql`
       SELECT id, used_prepaid_account
       FROM property_monthly_ledger
       WHERE company_id = ${COMPANY} AND contract_id = ${CONTRACT}
         AND (year = 2027 OR (year = 2026 AND month = 12))
-    `)).rows as Row[];
-    requireMatch(future.length === 8 && future.every(r => r.used_prepaid_account === true),
-      "PREVIOUS_REPAIR_FUTURE_FLAGS_CHANGED");
-    return { applied: false, voucherId: number(prior[0].id),
-      prepaid: await ledgerBalance(tx, PREPAID), expense: await ledgerBalance(tx, EXPENSE) };
+    `)
+    ).rows as Row[];
+    requireMatch(
+      future.length === 8 && future.every((r) => r.used_prepaid_account === true),
+      "PREVIOUS_REPAIR_FUTURE_FLAGS_CHANGED"
+    );
+    return {
+      applied: false,
+      voucherId: number(prior[0].id),
+      prepaid: await ledgerBalance(tx, PREPAID),
+      expense: await ledgerBalance(tx, EXPENSE),
+    };
   }
 
   const asOf = await companyBusinessDate(COMPANY, tx);
@@ -106,128 +133,187 @@ async function correct(tx: DbTransaction): Promise<{ applied: boolean; voucherId
   const closedThrough = await companyClosedThrough(COMPANY, tx);
   requireMatch(!isDateInClosedPeriod(closedThrough, asOf), "CLOSED_PERIOD");
 
-  const companies = (await tx.execute(sql`
+  const companies = (
+    await tx.execute(sql`
     SELECT id, name, active FROM companies WHERE id = ${COMPANY}
-  `)).rows as Row[];
-  requireMatch(companies.length === 1 && companies[0].active === true &&
-    String(companies[0].name).trim().startsWith("POS"), "COMPANY_CHANGED");
+  `)
+  ).rows as Row[];
+  requireMatch(
+    companies.length === 1 && companies[0].active === true && String(companies[0].name).trim().startsWith("POS"),
+    "COMPANY_CHANGED"
+  );
 
-  const accounts = (await tx.execute(sql`
+  const accounts = (
+    await tx.execute(sql`
     SELECT id, name, code, account_type, active, deleted_at, opening_balance, opening_balance_side
     FROM ledger_accounts WHERE company_id = ${COMPANY} AND id IN (${PREPAID}, ${EXPENSE})
     ORDER BY id FOR SHARE
-  `)).rows as Row[];
+  `)
+  ).rows as Row[];
   requireMatch(accounts.length === 2, "ACCOUNTS_MISSING");
-  const prepaid = accounts.find(a => number(a.id) === PREPAID);
-  const expense = accounts.find(a => number(a.id) === EXPENSE);
-  requireMatch(prepaid && prepaid.name === "Prepaid Rent" &&
-    prepaid.code === "PREP-RENT-1788256800744" && prepaid.account_type === "Asset" &&
-    prepaid.active === true && prepaid.deleted_at == null && money(prepaid.opening_balance) === "0.00",
-    "PREPAID_ACCOUNT_CHANGED");
-  requireMatch(expense && expense.name === "Rent Expense - ERP Shops" &&
-    expense.code === "SHOP-RENT-EXP-1784027392519" && expense.account_type === "Indirect Expense" &&
-    expense.active === true && expense.deleted_at == null && money(expense.opening_balance) === "0.00",
-    "EXPENSE_ACCOUNT_CHANGED");
+  const prepaid = accounts.find((a) => number(a.id) === PREPAID);
+  const expense = accounts.find((a) => number(a.id) === EXPENSE);
+  requireMatch(
+    prepaid &&
+      prepaid.name === "Prepaid Rent" &&
+      prepaid.code === "PREP-RENT-1788256800744" &&
+      prepaid.account_type === "Asset" &&
+      prepaid.active === true &&
+      prepaid.deleted_at == null &&
+      money(prepaid.opening_balance) === "0.00",
+    "PREPAID_ACCOUNT_CHANGED"
+  );
+  requireMatch(
+    expense &&
+      expense.name === "Rent Expense - ERP Shops" &&
+      expense.code === "SHOP-RENT-EXP-1784027392519" &&
+      expense.account_type === "Indirect Expense" &&
+      expense.active === true &&
+      expense.deleted_at == null &&
+      money(expense.opening_balance) === "0.00",
+    "EXPENSE_ACCOUNT_CHANGED"
+  );
 
-  const contracts = (await tx.execute(sql`
+  const contracts = (
+    await tx.execute(sql`
     SELECT c.id, c.company_id, c.module, c.unit_id, c.rental_amount, c.currency,
            c.start_date::text AS start_date, c.status, u.unit_number, u.unit_type, u.active
     FROM property_contracts c JOIN property_units u ON u.id = c.unit_id
     WHERE c.company_id = ${COMPANY} AND c.module = 'ERP' AND u.unit_type = 'SHOP'
     FOR SHARE OF c, u
-  `)).rows as Row[];
+  `)
+  ).rows as Row[];
   requireMatch(
     contracts.length === 1 &&
-    number(contracts[0].id) === CONTRACT &&
-    number(contracts[0].unit_id) === 59 &&
-    contracts[0].status === "ACTIVE" &&
-    contracts[0].active === true &&
-    contracts[0].unit_number === "POS" &&
-    contracts[0].currency === "USD" &&
-    String(contracts[0].start_date).slice(0,10) === "2026-08-01" &&
-    money(contracts[0].rental_amount) === "2500.00",
+      number(contracts[0].id) === CONTRACT &&
+      number(contracts[0].unit_id) === 59 &&
+      contracts[0].status === "ACTIVE" &&
+      contracts[0].active === true &&
+      contracts[0].unit_number === "POS" &&
+      contracts[0].currency === "USD" &&
+      String(contracts[0].start_date).slice(0, 10) === "2026-08-01" &&
+      money(contracts[0].rental_amount) === "2500.00",
     "CONTRACT_CHANGED"
   );
 
-  const original = (await tx.execute(sql`
+  const original = (
+    await tx.execute(sql`
     SELECT v.id, v.voucher_number, v.voucher_date::text AS date, v.voucher_type, v.currency,
            v.source_module, v.deleted_at, v.optional, e.ledger_account_id, e.debit_amount, e.credit_amount
     FROM vouchers v JOIN voucher_entries e ON e.voucher_id = v.id
     WHERE v.company_id = ${COMPANY} AND v.id = ${ORIGINAL_PAYMENT}
     ORDER BY e.id FOR SHARE OF v, e
-  `)).rows as Row[];
+  `)
+  ).rows as Row[];
   requireMatch(
     original.length === 2 &&
-    original.every(r => r.voucher_number === "RENT-1784027392518-7rylj-36" &&
-      r.voucher_type === "Payment" && r.currency === "USD" && r.source_module === "ERP" &&
-      String(r.date).slice(0,10) === "2026-07-14" &&
-      r.deleted_at == null && r.optional === false) &&
-    original.some(r => number(r.ledger_account_id) === EXPENSE &&
-      money(r.debit_amount) === "30000.00" && money(r.credit_amount) === "0.00") &&
-    original.some(r => number(r.ledger_account_id) === 2137 &&
-      money(r.debit_amount) === "0.00" && money(r.credit_amount) === "30000.00"),
+      original.every(
+        (r) =>
+          r.voucher_number === "RENT-1784027392518-7rylj-36" &&
+          r.voucher_type === "Payment" &&
+          r.currency === "USD" &&
+          r.source_module === "ERP" &&
+          String(r.date).slice(0, 10) === "2026-07-14" &&
+          r.deleted_at == null &&
+          r.optional === false
+      ) &&
+      original.some(
+        (r) =>
+          number(r.ledger_account_id) === EXPENSE &&
+          money(r.debit_amount) === "30000.00" &&
+          money(r.credit_amount) === "0.00"
+      ) &&
+      original.some(
+        (r) =>
+          number(r.ledger_account_id) === 2137 &&
+          money(r.debit_amount) === "0.00" &&
+          money(r.credit_amount) === "30000.00"
+      ),
     "ORIGINAL_PAYMENT_CHANGED"
   );
 
-  const monthly = (await tx.execute(sql`
+  const monthly = (
+    await tx.execute<RawQueryRow<PosJnahMonth>>(sql`
     SELECT id, contract_id, unit_id, year, month, expected_amount, paid_amount,
            accrual_voucher_id, used_prepaid_account, used_advance_account
     FROM property_monthly_ledger
     WHERE company_id = ${COMPANY} AND contract_id = ${CONTRACT}
     ORDER BY year, month, id FOR UPDATE
-  `)).rows as PosJnahMonth[];
+  `)
+  ).rows;
   const futureIds = planPosJnahPrepaidMonths(monthly);
 
-  const payments = (await tx.execute(sql`
+  const payments = (
+    await tx.execute(sql`
     SELECT id, voucher_id, contract_id, ledger_row_id, amount, payment_date::text AS payment_date,
            for_year, for_month, posting_status, currency
     FROM property_payments WHERE company_id = ${COMPANY} AND contract_id = ${CONTRACT}
     ORDER BY for_year, for_month, id FOR SHARE
-  `)).rows as Row[];
+  `)
+  ).rows as Row[];
   requireMatch(payments.length === 12, "PAYMENT_COUNT_CHANGED");
   for (let i = 0; i < payments.length; i++) {
-    const p = payments[i], m = monthly[i];
-    requireMatch(number(p.id) === 306+i && number(p.voucher_id) === ORIGINAL_PAYMENT &&
-      number(p.contract_id) === CONTRACT && number(p.ledger_row_id) === m.id &&
-      number(p.for_year) === m.year && number(p.for_month) === m.month &&
-      String(p.payment_date).slice(0,10) === "2026-08-01" &&
-      p.posting_status === "POSTED" && money(p.amount) === "2500.00" &&
-      p.currency === "USD", "PAYMENT_SNAPSHOT_CHANGED_" + i);
+    const p = payments[i],
+      m = monthly[i];
+    requireMatch(
+      number(p.id) === 306 + i &&
+        number(p.voucher_id) === ORIGINAL_PAYMENT &&
+        number(p.contract_id) === CONTRACT &&
+        number(p.ledger_row_id) === m.id &&
+        number(p.for_year) === m.year &&
+        number(p.for_month) === m.month &&
+        String(p.payment_date).slice(0, 10) === "2026-08-01" &&
+        p.posting_status === "POSTED" &&
+        money(p.amount) === "2500.00" &&
+        p.currency === "USD",
+      "PAYMENT_SNAPSHOT_CHANGED_" + i
+    );
   }
 
   // Confirm each existing Sep/Oct reclassification and its matching
   // recognition are intact: neither should be posted/reversed a second time.
-  const legacy = (await tx.execute(sql`
+  const legacy = (
+    await tx.execute(sql`
     SELECT v.id, v.voucher_number, v.voucher_date::text AS date, v.deleted_at, v.optional,
            e.ledger_account_id, e.debit_amount, e.credit_amount
     FROM vouchers v JOIN voucher_entries e ON e.voucher_id = v.id
     WHERE v.company_id = ${COMPANY} AND v.id IN (13141, 13142, 15040, 15041)
     ORDER BY v.id, e.id FOR SHARE OF v, e
-  `)).rows as Row[];
-  requireMatch(legacy.length === 8 && legacy.every(r => r.deleted_at == null && r.optional === false),
-    "LEGACY_VOUCHERS_CHANGED");
+  `)
+  ).rows as Row[];
+  requireMatch(
+    legacy.length === 8 && legacy.every((r) => r.deleted_at == null && r.optional === false),
+    "LEGACY_VOUCHERS_CHANGED"
+  );
   for (const [voucherId, voucherNumber, date, prepaidIsDebit] of [
     [13141, "LEGACY-PREPAID-RECLASS-17-701217-307", "2026-08-01", true],
     [13142, "LEGACY-PREPAID-REC-17-701217", "2026-09-01", false],
     [15040, "LEGACY-PREPAID-RECLASS-17-701218-308", "2026-08-01", true],
     [15041, "LEGACY-PREPAID-REC-17-701218", "2026-10-01", false],
   ] as const) {
-    const entries = legacy.filter(r => number(r.id) === voucherId);
-    requireMatch(entries.length === 2 && entries.every(r =>
-      r.voucher_number === voucherNumber && String(r.date).slice(0,10) === date) &&
-      entries.some(r => number(r.ledger_account_id) === PREPAID &&
-        money(prepaidIsDebit ? r.debit_amount : r.credit_amount) === "2500.00" &&
-        money(prepaidIsDebit ? r.credit_amount : r.debit_amount) === "0.00") &&
-      entries.some(r => number(r.ledger_account_id) === EXPENSE &&
-        money(prepaidIsDebit ? r.credit_amount : r.debit_amount) === "2500.00" &&
-        money(prepaidIsDebit ? r.debit_amount : r.credit_amount) === "0.00"),
-      "LEGACY_VOUCHER_CHANGED_" + voucherId);
+    const entries = legacy.filter((r) => number(r.id) === voucherId);
+    requireMatch(
+      entries.length === 2 &&
+        entries.every((r) => r.voucher_number === voucherNumber && String(r.date).slice(0, 10) === date) &&
+        entries.some(
+          (r) =>
+            number(r.ledger_account_id) === PREPAID &&
+            money(prepaidIsDebit ? r.debit_amount : r.credit_amount) === "2500.00" &&
+            money(prepaidIsDebit ? r.credit_amount : r.debit_amount) === "0.00"
+        ) &&
+        entries.some(
+          (r) =>
+            number(r.ledger_account_id) === EXPENSE &&
+            money(prepaidIsDebit ? r.credit_amount : r.debit_amount) === "2500.00" &&
+            money(prepaidIsDebit ? r.debit_amount : r.credit_amount) === "0.00"
+        ),
+      "LEGACY_VOUCHER_CHANGED_" + voucherId
+    );
   }
 
   const prepaidBefore = await ledgerBalance(tx, PREPAID);
   const expenseBefore = await ledgerBalance(tx, EXPENSE);
-  requireMatch(prepaidBefore === "0.00" && expenseBefore === "30000.00",
-    "GL_BEFORE_IMAGE_CHANGED");
+  requireMatch(prepaidBefore === "0.00" && expenseBefore === "30000.00", "GL_BEFORE_IMAGE_CHANGED");
 
   const posted = await postErpVoucherTx(tx, {
     companyId: COMPANY,
@@ -236,18 +322,27 @@ async function correct(tx: DbTransaction): Promise<{ applied: boolean; voucherId
     voucherDate: asOf,
     currency: "USD",
     sourceModule: "ERP",
-    description: "POS Jnah contract 36: reclassify future Dec 2026–Jul 2027 paid rent ($20,000) from the Jul 2026 lump-sum expense to prepaid; original payment 10613 unchanged",
+    description:
+      "POS Jnah contract 36: reclassify future Dec 2026–Jul 2027 paid rent ($20,000) from the Jul 2026 lump-sum expense to prepaid; original payment 10613 unchanged",
     source: { type: "erp-pos-jnah-prepaid-repair", id: "17:36:10613:2026-11-09" },
     actor: { ...ACTOR, reason: "Owner-approved POS Jnah prepaid GL reconciliation" },
     lines: [
       { ledgerAccountId: PREPAID, debit: AMOUNT, narration: "Eight future rental months, Dec 2026–Jul 2027" },
-      { ledgerAccountId: EXPENSE, credit: AMOUNT, narration: "Reclassify unearned portion of $30,000 annual rent payment 10613" },
+      {
+        ledgerAccountId: EXPENSE,
+        credit: AMOUNT,
+        narration: "Reclassify unearned portion of $30,000 annual rent payment 10613",
+      },
     ],
   });
   requireMatch(!posted.replayed, "UNEXPECTED_POSTING_REPLAY");
 
-  const idsSql = sql.join(futureIds.map(id => sql`${id}`), sql`, `);
-  const marked = (await tx.execute(sql`
+  const idsSql = sql.join(
+    futureIds.map((id) => sql`${id}`),
+    sql`, `
+  );
+  const marked = (
+    await tx.execute(sql`
     UPDATE property_monthly_ledger
        SET used_prepaid_account = TRUE
      WHERE company_id = ${COMPANY} AND contract_id = ${CONTRACT}
@@ -255,34 +350,43 @@ async function correct(tx: DbTransaction): Promise<{ applied: boolean; voucherId
        AND accrual_voucher_id IS NULL
        AND used_prepaid_account = FALSE AND used_advance_account = FALSE
     RETURNING id
-  `)).rows as Row[];
+  `)
+  ).rows as Row[];
   requireMatch(marked.length === 8, "FUTURE_MONTHS_CONCURRENTLY_CHANGED");
 
   const prepaidAfter = await ledgerBalance(tx, PREPAID);
   const expenseAfter = await ledgerBalance(tx, EXPENSE);
-  requireMatch(prepaidAfter === AMOUNT && expenseAfter === "10000.00" &&
-    toMoney(prepaidAfter).minus(toMoney(prepaidBefore)).eq(AMOUNT) &&
-    toMoney(expenseBefore).minus(toMoney(expenseAfter)).eq(AMOUNT),
-    "POST_REPAIR_LEDGER_VERIFICATION_FAILED");
+  requireMatch(
+    prepaidAfter === AMOUNT &&
+      expenseAfter === "10000.00" &&
+      toMoney(prepaidAfter).minus(toMoney(prepaidBefore)).eq(AMOUNT) &&
+      toMoney(expenseBefore).minus(toMoney(expenseAfter)).eq(AMOUNT),
+    "POST_REPAIR_LEDGER_VERIFICATION_FAILED"
+  );
 
-  await writeAuditEvent({
-    userId: ACTOR.userId,
-    username: ACTOR.username,
-    companyId: COMPANY,
-    action: "update",
-    tableName: "property_monthly_ledger",
-    recordIdentifier: "pos-jnah-prepaid-36-20261109",
-    changes: {
-      entryRows: {
-        old: futureIds.map(id => ({ id, usedPrepaidAccount: false })),
-        new: futureIds.map(id => ({ id, usedPrepaidAccount: true })),
+  await writeAuditEvent(
+    {
+      userId: ACTOR.userId,
+      username: ACTOR.username,
+      companyId: COMPANY,
+      action: "update",
+      tableName: "property_monthly_ledger",
+      recordIdentifier: "pos-jnah-prepaid-36-20261109",
+      changes: {
+        entryRows: {
+          old: futureIds.map((id) => ({ id, usedPrepaidAccount: false })),
+          new: futureIds.map((id) => ({ id, usedPrepaidAccount: true })),
+        },
+        correctionVoucher: {
+          new: { voucherId: posted.voucher.id, voucherNumber: POSTING_NUMBER, debit: AMOUNT, credit: AMOUNT },
+        },
+        originalVoucher: { new: ORIGINAL_PAYMENT },
+        before: { new: { prepaid: prepaidBefore, expense: expenseBefore } },
+        after: { new: { prepaid: prepaidAfter, expense: expenseAfter } },
       },
-      correctionVoucher: { new: { voucherId: posted.voucher.id, voucherNumber: POSTING_NUMBER, debit: AMOUNT, credit: AMOUNT } },
-      originalVoucher: { new: ORIGINAL_PAYMENT },
-      before: { new: { prepaid: prepaidBefore, expense: expenseBefore } },
-      after: { new: { prepaid: prepaidAfter, expense: expenseAfter } },
     },
-  }, tx);
+    tx
+  );
 
   return { applied: true, voucherId: posted.voucher.id, prepaid: prepaidAfter, expense: expenseAfter };
 }
@@ -293,8 +397,9 @@ export async function runApprovedPosJnahPrepaidRepair(): Promise<void> {
   const currentDb = await pool.query<{ name: string }>("SELECT current_database() AS name");
   requireMatch(currentDb.rows[0]?.name === PRODUCTION_DATABASE, "WRONG_DATABASE");
   const result = await runAsSystemAuditActor(ACTOR.userId, () =>
-    runWithAuditReason("Owner-approved POS Jnah annual prepaid rent reconciliation for contract 36",
-      () => runInCompanyPostingScope(COMPANY, () => db.transaction(correct)))
+    runWithAuditReason("Owner-approved POS Jnah annual prepaid rent reconciliation for contract 36", () =>
+      runInCompanyPostingScope(COMPANY, () => db.transaction(correct))
+    )
   );
   logger.info("[PosJnahPrepaidRepair] Audited correction finished", result);
 }
