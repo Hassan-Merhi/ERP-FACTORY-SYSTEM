@@ -1,16 +1,10 @@
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { MoneyAmount } from "@/components/MoneyAmount";
 import type { RentalModule } from "@/properties/config/rentalModulePolicy";
+import { rentalPaymentDeletionImpact } from "@/properties/config/rentalPaymentPresentation";
 import type { PaymentRow } from "../../RentalPaymentsLog";
 
 const MONTH_NAMES = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-export function rentalPaymentDeletionImpact(module: RentalModule): string {
-  if (module === "PROPERTIES") {
-    return "Its associated accounting entries will be retired. Properties receipts do not automatically transfer money to another company; any previously linked transfer, if present, will also be retired. This cannot be undone.";
-  }
-  return "Its associated accounting entries will be retired. Any linked inter-company transfer, if present, will also be retired in the relevant companies. This cannot be undone.";
-}
 
 /** Shared confirmation for all rental modules. Authorization and retirement
  * remain server-owned; this dialog only describes the consequences.
