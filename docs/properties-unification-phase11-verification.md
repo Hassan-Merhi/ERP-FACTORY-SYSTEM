@@ -34,6 +34,8 @@ This is **not proof of a conflict-free or safe merge**. Changed code may still d
 
 No merge into `main`, rebase or main-branch update was made.
 
+**Final live comparison after Phase 11 commits:** GitHub showed **50 ahead / 151 behind**, **24 changed feature file paths** versus **73 upstream changed file paths**, with **zero overlapping file paths**. Main is moving; use fresh figures before integration. This finding is a file-level inventory only, not a compilation or runtime verdict.
+
 ## Required commands in an executable checkout
 
 ```bash
