@@ -5,8 +5,8 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, ClipboardList, Info, Loader2, Package,
-  RefreshCw, Save, Search, ShieldCheck, Truck, X } from "lucide-react";
+import { AlertTriangle, ClipboardList, Info, Loader2, Package,
+  RefreshCw, Save, Search, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
