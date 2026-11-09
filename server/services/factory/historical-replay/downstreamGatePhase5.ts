@@ -23,6 +23,7 @@ export interface Phase5ReplaySafety {
 export class Phase5ReplayDownstreamBlockedError extends Error {
   readonly code = "HISTORICAL_REPLAY_DOWNSTREAM_UNRECONCILED";
   readonly status = 409;
+  readonly statusCode = 409;
   constructor(message: string) { super(message); this.name = "Phase5ReplayDownstreamBlockedError"; }
 }
 
