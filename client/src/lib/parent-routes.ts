@@ -11,6 +11,10 @@ export function getParentRoute(pathname: string): string | null {
 
     // Containers, loading, and invoicing details → owning workflow.
     if (cleanPath === "/factory/containers/new") return "/factory/containers-hub?section=containers";
+    if (/^\/factory\/sales\/loading\/dispatch\/\d+/.test(cleanPath)) {
+      const match = cleanPath.match(/^\/factory\/sales\/loading\/dispatch\/(\d+)/);
+      if (match) return "/factory/sales/loading/new?orderId=" + match[1];
+    }
     if (cleanPath === "/factory/sales/loading/new") return "/factory/sales/loadings";
     if (cleanPath === "/factory/sales/loading/pending") return "/factory/sales/loadings";
     if (/^\/factory\/sales\/invoices\/\d+/.test(cleanPath)) return "/factory/invoicing?tab=invoices";
