@@ -23,7 +23,7 @@
 
 **Create mix / Top up mix**
 - Supplier FIFO consumption now checks available actual container-row kg and the *remaining* supplier ADD quantity, rather than allowing unlimited overdraw on the last FIFO container.
-- Available ADD backing = recorded supplier ADD quantity minus existing receipt-row excess, with conservative deduction for legacy supplier-only source rows that lack provable container attribution. The existing supplier row is transactionally locked before allocating.
+- Available ADD backing = recorded supplier ADD quantity **dated no later than the mix business date** minus existing receipt-row excess, with conservative deduction for legacy supplier-only source rows that lack provable container attribution. The existing supplier row is transactionally locked before allocating.
 - When an unused supplier ADD genuinely covers a FIFO remainder, the system permits that supplier-level consumption and records the extra segment separately with `source_type = SUPPLIER_ADJUSTMENT_BACKED` and an explanatory source note.
 - A proposed physical container-direct source can consume only the specific container's available kg; it may not claim unspecified supplier ADD inventory.
 - If supplier receipts plus unused ADD cannot cover a proposed mix, the whole transaction is rejected with HTTP 409, `MIX_RAW_STOCK_SHORTAGE`; no raw-stock, source, batch, or valuation writes are committed.
