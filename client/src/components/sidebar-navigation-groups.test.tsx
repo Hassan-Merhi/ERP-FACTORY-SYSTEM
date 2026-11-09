@@ -23,9 +23,32 @@ describe("sidebar navigation grouping", () => {
     expect(groupFor(FACTORY_NAV_SECTIONS, "/factory/bales-hub")).toBe("Production");
   });
 
-  it("puts Factory stock allocation and sheets & sacks under Inventory", () => {
+  it("keeps inventory workspaces and moves embedded Overview tabs out of the sidebar", () => {
     expect(groupFor(FACTORY_NAV_SECTIONS, "/factory/stock-allocation-v5")).toBe("Inventory");
-    expect(groupFor(FACTORY_NAV_SECTIONS, "/factory/sheets-sacks")).toBe("Inventory");
     expect(groupFor(FACTORY_NAV_SECTIONS, "/factory/location-inventory")).toBe("Inventory");
+    expect(groupFor(FACTORY_NAV_SECTIONS, "/factory/sheets-sacks")).toBeUndefined();
+    expect(groupFor(FACTORY_NAV_SECTIONS, "/factory/monthly-production-matrix")).toBeUndefined();
+  });
+
+  it("places comparison links, Stock Query and Tickets in the final Others section", () => {
+    const others = FACTORY_NAV_SECTIONS.at(-1);
+    expect(others?.label).toBe("Others");
+    expect(others?.items.map((item) => item.title)).toEqual([
+      "Comparison",
+      "Product Comparison",
+      "Ticket Management",
+      "Stock Query",
+    ]);
+    expect(groupFor(FACTORY_NAV_SECTIONS, "/factory/others?tab=comparison")).toBe("Others");
+    expect(groupFor(FACTORY_NAV_SECTIONS, "/factory/others?tab=product-comparison")).toBe("Others");
+    expect(groupFor(FACTORY_NAV_SECTIONS, "/factory/tickets")).toBe("Others");
+    expect(groupFor(FACTORY_NAV_SECTIONS, "/factory/stock-query")).toBe("Others");
+  });
+
+  it("combines Factory POS and Waste Dispatch in Sales & Loading", () => {
+    const section = FACTORY_NAV_SECTIONS.find((item) => item.label === "Sales & Loading");
+    expect(section?.items.filter((item) => item.title === "POS & Dispatch")).toHaveLength(2);
+    expect(groupFor(FACTORY_NAV_SECTIONS, "/factory/waste-dispatch")).toBe("Sales & Loading");
+    expect(groupFor(FACTORY_NAV_SECTIONS, "/factory/pos")).toBe("Sales & Loading");
   });
 });
