@@ -47,7 +47,6 @@ export function useAccountDisplayOrder() {
 
   const save = useMutation({
     mutationFn: async (nodes: DisplayNode[]) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const r = await apiRequest("PUT", url, { nodes });
       if (!r.ok) throw new Error("Unable to save account order");
       return r.json() as Promise<DisplayLayout>;
