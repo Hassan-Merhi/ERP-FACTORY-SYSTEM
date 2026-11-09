@@ -17,6 +17,20 @@ export function runPostStartupJobs(): void {
   if (installed) return;
   installed = true;
 
+  // Review hold: Warehouse 5001 / November 2026 (Factory company 12).
+  // Adds only the audited month-note marker; never posts financial entries.
+  if (process.env.ERP_RENT_HOLD_FACTORY_NOV2026 === "approved-company12-contract40-november-prepaid-freeze") {
+    const holdTimer = setTimeout(async () => {
+      try {
+        const { runApprovedFactoryNovemberRentHold } = await import("./runApprovedFactoryNovemberRentHold");
+        await runApprovedFactoryNovemberRentHold();
+      } catch (error: unknown) {
+        logger.error("[FactoryNovemberRentHold] Hold not applied", { error: getErrorMessage(error) });
+      }
+    }, 3000);
+    unrefTimer(holdTimer);
+  }
+
   // Explicitly approved Factory rent cleanup, company 12 only. All voucher
   // changes are to existing IDs; no cash or prepaid ledger lines are edited.
   // Opt-in is one-shot; after verifying the live balances, remove the flag.
