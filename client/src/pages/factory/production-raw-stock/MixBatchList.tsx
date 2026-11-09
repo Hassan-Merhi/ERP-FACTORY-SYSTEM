@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Layers, Pencil, Trash2, MessageCircle, Loader2, FileSpreadsheet } from "lucide-react";
+import { Layers, Pencil, Trash2, MessageCircle, Loader2, FileSpreadsheet, ShieldCheck, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MixBatchWhatsAppPreview } from "./MixBatchWhatsAppPreview";
@@ -56,6 +56,33 @@ export interface MixBatchPrintRow {
   sources?: MixBatchSourceRow[];
 }
 
+interface MixHistoricalAuditPreview {
+  generatedAt: string;
+  readOnly: true;
+  summary: {
+    batches: number;
+    activeBatches: number;
+    deletedBatches: number;
+    sources: number;
+    headerMismatchBatches: number;
+    sourceLineMismatchBatches: number;
+    historicalZeroSourceBatches: number;
+    inventoryOwnerReviewBatches: number;
+    missingCurrentRateBatches: number;
+    currentRateEstimateDifferenceBatches: number;
+    overusedBatches: number;
+    arithmeticErrorBatches: number;
+    evidenceReviewBatches: number;
+  };
+  batches: Array<{
+    batchId: number;
+    batchCode: string;
+    deleted: boolean;
+    classification: string;
+    issues: Array<{ code: string; severity: string; detail: string }>;
+  }>;
+}
+
 interface MixBatchListProps {
   mixBatches: MixBatchRow[];
   isLoading: boolean;
@@ -98,6 +125,9 @@ export function MixBatchList({
   const recordChangeReason = recordChanges.reason ?? undefined;
   const [showAllMixBatches, setShowAllMixBatches] = useState(false);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
+  const [isAuditingMixes, setIsAuditingMixes] = useState(false);
+  const [auditExportLevel, setAuditExportLevel] = useState<"batches" | "sources" | null>(null);
+  const [historicalAudit, setHistoricalAudit] = useState<MixHistoricalAuditPreview | null>(null);
   const [exportPeriod, setExportPeriod] = useState<"month" | "all-time">("month");
   const [exportMonth, setExportMonth] = useState(() => {
     const now = new Date();
@@ -134,6 +164,50 @@ export function MixBatchList({
       setIsExportingExcel(false);
     }
   };
+  const handleRunHistoricalAudit = async () => {
+    setIsAuditingMixes(true);
+    try {
+      const res = await fetch("/api/factory/mix-batches?profile=historical-audit&includeSources=false", {
+        credentials: "same-origin", cache: "no-store",
+      });
+      if (!res.ok) throw new Error("Could not load the historical audit.");
+      setHistoricalAudit((await res.json()) as MixHistoricalAuditPreview);
+      toast({ title: "Historical audit ready", description: "All active and deleted mix batches were checked without changing any records." });
+    } catch (error) {
+      toast({
+        title: "Historical audit failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAuditingMixes(false);
+    }
+  };
+
+  const handleDownloadHistoricalAudit = async (level: "batches" | "sources") => {
+    setAuditExportLevel(level);
+    try {
+      const res = await fetch(
+        "/api/factory/mix-batches?profile=historical-audit&format=csv&level=" + level,
+        { credentials: "same-origin", cache: "no-store" }
+      );
+      if (!res.ok) throw new Error("Historical audit export could not be generated.");
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = href;
+      link.download = "factory-mix-historical-" + level + "-audit.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(href);
+    } catch (error) {
+      toast({ title: "Audit export failed", description: error instanceof Error ? error.message : "Please retry.", variant: "destructive" });
+    } finally {
+      setAuditExportLevel(null);
+    }
+  };
+
   const BATCH_PREVIEW_COUNT = 15;
 
   const visibleMixBatches = useMemo(
@@ -233,6 +307,30 @@ export function MixBatchList({
           </span>
         </div>
 
+        <div className="flex w-full flex-col gap-2 rounded-xl border border-border/70 bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between" data-testid="mix-historical-audit-controls">
+          <div>
+            <p className="text-sm font-semibold">Historical Mix Cost Integrity</p>
+            <p className="text-xs text-muted-foreground">Read-only audit of every active and deleted batch; no automatic repricing.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" size="sm" disabled={isAuditingMixes} onClick={handleRunHistoricalAudit}
+              data-testid="button-run-mix-historical-audit" className="gap-2">
+              {isAuditingMixes ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+              {isAuditingMixes ? "Auditing…" : "Audit All Batches"}
+            </Button>
+            <Button type="button" variant="outline" size="sm" disabled={auditExportLevel !== null}
+              onClick={() => handleDownloadHistoricalAudit("batches")} className="gap-2"
+              data-testid="button-download-mix-batch-audit">
+              <Download className="h-4 w-4" /> Batch CSV
+            </Button>
+            <Button type="button" variant="outline" size="sm" disabled={auditExportLevel !== null}
+              onClick={() => handleDownloadHistoricalAudit("sources")} className="gap-2"
+              data-testid="button-download-mix-source-audit">
+              <Download className="h-4 w-4" /> Source CSV
+            </Button>
+          </div>
+        </div>
+
         <MixBatchWhatsAppPreview
           reportRef={mixBatchPrintRef}
           date={mixBatchDate}
@@ -244,6 +342,41 @@ export function MixBatchList({
       </CardHeader>
 
       <CardContent className="min-w-0 p-4 sm:p-5">
+        {historicalAudit && (
+          <div className="mb-4 space-y-3 rounded-xl border border-border/70 p-4" data-testid="mix-historical-audit-results">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold">Historical Reconciliation Snapshot</p>
+              <span className="text-xs text-muted-foreground">
+                {historicalAudit.summary.activeBatches} active · {historicalAudit.summary.deletedBatches} deleted · {historicalAudit.summary.sources} saved sources
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+              <div><p className="text-xs text-muted-foreground">Header discrepancies</p><p className="font-mono font-bold">{historicalAudit.summary.headerMismatchBatches}</p></div>
+              <div><p className="text-xs text-muted-foreground">Cost arithmetic flags</p><p className="font-mono font-bold">{historicalAudit.summary.sourceLineMismatchBatches}</p></div>
+              <div><p className="text-xs text-muted-foreground">Source evidence review</p><p className="font-mono font-bold">{historicalAudit.summary.evidenceReviewBatches}</p></div>
+              <div><p className="text-xs text-muted-foreground">Current-rate differences</p><p className="font-mono font-bold">{historicalAudit.summary.currentRateEstimateDifferenceBatches}</p></div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Current supplier rates can change after offload. Differences from recorded historical rates are informational,
+              not permission to overwrite a batch. Export the source CSV to investigate individual records.
+            </p>
+            {historicalAudit.batches.filter((b) => !b.deleted && (b.classification === "ARITHMETIC_ERROR" || b.classification === "EVIDENCE_REVIEW")).length > 0 && (
+              <div className="space-y-1 text-xs">
+                <p className="font-semibold">Batches requiring evidence or mathematical correction review</p>
+                {historicalAudit.batches
+                  .filter((b) => !b.deleted && (b.classification === "ARITHMETIC_ERROR" || b.classification === "EVIDENCE_REVIEW"))
+                  .slice(0, 12)
+                  .map((b) => (
+                    <p key={b.batchId} className="text-muted-foreground">
+                      <span className="font-mono text-foreground">{b.batchCode}</span>
+                      {" · "}{[...new Set(b.issues.filter((issue) => issue.severity !== "informational").map((issue) => issue.code))].join(", ")}
+                    </p>
+                  ))}
+                <p className="text-muted-foreground">All flagged records, including deleted batches, are available in the CSV exports.</p>
+              </div>
+            )}
+          </div>
+        )}
         {isLoading ? (
           <div className="space-y-2">
             <Skeleton className="h-12 w-full" />
