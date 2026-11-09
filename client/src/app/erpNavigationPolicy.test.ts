@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   ERP_ADMIN_ONLY_ROUTES,
+  canEnterErpGuardedRoute,
+  isErpDeclaredRoleRoute,
   ERP_RETAIL_HIDDEN_ROUTES,
   effectiveErpRole,
   isErpNavigationItemVisible,
@@ -20,6 +22,18 @@ import { erpPageAccessQueryOptions } from "./erpAccessQuery";
 const ordinary = { role: "Normal User", access: { fullAccess: true, pageKeys: ["accounts", "pos"] } };
 
 describe("ERP role and navigation policy", () => {
+  it("fails closed for an unregistered privileged route and keeps known grants", () => {
+    expect(isErpDeclaredRoleRoute("/maintenance/new-tool")).toBe(false);
+    expect(canEnterErpGuardedRoute("/maintenance/new-tool", "Admin")).toBe(false);
+    expect(canEnterErpGuardedRoute("/accounting/toolbox", "Normal User")).toBe(false);
+    expect(canEnterErpGuardedRoute("/accounting/toolbox", "Developer")).toBe(true);
+    expect(canEnterErpGuardedRoute("/settings", "Admin")).toBe(true);
+    expect(canEnterErpGuardedRoute("/convergence-reconciliation", "Owner")).toBe(true);
+    expect(canEnterErpGuardedRoute("/financial-overview", "View Only")).toBe(false);
+    expect(canEnterErpGuardedRoute("/transaction-journal", "ERP Tester")).toBe(false);
+    expect(canEnterErpGuardedRoute("/my-settings", "Normal User")).toBe(true);
+  });
+
   it("always enforces developer and admin route restrictions before full-access grants", () => {
     expect(ERP_ADMIN_ONLY_ROUTES.has("/settings")).toBe(true);
     expect(isErpRouteRoleAllowed("/settings", "Normal User")).toBe(false);
