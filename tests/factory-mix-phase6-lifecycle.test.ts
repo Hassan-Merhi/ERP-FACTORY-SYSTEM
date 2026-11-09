@@ -19,6 +19,7 @@ vi.mock("../server/db", () => ({
             cost_per_kg: "0.57", total_cost: "3188.0100",
             carry_forward_from_id: null, parent_id: null, parent_company_id: null,
             parent_batch_code: null, parent_batch_date: null, parent_cost_per_kg: null,
+  parent_status: null, parent_deleted_at: null,
             carry_source_count: "0", carry_source_kg: "0", carry_source_usd: "0",
             daily_usage_count: "0", daily_usage_kg: "0", child_count: "0",
           },
@@ -59,6 +60,7 @@ const saved = (overrides: Record<string, unknown> = {}) => ({
   cost_per_kg: "0.6325000", total_cost: "5512.2375000",
   carry_forward_from_id: null, parent_id: null, parent_company_id: null,
   parent_batch_code: null, parent_batch_date: null, parent_cost_per_kg: null,
+  parent_status: null, parent_deleted_at: null,
   carry_source_count: "0", carry_source_kg: "0", carry_source_usd: "0",
   daily_usage_count: "0", daily_usage_kg: "0", child_count: "0",
   ...overrides,
@@ -157,7 +159,8 @@ describe("Phase 6 historical completion / carry-forward evidence", () => {
   it("checks parent-source weight, cost and date in a carry-forward", () => {
     const row = classifyMixLifecycleEvidence(saved({
       status: "CARRY_FORWARD", carry_forward_from_id: 49,
-      parent_id: 49, parent_company_id: 12, parent_batch_code: "FMB-2026-0035",
+      parent_id: 49, parent_company_id: 12, parent_status: "CLOSED",
+      parent_deleted_at: null, parent_batch_code: "FMB-2026-0035",
       parent_batch_date: "2026-03-25", parent_cost_per_kg: "0.6325000",
       batch_date: "2026-03-26", total_weight_kg: "100.000", used_kg: "0",
       total_cost: "63.2500000", carry_source_count: "1",
