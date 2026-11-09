@@ -1,6 +1,5 @@
 import "./FactoryLocationInventoryRedesign.css";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { SearchField } from "@/components/ui/search-field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MapPin, Search, FileSpreadsheet, Pencil, ChevronRight } from "lucide-react";
