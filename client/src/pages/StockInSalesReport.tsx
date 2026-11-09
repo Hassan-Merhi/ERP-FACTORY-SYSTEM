@@ -1,7 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { differenceInCalendarDays, format, parseISO } from "date-fns";
+import { differenceInCalendarDays,
+  format,
+  parseISO } from "date-fns";
 import {
   ChevronDown,
   ChevronRight,
@@ -12,24 +17,40 @@ import {
   RefreshCw,
   TrendingDown,
   TrendingUp,
-} from "lucide-react";
+  } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
-import { ErpListTable, ErpReportExportMenu, ErpReportPrintFooter, erpReportFileName, exportErpReportCsv } from "@/erp-core";
-import { Button } from "@/components/ui/button";
+import { ErpListTable,
+  ErpReportExportMenu,
+  ErpReportPrintFooter,
+  erpReportFileName,
+  exportErpReportCsv,
+  Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { PeriodFilter, getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
+import { PeriodFilter,
+  getDefaultPeriodValue,
+  type PeriodFilterValue } from "@/components/ui/period-filter";
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover,
+  PopoverContent,
+  PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow } from "@/components/ui/table";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useToast } from "@/hooks/use-toast";
-import { ExcelJS, writeFile } from "@/lib/excelHelper";
+import { ExcelJS,
+  writeFile } from "@/lib/excelHelper";
 import { formatNumber } from "@/lib/formatNumber";
-import { erpCompanyDataKey, erpReferenceKeys } from "@/erp-core";
+import { erpCompanyDataKey,
+  erpReferenceKeys,
+} from "@/erp-core";
+
 import StockInSalesReportComparison from "./StockInSalesReportComparison";
 import StockInSalesReportDetail from "./StockInSalesReportDetail";
 
