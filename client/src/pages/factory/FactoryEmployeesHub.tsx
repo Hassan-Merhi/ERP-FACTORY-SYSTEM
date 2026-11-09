@@ -9,6 +9,8 @@ import FactoryEmployeeBonusesTab from "@/pages/factory/FactoryEmployeeBonusesTab
 import FactoryEmployeeWithdrawalsTab from "@/pages/factory/FactoryEmployeeWithdrawalsTab";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import type { FactoryMyAccess } from "@shared/apiTypes";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 
 type TabValue = "employees" | "payroll" | "attendance" | "advances" | "bonuses" | "withdrawals";
 
@@ -22,11 +24,14 @@ const TAB_OPTIONS: { value: TabValue; label: string; icon: React.ElementType; hi
 ];
 
 export default function FactoryEmployeesHub() {
+  const { selectedCompany } = useCompany();
   const { data: myAccess } = useQuery<FactoryMyAccess>({
-    queryKey: ["/api/factory/my-access"],
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60000,
   });
-  const hiddenTabs = myAccess?.hiddenCostFields ?? [];
+  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess.hasFactoryAccess
+    ? myAccess.hiddenCostFields
+    : TAB_OPTIONS.map((tab) => tab.hiddenKey);
   const visibleOptions = TAB_OPTIONS.filter((option) => !hiddenTabs.includes(option.hiddenKey));
   const visibleValues = visibleOptions.map((option) => option.value);
   const defaultValue: TabValue = visibleValues[0] ?? "employees";
