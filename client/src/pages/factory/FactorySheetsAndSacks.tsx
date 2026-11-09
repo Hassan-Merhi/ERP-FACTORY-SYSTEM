@@ -130,7 +130,7 @@ export default function FactorySheetsAndSacks() {
     staleTime: 30000,
   });
 
-  const accessReady = myAccess?.companyId === selectedCompany?.id && myAccess.hasFactoryAccess;
+  const accessReady = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true;
   const canEdit = Boolean(accessReady && (myAccess?.fullAccess || myAccess?.pageKeys.includes("factory/sheets-sacks")));
   const hiddenTabs = accessReady && myAccess ? myAccess.hiddenCostFields : ["hide_tab_sheets_stock", "hide_tab_sheets_movements"];
   const showStock = !hiddenTabs.includes("hide_tab_sheets_stock");
