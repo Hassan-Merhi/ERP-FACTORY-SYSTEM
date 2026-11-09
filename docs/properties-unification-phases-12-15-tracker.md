@@ -116,3 +116,6 @@ npx vitest run --config vitest.config.frontend.ts tests/ui/properties-unificatio
 ```
 
 **Phase 14 disposition:** Targeted source work and regression artifacts complete. Runtime and independently reconciled financial parity are not certified; Phase 15 must perform release-level verification before main merge.
+
+### Phase 14 branch integration snapshot
+The post-implementation GitHub comparison showed **25 commits ahead / 158 commits behind** `main`, with 15 changed branch files. These figures are not a guarantee of conflict-free integration; `main` can move independently. Phase 15 must incorporate latest main, run compilation and both Vitest configurations, and certify role/currency/ledger behavior before deployment. No CI or merge was initiated during Phase 14.
