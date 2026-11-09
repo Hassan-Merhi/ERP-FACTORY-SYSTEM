@@ -12,7 +12,7 @@
 | Phase | Scope | Implementation | Verification | Commit |
 | --- | --- | --- | --- | --- |
 | 1 | Fix rental navigation mismatch | **Code complete** | Static source review complete; browser/runtime checks pending | `e3ac129f5cd36b0b714dce3238bf70b211e0fb3c` |
-| 2 | Typed rental module policy | Not started | Not started | — |
+| 2 | Typed rental module policy | **Code complete** | Static source parity review passed; runtime/typecheck pending | `60084a305133835447212051b863c9af0745e8ed` through `57771a74a7603ae246908967a0a2f2a1648fc0e6` |
 | 3 | Reporting identity and currency | Not started | Not started | — |
 | 4 | Payments and rental view models | Not started | Not started | — |
 | 5 | Permissions and navigation registry | Not started | Not started | — |
@@ -43,6 +43,32 @@
 - [ ] Browser QA: Back/Forward from navigation routes and retained query string.
 
 **Disposition:** Phase 1 code complete. Runtime QA outstanding; do not misreport it as tested.
+
+## Phase 2 — Typed rental module policy
+
+**Changes committed (2026-11-09)**
+- Added `client/src/properties/config/rentalModulePolicy.ts` with typed `RentalModule = "PROPERTIES" | "FACTORY" | "ERP"`, preserved API bases and explicit view-policy flags.
+- Made `rentalModule` a required prop in shared rental units and payment-log screens, rather than implicitly assuming Properties or inferring mode from an endpoint string.
+- Both `PropertyRentalPage.tsx` and `RentalPaymentsLog.tsx` now select endpoint and Properties-specific read-only presentation through `getRentalModulePolicy(rentalModule)`.
+- Updated all nine entry pages: Shops, Warehouses and Payments for Properties, Factory and ERP. No server, accounting or transfer behavior changed.
+- Preserved existing Properties All Records payment-log behavior and warehouse reconciliation fetch; preserved Factory and ERP payment view behavior.
+
+**Static verification**
+- Re-fetched thirteen affected files from the working branch and checked the policy, required module props and all nine entry-page module values: **zero mismatches found**.
+- Explicit endpoint mapping remains `PROPERTIES → /api/properties/rental`, `FACTORY → /api/factory/rental`, `ERP → /api/erp/rental`.
+- No endpoint-string mode comparison remains in the two shared pages.
+- Browser/runtime verification, TypeScript compilation and tests have **not** been run (no CI, as requested). This is static verification, not a runtime guarantee.
+
+**Acceptance checklist**
+- [x] Typed three-mode policy exists.
+- [x] All shared rental entry pages pass an explicit module.
+- [x] Both shared screens use policy instead of endpoint-string mode detection.
+- [x] Existing endpoint paths and module-specific reconciliation/payment view flags preserved by source inspection.
+- [x] No accounting, database, or server changes.
+- [ ] Runtime smoke test across all three modes.
+- [ ] TypeScript compile/typecheck.
+
+**Disposition:** Phase 2 code complete; runtime and compilation validation remain outstanding.
 
 ## Mandatory boundaries for phases 2–6
 
