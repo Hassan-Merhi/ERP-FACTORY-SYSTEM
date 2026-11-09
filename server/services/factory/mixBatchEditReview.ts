@@ -22,6 +22,8 @@ export interface MixBatchForSourceReview {
   id: number;
   companyId: number;
   batchCode: string;
+  name?: string | null;
+  notes?: string | null;
   status: string;
   deletedAt: Date | null;
   updatedAt: Date | null;
@@ -185,6 +187,9 @@ export async function prepareMixSourceEditReview(
       new MoneyDecimal(0),
     );
     const nextKg = proposedSuppliers.get(supplierId) ?? new MoneyDecimal(0);
+    if (!raw.rows.length && nextKg.gt(0)) {
+      warnings.push(`Supplier #${supplierId} has no raw-stock allocation rows; its edit needs a separately reviewed manual-material reconciliation.`);
+    }
     if (raw.rows.length && nextKg.gt(free.plus(releasedKg).plus(0.001))) {
       warnings.push(`Supplier #${supplierId} does not have enough available kilograms for the proposed allocation.`);
     }
@@ -253,6 +258,7 @@ export async function prepareMixSourceEditReview(
     state: {
       status: batch.status, updatedAt: batch.updatedAt?.toISOString() ?? null,
       kg: batch.totalWeightKg, used: batch.usedKg, cost: batch.totalCost,
+      date: batch.batchDate ?? null, name: batch.name ?? null, notes: batch.notes ?? null,
     },
     old: normalizedOld, proposed,
     live: snapshot, reason: reason.trim(),
