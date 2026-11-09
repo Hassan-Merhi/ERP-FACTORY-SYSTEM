@@ -18,6 +18,7 @@ export default function FactoryOthers() {
   const visibleTabs = ALL_TABS.filter((tab) =>
     !hidden.includes(tab === "comparison" ? "hide_tab_overview_comparison" : "hide_tab_overview_product_comparison")
   );
+  const visibleTabsKey = visibleTabs.join(",");
   const [activeTab, setActiveTab] = useHubQueryState<OthersTab>({
     key: "tab",
     allowedValues: ready ? visibleTabs : ALL_TABS,
@@ -29,10 +30,10 @@ export default function FactoryOthers() {
   // Sync that navigation as well as the tab strip's own clicks.
   useEffect(() => {
     const requested = new URLSearchParams(search).get("tab") as OthersTab | null;
-    if (ready && requested && visibleTabs.includes(requested) && requested !== activeTab) {
+    if (ready && requested && visibleTabsKey.split(",").includes(requested) && requested !== activeTab) {
       setActiveTab(requested);
     }
-  }, [search, ready, visibleTabs.join(","), activeTab, setActiveTab]);
+  }, [search, ready, visibleTabsKey, activeTab, setActiveTab]);
 
   if (!ready) return <div className="p-5 text-sm text-muted-foreground">Loading access...</div>;
   if (visibleTabs.length === 0) {
