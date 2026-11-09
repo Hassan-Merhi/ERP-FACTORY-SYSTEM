@@ -76,6 +76,35 @@ export async function runPosJnahExistingVoucherRepair():Promise<void>{
     ORDER BY year,month,id FOR UPDATE
    `)).rows as PosJnahMonth[];
    const links=verifyPosJnahPrepaidMonths(monthly,done?"after":"before");
+   const companyRow=(await tx.execute(sql`
+    SELECT id,name,active FROM companies WHERE id=${company}
+   `)).rows as {id:number;name:string;active:boolean}[];
+   guard(companyRow.length===1 && companyRow[0].active &&
+     companyRow[0].name.trim().startsWith("POS"),"COMPANY");
+   const lease=(await tx.execute(sql`
+    SELECT c.id,c.unit_id,c.rental_amount,c.start_date,c.status,c.currency,
+      u.unit_number,u.unit_type,u.active
+    FROM property_contracts c JOIN property_units u ON u.id=c.unit_id
+    WHERE c.company_id=${company} AND c.id=${contract} FOR SHARE OF c,u
+   `)).rows as Record<string,unknown>[];
+   guard(lease.length===1 && n(lease[0].unit_id)===59 &&
+     n(lease[0].rental_amount)===2500 &&
+     String(lease[0].start_date).slice(0,10)==="2026-08-01" &&
+     lease[0].status==="ACTIVE" && lease[0].currency==="USD" &&
+     lease[0].unit_number==="POS" && lease[0].unit_type==="SHOP" &&
+     lease[0].active===true,"CONTRACT");
+   const payments=(await tx.execute(sql`
+    SELECT id,voucher_id,ledger_row_id,for_year,for_month,amount,posting_status
+    FROM property_payments
+    WHERE company_id=${company} AND contract_id=${contract}
+    ORDER BY for_year,for_month,id FOR SHARE
+   `)).rows as Record<string,unknown>[];
+   guard(payments.length===12 && payments.every((p,i)=>
+     n(p.id)===306+i && n(p.voucher_id)===10613 &&
+     n(p.ledger_row_id)===701216+i &&
+     n(p.for_year)===(i<5?2026:2027) &&
+     n(p.for_month)===(7+i)%12+1 &&
+     n(p.amount)===2500 && p.posting_status==="POSTED"),"PAYMENT_ALLOCATIONS");
    const old=await balances(tx);
    guard(old.prepaid===20000 && old.expense===10000,"LEDGER_DRIFT");
    if(done) return {applied:false,...old};
