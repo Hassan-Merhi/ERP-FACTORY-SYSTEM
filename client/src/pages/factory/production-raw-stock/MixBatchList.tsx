@@ -676,7 +676,7 @@ export function MixBatchList({
                       <p className="font-mono font-bold">{phase7Monitor.summary.warning}</p></div>
                     <div><p className="text-xs text-muted-foreground">Evidence reviews</p>
                       <p className="font-mono font-bold">{phase7Monitor.summary.review}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Unread new alerts</p>
+                    <div><p className="text-xs text-muted-foreground">Unread monitor alerts</p>
                       <p className="font-mono font-bold">{phase7Monitor.unreadAlerts}</p></div>
                   </div>
                 )}
