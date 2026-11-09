@@ -468,7 +468,7 @@ export function useAccountsLegacyModel() {
   }, [allAccounts, selectedAccount, urlAccountId, urlAccountType]);
 
   // Dedicated query for Group accounts used by the Parent Group combobox.
-  // Uses /api/ledger-accounts directly (same source as Account Groups page) so
+  // Uses the server's parent-group-only endpoint so
   // groups created there always appear here without needing /api/accounts/all to refresh.
   // Groups = accounts marked with subType "Group" OR accounts that happen to have children
   // (backward-compat: groups created before subType tagging still show up)
@@ -480,13 +480,8 @@ export function useAccountsLegacyModel() {
       if (!res.ok) throw new Error("Failed to fetch ledger accounts");
       return res.json();
     },
-    select: (data) => {
-      const parentIdSet = new Set<number>();
-      data.forEach((a) => {
-        if (a.parentId) parentIdSet.add(a.parentId);
-      });
-      return data.filter((a) => a.subType === "Group" || parentIdSet.has(a.id));
-    },
+    // The server returns tagged and legacy parent groups already filtered.
+    // Re-filtering this narrowed result would incorrectly drop legacy parents.
     enabled: !!selectedCompany,
   });
 
