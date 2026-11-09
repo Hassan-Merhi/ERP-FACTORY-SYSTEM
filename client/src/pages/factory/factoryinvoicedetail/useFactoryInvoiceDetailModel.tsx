@@ -74,7 +74,7 @@ export function useFactoryInvoiceDetailModel() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders"] });
       setEditingChargeLedger(null);
       toast({ title: "Ledger account updated" });
     },
@@ -103,7 +103,7 @@ export function useFactoryInvoiceDetailModel() {
       return res.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders"] });
       setShowAddCharge(false);
       setNewChargeName("");
       setNewChargeAmount("");
@@ -125,7 +125,7 @@ export function useFactoryInvoiceDetailModel() {
       return res.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders"] });
       toast({ title: data.linked > 0 ? "Ledger entries created" : "Nothing to relink", description: data.message });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -140,7 +140,7 @@ export function useFactoryInvoiceDetailModel() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders"] });
       setEditingChargeAmount(null);
       setChargeAmountInput("");
       toast({ title: "Charge amount updated" });
@@ -299,7 +299,7 @@ export function useFactoryInvoiceDetailModel() {
           description: `Updated ${data.repriced} bale(s) to current catalogue prices.`,
         });
       }
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders"] });
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
@@ -324,7 +324,7 @@ export function useFactoryInvoiceDetailModel() {
         title: "Price updated",
         description: "All bales for this article have been repriced and totals recalculated.",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders"] });
       setEditingArticleCode(null);
     },
     onError: (error: ClientErrorLike) => {
@@ -375,7 +375,7 @@ export function useFactoryInvoiceDetailModel() {
           description: `Updated ${data.repriced} bale(s) to production prices.`,
         });
       }
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders"] });
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
@@ -404,7 +404,7 @@ export function useFactoryInvoiceDetailModel() {
       } else {
         toast({ title: "Proforma prices applied", description: `Updated ${repriced} bale(s).` });
       }
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders"] });
       setShowProformaDialog(false);
       setSelectedProformaId("");
     },
@@ -428,7 +428,7 @@ export function useFactoryInvoiceDetailModel() {
     },
     onSuccess: () => {
       toast({ title: "Bale exchanged", description: `Replaced successfully.` });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders"] });
       setExchangeBale(null);
       setNewRefInput("");
     },
@@ -449,7 +449,7 @@ export function useFactoryInvoiceDetailModel() {
     },
     onSuccess: () => {
       toast({ title: "Bale removed", description: "Bale returned to stock." });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders"] });
       setRemoveBaleState(null);
     },
     onError: (error: ClientErrorLike) => {
