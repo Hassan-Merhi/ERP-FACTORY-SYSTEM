@@ -35,7 +35,7 @@ export async function runPosJnahExistingVoucherRepair():Promise<void>{
  const result=await runAsSystemAuditActor(actor.userId,()=>runWithAuditReason(
   "Owner-approved POS Jnah repair using existing vouchers only",
   ()=>runInCompanyPostingScope(company,()=>db.transaction(async(tx)=>{
-   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('pos-jnah-vouchers-20261109'))`);
+   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('pos-jnah-vouchers-20261109'), ${company})`);
    const lines=(await tx.execute(sql`
 SELECT v.id AS voucher_id,v.voucher_number,v.voucher_date::text AS voucher_date,
   v.deleted_at::text AS deleted_at,v.optional,v.currency,
