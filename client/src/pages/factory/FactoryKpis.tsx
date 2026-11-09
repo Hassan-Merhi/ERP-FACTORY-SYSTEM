@@ -87,33 +87,33 @@ export default function FactoryKpis() {
   }, [activeTab, requestedTab]);
 
   const dailyQuery = useQuery<DailyProduction[]>({
-    queryKey: ["/api/factory/kpis/daily", from, to],
+    queryKey: companyQueryKey("/api/factory/kpis/daily", selectedCompany?.id, from, to),
     queryFn: async () => {
       const res = await fetch(`/api/factory/kpis/daily?from=${from}&to=${to}`);
       if (!res.ok) throw new Error("Failed to load daily production");
       return res.json();
     },
-    enabled: showDaily,
+    enabled: showDaily && Boolean(selectedCompany?.id),
   });
 
   const workersQuery = useQuery<WorkerPerformance[]>({
-    queryKey: ["/api/factory/kpis/workers", from, to],
+    queryKey: companyQueryKey("/api/factory/kpis/workers", selectedCompany?.id, from, to),
     queryFn: async () => {
       const res = await fetch(`/api/factory/kpis/workers?from=${from}&to=${to}`);
       if (!res.ok) throw new Error("Failed to load worker performance");
       return res.json();
     },
-    enabled: showWorkers,
+    enabled: showWorkers && Boolean(selectedCompany?.id),
   });
 
   const mixesQuery = useQuery<MixEfficiency[]>({
-    queryKey: ["/api/factory/kpis/mixes", from, to],
+    queryKey: companyQueryKey("/api/factory/kpis/mixes", selectedCompany?.id, from, to),
     queryFn: async () => {
       const res = await fetch(`/api/factory/kpis/mixes?from=${from}&to=${to}`);
       if (!res.ok) throw new Error("Failed to load mix efficiency");
       return res.json();
     },
-    enabled: showMixes,
+    enabled: showMixes && Boolean(selectedCompany?.id),
   });
 
   return (
