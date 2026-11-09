@@ -42,6 +42,7 @@ function isChunkLoadError(error: unknown): boolean {
     combined.includes("Importing a module script failed") ||
     combined.includes("Unable to preload CSS") ||
     combined.includes("ChunkLoadError") ||
+    combined.includes("Page module loading timed out") ||
     (error as { name: "ChunkLoadError" })?.name === "ChunkLoadError"
   );
 }
@@ -146,6 +147,10 @@ export class ErrorBoundary extends Component<Props, State> {
 
       // If we're offline, the chunk simply isn't cached — reloading won't help.
       if (!navigator.onLine) return;
+      // Missing hashed chunks after a deployment require cache/SW recovery,
+      // not simply another navigation to the same unavailable asset.
+      window.dispatchEvent(new CustomEvent("erp:asset-load-failed"));
+      return;
       const path = window.location.pathname;
       if (canAutoRetry(path)) {
         recordRetry(path);
