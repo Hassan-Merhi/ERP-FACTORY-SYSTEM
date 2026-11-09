@@ -1,0 +1,312 @@
+/*
+ * Properties unified blue theme. This file is independent of Factory and ERP themes.
+ *
+ * Single edit point: --properties-hue: 217; (blue).
+ * Scope: html[data-app-shell="properties"], including portalled dialogs.
+ * Keep business/status meanings (green = success, red = warning/debit, amber =
+ * caution) and chart categories intact. These aliases target only the
+ * existing blue/indigo/purple/violet/sky/fuchsia utility families.
+ * Prefer semantic bg-background, bg-card and bg-primary in new pages.
+ */
+:root[data-app-shell="properties"] {
+  --properties-hue: 217;
+
+  /* 11 stops of one blue hue: legacy utility classes inherit this palette. */
+  --properties-color-50: hsl(var(--properties-hue) 100% 98%);
+  --properties-color-100: hsl(var(--properties-hue) 95% 95%);
+  --properties-color-200: hsl(var(--properties-hue) 93% 89%);
+  --properties-color-300: hsl(var(--properties-hue) 89% 80%);
+  --properties-color-400: hsl(var(--properties-hue) 86% 69%);
+  --properties-color-500: hsl(var(--properties-hue) 82% 59%);
+  --properties-color-600: hsl(var(--properties-hue) 78% 51%);
+  --properties-color-700: hsl(var(--properties-hue) 73% 43%);
+  --properties-color-800: hsl(var(--properties-hue) 65% 34%);
+  --properties-color-900: hsl(var(--properties-hue) 60% 26%);
+  --properties-color-950: hsl(var(--properties-hue) 66% 15%);
+
+  --color-blue-50: var(--properties-color-50);
+  --color-blue-100: var(--properties-color-100);
+  --color-blue-200: var(--properties-color-200);
+  --color-blue-300: var(--properties-color-300);
+  --color-blue-400: var(--properties-color-400);
+  --color-blue-500: var(--properties-color-500);
+  --color-blue-600: var(--properties-color-600);
+  --color-blue-700: var(--properties-color-700);
+  --color-blue-800: var(--properties-color-800);
+  --color-blue-900: var(--properties-color-900);
+  --color-blue-950: var(--properties-color-950);
+
+  --color-indigo-50: var(--properties-color-50);
+  --color-indigo-100: var(--properties-color-100);
+  --color-indigo-200: var(--properties-color-200);
+  --color-indigo-300: var(--properties-color-300);
+  --color-indigo-400: var(--properties-color-400);
+  --color-indigo-500: var(--properties-color-500);
+  --color-indigo-600: var(--properties-color-600);
+  --color-indigo-700: var(--properties-color-700);
+  --color-indigo-800: var(--properties-color-800);
+  --color-indigo-900: var(--properties-color-900);
+  --color-indigo-950: var(--properties-color-950);
+
+  --color-purple-50: var(--properties-color-50);
+  --color-purple-100: var(--properties-color-100);
+  --color-purple-200: var(--properties-color-200);
+  --color-purple-300: var(--properties-color-300);
+  --color-purple-400: var(--properties-color-400);
+  --color-purple-500: var(--properties-color-500);
+  --color-purple-600: var(--properties-color-600);
+  --color-purple-700: var(--properties-color-700);
+  --color-purple-800: var(--properties-color-800);
+  --color-purple-900: var(--properties-color-900);
+  --color-purple-950: var(--properties-color-950);
+
+  --color-violet-50: var(--properties-color-50);
+  --color-violet-100: var(--properties-color-100);
+  --color-violet-200: var(--properties-color-200);
+  --color-violet-300: var(--properties-color-300);
+  --color-violet-400: var(--properties-color-400);
+  --color-violet-500: var(--properties-color-500);
+  --color-violet-600: var(--properties-color-600);
+  --color-violet-700: var(--properties-color-700);
+  --color-violet-800: var(--properties-color-800);
+  --color-violet-900: var(--properties-color-900);
+  --color-violet-950: var(--properties-color-950);
+
+  --color-sky-50: var(--properties-color-50);
+  --color-sky-100: var(--properties-color-100);
+  --color-sky-200: var(--properties-color-200);
+  --color-sky-300: var(--properties-color-300);
+  --color-sky-400: var(--properties-color-400);
+  --color-sky-500: var(--properties-color-500);
+  --color-sky-600: var(--properties-color-600);
+  --color-sky-700: var(--properties-color-700);
+  --color-sky-800: var(--properties-color-800);
+  --color-sky-900: var(--properties-color-900);
+  --color-sky-950: var(--properties-color-950);
+
+  --color-fuchsia-50: var(--properties-color-50);
+  --color-fuchsia-100: var(--properties-color-100);
+  --color-fuchsia-200: var(--properties-color-200);
+  --color-fuchsia-300: var(--properties-color-300);
+  --color-fuchsia-400: var(--properties-color-400);
+  --color-fuchsia-500: var(--properties-color-500);
+  --color-fuchsia-600: var(--properties-color-600);
+  --color-fuchsia-700: var(--properties-color-700);
+  --color-fuchsia-800: var(--properties-color-800);
+  --color-fuchsia-900: var(--properties-color-900);
+  --color-fuchsia-950: var(--properties-color-950);
+
+  /* Light surfaces, buttons and navigation derive from the same hue. */
+  --properties-brand: var(--properties-hue) 78% 50%;
+  --properties-brand-strong: var(--properties-hue) 75% 42%;
+  --properties-brand-soft: var(--properties-hue) 100% 96%;
+  --properties-brand-ink: var(--properties-hue) 77% 34%;
+  --properties-brand-border: var(--properties-hue) 65% 84%;
+  --background: var(--properties-hue) 35% 98%;
+  --card: 0 0% 100%;
+  --popover: 0 0% 100%;
+  --sidebar: var(--properties-hue) 35% 97%;
+  --secondary: var(--properties-hue) 30% 94%;
+  --muted: var(--properties-hue) 23% 94%;
+  --accent: var(--properties-hue) 32% 93%;
+  --border: var(--properties-hue) 20% 87%;
+  --card-border: var(--properties-hue) 20% 87%;
+  --sidebar-border: var(--properties-hue) 20% 87%;
+  --sidebar-accent: var(--properties-hue) 34% 92%;
+  --input: var(--properties-hue) 18% 82%;
+  --primary: var(--properties-hue) 78% 45%;
+  --primary-foreground: 0 0% 100%;
+  --primary-border: var(--properties-hue) 75% 35%;
+  --ring: var(--properties-hue) 78% 48%;
+  --sidebar-primary: var(--properties-hue) 78% 45%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-ring: var(--properties-hue) 78% 48%;
+  --module-properties: var(--properties-hue) 78% 45%;
+  --nav-overview: var(--properties-hue) 75% 43%;
+  --nav-pinned: var(--properties-hue) 75% 43%;
+  --nav-inventory: var(--properties-hue) 75% 43%;
+  --nav-sales: var(--properties-hue) 75% 43%;
+  --nav-accounting: var(--properties-hue) 75% 43%;
+  --nav-analytics: var(--properties-hue) 75% 43%;
+  --nav-rentals: var(--properties-hue) 75% 43%;
+  --nav-finance: var(--properties-hue) 75% 43%;
+  --nav-operations: var(--properties-hue) 75% 43%;
+  --nav-bales: var(--properties-hue) 75% 43%;
+  --nav-reports: var(--properties-hue) 75% 43%;
+  --nav-intelligence: var(--properties-hue) 75% 43%;
+  --nav-utility: var(--properties-hue) 75% 43%;
+
+  /* Premium sidebar/topbar use a separate set of tokens. */
+  --pnav-violet: var(--properties-color-600);
+  --pnav-violet-text: hsl(var(--properties-brand-ink));
+  --pnav-surface: hsl(var(--sidebar));
+  --pnav-raised: hsl(var(--card));
+  --pnav-text: hsl(var(--foreground));
+  --pnav-muted: hsl(var(--muted-foreground));
+  --pnav-border: hsl(var(--properties-brand) / .17);
+  --pnav-hover: hsl(var(--properties-brand) / .075);
+  --pnav-active: linear-gradient(100deg, var(--properties-color-100), hsl(var(--background)));
+  --pnav-brand: linear-gradient(120deg, var(--properties-color-100), hsl(var(--card)));
+  --pnav-top: linear-gradient(105deg, hsl(var(--card)), var(--properties-color-100));
+}
+
+:root.dark[data-app-shell="properties"] {
+  --properties-brand: var(--properties-hue) 80% 51%;
+  --properties-brand-strong: var(--properties-hue) 76% 41%;
+  --properties-brand-soft: var(--properties-hue) 33% 19%;
+  --properties-brand-ink: var(--properties-hue) 89% 83%;
+  --properties-brand-border: var(--properties-hue) 36% 36%;
+  --background: var(--properties-hue) 20% 9%;
+  --card: var(--properties-hue) 17% 12%;
+  --popover: var(--properties-hue) 18% 15%;
+  --sidebar: var(--properties-hue) 19% 11%;
+  --secondary: var(--properties-hue) 18% 19%;
+  --muted: var(--properties-hue) 17% 18%;
+  --accent: var(--properties-hue) 23% 21%;
+  --border: var(--properties-hue) 15% 24%;
+  --card-border: var(--properties-hue) 15% 22%;
+  --sidebar-border: var(--properties-hue) 15% 24%;
+  --sidebar-accent: var(--properties-hue) 22% 20%;
+  --input: var(--properties-hue) 18% 28%;
+  --primary: var(--properties-hue) 80% 49%;
+  --primary-foreground: 0 0% 100%;
+  --primary-border: var(--properties-hue) 76% 39%;
+  --ring: var(--properties-hue) 88% 70%;
+  --sidebar-primary: var(--properties-hue) 80% 49%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-ring: var(--properties-hue) 88% 70%;
+  --module-properties: var(--properties-hue) 88% 70%;
+  --nav-overview: var(--properties-hue) 86% 74%;
+  --nav-pinned: var(--properties-hue) 86% 74%;
+  --nav-inventory: var(--properties-hue) 86% 74%;
+  --nav-sales: var(--properties-hue) 86% 74%;
+  --nav-accounting: var(--properties-hue) 86% 74%;
+  --nav-analytics: var(--properties-hue) 86% 74%;
+  --nav-rentals: var(--properties-hue) 86% 74%;
+  --nav-finance: var(--properties-hue) 86% 74%;
+  --nav-operations: var(--properties-hue) 86% 74%;
+  --nav-bales: var(--properties-hue) 86% 74%;
+  --nav-reports: var(--properties-hue) 86% 74%;
+  --nav-intelligence: var(--properties-hue) 86% 74%;
+  --nav-utility: var(--properties-hue) 86% 74%;
+
+  --pnav-violet: var(--properties-color-400);
+  --pnav-violet-text: hsl(var(--properties-brand-ink));
+  --pnav-surface: hsl(var(--sidebar));
+  --pnav-raised: hsl(var(--card));
+  --pnav-text: hsl(var(--foreground));
+  --pnav-muted: hsl(var(--muted-foreground));
+  --pnav-border: hsl(var(--properties-brand) / .25);
+  --pnav-hover: hsl(var(--properties-brand) / .16);
+  --pnav-active: linear-gradient(105deg, hsl(var(--properties-brand-strong) / .72), hsl(var(--properties-brand-soft)));
+  --pnav-brand: linear-gradient(120deg, hsl(var(--properties-brand-soft)), hsl(var(--sidebar)));
+  --pnav-top: linear-gradient(105deg, hsl(var(--sidebar)), hsl(var(--properties-brand-soft)));
+}
+
+/* Shared canvas and reusable branded elements for future Properties pages. */
+:root[data-app-shell="properties"] [data-properties-shell],
+:root[data-app-shell="properties"] #main-content {
+  background-color: hsl(var(--background));
+}
+:root[data-app-shell="properties"] .properties-brand-gradient {
+  background: linear-gradient(115deg, hsl(var(--properties-brand-strong)), hsl(var(--properties-brand)));
+  color: white;
+}
+:root[data-app-shell="properties"] .properties-brand-soft {
+  background: hsl(var(--properties-brand-soft));
+  border-color: hsl(var(--properties-brand-border));
+  color: hsl(var(--properties-brand-ink));
+}
+:root[data-app-shell="properties"] .properties-brand-text { color: hsl(var(--properties-brand-ink)); }
+
+/* Account ledger is a shared component. Only this mode is recolored. */
+:root[data-app-shell="properties"] .account-ledger-modern .account-ledger-heading-icon {
+  background: linear-gradient(135deg, hsl(var(--properties-brand-strong)), hsl(var(--properties-brand)));
+}
+:root[data-app-shell="properties"] .account-ledger-modern .account-ledger-subtitle {
+  color: hsl(var(--properties-brand-ink));
+}
+:root.dark[data-app-shell="properties"] .account-ledger-modern .account-ledger-subtitle {
+  color: hsl(var(--properties-brand-ink));
+}
+/* Properties Rentals and Payments use custom purple gradients. Theme their
+ * decorative surfaces without overriding green/red rent and payment statuses. */
+:root[data-app-shell="properties"] .properties-rentals-hub,
+:root[data-app-shell="properties"] .properties-rentals-premium {
+  --rent-border: hsl(var(--properties-brand) / .2);
+  --rent-surface: hsl(var(--card));
+  --rent-surface-alt: hsl(var(--properties-brand-soft));
+  --rent-row-hover: hsl(var(--properties-brand) / .08);
+  --rent-group-rgb: 36, 92, 188;
+}
+:root[data-app-shell="properties"] .properties-rentals-hub .properties-rentals-tabs [role="tab"][data-state="active"] {
+  background: linear-gradient(120deg, hsl(var(--properties-brand)), hsl(var(--properties-brand-strong)));
+  color: white;
+}
+:root[data-app-shell="properties"] .properties-rentals-hero {
+  background:
+    radial-gradient(ellipse at 90% -22%, hsl(var(--properties-brand) / .18), transparent 45%),
+    linear-gradient(120deg, hsl(var(--card)), hsl(var(--properties-brand-soft)));
+}
+:root[data-app-shell="properties"] .properties-rentals-hero-icon {
+  background: hsl(var(--properties-brand) / .12);
+  border-color: hsl(var(--properties-brand) / .33);
+  color: hsl(var(--properties-brand-ink));
+}
+:root[data-app-shell="properties"] .properties-rentals-eyebrow { color: hsl(var(--properties-brand-ink)); }
+:root[data-app-shell="properties"] .properties-rentals-hero-actions button[data-testid$="-add-unit"] {
+  background: linear-gradient(112deg, hsl(var(--properties-brand)), hsl(var(--properties-brand-strong)));
+  color: white;
+  border-color: hsl(var(--properties-brand-border));
+}
+:root[data-app-shell="properties"] .properties-payments-premium {
+  --payments-bg: hsl(var(--card));
+  --payments-bg-soft: hsl(var(--properties-brand-soft));
+  --payments-table-stripe: hsl(var(--properties-brand-soft) / .38);
+  --payments-table-hover: hsl(var(--properties-brand) / .1);
+  --payments-footer: hsl(var(--properties-brand-soft));
+}
+:root[data-app-shell="properties"] .properties-payments-hero {
+  background:
+    radial-gradient(ellipse at 72% 52%, hsl(var(--properties-brand) / .43), transparent 46%),
+    linear-gradient(115deg, #10284b 0%, #152e59 58%, #174b92 100%);
+}
+:root[data-app-shell="properties"] .properties-payments-hero::after {
+  background: linear-gradient(105deg, transparent 28%, hsl(var(--properties-brand) / .42) 29%, hsl(var(--properties-brand) / .2) 42%, transparent 43%);
+}
+:root[data-app-shell="properties"] .properties-payments-hero-icon {
+  background: linear-gradient(140deg, #2466bd, #15468e);
+  border-color: hsl(var(--properties-brand-border) / .45);
+  color: #e0efff;
+}
+:root[data-app-shell="properties"] .properties-payments-eyebrow { color: #b8d7ff; }
+:root[data-app-shell="properties"] .properties-payments-stat:not(.properties-payments-stat--green):not(.properties-payments-stat--blue) {
+  --payments-stat-color: #e1efff;
+  --payments-stat-icon: #164f9f;
+  --payments-stat-bg: linear-gradient(110deg, #164787, #1e60aa);
+  border-color: hsl(var(--properties-brand-border) / .43);
+}
+:root[data-app-shell="properties"] .properties-payments-copy {
+  background: linear-gradient(115deg, hsl(var(--properties-brand)), hsl(var(--properties-brand-strong)));
+}
+:root[data-app-shell="properties"] .properties-payments-copy:hover:not(:disabled) {
+  background: linear-gradient(115deg, #367fe0, #1d57b0);
+}
+:root.dark[data-app-shell="properties"] .properties-rentals-hub,
+:root.dark[data-app-shell="properties"] .properties-rentals-premium {
+  --rent-surface: hsl(var(--card));
+  --rent-surface-alt: hsl(var(--properties-brand-soft));
+  --rent-row-hover: hsl(var(--properties-brand) / .15);
+}
+:root.dark[data-app-shell="properties"] .properties-rentals-hero {
+  background:
+    radial-gradient(ellipse at 90% -22%, hsl(var(--properties-brand) / .24), transparent 45%),
+    linear-gradient(120deg, #111d31, #162541);
+}
+:root.dark[data-app-shell="properties"] .properties-payments-premium {
+  --payments-bg: hsl(var(--card));
+  --payments-bg-soft: hsl(var(--properties-brand-soft));
+  --payments-table-stripe: hsl(var(--properties-brand-soft) / .5);
+  --payments-table-hover: hsl(var(--properties-brand) / .22);
+  --payments-footer: hsl(var(--properties-brand-soft));
+}
