@@ -346,7 +346,7 @@ function StockInSalesReportSummary() {
     setIsExporting(true);
     try {
       const workbook = new ExcelJS.Workbook();
-      const sheet = workbook.addWorksheet("Stock In & Sales");
+      const sheet = workbook.addWorksheet("Stock & Sales Report");
       sheet.columns = [
         { header: periodColumnLabel, key: "period", width: 22 },
         { header: "Opening Qty", key: "openingStockQty", width: 16 },
@@ -404,7 +404,7 @@ function StockInSalesReportSummary() {
   return (
     <div className="container mx-auto space-y-5 p-0 sm:p-6">
       <PageHeader
-        title="Stock In & Sales Report"
+        title="Stock & Sales Report"
         onBack={() => (window.location.href = "/sales-report")}
         backButtonTestId="button-back-stock-in-sales"
         meta={<span>Stock and sales overview{selectedCompany?.name ? ` · ${selectedCompany.name}` : ""}</span>}
