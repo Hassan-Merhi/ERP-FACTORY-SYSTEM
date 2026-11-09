@@ -6,7 +6,10 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const h = vi.hoisted(() => ({ writes: [] as Array<[string, string, Record<string, unknown>]> }));
+const h = vi.hoisted(() => ({
+  writes: [] as Array<[string, string, Record<string, unknown>]>,
+  status: "OPEN" as string,
+}));
 vi.mock("../server/auth", () => ({ requireAuth: () => undefined }));
 vi.mock("../server/routes/helpers/auditHelpers", () => ({ logAudit: async () => undefined }));
 vi.mock("../server/routes/factory/_helpers", () => ({ writeDaybookEntry: async () => undefined }));
@@ -46,7 +49,10 @@ vi.mock("../server/db", async () => {
       Promise.resolve(value).then(resolve, reject);
     return q;
   };
-  const batch = { id: 1, batchCode: "MB1", name: null, totalWeightKg: "0", totalCost: "0", usedKg: "0" };
+  const batch = {
+    id: 1, batchCode: "MB1", name: null, totalWeightKg: "0", totalCost: "0", usedKg: "0",
+    get status() { return h.status; },
+  };
   const db: Record<string, unknown> = {
     select: () => ({ from: (table: never) => chain(getTableName(table) === "factory_mix_batches" ? [batch] : []) }),
     update: (table: never) => ({
@@ -96,6 +102,7 @@ async function patch(body: Record<string, unknown>) {
 describe("mix batch edit", () => {
   beforeEach(() => {
     h.writes = [];
+    h.status = "OPEN";
   });
 
   it("debits raw stock by exact weights", async () => {
@@ -103,6 +110,24 @@ describe("mix batch edit", () => {
     expect(res.statusCode).toBe(200);
     const rawStockDebits = h.writes.filter(([, table]) => table === "factory_raw_stock").map(([, , v]) => v.usedKg);
     expect(rawStockDebits).toEqual([["0.1"], ["0.2"]]);
+  });
+
+  it("blocks source repricing of completed batches without making stock writes", async () => {
+    h.status = "COMPLETED";
+    const res = await patch({ supplierSources: [{ supplierId: 2, weightKg: "0.3" }] });
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toMatchObject({ code: "MIX_BATCH_COMPLETED_SOURCE_EDIT_REQUIRES_REVIEW" });
+    expect(h.writes).toEqual([]);
+  });
+
+  it("still permits metadata-only edits to completed batches", async () => {
+    h.status = "COMPLETED";
+    const res = await patch({ name: "Renamed historical mix" });
+    expect(res.statusCode).toBe(200);
+    expect(h.writes.some(([action, table, values]) =>
+      action === "update" && table === "factory_mix_batches" && values.name === "Renamed historical mix"
+    )).toBe(true);
+    expect(h.writes.some(([, table]) => table === "factory_raw_stock")).toBe(false);
   });
 
   it("rejects a source weight that does not parse", async () => {
