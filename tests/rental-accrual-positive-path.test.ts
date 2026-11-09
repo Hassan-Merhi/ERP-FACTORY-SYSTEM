@@ -324,6 +324,18 @@ describe("rental accrual positive paths", () => {
     expect(harness.postErpVoucherTx).not.toHaveBeenCalled();
   });
 
+  it("refuses a legacy orphan September accrual even when its monthly link is null", async () => {
+    harness.executeResults.push({rows:[{
+      id:19,company_id:4,module:"ERP",accrual_voucher_id:null,
+      used_prepaid_account:false,used_advance_account:false,prior_rent_accrual:true
+    }]});
+    await expect(postAccrualPassTx(harness.tx as never,{
+      companyId:4,module:"ERP",pass:"accrual",voucherDate:"2026-09-21",
+      description:"September rent",currency:"USD",lines:[],ledgerRowIds:[19],options:{}
+    })).rejects.toThrow("RENTAL_ACCRUAL_ALREADY_POSTED_OR_ROW_CHANGED");
+    expect(harness.postErpVoucherTx).not.toHaveBeenCalled();
+  });
+
   it("refuses missing or mis-scoped monthly rows before writing a voucher", async () => {
     harness.executeResults.push({rows:[]});
     await expect(postAccrualPassTx(harness.tx as never,{
