@@ -198,7 +198,10 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
     preview.data.hasAnyScans &&
     (!hasApproval || (supervisory && discrepancyReason.trim().length >= 10 && discrepancyReason.trim().length <= 1000)),
   );
-  const latest = history.data?.closures[0] ?? null;
+  // Historical closure records may have incomplete snapshots. Never allow
+  // missing review data to crash the active dispatch page.
+  const closures = Array.isArray(history.data?.closures) ? history.data.closures : [];
+  const latest = closures[0] ?? null;
 
   return (
     <>
@@ -226,7 +229,7 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
             <div className="space-y-1 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200">
               <p className="flex items-center gap-1.5 font-semibold"><CheckCircle2 className="h-4 w-4" /> Completed by {latest.closedByUsername}</p>
               <p>{formatDisplayDateTime(latest.closedAt)} · Closure #{latest.revision}</p>
-              <p>{fmt(latest.summary.verifiedBales)} verified bales · {fmt(latest.summary.verifiedWeightKg, 3)} kg</p>
+              <p>{fmt(latest.summary?.verifiedBales)} verified bales · {fmt(latest.summary?.verifiedWeightKg, 3)} kg</p>
               {latest.approvedWithDiscrepancies && <p className="font-semibold">Discrepancy approval: {latest.discrepancyReason}</p>}
             </div>
           )}
@@ -262,15 +265,15 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
             <div className="space-y-3 border-t pt-3 dark:border-slate-700">
               {history.isLoading && <p className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading history…</p>}
               {history.isError && <p className="text-xs text-red-600">{errorMessage(history.error)}</p>}
-              {!history.isLoading && (history.data?.closures.length ?? 0) === 0 &&
+              {!history.isLoading && closures.length === 0 &&
                 <p className="text-xs text-muted-foreground">No closures yet. This trip is still open.</p>}
-              {history.data?.closures.map((closure) => (
+              {closures.map((closure) => (
                 <div key={String(closure.id)} className="space-y-2 rounded-lg border p-3 text-xs dark:border-slate-700">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-semibold">Closure #{closure.revision} · {closure.closedByUsername}</span>
                     <Badge variant="outline">{closure.reopenedAt ? "Reopened" : "Finalized"}</Badge>
                   </div>
-                  <p className="text-muted-foreground">{formatDisplayDateTime(closure.closedAt)} · {fmt(closure.summary.verifiedBales)} bales · {fmt(closure.summary.verifiedWeightKg, 3)} kg</p>
+                  <p className="text-muted-foreground">{formatDisplayDateTime(closure.closedAt)} · {fmt(closure.summary?.verifiedBales)} bales · {fmt(closure.summary?.verifiedWeightKg, 3)} kg</p>
                   {closure.approvedWithDiscrepancies && (
                     <p className="text-amber-700 dark:text-amber-300">Approved with discrepancies: {closure.discrepancyReason}</p>
                   )}
@@ -291,11 +294,11 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
                   </div>
                 </div>
               ))}
-              {history.data?.events.length ? (
+              {(history.data?.events?.length ?? 0) > 0 ? (
                 <div className="space-y-2">
                   <h4 className="text-xs font-semibold">Recent dispatch activity</h4>
                   <div className="max-h-[250px] space-y-1.5 overflow-y-auto">
-                    {history.data.events.slice(0, 40).map((event) => (
+                    {history.data?.events?.slice(0, 40).map((event) => (
                       <div key={String(event.id)} className="flex flex-wrap justify-between gap-2 rounded-lg bg-slate-50 p-2 text-xs dark:bg-[#0a172c]">
                         <span className="font-medium">{event.eventType.replace(/_/g, " ")}</span>
                         <span className="text-muted-foreground">{event.actorUsername} · {formatDisplayDateTime(event.createdAt)}</span>
