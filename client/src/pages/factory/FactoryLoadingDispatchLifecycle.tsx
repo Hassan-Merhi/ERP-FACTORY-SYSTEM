@@ -277,10 +277,18 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
                   {closure.reopenedAt && <p className="text-blue-700 dark:text-sky-300">
                     Reopened by {closure.reopenedByUsername} on {formatDisplayDateTime(closure.reopenedAt)} — {closure.reopenReason}
                   </p>}
-                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setFrozenClosureId(String(closure.id))}
-                    data-testid={"button-view-closure-" + closure.id}>
-                    <FileSearch className="mr-1 h-3.5 w-3.5" /> View saved comparison
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setFrozenClosureId(String(closure.id))}
+                      data-testid={"button-view-closure-" + closure.id}>
+                      <FileSearch className="mr-1 h-3.5 w-3.5" /> View saved comparison
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+                      onClick={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/" + dispatchId +
+                        "/report?closureId=" + closure.id)}
+                      data-testid={"button-print-closure-" + closure.id}>
+                      <FileClock className="mr-1 h-3.5 w-3.5" /> Print saved manifest
+                    </Button>
+                  </div>
                 </div>
               ))}
               {history.data?.events.length ? (
