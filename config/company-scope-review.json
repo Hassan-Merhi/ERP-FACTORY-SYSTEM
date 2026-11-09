@@ -203,6 +203,10 @@
       "reason": "Process-level startup DDL: the purchase_orders and po_line_items references are a to_regclass existence probe and idempotent ADD COLUMN IF NOT EXISTS / NOT VALID constraint statements from startup stage 036. No tenant rows are read or written and no caller-supplied company identity exists at startup."
     },
     {
+      "path": "server/startup/posJnahOriginalVoucherRework.ts",
+      "reason": "False positive on a lock name: the flagged statement is SELECT pg_advisory_xact_lock(hashtext('pos-jnah-vouchers-20261109')), which reads no table; the word vouchers is part of the lock key. Every statement in this file that reads or writes tenant rows carries an explicit company_id predicate bound to the single hard-coded company the owner-approved repair is for. Owner-approved on 2026-11-09 (PR #3089)."
+    },
+    {
       "path": "server/startup/postStartupJobs.ts",
       "reason": "Product policy disables automated carrier tracking for every company, so these statements deliberately clear the tracking flags on all rows; they touch no other column and read nothing back."
     },
