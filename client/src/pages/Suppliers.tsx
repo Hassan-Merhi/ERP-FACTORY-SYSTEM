@@ -6,7 +6,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { PageHeader } from "@/components/PageHeader";
-import { DataTableToolbar } from "@/components/DataTableToolbar";
+import { ErpListFilters } from "@/erp-core";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -240,7 +240,7 @@ export default function Suppliers() {
         )}
       </div>
 
-      <DataTableToolbar
+      <ErpListFilters
         search={searchTerm}
         onSearchChange={(value) => setFilter("searchTerm", value)}
         searchPlaceholder="Search suppliers..."
