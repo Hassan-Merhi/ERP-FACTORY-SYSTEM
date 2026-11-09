@@ -226,8 +226,11 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
                actor_user_id, actor_username, event_data)
             VALUES (${companyId}, ${orderId}, ${dispatchId}, 'BALE_SCANNED',
                     ${userId}, ${username},
-                    jsonb_build_object('scanId', ${scan.id}, 'baleId', ${bale.baleId},
-                                       'baleReference', ${bale.baleReference}))
+                    ${JSON.stringify({
+                      scanId: String(scan.id),
+                      baleId: Number(bale.baleId),
+                      baleReference: String(bale.baleReference),
+                    })}::jsonb)
           `);
           if (assignedOther) {
             await tx.execute(sql`
@@ -236,9 +239,11 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
                  actor_username, event_data)
               VALUES (${companyId}, ${orderId}, ${dispatchId},
                 'WRONG_TRIP_BALE_VERIFIED', ${userId}, ${username},
-                jsonb_build_object('baleId', ${bale.baleId},
-                  'expectedDispatchId', ${assignedOther.expectedDispatchId},
-                  'expectedDispatchNumber', ${assignedOther.expectedDispatchNumber}))
+                ${JSON.stringify({
+                    baleId: Number(bale.baleId),
+                    expectedDispatchId: String(assignedOther.expectedDispatchId),
+                    expectedDispatchNumber: Number(assignedOther.expectedDispatchNumber),
+                  })}::jsonb)
             `);
           }
           return { scan, assignedOther };
@@ -315,7 +320,7 @@ export function registerFactoryLoadingDispatchScanRoutes(app: Express): void {
                actor_user_id, actor_username, event_data)
             VALUES (${companyId}, ${orderId}, ${dispatchId}, 'BALE_SCAN_REMOVED',
                     ${userId}, ${username},
-                    jsonb_build_object('scanId', ${scan.id}, 'baleId', ${scan.baleId},
+                    jsonb_build_object('scanId', ${scan.id}::text, 'baleId', ${scan.baleId}::integer,
                                        'baleReference', ${scan.baleReference}, 'reason', ${reason}))
           `);
           return { scan };
