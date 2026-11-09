@@ -50,3 +50,17 @@ export function isRentalDayInPeriod(paymentDate: string, since: string | null): 
   const day = paymentDayKey(paymentDate);
   return day !== null && day >= since;
 }
+
+/** Inclusive company-calendar range. All dates are recorded calendar days, not instants. */
+export type RentalPeriodBounds = Readonly<{ since: string; through: string }>;
+
+/** "All" stays unbounded; invalid business dates fail closed for dated periods. */
+export function rentalPeriodBounds(period: PaymentsPeriod, businessToday: string = getAppDate()): RentalPeriodBounds | null {
+  if (period === "all" || !validDayKey(businessToday)) return null;
+  return { since: rentalPeriodStart(period, businessToday)!, through: businessToday };
+}
+
+export function isRentalDayInRange(paymentDate: string, bounds: RentalPeriodBounds): boolean {
+  const day = paymentDayKey(paymentDate);
+  return day !== null && day >= bounds.since && day <= bounds.through;
+}
