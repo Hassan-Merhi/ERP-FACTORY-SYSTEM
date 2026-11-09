@@ -6,21 +6,11 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { PageHeader } from "@/components/PageHeader";
-import { ErpListFilters } from "@/erp-core";
+import { ErpListFilters, ErpConfirmDialog } from "@/erp-core";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Edit, Eye, EyeOff, FileText, Search, Truck, Users, Container, DollarSign } from "lucide-react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCan, canDenialMessage } from "@/hooks/useCan";
@@ -434,38 +424,22 @@ export default function Suppliers() {
         onContainerClick={handleContainerClick}
       />
 
-      {/* Delete confirmation */}
-      <AlertDialog open={!!supplierToDelete} onOpenChange={(open) => !open && setSupplierToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Supplier</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete <strong>{supplierToDelete?.name}</strong>? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() =>
-                supplierToDelete &&
-                mayDeleteSupplier.allowed &&
-                recordChanges.allowed &&
-                deleteMutation.mutate(supplierToDelete.id)
-              }
-              disabled={!mayDeleteSupplier.allowed || !recordChanges.allowed || deleteMutation.isPending}
-              title={
-                !mayDeleteSupplier.allowed
-                  ? canDenialMessage(mayDeleteSupplier.reason)
-                  : (recordChanges.reason ?? undefined)
-              }
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              data-testid="button-confirm-delete-supplier"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Centralized destructive confirmation, with the existing permission checks. */}
+      <ErpConfirmDialog
+        open={supplierToDelete !== null}
+        onOpenChange={(open) => !open && setSupplierToDelete(null)}
+        title="Delete Supplier"
+        description={<>Are you sure you want to delete <strong>{supplierToDelete?.name}</strong>? This action cannot be undone.</>}
+        tone="destructive"
+        confirmText="Delete"
+        confirmButtonTestId="button-confirm-delete-supplier"
+        confirmDisabled={!mayDeleteSupplier.allowed || !recordChanges.allowed}
+        loading={deleteMutation.isPending}
+        onConfirm={async () => {
+          if (!supplierToDelete || !mayDeleteSupplier.allowed || !recordChanges.allowed) return;
+          await deleteMutation.mutateAsync(supplierToDelete.id);
+        }}
+      />
     </div>
   );
 }
