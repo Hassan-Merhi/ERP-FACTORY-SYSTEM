@@ -11,6 +11,7 @@ import {
   belongsToHistoricalRentSnapshot,
 } from "../client/src/pages/properties/property-rental/historicalRentSnapshot";
 import { hasHassanPropertiesHistoricalReportingPolicy } from "../client/src/properties/config/historicalRentReportingPolicy";
+import { paymentHistoryTsv, reconciledHistoryTsv } from "../client/src/pages/properties/property-rental/paymentsReceiptMath";
 
 describe("Phase 8 rental financial presentation", () => {
   it("does not sum mixed, blank or mislabeled currencies as USD", () => {
@@ -18,6 +19,14 @@ describe("Phase 8 rental financial presentation", () => {
     expect(hasSingleUsdBasis([{ currency: "USD" }, { currency: "CDF" }])).toBe(false);
     expect(hasSingleUsdBasis([{ currency: " USD " }, { currency: "ZMW" }])).toBe(false);
     expect(hasSingleUsdBasis([])).toBe(true);
+    expect(hasSingleUsdBasis([{ currency: "" }])).toBe(true);
+  });
+
+  it("rejects incorrectly labeled USD TSV exports when recorded payments use other currencies", () => {
+    const rows = [{ id: 1, paymentDate: "2026-11-01", amount: "50", currency: "CDF" }];
+    expect(() => paymentHistoryTsv(rows)).toThrow(/mixed-currency/);
+    expect(() => reconciledHistoryTsv(rows, { aliCashLedgerId: 1, threeAccountsTotal: 5000 })).toThrow(/mixed-currency/);
+    expect(paymentHistoryTsv([{ ...rows[0], currency: "USD" }])).toContain("Cash Received (USD)");
   });
 
   it("preserves calculation provenance without converting financial values", () => {
