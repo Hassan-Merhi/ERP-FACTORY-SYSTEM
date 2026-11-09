@@ -10,7 +10,7 @@
 | 8 — Financial presentation | Implemented; automated execution not verified | USD-only overview/export safeguards, typed reporting basis, explicit current-vs-historical reconciliation labels, company-calendar date filtering, historical policy preservation, focused tests. |
 | 9 — Payment and rental UI cleanup | Implemented; automated execution not verified | Removed unreachable reconciliation selector and Factory/ERP dead JSX, shared deletion dialog, module-specific retirement explanations, timezone-neutral date labels and row editability policy; focused tests added. |
 | 10 — Legacy and navigation | Implemented; automated execution not verified | Preserved operational compatibility dashboard; centralized rental bookmark redirects, deep-link matcher, route-keyed sidebar icons and navigation regression tests. |
-| 11 — Regression verification | Not started | End-to-end tenant isolation, financial parity and navigation validation. |
+| 11 — Regression verification | Static review complete (27/27); runtime/integration blocked | Source-backed assertions passed, targeted UI/test fix committed, standalone regression script and signoff report added. No Vitest, typecheck, browser, ledger or latest-main integration execution; not merge-certified. |
 
 ## Phase 7 change register
 
@@ -117,3 +117,14 @@ The Phase 3 stable-ID assignment (company id 13, code HP, company type propertie
 ### Branch-divergence notice after Phase 10
 
 At the final Phase 10 comparison on 2026-11-09, GitHub reported `properties-unification-phases-7-11` **43 commits ahead and 149 commits behind `main`**. This is a snapshot, not a permanent branch state; `main` may continue moving. Do not assume the branch can be merged conflict-free. Phase 11/integration must review the full upstream diff and any conflicts, preserve the implemented financial safeguards and compatibility routes, and retest the reconciled result. No rebase, merge, cherry-pick, change to `main`, or CI action was performed as part of Phase 10.
+
+## Phase 11 execution record (2026-11-09)
+
+- **Completed:** 27/27 live, GitHub-fetched static source checks passed for Phases 7–10; original route guards and financial/date/history invariants examined.
+- **Completed:** Integration path comparison found no overlapping filenames between the feature diff and upstream-main diff at the initial Phase 11 snapshot (feature: 22 paths; upstream: 71). This does not imply semantic compatibility or certify merge safety.
+- **Fixed:** Full-history copy action was incorrectly labeled for unverified Properties companies: now `copyIsFull = isFullHistory`; regression asserted. Positive company-permission test now uses a consistent company ID.
+- **Committed:** `scripts/verify-properties-unification-phase11.mjs` (dependency-free 27-point static check) and `docs/properties-unification-phase11-verification.md` (detailed results, test commands, API/browser accounting matrix and signoff requirements).
+- **Blocked:** No runnable repository checkout or dependencies. Container `git ls-remote` failed because the host could not resolve `github.com`. Vitest, `npm run check`, browser navigation, live API authorizations, ledger reconciliation, and integration of 149+ upstream commits were not executed.
+- **Release gate:** NOT MERGE-CERTIFIED. Do not interpret source inspections as a runtime pass. A release owner must incorporate latest main into this branch and execute the report's required checks before any merge.
+
+Phase 11's available source-level work is complete, but its full testing/integration objective remains incomplete pending an executable environment. No CI request or main merge was initiated.
