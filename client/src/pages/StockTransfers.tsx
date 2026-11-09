@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ArrowRight, ExternalLink, Pencil, Save, X, ArrowLeftRight, Package, DollarSign, Clock } from "lucide-react";
 import { parseISO } from "date-fns";
@@ -17,7 +17,7 @@ import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { PageHeader } from "@/components/PageHeader";
-import { ErpListFilters, ErpListTable } from "@/erp-core";
+import { ErpListFilters, ErpListTable, ErpField, ErpFormActions, ErpPendingButton } from "@/erp-core";
 import { PeriodFilter, PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
 import { useDateJump } from "@/hooks/use-date-jump";
 import { usePaginatedFilterState } from "@/hooks/use-paginated-filter-state";
@@ -465,24 +465,40 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
                 </div>
               </div>
             )}
-            <Textarea
-              value={editNotes}
-              onChange={(e) => setEditNotes(e.target.value)}
-              placeholder="Transfer notes…"
-              className="min-h-28 resize-none"
-              data-testid="input-edit-notes"
-            />
+            <ErpField id="transfer-notes" label="Notes">
+              {(control) => (
+                <Textarea
+                  {...control}
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  placeholder="Transfer notes…"
+                  className="min-h-28 resize-none"
+                  data-testid="input-edit-notes"
+                />
+              )}
+            </ErpField>
           </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setEditingTransfer(null)} data-testid="button-cancel-edit">
+          <ErpFormActions layout="dialog" className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setEditingTransfer(null)}
+              disabled={updateNotesMutation.isPending}
+              data-testid="button-cancel-edit"
+            >
               <X className="h-4 w-4 mr-2" />
               Cancel
             </Button>
-            <Button onClick={saveNotes} disabled={updateNotesMutation.isPending} data-testid="button-save-notes">
+            <ErpPendingButton
+              onClick={saveNotes}
+              pending={updateNotesMutation.isPending}
+              pendingLabel="Saving…"
+              data-testid="button-save-notes"
+            >
               <Save className="h-4 w-4 mr-2" />
-              {updateNotesMutation.isPending ? "Saving…" : "Save"}
-            </Button>
-          </DialogFooter>
+              Save
+            </ErpPendingButton>
+          </ErpFormActions>
         </DialogContent>
       </Dialog>
     </div>
