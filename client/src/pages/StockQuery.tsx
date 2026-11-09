@@ -8,7 +8,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Package, Search } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { useCompany } from "@/contexts/CompanyContext";
-import { ErpListFilters, ErpListTable, ErpListPagination } from "@/erp-core";
+import {
+  ErpListFilters,
+  ErpListTable,
+  ErpListPagination,
+  erpRequestUrl,
+  erpCompanyDataKey,
+  formatErpNumber,
+  useErpServerPagination,
+} from "@/erp-core";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface StockItem {
@@ -44,8 +52,11 @@ export default function StockQuery() {
   const initialQ = new URLSearchParams(search).get("q") || "";
   const [searchTerm, setSearchTerm] = useState(initialQ);
   const [debouncedSearch, setDebouncedSearch] = useState(initialQ);
-  const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 100;
+  const { page: currentPage, pageSize, onPageChange: setCurrentPage, resetPage } = useErpServerPagination({
+    companyId: selectedCompany?.id,
+    filterKey: debouncedSearch,
+    pageSize: 100,
+  });
   const [, navigate] = useLocation();
 
   useEffect(() => {
@@ -53,16 +64,20 @@ export default function StockQuery() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
+  const stockQueryUrl = erpRequestUrl("/api/stock-items", {
+    page: currentPage,
+    pageSize,
+    search: debouncedSearch.trim() || undefined,
+  });
+
   const { data: pagedStockItems, isLoading: erpLoading } = useQuery<PagedStockItems>({
-    queryKey: ["/api/stock-items", { companyId: selectedCompany?.id, search: debouncedSearch, page: currentPage, pageSize }],
+    queryKey: erpCompanyDataKey(stockQueryUrl, selectedCompany?.id),
     queryFn: async () => {
-      const params = new URLSearchParams({ page: String(currentPage), pageSize: String(pageSize) });
-      if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
-      const res = await fetch(`/api/stock-items?${params}`, { credentials: "include" });
+      const res = await fetch(stockQueryUrl, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch stock items");
       return res.json();
     },
-    enabled: !isFactory,
+    enabled: !isFactory && selectedCompany?.id != null,
   });
 
   const { data: factoryProducts = [], isLoading: factoryLoading } = useQuery<FactoryBaleProduct[]>({
@@ -72,17 +87,12 @@ export default function StockQuery() {
 
   const isLoading = isFactory ? factoryLoading : erpLoading;
 
-  // A company switch must never keep a page number from the previous inventory.
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [selectedCompany?.id, isFactory]);
-
-  // If a filtered result set shrinks, recover the last valid page rather
-  // than leaving the user on an empty page with no pagination controls.
+  // Server pagination never slices the returned page locally.
+  // If a filtered result set shrinks, recover the last valid page.
   useEffect(() => {
     if (isFactory || !pagedStockItems || currentPage <= Math.max(1, pagedStockItems.totalPages)) return;
     setCurrentPage(Math.max(1, pagedStockItems.totalPages));
-  }, [currentPage, isFactory, pagedStockItems]);
+  }, [currentPage, isFactory, pagedStockItems, setCurrentPage]);
 
   const items = isFactory
     ? factoryProducts
@@ -105,7 +115,7 @@ export default function StockQuery() {
         search={searchTerm}
         onSearchChange={(value) => {
           setSearchTerm(value);
-          setCurrentPage(1);
+          resetPage();
         }}
         searchPlaceholder="Search by code or name..."
         searchTestId="input-stock-search"
@@ -117,8 +127,8 @@ export default function StockQuery() {
       {!isLoading && (items.length > 0 || hasSearch) && (
         <p className="text-sm text-muted-foreground">
           {hasSearch
-            ? `${totalResults.toLocaleString()} item${totalResults !== 1 ? "s" : ""} match "${debouncedSearch}"`
-            : `${totalResults.toLocaleString()} item${totalResults !== 1 ? "s" : ""}`}
+            ? `${formatErpNumber(totalResults, 0)} item${totalResults !== 1 ? "s" : ""} match "${debouncedSearch}"`
+            : `${formatErpNumber(totalResults, 0)} item${totalResults !== 1 ? "s" : ""}`}
         </p>
       )}
 
