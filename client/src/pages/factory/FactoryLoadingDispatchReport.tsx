@@ -6,7 +6,7 @@
 import { useMemo, useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowLeft, Download, FileSpreadsheet, Loader2,
+import { AlertTriangle, ArrowLeft, FileSpreadsheet, Loader2,
   Printer, RefreshCw, ShieldCheck, Truck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ interface Trip {
   driverName: string | null;
   destination: string | null;
   notes: string | null;
+  containerNumberSnapshot: string | null;
   createdByUsername: string | null;
   createdAt: string | null;
   closedAt: string | null;
@@ -266,8 +267,7 @@ export default function FactoryLoadingDispatchReport() {
                   </div>
                   <div>
                     <h1 className="text-xl font-bold sm:text-2xl">Factory Dispatch {report.trip ? "Manifest" : "Reconciliation"}</h1>
-                    <p className="mt-1 text-sm font-semibold">{recordLabel} · Container {report.trip?.status === "CLOSED"
-                      ? (report.loading.containerNumber || "—") : (report.loading.containerNumber || "—")}</p>
+                    <p className="mt-1 text-sm font-semibold">{recordLabel} · Container {report.trip?.containerNumberSnapshot || report.loading.containerNumber || "—"}</p>
                     <p className="text-xs text-muted-foreground">{report.loading.companyName}</p>
                   </div>
                 </div>
