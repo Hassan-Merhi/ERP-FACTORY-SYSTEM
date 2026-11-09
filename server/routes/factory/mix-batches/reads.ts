@@ -16,12 +16,30 @@ import { toMoney } from "../../../lib/money";
 import { getHistoricalMixBatchReconciliation, historicalMixAuditCsv } from "../../../services/factory/historicalMixBatchReconciliation";
 import { getPhase4MixProvenanceReport, phase4MixProvenanceCsv } from "../../../services/factory/mixPhase4ProvenanceAudit";
 import { getPhase5MixDownstreamReconciliation, phase5MixDownstreamCsv } from "../../../services/factory/mixPhase5DownstreamAudit";
+import { getPhase6MixLifecycleReport, phase6MixLifecycleCsv } from "../../../services/factory/mixPhase6LifecycleAudit";
 
 export function registerFactoryMixBatchReadRoutes(app: Express) {
   app.get("/api/factory/mix-batches", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      // Phase 6: historical status, used kg and carry-forward integrity.
+      if (req.query.profile === "lifecycle-audit") {
+        const role = String(req.session.currentRole || req.session.role || "").trim().toLowerCase();
+        if (!["admin", "owner", "developer", "dev"].includes(role)) {
+          return res.status(403).json({ message: "Mix lifecycle reconciliation requires Admin, Owner or Developer access." });
+        }
+        const report = await getPhase6MixLifecycleReport(companyId);
+        res.set("Cache-Control", "private, no-store");
+        res.set("X-ERP-Payload-Profile", "factory-mix-lifecycle-audit-read-only");
+        if (req.query.format === "csv") {
+          res.set("Content-Type", "text/csv; charset=utf-8");
+          res.set("Content-Disposition", 'attachment; filename="factory-mix-lifecycle-audit.csv"');
+          return res.send(phase6MixLifecycleCsv(report));
+        }
+        return res.json(report);
+      }
 
       // Phase 5: all-mix downstream production/bale/sales/GL lineage.
       if (req.query.profile === "downstream-audit") {
