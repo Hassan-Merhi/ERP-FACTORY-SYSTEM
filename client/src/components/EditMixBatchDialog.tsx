@@ -174,19 +174,29 @@ export function EditMixBatchDialog({
 
     for (const src of currentSources) {
       if (src.sourceBatchId) {
-        // Batch source
+        // A batch can have multiple records from the same upstream mix after
+        // top-ups. Merge these so the reviewed payload has one ID per source.
         const srcBatch = existingBatches?.find((b) => b.id === src.sourceBatchId);
-        const existingRemaining = srcBatch ? parseFloat(srcBatch.totalWeightKg) - parseFloat(srcBatch.usedKg) : 0;
-        batchSourceList.push({
-          type: "batch",
-          sourceId: src.sourceBatchId,
-          label: src.sourceBatchCode || `Batch #${src.sourceBatchId}`,
-          weightKg: parseFloat(src.weightKg),
-          costPerKg: parseFloat(src.costPerKg),
-          totalCost: parseFloat(src.totalCost),
-          // Available = what's currently available + what this batch is using (returns on edit)
-          availableKg: existingRemaining + parseFloat(src.weightKg),
-        });
+        const remaining = srcBatch ? parseFloat(srcBatch.totalWeightKg) - parseFloat(srcBatch.usedKg) : 0;
+        const weight = parseFloat(src.weightKg);
+        const currentCost = srcBatch ? parseFloat(srcBatch.costPerKg || "0") : parseFloat(src.costPerKg);
+        const existing = batchSourceList.find((item) => item.sourceId === src.sourceBatchId);
+        if (existing) {
+          existing.weightKg += weight;
+          existing.totalCost = existing.weightKg * currentCost;
+          existing.costPerKg = currentCost;
+          existing.availableKg = remaining + existing.weightKg;
+        } else {
+          batchSourceList.push({
+            type: "batch",
+            sourceId: src.sourceBatchId,
+            label: src.sourceBatchCode || `Batch #${src.sourceBatchId}`,
+            weightKg: weight,
+            costPerKg: currentCost,
+            totalCost: weight * currentCost,
+            availableKg: remaining + weight,
+          });
+        }
       } else if (src.supplierId) {
         // Supplier source (may span multiple containers — aggregate by supplierId).
         // Cost/kg ALWAYS comes from the current server-authoritative locked rate
