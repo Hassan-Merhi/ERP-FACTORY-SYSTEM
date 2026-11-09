@@ -481,7 +481,10 @@ export async function postRentAccrualForCompany(
           and(
             inArray(propertyMonthlyLedger.contractId, contractIds),
             isNull(propertyMonthlyLedger.accrualVoucherId),
-            eq(propertyMonthlyLedger.usedPrepaidAccount, true)
+            eq(propertyMonthlyLedger.usedPrepaidAccount, true),
+            // A paid future month may have expected_amount=0 until the due
+            // schedule is populated. Do not stamp a zero-dollar recognition.
+            sql`${propertyMonthlyLedger.expectedAmount}::numeric > 0`
           )
         );
       const duePrepaid = prepaidUnaccrued.filter((r) => isDue(r));
