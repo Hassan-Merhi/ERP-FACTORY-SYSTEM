@@ -6,7 +6,7 @@
  */
 import type { Express, Request, Response } from "express";
 import { sql } from "drizzle-orm";
-import { db } from "../../../db";
+import { db, type DbTransaction } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { getFactoryAccessState, requireFactoryTabAccess } from "../../../lib/factoryAccessControl";
 import { parseId } from "../../../lib/parseId";
@@ -44,7 +44,7 @@ async function readContext(req: Request, res: Response) {
 }
 
 async function readDuplicate(
-  tx: Pick<typeof db, "execute">,
+  tx: DbTransaction,
   companyId: number, orderId: number, baleId: number
 ) {
   const rows = await tx.execute(sql`
