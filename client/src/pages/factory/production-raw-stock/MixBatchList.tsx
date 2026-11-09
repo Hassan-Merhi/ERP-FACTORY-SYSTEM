@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { formatNumber } from "@/lib/formatNumber";
 import { summarizeRecordedMixBatches, recordedMixBatchCost } from "@/lib/recordedMixBatchCost";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -159,6 +159,17 @@ interface MixPhase6LifecycleAudit {
   }>;
 }
 
+interface MixPhase7MonitorStatus {
+  companyId: number;
+  initialized: boolean;
+  lastSuccessAt: string | null;
+  summary: { critical: number; warning: number; review: number; total: number; suppressedCurrentRateDrift: boolean } | null;
+  unreadAlerts: number;
+  monitoringEnabled: boolean;
+  nextCheck: string;
+  legacyBaselinePolicy: string;
+}
+
 interface MixBatchListProps {
   mixBatches: MixBatchRow[];
   isLoading: boolean;
@@ -199,8 +210,10 @@ export function MixBatchList({
 }: MixBatchListProps) {
   const recordChanges = useExistingRecordChangeAccess();
   const recordChangeReason = recordChanges.reason ?? undefined;
-  const selectedRole = String(useOptionalCompany()?.selectedCompany?.role ?? "").trim().toLowerCase();
+  const selectedCompany = useOptionalCompany()?.selectedCompany;
+  const selectedRole = String(selectedCompany?.role ?? "").trim().toLowerCase();
   const canAuditHistoricalMixes = ["admin", "owner", "developer", "dev"].includes(selectedRole);
+  const monitorCompanyId = selectedCompany?.id ?? null;
   const [showAllMixBatches, setShowAllMixBatches] = useState(false);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
   const [isAuditingMixes, setIsAuditingMixes] = useState(false);
@@ -209,6 +222,9 @@ export function MixBatchList({
   const [phase4Audit, setPhase4Audit] = useState<MixPhase4Audit | null>(null);
   const [phase5Audit, setPhase5Audit] = useState<MixPhase5Audit | null>(null);
   const [phase6Audit, setPhase6Audit] = useState<MixPhase6LifecycleAudit | null>(null);
+  const [phase7Monitor, setPhase7Monitor] = useState<MixPhase7MonitorStatus | null>(null);
+  const [monitorRefreshError, setMonitorRefreshError] = useState<string | null>(null);
+  const [isRefreshingMonitor, setIsRefreshingMonitor] = useState(false);
   const [isAuditingLifecycle, setIsAuditingLifecycle] = useState(false);
   const [isExportingLifecycle, setIsExportingLifecycle] = useState(false);
   const [isAuditingDownstream, setIsAuditingDownstream] = useState(false);
@@ -221,6 +237,54 @@ export function MixBatchList({
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
   const { toast } = useToast();
+
+  // The monitor is persisted by the scheduler, not re-run from this page.
+  // Refreshing this small status never starts heavy reconciliation SQL.
+  useEffect(() => {
+    setPhase7Monitor(null);
+    setMonitorRefreshError(null);
+    if (!canAuditHistoricalMixes || !monitorCompanyId) return;
+    let active = true;
+    let inFlight = false;
+    const refresh = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const response = await fetch("/api/factory/mix-batches?profile=integrity-monitor", {
+          credentials: "same-origin", cache: "no-store",
+        });
+        if (!response.ok) throw new Error("Monitor status unavailable.");
+        const data = (await response.json()) as MixPhase7MonitorStatus;
+        if (active) {
+          setPhase7Monitor(data);
+          setMonitorRefreshError(null);
+        }
+      } catch (error) {
+        if (active) setMonitorRefreshError(error instanceof Error ? error.message : "Monitor status unavailable.");
+      } finally { inFlight = false; }
+    };
+    void refresh();
+    const interval = setInterval(() => { void refresh(); }, 300_000);
+    return () => { active = false; clearInterval(interval); };
+  }, [canAuditHistoricalMixes, monitorCompanyId]);
+
+  const handleRefreshMonitor = async () => {
+    setIsRefreshingMonitor(true);
+    try {
+      const response = await fetch("/api/factory/mix-batches?profile=integrity-monitor", {
+        credentials: "same-origin", cache: "no-store",
+      });
+      if (!response.ok) throw new Error("Could not retrieve Factory mix monitor status.");
+      const data = (await response.json()) as MixPhase7MonitorStatus;
+      if (data.companyId !== monitorCompanyId) throw new Error("Company changed during monitor refresh.");
+      setPhase7Monitor(data);
+      setMonitorRefreshError(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Please retry.";
+      setMonitorRefreshError(message);
+      toast({ title: "Integrity status unavailable", description: message, variant: "destructive" });
+    } finally { setIsRefreshingMonitor(false); }
+  };
 
   const handleExportExcel = async () => {
     setIsExportingExcel(true);
@@ -583,6 +647,48 @@ export function MixBatchList({
       </CardHeader>
 
       <CardContent className="min-w-0 p-4 sm:p-5">
+        {canAuditHistoricalMixes && (
+          <div className="mb-4 space-y-3 rounded-xl border border-border/70 bg-muted/20 p-4" data-testid="mix-phase7-monitor-status">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold">Phase 7 · Automatic Mix Integrity Monitoring</p>
+              <Button type="button" variant="outline" size="sm" onClick={handleRefreshMonitor}
+                disabled={isRefreshingMonitor} data-testid="button-refresh-mix-integrity-status">
+                {isRefreshingMonitor ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                Refresh Status
+              </Button>
+            </div>
+            {monitorRefreshError && <p className="text-xs text-destructive">{monitorRefreshError}</p>}
+            {!phase7Monitor ? (
+              <p className="text-xs text-muted-foreground">Checking the last completed scheduled scan…</p>
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  {phase7Monitor.monitoringEnabled ? "Daily 01:35 UTC (server scheduler enabled)" : "Automatic checking disabled in server settings"}.
+                  {" "}{phase7Monitor.initialized
+                    ? "Last successful check: " + new Date(phase7Monitor.lastSuccessAt!).toLocaleString()
+                    : "Awaiting the first successful scan to establish a historical baseline."}
+                </p>
+                {phase7Monitor.summary && (
+                  <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+                    <div><p className="text-xs text-muted-foreground">Critical findings</p>
+                      <p className="font-mono font-bold">{phase7Monitor.summary.critical}</p></div>
+                    <div><p className="text-xs text-muted-foreground">Warnings</p>
+                      <p className="font-mono font-bold">{phase7Monitor.summary.warning}</p></div>
+                    <div><p className="text-xs text-muted-foreground">Evidence reviews</p>
+                      <p className="font-mono font-bold">{phase7Monitor.summary.review}</p></div>
+                    <div><p className="text-xs text-muted-foreground">Unread new alerts</p>
+                      <p className="font-mono font-bold">{phase7Monitor.unreadAlerts}</p></div>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Historical defects remain visible in the detailed audits. New or worsened findings appear in Factory Alerts;
+                  ordinary later supplier-rate changes do not count as saved-batch cost errors.
+                  No automatic revaluation, historical write-off or accounting posting.
+                </p>
+              </>
+            )}
+          </div>
+        )}
         {phase6Audit && (
           <div className="mb-4 space-y-3 rounded-xl border border-border/70 p-4" data-testid="mix-phase6-audit-results">
             <div className="flex flex-wrap items-center justify-between gap-2">
