@@ -42,7 +42,7 @@ import {
 } from "./factoryworkerattendancereport/utils";
 import { StatusPill } from "./factoryworkerattendancereport/components/StatusPill";
 import { AttendanceAdminApprovalDialog } from "./factoryattendance/components/AttendanceAdminApprovalDialog";
-import { attendancePastDates, type AttendanceAdminCredentials } from "./factoryattendance/attendanceEditPolicy";
+import { attendancePastDates, attendanceToday, type AttendanceAdminCredentials } from "./factoryattendance/attendanceEditPolicy";
 import { useToast } from "@/hooks/use-toast";
 
 type AttendanceReportRecord = { workerId: number; attendanceDate: string; status: string };
@@ -124,6 +124,8 @@ export default function FactoryWorkerAttendanceReport() {
 
   /* Save changes using the same historical-date approval rule as the daily Attendance page. */
   const saveMutation = useMutation({
+    // Save sequentially: a delayed response must never overwrite a newer status.
+    scope: { id: "factory-worker-attendance-report" },
     mutationFn: async ({ records, credentials }: AttendanceReportSavePayload) => {
       const validRecords = records.filter((r) => r.status !== "");
       const blankRecords = records.filter((r) => r.status === "");
@@ -148,7 +150,12 @@ export default function FactoryWorkerAttendanceReport() {
       }
       await Promise.all(promises);
     },
-    onSuccess: (_result, { records, credentials }: AttendanceReportSavePayload) => {
+    onSuccess: async (_result, { records, credentials }: AttendanceReportSavePayload) => {
+      // Keep optimistic edits displayed until the refreshed server report arrives.
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["/api/factory/workers/attendance-report"] }),
+        qc.invalidateQueries({ queryKey: ["/api/factory/attendance"] }),
+      ]);
       // A newer edit to the same cell must not be discarded by an older response.
       setPending((current) => {
         const next = { ...current };
@@ -163,8 +170,6 @@ export default function FactoryWorkerAttendanceReport() {
         setApprovalRecords(null);
         setApprovalDates([]);
       }
-      qc.invalidateQueries({ queryKey: ["/api/factory/workers/attendance-report"] });
-      qc.invalidateQueries({ queryKey: ["/api/factory/attendance"] });
     },
     onError: (error: Error, { records, credentials }: AttendanceReportSavePayload) => {
       // A declined historical edit remains visible while the Admin retries.
@@ -214,13 +219,17 @@ export default function FactoryWorkerAttendanceReport() {
 
   const cycleCell = useCallback(
     (workerId: number, date: string, currentStatus?: string) => {
+      if (date > attendanceToday()) {
+        toast({ title: "Future dates cannot be edited", variant: "destructive" });
+        return;
+      }
       const key = `${workerId}|${date}`;
       const next = CYCLE[currentStatus ?? ""] ?? "Present";
       const newPending = { ...pending, [key]: next };
       setPending(newPending);
       flushPending(newPending);
     },
-    [pending, flushPending]
+    [pending, flushPending, toast]
   );
 
   const approveAttendanceSave = (credentials: AttendanceAdminCredentials) => {
@@ -805,14 +814,14 @@ export default function FactoryWorkerAttendanceReport() {
                               <StatusPill
                                 status={status}
                                 absentsOnly={filter === "absent"}
-                                editable={editMode && worker.active !== false}
+                                editable={editMode && worker.active !== false && date <= attendanceToday()}
                                 onClick={
-                                  editMode && worker.active !== false
+                                  editMode && worker.active !== false && date <= attendanceToday()
                                     ? () => cycleCell(worker.id, date, status)
                                     : undefined
                                 }
                                 onKeyDown={
-                                  editMode && worker.active !== false
+                                  editMode && worker.active !== false && date <= attendanceToday()
                                     ? (e) => {
                                         const setStatus = (val: string) => {
                                           e.preventDefault();
