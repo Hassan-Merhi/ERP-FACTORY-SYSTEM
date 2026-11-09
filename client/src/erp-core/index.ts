@@ -96,3 +96,15 @@ export {
   formatErpFixedQuantity,
   erpDebitCreditClass,
 } from "./erpDisplay";
+
+/** Phase 6: one export presentation and file contract across ERP reports. */
+export { ErpReportExportMenu } from "./ErpReportExportMenu";
+export type { ErpReportExportMenuProps, ErpReportExportOption } from "./ErpReportExportMenu";
+export { ErpReportPrintFooter } from "./ErpReportPrintFooter";
+export {
+  erpReportFileName,
+  exportErpReportRowsExcel,
+  buildErpReportCsv,
+  exportErpReportCsv,
+} from "./erpReportExports";
+export type { ErpReportFileExtension } from "./erpReportExports";
