@@ -47,3 +47,34 @@ The following targeted source changes were applied on the **same** unification b
 - No runnable checkout, TypeScript build, browser, tests, API runtime, live role accounts or database fixtures were available in this interaction. Do not infer test success.
 
 **Continuation status:** Targeted high-risk source hardening complete. **Exhaustive repo-wide cache audit and runtime verification remain open**. Phase 2 should not be labelled fully DONE until those checks have evidence.
+
+## 2026-11-09 expanded full Phase 2 source pass
+
+A further set of targeted high-impact fixes is committed in the same branch:
+
+**Access, navigation and authorization presentation**
+- Made access/settings company-scoped and hidden tabs fail closed in Factory Bales Hub, Payroll Hub, Employees Hub, Supplier Hub, Parties Hub, Production Intelligence Hub, Import and KPI views.
+- Made invoice list, pending invoices, dispatch batches, customer statement, Sheets & Sacks, stock entry and bale relabeling use selected-company access payloads rather than unscoped access keys.
+- **Sheets & Sacks previously treated missing access data as permission to edit**. It now requires matching-company Factory access and a page grant/full-access claim before rendering edit controls; the server must still authorize writes.
+- Corrected the empty-company comparison edge case: `undefined === undefined` followed by reading `myAccess.hasFactoryAccess` could throw. New checks explicitly require `myAccess?.hasFactoryAccess === true`; the same rule was applied to production bonus capability context and earlier hub screens.
+- The stock-entry production-session query retains its original backend gate but also requires a selected company; sensitive tabs are hidden until matching-company access is resolved.
+
+**Selected-company data and cache keys**
+- Scoped invoice/customer order lists; pending-verification lists; dispatch batch and report views; customer statement and price list; KPI data; Sheets & Sacks stock; Factory dashboard and containers; bale relabel sessions; employee payroll list and preview; and stock-entry production-session.
+- Scoped detail read models for invoice/order, proforma selection, dispatch batch, ledger account list, worker documents, advances, payroll and worker cash accounts.
+- Read keys keep the real URL first so shared fetching remains compatible. For detail pages, changed mutation invalidations to URL-prefix invalidation to refresh new `[URL, companyId, ...]` keys and older URL-only consumers without altering mutation endpoints or their accounting effects.
+- The worker payroll preview is now keyed by company; its local editable form resets on selected-company change.
+
+**Source audit and tests**
+- New `scripts/audit-factory-phase2.mjs` walks the full `client/src` tree, inventories literal unscoped Factory keys, selected-company keys, potential fail-open access expressions and unscoped location reads. Optional `--strict` returns nonzero if suspect patterns remain. **This scanner has not been run**, and it is heuristic: dynamic query keys, cross-company local state and backend endpoints require additional review.
+- New `tests/factory-unification-phase2-final-audit.test.ts` pins hub/financial/stock read keys, no-company fail-closed checks and URL-prefix invalidations. Tests exist on GitHub; **not executed**.
+- Source re-reads verified updated code presence in selected files; this does not establish TypeScript or runtime correctness.
+
+### Unresolved gates — prevent an unqualified DONE claim
+1. A repo-wide execution of the audit script, triage of every finding, and review of dynamic query keys and `useQueries` consumers have **not** occurred. Other Factory-related code under shared pages, hooks and dialogs may still have unscoped reads.
+2. No runnable checkout was available for TypeScript, targeted Vitest, browser or API tests. Even source characterization tests have not been run.
+3. View Only, Create Only, Admin, Owner, Developer 200/403/permission parity has not been tested against live nonproduction accounts. UI hidden tabs do not replace server authorization.
+4. Company A→B→A transitions, delayed responses, offline state, ongoing edits, and cross-company pricing/cost checks are not runtime certified.
+5. Financial, dispatch, stock and payroll mutations were deliberately not modified; behavior and data-parity claims require independent nonproduction tests.
+
+**Honest current state:** Extensive additional Phase 2 source hardening committed; **Phase 2 is NOT fully verified or complete**. This is a stop/go release gate for the user-controlled future merge. No CI, production DB action or main merge.
