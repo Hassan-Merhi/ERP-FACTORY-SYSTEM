@@ -9,7 +9,7 @@ import { runRentalReconciliation } from "../services/rental/rentalReconciliation
 import { registerDeferredRentReclassificationRoutes } from "./rental/deferredRentReclassificationRoutes";
 import { registerDueRentalPostingRoutes } from "./rental/dueRentalPostingRoutes";
 import { registerLegacyPrepaidRecognitionRoutes } from "./rental/legacyPrepaidRecognitionRoutes";
-import { requireAuth } from "../auth";
+import { requireAuth, requireRole } from "../auth";
 import { getClientDate } from "../lib/dateUtils";
 import { getCompanyId } from "./rental/shared";
 export { ensureMonthlyForCompany, postRentAccrualForCompany } from "./rental/shared";
@@ -44,17 +44,11 @@ export function registerRentalRoutes(
   registerRentalAccrualConfigRoutes(app, module, urlPrefix, incomeAccountName, shopExpenseAccountName);
 
   // ── Reconciliation endpoint (Admin / Developer only) ──
-  app.get(`${urlPrefix}/reconciliation`, requireAuth, async (req: Request, res: Response) => {
+  app.get(`${urlPrefix}/reconciliation`, requireAuth, requireRole("Admin"), async (req: Request, res: Response) => {
     try {
       const companyId = getCompanyId(req);
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      // Authentication stores the active role in currentRole. Keep the legacy
-      // role fallback for older sessions while enforcing the same Admin/Developer gate.
-      const session = req.session;
-      const userRole = session?.currentRole ?? session?.role;
-      if (userRole !== "Admin" && userRole !== "Developer") {
-        return res.status(403).json({ message: "Administrator or Developer role required" });
-      }
+      // requireAuth resolves the active company role; requireRole checks it before any reads.
       const asOf = (req.query.asOf as string | undefined) || getClientDate(req);
       const result = await runRentalReconciliation(companyId, module, asOf);
       res.json(result);
