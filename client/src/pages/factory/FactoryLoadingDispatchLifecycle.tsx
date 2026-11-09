@@ -4,8 +4,9 @@
  */
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import {
-  AlertTriangle, CheckCircle2, ClipboardCheck, Clock3, FileClock,
+  AlertTriangle, CheckCircle2, ClipboardCheck, FileClock,
   FileSearch, History, LockKeyhole, Loader2, RotateCcw, ShieldCheck,
   UnlockKeyhole,
 } from "lucide-react";
@@ -102,6 +103,7 @@ async function getJson<T>(url: string): Promise<T> {
 export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, companyId, status, role, onChanged }: Props) {
   const { toast } = useToast();
   const { formatDisplayDateTime } = useDateFormat();
+  const [, navigate] = useLocation();
   const base = "/api/factory/customer-orders/" + orderId + "/loading-dispatches/" + dispatchId;
   const previewUrl = base + "/close-preview";
   const lifecycleUrl = base + "/lifecycle";
@@ -363,6 +365,14 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
                 <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-200">
                   <CheckCircle2 className="h-4 w-4" /> All expected items match this truck's physical scans.
                 </div>
+              )}
+              {issues.length > 0 && (
+                <Button size="sm" variant="outline" onClick={() => {
+                  setCloseOpen(false);
+                  navigate("/factory/sales/loading/dispatch/" + orderId + "/" + dispatchId + "/compare");
+                }} data-testid="button-review-dispatch-close-differences">
+                  <FileSearch className="mr-1.5 h-4 w-4" /> Review barcode differences
+                </Button>
               )}
               {!preview.data.hasAnyScans && <p className="text-xs font-medium text-red-600">
                 You must physically verify at least one bale before ending this dispatch.
