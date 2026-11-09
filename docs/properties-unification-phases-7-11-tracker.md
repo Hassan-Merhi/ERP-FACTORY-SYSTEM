@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | 7 — Authorization and company scope | Implemented; automated execution not verified | Canonical company-context permissions for posted payment deletion, scheduled cancellation, and rental reconciliation. Focused tests added. |
 | 8 — Financial presentation | Implemented; automated execution not verified | USD-only overview/export safeguards, typed reporting basis, explicit current-vs-historical reconciliation labels, company-calendar date filtering, historical policy preservation, focused tests. |
-| 9 — Payment and rental UI cleanup | Not started | Shared renderers, dead filters and module-specific language. |
+| 9 — Payment and rental UI cleanup | Implemented; automated execution not verified | Removed unreachable reconciliation selector and Factory/ERP dead JSX, shared deletion dialog, module-specific retirement explanations, timezone-neutral date labels and row editability policy; focused tests added. |
 | 10 — Legacy and navigation | Not started | Dashboard compatibility, route coverage, bookmarks. |
 | 11 — Regression verification | Not started | End-to-end tenant isolation, financial parity and navigation validation. |
 
@@ -63,3 +63,27 @@ The Phase 3 stable-ID assignment (company id 13, code HP, company type propertie
 - **Not executed:** Vitest, TypeScript, real browser or API reconciliation, actual mixed-currency financial account verification, CI and deployment.
 - **To verify in a runnable checkout:** `npx vitest run tests/properties-unification-phase8-presentation.test.ts tests/properties-payment-history-reconciliation.test.ts` and the project TypeScript checker; check a company configured in a different timezone with payments at month-end, and an isolated test company with USD and non-USD contracts.
 - **Status interpretation:** Phase 8 implementation is committed, with runtime verification pending. No production posting or historical financial data was changed.
+
+## Phase 9 change register (2026-11-09)
+
+1. `client/src/pages/properties/property-rental/components/RentalPaymentDeleteDialog.tsx`: All rental modules now reuse one confirmation component. It retains the established test ID and confirmation workflow, including the recorded payment amount, tenant and rental period. The message describes voucher/accounting retirement and distinguishes Properties' no-auto-transfer policy from ERP/Factory's potential linked transfers. The server still determines the actual effects of deletion.
+2. `client/src/properties/config/rentalPaymentPresentation.ts`: Added pure, testable presentation helpers for recorded payment calendar-date labels (no browser timezone reinterpretation), origin/read-only editability checks and module-specific deletion impact. The cross-module Properties payment rows remain read-only in the Properties UI.
+3. `client/src/pages/properties/RentalPaymentsLog.tsx`: Reused the new deletion component in both rendered page layouts, removed the reconciliation-type controls and accounting displays unreachable after the Properties early return, and retained the Properties premium UI, existing search, payment query, cash/non-cash classification and account-balance reconciliation. Factory/ERP still use their standard table.
+4. `client/src/pages/properties/property-rental/components/PropertiesPaymentsPremium.tsx`: Reuses the same recorded-date and origin/read-only policy. The premium table structure, input filters, copy behavior and row-action IDs are unchanged.
+5. `client/src/properties/hooks/useRentalPaymentsFilters.ts` and `client/src/properties/config/rentalModulePolicy.ts`: Removed dead reconciliation-view state and unused `paymentsAllRecordsOnly` configuration. Properties continues to show all records; Factory and ERP continue to use the unfiltered-by-reconciliation payments list. Search, tenant, unit and period filtering remain.
+6. `tests/properties-unification-phase9-ui.test.ts`: Adds test coverage for module-specific deletion copy, origin/read-only editability, calendar date display, preserved API bases, receipt math, shared component wiring and dead-view removal.
+
+### Phase 9 invariants
+
+- No rental API endpoint or server route changed.
+- No ledger, receipt, guarantee, scheduled payment, historical snapshot, transfer or voucher calculations were modified.
+- No visible reconciliation-type selector existed in the active Properties premium path; removing the unreachable selector does not eliminate a supported active Properties feature.
+- Payment copy, search, Properties premium visual components and the existing Factory/ERP table remain separate where their presentation requirements differ.
+- UI read-only flags remain informational only; server-enforced company-scoped authorization from Phase 7 is authoritative.
+
+### Phase 9 verification
+
+- **Completed:** GitHub branch commits, read-back of edited files, and static checks on removed unreachable view references; new targeted tests committed.
+- **Not executed:** Vitest, TypeScript checker, a running browser, production queries or CI. Phase 11 must execute comprehensive parity checks in a runnable checkout before merge/deployment.
+- **Recommended runnable checks:** `npx vitest run tests/properties-unification-phase9-ui.test.ts tests/properties-unification-phase8-presentation.test.ts tests/properties-payment-history-reconciliation.test.ts`, plus project typecheck, and manual smoke checks for Properties/Factory/ERP payment views and deletion confirmations.
+- **Status:** Phase 9 code-level implementation complete with runtime verification pending; Phase 10 remains next on this same branch.
