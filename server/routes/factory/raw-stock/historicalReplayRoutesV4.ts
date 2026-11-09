@@ -403,6 +403,7 @@ export function registerHistoricalReplayRoutesV4(app: Express): void {
           try {
             await prepareClient.query("BEGIN");
             await prepareClient.query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY");
+            await prepareClient.query("SELECT set_config('app.current_company_id', $1, true)", [String(companyId)]);
             const executor = prepareClient as unknown as ReplayQueryExecutor;
 
             const selectionPreview = await previewHistoricalCostReplayWithExecutor(executor, companyId);
