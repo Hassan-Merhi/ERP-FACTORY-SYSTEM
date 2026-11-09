@@ -72,3 +72,27 @@ export type { ErpRecordActionProps } from "./ErpRecordAction";
 export { useCan as useErpCan, canDenialMessage as erpCanDenialMessage } from "@/hooks/useCan";
 export { useExistingRecordChangeAccess as useErpRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 export { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
+
+/** Phase 5: company-scoped requests, compatible invalidation and server pagination. */
+export {
+  erpDataKeys,
+  erpReferenceKeys,
+  erpStockItemKeys,
+  erpRequestUrl,
+  erpCompanyDataKey,
+  erpUnwrapList,
+  erpUnwrapPage,
+  invalidateErpDataFamilies,
+} from "./erpData";
+export { useErpServerPagination } from "./useErpServerPagination";
+export type { ErpServerPaginationOptions } from "./useErpServerPagination";
+export {
+  useErpDateFormat,
+  ErpMoneyAmount,
+  formatErpMoneyDisplay,
+  formatErpMoneyNumber,
+  formatErpNumber,
+  formatErpCurrencyNumber,
+  formatErpFixedQuantity,
+  erpDebitCreditClass,
+} from "./erpDisplay";
