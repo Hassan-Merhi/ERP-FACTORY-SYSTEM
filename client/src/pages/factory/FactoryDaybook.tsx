@@ -36,7 +36,7 @@ export default function FactoryDaybook() {
     enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60000,
   });
-  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess.hasFactoryAccess
+  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
     ? myAccess.hiddenCostFields
     : ["hide_tab_daybook_transactions","hide_tab_daybook_activity"];
   const showTransactions = !hiddenTabs.includes("hide_tab_daybook_transactions");
