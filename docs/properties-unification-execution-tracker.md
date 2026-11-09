@@ -15,7 +15,7 @@
 | 2 | Typed rental module policy | **Code complete** | Static source parity review passed; runtime/typecheck pending | `60084a305133835447212051b863c9af0745e8ed` through `57771a74a7603ae246908967a0a2f2a1648fc0e6` |
 | 3 | Reporting identity and currency | **Code committed; rollout blocked on verified company ID** | Seven static checks passed; runtime/ID verification outstanding | `62befb3e55efd0439b200496475fe3c370c3189e` through `78e61c82e553ea25c30df07492c9d0fc35fc2414` |
 | 4 | Payments and rental view models | **Code complete** | 12 static source checks passed; runtime/typecheck pending | `125c1c66012b2de2619b35796094a30917e76c37` through `652f333a935bcceb84f5565a082fb6dd6dc2e392` |
-| 5 | Permissions and navigation registry | Not started | Not started | — |
+| 5 | Permissions and navigation registry | **Code complete** | 13 static consistency checks passed; runtime/role QA pending | `794e2204c31c1fa27cea1ba39d56a5cf89e8ee09` through `ac7bcb0d4056b2dd12182c3ce85761bf3a33874c` |
 | 6 | Final parity and legacy cleanup | Not started | Not started | — |
 
 ## Phase 1 — Fix navigation mismatch
@@ -130,6 +130,36 @@
 - [ ] Confirm Phase 3 verified company-ID setting before historical UI parity QA.
 
 **Disposition:** Phase 4 source implementation complete on the same branch. Runtime, build and accounting-parity certification are outstanding for Claude's later main-merge review; this status does not claim production verification.
+
+## Phase 5 — Permissions and navigation registry
+
+**Changes committed (2026-11-09)**
+- Added `client/src/properties/config/propertiesNavigation.ts` as the typed canonical frontend manifest: pinned root pages, route labels, parent paths, rental tabs/query links, legacy redirects, and capability requirements (`workspace`, `personal`, `admin`, `developer`).
+- Added `propertiesEffectiveRole`, `canUsePropertiesCapability`, and `canNavigateProperties` to enforce consistent frontend visibility. When the selected Properties company supplies an assigned role, it takes precedence; otherwise current session role and legacy role fallback apply. Selecting another company type suppresses Properties capability visibility.
+- Replaced local role comparisons in `PropertiesRoutes.tsx`, `PropertiesSidebar.tsx` and `PropertiesRentalsHub.tsx` with shared capability checks. The route switch keeps its existing permission-gated component mounts and unknown-route fallback.
+- `PropertiesSidebar.tsx` now derives the six pinned page names/URLs from the executable manifest; its command-search section helper filters entries through the same capability registry; recent navigation is filtered to accessible URLs.
+- `CommandPalette.tsx` and `useHelpTrainingTopics.ts` now apply selected-company capability rules for Properties commands and training navigation, not separate ad-hoc Developer comparisons.
+- The Rentals hub uses the manifest's typed tab values; all three replacement-history legacy rental redirects use central constants. The Shops tab from Phase 1 remains reachable.
+- Updated `docs/properties-navigation-registry.md` to document the executable manifest and frontend-only authorization boundary.
+- **No server/API authorization, reconciliation role fallback, SQL, vouchers, or accounting behavior was modified.** Client capabilities control appearance and route mounts only; all server write authorization remains mandatory.
+
+**Static verification**
+- Re-fetched seven affected files from the feature branch and checked 13 structural invariants: six pinned pages, typed tabs, legacy redirect preservation, admin/developer/personal route gates, pinned/sidebar policy use, hub capability and tab use, command palette capability filtering, Help & Training integration, documentation, and no backend changes. **13/13 passed.**
+- The `server/routes/rentalRouteFactory.ts` legacy `currentRole ?? role` fallback has not been altered; verify effective company/session authorization independently instead of changing it on assumption.
+- No CI, TypeScript compilation, automated tests, browser session testing, production writes or merge was performed.
+
+**Acceptance checklist**
+- [x] Provide a typed Properties route/tab manifest and shared capability policy.
+- [x] Consume capability checks in route switch, sidebar, hub, command palette and training navigation.
+- [x] Source six pinned Properties routes and rental tabs from the manifest.
+- [x] Keep existing legacy redirect destinations and deterministic route fallback.
+- [x] Leave backend authorization authoritative without modifying financial semantics.
+- [x] Record Phase 5 commits and source verification.
+- [ ] Runtime navigation / Back / Forward / deep-link and command search QA.
+- [ ] Runtime selected-company switching, Admin/Developer/ERP Tester visibility and backend authorization review.
+- [ ] TypeScript compilation, browser tests and merge integration review (not run).
+
+**Disposition:** Phase 5 frontend source implementation complete. Build, runtime, selected-company session and backend authorization review remain for independent merge certification. Phase 3's company-ID blocker remains open.
 
 ## Mandatory boundaries for phases 2–6
 
