@@ -41,6 +41,7 @@ import {
   Hammer,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { fmtNum } from "./factorypendinginvoiceverify/utils";
 import { useFactoryPendingInvoiceVerifyModel } from "./factorypendinginvoiceverify/useFactoryPendingInvoiceVerifyModel";
 import { FactoryPendingInvoiceVerifyDialog1 } from "./factorypendinginvoiceverify/components/FactoryPendingInvoiceVerifyDialog1";
@@ -54,6 +55,9 @@ import { FactoryPendingInvoiceVerifyDetailCard } from "./factorypendinginvoiceve
 
 export default function FactoryPendingInvoiceVerify() {
   const model = useFactoryPendingInvoiceVerifyModel();
+  // View Only / Create Only roles review the loading but never approve, finalize, reprice or edit it.
+  const recordChanges = useExistingRecordChangeAccess();
+  const canChange = recordChanges.allowed;
   const {
     navigate,
     orderId,
@@ -180,7 +184,7 @@ export default function FactoryPendingInvoiceVerify() {
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
 
-                  {isAdminOrOwner && (
+                  {isAdminOrOwner && canChange && (
                     <>
                       <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
                         Pricing
@@ -248,7 +252,7 @@ export default function FactoryPendingInvoiceVerify() {
                   <DropdownMenuItem
                     className="text-destructive focus:text-destructive"
                     onSelect={() => setShowReturnDialog(true)}
-                    disabled={returnToLoadingMutation.isPending}
+                    disabled={returnToLoadingMutation.isPending || !canChange}
                     data-testid="menu-return-to-loading"
                   >
                     <RotateCcw className="h-4 w-4" />
@@ -259,7 +263,7 @@ export default function FactoryPendingInvoiceVerify() {
                 <>
                   <DropdownMenuItem
                     onClick={() => setShowReturnDialog(true)}
-                    disabled={returnToLoadingMutation.isPending}
+                    disabled={returnToLoadingMutation.isPending || !canChange}
                     data-testid="menu-return-to-loading"
                   >
                     <RotateCcw className="mr-2 h-4 w-4" />
@@ -312,7 +316,7 @@ export default function FactoryPendingInvoiceVerify() {
               </p>
             </div>
           </div>
-          {isAdminOrOwner && (
+          {isAdminOrOwner && canChange && (
             <Button
               variant="outline"
               size="sm"
@@ -334,7 +338,8 @@ export default function FactoryPendingInvoiceVerify() {
         // Recovery is relevant only after the loading was submitted.
         !["LOADING", "DRAFT"].includes(verification?.order?.status || "") &&
         verification?.dataSource !== "order_lines" &&
-        isAdminOrOwner && (
+        isAdminOrOwner &&
+        canChange && (
           <div
             className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950 p-4"
             data-testid="panel-zero-bales-warning"
@@ -486,7 +491,8 @@ export default function FactoryPendingInvoiceVerify() {
                 destination,
               })
             }
-            disabled={assignContainerMutation.isPending}
+            disabled={assignContainerMutation.isPending || !canChange}
+            title={recordChanges.reason ?? undefined}
             data-testid="button-save-container"
           >
             <Ship className="mr-2 h-4 w-4" />
@@ -526,7 +532,8 @@ export default function FactoryPendingInvoiceVerify() {
                           variant="ghost"
                           size="icon"
                           onClick={() => removeChargeMutation.mutate(charge.id)}
-                          disabled={removeChargeMutation.isPending}
+                          disabled={removeChargeMutation.isPending || !canChange}
+                          title={recordChanges.reason ?? undefined}
                           data-testid={`button-remove-charge-${charge.id}`}
                         >
                           <Trash2 className="h-3 w-3" />
@@ -625,8 +632,12 @@ export default function FactoryPendingInvoiceVerify() {
                   variant="outline"
                   onClick={handleAddCharge}
                   disabled={
-                    !chargeAmount || (chargeType !== "FREIGHT" && !chargeLedgerAccountId) || addChargeMutation.isPending
+                    !canChange ||
+                    !chargeAmount ||
+                    (chargeType !== "FREIGHT" && !chargeLedgerAccountId) ||
+                    addChargeMutation.isPending
                   }
+                  title={recordChanges.reason ?? undefined}
                   data-testid="button-add-charge"
                 >
                   <Plus className="h-4 w-4" />
@@ -642,10 +653,10 @@ export default function FactoryPendingInvoiceVerify() {
 
         {/* Phones pin the verification actions above the home indicator; sm+ keeps the inline row. */}
         <FactoryMobileActionBar
-          className={`sm:items-center sm:gap-2 ${isPending || isVerified ? "" : "hidden sm:flex"}`}
+          className={`sm:items-center sm:gap-2 ${(isPending || isVerified) && canChange ? "" : "hidden sm:flex"}`}
           data-testid="verify-mobile-actions"
         >
-          {isPending && (
+          {isPending && canChange && (
             <Button
               onClick={() => setShowApproveDialog(true)}
               disabled={verifyMutation.isPending}
@@ -655,7 +666,7 @@ export default function FactoryPendingInvoiceVerify() {
               Approve & Verify
             </Button>
           )}
-          {isVerified && isDeveloper && orderDetail?.invoiceNumber && (
+          {isVerified && isDeveloper && canChange && orderDetail?.invoiceNumber && (
             <Button
               variant="outline"
               onClick={() => setShowFixBalesDialog(true)}
@@ -666,7 +677,7 @@ export default function FactoryPendingInvoiceVerify() {
               Fix Bale Statuses
             </Button>
           )}
-          {isVerified && (
+          {isVerified && canChange && (
             <Button
               onClick={fetchFinalizePreview}
               disabled={finalizeMutation.isPending || previewLoading}

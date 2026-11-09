@@ -4,6 +4,7 @@ import { useLocation, useParams, useSearch } from "wouter";
 import { AlertTriangle, ArrowLeft, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import EditProformaV5Drawer from "./EditProformaV5Drawer";
 import { fetchAllV5AllocationData, type V5AllocationData } from "@/lib/v5AllocationPaginationClient";
 import { invoicingProformaReturnPath } from "@/lib/factoryProformaEditRoutes";
@@ -17,18 +18,21 @@ export default function FactoryStockAllocationV5EditProforma() {
   const search = useSearch();
   const fromInvoicing = location.startsWith("/factory/invoicing/proformas/");
   const customerId = new URLSearchParams(search).get("customerId");
-  const back = () => navigate(
-    fromInvoicing
-      ? invoicingProformaReturnPath(validId ? proformaId : null, customerId)
-      : validId
-        ? `/factory/stock-allocation-v5?proformaId=${proformaId}`
-        : "/factory/stock-allocation-v5"
-  );
+  // View Only / Create Only roles never edit an existing proforma.
+  const recordChanges = useExistingRecordChangeAccess();
+  const back = () =>
+    navigate(
+      fromInvoicing
+        ? invoicingProformaReturnPath(validId ? proformaId : null, customerId)
+        : validId
+          ? `/factory/stock-allocation-v5?proformaId=${proformaId}`
+          : "/factory/stock-allocation-v5"
+    );
 
   const query = useQuery<V5AllocationData>({
     queryKey: ["/api/factory/v5/stock-allocation/all-for-edit", proformaId],
     queryFn: () => fetchAllV5AllocationData(),
-    enabled: validId,
+    enabled: validId && recordChanges.allowed,
     staleTime: 15000,
     retry: 1,
     refetchOnWindowFocus: false,
@@ -49,6 +53,23 @@ export default function FactoryStockAllocationV5EditProforma() {
         .sort((a, b) => a.productName.localeCompare(b.productName)),
     [query.data?.rows]
   );
+
+  if (!recordChanges.allowed) {
+    return (
+      <div className="flex h-full flex-col gap-4 p-4" data-testid="page-v5-edit-denied">
+        <div className="flex flex-wrap items-center gap-3">
+          <Button variant="outline" size="sm" onClick={back}>
+            <ArrowLeft className="mr-2 h-4 w-4" /> {fromInvoicing ? "Back to Invoicing" : "Back to Stock Allocation"}
+          </Button>
+          <PageHeader title="Edit Proforma" />
+        </div>
+        <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+          <AlertTriangle className="h-4 w-4" />
+          {recordChanges.reason}
+        </p>
+      </div>
+    );
+  }
 
   if (!validId || query.isError) {
     return (
@@ -83,7 +104,13 @@ export default function FactoryStockAllocationV5EditProforma() {
   return (
     <div className="flex min-w-0 flex-col">
       <div className="border-b bg-card/40 px-3 py-3 sm:px-5">
-        <Button variant="outline" size="sm" className="h-9 gap-1.5 rounded-lg" onClick={back} data-testid="button-v5-edit-back">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 gap-1.5 rounded-lg"
+          onClick={back}
+          data-testid="button-v5-edit-back"
+        >
           <ArrowLeft className="mr-2 h-4 w-4" /> {fromInvoicing ? "Invoicing / Proformas" : "Stock Allocation"}
         </Button>
       </div>

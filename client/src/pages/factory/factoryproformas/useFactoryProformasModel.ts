@@ -8,6 +8,7 @@ import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { factoryRecordChangeAccess } from "../factoryRecordChangeAccess";
 import { read as readExcel, utils as excelUtils, writeFile as writeExcel } from "@/lib/excelHelper";
 import type { CatalogStockItem, Customer, Proforma, ProformaLine } from "./types";
 
@@ -76,7 +77,9 @@ export function useFactoryProformasModel() {
   const hideProformaPrice = myAccess?.hiddenCostFields?.includes("hide_proforma_price") ?? false;
 
   const { data: currentUser } = useQuery<{ role: string }>({ queryKey: ["/api/auth/me"] });
-  const canEdit = ["Admin", "Owner", "Developer"].includes(currentUser?.role || "");
+  // View Only and Create Only company roles never change existing proformas.
+  const recordChanges = factoryRecordChangeAccess(selectedCompany?.role);
+  const canEdit = recordChanges.allowed && ["Admin", "Owner", "Developer"].includes(currentUser?.role || "");
 
   const { data: customers = [], isLoading: customersLoading } = useQuery<Customer[]>({
     queryKey: ["/api/factory/customers"],
@@ -727,6 +730,7 @@ export function useFactoryProformasModel() {
     customerId,
     hideProformaPrice,
     canEdit,
+    recordChanges,
     customers,
     customersLoading,
     proformas,

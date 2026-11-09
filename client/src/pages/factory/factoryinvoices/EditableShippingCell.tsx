@@ -7,6 +7,7 @@ import { Check, Loader2, Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { EditableShippingField } from "./InvoiceOrderRow";
 
 interface Props {
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export function EditableShippingCell({ orderId, field, value, multiline = false, maxLength, onSave }: Props) {
+  const recordChanges = useExistingRecordChangeAccess();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
@@ -100,12 +102,27 @@ export function EditableShippingCell({ orderId, field, value, multiline = false,
             />
           )}
           <div className="flex justify-end gap-1">
-            <Button type="button" size="icon" variant="ghost" className="h-7 w-7" disabled={saving}
-              onClick={cancel} aria-label="Cancel edit" data-testid={`cancel-inline-${field}-${orderId}`}>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              disabled={saving}
+              onClick={cancel}
+              aria-label="Cancel edit"
+              data-testid={`cancel-inline-${field}-${orderId}`}
+            >
               <X className="h-3.5 w-3.5" />
             </Button>
-            <Button type="button" size="icon" className="h-7 w-7" disabled={saving}
-              onClick={() => void save()} aria-label="Save changes" data-testid={`save-inline-${field}-${orderId}`}>
+            <Button
+              type="button"
+              size="icon"
+              className="h-7 w-7"
+              disabled={saving}
+              onClick={() => void save()}
+              aria-label="Save changes"
+              data-testid={`save-inline-${field}-${orderId}`}
+            >
               {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
             </Button>
           </div>
@@ -113,16 +130,19 @@ export function EditableShippingCell({ orderId, field, value, multiline = false,
       ) : (
         <button
           type="button"
-          title={value || "Click to edit"}
+          title={recordChanges.reason ?? (value || "Click to edit")}
           onClick={startEdit}
+          disabled={!recordChanges.allowed}
           className="group flex w-full min-h-7 items-center gap-1 text-left hover:text-foreground"
-          aria-label={`Edit ${field}`}
+          aria-label={recordChanges.reason ?? `Edit ${field}`}
           data-testid={`edit-inline-${field}-${orderId}`}
         >
           <span className="min-w-0 flex-1 truncate">
             {value || <span className="text-muted-foreground/50">—</span>}
           </span>
-          <Pencil className="h-3 w-3 shrink-0 opacity-40 group-hover:opacity-100" aria-hidden="true" />
+          {recordChanges.allowed && (
+            <Pencil className="h-3 w-3 shrink-0 opacity-40 group-hover:opacity-100" aria-hidden="true" />
+          )}
         </button>
       )}
     </div>

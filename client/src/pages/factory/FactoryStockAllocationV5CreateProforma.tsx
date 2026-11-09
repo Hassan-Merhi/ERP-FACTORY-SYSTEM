@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { AlertTriangle, ArrowLeft, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import CreateProformaV5Drawer from "./CreateProformaV5Drawer";
 import { fetchAllV5AllocationData, type V5AllocationData } from "@/lib/v5AllocationPaginationClient";
 
@@ -14,10 +15,13 @@ import { fetchAllV5AllocationData, type V5AllocationData } from "@/lib/v5Allocat
 export default function FactoryStockAllocationV5CreateProforma() {
   const [, navigate] = useLocation();
   const back = () => navigate("/factory/stock-allocation-v5");
+  // Create Only roles may add bale batches and customer-order drafts, not proformas.
+  const { isCreateOnly } = useExistingRecordChangeAccess();
 
   const query = useQuery<V5AllocationData>({
     queryKey: ["/api/factory/v5/stock-allocation/all-for-create"],
     queryFn: () => fetchAllV5AllocationData(),
+    enabled: !isCreateOnly,
     staleTime: 2 * 60 * 1000,
     retry: 1,
     refetchOnWindowFocus: false,
@@ -38,6 +42,23 @@ export default function FactoryStockAllocationV5CreateProforma() {
         .sort((a, b) => a.productName.localeCompare(b.productName)),
     [query.data?.rows]
   );
+
+  if (isCreateOnly) {
+    return (
+      <div className="flex h-full flex-col gap-4 p-4" data-testid="page-v5-create-denied">
+        <div className="flex items-center gap-3">
+          <Button variant="outline" size="sm" onClick={back}>
+            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Stock Allocation
+          </Button>
+          <PageHeader title="Create Proforma" />
+        </div>
+        <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+          <AlertTriangle className="h-4 w-4" />
+          Your role can create bale batches and customer order drafts, but not proformas.
+        </p>
+      </div>
+    );
+  }
 
   if (query.isPending) {
     return (
@@ -70,7 +91,13 @@ export default function FactoryStockAllocationV5CreateProforma() {
   return (
     <div className="flex min-w-0 flex-col">
       <div className="border-b bg-card/40 px-3 py-3 sm:px-5">
-        <Button variant="outline" size="sm" className="h-9 gap-1.5 rounded-lg" onClick={back} data-testid="button-v5-create-back">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 gap-1.5 rounded-lg"
+          onClick={back}
+          data-testid="button-v5-create-back"
+        >
           <ArrowLeft className="mr-2 h-4 w-4" /> Stock Allocation
         </Button>
       </div>

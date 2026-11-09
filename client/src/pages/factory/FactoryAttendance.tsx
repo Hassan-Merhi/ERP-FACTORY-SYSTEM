@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { CalendarDays, Save, Printer, FileDown, Loader2, MessageCircle, Search } from "lucide-react";
 
 import type {
@@ -57,6 +58,8 @@ interface AttendanceWhatsappSettings {
 
 export default function FactoryAttendance() {
   const { toast } = useToast();
+  // View Only / Create Only roles read attendance but never save or bulk-mark it.
+  const recordChanges = useExistingRecordChangeAccess();
   const [mode, setMode] = useState<ViewMode>(getInitialMode);
 
   const showDailyAttendance = () => {
@@ -428,6 +431,7 @@ export default function FactoryAttendance() {
 
                       <AttendanceActionsMenu
                         disabled={!workers.length}
+                        canChange={recordChanges.allowed}
                         onMarkAll={markAll}
                         onReset={reset}
                         onPrint={setPrintDialog}
@@ -438,7 +442,13 @@ export default function FactoryAttendance() {
                         className="rounded-xl shadow-xs"
                         data-testid="button-save-attendance"
                         onClick={handleSave}
-                        disabled={!workers.length || saveMutation.isPending || selectedDate > attendanceToday()}
+                        disabled={
+                          !workers.length ||
+                          saveMutation.isPending ||
+                          selectedDate > attendanceToday() ||
+                          !recordChanges.allowed
+                        }
+                        title={recordChanges.reason ?? undefined}
                       >
                         {saveMutation.isPending ? (
                           <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
@@ -777,7 +787,8 @@ export default function FactoryAttendance() {
                       className="rounded-xl shadow-xs sm:min-w-36"
                       data-testid="button-save-attendance-sticky"
                       onClick={handleSave}
-                      disabled={saveMutation.isPending || selectedDate > attendanceToday()}
+                      disabled={saveMutation.isPending || selectedDate > attendanceToday() || !recordChanges.allowed}
+                      title={recordChanges.reason ?? undefined}
                     >
                       {saveMutation.isPending ? (
                         <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
