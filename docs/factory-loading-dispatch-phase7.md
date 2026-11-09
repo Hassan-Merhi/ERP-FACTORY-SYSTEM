@@ -91,7 +91,7 @@ Every new End Dispatch transaction now captures:
 - the existing frozen comparison, summary, discrepancy approvals and
   immutable closure revision.
 
-A reopened trip may be scanned and closed again, creating another signed
+A reopened trip may be scanned and closed again, creating another frozen
 revision. Downloading a previous revision presents its **original** bale
 manifest and truck details, not current rows that may have changed.
 
