@@ -7,6 +7,9 @@ import { PageHeader } from "@/components/PageHeader";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import EditProformaV5Drawer from "./EditProformaV5Drawer";
 import { fetchAllV5AllocationData, type V5AllocationData } from "@/lib/v5AllocationPaginationClient";
+import { toFactoryProformaAllocationArticles, FACTORY_V5_EDIT_SNAPSHOT } from "@/lib/factoryAllocationReadModel";
+import { companyQueryKey } from "@/lib/companyQueryScope";
+import { useCompany } from "@/contexts/CompanyContext";
 import { invoicingProformaReturnPath } from "@/lib/factoryProformaEditRoutes";
 
 /** Full-page V5 proforma editor, using the complete unfiltered allocation snapshot. */
@@ -16,6 +19,7 @@ export default function FactoryStockAllocationV5EditProforma() {
   const validId = /^[1-9]\d*$/.test(id ?? "") && Number.isSafeInteger(proformaId);
   const [location, navigate] = useLocation();
   const search = useSearch();
+  const { selectedCompany } = useCompany();
   const fromInvoicing = location.startsWith("/factory/invoicing/proformas/");
   const customerId = new URLSearchParams(search).get("customerId");
   // View Only / Create Only roles never edit an existing proforma.
@@ -30,27 +34,16 @@ export default function FactoryStockAllocationV5EditProforma() {
     );
 
   const query = useQuery<V5AllocationData>({
-    queryKey: ["/api/factory/v5/stock-allocation/all-for-edit", proformaId],
+    queryKey: companyQueryKey(FACTORY_V5_EDIT_SNAPSHOT, selectedCompany?.id, proformaId),
     queryFn: () => fetchAllV5AllocationData(),
-    enabled: validId && recordChanges.allowed,
+    enabled: validId && recordChanges.allowed && Boolean(selectedCompany?.id),
     staleTime: 15000,
     retry: 1,
     refetchOnWindowFocus: false,
   });
 
   const articleRows = useMemo(
-    () =>
-      (query.data?.rows ?? [])
-        .map((row) => ({
-          articleCode: row.articleCode,
-          productName: row.productName,
-          categoryName: row.categoryName,
-          stockAvailable: row.stockAvailable,
-          totalLoaded: row.totalLoaded,
-          expectedToLoad: row.expectedToLoad,
-          freeToPromise: row.freeToPromise,
-        }))
-        .sort((a, b) => a.productName.localeCompare(b.productName)),
+    () => toFactoryProformaAllocationArticles(query.data?.rows ?? []),
     [query.data?.rows]
   );
 
