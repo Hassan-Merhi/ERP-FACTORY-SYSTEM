@@ -11,7 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   AlertCircle, AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2,
   ClipboardCheck, FileSearch, Layers3, Loader2, Package, RefreshCw,
-  Search, ShieldCheck, Truck, Weight,
+  Search, ShieldCheck, Truck,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
