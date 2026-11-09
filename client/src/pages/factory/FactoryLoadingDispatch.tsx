@@ -3,7 +3,7 @@
  * Verification-only: displays main-loading totals but never writes to the
  * main loading, stock, proforma, invoice or accounting endpoints.
  *
- * Phase 3 adds physical scans; Phase 4 comparison; Phase 6 closing/reopening.
+ * Phase 3 provides physical scan verification; Phase 4 comparison; Phase 6 close/reopen.
  */
 import { useMemo, useState, type FormEvent } from "react";
 import { useLocation, useParams } from "wouter";
@@ -25,6 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import FactoryLoadingDispatchScanner from "./FactoryLoadingDispatchScanner";
 
 interface OrderBale {
   id: number;
@@ -341,7 +342,7 @@ export default function FactoryLoadingDispatch() {
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
           <div>
             <span className="font-semibold">Verification only.</span> A Dispatch never adds bales to Loading,
-            changes inventory or posts financial transactions. Scanning and reconciliation will be enabled in the next phases.
+            changes inventory or posts financial transactions. Only unique bales from this loading may be verified on trucks.
           </div>
         </div>
 
@@ -441,7 +442,7 @@ export default function FactoryLoadingDispatch() {
                 {getError(selectedQuery.error)}
               </div>
             )}
-            {selectedTrip && (
+            {selectedTrip && dispatchId !== null && (
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(290px,0.7fr)]">
                 <Card className="border-blue-100 dark:border-blue-500/20 dark:bg-[#101c34]">
                   <CardContent className="space-y-5 p-4 sm:p-5">
@@ -483,7 +484,7 @@ export default function FactoryLoadingDispatch() {
                     <div className="flex flex-wrap gap-3 border-t pt-4 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1"><Package className="h-3.5 w-3.5" /> {printNumber(numberValue(selectedTrip.scannedBales ?? trips.find((trip) => Number(trip.id) === dispatchId)?.scannedBales))} scans</span>
                       <span className="flex items-center gap-1"><Weight className="h-3.5 w-3.5" /> {printNumber(numberValue(selectedTrip.scannedWeightKg ?? trips.find((trip) => Number(trip.id) === dispatchId)?.scannedWeightKg), 2)} kg</span>
-                      <span className="flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" /> {selectedTrip.status === "OPEN" ? "Ready for Phase 3 scanning" : "Trip finished"}</span>
+                      <span className="flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" /> {selectedTrip.status === "OPEN" ? "Barcode verification active" : "Trip finished"}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -491,8 +492,8 @@ export default function FactoryLoadingDispatch() {
                   <Card className="border-blue-100 dark:border-blue-500/20 dark:bg-[#101c34]">
                     <CardContent className="space-y-3 p-4">
                       <div className="flex items-center gap-2"><Route className="h-4 w-4 text-blue-500" /><h3 className="text-sm font-semibold">Truck verification</h3></div>
-                      <p className="text-xs text-muted-foreground">Physical barcode scanning will appear here in Phase 3. This screen cannot change the main loading.</p>
-                      <Badge variant="secondary">Scanner — next phase</Badge>
+                      <p className="text-xs text-muted-foreground">Use the scanner below for each bale entering this truck. Scans never change the main loading.</p>
+                      <Badge variant="secondary">Scanner available below</Badge>
                     </CardContent>
                   </Card>
                   <Card className="border-blue-100 dark:border-blue-500/20 dark:bg-[#101c34]">
@@ -506,6 +507,20 @@ export default function FactoryLoadingDispatch() {
                     <Info className="mt-0.5 h-4 w-4 shrink-0" />
                     Trip closing, discrepancy approvals and reopening will be introduced in Phase 6.
                   </div>
+                </div>
+                <div className="xl:col-span-2">
+                  <FactoryLoadingDispatchScanner
+                    key={dispatchId}
+                    orderId={orderId}
+                    dispatchId={dispatchId}
+                    companyId={companyId}
+                    status={selectedTrip.status}
+                    role={user?.currentRole ?? user?.role ?? ""}
+                    onChanged={() => {
+                      void queryClient.invalidateQueries({ queryKey: companyQueryKey(listUrl, companyId) });
+                      if (selectedUrl) void queryClient.invalidateQueries({ queryKey: companyQueryKey(selectedUrl, companyId) });
+                    }}
+                  />
                 </div>
               </div>
             )}
