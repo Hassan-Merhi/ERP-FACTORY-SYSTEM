@@ -17,7 +17,7 @@ export {
   WorkspaceToolbarGroup as ErpToolbarGroup,
   WorkspaceActions as ErpResponsiveActions,
   ResponsiveTableFrame as ErpTableFrame,
-  FormActionBar as ErpFormActions,
+  FormActionBar as ErpStickyFormActionBar,
 } from "@/components/ui/workspace-layout";
 export { DataTableToolbar as ErpDataTableToolbar } from "@/components/DataTableToolbar";
 export { SearchField as ErpSearchField } from "@/components/ui/search-field";
