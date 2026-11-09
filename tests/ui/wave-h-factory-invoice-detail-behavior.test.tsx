@@ -13,20 +13,13 @@ type ChildrenProps = { children: React.ReactNode };
 
 vi.mock("wouter", () => ({
   useLocation: () => ["/factory/sales/invoices/77", harness.navigate],
-  useRoute: (pattern: string) =>
-    pattern === "/factory/sales/invoices/:id"
-      ? [true, { id: "77" }]
-      : [false, {}],
+  useRoute: (pattern: string) => (pattern === "/factory/sales/invoices/:id" ? [true, { id: "77" }] : [false, {}]),
   useSearch: () => "",
   useParams: () => ({}),
-  Link: ({
-    children,
-    ...props
-  }: React.PropsWithChildren<React.AnchorHTMLAttributes<HTMLAnchorElement>>) => (
+  Link: ({ children, ...props }: React.PropsWithChildren<React.AnchorHTMLAttributes<HTMLAnchorElement>>) => (
     <a {...props}>{children}</a>
   ),
-  Route: ({ component: Component }: { component?: React.ComponentType }) =>
-    Component ? <Component /> : null,
+  Route: ({ component: Component }: { component?: React.ComponentType }) => (Component ? <Component /> : null),
   Switch: ({ children }: ChildrenProps) => <>{children}</>,
   Redirect: () => null,
 }));
@@ -187,7 +180,10 @@ const finalizedOrder = {
 describe("Wave H populated factory-invoice detail behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse([])));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse([]))
+    );
   });
 
   it("renders finalized invoice lines, charges, logistics metadata, and computed totals", async () => {
@@ -201,47 +197,28 @@ describe("Wave H populated factory-invoice detail behavior", () => {
             { id: 10, name: "Clearance Expense", code: "EXP-10" },
           ],
         ],
-        [
-          ["/api/factory/my-access"],
-          { hiddenCostFields: [], fullAccess: true },
-        ],
+        [["/api/factory/my-access"], { hiddenCostFields: [], fullAccess: true }],
         [["/api/factory/customer-proformas", 3], []],
       ],
     });
 
-    expect(await screen.findByTestId("text-invoice-number")).toHaveTextContent(
-      "INV-77",
-    );
-    expect(screen.getByTestId("badge-status-finalized")).toHaveTextContent(
-      "Finalized",
-    );
-    expect(screen.getByTestId("text-customer-name")).toHaveTextContent(
-      "Factory Customer",
-    );
-    expect(screen.getByTestId("text-container-number")).toHaveTextContent(
-      "MSCU-77",
-    );
-    expect(screen.getByTestId("text-shipping-company")).toHaveTextContent(
-      "Test Shipping",
-    );
+    expect(await screen.findByTestId("text-invoice-number")).toHaveTextContent("INV-77");
+    expect(screen.getByTestId("badge-status-finalized")).toHaveTextContent("Finalized");
+    expect(screen.getByTestId("text-customer-name")).toHaveTextContent("Factory Customer");
+    expect(screen.getByTestId("text-container-number")).toHaveTextContent("MSCU-77");
+    expect(screen.getByTestId("text-shipping-company")).toHaveTextContent("Test Shipping");
     expect(screen.getByTestId("text-destination")).toHaveTextContent("Kolwezi");
     expect(screen.getByTestId("button-scan-loading")).toBeInTheDocument();
 
     expect(screen.getByTestId("text-article-code-0")).toHaveTextContent("BAL-A");
-    expect(screen.getByTestId("text-bale-name-0")).toHaveTextContent(
-      "Alpha Bale",
-    );
+    expect(screen.getByTestId("text-bale-name-0")).toHaveTextContent("Alpha Bale");
     expect(screen.getByTestId("text-qty-0")).toHaveTextContent("2");
     expect(screen.getByTestId("text-total-weight-0")).toHaveTextContent("100");
     expect(screen.getByTestId("text-total-price-0")).toHaveTextContent("120");
     expect(screen.getByTestId("text-article-code-1")).toHaveTextContent("BAL-B");
-    expect(screen.getByTestId("text-bale-name-1")).toHaveTextContent(
-      "Beta Bale",
-    );
+    expect(screen.getByTestId("text-bale-name-1")).toHaveTextContent("Beta Bale");
 
-    expect(screen.getByTestId("text-charges-header")).toHaveTextContent(
-      "Freight & Charges",
-    );
+    expect(screen.getByTestId("text-charges-header")).toHaveTextContent("Freight & Charges");
     expect(screen.getByText("Ocean Freight")).toBeInTheDocument();
     expect(screen.getByText("Clearance")).toBeInTheDocument();
     expect(screen.getByTestId("button-add-charge")).toBeInTheDocument();
@@ -250,8 +227,6 @@ describe("Wave H populated factory-invoice detail behavior", () => {
     expect(screen.getByTestId("text-total-charges")).toHaveTextContent("50");
     expect(screen.getByTestId("text-grand-total")).toHaveTextContent("300");
     expect(screen.getByTestId("text-total-bales-qty")).toHaveTextContent("5");
-    expect(screen.getByTestId("text-total-weight-kg")).toHaveTextContent(
-      "235 kg",
-    );
+    expect(screen.getByTestId("text-total-weight-kg")).toHaveTextContent("235 kg");
   });
 });
