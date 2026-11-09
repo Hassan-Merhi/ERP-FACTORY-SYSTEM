@@ -44,4 +44,3 @@ export async function invalidateErpDataFamilies(
 
 /** Type-level compile checks ensure this facade stays attached to real helpers. */
 export type ErpCompanyId = CompanyIdentity;
-export type ErpQueryParams = QueryParams;
