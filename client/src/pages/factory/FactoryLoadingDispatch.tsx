@@ -11,7 +11,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft, ArrowRight, ClipboardCheck, Clock3, Edit3, FileSearch,
   Info, Loader2, Package, Plus, RefreshCw, Route, ShieldCheck, Truck,
-  Weight, XCircle,
+  Weight,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -255,7 +255,7 @@ export default function FactoryLoadingDispatch() {
     filter === "all" || (filter === "open" ? trip.status === "OPEN" : trip.status !== "OPEN")
   )), [trips, filter]);
   const selectedTrip = selectedQuery.data ??
-    trips.find((trip) => trip.id === dispatchId) ?? null;
+    trips.find((trip) => Number(trip.id) === dispatchId) ?? null;
 
   const refresh = async () => {
     await Promise.all([
@@ -481,8 +481,8 @@ export default function FactoryLoadingDispatch() {
                       </div>
                     )}
                     <div className="flex flex-wrap gap-3 border-t pt-4 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><Package className="h-3.5 w-3.5" /> {printNumber(numberValue(selectedTrip.scannedBales ?? trips.find((trip) => trip.id === dispatchId)?.scannedBales))} scans</span>
-                      <span className="flex items-center gap-1"><Weight className="h-3.5 w-3.5" /> {printNumber(numberValue(selectedTrip.scannedWeightKg ?? trips.find((trip) => trip.id === dispatchId)?.scannedWeightKg), 2)} kg</span>
+                      <span className="flex items-center gap-1"><Package className="h-3.5 w-3.5" /> {printNumber(numberValue(selectedTrip.scannedBales ?? trips.find((trip) => Number(trip.id) === dispatchId)?.scannedBales))} scans</span>
+                      <span className="flex items-center gap-1"><Weight className="h-3.5 w-3.5" /> {printNumber(numberValue(selectedTrip.scannedWeightKg ?? trips.find((trip) => Number(trip.id) === dispatchId)?.scannedWeightKg), 2)} kg</span>
                       <span className="flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" /> {selectedTrip.status === "OPEN" ? "Ready for Phase 3 scanning" : "Trip finished"}</span>
                     </div>
                   </CardContent>
