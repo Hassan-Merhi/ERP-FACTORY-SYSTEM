@@ -32,6 +32,7 @@ import {
   readHistoricalReplayProductionControl,
 } from "./historical-replay/productionReadinessV8";
 import { POST_OFFLOAD_REPORT_QUERY_KEYS } from "./postOffloadReconciliation";
+import { inspectPhase5ReplayScopeSafety } from "./historical-replay/downstreamGatePhase5";
 const PHASE6_TOKEN_KIND = "POST_OFFLOAD_PHASE6_REPAIR_V1" as const;
 const PHASE6_TOKEN_VERSION = 1 as const;
 const EXACT_UNDO_KIND = "HISTORICAL_REPLAY_EXACT_V1" as const;
@@ -509,6 +510,21 @@ async function buildSnapshot(params: { companyId: number; requestedSupplierIds?:
         preview = internalScope._fullPreview;
       }
     }
+    // Phase 5: include downstream production/GL reconciliation in the
+    // preflight, not only the final serializable apply. A report with missing
+    // production links must not advertise an automatic-repair token as ready.
+    const downstreamSafety = await inspectPhase5ReplayScopeSafety(executor, params.companyId, scope);
+    if (!downstreamSafety.safeToApply) {
+      safety = {
+        ...safety,
+        allSafetyGatesPassed: false,
+        blockers: [
+          ...safety.blockers,
+          { gate: "unreconciledDownstreamCostOrGL", count: downstreamSafety.blockers.length },
+        ],
+      };
+    }
+
     const selectedSupplierIds = scope.supplierIds;
     const supplierRateChanges = preview
       ? preview.supplierRows.filter(
@@ -554,6 +570,7 @@ async function buildSnapshot(params: { companyId: number; requestedSupplierIds?:
       selectedSupplierIds,
       scope,
       fingerprint,
+      downstreamSafety,
     });
     const status = classifyStatus({
       integrityIssueCount: integrity.issueCount,
