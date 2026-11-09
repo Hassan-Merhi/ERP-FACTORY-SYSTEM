@@ -8,6 +8,7 @@ import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { logger } from "../../../../lib/logger";
 import { parseId } from "../../../../lib/parseId";
+import { resultRows } from "../../../../lib/queryResult";
 import { db } from "../../../../db";
 import { requireAuth, requireRole } from "../../../../auth";
 import { recalculateOrderTotals } from "../../_helpers";
@@ -207,7 +208,7 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
              WHERE company_id = ${companyId} AND id = ${orderId}
                AND deleted_at IS NULL
           `);
-          const status = (currentRows.rows?.[0] as { status?: string } | undefined)?.status;
+          const status = resultRows(currentRows)[0]?.status;
           if (!["LOADING", "PENDING_VERIFICATION"].includes(status || "")) {
             throw new DispatchReconciliationRefusal(409, "Only active Pending Loading orders can be reconciled");
           }
@@ -216,7 +217,7 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
              WHERE company_id = ${companyId} AND order_id = ${orderId}
              LIMIT 10000
           `);
-          const tripStatuses = tripRows.rows as Array<{ status: string }>;
+          const tripStatuses = resultRows(tripRows);
           if (!tripStatuses.length || tripStatuses.some((trip) => trip.status === "OPEN")) {
             throw new DispatchReconciliationRefusal(409, "Finish all dispatch trips before removing missing bales");
           }
@@ -236,7 +237,7 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
                AND bale_id = ${orderBale.baleId} AND removed_at IS NULL
              LIMIT 1
           `);
-          if (scanned.rows?.length) {
+          if (resultRows(scanned).length > 0) {
             throw new DispatchReconciliationRefusal(409, "This bale was verified on a trip and cannot be removed as missing");
           }
         }
