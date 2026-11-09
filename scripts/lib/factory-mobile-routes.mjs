@@ -66,8 +66,9 @@ export const STATIC_ROUTES = [
   "/my-settings",
   // Every hub section/tab, not only the default one
   "/factory/production-report?tab=production",
-  "/factory/production-report?tab=comparison",
-  "/factory/production-report?tab=product-comparison",
+  // Comparison tabs moved to the Others hub (#3050); the old Overview URLs redirect there.
+  "/factory/others?tab=comparison",
+  "/factory/others?tab=product-comparison",
   "/factory/production-report?tab=shipping",
   "/factory/production-report?tab=sheets",
   "/factory/production-report?tab=container-tracking",

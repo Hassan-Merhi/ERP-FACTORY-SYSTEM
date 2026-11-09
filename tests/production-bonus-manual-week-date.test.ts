@@ -34,7 +34,7 @@ describe("manual weekly production bonus date entry", () => {
       "client/src/pages/factory/productiontargets/ProductionBonusWeeklyMethodPanel.tsx"), "utf8");
     expect(source).toContain('aria-label="Type bonus week date"');
     expect(source).toContain('aria-label="Choose bonus week date from calendar"');
-    expect(source).toContain("onChange={event => setEffectiveWeek(event.target.value)}");
+    expect(source).toContain("onChange={(event) => setEffectiveWeek(event.target.value)}");
     expect(source).not.toContain('setEffectiveWeek(mondayOfProductionBonusWeek(event.target.value) ?? "")');
   });
 });
