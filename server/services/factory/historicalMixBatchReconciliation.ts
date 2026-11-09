@@ -402,12 +402,16 @@ export async function getHistoricalMixBatchReconciliation(companyId: number): Pr
       "sp.name AS supplier_name, sp.company_id AS supplier_company_id, " +
       "sp.current_raw_material_cost_per_kg_usd::text AS current_supplier_rate, " +
       "c.container_number, c.company_id AS container_company_id, c.supplier_id AS container_supplier_id, " +
-      "c.offloaded_at::text AS container_offloaded_at, " +
+      "r.first_offloaded_at::text AS container_offloaded_at, " +
       "up.company_id AS upstream_company_id, up.batch_code AS upstream_batch_code " +
       "FROM factory_mix_batch_sources s " +
       "JOIN factory_mix_batches m ON m.id = s.mix_batch_id AND m.company_id = $1 " +
       "LEFT JOIN factory_suppliers sp ON sp.id = s.supplier_id " +
       "LEFT JOIN factory_containers c ON c.id = s.container_id " +
+      "LEFT JOIN LATERAL (" +
+      "SELECT MIN(rs.offloaded_at) AS first_offloaded_at FROM factory_raw_stock rs " +
+      "WHERE rs.company_id = m.company_id AND rs.container_id = s.container_id AND rs.deleted_at IS NULL" +
+      ") r ON TRUE " +
       "LEFT JOIN factory_mix_batches up ON up.id = s.source_batch_id " +
       "ORDER BY s.mix_batch_id, s.id",
       [companyId],
