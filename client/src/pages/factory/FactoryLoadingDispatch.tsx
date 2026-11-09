@@ -65,14 +65,12 @@ interface DispatchList {
   dispatches: DispatchTrip[];
 }
 interface TripForm {
-  truckPlate: string;
-  driverName: string;
-  destination: string;
+  tripNumber: string;
   notes: string;
 }
 type TripFilter = "all" | "open" | "closed";
 
-const blankForm: TripForm = { truckPlate: "", driverName: "", destination: "", notes: "" };
+const blankForm: TripForm = { tripNumber: "", notes: "" };
 const activeOrderStatuses = new Set(["DRAFT", "LOADING", "PENDING_VERIFICATION"]);
 
 function tripPath(orderId: number, dispatchId?: number): string {
@@ -116,9 +114,7 @@ function getError(error: unknown): string {
 
 function fromTrip(trip: DispatchTrip): TripForm {
   return {
-    truckPlate: trip.truckPlate ?? "",
-    driverName: trip.driverName ?? "",
-    destination: trip.destination ?? "",
+    tripNumber: String(trip.dispatchNumber),
     notes: trip.notes ?? "",
   };
 }
@@ -172,26 +168,15 @@ function TripEditor({ open, onOpenChange, value, onChange, onSubmit, title, subm
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Each trip has a separate record for this loading. Truck and driver details are optional.
+            Choose a unique trip number for this loading. Notes are optional.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-4" data-testid="dispatch-trip-form">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="dispatch-truck-plate">Truck number / plate</Label>
-              <Input id="dispatch-truck-plate" maxLength={120} value={value.truckPlate}
-                placeholder="e.g. Truck 01" onChange={(e) => onChange({ ...value, truckPlate: e.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="dispatch-driver-name">Driver</Label>
-              <Input id="dispatch-driver-name" maxLength={200} value={value.driverName}
-                placeholder="Driver name" onChange={(e) => onChange({ ...value, driverName: e.target.value })} />
-            </div>
-          </div>
           <div className="space-y-1.5">
-            <Label htmlFor="dispatch-destination">Destination</Label>
-            <Input id="dispatch-destination" maxLength={500} value={value.destination}
-              placeholder="Truck destination" onChange={(e) => onChange({ ...value, destination: e.target.value })} />
+            <Label htmlFor="dispatch-trip-number">Trip number</Label>
+            <Input id="dispatch-trip-number" type="number" min={1} max={2147483647} step={1}
+              required value={value.tripNumber} placeholder="e.g. 1"
+              onChange={(e) => onChange({ ...value, tripNumber: e.target.value })} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="dispatch-notes">Notes</Label>
@@ -283,7 +268,10 @@ export default function FactoryLoadingDispatch() {
 
   const createMutation = useMutation({
     mutationFn: async (form: TripForm) => {
-      const response = await apiRequest("POST", listUrl, form);
+      const response = await apiRequest("POST", listUrl, {
+        tripNumber: Number(form.tripNumber),
+        notes: form.notes,
+      });
       return response.json() as Promise<DispatchTrip>;
     },
     onSuccess: (trip) => {
@@ -299,7 +287,10 @@ export default function FactoryLoadingDispatch() {
   const editMutation = useMutation({
     mutationFn: async (form: TripForm) => {
       if (!selectedUrl) throw new Error("Choose a dispatch to edit");
-      const response = await apiRequest("PATCH", selectedUrl, form);
+      const response = await apiRequest("PATCH", selectedUrl, {
+        tripNumber: Number(form.tripNumber),
+        notes: form.notes,
+      });
       return response.json() as Promise<DispatchTrip>;
     },
     onSuccess: () => {
@@ -434,7 +425,7 @@ export default function FactoryLoadingDispatch() {
                       <div className="rounded-lg bg-blue-50 p-2 text-blue-600 dark:bg-blue-500/15 dark:text-sky-300"><Truck className="h-4 w-4" /></div>
                       <div>
                         <h3 className="text-sm font-bold">Dispatch #{String(trip.dispatchNumber).padStart(3, "0")}</h3>
-                        <p className="text-xs text-muted-foreground">{trip.truckPlate || "Truck not assigned"}</p>
+                        <p className="text-xs text-muted-foreground">{trip.notes || "No notes"}</p>
                       </div>
                     </div>
                     <TripStatusBadge status={trip.status} />
@@ -444,7 +435,7 @@ export default function FactoryLoadingDispatch() {
                     <div><p className="text-[11px] text-muted-foreground">Verified kg</p><p className="font-mono font-bold">{printNumber(numberValue(trip.scannedWeightKg), 2)}</p></div>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                    <span>{trip.driverName || trip.createdByUsername || "No driver set"}</span>
+                    <span>{trip.createdByUsername || "Unknown operator"}</span>
                     <span className="flex items-center gap-1">{formatDisplayDateTime(trip.createdAt)} <ArrowRight className="h-3.5 w-3.5 text-blue-500" /></span>
                   </div>
                 </button>
@@ -486,9 +477,7 @@ export default function FactoryLoadingDispatch() {
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       {([
-                        ["Truck", selectedTrip.truckPlate || "Not assigned"],
-                        ["Driver", selectedTrip.driverName || "Not assigned"],
-                        ["Destination", selectedTrip.destination || "Not assigned"],
+                        ["Trip number", String(selectedTrip.dispatchNumber)],
                         ["Container", selectedTrip.containerNumberSnapshot || tripsQuery.data?.containerNumber || "Not assigned"],
                       ] as const).map(([label, value]) => (
                         <div key={label} className="min-w-0 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
@@ -580,7 +569,7 @@ export default function FactoryLoadingDispatch() {
       </div>
 
       <TripEditor open={createOpen} onOpenChange={(open) => { if (!createMutation.isPending) setCreateOpen(open); }}
-        value={newTrip} onChange={setNewTrip} title="New truck dispatch" submitLabel="Create dispatch"
+        value={newTrip} onChange={setNewTrip} title="New dispatch" submitLabel="Create dispatch"
         busy={createMutation.isPending}
         onSubmit={(event) => { event.preventDefault(); if (canCreate) createMutation.mutate(newTrip); }} />
       <TripEditor open={editOpen} onOpenChange={(open) => { if (!editMutation.isPending) setEditOpen(open); }}

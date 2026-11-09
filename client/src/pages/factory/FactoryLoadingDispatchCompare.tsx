@@ -508,7 +508,7 @@ export default function FactoryLoadingDispatchCompare() {
                         <span className="flex min-w-0 items-center gap-2">
                           <Truck className="h-4 w-4 shrink-0 text-blue-500" />
                           <span className="min-w-0"><span className="block truncate text-sm font-semibold">{tripLabel(trip.dispatchNumber)}</span>
-                            <span className="block truncate text-xs text-muted-foreground">{trip.truckPlate || "Truck not assigned"} · {trip.status}</span></span>
+                            <span className="block truncate text-xs text-muted-foreground">{trip.status}</span></span>
                         </span>
                         <span className="flex shrink-0 items-center gap-1 font-mono text-xs">{trip.scannedBales} <ArrowRight className="h-3.5 w-3.5" /></span>
                       </button>
