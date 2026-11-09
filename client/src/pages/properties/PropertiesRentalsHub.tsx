@@ -2,20 +2,22 @@ import { Building2, ClipboardList, ArrowLeftRight } from "lucide-react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import type { AuthMe } from "@shared/apiTypes";
+import { useCompany } from "@/contexts/CompanyContext";
+import { canUsePropertiesCapability, PROPERTIES_RENTAL_TABS, type PropertiesRentalTab } from "@/properties/config/propertiesNavigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import PropertiesRentalWarehouses from "./PropertiesRentalWarehouses";
 import PropertiesRentalShops from "./PropertiesRentalShops";
 import PropertiesRentalPayments from "./PropertiesRentalPayments";
 
-const RENTAL_TABS = ["warehouses", "shops", "payments"] as const;
-type RentalTab = (typeof RENTAL_TABS)[number];
+const RENTAL_TABS = PROPERTIES_RENTAL_TABS.map((item) => item.value);
 
 export default function PropertiesRentalsHub() {
   const { data: user } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
-  // PropertiesRoutes protects /properties/transfer with user.role.
-  const isDeveloper = user?.role === "Developer";
-  const [tab, setTab] = useHubQueryState<RentalTab>({
+  const { selectedCompany } = useCompany();
+  // Visibility only; the server continues to authorize transfer writes.
+  const isDeveloper = canUsePropertiesCapability("developer", user, selectedCompany);
+  const [tab, setTab] = useHubQueryState<PropertiesRentalTab>({
     key: "tab",
     allowedValues: RENTAL_TABS,
     defaultValue: "warehouses",
@@ -36,7 +38,7 @@ export default function PropertiesRentalsHub() {
           </Link>
         </nav>
       )}
-      <Tabs value={tab} onValueChange={(value) => setTab(value as RentalTab)}>
+      <Tabs value={tab} onValueChange={(value) => setTab(value as PropertiesRentalTab)}>
         <div className="erp-mobile-scroll-tabs pb-1">
           <TabsList className="properties-rentals-tabs w-max min-w-full sm:min-w-0 sm:w-fit" aria-label="Rental sections">
             <TabsTrigger value="warehouses" data-testid="tab-properties-rentals-warehouses">
