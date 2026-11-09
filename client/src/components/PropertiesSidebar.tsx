@@ -15,7 +15,7 @@ import { useRecentNav } from "@/hooks/use-recent-nav";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Clock, LifeBuoy } from "lucide-react";
 import type { ShellUser } from "@/app/shellUser";
-import { canUsePropertiesCapability, canNavigateProperties } from "@/properties/config/propertiesNavigation";
+import { canUsePropertiesCapability, canNavigateProperties, PROPERTIES_NAVIGATION } from "@/properties/config/propertiesNavigation";
 import {
   ModuleHeader,
   ModuleFooter,
@@ -62,18 +62,19 @@ export const PROPERTIES_NAV_SECTIONS: NavSection[] = [
 export function getPropertiesVisibleNavSections(isDeveloper: boolean): NavSection[] {
   return PROPERTIES_NAV_SECTIONS.map((section) => ({
     ...section,
-    items: section.items.filter((item) => isDeveloper || !item.url.startsWith("/properties/accounting/")),
+    items: section.items.filter((item) => canNavigateProperties(item.url, { role: isDeveloper ? "Developer" : "User" }, null)),
   })).filter((section) => section.items.length > 0);
 }
 
-export const PROPERTIES_PINNED_DEFAULTS: NavItem[] = [
-  { title: "Daybook", url: "/properties/daybook", icon: BookOpen },
-  { title: "Agent Ledger", url: "/properties/agents", icon: UserRound },
-  { title: "Rentals", url: "/properties/rentals", icon: Building2 },
-  { title: "Accounts", url: "/properties/accounts", icon: Landmark },
-  { title: "Vouchers", url: "/properties/vouchers", icon: FileText },
-  { title: "Analytics", url: "/properties/analytics", icon: BarChart2 },
-];
+// Pinned labels, order and routes come from the same manifest used by route guards.
+const pinnedIcons = [BookOpen, UserRound, Building2, Landmark, FileText, BarChart2] as const;
+export const PROPERTIES_PINNED_DEFAULTS: NavItem[] = PROPERTIES_NAVIGATION
+  .filter((entry) => entry.navigation === "pinned")
+  .map((entry, index) => ({
+    title: entry.label,
+    url: entry.path,
+    icon: pinnedIcons[index] ?? Building2,
+  }));
 
 export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogout: () => void | Promise<void> }) {
   const { selectedCompany } = useCompany();
