@@ -139,6 +139,7 @@ const AccountGroups = lazy(() => import("@/pages/AccountGroups"));
 const FactoryInvoiceDetailBilingual = lazy(() => import("@/pages/factory/FactoryInvoiceDetailBilingual"));
 const FactoryProductionBonuses = lazy(() => import("@/pages/factory/FactoryProductionBonuses"));
 const WasteDispatchPage = lazy(() => import("@/pages/factory/WasteDispatchOptimized"));
+const FactoryLoadingDispatch = lazy(() => import("@/pages/factory/FactoryLoadingDispatch"));
 const FactoryStockAllocationV5CreateProforma = lazy(
   () => import("@/pages/factory/FactoryStockAllocationV5CreateProforma")
 );
@@ -256,6 +257,8 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       <Route path="/factory/sales/loading/pending">
         <Redirect replace to="/factory/sales/loadings?tab=pending" />
       </Route>
+      <Route path="/factory/sales/loading/dispatch/:orderId/:dispatchId" component={FactoryLoadingDispatch} />
+      <Route path="/factory/sales/loading/dispatch/:orderId" component={FactoryLoadingDispatch} />
       <Route path="/factory/sales/loading/new" component={FactoryContainerLoadingScan} />
       <Route path="/factory/sales/loadings" component={FactoryLoadingsHub} />
       <Route path="/factory/sales/pending-invoices/:id/verify" component={FactoryPendingInvoiceVerify} />
