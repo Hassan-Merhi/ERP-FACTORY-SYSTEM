@@ -267,7 +267,7 @@ describe("Wave H populated core-page behavior", () => {
           ],
         ],
         [
-          ["/api/suppliers/1/unified-ledger"],
+          ["/api/suppliers/1/unified-ledger", 1],
           [
             { type: "opening", date: "2026-08-01", balance: 100 },
             {
@@ -299,7 +299,7 @@ describe("Wave H populated core-page behavior", () => {
           ],
         ],
         [
-          ["/api/suppliers/1/purchase-orders"],
+          ["/api/suppliers/1/purchase-orders", 1],
           [
             {
               id: 501,
