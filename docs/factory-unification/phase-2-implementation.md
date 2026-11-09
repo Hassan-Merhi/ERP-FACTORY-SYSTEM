@@ -27,3 +27,23 @@
 - Verify server 403/200 matrix and signed dispatch closure immutability with a safe nonproduction dataset.
 
 **State: IN PROGRESS — Phase 2 source changes landed; full policy/cache regression remains unverified.**
+
+
+## 2026-11-09 continuation — additional source fixes committed
+The following targeted source changes were applied on the **same** unification branch, without modifying business mutations, SQL or permission enforcement:
+- `FactoryProductionTargets.tsx`: production/staff tracking results have a selected-company URL-first key and only fetch for an active company. Bonus management UI requires current matching-company `hasFactoryAccess` as well as the existing Admin/Owner role capability.
+- `FactoryAttendance.tsx`: attendance date rows and attendance WhatsApp settings have selected-company cache keys; the save invalidation targets the same company/date. Prior-day server Admin approval is unchanged.
+- `FactoryLocationInventoryModel.tsx`: locations, selected-location inventory, available stock and catalogs require a selected-company scope; the existing availability and catalog calculations remain unchanged.
+- `FactoryWorkersHub.tsx`, `FactoryInvoicing.tsx`, `FactoryLoadingsHub.tsx`, `FactoryDaybook.tsx`, `FactoryAdvancesTab.tsx`: nested hub tab visibility now fails closed when the access payload is pending, lacks Factory access or reports a company other than the selected one. Both access and settings reads are company scoped.
+- `factoryworkers/useFactoryWorkersModel.tsx`: full worker list, cash accounts, document counts, nationalities, amount-due and worker categories reads have company-scoped cache keys. Workers and categories tabs are hidden until matching-company access is available.
+- `FactoryWorkerBonusesTab.tsx`: worker picker, cash accounts and bonus record list read keys are company-scoped. Pending/paid totals still use the original backend response and are not recalculated differently.
+- `tests/factory-unification-phase2-continuation.test.ts` records selected-company key invariants, bonus capability fail-closed policy, nested-hub access visibility and worker/bonus sensitive query paths. **Tests authored, not executed.**
+
+## Source-only review observations and remaining risks
+- Source post-write re-reads confirmed the scoped imports/keys and matching-company access predicates in the modified files.
+- `CompanyContext` continues to cancel/remove old company-session queries. URL-first query keys preserve existing query invalidation conventions. The implementation **does not** claim that every Factory query key throughout the repository is now company scoped: the repository also has other production/worker dialogs, inventory/settings screens, Factory intelligence and domain-specific reads. Some still use unscoped URL keys; they require a repo-wide inventory before saying the exhaustive audit is complete.
+- Even among modified screens, in-flight React local state, outstanding write requests and UI remount behavior were not exercised with A→B→A transitions. A scoped query key by itself does not prove every consumer cannot display local stale data.
+- Client tab suppression is presentation policy, not access authorization. Existing route/backend checks remain authoritative. Owner/Admin/Developer/create-only/view-only 200/403 parity and dispatch-closure side effects remain **unverified**.
+- No runnable checkout, TypeScript build, browser, tests, API runtime, live role accounts or database fixtures were available in this interaction. Do not infer test success.
+
+**Continuation status:** Targeted high-risk source hardening complete. **Exhaustive repo-wide cache audit and runtime verification remain open**. Phase 2 should not be labelled fully DONE until those checks have evidence.
