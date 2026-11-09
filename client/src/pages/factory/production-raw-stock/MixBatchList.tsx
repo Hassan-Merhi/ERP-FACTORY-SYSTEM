@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { formatNumber } from "@/lib/formatNumber";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Layers, Pencil, Trash2, MessageCircle, Loader2, FileSpreadsheet } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -72,8 +73,6 @@ interface MixBatchListProps {
   reportAllocations: Record<string, number> | null;
   reportLoading: boolean;
   formatDisplayDate: (date: string) => string;
-  /** False for read-only company roles: edit, delete and WhatsApp send are not offered. */
-  canChange?: boolean;
 }
 
 export function MixBatchList({
@@ -84,7 +83,6 @@ export function MixBatchList({
   onViewDetail,
   onSendWhatsApp,
   isSendingWhatsApp,
-  canChange = true,
   mixBatchDate,
   setMixBatchDate,
   mixBatchesByDate,
@@ -95,6 +93,8 @@ export function MixBatchList({
   reportLoading,
   formatDisplayDate,
 }: MixBatchListProps) {
+  const recordChanges = useExistingRecordChangeAccess();
+  const recordChangeReason = recordChanges.reason ?? undefined;
   const [showAllMixBatches, setShowAllMixBatches] = useState(false);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
   const [exportPeriod, setExportPeriod] = useState<"month" | "all-time">("month");
@@ -172,25 +172,21 @@ export function MixBatchList({
             className="min-h-11 min-w-0 w-full rounded-lg border border-input bg-background px-3 py-1 text-base font-semibold outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9 sm:w-auto sm:text-sm"
             data-testid="input-mix-batch-date"
           />
-          {canChange && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onSendWhatsApp}
-              disabled={
-                isSendingWhatsApp || reportLoading || reportAllocations === null || mixBatchesByDate.length === 0
-              }
-              data-testid="button-send-mix-batch-whatsapp"
-              className="h-11 w-full gap-2 rounded-lg border-border/80 bg-card font-medium shadow-sm sm:h-9 sm:w-auto"
-            >
-              {isSendingWhatsApp ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <MessageCircle className="h-3.5 w-3.5" />
-              )}
-              Send WhatsApp
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onSendWhatsApp}
+            disabled={isSendingWhatsApp || reportLoading || reportAllocations === null || mixBatchesByDate.length === 0}
+            data-testid="button-send-mix-batch-whatsapp"
+            className="h-11 w-full gap-2 rounded-lg border-border/80 bg-card font-medium shadow-sm sm:h-9 sm:w-auto"
+          >
+            {isSendingWhatsApp ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <MessageCircle className="h-3.5 w-3.5" />
+            )}
+            Send WhatsApp
+          </Button>
         </div>
 
         <div className="flex w-full flex-col gap-1.5 sm:w-auto">
@@ -309,28 +305,30 @@ export function MixBatchList({
                           {batch.batchDate ? formatDisplayDate(batch.batchDate) : formatDisplayDate(batch.createdAt)}
                         </div>
                       </button>
-                      {canChange && (
-                        <div className="flex shrink-0 items-center gap-1">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => onEdit(batch)}
-                            aria-label={`Edit ${batch.batchCode}`}
-                            data-testid={`button-edit-mix-batch-mobile-${batch.id}`}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => onDelete(batch.id)}
-                            aria-label={`Delete ${batch.batchCode}`}
-                            data-testid={`button-delete-mix-batch-mobile-${batch.id}`}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      )}
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => onEdit(batch)}
+                          disabled={!recordChanges.allowed}
+                          title={recordChangeReason}
+                          aria-label={recordChanges.reason ?? `Edit ${batch.batchCode}`}
+                          data-testid={`button-edit-mix-batch-mobile-${batch.id}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => onDelete(batch.id)}
+                          disabled={!recordChanges.allowed}
+                          title={recordChangeReason}
+                          aria-label={recordChanges.reason ?? `Delete ${batch.batchCode}`}
+                          data-testid={`button-delete-mix-batch-mobile-${batch.id}`}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
                     </div>
                     <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                       <div className="rounded-lg bg-muted/40 p-2">
@@ -411,26 +409,30 @@ export function MixBatchList({
                           ${parseFloat(batch.displayCostPerKg ?? batch.costPerKg ?? "0").toFixed(4)}/kg
                         </TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
-                          {canChange && (
-                            <div className="flex items-center gap-1">
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => onEdit(batch)}
-                                data-testid={`button-edit-mix-batch-${batch.id}`}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => onDelete(batch.id)}
-                                data-testid={`button-delete-mix-batch-${batch.id}`}
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </div>
-                          )}
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => onEdit(batch)}
+                              disabled={!recordChanges.allowed}
+                              title={recordChangeReason}
+                              aria-label={recordChangeReason}
+                              data-testid={`button-edit-mix-batch-${batch.id}`}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => onDelete(batch.id)}
+                              disabled={!recordChanges.allowed}
+                              title={recordChangeReason}
+                              aria-label={recordChangeReason}
+                              data-testid={`button-delete-mix-batch-${batch.id}`}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );

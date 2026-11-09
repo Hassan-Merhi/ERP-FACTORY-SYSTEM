@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatNumber } from "@/lib/formatNumber";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { FactorySupplier } from "@shared/schema";
 import { ContainerStatusBadge } from "./ContainerBadges";
 import type { ContainerWithSupplier } from "./otwHelpers";
@@ -63,6 +64,8 @@ export function ContainerListView({
   onReverseOffload,
   onNavigateOffload,
 }: ContainerListViewProps) {
+  const recordChanges = useExistingRecordChangeAccess();
+  const recordChangeReason = recordChanges.reason ?? undefined;
   const toggleSupplier = (key: string) => {
     setExpandedSuppliers((prev) => {
       const next = new Set(prev);
@@ -85,7 +88,10 @@ export function ContainerListView({
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-border/70 bg-card/95 shadow-sm dark:border-blue-200/10 dark:bg-slate-900/60" aria-label="All factory containers">
+    <section
+      className="overflow-hidden rounded-2xl border border-border/70 bg-card/95 shadow-sm dark:border-blue-200/10 dark:bg-slate-900/60"
+      aria-label="All factory containers"
+    >
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 bg-gradient-to-r from-blue-500/5 via-background/40 to-violet-500/5 px-4 py-4 sm:px-5">
         <div className="flex items-center gap-3">
           <span className="flex size-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-300">
@@ -108,7 +114,10 @@ export function ContainerListView({
           className="mb-0"
           filters={
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-40 rounded-lg border-border/70 bg-background/80 shadow-sm" data-testid="select-filter-status">
+              <SelectTrigger
+                className="w-40 rounded-lg border-border/70 bg-background/80 shadow-sm"
+                data-testid="select-filter-status"
+              >
                 <SelectValue placeholder="All Statuses" />
               </SelectTrigger>
               <SelectContent>
@@ -212,7 +221,10 @@ export function ContainerListView({
                           <Building2 className="h-4 w-4" />
                         </span>
                         <span className="text-sm font-semibold tracking-tight">{supplierName}</span>
-                        <Badge variant="secondary" className="rounded-full border border-border/60 px-2.5 py-0.5 text-xs">
+                        <Badge
+                          variant="secondary"
+                          className="rounded-full border border-border/60 px-2.5 py-0.5 text-xs"
+                        >
                           {count} container{count !== 1 ? "s" : ""}
                         </Badge>
                       </div>
@@ -260,7 +272,11 @@ export function ContainerListView({
                           <TableRow
                             key={c.id}
                             data-testid={`row-factory-container-${c.id}`}
-                            className={selectedIds.has(c.id) ? "border-border/40 bg-blue-500/10 dark:bg-blue-500/15" : "border-border/40 transition-colors hover:bg-blue-500/5 dark:hover:bg-blue-400/10"}
+                            className={
+                              selectedIds.has(c.id)
+                                ? "border-border/40 bg-blue-500/10 dark:bg-blue-500/15"
+                                : "border-border/40 transition-colors hover:bg-blue-500/5 dark:hover:bg-blue-400/10"
+                            }
                           >
                             <TableCell className="w-10 pl-6">
                               <Checkbox
@@ -292,7 +308,10 @@ export function ContainerListView({
                                 <span className="text-muted-foreground">—</span>
                               )}
                             </TableCell>
-                            <TableCell className="text-right font-mono tabular-nums" data-testid={`text-weight-${c.id}`}>
+                            <TableCell
+                              className="text-right font-mono tabular-nums"
+                              data-testid={`text-weight-${c.id}`}
+                            >
                               {parseFloat(c.totalKg || "0") > 0 ? (
                                 formatNumber(parseFloat(c.totalKg || "0"))
                               ) : (
@@ -318,6 +337,9 @@ export function ContainerListView({
                                         variant="ghost"
                                         size="icon"
                                         onClick={onNavigateOffload}
+                                        disabled={!recordChanges.allowed}
+                                        title={recordChangeReason}
+                                        aria-label={recordChanges.reason ?? "Offload to Production"}
                                         data-testid={`button-offload-container-${c.id}`}
                                       >
                                         <ArrowDown className="h-4 w-4" />
@@ -334,6 +356,9 @@ export function ContainerListView({
                                           variant="ghost"
                                           size="icon"
                                           onClick={() => onPostOffload(c)}
+                                          disabled={!recordChanges.allowed}
+                                          title={recordChangeReason}
+                                          aria-label={recordChanges.reason ?? "Add Post-Offload Charges"}
                                           data-testid={`button-post-offload-charges-${c.id}`}
                                         >
                                           <PlusCircle className="h-4 w-4 text-blue-500" />
@@ -347,6 +372,9 @@ export function ContainerListView({
                                           variant="ghost"
                                           size="icon"
                                           onClick={() => onReverseOffload(c)}
+                                          disabled={!recordChanges.allowed}
+                                          title={recordChangeReason}
+                                          aria-label={recordChanges.reason ?? "Reverse Offload"}
                                           data-testid={`button-reverse-offload-${c.id}`}
                                         >
                                           <RotateCcw className="h-4 w-4 text-amber-500" />
@@ -360,6 +388,9 @@ export function ContainerListView({
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => onEdit(c)}
+                                  disabled={!recordChanges.allowed}
+                                  title={recordChangeReason}
+                                  aria-label={recordChanges.reason ?? "Edit container"}
                                   data-testid={`button-edit-container-${c.id}`}
                                 >
                                   <Pencil className="h-4 w-4" />
@@ -368,6 +399,9 @@ export function ContainerListView({
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => onDelete(c.id)}
+                                  disabled={!recordChanges.allowed}
+                                  title={recordChangeReason}
+                                  aria-label={recordChanges.reason ?? "Delete container"}
                                   data-testid={`button-delete-container-${c.id}`}
                                 >
                                   <Trash2 className="h-4 w-4 text-destructive" />

@@ -6,6 +6,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { FlaskConical, ArrowDown, Tag, Layers, Calculator } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { queryClient } from "@/lib/queryClient";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
@@ -31,7 +32,6 @@ import { DeductStockDialog, type DeductStockPayload } from "./production-raw-sto
 import { AddToBatchDialog, type AddToBatchSource } from "./production-raw-stock/AddToBatchDialog";
 import { CreateMixBatchDialog } from "@/components/CreateMixBatchDialog";
 import { EditMixBatchDialog } from "@/components/EditMixBatchDialog";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 
 interface AddToBatchPayload {
   batchId: number;
@@ -43,12 +43,10 @@ export default function ProductionRawStock() {
   const { wrapAdminAction, AdminDialog } = useAdminOverride();
   const { formatDisplayDate } = useDateFormat();
   const { toast } = useToast();
+  const recordChanges = useExistingRecordChangeAccess();
   const appMode = useAppMode();
   const { language } = useApplicationLanguage();
   const modeApiRequest = getApiRequest(appMode);
-  // Offload, adjust, deduct, top-up, delete and WhatsApp send all change existing stock or post for it.
-  const recordChanges = useExistingRecordChangeAccess();
-  const canCreateMixBatch = recordChanges.canCreate("POST", "/api/factory/mix-batches");
 
   const [offloadDialogOpen, setOffloadDialogOpen] = useState(false);
   const [fixedPlannerOpen, setFixedPlannerOpen] = useState(false);
@@ -135,7 +133,6 @@ export default function ProductionRawStock() {
 
   const offloadMutation = useMutation({
     mutationFn: async (data: OffloadPayload) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await modeApiRequest("POST", "/api/factory/raw-stock/offload", data);
       if (!res.ok) throw new Error((await res.json()).message || "Failed to offload");
       return res.json();
@@ -158,7 +155,6 @@ export default function ProductionRawStock() {
 
   const createAdjustmentMutation = useMutation({
     mutationFn: async (payload: StockAdjustmentPayload) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await modeApiRequest("POST", "/api/factory/raw-stock/adjustment", payload);
       if (!res.ok) throw new Error((await res.json()).message || "Failed to save adjustment");
       return res.json();
@@ -172,7 +168,6 @@ export default function ProductionRawStock() {
 
   const deductReceivedMutation = useMutation({
     mutationFn: async (payload: DeductStockPayload) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await modeApiRequest("POST", "/api/factory/raw-stock/deduct-received", payload);
       if (!res.ok) throw new Error((await res.json()).message || "Failed to deduct");
       return res.json();
@@ -186,7 +181,6 @@ export default function ProductionRawStock() {
 
   const addToBatchMutation = useMutation({
     mutationFn: async (data: AddToBatchPayload) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await modeApiRequest("POST", `/api/factory/mix-batches/${data.batchId}/top-up`, {
         supplierSources: [{ supplierId: data.supplierId, weightKg: data.weightKg }],
       });
@@ -203,7 +197,6 @@ export default function ProductionRawStock() {
 
   const deleteMixBatchMutation = useMutation({
     mutationFn: async (id: number) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       const res = await modeApiRequest("DELETE", `/api/factory/mix-batches/${id}`);
       if (!res.ok) throw new Error((await res.json()).message || "Failed to delete batch");
       return res.json();
@@ -220,7 +213,6 @@ export default function ProductionRawStock() {
 
   const sendWhatsAppMutation = useMutation({
     mutationFn: async () => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (!mixBatchPrintRef.current) throw new Error("Nothing to capture");
       if (!reportAllocations || reportLoading)
         throw new Error("Save a Fixed Production Plan before sending a target comparison.");
@@ -290,7 +282,7 @@ export default function ProductionRawStock() {
           >
             <Calculator className="h-4 w-4" /> {translateFixedProductionPlanner("title", language)}
           </Button>
-          {canCreateMixBatch && (
+          {!recordChanges.isCreateOnly && (
             <Button
               onClick={() => setCreateMixBatchOpen(true)}
               className="h-11 gap-2 rounded-xl bg-blue-600 px-3 text-xs font-bold text-white shadow-sm shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md dark:bg-blue-500 dark:text-white dark:hover:bg-blue-400 sm:h-10"
@@ -309,14 +301,16 @@ export default function ProductionRawStock() {
               <ArrowDown className="h-4 w-4" /> Offload Container
             </Button>
           )}
-          <Button
-            variant="outline"
-            onClick={() => setCategoriesDialogOpen(true)}
-            className="h-11 gap-2 rounded-xl border-amber-500/40 bg-amber-500/5 px-3 text-xs font-bold text-amber-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-amber-500/70 hover:bg-amber-500/10 hover:shadow-md dark:text-amber-300 min-[360px]:col-span-2 sm:h-10 sm:w-auto"
-            data-testid="button-manage-categories"
-          >
-            <Tag className="h-4 w-4" /> Categories
-          </Button>
+          {recordChanges.allowed && (
+            <Button
+              variant="outline"
+              onClick={() => setCategoriesDialogOpen(true)}
+              className="h-11 gap-2 rounded-xl border-amber-500/40 bg-amber-500/5 px-3 text-xs font-bold text-amber-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-amber-500/70 hover:bg-amber-500/10 hover:shadow-md dark:text-amber-300 min-[360px]:col-span-2 sm:h-10 sm:w-auto"
+              data-testid="button-manage-categories"
+            >
+              <Tag className="h-4 w-4" /> Categories
+            </Button>
+          )}
         </div>
       </div>
 
@@ -326,7 +320,6 @@ export default function ProductionRawStock() {
         <section className="min-w-0 space-y-4">
           <RawStockTable
             rawStock={rawStock || []}
-            canChange={recordChanges.allowed}
             onAdjust={(row) => {
               setAdjIsNewMaterial(false);
               setAdjustingRow(row);
@@ -363,7 +356,6 @@ export default function ProductionRawStock() {
             onViewDetail={(batch) => setEditBatch(batch as unknown as FactoryMixBatch)}
             onSendWhatsApp={() => sendWhatsAppMutation.mutate()}
             isSendingWhatsApp={sendWhatsAppMutation.isPending}
-            canChange={recordChanges.allowed}
             mixBatchDate={mixBatchDate}
             setMixBatchDate={setMixBatchDate}
             mixBatchesByDate={mixBatchesByDate}

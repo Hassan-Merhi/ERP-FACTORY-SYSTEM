@@ -1,5 +1,4 @@
 import type { ClientErrorLike } from "@/lib/clientError";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -14,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { CalendarDays, Save, Printer, FileDown, Loader2, MessageCircle, Search } from "lucide-react";
 
 import type {
@@ -58,6 +58,7 @@ interface AttendanceWhatsappSettings {
 
 export default function FactoryAttendance() {
   const { toast } = useToast();
+  // View Only / Create Only roles read attendance but never save or bulk-mark it.
   const recordChanges = useExistingRecordChangeAccess();
   const [mode, setMode] = useState<ViewMode>(getInitialMode);
 
@@ -123,7 +124,6 @@ export default function FactoryAttendance() {
 
   const sendWhatsappImageMutation = useMutation({
     mutationFn: async () => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
       if (!attendanceReportRef.current) throw new Error("Attendance image is not ready");
 
       const html2canvas = (await import("html2canvas")).default;
@@ -157,13 +157,11 @@ export default function FactoryAttendance() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: (payload: { records: AttendanceBulkRecord[]; credentials?: AttendanceAdminCredentials }) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      return apiRequest("POST", "/api/factory/attendance/bulk", {
+    mutationFn: (payload: { records: AttendanceBulkRecord[]; credentials?: AttendanceAdminCredentials }) =>
+      apiRequest("POST", "/api/factory/attendance/bulk", {
         records: payload.records,
         ...payload.credentials,
-      });
-    },
+      }),
     onSuccess: () => {
       setApprovalOpen(false);
       setPendingApprovalRecords(null);
@@ -413,49 +411,52 @@ export default function FactoryAttendance() {
                         />
                       </div>
 
-                      {recordChanges.allowed && (
-                        <Button
-                          variant="outline"
-                          size="default"
-                          onClick={() => sendWhatsappImageMutation.mutate()}
-                          disabled={
-                            !attendanceWaGroupId || !workers.length || isLoading || sendWhatsappImageMutation.isPending
-                          }
-                          data-testid="button-send-attendance-whatsapp-image"
-                          className="rounded-xl"
-                        >
-                          {sendWhatsappImageMutation.isPending ? (
-                            <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                          ) : (
-                            <MessageCircle className="mr-1.5 h-4 w-4" />
-                          )}
-                          {sendWhatsappImageMutation.isPending ? "Sending…" : "Send WhatsApp Image"}
-                        </Button>
-                      )}
+                      <Button
+                        variant="outline"
+                        size="default"
+                        onClick={() => sendWhatsappImageMutation.mutate()}
+                        disabled={
+                          !attendanceWaGroupId || !workers.length || isLoading || sendWhatsappImageMutation.isPending
+                        }
+                        data-testid="button-send-attendance-whatsapp-image"
+                        className="rounded-xl"
+                      >
+                        {sendWhatsappImageMutation.isPending ? (
+                          <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                        ) : (
+                          <MessageCircle className="mr-1.5 h-4 w-4" />
+                        )}
+                        {sendWhatsappImageMutation.isPending ? "Sending…" : "Send WhatsApp Image"}
+                      </Button>
 
                       <AttendanceActionsMenu
                         disabled={!workers.length}
+                        canChange={recordChanges.allowed}
                         onMarkAll={markAll}
                         onReset={reset}
                         onPrint={setPrintDialog}
                       />
 
-                      {recordChanges.allowed && (
-                        <Button
-                          size="default"
-                          className="rounded-xl shadow-xs"
-                          data-testid="button-save-attendance"
-                          onClick={handleSave}
-                          disabled={!workers.length || saveMutation.isPending || selectedDate > attendanceToday()}
-                        >
-                          {saveMutation.isPending ? (
-                            <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                          ) : (
-                            <Save className="mr-1.5 h-4 w-4" />
-                          )}
-                          {saveMutation.isPending ? "Saving…" : "Save Attendance"}
-                        </Button>
-                      )}
+                      <Button
+                        size="default"
+                        className="rounded-xl shadow-xs"
+                        data-testid="button-save-attendance"
+                        onClick={handleSave}
+                        disabled={
+                          !workers.length ||
+                          saveMutation.isPending ||
+                          selectedDate > attendanceToday() ||
+                          !recordChanges.allowed
+                        }
+                        title={recordChanges.reason ?? undefined}
+                      >
+                        {saveMutation.isPending ? (
+                          <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Save className="mr-1.5 h-4 w-4" />
+                        )}
+                        {saveMutation.isPending ? "Saving…" : "Save Attendance"}
+                      </Button>
                     </div>
                   </div>
 
@@ -781,22 +782,21 @@ export default function FactoryAttendance() {
                       )}
                       <span>{attendancePct}% attendance</span>
                     </div>
-                    {recordChanges.allowed && (
-                      <Button
-                        size="sm"
-                        className="rounded-xl shadow-xs sm:min-w-36"
-                        data-testid="button-save-attendance-sticky"
-                        onClick={handleSave}
-                        disabled={saveMutation.isPending || selectedDate > attendanceToday()}
-                      >
-                        {saveMutation.isPending ? (
-                          <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Save className="mr-1.5 h-4 w-4" />
-                        )}
-                        {saveMutation.isPending ? "Saving…" : "Save Attendance"}
-                      </Button>
-                    )}
+                    <Button
+                      size="sm"
+                      className="rounded-xl shadow-xs sm:min-w-36"
+                      data-testid="button-save-attendance-sticky"
+                      onClick={handleSave}
+                      disabled={saveMutation.isPending || selectedDate > attendanceToday() || !recordChanges.allowed}
+                      title={recordChanges.reason ?? undefined}
+                    >
+                      {saveMutation.isPending ? (
+                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="mr-1.5 h-4 w-4" />
+                      )}
+                      {saveMutation.isPending ? "Saving…" : "Save Attendance"}
+                    </Button>
                   </div>
                 )}
               </CardContent>

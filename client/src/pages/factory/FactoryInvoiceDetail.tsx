@@ -3,6 +3,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useCompany } from "@/contexts/CompanyContext";
+import { factoryRecordChangeAccess } from "./factoryRecordChangeAccess";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   FileDown,
@@ -43,6 +45,9 @@ import { FactoryInvoiceAdminTotals } from "./factoryinvoicedetail/components/Fac
 
 export default function FactoryInvoiceDetail() {
   const model = useFactoryInvoiceDetailModel();
+  // View Only / Create Only roles read the invoice but never reprice, revert, delete or edit charges.
+  const recordChanges = factoryRecordChangeAccess(useCompany().selectedCompany?.role);
+  const canChange = recordChanges.allowed;
   const {
     formatDisplayDate,
     navigate,
@@ -95,7 +100,6 @@ export default function FactoryInvoiceDetail() {
     handleExportPdf,
     handleExportPdfNoCharges,
     handleExportLoadingStatus,
-    canChangeExistingRecords,
   } = model;
 
   const invoiceQueryParams =
@@ -204,7 +208,7 @@ export default function FactoryInvoiceDetail() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Primary context action */}
-          {canChangeExistingRecords && order.status === "DRAFT" && (
+          {order.status === "DRAFT" && canChange && (
             <Button
               variant="outline"
               onClick={() => navigate(`/factory/sales/new?orderId=${order.id}`)}
@@ -237,7 +241,7 @@ export default function FactoryInvoiceDetail() {
               )}
             </Button>
           )}
-          {isFinalized && (
+          {isFinalized && canChange && (
             <Button
               onClick={() => navigate(`/factory/invoices/${order.id}/loading-scan`)}
               data-testid="button-scan-loading"
@@ -270,7 +274,7 @@ export default function FactoryInvoiceDetail() {
                 </>
               )}
 
-              {isAdmin && canChangeExistingRecords && (
+              {isAdmin && canChange && (
                 <>
                   <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">Pricing</DropdownMenuLabel>
                   {order.status !== "CANCELLED" && (
@@ -334,11 +338,11 @@ export default function FactoryInvoiceDetail() {
                 </DropdownMenuItem>
               )}
 
-              {canChangeExistingRecords &&
-                isAdmin &&
+              {isAdmin &&
+                canChange &&
                 (isFinalized || order.status !== "FINALIZED") &&
                 order.status !== "CANCELLED" && <DropdownMenuSeparator />}
-              {canChangeExistingRecords && isAdmin && isFinalized && (
+              {isAdmin && canChange && isFinalized && (
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
                   onSelect={() => setRevertDialogOpen(true)}
@@ -348,7 +352,7 @@ export default function FactoryInvoiceDetail() {
                   Revert to Draft
                 </DropdownMenuItem>
               )}
-              {canChangeExistingRecords && order.status !== "FINALIZED" && order.status !== "CANCELLED" && (
+              {canChange && order.status !== "FINALIZED" && order.status !== "CANCELLED" && (
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
                   onSelect={() => setDeleteDialogOpen(true)}
@@ -508,9 +512,7 @@ export default function FactoryInvoiceDetail() {
                           className={`text-right font-mono${hideExportSelling ? " print:hidden" : ""}`}
                           data-testid={`text-price-per-bale-${idx}`}
                         >
-                          {canChangeExistingRecords &&
-                          (isVerifiedStatus || order.status === "FINALIZED") &&
-                          !isPerKg ? (
+                          {(isVerifiedStatus || order.status === "FINALIZED") && !isPerKg ? (
                             editingArticleCode === line.articleCode ? (
                               <Input
                                 ref={inputRef}
@@ -531,9 +533,10 @@ export default function FactoryInvoiceDetail() {
                             ) : (
                               <button
                                 onClick={() => startEdit(line.articleCode, line.pricePerBale)}
+                                disabled={!canChange}
                                 className="group flex items-center justify-end gap-1 w-full hover-elevate rounded-md px-1 py-0.5"
                                 data-testid={`button-edit-price-${idx}`}
-                                title="Click to edit price"
+                                title={recordChanges.reason ?? "Click to edit price"}
                               >
                                 <span>
                                   {displayRate.toLocaleString(undefined, {
@@ -577,31 +580,29 @@ export default function FactoryInvoiceDetail() {
             <h3 className="font-semibold" data-testid="text-charges-header">
               Freight &amp; Charges
             </h3>
-            {canChangeExistingRecords &&
-              isFinalized &&
-              [...freightCharges, ...otherCharges].some((c) => !c.voucherId) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => relinkVouchersMutation.mutate()}
-                  disabled={relinkVouchersMutation.isPending}
-                  data-testid="button-relink-charge-vouchers"
-                >
-                  {relinkVouchersMutation.isPending ? "Linking..." : "Fix Ledger Entries"}
-                </Button>
-              )}
+            {isFinalized && canChange && [...freightCharges, ...otherCharges].some((c) => !c.voucherId) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => relinkVouchersMutation.mutate()}
+                disabled={relinkVouchersMutation.isPending}
+                data-testid="button-relink-charge-vouchers"
+              >
+                {relinkVouchersMutation.isPending ? "Linking..." : "Fix Ledger Entries"}
+              </Button>
+            )}
           </div>
           <div className="space-y-3">
             {[...freightCharges, ...otherCharges].map((charge, idx) => {
               const linkedAccount = ledgerAccounts.find((a) => a.id === charge.ledgerAccountId);
               const isEditingLedger = editingChargeLedger === charge.id;
               const isEditingAmount = editingChargeAmount === charge.id;
-              const canEditAmount = canChangeExistingRecords && isFinalized && !!charge.voucherId;
+              const canEditAmount = canChange && isFinalized && !!charge.voucherId;
               return (
                 <div key={charge.id} className="space-y-1" data-testid={`row-charge-${idx}`}>
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm">{charge.name}</span>
-                    {canChangeExistingRecords && isEditingAmount ? (
+                    {isEditingAmount ? (
                       <div className="flex items-center gap-1 print:hidden">
                         <Input
                           type="number"
@@ -674,7 +675,7 @@ export default function FactoryInvoiceDetail() {
                       </div>
                     )}
                   </div>
-                  {canChangeExistingRecords && isEditingLedger ? (
+                  {isEditingLedger ? (
                     <div className="flex items-center gap-2 print:hidden">
                       <Select
                         value={String(charge.ledgerAccountId ?? "")}
@@ -716,18 +717,18 @@ export default function FactoryInvoiceDetail() {
                           No ledger account — not posted
                         </span>
                       )}
-                      {canChangeExistingRecords && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 text-xs px-2"
-                          onClick={() => setEditingChargeLedger(charge.id)}
-                          data-testid={`button-edit-charge-ledger-${charge.id}`}
-                        >
-                          <Pencil className="h-3 w-3 mr-1" />
-                          Link
-                        </Button>
-                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 text-xs px-2"
+                        onClick={() => setEditingChargeLedger(charge.id)}
+                        disabled={!canChange}
+                        title={recordChanges.reason ?? undefined}
+                        data-testid={`button-edit-charge-ledger-${charge.id}`}
+                      >
+                        <Pencil className="h-3 w-3 mr-1" />
+                        Link
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -735,7 +736,7 @@ export default function FactoryInvoiceDetail() {
             })}
           </div>
 
-          {canChangeExistingRecords && isFinalized && (
+          {isFinalized && canChange && (
             <div className="mt-3 pt-3 border-t print:hidden">
               {showAddCharge ? (
                 <div className="space-y-2">

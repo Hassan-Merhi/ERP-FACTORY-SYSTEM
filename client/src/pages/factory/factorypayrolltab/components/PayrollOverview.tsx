@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BatchRow } from "./BatchRow";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { FactoryPayrollState } from "../useFactoryPayroll";
 
 export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
@@ -49,8 +50,8 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
     stats,
     activeGroups,
     completedGroups,
-    canChangeExistingRecords,
   } = payroll;
+  const recordChanges = useExistingRecordChangeAccess();
   return (
     <>
       {/* Presentation-only metrics: all values still come from the existing payroll model. */}
@@ -159,13 +160,13 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
           {payrollGroups.length !== 1 ? "es" : ""}
         </p>
         <div className="flex gap-2 flex-wrap">
-          {canChangeExistingRecords && selectedIds.size > 0 && (
+          {selectedIds.size > 0 && recordChanges.allowed && (
             <Button variant="outline" onClick={() => setBulkPayOpen(true)} data-testid="button-bulk-pay">
               <DollarSign className="h-4 w-4 mr-2" />
               Pay {selectedIds.size} Selected
             </Button>
           )}
-          {canChangeExistingRecords && isDeveloper && (
+          {isDeveloper && recordChanges.allowed && (
             <Button
               size="icon"
               variant="ghost"
@@ -179,7 +180,7 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
               <ShieldCheck className="h-4 w-4 text-muted-foreground" />
             </Button>
           )}
-          {canChangeExistingRecords && (
+          {!recordChanges.isCreateOnly && (
             <Button
               className="rounded-xl bg-blue-600 px-5 font-semibold shadow-sm shadow-blue-500/20 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
               onClick={() => setRunOpen(true)}
@@ -236,7 +237,6 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
                   setDeleteBatchGroup={setDeleteBatchGroup}
                   formatDisplayDate={formatDisplayDate}
                   isDeveloper={isDeveloper}
-                  canChangeExistingRecords={canChangeExistingRecords}
                 />
               ))}
             </div>
@@ -279,7 +279,6 @@ export function PayrollOverview({ payroll }: { payroll: FactoryPayrollState }) {
                         formatDisplayDate={formatDisplayDate}
                         condensed
                         isDeveloper={isDeveloper}
-                        canChangeExistingRecords={canChangeExistingRecords}
                       />
                     ))}
                   </div>

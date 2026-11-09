@@ -7,6 +7,8 @@ import { Boxes, FileText, Plus, Search, Upload, Users, Weight, Wallet, X } from 
 import type { Customer, Proforma } from "./types";
 
 interface FactoryProformasHeaderProps {
+  /** False for Create Only: proforma create/import controls are hidden. */
+  canCreate: boolean;
   customerId: number | null;
   proformas: Proforma[];
   proformasLoading: boolean;
@@ -19,9 +21,6 @@ interface FactoryProformasHeaderProps {
   setExcelImportErrors: Dispatch<SetStateAction<string[]>>;
   setIsExcelImportOpen: Dispatch<SetStateAction<boolean>>;
   setIsCreateOpen: Dispatch<SetStateAction<boolean>>;
-  /** canCreate for POST /api/factory/customer-proformas/bulk and POST /api/factory/customer-proformas. */
-  canImportProforma: boolean;
-  canCreateProforma: boolean;
   customersLoading: boolean;
   selectedCustomerId: string;
   setSelectedCustomerId: Dispatch<SetStateAction<string>>;
@@ -33,6 +32,7 @@ interface FactoryProformasHeaderProps {
 
 export function FactoryProformasHeader(props: FactoryProformasHeaderProps) {
   const {
+    canCreate,
     customerId,
     proformas,
     proformasLoading,
@@ -43,8 +43,6 @@ export function FactoryProformasHeader(props: FactoryProformasHeaderProps) {
     setExcelImportErrors,
     setIsExcelImportOpen,
     setIsCreateOpen,
-    canImportProforma,
-    canCreateProforma,
     customersLoading,
     selectedCustomerId,
     setSelectedCustomerId,
@@ -127,36 +125,32 @@ export function FactoryProformasHeader(props: FactoryProformasHeaderProps) {
             <p className="mt-0.5 text-sm text-muted-foreground">Price lists for bale sales per customer</p>
           </div>
         </div>
-        {customerId && (
+        {customerId && canCreate && (
           <div className="flex items-center gap-2 flex-wrap">
-            {canImportProforma && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 rounded-xl border-border/70 bg-background/70 px-4 shadow-sm"
-                data-testid="button-import-excel-proforma"
-                onClick={() => {
-                  setExcelImportName("");
-                  setExcelImportLines([]);
-                  setExcelImportErrors([]);
-                  setIsExcelImportOpen(true);
-                }}
-              >
-                <Upload className="mr-1.5 h-3.5 w-3.5" />
-                Import Excel
-              </Button>
-            )}
-            {canCreateProforma && (
-              <Button
-                size="sm"
-                className="h-9 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-white shadow-md shadow-violet-500/15 hover:from-violet-500 hover:to-indigo-500"
-                data-testid="button-create-proforma"
-                onClick={() => setIsCreateOpen(true)}
-              >
-                <Plus className="mr-1.5 h-3.5 w-3.5" />
-                New Proforma
-              </Button>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 rounded-xl border-border/70 bg-background/70 px-4 shadow-sm"
+              data-testid="button-import-excel-proforma"
+              onClick={() => {
+                setExcelImportName("");
+                setExcelImportLines([]);
+                setExcelImportErrors([]);
+                setIsExcelImportOpen(true);
+              }}
+            >
+              <Upload className="mr-1.5 h-3.5 w-3.5" />
+              Import Excel
+            </Button>
+            <Button
+              size="sm"
+              className="h-9 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-white shadow-md shadow-violet-500/15 hover:from-violet-500 hover:to-indigo-500"
+              data-testid="button-create-proforma"
+              onClick={() => setIsCreateOpen(true)}
+            >
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              New Proforma
+            </Button>
           </div>
         )}
       </div>

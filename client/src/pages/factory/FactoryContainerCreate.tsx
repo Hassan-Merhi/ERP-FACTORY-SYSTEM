@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { PageHeader } from "@/components/PageHeader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
@@ -24,6 +25,8 @@ export default function FactoryContainerCreate() {
   const [, navigate] = useLocation();
   useEscapeToParent("/factory/containers");
   const { toast } = useToast();
+  // Create Only roles may add bale batches and customer-order drafts, not containers.
+  const { isCreateOnly } = useExistingRecordChangeAccess();
 
   const [formData, setFormData] = useState({
     containerNumber: "",
@@ -639,7 +642,12 @@ export default function FactoryContainerCreate() {
         <Button variant="outline" onClick={() => navigate("/factory/containers")} data-testid="button-cancel">
           Cancel
         </Button>
-        <Button onClick={() => createMutation.mutate()} disabled={!canSubmit} data-testid="button-create-container">
+        <Button
+          onClick={() => createMutation.mutate()}
+          disabled={!canSubmit || isCreateOnly}
+          title={isCreateOnly ? "Your role cannot create factory containers." : undefined}
+          data-testid="button-create-container"
+        >
           {createMutation.isPending ? "Creating..." : "Create Container"}
         </Button>
       </FactoryMobileActionBar>

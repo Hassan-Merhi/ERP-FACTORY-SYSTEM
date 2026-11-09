@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { queryClient } from "@/lib/queryClient";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { ProductionBonusDecisionPanel } from "../../factorypayroll/ProductionBonusDecisionPanel";
 import type { BatchRowProps, PayrollRecord } from "../types";
 import { STATUS_CONFIG, fmt, fmtDate } from "../utils";
@@ -36,15 +37,16 @@ export function BatchRow({
   formatDisplayDate,
   condensed,
   isDeveloper,
-  canChangeExistingRecords,
 }: BatchRowProps) {
   const [bonusPayrollId, setBonusPayrollId] = useState<number | null>(null);
+  // View Only / Create Only roles see payroll history without pay, undo or delete.
+  const recordChanges = useExistingRecordChangeAccess();
   const isExpanded = expanded.has(group.key);
   const total = group.records.reduce((sum, payroll) => sum + parseFloat(payroll.netSalary || "0"), 0);
   const paidCount = group.records.filter((payroll) => payroll.status === "PAID").length;
   const unpaidCount = group.records.length - paidCount;
   const groupPayable = group.records.filter(
-    (payroll) => payroll.status !== "PAID" && pendingProductionBonus(payroll) <= 0
+    (payroll) => recordChanges.allowed && payroll.status !== "PAID" && pendingProductionBonus(payroll) <= 0
   );
   const allGroupSelected = groupPayable.length > 0 && groupPayable.every((payroll) => selectedIds.has(payroll.id));
   const bonusPayroll = group.records.find((payroll) => payroll.id === bonusPayrollId) ?? null;
@@ -88,7 +90,7 @@ export function BatchRow({
               )}
             </p>
           </div>
-          {canChangeExistingRecords && groupPayable.length > 0 && (
+          {groupPayable.length > 0 && (
             <Checkbox
               checked={allGroupSelected}
               onCheckedChange={(checked) => {
@@ -103,7 +105,7 @@ export function BatchRow({
               aria-label="Select all payable workers in batch"
             />
           )}
-          {canChangeExistingRecords && (
+          {recordChanges.allowed && (
             <Button
               size="icon"
               variant="ghost"
@@ -144,7 +146,7 @@ export function BatchRow({
               {group.records.map((payroll) => {
                 const cfg = STATUS_CONFIG[payroll.status] || STATUS_CONFIG.DRAFT;
                 const pendingBonus = pendingProductionBonus(payroll);
-                const canPay = payroll.status !== "PAID" && pendingBonus <= 0;
+                const canPay = recordChanges.allowed && payroll.status !== "PAID" && pendingBonus <= 0;
                 const hasProductionBonusActivity =
                   Number(payroll.suggestedProductionBonus || 0) > 0 ||
                   Number(payroll.productionBonus || 0) > 0 ||
@@ -157,7 +159,7 @@ export function BatchRow({
                     data-testid={`row-payroll-${payroll.id}`}
                   >
                     <TableCell className="pl-8">
-                      {canChangeExistingRecords && canPay && (
+                      {canPay && (
                         <Checkbox
                           checked={selectedIds.has(payroll.id)}
                           onCheckedChange={() =>
@@ -250,7 +252,7 @@ export function BatchRow({
                             />
                           </Button>
                         )}
-                        {canChangeExistingRecords && canPay && (
+                        {canPay && (
                           <Button
                             size="sm"
                             variant="outline"
@@ -264,8 +266,8 @@ export function BatchRow({
                             Pay
                           </Button>
                         )}
-                        {canChangeExistingRecords &&
-                          isDeveloper &&
+                        {isDeveloper &&
+                          recordChanges.allowed &&
                           (payroll.status === "PAID" || payroll.status === "APPROVED") &&
                           !payroll.cashAccountId && (
                             <Button
@@ -282,7 +284,7 @@ export function BatchRow({
                               <Wrench className="h-4 w-4 text-amber-500" />
                             </Button>
                           )}
-                        {canChangeExistingRecords && (
+                        {recordChanges.allowed && (
                           <>
                             <Button
                               size="icon"

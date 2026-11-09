@@ -18,6 +18,7 @@ import { AssignProformaDestinationDialog } from "./factory-proformas/dialogs/Ass
 import type { Proforma } from "./factoryproformas/types";
 export default function FactoryProformas() {
   const model = useFactoryProformasModel();
+  const { recordChanges } = model;
   const {
     navigate,
     expandedProformaIds,
@@ -67,6 +68,7 @@ export default function FactoryProformas() {
   return (
     <div className="flex h-full flex-col bg-gradient-to-b from-violet-500/[0.035] via-background to-background dark:from-violet-600/[0.08]">
       <FactoryProformasHeader
+        canCreate={!recordChanges.isCreateOnly}
         customerId={customerId}
         proformas={proformas}
         proformasLoading={proformasLoading}
@@ -77,8 +79,6 @@ export default function FactoryProformas() {
         setExcelImportErrors={model.setExcelImportErrors}
         setIsExcelImportOpen={model.setIsExcelImportOpen}
         setIsCreateOpen={model.setIsCreateOpen}
-        canImportProforma={model.canImportProforma}
-        canCreateProforma={model.canCreateProforma}
         customersLoading={customersLoading}
         selectedCustomerId={model.selectedCustomerId}
         setSelectedCustomerId={model.setSelectedCustomerId}
@@ -121,7 +121,7 @@ export default function FactoryProformas() {
             </div>
             <p className="font-medium text-muted-foreground">No proformas yet</p>
             <p className="text-sm text-muted-foreground mt-1">Create a proforma to define this customer's pricing</p>
-            {model.canCreateProforma && (
+            {!recordChanges.isCreateOnly && (
               <Button size="sm" className="mt-4" onClick={() => model.setIsCreateOpen(true)}>
                 <Plus className="mr-1.5 h-3.5 w-3.5" />
                 New Proforma
@@ -216,9 +216,7 @@ export default function FactoryProformas() {
                     customerId={customerId}
                     hideProformaPrice={model.hideProformaPrice}
                     canEdit={model.canEdit}
-                    canChangeExistingRecords={model.canChangeExistingRecords}
-                    changeDisabledReason={model.changeDisabledReason}
-                    canCreateDispatchBatch={model.canCreateDispatchBatch}
+                    recordChanges={recordChanges}
                     formatAmount={model.formatAmount}
                     formatProformaDate={model.formatProformaDate}
                     navigate={navigate}

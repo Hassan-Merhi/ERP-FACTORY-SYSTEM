@@ -3,6 +3,7 @@ import { formatNumber } from "@/lib/formatNumber";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { ChevronRight, ChevronDown, Eye, EyeOff, FlaskRound, Plus, MinusCircle, Layers } from "lucide-react";
 import { SupplierMixBatchHistoryDialog } from "./SupplierMixBatchHistoryDialog";
 
@@ -31,11 +32,11 @@ interface RawStockTableProps {
   onDeduct: (row: RawStockRow) => void;
   onAddToBatch: (row: RawStockRow) => void;
   onNewMaterial: () => void;
-  /** False for read-only company roles: adjust, deduct and batch actions are not offered. */
-  canChange?: boolean;
 }
 
-export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch, canChange = true }: RawStockTableProps) {
+export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: RawStockTableProps) {
+  // View Only / Create Only roles see raw stock without adjust, deduct or batch actions.
+  const recordChanges = useExistingRecordChangeAccess();
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({ Uncategorized: true });
   const [historyDialog, setHistoryDialog] = useState<{ supplierId: number; supplierName: string } | null>(null);
   const [showZeroBalance, setShowZeroBalance] = useState(false);
@@ -199,7 +200,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch, canC
                             </div>
                           </div>
 
-                          {canChange && (
+                          {recordChanges.allowed && (
                             <div className="grid grid-cols-3 gap-2">
                               <Button
                                 type="button"
@@ -378,7 +379,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch, canC
                               </div>
                             </TableCell>
                             <TableCell className="py-3 text-right pr-4">
-                              {canChange && (
+                              {recordChanges.allowed && (
                                 <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 touch:opacity-100">
                                   <Button
                                     size="icon"

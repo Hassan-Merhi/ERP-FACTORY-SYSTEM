@@ -7,6 +7,7 @@ import { Check, Loader2, Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import type { EditableShippingField } from "./InvoiceOrderRow";
 
 interface Props {
@@ -16,19 +17,10 @@ interface Props {
   multiline?: boolean;
   maxLength: number;
   onSave: (orderId: number, field: EditableShippingField, value: string) => Promise<void>;
-  /** Read-only roles see the value without the inline editor. */
-  readOnly?: boolean;
 }
 
-export function EditableShippingCell({
-  orderId,
-  field,
-  value,
-  multiline = false,
-  maxLength,
-  onSave,
-  readOnly = false,
-}: Props) {
+export function EditableShippingCell({ orderId, field, value, multiline = false, maxLength, onSave }: Props) {
+  const recordChanges = useExistingRecordChangeAccess();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
@@ -58,18 +50,6 @@ export function EditableShippingCell({
     } finally {
       setSaving(false);
     }
-  }
-
-  if (readOnly) {
-    return (
-      <div
-        className="min-w-[100px] max-w-[220px] truncate"
-        title={value || undefined}
-        data-testid={`text-inline-${field}-${orderId}`}
-      >
-        {value || <span className="text-muted-foreground/50">—</span>}
-      </div>
-    );
   }
 
   return (
@@ -150,16 +130,19 @@ export function EditableShippingCell({
       ) : (
         <button
           type="button"
-          title={value || "Click to edit"}
+          title={recordChanges.reason ?? (value || "Click to edit")}
           onClick={startEdit}
+          disabled={!recordChanges.allowed}
           className="group flex w-full min-h-7 items-center gap-1 text-left hover:text-foreground"
-          aria-label={`Edit ${field}`}
+          aria-label={recordChanges.reason ?? `Edit ${field}`}
           data-testid={`edit-inline-${field}-${orderId}`}
         >
           <span className="min-w-0 flex-1 truncate">
             {value || <span className="text-muted-foreground/50">—</span>}
           </span>
-          <Pencil className="h-3 w-3 shrink-0 opacity-40 group-hover:opacity-100" aria-hidden="true" />
+          {recordChanges.allowed && (
+            <Pencil className="h-3 w-3 shrink-0 opacity-40 group-hover:opacity-100" aria-hidden="true" />
+          )}
         </button>
       )}
     </div>

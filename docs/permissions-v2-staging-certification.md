@@ -62,6 +62,10 @@ Use a disposable copy for this step, because the HTTP suites create and remove t
    - Unset both switches.
 8. Attach the evidence directory and the operator's notes to the release record. Then update the `migration-staging`, `data-integrity` and `rollback-drill` gates with the evidence paths, the release commit and the result.
 
+## Relation to `staging-shadow-migration.mjs`
+
+`scripts/permissions/staging-shadow-migration.mjs` (from #3032) is a lighter runner meant for the staging service's Render shell. It refuses production, snapshots ten business tables, rehearses the shadow migration in a rolled-back transaction, applies it and verifies the result. It does not take or verify a backup, does not apply `20261107_001`, and does not check isolation as the service role. If you use it, still take and verify the backup first, then apply `migrations/20261107_001_permissions_v2_policy_mode_audit.sql`, and record that the backup, follow-up migration and service-role checks were done separately.
+
 ## If something fails
 
 - **Migration error:** the migration runs in one transaction and leaves nothing behind (verified locally). Fix the cause and re-run; the migrations are idempotent.

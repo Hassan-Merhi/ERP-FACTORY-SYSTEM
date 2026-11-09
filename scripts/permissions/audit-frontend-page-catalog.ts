@@ -40,7 +40,7 @@ const ROUTE_SOURCES = [
 // "/retail/products/:id" is dispatched with startsWith("/retail/products/").
 const PREFIX_ROUTES: Record<string, string> = { "/retail/products/:id": '"/retail/products/"' };
 const GATING_EVIDENCE =
-  /useExistingRecordChangeAccess|isExistingRecordReadOnlyRole|isCreateOnlyRole|\buseCan\(|<Can\b|canScan|changeDisabledReason|canChangeExistingRecords/;
+  /useExistingRecordChangeAccess|isExistingRecordReadOnlyRole|isCreateOnlyRole|\buseCan\(|<Can\b|canScan|changeDisabledReason|canChangeExistingRecords|factoryRecordChangeAccess/;
 const REPORT_PATH = "docs/permissions-v2-frontend-page-audit.md";
 
 const CATALOG_PATH = "config/permissions-v2-page-catalog.json";

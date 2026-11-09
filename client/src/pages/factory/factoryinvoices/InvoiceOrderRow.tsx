@@ -21,6 +21,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { TableCell, TableRow } from "@/components/ui/table";
 import {
   AlertDialog,
@@ -81,8 +82,6 @@ export interface InvoiceOrderRowContext {
   onToggleHideOrder: (order: CustomerOrder) => void;
   onDownload: (url: string, fallbackName: string) => void;
   isAdmin: boolean;
-  /** False for View Only and Create Only: hide hide/revert/delete/change-customer and inline edits. */
-  canChangeExistingRecords: boolean;
   unfinalizePending: boolean;
   onRevertOrder: (orderId: number) => void;
   onDeleteOrder: (orderId: number) => void;
@@ -117,13 +116,14 @@ export function InvoiceOrderRow({
   onToggleHideOrder,
   onDownload,
   isAdmin,
-  canChangeExistingRecords,
   unfinalizePending,
   onRevertOrder,
   onDeleteOrder,
   onChangeCustomer,
   onSaveShippingField,
 }: InvoiceOrderRowProps) {
+  const recordChanges = useExistingRecordChangeAccess();
+  const recordChangeReason = recordChanges.reason ?? undefined;
   const remaining = getRemainingBales(order);
   const expected = parseFloat(order.proformaExpectedBales || "0");
   const overloaded = getOverloadedBales(order);
@@ -172,7 +172,6 @@ export function InvoiceOrderRow({
             value={order.containerNumber}
             maxLength={100}
             onSave={onSaveShippingField}
-            readOnly={!canChangeExistingRecords}
           />
         </TableCell>
       )}
@@ -184,7 +183,6 @@ export function InvoiceOrderRow({
             value={order.bookingInfo}
             maxLength={2000}
             onSave={onSaveShippingField}
-            readOnly={!canChangeExistingRecords}
           />
         </TableCell>
       )}
@@ -196,7 +194,6 @@ export function InvoiceOrderRow({
             value={order.destination}
             maxLength={500}
             onSave={onSaveShippingField}
-            readOnly={!canChangeExistingRecords}
           />
         </TableCell>
       )}
@@ -209,7 +206,6 @@ export function InvoiceOrderRow({
             maxLength={10000}
             multiline
             onSave={onSaveShippingField}
-            readOnly={!canChangeExistingRecords}
           />
         </TableCell>
       )}
@@ -286,21 +282,20 @@ export function InvoiceOrderRow({
       )}
       <TableCell>
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          {canChangeExistingRecords && (
-            <Button
-              variant="ghost"
-              size="icon"
-              title={order.isHidden ? "Unhide loading" : "Hide loading"}
-              data-testid={`button-hide-order-${order.id}`}
-              onClick={() => onToggleHideOrder(order)}
-            >
-              {order.isHidden ? (
-                <Eye className="h-4 w-4 text-muted-foreground" />
-              ) : (
-                <EyeOff className="h-4 w-4 text-muted-foreground" />
-              )}
-            </Button>
-          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            title={recordChanges.reason ?? (order.isHidden ? "Unhide loading" : "Hide loading")}
+            disabled={!recordChanges.allowed}
+            data-testid={`button-hide-order-${order.id}`}
+            onClick={() => onToggleHideOrder(order)}
+          >
+            {order.isHidden ? (
+              <Eye className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <EyeOff className="h-4 w-4 text-muted-foreground" />
+            )}
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" data-testid={`button-download-${order.id}`} title="Download Invoice">
@@ -367,7 +362,7 @@ export function InvoiceOrderRow({
           >
             <Eye className="h-4 w-4" />
           </Button>
-          {canChangeExistingRecords && isAdmin && order.status === "LOADING" && (
+          {isAdmin && recordChanges.allowed && order.status === "LOADING" && (
             <Button
               variant="ghost"
               size="icon"
@@ -378,13 +373,15 @@ export function InvoiceOrderRow({
               <UserRoundCog className="h-4 w-4" />
             </Button>
           )}
-          {canChangeExistingRecords && order.status === "FINALIZED" && (
+          {order.status === "FINALIZED" && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  disabled={unfinalizePending}
+                  disabled={unfinalizePending || !recordChanges.allowed}
+                  title={recordChangeReason}
+                  aria-label={recordChanges.reason ?? "Revert to Verified"}
                   data-testid={`button-revert-order-${order.id}`}
                 >
                   <RotateCcw className="h-4 w-4 text-muted-foreground" />
@@ -411,10 +408,17 @@ export function InvoiceOrderRow({
               </AlertDialogContent>
             </AlertDialog>
           )}
-          {canChangeExistingRecords && order.status !== "FINALIZED" && (
+          {order.status !== "FINALIZED" && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="ghost" size="icon" data-testid={`button-delete-order-${order.id}`}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={!recordChanges.allowed}
+                  title={recordChangeReason}
+                  aria-label={recordChanges.reason ?? "Delete loading"}
+                  data-testid={`button-delete-order-${order.id}`}
+                >
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
               </AlertDialogTrigger>
