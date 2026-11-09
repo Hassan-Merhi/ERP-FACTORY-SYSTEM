@@ -10,6 +10,8 @@ import { BaleImport } from "./factoryimport/components/BaleImport";
 import { OpeningStockImport } from "./factoryimport/components/OpeningStockImport";
 import { SupplierObEdit } from "./factoryimport/components/SupplierObEdit";
 import type { FactoryMyAccess } from "@shared/apiTypes";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 
 const IMPORT_TABS: { key: ImportTab; label: string; icon: typeof Users; hiddenKey: string }[] = [
   { key: "suppliers", label: "Supplier Balances", icon: Users, hiddenKey: "hide_tab_import_suppliers" },
@@ -20,12 +22,15 @@ const IMPORT_TABS: { key: ImportTab; label: string; icon: typeof Users; hiddenKe
 ];
 
 export default function FactoryImport() {
+  const { selectedCompany } = useCompany();
   const [requestedTab, setRequestedTab] = useState<ImportTab>("suppliers");
   const { data: myAccess } = useQuery<FactoryMyAccess>({
-    queryKey: ["/api/factory/my-access"],
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60000,
   });
-  const hiddenTabs = myAccess?.hiddenCostFields ?? [];
+  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess.hasFactoryAccess
+    ? myAccess.hiddenCostFields
+    : IMPORT_TABS.map((tab) => tab.hiddenKey);
   const tabs = IMPORT_TABS.filter((tab) => !hiddenTabs.includes(tab.hiddenKey));
   const activeTab = tabs.some((tab) => tab.key === requestedTab) ? requestedTab : tabs[0]?.key;
 
