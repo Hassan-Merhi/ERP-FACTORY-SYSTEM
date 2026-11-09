@@ -13,7 +13,7 @@ import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { writeDaybookEntry } from "../_helpers";
-import { factoryContainers, factoryRawStock, factoryMixBatches, factoryMixBatchSources } from "@shared/schema";
+import { factoryContainers, factoryRawStock, factoryMixBatches, factoryMixBatchSources, factorySuppliers } from "@shared/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
 import { getStableSupplierCost } from "../../../services/factory/rawStockStableCost";
 import {
@@ -88,6 +88,11 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
           // happens to draw from.
           // The persisted locked rate only (the legacy receipt-weighted fallback
           // can carry a native-currency cost).
+          // Serialize concurrent mix allocations for the same supplier,
+          // including manual ADD stock with no physical raw-stock rows.
+          await tx.select({ id: factorySuppliers.id }).from(factorySuppliers)
+            .where(and(eq(factorySuppliers.companyId, companyId), eq(factorySuppliers.id, supplierId)))
+            .for("update");
           const [lockedRate, { rows: supplierRawStocks }] = await Promise.all([
             supplierLockedUsdRate(tx, companyId, supplierId),
             getStableSupplierCost(tx, companyId, supplierId, { forUpdate: true }),
