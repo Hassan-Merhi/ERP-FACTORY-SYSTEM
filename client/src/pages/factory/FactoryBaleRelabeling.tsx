@@ -44,8 +44,11 @@ import type { ApplyItem, ParsedRow, RelabelSession, Step, ValidationResult } fro
 import { downloadCsv, downloadExcelTemplate, parseExcelFile } from "./factorybalerelabeling/utils";
 import { LabelPreviewCard } from "./factorybalerelabeling/components/LabelPreviewCard";
 import type { FactoryMyAccess } from "@shared/apiTypes";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 
 export default function FactoryBaleRelabeling() {
+  const { selectedCompany } = useCompany();
   const { toast } = useToast();
   const { formatDisplayDate } = useDateFormat();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -60,10 +63,13 @@ export default function FactoryBaleRelabeling() {
   const [designColor, setDesignColor] = useState<A4DesignColor>("purple");
   const { colors } = useLabelDesignColors();
   const { data: myAccess } = useQuery<FactoryMyAccess>({
-    queryKey: ["/api/factory/my-access"],
+    queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     staleTime: 5 * 60000,
   });
-  const hiddenTabs = myAccess?.hiddenCostFields ?? [];
+  const hiddenTabs = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+    ? myAccess.hiddenCostFields
+    : ["hide_tab_relabeling_main", "hide_tab_relabeling_wipers"];
   const showRelabeling = !hiddenTabs.includes("hide_tab_relabeling_main");
   const showWipersReEntry = !hiddenTabs.includes("hide_tab_relabeling_wipers");
 
@@ -90,7 +96,8 @@ export default function FactoryBaleRelabeling() {
   const invalidRows = validationResults.filter((r) => !r.valid);
 
   const { data: sessions = [] } = useQuery<RelabelSession[]>({
-    queryKey: ["/api/factory/bales/relabel/sessions"],
+    queryKey: companyQueryKey("/api/factory/bales/relabel/sessions", selectedCompany?.id),
+    enabled: Boolean(selectedCompany?.id),
     queryFn: async () => {
       const res = await factoryApiRequest("GET", "/api/factory/bales/relabel/sessions");
       return res.json();

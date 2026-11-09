@@ -17,6 +17,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { ImportBalesTab } from "../bale-stock-entry/ImportBalesTab";
+import { LEGACY_FACTORY_RENAME_DEFAULTS } from "@shared/factoryUiDefaults";
 import type { useFactorySettingsModel } from "./useFactorySettingsModel";
 
 type Props = {
@@ -81,7 +82,7 @@ export function FactorySettingsAdminTools({ model }: Props) {
                   setCodePrefix(event.target.value);
                   setRenamePreview(null);
                 }}
-                placeholder="e.g. HMD13"
+                placeholder={LEGACY_FACTORY_RENAME_DEFAULTS.codePrefix}
                 data-testid="input-code-prefix"
               />
             </div>

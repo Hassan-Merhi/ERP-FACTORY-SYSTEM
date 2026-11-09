@@ -35,6 +35,8 @@ type QueueEntry = {
 };
 
 const MAX_CONCURRENT_API_GETS = 6;
+// Bound occupied slots so one hung backend request cannot starve every page.
+const API_GET_TIMEOUT_MS = 45_000;
 const MAX_CACHE_ENTRIES = 32;
 const MAX_CACHEABLE_RESPONSE_BYTES = 1_500_000;
 const HIDDEN_TAB_STALE_MS = 10 * 60_000;
@@ -503,11 +505,19 @@ export function installRequestStormGuard(): void {
     const requestPromise = (async () => {
       if (shouldDeferUntilVisible(url.pathname, ttlMs)) await waitUntilVisible(lifetime.controller.signal);
       const release = await acquireGetSlot(lifetime.controller.signal);
+      let requestTimeout: number | undefined;
       try {
-        const response = await originalFetch(
-          input,
-          forwardRequestInit(input, init, lifetime.controller.signal, revalidationEntry?.etag)
-        );
+        // Race the request itself: some browser/proxy fetch wrappers do not
+        // settle immediately on abort. The queue slot must still be released.
+        const response = await Promise.race([
+          originalFetch(input, forwardRequestInit(input, init, lifetime.controller.signal, revalidationEntry?.etag)),
+          new Promise<never>((_resolve, reject) => {
+            requestTimeout = window.setTimeout(() => {
+              lifetime.controller.abort();
+              reject(new Error(`Request timed out: ${url.pathname}`));
+            }, API_GET_TIMEOUT_MS);
+          }),
+        ]);
         // The response exists; its body is still unread. Any later abort would
         // tear that stream down under the caller, so disarm before handing over.
         lifetime.disarm();
@@ -523,6 +533,7 @@ export function installRequestStormGuard(): void {
 
         return response;
       } finally {
+        if (requestTimeout !== undefined) window.clearTimeout(requestTimeout);
         release();
       }
     })().finally(() => {

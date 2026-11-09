@@ -8,6 +8,8 @@ export interface DataTableToolbarProps {
   search?: string;
   onSearchChange?: (value: string) => void;
   searchPlaceholder?: string;
+  searchAutoFocus?: boolean;
+  searchWrapperClassName?: string;
   searchTestId?: string;
   /** Controlled filters supplied by the owning page. */
   filters?: React.ReactNode;
@@ -29,6 +31,8 @@ export function DataTableToolbar({
   search,
   onSearchChange,
   searchPlaceholder = "Search...",
+  searchAutoFocus = false,
+  searchWrapperClassName,
   searchTestId = "input-search",
   filters,
   actions,
@@ -45,7 +49,8 @@ export function DataTableToolbar({
       onValueChange={onSearchChange}
       placeholder={searchPlaceholder}
       data-testid={searchTestId}
-      wrapperClassName="sm:w-72 sm:max-w-full"
+      autoFocus={searchAutoFocus}
+      wrapperClassName={cn("sm:w-72 sm:max-w-full", searchWrapperClassName)}
     />
   ) : null;
 

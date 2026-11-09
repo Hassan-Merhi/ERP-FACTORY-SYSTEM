@@ -17,16 +17,12 @@ import { useDateJump } from "@/hooks/use-date-jump";
 
 import { useToast } from "@/hooks/use-toast";
 import { PageHeader } from "@/components/PageHeader";
+import { ErpReportExportMenu, ErpReportPrintFooter } from "@/erp-core";
+import { useCompany } from "@/contexts/CompanyContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { FileSpreadsheet, FileText, TrendingUp, TrendingDown, ChevronRight, ChevronDown, Download } from "lucide-react";
+import { TrendingUp, TrendingDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { format, parseISO, startOfDay, startOfMonth, startOfYear } from "date-fns";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
@@ -67,6 +63,7 @@ function getInitialSalesReportGroups(): string[] {
 }
 
 export default function SalesReport() {
+  const { selectedCompany } = useCompany();
   const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>(getInitialSalesReportPeriod);
   useDateJump((date) => setPeriodFilter({ fromDate: date, toDate: date, preset: "custom" }));
 
@@ -434,31 +431,16 @@ export default function SalesReport() {
         subtitle="Analyze profit and loss from POS transactions"
         meta={isMultiCompanyMode ? <span>All Companies</span> : undefined}
       >
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              disabled={groupedData.length === 0}
-              data-testid="button-export-dropdown"
-            >
-              <Download className="w-4 h-4" />
-              Export
-              <ChevronDown className="w-4 h-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={handleExportExcel} data-testid="menu-export-excel">
-              <FileSpreadsheet className="w-4 h-4 mr-2" />
-              Export Excel
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleExportPDF} data-testid="menu-export-pdf">
-              <FileText className="w-4 h-4 mr-2" />
-              Export PDF
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <ErpReportExportMenu
+          size="sm"
+          className="gap-2"
+          disabled={groupedData.length === 0}
+          data-testid="button-export-dropdown"
+          options={[
+            { id: "sales-excel", testId: "menu-export-excel", label: "Export Excel", kind: "excel", onSelect: handleExportExcel },
+            { id: "sales-print", testId: "menu-export-pdf", label: "Print / Save PDF", kind: "print", onSelect: handleExportPDF },
+          ]}
+        />
       </PageHeader>
 
       {/* Summary Pills */}
@@ -771,6 +753,12 @@ export default function SalesReport() {
         </div>
       </div>
 
+      <ErpReportPrintFooter
+        title="Sales Report"
+        companyName={isMultiCompanyMode ? "Selected companies" : selectedCompany?.name}
+        fromDate={periodFilter.fromDate}
+        toDate={periodFilter.toDate}
+      />
       {/* Print Styles */}
       <style>{`
         @media print {

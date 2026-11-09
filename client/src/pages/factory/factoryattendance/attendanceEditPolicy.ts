@@ -1,20 +1,15 @@
-/** Mirror the server's Asia/Beirut calendar rule for early UI feedback only.
- * The server always enforces this independently.
+/**
+ * Mirror the server's Beirut-calendar rule for UI feedback only.
+ * All prior-day approval remains independently enforced by the server.
  */
+import { factoryLocalDate, factoryPastCalendarDates } from "@shared/factoryLocalDate";
+
 export function attendanceToday(): string {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Beirut",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const p = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
-  return `${p("year")}-${p("month")}-${p("day")}`;
+  return factoryLocalDate();
 }
 
 export function attendancePastDates(dates: string[]): string[] {
-  const today = attendanceToday();
-  return [...new Set(dates.filter((date) => date < today))];
+  return factoryPastCalendarDates(dates);
 }
 
 export interface AttendanceAdminCredentials {

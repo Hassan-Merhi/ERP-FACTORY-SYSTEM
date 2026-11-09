@@ -66,14 +66,22 @@ export function getPropertiesVisibleNavSections(isDeveloper: boolean): NavSectio
   })).filter((section) => section.items.length > 0);
 }
 
-// Pinned labels, order and routes come from the same manifest used by route guards.
-const pinnedIcons = [BookOpen, UserRound, Building2, Landmark, FileText, BarChart2] as const;
+// Stable route-keyed icons avoid silently changing icons if the manifest order
+// changes. Labels, URLs and visibility still come from the canonical registry.
+const pinnedIconsByPath = {
+  "/properties/daybook": BookOpen,
+  "/properties/agents": UserRound,
+  "/properties/rentals": Building2,
+  "/properties/accounts": Landmark,
+  "/properties/vouchers": FileText,
+  "/properties/analytics": BarChart2,
+} as const;
 export const PROPERTIES_PINNED_DEFAULTS: NavItem[] = PROPERTIES_NAVIGATION
   .filter((entry) => entry.navigation === "pinned")
-  .map((entry, index) => ({
+  .map((entry) => ({
     title: entry.label,
     url: entry.path,
-    icon: pinnedIcons[index] ?? Building2,
+    icon: pinnedIconsByPath[entry.path as keyof typeof pinnedIconsByPath] ?? Building2,
   }));
 
 export function PropertiesSidebar({ user, onLogout }: { user?: ShellUser; onLogout: () => void | Promise<void> }) {

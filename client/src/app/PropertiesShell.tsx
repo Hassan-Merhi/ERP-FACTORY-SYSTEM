@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useMainContentFocus } from "@/hooks/use-main-content-focus";
 import { PhoneSheetDialogs } from "@/components/ui/phone-sheet";
 import { useDocumentAppShell } from "@/hooks/use-document-app-shell";
@@ -38,6 +38,15 @@ export function PropertiesShell({ user, currentLocation, handleLogout, leaveConf
   // Fades the trailing edge of tab strips that still hide tabs (data-scroll-overflow).
   useScrollOverflowProbe(propertiesContainerRef);
   const hasAdminSearch = canUseAdminSearch(user);
+
+  // Fetch the frequently used Agent Ledger module in the background after the shell
+  // becomes interactive, instead of waiting until the first sidebar navigation.
+  // The same dynamic import is reused by React.lazy when the route opens.
+  useEffect(() => {
+    void import("@/pages/Agents").catch(() => {
+      // An unavailable chunk is handled by lazyRetry when the route is opened.
+    });
+  }, []);
 
   return (
     <PhoneSheetDialogs>

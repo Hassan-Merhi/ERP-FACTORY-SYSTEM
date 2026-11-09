@@ -61,9 +61,8 @@ function makeSheet(workbook: ExcelJS.Workbook, name: string, headers: string[], 
     fitToHeight: 0, margins: { left: 0.25, right: 0.25, top: 0.5, bottom: 0.5, header: 0.25, footer: 0.25 } };
   return ws;
 }
-function formatTrip(trip: { dispatchNumber: number; truckPlate?: string | null }) {
-  return "Dispatch #" + String(trip.dispatchNumber).padStart(3, "0") +
-    (trip.truckPlate ? " – " + trip.truckPlate : "");
+function formatTrip(trip: { dispatchNumber: number }) {
+  return "Trip #" + String(trip.dispatchNumber).padStart(3, "0");
 }
 
 export function buildFactoryLoadingDispatchWorkbook(report: DispatchReport): ExcelJS.Workbook {
@@ -85,11 +84,8 @@ export function buildFactoryLoadingDispatchWorkbook(report: DispatchReport): Exc
     ["Container", report.trip?.containerNumberSnapshot ?? report.loading.containerNumber],
     ["Loading Order ID", report.loading.orderId],
     ["Loading Status", report.loading.status],
-    ["Dispatch", report.trip ? formatTrip(report.trip) : "All trips"],
+    ["Trip Number", report.trip ? report.trip.dispatchNumber : "All trips"],
     ["Dispatch Status", report.trip?.status ?? "Multiple"],
-    ["Truck Plate", report.trip?.truckPlate ?? null],
-    ["Driver", report.trip?.driverName ?? null],
-    ["Destination", report.trip?.destination ?? null],
     ["Trip Notes", report.trip?.notes ?? null],
     ["Opened by", report.trip?.createdByUsername ?? null],
     ["Opened at (UTC)", formattedDate(report.trip?.createdAt)],
@@ -119,11 +115,11 @@ export function buildFactoryLoadingDispatchWorkbook(report: DispatchReport): Exc
 
   if (!report.trip) {
     makeSheet(wb, "Truck Trips",
-      ["Dispatch", "Truck Plate", "Status", "Verified Bales", "Verified KG"],
+      ["Trip Number", "Status", "Verified Bales", "Verified KG"],
       comp.trips.map((t) => [
-        t.dispatchNumber, t.truckPlate, t.status,
+        t.dispatchNumber, t.status,
         t.scannedBales, round(t.scannedWeightKg),
-      ]), [1, 4, 5]);
+      ]), [1, 3, 4]);
   }
 
   makeSheet(wb, "Article Comparison",

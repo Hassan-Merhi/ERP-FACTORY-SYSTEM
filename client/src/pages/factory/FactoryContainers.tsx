@@ -20,6 +20,7 @@ import { useLocation } from "wouter";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import type { FactorySupplier } from "@shared/schema";
 import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { usePaginatedFilterState } from "@/hooks/use-paginated-filter-state";
 
@@ -92,10 +93,10 @@ export default function FactoryContainers() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
-  const { data: containers, isLoading } = useQuery<ContainerWithSupplier[]>({ queryKey: ["/api/factory/containers"] });
-  const { data: suppliers } = useQuery<FactorySupplier[]>({ queryKey: ["/api/factory/suppliers"] });
+  const { data: containers, isLoading } = useQuery<ContainerWithSupplier[]>({ queryKey: companyQueryKey("/api/factory/containers", selectedCompany?.id) });
+  const { data: suppliers } = useQuery<FactorySupplier[]>({ queryKey: companyQueryKey("/api/factory/suppliers", selectedCompany?.id) });
   const { data: ledgerAccounts = [] } = useQuery<ApiListRow[]>({
-    queryKey: ["/api/factory/containers/account-options"],
+    queryKey: companyQueryKey("/api/factory/containers/account-options", selectedCompany?.id),
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
@@ -166,8 +167,8 @@ export default function FactoryContainers() {
       return res.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/containers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers"] });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/containers", selectedCompany?.id) });
+      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/suppliers", selectedCompany?.id) });
       setImportResult(data);
       toast({
         title: "Import Complete",

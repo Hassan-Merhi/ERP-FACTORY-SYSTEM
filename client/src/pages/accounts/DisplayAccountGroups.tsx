@@ -7,6 +7,8 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ErpField, ErpFormActions, ErpPendingButton, ErpConfirmDialog } from "@/erp-core";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export type AccountDisplayNode = {
@@ -45,6 +47,9 @@ export default function DisplayAccountGroups() {
   const { toast } = useToast();
   const [nodes, setNodes] = useState<AccountDisplayNode[]>([]);
   const [newName, setNewName] = useState("");
+  const [renameKey, setRenameKey] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [removeKey, setRemoveKey] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [draggedKey, setDraggedKey] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -135,17 +140,31 @@ export default function DisplayAccountGroups() {
     mutate([...nodes, { key, type: "group", name, parentKey: null, order: orderedRoot.length }]);
     setNewName("");
   };
+  // Display grouping is presentation-only; changes are staged until Save.
   const renameGroup = (key: string) => {
-    const current = nodes.find((n) => n.key === key);
-    const next = window.prompt("Rename display group", current?.name ?? "");
-    if (next == null || !next.trim() || next.trim().length > 120) return;
-    mutate(nodes.map((n) => (n.key === key ? { ...n, name: next.trim() } : n)));
+    const current = nodes.find((node) => node.key === key);
+    if (!current || current.type !== "group") return;
+    setRenameKey(key);
+    setRenameDraft(current.name ?? "");
+  };
+  const applyRename = () => {
+    const name = renameDraft.trim();
+    if (!renameKey || !name || name.length > 120) return;
+    mutate(nodes.map((node) => (node.key === renameKey ? { ...node, name } : node)));
+    setRenameKey(null);
+    setRenameDraft("");
   };
   const deleteGroup = (key: string) => {
-    if (!window.confirm("Remove this display group? Its accounts and vouchers remain unchanged.")) return;
-    let next = nodes.filter((n) => n.key !== key).map((n) => (n.parentKey === key ? { ...n, parentKey: null } : n));
-    next = next.map((n, i) => ({ ...n, order: n.parentKey ? n.order : i }));
+    if (nodes.some((node) => node.key === key && node.type === "group")) setRemoveKey(key);
+  };
+  const applyDelete = () => {
+    if (!removeKey) return;
+    let next = nodes
+      .filter((node) => node.key !== removeKey)
+      .map((node) => (node.parentKey === removeKey ? { ...node, parentKey: null } : node));
+    next = next.map((node, index) => ({ ...node, order: node.parentKey ? node.order : index }));
     mutate(next);
+    setRemoveKey(null);
   };
   const reorderOne = (key: string, direction: -1 | 1) => {
     const item = nodes.find((n) => n.key === key);
@@ -282,13 +301,18 @@ export default function DisplayAccountGroups() {
       ) : (
         <>
           <div className="flex flex-wrap gap-2">
-            <Input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && createGroup()}
-              placeholder="Group name (e.g. KAZEMBE)"
-              className="max-w-sm"
-            />
+            <ErpField id="new-display-group" label="New display group" className="min-w-40 flex-1 max-w-sm">
+              {(control) => (
+                <Input
+                  {...control}
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && createGroup()}
+                  placeholder="Group name (e.g. KAZEMBE)"
+                  maxLength={120}
+                />
+              )}
+            </ErpField>
             <Button
               variant="outline"
               size="sm"
@@ -311,9 +335,16 @@ export default function DisplayAccountGroups() {
             >
               <Plus className="h-4 w-4 mr-1" /> New display group
             </Button>
-            <Button onClick={() => save.mutate()} disabled={!dirty || save.isPending} className="ml-auto">
-              <Save className="h-4 w-4 mr-1" /> {save.isPending ? "Saving…" : "Save for all users"}
-            </Button>
+            <ErpPendingButton
+              onClick={() => save.mutate()}
+              disabled={!dirty}
+              pending={save.isPending}
+              pendingLabel="Saving…"
+              className="ml-auto"
+            >
+              <Save className="h-4 w-4 mr-1" />
+              Save for all users
+            </ErpPendingButton>
           </div>
           <Input
             value={search}
@@ -337,6 +368,53 @@ export default function DisplayAccountGroups() {
           )}
         </>
       )}
+
+      <Dialog open={renameKey !== null} onOpenChange={(open) => !open && setRenameKey(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename display group</DialogTitle>
+          </DialogHeader>
+          <ErpField id="rename-display-group" label="Group name" required>
+            {(control) => (
+              <Input
+                {...control}
+                value={renameDraft}
+                onChange={(event) => setRenameDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    applyRename();
+                  }
+                }}
+                maxLength={120}
+                data-testid="input-rename-display-group"
+              />
+            )}
+          </ErpField>
+          <ErpFormActions layout="dialog">
+            <Button type="button" variant="outline" onClick={() => setRenameKey(null)}>Cancel</Button>
+            <ErpPendingButton
+              type="button"
+              disabled={!renameDraft.trim()}
+              onClick={applyRename}
+              data-testid="button-confirm-rename-display-group"
+            >
+              Save name
+            </ErpPendingButton>
+          </ErpFormActions>
+        </DialogContent>
+      </Dialog>
+
+      <ErpConfirmDialog
+        open={removeKey !== null}
+        onOpenChange={(open) => !open && setRemoveKey(null)}
+        title="Remove display group?"
+        description="Accounts will become ungrouped in the draft layout. Ledger accounts, vouchers and balances will not be deleted. Save for all users to publish the change."
+        tone="destructive"
+        confirmText="Remove group"
+        confirmButtonTestId="button-confirm-remove-display-group"
+        onConfirm={applyDelete}
+      />
     </div>
   );
 }

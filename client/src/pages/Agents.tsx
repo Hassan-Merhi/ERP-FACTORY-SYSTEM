@@ -7,7 +7,7 @@ import { searchAny } from "@shared/searchNormalization";
  * math in pages/agents/agentStatementMath.ts, and Excel export in
  * pages/agents/agentStatementExcel.ts. Behaviour is unchanged.
  */
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, Suspense, lazy } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -28,11 +28,10 @@ import {
   withPartyDisplayBalance,
   type Account,
 } from "./agents/agentStatementMath";
-import { buildAgentStatementExcelRows, exportAgentStatementExcel } from "./agents/agentStatementExcel";
 import { useAgentLedger } from "./agents/useAgentLedger";
 import { AgentListPanel } from "./agents/AgentListPanel";
-import { AgentStatementPanel } from "./agents/AgentStatementPanel";
-import { AddAgentDialog } from "./agents/AddAgentDialog";
+const AgentStatementPanel = lazy(() => import("./agents/AgentStatementPanel").then((m) => ({ default: m.AgentStatementPanel })));
+const AddAgentDialog = lazy(() => import("./agents/AddAgentDialog").then((m) => ({ default: m.AddAgentDialog })));
 
 export default function Agents() {
   const { selectedCompany } = useCompany();
@@ -57,6 +56,10 @@ export default function Agents() {
     accountsLoading,
     agentAccountRows,
     agentsLoading,
+    accountsError,
+    agentsError,
+    retryAccounts,
+    retryAgents,
     transactions,
     transactionsLoading,
     prePeriodData,
@@ -128,6 +131,8 @@ export default function Agents() {
       isMultiCurrency && displayCurrency && exchangeRate
         ? `Displayed in ${selectedCurrency}; 1 ${baseCurrency} = ${exchangeRate.toLocaleString(undefined, { maximumFractionDigits: 6 })} ${displayCurrency}`
         : null;
+    // Load the spreadsheet implementation only when the user exports; it is not needed to open the ledger.
+    const { buildAgentStatementExcelRows, exportAgentStatementExcel } = await import("./agents/agentStatementExcel");
     const rows = buildAgentStatementExcelRows({
       account: selectedAccount,
       vouchersWithBalance,
@@ -146,6 +151,13 @@ export default function Agents() {
   };
 
   const listPanel = (
+    <div className={isPhone ? "flex w-full min-w-0 flex-col gap-2" : "flex w-80 shrink-0 min-w-0 flex-col gap-2 max-md:w-full"}>
+    {(accountsError || agentsError) && (
+      <div role="alert" className="rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-sm">
+        Unable to load some agent accounts. Check the connection and retry.
+        <button type="button" className="ml-2 font-semibold underline" onClick={() => { if (accountsError) void retryAccounts(); if (agentsError) void retryAgents(); }}>Retry</button>
+      </div>
+    )}
     <AgentListPanel
       agentAccounts={agentAccounts}
       hasAnyAgents={agentIds.size > 0}
@@ -162,8 +174,10 @@ export default function Agents() {
       }}
       phone={isPhone}
     />
+    </div>
   );
   const statementPanel = selectedAccount ? (
+    <Suspense fallback={<div className="rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground" role="status">Opening agent statement…</div>}>
     <AgentStatementPanel
       companyName={selectedCompany?.name}
       selectedAccount={selectedAccount}
@@ -182,8 +196,10 @@ export default function Agents() {
       formatDisplayDate={formatDisplayDate}
       phone={isPhone}
     />
+    </Suspense>
   ) : null;
-  const addDialog = (
+  const addDialog = addDialogOpen ? (
+    <Suspense fallback={null}>
     <AddAgentDialog
       open={addDialogOpen}
       onOpenChange={setAddDialogOpen}
@@ -194,7 +210,8 @@ export default function Agents() {
       formatAmount={formatAmount}
       onAdd={handleAddAgent}
     />
-  );
+    </Suspense>
+  ) : null;
 
   // Phones show one screen at a time: the agent list, then the selected agent's statement.
   if (isPhone) {

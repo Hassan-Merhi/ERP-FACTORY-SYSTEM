@@ -20,6 +20,10 @@ import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { companyQueryKey } from "@/lib/companyQueryScope";
+import { factoryActionCapabilities } from "@shared/factoryActionCapabilities";
+import { factoryStatusLabel } from "@shared/factoryStatusPresentation";
+import { useCompany } from "@/contexts/CompanyContext";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 
 interface ClosingSummary {
   expectedBales: number | null;
@@ -102,13 +106,22 @@ async function getJson<T>(url: string): Promise<T> {
 
 export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, companyId, status, role, onChanged }: Props) {
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
+  const { data: access } = useQuery<FactoryMyAccess>({
+    queryKey: companyQueryKey("/api/factory/my-access", companyId),
+    enabled: Boolean(companyId) && selectedCompany?.id === companyId,
+  });
   const { formatDisplayDateTime } = useDateFormat();
   const [, navigate] = useLocation();
   const base = "/api/factory/customer-orders/" + orderId + "/loading-dispatches/" + dispatchId;
   const previewUrl = base + "/close-preview";
   const lifecycleUrl = base + "/lifecycle";
-  const supervisory = ["owner", "admin", "developer"].includes(role.trim().toLowerCase());
-  const canClose = !["view only", "create only"].includes(role.trim().toLowerCase()) && status === "OPEN";
+  const capabilities = factoryActionCapabilities({
+    role,
+    hasFactoryAccess: Boolean(selectedCompany?.id === companyId && access?.companyId === companyId && access.hasFactoryAccess),
+  });
+  const supervisory = capabilities["dispatch.approve-discrepancy"];
+  const canClose = capabilities["dispatch.close"] && status === "OPEN";
   const [closeOpen, setCloseOpen] = useState(false);
   const [reopenOpen, setReopenOpen] = useState(false);
   const [closeConfirmed, setCloseConfirmed] = useState(false);
@@ -131,7 +144,8 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
   });
   const frozenUrl = frozenClosureId ? lifecycleUrl + "/closures/" + frozenClosureId : lifecycleUrl;
   const frozen = useQuery<FrozenSnapshot>({
-    queryKey: companyQueryKey(frozenUrl, companyId),
+    // Keep inactive snapshot state out of the lifecycle history query cache.
+    queryKey: companyQueryKey(lifecycleUrl + "/closure-snapshot/" + (frozenClosureId ?? "none"), companyId),
     queryFn: () => getJson<FrozenSnapshot>(frozenUrl),
     enabled: Boolean(companyId) && Boolean(frozenClosureId),
   });
@@ -198,7 +212,10 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
     preview.data.hasAnyScans &&
     (!hasApproval || (supervisory && discrepancyReason.trim().length >= 10 && discrepancyReason.trim().length <= 1000)),
   );
-  const latest = history.data?.closures[0] ?? null;
+  // Historical closure records may have incomplete snapshots. Never allow
+  // missing review data to crash the active dispatch page.
+  const closures = Array.isArray(history.data?.closures) ? history.data.closures : [];
+  const latest = closures[0] ?? null;
 
   return (
     <>
@@ -213,12 +230,12 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
                 <p className="mt-1 text-xs text-muted-foreground">
                   {status === "CLOSED"
                     ? "This truck record is locked. Scans, expected allocations and details can no longer be changed."
-                    : "End the trip after physically verifying its bales. Discrepancies require a supervisor approval."}
+                    : "Scan physical bales on this trip and End Dispatch. No truck targets are needed. Compare all trips against Pending Loading at the end."}
                 </p>
               </div>
             </div>
             <Badge variant="outline" className={status === "CLOSED" ? "border-emerald-500 text-emerald-600" : "border-blue-400 text-blue-600"}>
-              {status === "CLOSED" ? "Completed" : status === "OPEN" ? "Open" : status}
+              {status === "CLOSED" ? "Completed" : factoryStatusLabel("dispatch", status)}
             </Badge>
           </div>
 
@@ -226,7 +243,7 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
             <div className="space-y-1 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200">
               <p className="flex items-center gap-1.5 font-semibold"><CheckCircle2 className="h-4 w-4" /> Completed by {latest.closedByUsername}</p>
               <p>{formatDisplayDateTime(latest.closedAt)} · Closure #{latest.revision}</p>
-              <p>{fmt(latest.summary.verifiedBales)} verified bales · {fmt(latest.summary.verifiedWeightKg, 3)} kg</p>
+              <p>{fmt(latest.summary?.verifiedBales)} verified bales · {fmt(latest.summary?.verifiedWeightKg, 3)} kg</p>
               {latest.approvedWithDiscrepancies && <p className="font-semibold">Discrepancy approval: {latest.discrepancyReason}</p>}
             </div>
           )}
@@ -241,7 +258,7 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
                 <LockKeyhole className="mr-1.5 h-4 w-4" /> End Dispatch
               </Button>
             )}
-            {status === "CLOSED" && supervisory && (
+            {status === "CLOSED" && capabilities["dispatch.reopen"] && (
               <Button size="sm" variant="outline" onClick={() => {
                 setReopenReason(""); setReopenOpen(true);
               }} data-testid="button-reopen-dispatch">
@@ -262,15 +279,15 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
             <div className="space-y-3 border-t pt-3 dark:border-slate-700">
               {history.isLoading && <p className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading history…</p>}
               {history.isError && <p className="text-xs text-red-600">{errorMessage(history.error)}</p>}
-              {!history.isLoading && (history.data?.closures.length ?? 0) === 0 &&
+              {!history.isLoading && closures.length === 0 &&
                 <p className="text-xs text-muted-foreground">No closures yet. This trip is still open.</p>}
-              {history.data?.closures.map((closure) => (
+              {closures.map((closure) => (
                 <div key={String(closure.id)} className="space-y-2 rounded-lg border p-3 text-xs dark:border-slate-700">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-semibold">Closure #{closure.revision} · {closure.closedByUsername}</span>
                     <Badge variant="outline">{closure.reopenedAt ? "Reopened" : "Finalized"}</Badge>
                   </div>
-                  <p className="text-muted-foreground">{formatDisplayDateTime(closure.closedAt)} · {fmt(closure.summary.verifiedBales)} bales · {fmt(closure.summary.verifiedWeightKg, 3)} kg</p>
+                  <p className="text-muted-foreground">{formatDisplayDateTime(closure.closedAt)} · {fmt(closure.summary?.verifiedBales)} bales · {fmt(closure.summary?.verifiedWeightKg, 3)} kg</p>
                   {closure.approvedWithDiscrepancies && (
                     <p className="text-amber-700 dark:text-amber-300">Approved with discrepancies: {closure.discrepancyReason}</p>
                   )}
@@ -291,11 +308,11 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
                   </div>
                 </div>
               ))}
-              {history.data?.events.length ? (
+              {(history.data?.events?.length ?? 0) > 0 ? (
                 <div className="space-y-2">
                   <h4 className="text-xs font-semibold">Recent dispatch activity</h4>
                   <div className="max-h-[250px] space-y-1.5 overflow-y-auto">
-                    {history.data.events.slice(0, 40).map((event) => (
+                    {history.data?.events?.slice(0, 40).map((event) => (
                       <div key={String(event.id)} className="flex flex-wrap justify-between gap-2 rounded-lg bg-slate-50 p-2 text-xs dark:bg-[#0a172c]">
                         <span className="font-medium">{event.eventType.replace(/_/g, " ")}</span>
                         <span className="text-muted-foreground">{event.actorUsername} · {formatDisplayDateTime(event.createdAt)}</span>
@@ -332,9 +349,8 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {([
-                  ["Expected", fmt(s?.expectedBales)],
-                  ["Verified", fmt(s?.verifiedBales)],
-                  ["Missing", fmt(s?.missingBales)],
+                  ["Scanned bales", fmt(s?.verifiedBales)],
+                  ["Scanned KG", fmt(s?.verifiedWeightKg, 3)],
                   ["Unexpected", fmt(s?.unexpectedBales)],
                 ] as const).map(([name, value]) => (
                   <div className="rounded-lg bg-slate-50 p-2.5 dark:bg-[#0b162a]" key={name}>
@@ -344,9 +360,7 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
                 ))}
               </div>
               <p className="text-xs text-muted-foreground">
-                {fmt(s?.verifiedWeightKg, 3)} kg physically verified
-                {s?.expectedWeightKg !== null && s?.expectedWeightKg !== undefined
-                  ? " · " + fmt(s.expectedWeightKg, 3) + " kg expected" : " · expected KG not fully allocated"}
+                No expected allocation is needed per truck. Remaining bales will be identified in All Trips comparison.
               </p>
               {issues.length ? (
                 <div className="space-y-2 rounded-xl border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-950/20">
@@ -360,7 +374,7 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
                     <div className="space-y-2">
                       <p className="text-xs font-semibold">Supervisor reason for closing with discrepancies</p>
                       <Textarea value={discrepancyReason} maxLength={1000} rows={3}
-                        placeholder="Explain the missing / unexpected bales and why this truck may be finalized"
+                        placeholder="Explain the unexpected scanned bale(s) and why this trip may be ended"
                         onChange={(e) => setDiscrepancyReason(e.target.value)}
                         data-testid="input-dispatch-closure-reason" />
                       <p className="text-[11px] text-muted-foreground">Required: 10–1,000 characters. The reason and approval will be saved in permanent history.</p>
@@ -371,7 +385,7 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
                 </div>
               ) : (
                 <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-200">
-                  <CheckCircle2 className="h-4 w-4" /> All expected items match this truck's physical scans.
+                  <CheckCircle2 className="h-4 w-4" /> No scan anomalies found. This trip can be ended without an expected truck plan.
                 </div>
               )}
               {issues.length > 0 && (
@@ -437,14 +451,14 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
           </DialogHeader>
           {frozen.isPending && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading saved comparison…</p>}
           {frozen.isError && <p className="text-sm text-red-600">{errorMessage(frozen.error)}</p>}
-          {frozen.data && (
+          {frozenClosureId && frozen.data && (
             <div className="space-y-3">
               <p className="text-sm font-semibold">Closure #{frozen.data.revision} · {frozen.data.closedByUsername} · {formatDisplayDateTime(frozen.data.closedAt)}</p>
               <div className="flex flex-wrap gap-2">
-                <Badge variant="secondary">Verified {fmt(frozen.data.summary.verifiedBales)}</Badge>
-                <Badge variant="secondary">Expected {fmt(frozen.data.summary.expectedBales)}</Badge>
-                <Badge variant="secondary">Missing {fmt(frozen.data.summary.missingBales)}</Badge>
-                <Badge variant="secondary">Scanned KG {fmt(frozen.data.summary.verifiedWeightKg, 3)}</Badge>
+                <Badge variant="secondary">Verified {fmt(frozen.data.summary?.verifiedBales)}</Badge>
+                <Badge variant="secondary">Expected {fmt(frozen.data.summary?.expectedBales)}</Badge>
+                <Badge variant="secondary">Missing {fmt(frozen.data.summary?.missingBales)}</Badge>
+                <Badge variant="secondary">Scanned KG {fmt(frozen.data.summary?.verifiedWeightKg, 3)}</Badge>
               </div>
               {frozen.data.approvedWithDiscrepancies && <p className="rounded-lg bg-amber-50 p-2 text-sm text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
                 Supervisor approval: {frozen.data.discrepancyReason}

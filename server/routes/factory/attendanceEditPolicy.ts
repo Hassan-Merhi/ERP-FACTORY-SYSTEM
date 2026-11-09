@@ -4,17 +4,11 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../../db";
 import { users, userCompanyRoles } from "@shared/schema";
 import { verifyPasswordBcryptOnly } from "../helpers/passwordHelpers";
+import { factoryLocalDate } from "@shared/factoryLocalDate";
 
-/** All factory attendance locks use the server's Beirut calendar date, including DST changes. */
+/** Server-enforced Beirut calendar date, including DST changes. */
 export function factoryAttendanceToday(): string {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Beirut",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "";
-  return `${part("year")}-${part("month")}-${part("day")}`;
+  return factoryLocalDate();
 }
 
 export function isValidAttendanceDate(value: unknown): value is string {

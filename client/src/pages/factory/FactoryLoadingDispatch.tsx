@@ -22,11 +22,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TabsList, PillTabButton } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { companyQueryKey } from "@/lib/companyQueryScope";
+import { FACTORY_DISPATCH_TRIP_STATUS_LABELS, type FactoryDispatchTripStatus } from "@shared/factoryStatusPresentation";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import FactoryLoadingDispatchScanner from "./FactoryLoadingDispatchScanner";
-import FactoryLoadingDispatchAllocation from "./FactoryLoadingDispatchAllocation";
 import FactoryLoadingDispatchLifecycle from "./FactoryLoadingDispatchLifecycle";
 
 interface OrderBale {
@@ -41,7 +42,7 @@ interface LoadingOrder {
   containerNumber?: string | null;
   bales: OrderBale[];
 }
-type TripStatus = "OPEN" | "CLOSED" | "CANCELLED";
+type TripStatus = FactoryDispatchTripStatus;
 interface DispatchTrip {
   id: number;
   orderId: number;
@@ -65,14 +66,12 @@ interface DispatchList {
   dispatches: DispatchTrip[];
 }
 interface TripForm {
-  truckPlate: string;
-  driverName: string;
-  destination: string;
+  tripNumber: string;
   notes: string;
 }
 type TripFilter = "all" | "open" | "closed";
 
-const blankForm: TripForm = { truckPlate: "", driverName: "", destination: "", notes: "" };
+const blankForm: TripForm = { tripNumber: "", notes: "" };
 const activeOrderStatuses = new Set(["DRAFT", "LOADING", "PENDING_VERIFICATION"]);
 
 function tripPath(orderId: number, dispatchId?: number): string {
@@ -89,25 +88,37 @@ function printNumber(n: number, digits = 0): string {
 }
 
 async function getJson<T>(url: string): Promise<T> {
-  // Dispatch evidence must never be substituted with the SPA index.html by
-  // a stale browser/proxy cache. Expect the API's JSON response explicitly.
-  const response = await fetch(url, {
-    credentials: "include",
-    cache: "no-store",
-    headers: { Accept: "application/json" },
-  });
-  const contentType = response.headers.get("content-type") || "";
-  if (!contentType.toLowerCase().includes("application/json")) {
-    throw new Error(
-      "Dispatch API returned a webpage instead of data (HTTP " +
-      response.status + "). Check the backend deployment and refresh the page."
-    );
+  // After a rolling deployment some intermediaries can briefly return the
+  // SPA HTML shell for an API GET. Never interpret it as dispatch evidence.
+  // One cache-busted retry allows the client to recover without operator
+  // action while preserving real JSON errors and authorization responses.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const requestUrl = attempt === 0
+      ? url
+      : url + (url.includes("?") ? "&" : "?") + "_dispatch_retry=" + Date.now();
+    const response = await fetch(requestUrl, {
+      credentials: "include",
+      cache: "no-store",
+      headers: { Accept: "application/json", "Cache-Control": "no-cache" },
+    });
+    const contentType = (response.headers.get("content-type") || "").toLowerCase();
+    if (!contentType.includes("application/json")) {
+      // Retry only successful non-JSON responses. A 401, 403, 404, or 5xx
+      // should not be masked by retrying an unrelated fallback page.
+      if (response.ok && attempt === 0) continue;
+      throw new Error(
+        "Dispatch API returned " + (contentType || "an unknown content type") +
+        " instead of JSON (HTTP " + response.status + "). " +
+        "The server or proxy served an invalid API response; please retry."
+      );
+    }
+    const body = await response.json();
+    if (!response.ok) {
+      throw new Error(body?.message || "Unable to load dispatch information (HTTP " + response.status + ")");
+    }
+    return body as T;
   }
-  const body = await response.json();
-  if (!response.ok) {
-    throw new Error(body?.message || "Unable to load dispatch information (HTTP " + response.status + ")");
-  }
-  return body as T;
+  throw new Error("Dispatch API did not return JSON after retry");
 }
 
 function getError(error: unknown): string {
@@ -116,9 +127,7 @@ function getError(error: unknown): string {
 
 function fromTrip(trip: DispatchTrip): TripForm {
   return {
-    truckPlate: trip.truckPlate ?? "",
-    driverName: trip.driverName ?? "",
-    destination: trip.destination ?? "",
+    tripNumber: String(trip.dispatchNumber),
     notes: trip.notes ?? "",
   };
 }
@@ -130,7 +139,7 @@ function TripStatusBadge({ status }: { status: TripStatus }) {
       : status === "CLOSED"
         ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-200"
         : "border-red-300 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-200";
-  return <Badge variant="outline" className={statusStyle}>{status === "OPEN" ? "Open" : status === "CLOSED" ? "Closed" : "Cancelled"}</Badge>;
+  return <Badge variant="outline" className={statusStyle}>{FACTORY_DISPATCH_TRIP_STATUS_LABELS[status]}</Badge>;
 }
 
 function StatCard({ label, value, unit, icon: Icon }: {
@@ -172,26 +181,15 @@ function TripEditor({ open, onOpenChange, value, onChange, onSubmit, title, subm
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Each trip has a separate record for this loading. Truck and driver details are optional.
+            Choose a unique trip number for this loading. Notes are optional.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-4" data-testid="dispatch-trip-form">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="dispatch-truck-plate">Truck number / plate</Label>
-              <Input id="dispatch-truck-plate" maxLength={120} value={value.truckPlate}
-                placeholder="e.g. Truck 01" onChange={(e) => onChange({ ...value, truckPlate: e.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="dispatch-driver-name">Driver</Label>
-              <Input id="dispatch-driver-name" maxLength={200} value={value.driverName}
-                placeholder="Driver name" onChange={(e) => onChange({ ...value, driverName: e.target.value })} />
-            </div>
-          </div>
           <div className="space-y-1.5">
-            <Label htmlFor="dispatch-destination">Destination</Label>
-            <Input id="dispatch-destination" maxLength={500} value={value.destination}
-              placeholder="Truck destination" onChange={(e) => onChange({ ...value, destination: e.target.value })} />
+            <Label htmlFor="dispatch-trip-number">Trip number</Label>
+            <Input id="dispatch-trip-number" type="number" min={1} max={2147483647} step={1}
+              required value={value.tripNumber} placeholder="e.g. 1"
+              onChange={(e) => onChange({ ...value, tripNumber: e.target.value })} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="dispatch-notes">Notes</Label>
@@ -283,7 +281,10 @@ export default function FactoryLoadingDispatch() {
 
   const createMutation = useMutation({
     mutationFn: async (form: TripForm) => {
-      const response = await apiRequest("POST", listUrl, form);
+      const response = await apiRequest("POST", listUrl, {
+        tripNumber: Number(form.tripNumber),
+        notes: form.notes,
+      });
       return response.json() as Promise<DispatchTrip>;
     },
     onSuccess: (trip) => {
@@ -299,7 +300,10 @@ export default function FactoryLoadingDispatch() {
   const editMutation = useMutation({
     mutationFn: async (form: TripForm) => {
       if (!selectedUrl) throw new Error("Choose a dispatch to edit");
-      const response = await apiRequest("PATCH", selectedUrl, form);
+      const response = await apiRequest("PATCH", selectedUrl, {
+        tripNumber: Number(form.tripNumber),
+        notes: form.notes,
+      });
       return response.json() as Promise<DispatchTrip>;
     },
     onSuccess: () => {
@@ -333,7 +337,7 @@ export default function FactoryLoadingDispatch() {
                   {orderQuery.data?.containerNumber && <Badge variant="outline">{orderQuery.data.containerNumber}</Badge>}
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
-                  Verify truck trips independently from your main loading record.
+                  Scan actual bales on each trip, then compare all trips against Pending Loading.
                 </p>
               </div>
             </div>
@@ -346,7 +350,7 @@ export default function FactoryLoadingDispatch() {
                 <FileSpreadsheet className="mr-1.5 h-4 w-4" /> Reports & Excel
               </Button>
               <Button size="sm" variant="outline" onClick={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/compare")} data-testid="button-compare-all-dispatches">
-                <FileSearch className="mr-1.5 h-4 w-4" /> Compare All
+                <FileSearch className="mr-1.5 h-4 w-4" /> Final Loading Comparison
               </Button>
               <Button size="sm" variant="outline" onClick={() => void refresh()} disabled={tripsQuery.isFetching || orderQuery.isFetching} data-testid="button-refresh-dispatch">
                 <RefreshCw className="mr-1.5 h-4 w-4" /> Refresh
@@ -363,8 +367,9 @@ export default function FactoryLoadingDispatch() {
         <div className="flex items-start gap-2 rounded-xl border border-indigo-200 bg-indigo-50/80 p-3 text-xs text-indigo-900 dark:border-indigo-500/25 dark:bg-indigo-500/10 dark:text-indigo-100">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
           <div>
-            <span className="font-semibold">Verification only.</span> A Dispatch never adds bales to Loading,
-            changes inventory or posts financial transactions. Only unique bales from this loading may be verified on trucks.
+            <span className="font-semibold">Scan-only dispatch.</span> No expected targets per truck.
+            Scanning records the actual bales on each trip. After all trips finish,
+            compare against Pending Loading and choose whether to remove unscanned bales.
           </div>
         </div>
 
@@ -434,7 +439,7 @@ export default function FactoryLoadingDispatch() {
                       <div className="rounded-lg bg-blue-50 p-2 text-blue-600 dark:bg-blue-500/15 dark:text-sky-300"><Truck className="h-4 w-4" /></div>
                       <div>
                         <h3 className="text-sm font-bold">Dispatch #{String(trip.dispatchNumber).padStart(3, "0")}</h3>
-                        <p className="text-xs text-muted-foreground">{trip.truckPlate || "Truck not assigned"}</p>
+                        <p className="text-xs text-muted-foreground">{trip.notes || "No notes"}</p>
                       </div>
                     </div>
                     <TripStatusBadge status={trip.status} />
@@ -444,7 +449,7 @@ export default function FactoryLoadingDispatch() {
                     <div><p className="text-[11px] text-muted-foreground">Verified kg</p><p className="font-mono font-bold">{printNumber(numberValue(trip.scannedWeightKg), 2)}</p></div>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                    <span>{trip.driverName || trip.createdByUsername || "No driver set"}</span>
+                    <span>{trip.createdByUsername || "Unknown operator"}</span>
                     <span className="flex items-center gap-1">{formatDisplayDateTime(trip.createdAt)} <ArrowRight className="h-3.5 w-3.5 text-blue-500" /></span>
                   </div>
                 </button>
@@ -486,9 +491,7 @@ export default function FactoryLoadingDispatch() {
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       {([
-                        ["Truck", selectedTrip.truckPlate || "Not assigned"],
-                        ["Driver", selectedTrip.driverName || "Not assigned"],
-                        ["Destination", selectedTrip.destination || "Not assigned"],
+                        ["Trip number", String(selectedTrip.dispatchNumber)],
                         ["Container", selectedTrip.containerNumberSnapshot || tripsQuery.data?.containerNumber || "Not assigned"],
                       ] as const).map(([label, value]) => (
                         <div key={label} className="min-w-0 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
@@ -520,15 +523,17 @@ export default function FactoryLoadingDispatch() {
                   </Card>
                   <Card className="border-blue-100 dark:border-blue-500/20 dark:bg-[#101c34]">
                     <CardContent className="space-y-3 p-4">
-                      <div className="flex items-center gap-2"><FileSearch className="h-4 w-4 text-blue-500" /><h3 className="text-sm font-semibold">Trip comparison</h3></div>
-                      <p className="text-xs text-muted-foreground">Compare the expected truck load configured below against physically scanned barcodes, missing references and KG differences.</p>
+                      <div className="flex items-center gap-2"><FileSearch className="h-4 w-4 text-blue-500" /><h3 className="text-sm font-semibold">Final loading comparison</h3></div>
+                      <p className="text-xs text-muted-foreground">Compare every trip's scanned bales against Pending Loading. After all trips finish,
+                        you may choose which unscanned bales to remove from the order.</p>
                       <Button type="button" size="sm" variant="outline" className="w-full justify-between"
-                        onClick={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/" + dispatchId + "/compare")}
+                        onClick={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/compare")}
                         data-testid="button-compare-dispatch">
-                        Compare this trip <ArrowRight className="h-4 w-4" />
+                        Compare all trips <ArrowRight className="h-4 w-4" />
                       </Button>
                     </CardContent>
                   </Card>
+                  <ErrorBoundary resetKey={"dispatch-lifecycle-" + dispatchId}>
                   <FactoryLoadingDispatchLifecycle
                     key={dispatchId}
                     orderId={orderId}
@@ -541,19 +546,7 @@ export default function FactoryLoadingDispatch() {
                       if (selectedUrl) void queryClient.invalidateQueries({ queryKey: companyQueryKey(selectedUrl, companyId) });
                     }}
                   />
-                </div>
-                <div className="xl:col-span-2">
-                  <FactoryLoadingDispatchAllocation
-                    orderId={orderId}
-                    dispatchId={dispatchId}
-                    companyId={companyId}
-                    status={selectedTrip.status}
-                    role={user?.currentRole ?? user?.role ?? ""}
-                    onChanged={() => {
-                      void queryClient.invalidateQueries({ queryKey: companyQueryKey(listUrl, companyId) });
-                      if (selectedUrl) void queryClient.invalidateQueries({ queryKey: companyQueryKey(selectedUrl, companyId) });
-                    }}
-                  />
+                  </ErrorBoundary>
                 </div>
                 <div className="xl:col-span-2">
                   <FactoryLoadingDispatchScanner
@@ -580,7 +573,7 @@ export default function FactoryLoadingDispatch() {
       </div>
 
       <TripEditor open={createOpen} onOpenChange={(open) => { if (!createMutation.isPending) setCreateOpen(open); }}
-        value={newTrip} onChange={setNewTrip} title="New truck dispatch" submitLabel="Create dispatch"
+        value={newTrip} onChange={setNewTrip} title="New dispatch" submitLabel="Create dispatch"
         busy={createMutation.isPending}
         onSubmit={(event) => { event.preventDefault(); if (canCreate) createMutation.mutate(newTrip); }} />
       <TripEditor open={editOpen} onOpenChange={(open) => { if (!editMutation.isPending) setEditOpen(open); }}

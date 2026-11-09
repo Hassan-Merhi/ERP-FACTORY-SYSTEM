@@ -3,21 +3,20 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useLocation } from "wouter";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ArrowRight, ExternalLink, Pencil, Save, X, ArrowLeftRight, Package, DollarSign, Clock } from "lucide-react";
-import { parseISO } from "date-fns";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { PageHeader } from "@/components/PageHeader";
-import { DataTableToolbar } from "@/components/DataTableToolbar";
+import { ErpListFilters, ErpListTable, ErpField, ErpFormActions, ErpPendingButton, useErpDateFormat } from "@/erp-core";
+import { erpCompanyDataKey, erpRequestUrl, invalidateErpDataFamilies } from "@/erp-core/erpData";
 import { PeriodFilter, PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
 import { useDateJump } from "@/hooks/use-date-jump";
 import { usePaginatedFilterState } from "@/hooks/use-paginated-filter-state";
@@ -54,7 +53,7 @@ function createStockTransferFilters(): StockTransferFilters {
 export default function StockTransfers({ hideVoucherNotes = false }: StockTransfersProps) {
   const [, setLocation] = useLocation();
   const { formatAmount } = useCurrencyContext();
-  const { formatShortDate: formatDate } = useDateFormat();
+  const { formatShortDate: formatDate } = useErpDateFormat();
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
 
@@ -75,20 +74,16 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
   const startDate = period.fromDate ?? "";
   const endDate = period.toDate ?? "";
 
-  const params = new URLSearchParams();
-  if (startDate) params.set("startDate", startDate);
-  if (endDate) params.set("endDate", endDate);
-  const queryString = params.toString();
+  const queryUrl = erpRequestUrl("/api/stock-transfers/list", { startDate, endDate });
 
   const { data: transfers = [], isLoading } = useQuery<StockTransferRow[]>({
-    queryKey: ["/api/stock-transfers/list", startDate, endDate],
+    queryKey: erpCompanyDataKey(queryUrl, selectedCompany?.id),
     queryFn: async () => {
-      const res = await fetch(`/api/stock-transfers/list${queryString ? `?${queryString}` : ""}`, {
-        credentials: "include",
-      });
+      const res = await fetch(queryUrl, { credentials: "include" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
+    enabled: selectedCompany?.id != null,
   });
 
   const updateNotesMutation = useMutation({
@@ -99,7 +94,7 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
     },
     onSuccess: () => {
       toast({ title: "Notes updated" });
-      queryClient.invalidateQueries({ queryKey: ["/api/stock-transfers/list"] });
+      void invalidateErpDataFamilies(queryClient, ["/api/stock-transfers/list"]);
       setEditingTransfer(null);
     },
     onError: (err: Error) => {
@@ -135,7 +130,7 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
 
   const formatVoucherDate = (d: string) => {
     try {
-      return formatDate(parseISO(d));
+      return formatDate(d);
     } catch {
       return d;
     }
@@ -189,7 +184,7 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
         </div>
       </div>
 
-      <DataTableToolbar
+      <ErpListFilters
         search={search}
         onSearchChange={(value) => setFilter("search", value)}
         searchPlaceholder="Search by voucher, location, notes…"
@@ -225,7 +220,7 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
           {/* Desktop table */}
           <div className="hidden md:block phone-land:hidden border rounded-xl overflow-hidden">
             <div className="table-responsive">
-              <Table>
+              <ErpListTable pageKey="stock-transfers" companyId={selectedCompany?.id} scrollLabel="Stock transfer history">
                 <TableHeader>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
                     {!hideVoucherNotes && <TableHead className="text-xs whitespace-nowrap">Voucher</TableHead>}
@@ -327,7 +322,7 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
                     </TableRow>
                   ))}
                 </TableBody>
-              </Table>
+              </ErpListTable>
             </div>
           </div>
 
@@ -465,24 +460,40 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
                 </div>
               </div>
             )}
-            <Textarea
-              value={editNotes}
-              onChange={(e) => setEditNotes(e.target.value)}
-              placeholder="Transfer notes…"
-              className="min-h-28 resize-none"
-              data-testid="input-edit-notes"
-            />
+            <ErpField id="transfer-notes" label="Notes">
+              {(control) => (
+                <Textarea
+                  {...control}
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  placeholder="Transfer notes…"
+                  className="min-h-28 resize-none"
+                  data-testid="input-edit-notes"
+                />
+              )}
+            </ErpField>
           </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setEditingTransfer(null)} data-testid="button-cancel-edit">
+          <ErpFormActions layout="dialog" className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setEditingTransfer(null)}
+              disabled={updateNotesMutation.isPending}
+              data-testid="button-cancel-edit"
+            >
               <X className="h-4 w-4 mr-2" />
               Cancel
             </Button>
-            <Button onClick={saveNotes} disabled={updateNotesMutation.isPending} data-testid="button-save-notes">
+            <ErpPendingButton
+              onClick={saveNotes}
+              pending={updateNotesMutation.isPending}
+              pendingLabel="Saving…"
+              data-testid="button-save-notes"
+            >
               <Save className="h-4 w-4 mr-2" />
-              {updateNotesMutation.isPending ? "Saving…" : "Save"}
-            </Button>
-          </DialogFooter>
+              Save
+            </ErpPendingButton>
+          </ErpFormActions>
         </DialogContent>
       </Dialog>
     </div>

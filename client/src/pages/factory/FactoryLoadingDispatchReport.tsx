@@ -285,9 +285,7 @@ export default function FactoryLoadingDispatchReport() {
                   ["Proforma", report.loading.proformaName || "—"],
                   ["Loading Order", "#" + report.loading.orderId],
                   ["Loading Status", report.loading.status],
-                  ["Truck / Plate", report.trip?.truckPlate || (report.trip ? "Not assigned" : "All trips")],
-                  ["Driver", report.trip?.driverName || "—"],
-                  ["Destination", report.trip?.destination || "—"],
+                  ["Trip Number", report.trip ? tripNumber(report.trip.dispatchNumber) : "All trips"],
                   ["Trip Status", report.trip?.status || "Multiple trips"],
                   ["Opened By", report.trip?.createdByUsername || "—"],
                   ["Opened At", report.trip?.createdAt ? formatDisplayDateTime(report.trip.createdAt) : "—"],
@@ -333,14 +331,13 @@ export default function FactoryLoadingDispatchReport() {
                 <div className="dispatch-print-table overflow-x-auto rounded-lg border dark:border-slate-700">
                   <table className="w-full min-w-[580px] text-left text-xs">
                     <thead className="bg-slate-100 dark:bg-slate-800">
-                      <tr><th className="px-2 py-2">Trip</th><th className="px-2 py-2">Truck</th><th className="px-2 py-2">Status</th>
+                      <tr><th className="px-2 py-2">Trip number</th><th className="px-2 py-2">Status</th>
                         <th className="px-2 py-2 text-right">Verified Bales</th><th className="px-2 py-2 text-right">Verified KG</th></tr>
                     </thead>
                     <tbody>{report.comparison.trips.map(t => (
                       <tr key={t.id} className="border-t dark:border-slate-700">
                         <td className="px-2 py-2">{tripNumber(t.dispatchNumber)}</td>
-                        <td className="px-2 py-2">{t.truckPlate || "—"}</td>
-                        <td className="px-2 py-2">{t.status}</td>
+                         <td className="px-2 py-2">{t.status}</td>
                         <td className="px-2 py-2 text-right font-mono">{qty(t.scannedBales)}</td>
                         <td className="px-2 py-2 text-right font-mono">{kg(t.scannedWeightKg)}</td>
                       </tr>

@@ -4,6 +4,23 @@ type ModuleFactory<T> = () => Promise<{ default: T }>;
 
 const DEFAULT_ATTEMPTS = 3;
 const BASE_DELAY_MS = 300;
+const IMPORT_TIMEOUT_MS = 15_000;
+
+/** Prevent an unresolved dynamic import from leaving a route suspended forever. */
+function importWithTimeout<T>(factory: ModuleFactory<T>): Promise<{ default: T }> {
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => reject(new Error("Page module loading timed out")), IMPORT_TIMEOUT_MS);
+    try {
+      factory().then(
+        (module) => { window.clearTimeout(timeout); resolve(module); },
+        (error) => { window.clearTimeout(timeout); reject(error); },
+      );
+    } catch (error) {
+      window.clearTimeout(timeout);
+      reject(error);
+    }
+  });
+}
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -17,7 +34,7 @@ export async function importWithRetry<T>(
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      return await factory();
+      return await importWithTimeout(factory);
     } catch (error) {
       lastError = error;
       if (attempt < attempts) await wait(BASE_DELAY_MS * attempt);

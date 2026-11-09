@@ -4,13 +4,9 @@
  * Extracted from FactoryStockAllocationV5.tsx during the Phase 4 god-file split.
  */
 
-export const STATUS_LABELS: Record<string, string> = {
-  DRAFT: "Draft",
-  LOADING: "Loading",
-  PENDING_VERIFICATION: "Verified",
-  VERIFIED: "Verified",
-  FINALIZED: "Finalized",
-  CANCELLED: "Cancelled",
-};
+import { FACTORY_ALLOCATION_STATUS_LABELS } from "@shared/factoryStatusPresentation";
+
+/** Backward-compatible V5 label export; workflow-specific labels owned in shared Factory presentation. */
+export const STATUS_LABELS: Readonly<Record<string, string>> = FACTORY_ALLOCATION_STATUS_LABELS;
 
 /* ═══════════════════════════════════════════════════════════════════════════ */

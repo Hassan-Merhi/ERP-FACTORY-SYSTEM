@@ -42,6 +42,7 @@ function isChunkLoadError(error: unknown): boolean {
     combined.includes("Importing a module script failed") ||
     combined.includes("Unable to preload CSS") ||
     combined.includes("ChunkLoadError") ||
+    combined.includes("Page module loading timed out") ||
     (error as { name: "ChunkLoadError" })?.name === "ChunkLoadError"
   );
 }
@@ -51,49 +52,12 @@ function hardNavigate(path: string) {
   window.location.href = path + (path.includes("?") ? "&" : "?") + "_r=" + Date.now();
 }
 
-const RETRY_WINDOW_MS = 30_000; // 30s sliding window
-const MAX_RETRIES = 2;
-
-function getRetryState(path: string): { count: number; firstAt: number } {
-  try {
-    const raw = sessionStorage.getItem("chunkRetry:" + path);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    /* ignore */
-  }
-  return { count: 0, firstAt: 0 };
-}
-
-function recordRetry(path: string) {
-  try {
-    const now = Date.now();
-    const state = getRetryState(path);
-    // Reset window if it's been long enough
-    const base = now - state.firstAt < RETRY_WINDOW_MS ? state : { count: 0, firstAt: now };
-    sessionStorage.setItem(
-      "chunkRetry:" + path,
-      JSON.stringify({
-        count: base.count + 1,
-        firstAt: base.count === 0 ? now : state.firstAt,
-      })
-    );
-  } catch {
-    /* ignore */
-  }
-}
-
 function clearRetries(path: string) {
   try {
     sessionStorage.removeItem("chunkRetry:" + path);
   } catch {
     /* ignore */
   }
-}
-
-function canAutoRetry(path: string): boolean {
-  const { count, firstAt } = getRetryState(path);
-  const withinWindow = Date.now() - firstAt < RETRY_WINDOW_MS;
-  return count < MAX_RETRIES && (count === 0 || withinWindow);
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -146,12 +110,10 @@ export class ErrorBoundary extends Component<Props, State> {
 
       // If we're offline, the chunk simply isn't cached — reloading won't help.
       if (!navigator.onLine) return;
-      const path = window.location.pathname;
-      if (canAutoRetry(path)) {
-        recordRetry(path);
-        // Small delay so the server has time to finish restarting
-        setTimeout(() => hardNavigate(path), 800);
-      }
+      // Missing hashed chunks after a deployment require cache/SW recovery,
+      // not simply another navigation to the same unavailable asset.
+      window.dispatchEvent(new CustomEvent("erp:asset-load-failed"));
+      return;
     }
   }
 

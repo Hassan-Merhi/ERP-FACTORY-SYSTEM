@@ -46,6 +46,7 @@ import { useRentalOverview, useGroupedRentalUnits } from "@/properties/hooks/use
 import { getRentalModulePolicy } from "@/properties/config/rentalModulePolicy";
 import { fmtMoneyCurrency } from "./property-rental/utils";
 import { formatMoneyDisplay } from "@/lib/moneyDisplay";
+import { hasSingleUsdBasis, rentalReportingFigure } from "@/properties/config/rentalReportingPresentation";
 import { hasHassanPropertiesHistoricalReportingPolicy } from "@/properties/config/historicalRentReportingPolicy";
 import { ApiBaseCtx } from "./property-rental/shared";
 import { NoteCell } from "./property-rental/components/NoteCell";
@@ -98,6 +99,11 @@ export default function PropertyRentalPage({
 
   const grouped = useGroupedRentalUnits(units);
   const totals = useRentalOverview(units);
+  // Contracts carry their own recorded currency. Never label an unconverted
+  // mixture as USD merely because the historical summary defaulted to dollars.
+  const contractTotalsAreUsd = hasSingleUsdBasis(
+    units.filter((unit) => unit.contract && !unit.isInternalLeaseProjection).map((unit) => ({ currency: unit.contract?.currency })),
+  );
 
   const reconciledAccountTotalsReady =
     showHistoricalPaid &&
@@ -122,17 +128,28 @@ export default function PropertyRentalPage({
       : 0
     : totals.totalGuarantee;
   const paidLabel = showHistoricalPaid ? "RENT + CASH BALANCES" : "TOTAL PAID";
-  // Aggregated summary figures historically use USD; this is presentation only, never FX conversion.
-  const summaryMoney = (amount: number) => formatMoneyDisplay(amount, { currency: "USD" });
-  const paidValue = !showHistoricalPaid || reconciledAccountTotalsReady ? summaryMoney(summaryPaid) : "Unavailable";
-  const guaranteeValue =
-    !showHistoricalPaid || reconciledAccountTotalsReady ? summaryMoney(summaryGuarantee) : "Unavailable";
+  const paidFigure = rentalReportingFigure(
+    showHistoricalPaid ? (reconciledAccountTotalsReady ? summaryPaid : null) : (contractTotalsAreUsd ? summaryPaid : null),
+    showHistoricalPaid ? "reconciled-account-balances" : "contract-paid",
+    null, // mixed historical-cutoff withdrawal and current cash/deposit balances have no single as-of date
+  );
+  const ledgerUsdMoney = (amount: number) => formatMoneyDisplay(amount, { currency: "USD" });
+  const summaryMoney = (amount: number) => contractTotalsAreUsd
+    ? ledgerUsdMoney(amount)
+    : "Non-USD or unverified currencies — see contracts";
+  const paidValue = paidFigure.amount === null
+    ? (showHistoricalPaid ? "Unavailable" : "Non-USD or unverified currencies — see contracts")
+    : formatMoneyDisplay(paidFigure.amount, { currency: paidFigure.currency });
+  const guaranteeValue = showHistoricalPaid
+    ? (reconciledAccountTotalsReady ? formatMoneyDisplay(summaryGuarantee, { currency: "USD" }) : "Unavailable")
+    : summaryMoney(summaryGuarantee);
   const historicalAccountMismatch =
     reconciledAccountTotalsReady &&
     historyReconciliation!.reconciled !== null &&
     historyReconciliation!.difference !== null &&
     Math.abs(historyReconciliation!.difference) > 1;
   const guaranteeLedgerMismatch =
+    contractTotalsAreUsd &&
     reconciledAccountTotalsReady &&
     Math.abs(historyReconciliation!.depositBalance! - Math.round(totals.totalGuarantee * 100)) > 1;
 
@@ -406,17 +423,23 @@ export default function PropertyRentalPage({
             totals; manage payments and accounting from the originating rental module.
           </p>
         )}
+        {!contractTotalsAreUsd && (
+          <p role="status" className="text-xs text-amber-600 dark:text-amber-400">
+            Contract currencies are not all verified as USD. Contract-based overview totals are withheld rather than silently reported in USD.
+            Individual contracts and ledger balances remain unchanged.
+          </p>
+        )}
         {showHistoricalPaid && reconciledAccountTotalsReady && (
           <p className="text-xs text-muted-foreground" data-testid="properties-rent-account-balance-explanation">
             Combined account balances:{" "}
             <span className="font-semibold tabular-nums">
-              {summaryMoney(historyReconciliation!.accountSum! / 100)}
+              {ledgerUsdMoney(historyReconciliation!.accountSum! / 100)}
             </span>{" "}
-            (rent withdrawal, ALI cash, Properties cashbox if present, and tenant deposits).
+            (historical rent withdrawal through 26 Oct 2026; current ALI cash, Properties cashbox if present, and tenant deposits). These are account balances, not unique rent receipts.
             {historyReconciliation!.guaranteeCashOverlap != null && historyReconciliation!.guaranteeCashOverlap > 0 && (
               <>
                 {" "}
-                Guarantee cash of {summaryMoney(historyReconciliation!.guaranteeCashOverlap / 100)} appears in both a cash account and the
+                Guarantee cash of {ledgerUsdMoney(historyReconciliation!.guaranteeCashOverlap / 100)} appears in both a cash account and the
                 deposit liability; these are not unique receipts.
               </>
             )}

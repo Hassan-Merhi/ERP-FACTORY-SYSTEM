@@ -20,6 +20,7 @@ import { factoryApiRequest } from "@/lib/factoryApi";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
 import { useDateJump } from "@/hooks/use-date-jump";
+import { useDebounce } from "@/hooks/use-debounce";
 import { hasAnyOpenDialog } from "@/hooks/use-escape-back";
 import type { DaybookEntry, DisplayEntry, FactoryDaybookUIState } from "./types";
 import {
@@ -89,11 +90,7 @@ export function useFactoryDaybookModel() {
   const [sortOrder] = useState<"asc" | "desc">(() => initialDaybookStateRef.current?.sortOrder || "desc");
   // searchQuery filters client-side only (not part of the query key below), but debounce
   // it anyway so rapid typing doesn't thrash the derived filteredEntries memo on large lists.
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearchQuery(searchQuery), 250);
-    return () => clearTimeout(t);
-  }, [searchQuery]);
+  const debouncedSearchQuery = useDebounce(searchQuery, 250);
 
   // ── View/UX state ─────────────────────────────────────────────────────────
   const [expandedRowKey, setExpandedRowKey] = useState<string | null>(null);

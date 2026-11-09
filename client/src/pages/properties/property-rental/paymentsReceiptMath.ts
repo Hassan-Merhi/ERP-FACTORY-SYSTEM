@@ -2,6 +2,8 @@
  * Presentation-only reconciliation. Payment and voucher rows are never changed.
  * All amounts use integer cents and retain the recorded (unconverted) currency.
  */
+import { hasVerifiedUsdBasis } from "@/properties/config/rentalCurrencyBasis";
+
 export type ReceiptRow = {
   id: number;
   paymentDate: string;
@@ -18,6 +20,7 @@ export type ReceiptRow = {
   forYear?: number;
   notes?: string | null;
   sourceModule?: string;
+  currency?: string | null;
 };
 
 export const cents = (amount: number | string | null | undefined): number => Math.round(Number(amount ?? 0) * 100);
@@ -113,6 +116,7 @@ export type HistoryReconciliationExport = {
  * the residual must be zero for the history to be fully reconciled.
  */
 export function reconciledHistoryTsv(rows: ReceiptRow[], snapshot: HistoryReconciliationExport): string {
+  assertUsdHistoryExport(rows);
   const bridge = accountBalanceHistoryBridge(rows, [
     snapshot.aliCashLedgerId,
     ...(snapshot.cashboxLedgerId == null ? [] : [snapshot.cashboxLedgerId]),
@@ -195,8 +199,16 @@ const excelSafe = (value: unknown): string => {
   return /^[=+@-]/.test(text) ? "'" + text : text;
 };
 
+/** Exports name their numeric columns USD; non-USD must never be silently relabeled. */
+function assertUsdHistoryExport(rows: readonly ReceiptRow[]): void {
+  if (!hasVerifiedUsdBasis(rows)) {
+    throw new Error("Cannot export mixed-currency payment history as USD without booked conversion");
+  }
+}
+
 /** TSV is deliberately Excel-friendly: numeric receipt/adjustment columns and totals. */
 export function paymentHistoryTsv(rows: ReceiptRow[]): string {
+  assertUsdHistoryExport(rows);
   const columns = [
     "Date",
     "Tenant",

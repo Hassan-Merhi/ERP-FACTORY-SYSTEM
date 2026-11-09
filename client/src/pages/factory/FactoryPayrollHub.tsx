@@ -9,6 +9,8 @@ import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translateFactoryStaffTrackingText } from "@/i18n/factoryStaffTrackingTranslations";
 import type { FactoryMyAccess } from "@shared/apiTypes";
+import { useCompany } from "@/contexts/CompanyContext";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 
 type Section = "workers" | "employees" | "insurance";
 const SECTIONS: Section[] = ["workers", "employees", "insurance"];
@@ -19,11 +21,14 @@ const HIDDEN_KEYS: Record<Section, string> = {
 };
 
 export default function FactoryPayrollHub() {
-  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
+  const { selectedCompany } = useCompany();
+  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: companyQueryKey("/api/factory/my-access", selectedCompany?.id), enabled: Boolean(selectedCompany?.id), staleTime: 5 * 60000 });
   const { language } = useApplicationLanguage();
   const tr = (key: Parameters<typeof translateFactoryStaffTrackingText>[0]) =>
     translateFactoryStaffTrackingText(key, language);
-  const hidden = myAccess?.hiddenCostFields ?? [];
+  const hidden = myAccess?.companyId === selectedCompany?.id && myAccess?.hasFactoryAccess === true
+    ? myAccess.hiddenCostFields
+    : Object.values(HIDDEN_KEYS);
 
   const sections = SECTIONS.filter((section) => !hidden.includes(HIDDEN_KEYS[section]));
   const defaultSection: Section = sections[0] ?? "workers";

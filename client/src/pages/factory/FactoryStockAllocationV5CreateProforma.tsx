@@ -7,6 +7,9 @@ import { PageHeader } from "@/components/PageHeader";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import CreateProformaV5Drawer from "./CreateProformaV5Drawer";
 import { fetchAllV5AllocationData, type V5AllocationData } from "@/lib/v5AllocationPaginationClient";
+import { toFactoryProformaAllocationArticles, FACTORY_V5_CREATE_SNAPSHOT } from "@/lib/factoryAllocationReadModel";
+import { companyQueryKey } from "@/lib/companyQueryScope";
+import { useCompany } from "@/contexts/CompanyContext";
 
 /**
  * Full-page proforma creation reuses the exact V5 stock allocation figures,
@@ -14,32 +17,22 @@ import { fetchAllV5AllocationData, type V5AllocationData } from "@/lib/v5Allocat
  */
 export default function FactoryStockAllocationV5CreateProforma() {
   const [, navigate] = useLocation();
+  const { selectedCompany } = useCompany();
   const back = () => navigate("/factory/stock-allocation-v5");
   // Create Only roles may add bale batches and customer-order drafts, not proformas.
   const { isCreateOnly } = useExistingRecordChangeAccess();
 
   const query = useQuery<V5AllocationData>({
-    queryKey: ["/api/factory/v5/stock-allocation/all-for-create"],
+    queryKey: companyQueryKey(FACTORY_V5_CREATE_SNAPSHOT, selectedCompany?.id),
     queryFn: () => fetchAllV5AllocationData(),
-    enabled: !isCreateOnly,
+    enabled: !isCreateOnly && Boolean(selectedCompany?.id),
     staleTime: 2 * 60 * 1000,
     retry: 1,
     refetchOnWindowFocus: false,
   });
 
   const articleRows = useMemo(
-    () =>
-      (query.data?.rows ?? [])
-        .map((row) => ({
-          articleCode: row.articleCode,
-          productName: row.productName,
-          categoryName: row.categoryName,
-          stockAvailable: row.stockAvailable,
-          totalLoaded: row.totalLoaded,
-          expectedToLoad: row.expectedToLoad,
-          freeToPromise: row.freeToPromise,
-        }))
-        .sort((a, b) => a.productName.localeCompare(b.productName)),
+    () => toFactoryProformaAllocationArticles(query.data?.rows ?? []),
     [query.data?.rows]
   );
 
