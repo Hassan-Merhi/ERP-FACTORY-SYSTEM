@@ -79,6 +79,20 @@ export function startScheduler(): void {
   });
   cron.schedule("45 23 * * *", factoryStockTick, { timezone: "UTC" });
 
+  // Phase 7: daily read-only Factory mix scans. The module is lazy-loaded
+  // only at 01:35 UTC; it writes only diagnostic state and Factory Alerts.
+  // ENABLE_SCHEDULERS=false and the optional feature flag disable this.
+  if (process.env.FACTORY_MIX_INTEGRITY_MONITOR_ENABLED !== "false") {
+    const mixIntegrityTick = createSchedulerTick("factoryMixIntegrityMonitor", async () => {
+      const { runScheduledFactoryMixIntegrityMonitoring } = await import("../factory/mixPhase7IntegrityMonitor");
+      const result = await runScheduledFactoryMixIntegrityMonitoring();
+      if (result.failed > 0) {
+        throw new Error("Factory mix integrity scan failed for " + result.failed + " company(s)");
+      }
+    });
+    cron.schedule("35 1 * * *", mixIntegrityTick, { timezone: "UTC" });
+  }
+
   logger.info("Location stock WhatsApp scheduler registered", {
     module: "scheduler",
     action: "start",
@@ -86,6 +100,7 @@ export function startScheduler(): void {
       "locationStockWhatsApp(every minute; per-location timezone/time/day rules)",
       "scheduledWhatsAppCustomMessages(every minute; per-message timezone and weekday times)",
       "factoryStockJournal(23:45 UTC daily)",
+      "factoryMixIntegrityMonitor(01:35 UTC daily; if enabled)",
     ],
   });
 }
