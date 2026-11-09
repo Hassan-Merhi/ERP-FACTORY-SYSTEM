@@ -15,7 +15,8 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
-import { ErpListTable, ErpReportExportMenu, ErpReportPrintFooter, erpReportFileName, exportErpReportCsv, erpCompanyDataKey, erpReferenceKeys } from "@/erp-core";
+import { ErpListTable, ErpReportExportMenu, ErpReportPrintFooter, erpReportFileName, exportErpReportCsv } from "@/erp-core";
+import { erpCompanyDataKey, erpReferenceKeys } from "@/erp-core/erpData";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
