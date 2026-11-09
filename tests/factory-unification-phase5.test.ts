@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { factoryLocalDate, factoryLocalDateFromInstant, factoryPastCalendarDates } from "../shared/factoryLocalDate";
 import { factoryCameraErrorMessage } from "../client/src/factory/scanner/cameraUiErrors";
 import { ContinuousScanGate } from "../client/src/pages/factory/pressing-scanner/continuousScanGate";
+import { factoryScanStateLabel, factoryScanIsConfirmed } from "../client/src/factory/scanner/scannerFeedback";
 
 describe("Factory Phase 5 Beirut calendar", () => {
   it("handles calendar midnight independent of UTC and across DST", () => {
@@ -16,6 +17,13 @@ describe("Factory Phase 5 Beirut calendar", () => {
 });
 
 describe("Factory Phase 5 scanner UI primitives", () => {
+  it("never treats a pending offline scan as a server confirmation", () => {
+    expect(factoryScanStateLabel("pending")).toBe("Saved locally — pending");
+    expect(factoryScanStateLabel("syncing")).toBe("Sending");
+    expect(factoryScanIsConfirmed("pending")).toBe(false);
+    expect(factoryScanIsConfirmed("syncing")).toBe(false);
+    expect(factoryScanIsConfirmed("confirmed")).toBe(true);
+  });
   it("maps camera permission and hardware errors without transport effects", () => {
     expect(factoryCameraErrorMessage({ name: "NotAllowedError" })).toMatch(/permission denied/i);
     expect(factoryCameraErrorMessage({ name: "NotReadableError" })).toMatch(/already in use/i);
