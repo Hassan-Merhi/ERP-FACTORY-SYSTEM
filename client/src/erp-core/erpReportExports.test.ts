@@ -29,4 +29,22 @@ describe("ERP reporting exports", () => {
   it("preserves empty-cell positions in CSV", () => {
     expect(buildErpReportCsv(["A", "B"], [[null, undefined]])).toBe('"A","B"\r\n"",""');
   });
+
+  it("preserves historical filenames using the original separator", () => {
+    const date = new Date(2026, 10, 9);
+    expect(erpReportFileName("stock-in-sales-report", "xlsx", date, "-")).toBe(
+      "stock-in-sales-report-2026-11-09.xlsx"
+    );
+  });
+
+  it("keeps headerless financial statement metadata rows and signed numeric text", () => {
+    const csv = buildErpReportCsv([], [
+      ["PROVISIONAL FINANCIAL STATEMENTS — NOT CERTIFIED"],
+      ["Revenue", "-1500.50", "-1200.00"],
+      ["Note", "-HYPERLINK(1)", ""],
+    ]);
+    expect(csv.startsWith('"PROVISIONAL FINANCIAL STATEMENTS — NOT CERTIFIED"\r\n')).toBe(true);
+    expect(csv).toContain('"Revenue","-1500.50","-1200.00"');
+    expect(csv).toContain('"Note","\'-HYPERLINK(1)",""');
+  });
 });
