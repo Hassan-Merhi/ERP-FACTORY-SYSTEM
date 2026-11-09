@@ -27,6 +27,7 @@ import { recordFactoryStockValueEventTx } from "../../../services/factory/factor
 import Decimal from "decimal.js";
 import { MoneyDecimal, parseMoneyInput, toMoney } from "../../../lib/money";
 import { MixRawStockShortageError, requireMixFifoFullyAllocated, requireMixRawStockCapacity, availableSupplierAddAllowance } from "../../../services/factory/mixRawStockQuantityGuard";
+import { mixKilograms, requireMixLifecycleAvailable } from "../../../services/factory/mixLifecyclePhase6";
 
 export function registerFactoryMixBatchTopUpRoutes(app: Express) {
   // Top-up an existing mix batch with additional sources
@@ -47,10 +48,13 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
       // Source weights are read the way parseFloat reads them; one that does not
       // parse would otherwise reach usedKg as NaN.
       const allSources: Array<{ weightKg?: unknown }> = [...supplierSources, ...sources, ...batchSources];
-      if (allSources.some((source) => parseMoneyInput(source.weightKg) === null)) {
-        return res.status(400).json({ message: "Invalid amount" });
+      if (allSources.some((source) => {
+        try { mixKilograms(source.weightKg, "Source kg"); return false; }
+        catch { return true; }
+      })) {
+        return res.status(400).json({ code: "MIX_BATCH_LIFECYCLE_REFUSED", message: "Source kg must be positive with no more than 3 decimal places." });
       }
-      const weightOf = (source: { weightKg?: unknown }) => parseMoneyInput(source.weightKg) as Decimal;
+      const weightOf = (source: { weightKg?: unknown }) => mixKilograms(source.weightKg, "Source kg");
 
       // Capture old values before the transaction for the audit log.
       const [batchBeforeTopup] = await db
@@ -71,6 +75,8 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
           .for("update");
 
         if (!batch) throw new Error("Batch not found");
+        // Never silently reopen a completed, closed or deleted historical mix.
+        requireMixLifecycleAvailable(batch);
 
         const existingTotalKg = toMoney(batch.totalWeightKg);
         const existingTotalCost = toMoney(batch.totalCost);
@@ -233,9 +239,9 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
 
           if (!srcBatch) throw new Error(`Source batch ${sourceBatchId} not found`);
 
-          const batchRemaining = toMoney(srcBatch.totalWeightKg).minus(toMoney(srcBatch.usedKg));
+          const batchRemaining = requireMixLifecycleAvailable(srcBatch);
           const weight = weightOf(bSource);
-          if (weight.greaterThan(batchRemaining.plus(0.001))) {
+          if (weight.greaterThan(batchRemaining)) {
             throw new Error(`Not enough in batch ${srcBatch.batchCode}. Available: ${batchRemaining.toFixed(3)} kg`);
           }
 
