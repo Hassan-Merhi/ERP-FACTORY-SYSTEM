@@ -1,5 +1,7 @@
 import { useFactoryMhdView } from "@/hooks/use-factory-mhd-view";
 import { downloadBlob } from "@/lib/downloadBlob";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -32,6 +34,9 @@ const csvCell = (value: string | number) => '"' + String(value).replace(/"/g, '"
 
 export default function FactoryMonthlyProductionMatrix() {
   const mhd = useFactoryMhdView();
+  const isMobile = useIsMobile();
+  const isPhoneLayout = useErpPhoneLayout();
+  const showMobileCards = isMobile || isPhoneLayout;
   const { selectedCompany } = useCompany();
   const [, navigate] = useLocation();
   const returnMonths =
@@ -89,7 +94,14 @@ export default function FactoryMonthlyProductionMatrix() {
     return months;
   }, [data?.monthly]);
   const months = mode === "all" ? allMonths : [...pickedMonths].sort();
-  const monthLabel = (month: string) => prettyMonth(month, language === "ar" ? "ar" : language === "fr" ? "fr" : "en");
+  // Intl.DateTimeFormat is expensive when called in thousands of table cells.
+  // Cache a label once per displayed month, and reuse it in titles and ARIA text.
+  const monthKey = months.join("|");
+  const monthLabels = useMemo(() => {
+    const locale = language === "ar" ? "ar" : language === "fr" ? "fr" : "en";
+    return new Map(monthKey.split("|").filter(Boolean).map((month) => [month, prettyMonth(month, locale)]));
+  }, [monthKey, language]);
+  const monthLabel = (month: string) => monthLabels.get(month) ?? month;
   const counts = useMemo(() => {
     const map = new Map<number, Map<string, number>>();
     for (const record of data?.monthly ?? []) {
@@ -428,7 +440,7 @@ export default function FactoryMonthlyProductionMatrix() {
           </span>
         </div>
       </div>
-      {!error && !isLoading && data && (
+      {!error && !isLoading && data && showMobileCards && (
         <section
           className="space-y-3 md:hidden phone-land:block"
           aria-label={t("monthlyProduction.title")}
@@ -537,7 +549,7 @@ export default function FactoryMonthlyProductionMatrix() {
         </div>
       ) : isLoading || !data ? (
         <div className="rounded-lg border p-10 text-center text-muted-foreground">{t("monthlyProduction.loading")}</div>
-      ) : (
+      ) : !showMobileCards ? (
         <div
           className="hidden overflow-auto rounded-xl border bg-card md:block phone-land:hidden"
           style={{ maxHeight: "calc(100dvh - 280px)" }}
@@ -730,7 +742,7 @@ export default function FactoryMonthlyProductionMatrix() {
             </tfoot>
           </table>
         </div>
-      )}
+      ) : null}
       <Dialog
         open={moveItemId !== null}
         onOpenChange={(open) => {
