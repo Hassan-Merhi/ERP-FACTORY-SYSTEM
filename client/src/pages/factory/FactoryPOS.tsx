@@ -12,6 +12,7 @@ import { useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
+import { FactorySalesDispatchSwitcher } from "./FactorySalesDispatchSwitcher";
 import { useFactoryPosModel } from "./factorypos/useFactoryPosModel";
 import { FactoryPosToolbar } from "./factorypos/FactoryPosToolbar";
 import { FactoryPosMobileCart } from "./factorypos/FactoryPosMobileCart";
@@ -37,6 +38,7 @@ function FactoryPOSScreen() {
 
   return (
     <div className="space-y-4 pb-6" data-testid="factory-pos-page">
+      <FactorySalesDispatchSwitcher />
       <section className="relative overflow-hidden rounded-2xl border border-orange-500/20 bg-gradient-to-br from-card via-card to-orange-500/10 px-4 pt-4 shadow-sm sm:px-5 sm:pt-5">
         <div className="pointer-events-none absolute -right-12 -top-32 h-60 w-80 rounded-full bg-orange-500/10 blur-3xl" aria-hidden="true" />
         <div className="relative">
