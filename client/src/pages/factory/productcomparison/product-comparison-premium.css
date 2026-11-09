@@ -4,50 +4,60 @@
  * and every other Factory/ERP page keep their existing behavior.
  */
 .product-comparison-premium {
-  --pc-text: #172241;
+  --pc-text: hsl(var(--factory-hue) 48% 17%);
   --pc-muted: #64748b;
   --pc-card: #ffffff;
-  --pc-border: rgba(98, 115, 171, .22);
-  --pc-toolbar-bg: rgba(255, 255, 255, .74);
+  --pc-border: hsl(var(--factory-hue) 30% 53% / 0.22);
+  --pc-toolbar-bg: rgba(255, 255, 255, 0.74);
   --pc-input-bg: #ffffff;
   --pc-tooltip-bg: #ffffff;
   --pc-chart-label: #65718b;
-  --pc-chart-grid: #cbd5e1;
-  --pc-bar-blue-top: #4787ff;
-  --pc-bar-blue-bottom: #2d55dc;
+  --pc-chart-grid: hsl(var(--factory-hue) 27% 84%);
+  --pc-bar-blue-top: hsl(var(--factory-hue) 100% 64%);
+  --pc-bar-blue-bottom: hsl(var(--factory-hue) 71% 52%);
   --pc-bar-green-top: #22e08d;
   --pc-bar-green-bottom: #10a763;
   position: relative;
   isolation: isolate;
   min-width: 0;
   padding: clamp(12px, 1.5vw, 24px);
-  border: 1px solid rgba(122, 135, 212, .17);
+  border: 1px solid hsl(var(--factory-hue) 51% 65% / 0.17);
   border-radius: 22px;
   background:
-    radial-gradient(ellipse 46% 22% at 98% 2%, rgba(146, 82, 248, .13), transparent 88%),
-    radial-gradient(ellipse 45% 26% at 8% -6%, rgba(38, 130, 240, .12), transparent 92%),
-    linear-gradient(150deg, #f8faff 0%, #f1f5ff 55%, #f7f8ff 100%);
+    radial-gradient(ellipse 46% 22% at 98% 2%, hsl(var(--factory-hue) 92% 65% / 0.13), transparent 88%),
+    radial-gradient(ellipse 45% 26% at 8% -6%, hsl(var(--factory-hue) 87% 55% / 0.12), transparent 92%),
+    linear-gradient(
+      150deg,
+      hsl(var(--factory-hue) 100% 99%) 0%,
+      hsl(var(--factory-hue) 100% 97%) 55%,
+      hsl(var(--factory-hue) 100% 98%) 100%
+    );
   color: var(--pc-text);
 }
 .dark .product-comparison-premium {
-  --pc-text: #f5f7ff;
-  --pc-muted: #a1acc7;
-  --pc-card: #111a33;
-  --pc-border: rgba(140, 158, 226, .28);
-  --pc-toolbar-bg: rgba(16, 24, 49, .72);
-  --pc-input-bg: rgba(9, 16, 37, .78);
-  --pc-tooltip-bg: #111b37;
-  --pc-chart-label: #abb4d0;
+  --pc-text: hsl(var(--factory-hue) 100% 98%);
+  --pc-muted: hsl(var(--factory-hue) 25% 71%);
+  --pc-card: hsl(var(--factory-hue) 50% 13%);
+  --pc-border: hsl(var(--factory-hue) 60% 72% / 0.28);
+  --pc-toolbar-bg: hsl(var(--factory-hue) 51% 13% / 0.72);
+  --pc-input-bg: hsl(var(--factory-hue) 61% 9% / 0.78);
+  --pc-tooltip-bg: hsl(var(--factory-hue) 53% 14%);
+  --pc-chart-label: hsl(var(--factory-hue) 28% 74%);
   --pc-chart-grid: #52607c;
-  --pc-bar-blue-top: #4d9dff;
-  --pc-bar-blue-bottom: #274cfa;
+  --pc-bar-blue-top: hsl(var(--factory-hue) 100% 65%);
+  --pc-bar-blue-bottom: hsl(var(--factory-hue) 95% 57%);
   --pc-bar-green-top: #20e981;
   --pc-bar-green-bottom: #0e9872;
-  border-color: rgba(118, 133, 205, .22);
+  border-color: hsl(var(--factory-hue) 47% 63% / 0.22);
   background:
-    radial-gradient(ellipse 46% 20% at 100% 2%, rgba(148, 42, 234, .30), transparent 88%),
-    radial-gradient(ellipse 44% 28% at 5% -5%, rgba(29, 99, 231, .20), transparent 92%),
-    linear-gradient(145deg, #0c1429 0%, #0b1226 45%, #101029 100%);
+    radial-gradient(ellipse 46% 20% at 100% 2%, hsl(var(--factory-hue) 82% 54% / 0.3), transparent 88%),
+    radial-gradient(ellipse 44% 28% at 5% -5%, hsl(var(--factory-hue) 81% 51% / 0.2), transparent 92%),
+    linear-gradient(
+      145deg,
+      hsl(var(--factory-hue) 55% 10%) 0%,
+      hsl(var(--factory-hue) 55% 10%) 45%,
+      hsl(var(--factory-hue) 44% 11%) 100%
+    );
 }
 .product-comparison-premium .pc-page-heading {
   min-width: 0;
@@ -68,10 +78,17 @@
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  color: #f9faff;
-  background: linear-gradient(145deg, #357cf7 0%, #6336c9 60%, #8d39eb 100%);
-  border: 1px solid rgba(179, 163, 255, .52);
-  box-shadow: 0 7px 24px rgba(84, 53, 228, .22), inset 0 1px 0 rgba(255,255,255,.24);
+  color: hsl(var(--factory-hue) 100% 99%);
+  background: linear-gradient(
+    145deg,
+    hsl(var(--factory-hue) 92% 59%) 0%,
+    hsl(var(--factory-hue) 58% 50%) 60%,
+    hsl(var(--factory-hue) 82% 57%) 100%
+  );
+  border: 1px solid hsl(var(--factory-hue) 100% 82% / 0.52);
+  box-shadow:
+    0 7px 24px hsl(var(--factory-hue) 76% 55% / 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24);
 }
 .product-comparison-premium .pc-heading-icon {
   width: 52px;
@@ -82,9 +99,9 @@
   width: 32px;
   height: 32px;
   border-radius: 10px;
-  color: #8fc0ff;
-  background: linear-gradient(145deg, rgba(45, 117, 245, .20), rgba(116, 60, 210, .17));
-  border-color: rgba(97, 144, 245, .36);
+  color: hsl(var(--factory-hue) 100% 78%);
+  background: linear-gradient(145deg, hsl(var(--factory-hue) 91% 57% / 0.2), hsl(var(--factory-hue) 62% 53% / 0.17));
+  border-color: hsl(var(--factory-hue) 88% 67% / 0.36);
   box-shadow: none;
 }
 .product-comparison-premium .pc-toolbar {
@@ -105,19 +122,24 @@
   font-weight: 600;
 }
 .product-comparison-premium .pc-control-button:hover {
-  background: rgba(92, 117, 236, .14);
+  background: hsl(var(--factory-hue) 79% 64% / 0.14);
   color: var(--pc-text);
 }
 .product-comparison-premium .pc-control-button[aria-pressed="true"] {
-  background: linear-gradient(120deg, #1474ea, #3d57e2 62%, #682ccc);
-  border-color: rgba(133, 174, 255, .75);
+  background: linear-gradient(
+    120deg,
+    hsl(var(--factory-hue) 84% 50%),
+    hsl(var(--factory-hue) 74% 56%) 62%,
+    hsl(var(--factory-hue) 65% 49%)
+  );
+  border-color: hsl(var(--factory-hue) 100% 76% / 0.75);
   color: #fff;
-  box-shadow: 0 4px 14px rgba(41, 91, 220, .24);
+  box-shadow: 0 4px 14px hsl(var(--factory-hue) 72% 51% / 0.24);
 }
 .product-comparison-premium .pc-control-button:focus-visible,
 .product-comparison-premium .pc-date-input:focus-visible,
 .product-comparison-premium .pc-product-chip button:focus-visible {
-  outline: 2px solid #7e80f8;
+  outline: 2px solid hsl(var(--factory-hue) 90% 73%);
   outline-offset: 2px;
 }
 .product-comparison-premium .pc-date-panel {
@@ -125,13 +147,15 @@
   border-radius: 16px;
   border: 1px solid var(--pc-border);
   background:
-    linear-gradient(115deg, rgba(56, 111, 227, .07), rgba(154, 81, 245, .10)),
+    linear-gradient(115deg, hsl(var(--factory-hue) 75% 55% / 0.07), hsl(var(--factory-hue) 89% 64% / 0.1)),
     var(--pc-card);
-  box-shadow: 0 8px 24px rgba(18, 28, 80, .06);
+  box-shadow: 0 8px 24px hsl(var(--factory-hue) 63% 19% / 0.06);
 }
 .dark .product-comparison-premium .pc-date-panel {
-  background: linear-gradient(115deg, rgba(48, 77, 157, .22), rgba(101, 45, 166, .22)), var(--pc-card);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, .15);
+  background:
+    linear-gradient(115deg, hsl(var(--factory-hue) 53% 40% / 0.22), hsl(var(--factory-hue) 57% 41% / 0.22)),
+    var(--pc-card);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
 }
 .product-comparison-premium .pc-date-input {
   background: var(--pc-input-bg);
@@ -143,19 +167,19 @@
   color-scheme: dark;
 }
 .product-comparison-premium .pc-period-summary {
-  background: rgba(65, 132, 248, .06);
-  border-color: rgba(76, 139, 241, .25);
+  background: hsl(var(--factory-hue) 93% 61% / 0.06);
+  border-color: hsl(var(--factory-hue) 85% 62% / 0.25);
   min-width: 0;
 }
 .product-comparison-premium .pc-period-summary--comparison {
-  background: rgba(147, 88, 235, .08);
-  border-color: rgba(159, 106, 248, .30);
+  background: hsl(var(--factory-hue) 79% 63% / 0.08);
+  border-color: hsl(var(--factory-hue) 91% 69% / 0.3);
 }
 .dark .product-comparison-premium .pc-period-summary {
-  background: rgba(26, 68, 121, .34);
+  background: hsl(var(--factory-hue) 65% 29% / 0.34);
 }
 .dark .product-comparison-premium .pc-period-summary--comparison {
-  background: rgba(100, 48, 147, .31);
+  background: hsl(var(--factory-hue) 51% 38% / 0.31);
 }
 .product-comparison-premium .pc-filters {
   padding-top: 2px;
@@ -166,25 +190,25 @@
   border: 1px solid var(--pc-border);
   color: var(--pc-text);
   background: var(--pc-input-bg);
-  box-shadow: 0 2px 8px rgba(20, 30, 85, .06);
+  box-shadow: 0 2px 8px hsl(var(--factory-hue) 62% 21% / 0.06);
 }
 .product-comparison-premium .pc-filters [data-testid^="product-comparison-"]:hover {
-  border-color: rgba(110, 123, 240, .7);
+  border-color: hsl(var(--factory-hue) 81% 69% / 0.7);
 }
 .product-comparison-premium .pc-product-chip {
   border-radius: 10px;
   border: 1px solid var(--pc-border);
   color: var(--pc-text);
-  background: linear-gradient(120deg, rgba(74, 103, 193, .14), rgba(128, 69, 212, .10));
+  background: linear-gradient(120deg, hsl(var(--factory-hue) 49% 52% / 0.14), hsl(var(--factory-hue) 62% 55% / 0.1));
   font-weight: 600;
 }
 .product-comparison-premium .pc-product-chip button:hover {
-  background: rgba(130, 115, 238, .18);
+  background: hsl(var(--factory-hue) 78% 69% / 0.18);
 }
 .product-comparison-premium .pc-stat-card {
-  --pc-tone: #6942dc;
-  --pc-tone-soft: rgba(119, 70, 230, .16);
-  --pc-tone-border: rgba(142, 79, 246, .46);
+  --pc-tone: hsl(var(--factory-hue) 69% 56%);
+  --pc-tone-soft: hsl(var(--factory-hue) 76% 59% / 0.16);
+  --pc-tone-border: hsl(var(--factory-hue) 90% 64% / 0.46);
   position: relative;
   overflow: hidden;
   border: 1px solid var(--pc-tone-border);
@@ -192,29 +216,29 @@
   background:
     radial-gradient(ellipse 80% 100% at 100% 120%, var(--pc-tone-soft), transparent 75%),
     linear-gradient(135deg, var(--pc-card), var(--pc-card));
-  box-shadow: 0 5px 18px rgba(22, 36, 94, .08);
+  box-shadow: 0 5px 18px hsl(var(--factory-hue) 62% 23% / 0.08);
   color: var(--pc-text);
 }
 .product-comparison-premium .pc-stat-card--blue {
-  --pc-tone: #1688e8;
-  --pc-tone-soft: rgba(34, 125, 240, .21);
-  --pc-tone-border: rgba(43, 119, 239, .43);
+  --pc-tone: hsl(var(--factory-hue) 83% 50%);
+  --pc-tone-soft: hsl(var(--factory-hue) 87% 54% / 0.21);
+  --pc-tone-border: hsl(var(--factory-hue) 86% 55% / 0.43);
 }
 .product-comparison-premium .pc-stat-card--green {
   --pc-tone: #10bd7f;
-  --pc-tone-soft: rgba(13, 194, 128, .21);
-  --pc-tone-border: rgba(15, 166, 117, .46);
+  --pc-tone-soft: rgba(13, 194, 128, 0.21);
+  --pc-tone-border: rgba(15, 166, 117, 0.46);
 }
 .product-comparison-premium .pc-stat-card--rose {
   --pc-tone: #ef4876;
-  --pc-tone-soft: rgba(230, 58, 93, .20);
-  --pc-tone-border: rgba(223, 69, 114, .43);
+  --pc-tone-soft: rgba(230, 58, 93, 0.2);
+  --pc-tone-border: rgba(223, 69, 114, 0.43);
 }
 .dark .product-comparison-premium .pc-stat-card {
   background:
     radial-gradient(ellipse 90% 90% at 100% 120%, var(--pc-tone-soft), transparent 78%),
-    linear-gradient(120deg, rgba(26, 34, 72, .93), rgba(20, 28, 56, .97));
-  box-shadow: 0 7px 25px rgba(0,0,0,.15);
+    linear-gradient(120deg, hsl(var(--factory-hue) 47% 19% / 0.93), hsl(var(--factory-hue) 47% 15% / 0.97));
+  box-shadow: 0 7px 25px rgba(0, 0, 0, 0.15);
 }
 .product-comparison-premium .pc-stat-icon {
   width: 48px;
@@ -226,11 +250,11 @@
   color: var(--pc-tone);
   border-radius: 13px;
   background: var(--pc-tone-soft);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 .dark .product-comparison-premium .pc-stat-icon {
   color: #fff;
-  background: linear-gradient(135deg, var(--pc-tone), rgba(110, 71, 211, .38));
+  background: linear-gradient(135deg, var(--pc-tone), hsl(var(--factory-hue) 61% 55% / 0.38));
 }
 .product-comparison-premium .pc-stat-card p {
   line-height: 1.3;
@@ -238,15 +262,17 @@
 .product-comparison-premium .pc-product-chart {
   border: 1px solid transparent;
   border-radius: 17px;
-  background: linear-gradient(var(--pc-card), var(--pc-card)) padding-box,
-    linear-gradient(135deg, rgba(153, 91, 232, .66), rgba(59, 131, 239, .59)) border-box;
-  box-shadow: 0 7px 25px rgba(27, 40, 92, .08);
+  background:
+    linear-gradient(var(--pc-card), var(--pc-card)) padding-box,
+    linear-gradient(135deg, hsl(var(--factory-hue) 75% 63% / 0.66), hsl(var(--factory-hue) 85% 58% / 0.59)) border-box;
+  box-shadow: 0 7px 25px hsl(var(--factory-hue) 55% 23% / 0.08);
   color: var(--pc-text);
 }
 .dark .product-comparison-premium .pc-product-chart {
-  background: linear-gradient(145deg, #161e3e, #0e1a32) padding-box,
-    linear-gradient(135deg, rgba(157, 97, 253, .8), rgba(38, 132, 238, .76)) border-box;
-  box-shadow: 0 9px 30px rgba(0, 0, 0, .16);
+  background:
+    linear-gradient(145deg, hsl(var(--factory-hue) 48% 16%), hsl(var(--factory-hue) 56% 13%)) padding-box,
+    linear-gradient(135deg, hsl(var(--factory-hue) 98% 69% / 0.8), hsl(var(--factory-hue) 85% 54% / 0.76)) border-box;
+  box-shadow: 0 9px 30px rgba(0, 0, 0, 0.16);
 }
 .product-comparison-premium .pc-product-chart h3 {
   color: var(--pc-text);
@@ -254,21 +280,21 @@
 .product-comparison-premium .pc-value-card {
   min-width: 0;
   border-radius: 12px;
-  border: 1px solid rgba(51, 120, 229, .42);
-  background: rgba(38, 119, 235, .08);
+  border: 1px solid hsl(var(--factory-hue) 77% 55% / 0.42);
+  background: hsl(var(--factory-hue) 83% 54% / 0.08);
 }
 .product-comparison-premium .pc-value-card--compared {
-  border-color: rgba(13, 187, 112, .37);
-  background: rgba(25, 195, 121, .09);
+  border-color: rgba(13, 187, 112, 0.37);
+  background: rgba(25, 195, 121, 0.09);
 }
 .dark .product-comparison-premium .pc-value-card {
-  background: rgba(25, 70, 145, .27);
+  background: hsl(var(--factory-hue) 71% 33% / 0.27);
 }
 .dark .product-comparison-premium .pc-value-card--compared {
-  background: rgba(11, 113, 72, .25);
+  background: rgba(11, 113, 72, 0.25);
 }
 .product-comparison-premium .pc-value-dot--selected {
-  background-color: #398afc;
+  background-color: hsl(var(--factory-hue) 97% 61%);
 }
 .product-comparison-premium .pc-value-dot--compared {
   background-color: #15d581;
@@ -288,19 +314,37 @@
   color: var(--pc-text);
 }
 @media (max-width: 640px) {
-  .product-comparison-premium { padding: 12px; border-radius: 14px; }
-  .product-comparison-premium .pc-heading-icon { width: 44px; height: 44px; border-radius: 12px; }
-  .product-comparison-premium .pc-page-heading h2 { font-size: 1.3rem; }
-  .product-comparison-premium .pc-control-button { padding-inline: 10px; }
-  .product-comparison-premium .pc-stat-icon { width: 40px; height: 40px; flex-basis: 40px; }
+  .product-comparison-premium {
+    padding: 12px;
+    border-radius: 14px;
+  }
+  .product-comparison-premium .pc-heading-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+  }
+  .product-comparison-premium .pc-page-heading h2 {
+    font-size: 1.3rem;
+  }
+  .product-comparison-premium .pc-control-button {
+    padding-inline: 10px;
+  }
+  .product-comparison-premium .pc-stat-icon {
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+  }
 }
 @media (prefers-reduced-motion: no-preference) {
   .product-comparison-premium .pc-stat-card,
   .product-comparison-premium .pc-product-chart,
   .product-comparison-premium .pc-control-button {
-    transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease;
+    transition:
+      background-color 0.18s ease,
+      border-color 0.18s ease,
+      box-shadow 0.18s ease;
   }
   .product-comparison-premium .pc-product-chart:hover {
-    box-shadow: 0 10px 30px rgba(65, 82, 185, .16);
+    box-shadow: 0 10px 30px hsl(var(--factory-hue) 48% 49% / 0.16);
   }
 }

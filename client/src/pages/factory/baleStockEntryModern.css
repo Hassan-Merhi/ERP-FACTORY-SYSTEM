@@ -8,26 +8,26 @@
 @layer utilities {
   .bale-stock-entry-modern {
     --bse-surface: #ffffff;
-    --bse-surface-alt: #f5f8ff;
-    --bse-line: #dce4f2;
-    --bse-text: #17263f;
+    --bse-surface-alt: hsl(var(--factory-hue) 100% 98%);
+    --bse-line: hsl(var(--factory-hue) 46% 91%);
+    --bse-text: hsl(var(--factory-hue) 47% 17%);
     --bse-subtle: #63748e;
-    --bse-shadow: 0 18px 40px -32px rgba(30, 56, 98, .28);
+    --bse-shadow: 0 18px 40px -32px hsl(var(--factory-hue) 53% 25% / 0.28);
     position: relative;
     isolation: isolate;
     gap: 14px;
     padding: 6px 0 30px;
-    background: radial-gradient(ellipse at 80% 0%, rgba(102, 78, 255, .055), transparent 42%);
+    background: radial-gradient(ellipse at 80% 0%, hsl(var(--factory-hue) 100% 65% / 0.055), transparent 42%);
   }
 
   .dark .bale-stock-entry-modern {
-    --bse-surface: #111c31;
-    --bse-surface-alt: #0c172b;
-    --bse-line: #2a3e5b;
-    --bse-text: #eef5ff;
-    --bse-subtle: #a0b2c9;
-    --bse-shadow: 0 18px 48px -28px rgba(0, 4, 20, .85);
-    background: radial-gradient(ellipse at 80% 0%, rgba(80, 65, 194, .12), transparent 44%);
+    --bse-surface: hsl(var(--factory-hue) 48% 13%);
+    --bse-surface-alt: hsl(var(--factory-hue) 56% 11%);
+    --bse-line: hsl(var(--factory-hue) 37% 26%);
+    --bse-text: hsl(var(--factory-hue) 100% 97%);
+    --bse-subtle: hsl(var(--factory-hue) 28% 71%);
+    --bse-shadow: 0 18px 48px -28px hsl(var(--factory-hue) 100% 4% / 0.85);
+    background: radial-gradient(ellipse at 80% 0%, hsl(var(--factory-hue) 51% 51% / 0.12), transparent 44%);
   }
 
   .bale-stock-entry-modern .bale-stock-entry-hero {
@@ -39,15 +39,24 @@
     align-items: center;
     border: 1px solid var(--bse-line);
     border-radius: 20px;
-    background:
-      linear-gradient(110deg, rgba(250, 252, 255, .98) 0%, rgba(236, 243, 255, .94) 48%, rgba(218, 228, 252, .78) 100%);
+    background: linear-gradient(
+      110deg,
+      hsl(var(--factory-hue) 100% 99% / 0.98) 0%,
+      hsl(var(--factory-hue) 100% 96% / 0.94) 48%,
+      hsl(var(--factory-hue) 85% 92% / 0.78) 100%
+    );
     box-shadow: var(--bse-shadow);
   }
 
   .dark .bale-stock-entry-modern .bale-stock-entry-hero {
     background:
-      radial-gradient(ellipse at 84% 65%, rgba(62, 109, 175, .32), transparent 34%),
-      linear-gradient(105deg, #0b1528 2%, #10213c 56%, #152d4c 100%);
+      radial-gradient(ellipse at 84% 65%, hsl(var(--factory-hue) 48% 46% / 0.32), transparent 34%),
+      linear-gradient(
+        105deg,
+        hsl(var(--factory-hue) 57% 10%) 2%,
+        hsl(var(--factory-hue) 58% 15%) 56%,
+        hsl(var(--factory-hue) 57% 19%) 100%
+      );
   }
 
   .bale-stock-entry-modern .bale-stock-entry-hero::after {
@@ -55,11 +64,11 @@
     position: absolute;
     inset: 0 0 0 52%;
     z-index: -1;
-    opacity: .33;
+    opacity: 0.33;
     background:
-      repeating-linear-gradient(90deg, transparent 0 72px, rgba(88, 128, 177, .14) 72px 74px),
-      linear-gradient(180deg, transparent 55%, rgba(69, 112, 166, .17) 56%, transparent 57%),
-      linear-gradient(90deg, transparent, rgba(89, 132, 198, .26));
+      repeating-linear-gradient(90deg, transparent 0 72px, hsl(var(--factory-hue) 36% 52% / 0.14) 72px 74px),
+      linear-gradient(180deg, transparent 55%, hsl(var(--factory-hue) 41% 46% / 0.17) 56%, transparent 57%),
+      linear-gradient(90deg, transparent, hsl(var(--factory-hue) 49% 56% / 0.26));
     mask-image: linear-gradient(to right, transparent, black 35%);
     pointer-events: none;
   }
@@ -73,9 +82,9 @@
     width: 46px;
     height: 46px;
     border-radius: 15px;
-    border: 1px solid rgba(0, 182, 119, .36);
+    border: 1px solid rgba(0, 182, 119, 0.36);
     background: linear-gradient(145deg, #079760, #036a50);
-    box-shadow: 0 8px 24px -13px rgba(0, 155, 114, .85);
+    box-shadow: 0 8px 24px -13px rgba(0, 155, 114, 0.85);
   }
 
   .bale-stock-entry-modern .bale-stock-entry-hero-title > div:first-child svg {
@@ -85,7 +94,7 @@
   .bale-stock-entry-modern .bale-stock-entry-hero h1 {
     color: var(--bse-text);
     font-weight: 800;
-    letter-spacing: -.035em;
+    letter-spacing: -0.035em;
     font-size: clamp(1.2rem, 1.6vw, 1.55rem);
   }
 
@@ -101,7 +110,7 @@
     display: grid;
     place-items: center;
     width: 150px;
-    color: rgba(86, 144, 206, .14);
+    color: hsl(var(--factory-hue) 55% 57% / 0.14);
     pointer-events: none;
   }
 
@@ -118,14 +127,14 @@
 
   .bale-stock-entry-modern [data-factory-mobile-actions] > * {
     border-radius: 11px;
-    box-shadow: 0 8px 18px -16px rgba(0, 0, 0, .6);
+    box-shadow: 0 8px 18px -16px rgba(0, 0, 0, 0.6);
   }
 
   .bale-stock-entry-modern [data-testid="badge-stock-entry"] {
-    border-color: rgba(10, 178, 114, .42);
+    border-color: rgba(10, 178, 114, 0.42);
     color: #fff;
     background: linear-gradient(130deg, #019d6b, #057a58);
-    letter-spacing: .055em;
+    letter-spacing: 0.055em;
   }
 
   .bale-stock-entry-modern [data-factory-daily-summary] > div:nth-child(2) {
@@ -141,7 +150,9 @@
     padding: 17px 16px;
     box-shadow: var(--bse-shadow);
     background-color: var(--bse-surface);
-    transition: box-shadow .2s ease, border-color .2s ease;
+    transition:
+      box-shadow 0.2s ease,
+      border-color 0.2s ease;
   }
 
   .bale-stock-entry-modern [data-factory-daily-summary] > div:nth-child(2) > div::after {
@@ -155,32 +166,32 @@
     transform: rotate(-14deg);
     border-radius: 45%;
     background: currentColor;
-    opacity: .045;
+    opacity: 0.045;
     pointer-events: none;
   }
 
   .dark .bale-stock-entry-modern [data-factory-daily-summary] > div:nth-child(2) > div::after {
-    opacity: .11;
+    opacity: 0.11;
   }
 
   .bale-stock-entry-modern [data-factory-daily-summary] > div:nth-child(2) > div:nth-child(1) {
-    border-color: rgba(5, 180, 118, .35);
-    background-image: linear-gradient(110deg, rgba(2, 181, 116, .1), transparent 85%);
+    border-color: rgba(5, 180, 118, 0.35);
+    background-image: linear-gradient(110deg, rgba(2, 181, 116, 0.1), transparent 85%);
     color: #059b6c;
   }
   .bale-stock-entry-modern [data-factory-daily-summary] > div:nth-child(2) > div:nth-child(2) {
-    border-color: rgba(234, 163, 27, .35);
-    background-image: linear-gradient(110deg, rgba(252, 173, 24, .1), transparent 85%);
+    border-color: rgba(234, 163, 27, 0.35);
+    background-image: linear-gradient(110deg, rgba(252, 173, 24, 0.1), transparent 85%);
     color: #e1a01c;
   }
   .bale-stock-entry-modern [data-factory-daily-summary] > div:nth-child(2) > div:nth-child(3) {
-    border-color: rgba(45, 155, 235, .35);
-    background-image: linear-gradient(110deg, rgba(30, 152, 240, .1), transparent 85%);
-    color: #229bd9;
+    border-color: hsl(var(--factory-hue) 83% 55% / 0.35);
+    background-image: linear-gradient(110deg, hsl(var(--factory-hue) 87% 53% / 0.1), transparent 85%);
+    color: hsl(var(--factory-hue) 73% 49%);
   }
 
   .bale-stock-entry-modern [data-factory-daily-summary] strong {
-    letter-spacing: -.03em;
+    letter-spacing: -0.03em;
   }
   .bale-stock-entry-modern [data-factory-daily-summary] > div:nth-child(2) > div > div:first-child strong {
     color: var(--bse-text);
@@ -190,7 +201,7 @@
   }
   .bale-stock-entry-modern [data-factory-daily-summary] > div:nth-child(2) > div > div:first-child > span {
     border-radius: 13px;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
   }
 
   .bale-stock-entry-modern .bale-stock-entry-tabs {
@@ -204,20 +215,23 @@
     border-radius: 11px;
     min-height: 38px;
     padding: 8px 14px;
-    transition: background-color .15s ease, color .15s ease, box-shadow .15s ease;
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease,
+      box-shadow 0.15s ease;
   }
 
   .bale-stock-entry-modern .bale-stock-entry-tabs [role="tab"][data-state="active"] {
     font-weight: 700;
-    background: rgba(98, 76, 237, .12);
-    color: #7753e4;
-    box-shadow: inset 0 0 0 1px rgba(125, 93, 248, .22);
+    background: hsl(var(--factory-hue) 82% 61% / 0.12);
+    color: hsl(var(--factory-hue) 73% 61%);
+    box-shadow: inset 0 0 0 1px hsl(var(--factory-hue) 92% 67% / 0.22);
   }
 
   .dark .bale-stock-entry-modern .bale-stock-entry-tabs [role="tab"][data-state="active"] {
-    background: linear-gradient(130deg, #6946d8, #4832ba);
+    background: linear-gradient(130deg, hsl(var(--factory-hue) 65% 56%), hsl(var(--factory-hue) 58% 46%));
     color: #fff;
-    box-shadow: 0 6px 18px -9px rgba(117, 81, 255, .85);
+    box-shadow: 0 6px 18px -9px hsl(var(--factory-hue) 100% 66% / 0.85);
   }
 
   .bale-stock-entry-modern .daily-scan-modern {
@@ -232,7 +246,7 @@
     border-radius: 11px;
     background: var(--bse-surface);
     color: var(--bse-text);
-    box-shadow: 0 8px 22px -20px rgba(16, 38, 83, .5);
+    box-shadow: 0 8px 22px -20px hsl(var(--factory-hue) 68% 19% / 0.5);
     min-height: 40px;
   }
 
@@ -258,16 +272,16 @@
     min-width: 0;
     height: 46px;
     border-radius: 12px;
-    border: 1px solid rgba(108, 83, 233, .65);
+    border: 1px solid hsl(var(--factory-hue) 77% 62% / 0.65);
     background: var(--bse-surface);
     padding-inline: 16px;
     font-size: 14px;
-    box-shadow: inset 0 0 0 1px rgba(121, 97, 250, .09);
+    box-shadow: inset 0 0 0 1px hsl(var(--factory-hue) 94% 68% / 0.09);
   }
 
   .bale-stock-entry-modern .daily-scan-input:focus-visible {
-    border-color: #8a63ef;
-    box-shadow: 0 0 0 3px rgba(132, 98, 239, .16);
+    border-color: hsl(var(--factory-hue) 81% 66%);
+    box-shadow: 0 0 0 3px hsl(var(--factory-hue) 82% 66% / 0.16);
   }
 
   .bale-stock-entry-modern .daily-scan-scanner > button,
@@ -277,21 +291,21 @@
   }
 
   .bale-stock-entry-modern .daily-scan-scanner .daily-scan-submit {
-    border: 1px solid #7452d7;
+    border: 1px solid hsl(var(--factory-hue) 62% 58%);
     color: #fff;
-    background: linear-gradient(130deg, #7654ed, #5338c2);
-    box-shadow: 0 9px 22px -14px rgba(98, 58, 225, .8);
+    background: linear-gradient(130deg, hsl(var(--factory-hue) 81% 63%), hsl(var(--factory-hue) 55% 49%));
+    box-shadow: 0 9px 22px -14px hsl(var(--factory-hue) 74% 55% / 0.8);
     font-weight: 700;
     padding-inline: 19px;
   }
   .bale-stock-entry-modern .daily-scan-scanner .daily-scan-submit:hover:not(:disabled) {
-    background: linear-gradient(130deg, #8668f3, #6348d8);
+    background: linear-gradient(130deg, hsl(var(--factory-hue) 85% 68%), hsl(var(--factory-hue) 65% 56%));
   }
 
   .bale-stock-entry-modern .daily-scan-success {
     border-radius: 11px;
-    border: 1px solid rgba(15, 170, 111, .38);
-    background: linear-gradient(90deg, rgba(15, 190, 120, .15), rgba(15, 190, 120, .045));
+    border: 1px solid rgba(15, 170, 111, 0.38);
+    background: linear-gradient(90deg, rgba(15, 190, 120, 0.15), rgba(15, 190, 120, 0.045));
     color: #067d55;
     padding: 11px 13px;
   }
@@ -301,8 +315,8 @@
 
   .bale-stock-entry-modern .daily-scan-alert {
     border-radius: 11px;
-    border: 1px solid rgba(235, 164, 27, .4);
-    background: linear-gradient(90deg, rgba(239, 168, 29, .13), rgba(238, 169, 29, .055));
+    border: 1px solid rgba(235, 164, 27, 0.4);
+    background: linear-gradient(90deg, rgba(239, 168, 29, 0.13), rgba(238, 169, 29, 0.055));
     color: #9a6612;
     padding: 11px 13px;
   }
@@ -330,7 +344,7 @@
     color: var(--bse-subtle);
     font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: .045em;
+    letter-spacing: 0.045em;
     font-weight: 800;
     border-bottom: 1px solid var(--bse-line);
     white-space: nowrap;
@@ -344,10 +358,10 @@
     font-size: 12px;
   }
   .bale-stock-entry-modern .daily-scan-table tbody tr:nth-child(even) {
-    background: rgba(118, 150, 204, .045);
+    background: hsl(var(--factory-hue) 46% 63% / 0.045);
   }
   .bale-stock-entry-modern .daily-scan-table tbody tr:hover {
-    background: rgba(117, 94, 230, .09);
+    background: hsl(var(--factory-hue) 73% 64% / 0.09);
   }
   .bale-stock-entry-modern .daily-scan-table .text-muted-foreground {
     color: var(--bse-subtle);
@@ -368,18 +382,18 @@
     white-space: nowrap;
   }
   .bale-stock-entry-modern .daily-scan-table-completed {
-    opacity: .89;
+    opacity: 0.89;
   }
   .bale-stock-entry-modern .daily-scan-scanned-toggle {
     padding: 7px 3px;
     font-weight: 650;
   }
   .bale-stock-entry-modern .daily-scan-scanned-toggle:hover {
-    color: #7355e7;
+    color: hsl(var(--factory-hue) 75% 62%);
   }
   .bale-stock-entry-modern [data-testid="panel-scan-feedback"] {
     border-radius: 15px;
-    box-shadow: 0 18px 44px -17px rgba(0, 0, 0, .4);
+    box-shadow: 0 18px 44px -17px rgba(0, 0, 0, 0.4);
   }
 
   @media (max-width: 760px) {
