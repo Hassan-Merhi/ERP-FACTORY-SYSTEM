@@ -216,7 +216,7 @@ export function compareFactoryLoadingDispatch(input: {
   type Accumulator = {
     articleCode: string; productName: string; loadedQty: number; loadedWeightKg: number;
     scannedQty: number; scannedWeightKg: number; matchedQty: number;
-    plannedQty: number | null; plannedWeightKg: number; hasExactPlan: boolean;
+    plannedQty: number | null; plannedWeightKg: number; exactPlannedQty: number; hasExactPlan: boolean;
     priorityRank: number | null;
   };
   const groups = new Map<string, Accumulator>();
@@ -226,7 +226,7 @@ export function compareFactoryLoadingDispatch(input: {
     if (!found) {
       found = { articleCode: key, productName: name, loadedQty: 0,
         loadedWeightKg: 0, scannedQty: 0, scannedWeightKg: 0, matchedQty: 0,
-        plannedQty: null, plannedWeightKg: 0, hasExactPlan: false, priorityRank: null };
+        plannedQty: null, plannedWeightKg: 0, exactPlannedQty: 0, hasExactPlan: false, priorityRank: null };
       groups.set(key, found);
     }
     if (name && !found.productName) found.productName = name;
@@ -252,6 +252,7 @@ export function compareFactoryLoadingDispatch(input: {
       const g = group(b.articleCode, b.productName);
       g.plannedQty = (g.plannedQty ?? 0) + 1;
       g.plannedWeightKg += weight(b.weightKg);
+      g.exactPlannedQty += 1;
       g.hasExactPlan = true;
     }
     // Priority article quantities supersede exact counts for article totals.
@@ -302,8 +303,8 @@ export function compareFactoryLoadingDispatch(input: {
       articleCode: g.articleCode, productName: g.productName,
       expectedQty, scannedQty: g.scannedQty, matchedQty,
       missingQty, extraQty,
-      expectedWeightKg: byTrip ? (g.hasExactPlan ? roundKg(g.plannedWeightKg) : null)
-        : roundKg(g.loadedWeightKg),
+      expectedWeightKg: byTrip ? (g.hasExactPlan && g.exactPlannedQty === expectedQty
+        ? roundKg(g.plannedWeightKg) : null) : roundKg(g.loadedWeightKg),
       scannedWeightKg: roundKg(g.scannedWeightKg),
       priorityRank: g.priorityRank,
       status,
@@ -318,10 +319,11 @@ export function compareFactoryLoadingDispatch(input: {
   const expectedBalesCount = !byTrip ? loadedMap.size
     : !hasTripPlan ? null
     : articles.reduce((sum, g) => sum + (g.expectedQty ?? 0), 0);
+  const allPlannedWeightsKnown = byTrip && hasTripPlan && articles.every((article) =>
+    article.expectedQty === 0 || article.expectedWeightKg !== null);
   const expectedWeightKg = !byTrip ? roundKg([...loadedMap.values()].reduce((sum,b) => sum + weight(b.weightKg), 0))
-    : scopedPlannedArticles.length ? null
-    : scopedPlannedBales.length ? roundKg(scopedPlannedBales.reduce((sum,b) =>
-      sum + weight((loadedMap.get(b.baleId) ?? b).weightKg), 0)) : null;
+    : allPlannedWeightsKnown ? roundKg(articles.reduce((sum, article) =>
+      sum + (article.expectedWeightKg ?? 0), 0)) : null;
 
   const verifiedBales = scopedByBale.size;
   const verifiedWeightKg = roundKg([...scopedByBale.values()].reduce((sum, b) => sum + weight(b.weightKg), 0));
