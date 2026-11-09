@@ -101,7 +101,7 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
           const isManualSupplier = supplierRawStocks.length === 0;
 
           if (isManualSupplier) {
-            const addAllowance = await availableSupplierAddAllowance(tx, companyId, supplierId, supplierRawStocks);
+            const addAllowance = await availableSupplierAddAllowance(tx, companyId, supplierId, supplierRawStocks, txDate || getClientDate(req));
             requireMixFifoFullyAllocated(weight.toFixed(3), supplierId, addAllowance.toFixed(3));
             // MANUAL supplier — no container raw-stock rows to update. Still must use
             // the supplier's locked rate; reject if none has ever been established.
@@ -136,7 +136,7 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
               toDeduct = toDeduct.minus(take);
             }
             if (toDeduct.gt(0)) {
-              const addAllowance = await availableSupplierAddAllowance(tx, companyId, supplierId, supplierRawStocks);
+              const addAllowance = await availableSupplierAddAllowance(tx, companyId, supplierId, supplierRawStocks, txDate || getClientDate(req));
               requireMixFifoFullyAllocated(toDeduct.toFixed(3), supplierId, addAllowance.toFixed(3));
               const last = supplierRawStocks[supplierRawStocks.length - 1];
               await tx.update(factoryRawStock)
