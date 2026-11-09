@@ -9,7 +9,7 @@ export default function FactoryRentalShops() {
       pageTitle="Factory — Shop Rentals"
       pageIcon={<Store className="h-7 w-7 text-orange-600" />}
       testIdPrefix="factory-rental-shops"
-      apiBase="/api/factory/rental"
+      rentalModule="FACTORY"
       paymentsLogUrl="/factory/rental/payments"
     />
   );
