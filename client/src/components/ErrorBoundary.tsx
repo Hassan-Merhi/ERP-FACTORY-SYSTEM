@@ -151,12 +151,6 @@ export class ErrorBoundary extends Component<Props, State> {
       // not simply another navigation to the same unavailable asset.
       window.dispatchEvent(new CustomEvent("erp:asset-load-failed"));
       return;
-      const path = window.location.pathname;
-      if (canAutoRetry(path)) {
-        recordRetry(path);
-        // Small delay so the server has time to finish restarting
-        setTimeout(() => hardNavigate(path), 800);
-      }
     }
   }
 
