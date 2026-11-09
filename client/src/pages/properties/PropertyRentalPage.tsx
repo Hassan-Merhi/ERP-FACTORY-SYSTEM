@@ -137,9 +137,9 @@ export default function PropertyRentalPage({
   const ledgerUsdMoney = (amount: number) => formatMoneyDisplay(amount, { currency: "USD" });
   const summaryMoney = (amount: number) => contractTotalsAreUsd
     ? ledgerUsdMoney(amount)
-    : "Non-USD or mixed currencies — see contracts";
+    : "Non-USD or unverified currencies — see contracts";
   const paidValue = paidFigure.amount === null
-    ? (showHistoricalPaid ? "Unavailable" : "Non-USD or mixed currencies — see contracts")
+    ? (showHistoricalPaid ? "Unavailable" : "Non-USD or unverified currencies — see contracts")
     : formatMoneyDisplay(paidFigure.amount, { currency: paidFigure.currency });
   const guaranteeValue = showHistoricalPaid
     ? (reconciledAccountTotalsReady ? formatMoneyDisplay(summaryGuarantee, { currency: "USD" }) : "Unavailable")
@@ -426,7 +426,7 @@ export default function PropertyRentalPage({
         )}
         {!contractTotalsAreUsd && (
           <p role="status" className="text-xs text-amber-600 dark:text-amber-400">
-            Contract totals are not exclusively USD. Contract-based overview totals are withheld rather than silently reported in USD.
+            Contract currencies are not all verified as USD. Contract-based overview totals are withheld rather than silently reported in USD.
             Individual contracts and ledger balances remain unchanged.
           </p>
         )}
