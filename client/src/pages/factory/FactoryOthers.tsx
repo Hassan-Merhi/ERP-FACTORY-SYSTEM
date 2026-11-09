@@ -10,8 +10,8 @@ type OthersTab = "comparison" | "product-comparison";
 const ALL_TABS: readonly OthersTab[] = ["comparison", "product-comparison"];
 
 export default function FactoryOthers() {
-  const { ready, access } = useFactoryNavigationAccess();
-  const hidden = access?.hiddenCostFields ?? [];
+  const { ready, access, isPrivileged } = useFactoryNavigationAccess();
+  const hidden = isPrivileged ? [] : (access?.hiddenCostFields ?? []);
   const visibleTabs = ALL_TABS.filter((tab) =>
     !hidden.includes(tab === "comparison" ? "hide_tab_overview_comparison" : "hide_tab_overview_product_comparison")
   );
