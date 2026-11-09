@@ -18,7 +18,8 @@ import {
 } from "../../services/accounting/scheduledPostingScope";
 import { db, pool } from "../../db";
 import { getRentalBillingDay, getRentalPeriodDueDate } from "../../services/rental/rentalPeriodService";
-import { canDelete, requireAuth, requireRole } from "../../auth";
+import { requireAuth, requireRole } from "../../auth";
+import { requireRentalDeletePermission } from "./rentalRoutePermissions";
 import { z } from "zod";
 import { eq, and, or, sql, desc, isNull } from "drizzle-orm";
 import {
@@ -985,7 +986,7 @@ export function registerRentalPaymentsAccrualRoutes(
   );
 
   // ── CANCEL SCHEDULED PAYMENT GROUP ────────────────────────────────────────
-  app.delete(`${urlPrefix}/payments/scheduled/:groupId`, requireAuth, canDelete, async (req: Request, res: Response) => {
+  app.delete(`${urlPrefix}/payments/scheduled/:groupId`, requireAuth, requireRentalDeletePermission, async (req: Request, res: Response) => {
     try {
       const companyId = getCompanyId(req);
       if (!companyId) return res.status(400).json({ message: "No company selected" });
