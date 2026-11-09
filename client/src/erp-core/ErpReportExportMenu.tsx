@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { ChevronDown, Download, FileSpreadsheet, FileText, Printer } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button, type ButtonProps } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +16,7 @@ export interface ErpReportExportOption {
   onSelect: () => void | Promise<void>;
   disabled?: boolean;
   icon?: ReactNode;
+  testId?: string;
 }
 
 /**
@@ -27,6 +28,7 @@ export interface ErpReportExportMenuProps {
   disabled?: boolean;
   busy?: boolean;
   label?: string;
+  size?: ButtonProps["size"];
   className?: string;
   "data-testid"?: string;
 }
@@ -43,6 +45,7 @@ export function ErpReportExportMenu({
   disabled = false,
   busy = false,
   label = "Export",
+  size,
   className,
   "data-testid": testId,
 }: ErpReportExportMenuProps) {
@@ -52,6 +55,7 @@ export function ErpReportExportMenu({
         <Button
           type="button"
           variant="outline"
+          size={size}
           className={className}
           disabled={disabled || busy || options.length === 0}
           aria-busy={busy || undefined}
@@ -72,7 +76,7 @@ export function ErpReportExportMenu({
               onSelect={() => {
                 void option.onSelect();
               }}
-              data-testid={`export-option-${option.id}`}
+              data-testid={option.testId ?? `export-option-${option.id}`}
             >
               {option.icon ?? <Icon className="mr-2 h-4 w-4" aria-hidden="true" />}
               {option.label}
