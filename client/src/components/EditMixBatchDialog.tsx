@@ -691,7 +691,7 @@ export function EditMixBatchDialog({
                       {availableSuppliers?.map((stock) => (
                         <SelectItem key={stock.supplierId!} value={stock.supplierId!.toString()}>
                           {stock.supplierName} ({formatNumber(parseFloat(stock.remainingKg))} kg @ $
-                          {parseFloat(stock.costPerKg).toFixed(4)}/kg)
+                          {parseFloat(stock.costPerKgUsd || stock.costPerKg || "0").toFixed(4)}/kg USD)
                         </SelectItem>
                       ))}
                       {(!availableSuppliers || availableSuppliers.length === 0) && (
