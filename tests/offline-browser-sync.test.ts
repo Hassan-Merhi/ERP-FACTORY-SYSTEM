@@ -297,14 +297,12 @@ describe("Browser offline sync: money and sales", () => {
     expect(again.body).toMatchObject({ cloudRef: first.body.cloudRef, replayed: true });
     expect(await quantity(ctx.stockItemIds[0])).toBe(before - 2);
 
-    const noAccount = await agent
-      .post("/api/offline/browser-sync/operations")
-      .send(
-        op("pos.sale.v1", {
-          locationId: ctx.locationId,
-          items: [{ stockItemId: ctx.stockItemIds[0], quantity: 1, rate: 1 }],
-        })
-      );
+    const noAccount = await agent.post("/api/offline/browser-sync/operations").send(
+      op("pos.sale.v1", {
+        locationId: ctx.locationId,
+        items: [{ stockItemId: ctx.stockItemIds[0], quantity: 1, rate: 1 }],
+      })
+    );
     expect(noAccount.status).toBe(422);
     expect(noAccount.body.code).toBe("OFFLINE_POS_ACCOUNT_REQUIRED");
   });
