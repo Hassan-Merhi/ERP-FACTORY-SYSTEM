@@ -45,7 +45,11 @@ import {
   STOCK_DOCUMENT_NOT_RESTORABLE_MESSAGE,
 } from "../../../services/inventory/voucherStockReversal";
 import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
-import { MixLifecycleRefusal, requireMixDeletionSafe, requireMixLifecycleAvailable } from "../../../services/factory/mixLifecyclePhase6";
+import {
+  MixLifecycleRefusal,
+  requireMixDeletionSafe,
+  requireMixLifecycleAvailable,
+} from "../../../services/factory/mixLifecyclePhase6";
 import { isPerpetualInventoryActive } from "../../../services/accounting/perpetualInventory/cutover";
 import {
   isRetiredVoucherNumber,
@@ -252,11 +256,17 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
           // restore updated every raw-stock row sharing a container and could
           // manufacture stock consumption a second time.
           const result = await db.transaction(async (tx) => {
-            const [mix] = await tx.select().from(factoryMixBatches).where(and(
-              eq(factoryMixBatches.id, itemId),
-              eq(factoryMixBatches.companyId, companyId),
-              isNotNull(factoryMixBatches.deletedAt),
-            )).for("update");
+            const [mix] = await tx
+              .select()
+              .from(factoryMixBatches)
+              .where(
+                and(
+                  eq(factoryMixBatches.id, itemId),
+                  eq(factoryMixBatches.companyId, companyId),
+                  isNotNull(factoryMixBatches.deletedAt)
+                )
+              )
+              .for("update");
             if (!mix) return "not-deleted";
             requireMixDeletionSafe({ ...mix, deletedAt: null }, false);
             if (await isPerpetualInventoryActive(tx, companyId, new Date().toISOString().slice(0, 10))) {
@@ -264,15 +274,19 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
                 "Restoring mix source consumption after perpetual inventory cutover requires an approved balancing journal."
               );
             }
-            const sources = await tx.select({
-              containerId: factoryMixBatchSources.containerId,
-              sourceBatchId: factoryMixBatchSources.sourceBatchId,
-              sourceType: factoryMixBatchSources.sourceType,
-              weightKg: factoryMixBatchSources.weightKg,
-            }).from(factoryMixBatchSources)
+            const sources = await tx
+              .select({
+                containerId: factoryMixBatchSources.containerId,
+                sourceBatchId: factoryMixBatchSources.sourceBatchId,
+                sourceType: factoryMixBatchSources.sourceType,
+                weightKg: factoryMixBatchSources.weightKg,
+              })
+              .from(factoryMixBatchSources)
               .where(eq(factoryMixBatchSources.mixBatchId, itemId));
             if (!sources.length) {
-              throw new MixLifecycleRefusal("Deleted mix lacks the source rows needed to reverse its original deletion.");
+              throw new MixLifecycleRefusal(
+                "Deleted mix lacks the source rows needed to reverse its original deletion."
+              );
             }
             for (const src of sources) {
               const weight = toMoney(src.weightKg);
@@ -283,58 +297,79 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
                 // Refuse unverified supplier-only ADD stock or ambiguous
                 // original container allocation rather than overdraw it.
                 if (src.sourceType === "SUPPLIER_ADJUSTMENT_BACKED") {
-                  throw new MixLifecycleRefusal("ADD-backed supplier stock needs dated adjustment evidence before restore.");
+                  throw new MixLifecycleRefusal(
+                    "ADD-backed supplier stock needs dated adjustment evidence before restore."
+                  );
                 }
-                const rows = await tx.select({
-                  id: factoryRawStock.id,
-                  receivedKg: factoryRawStock.receivedKg,
-                  usedKg: factoryRawStock.usedKg,
-                }).from(factoryRawStock).where(and(
-                  eq(factoryRawStock.companyId, companyId),
-                  eq(factoryRawStock.containerId, src.containerId),
-                  isNull(factoryRawStock.deletedAt),
-                )).for("update");
-                if (rows.length !== 1 ||
-                    toMoney(rows[0].receivedKg).minus(rows[0].usedKg).lt(weight)) {
+                const rows = await tx
+                  .select({
+                    id: factoryRawStock.id,
+                    receivedKg: factoryRawStock.receivedKg,
+                    usedKg: factoryRawStock.usedKg,
+                  })
+                  .from(factoryRawStock)
+                  .where(
+                    and(
+                      eq(factoryRawStock.companyId, companyId),
+                      eq(factoryRawStock.containerId, src.containerId),
+                      isNull(factoryRawStock.deletedAt)
+                    )
+                  )
+                  .for("update");
+                if (rows.length !== 1 || toMoney(rows[0].receivedKg).minus(rows[0].usedKg).lt(weight)) {
                   throw new MixLifecycleRefusal(
                     "Restoring this mix would consume unavailable or ambiguously attributed container stock."
                   );
                 }
-                await tx.update(factoryRawStock).set({
-                  usedKg: toMoney(rows[0].usedKg).plus(weight).toFixed(3),
-                }).where(and(eq(factoryRawStock.id, rows[0].id),
-                  eq(factoryRawStock.companyId, companyId)));
+                await tx
+                  .update(factoryRawStock)
+                  .set({
+                    usedKg: toMoney(rows[0].usedKg).plus(weight).toFixed(3),
+                  })
+                  .where(and(eq(factoryRawStock.id, rows[0].id), eq(factoryRawStock.companyId, companyId)));
               } else if (src.sourceBatchId != null) {
-                const [parent] = await tx.select().from(factoryMixBatches).where(and(
-                  eq(factoryMixBatches.id, src.sourceBatchId),
-                  eq(factoryMixBatches.companyId, companyId),
-                  isNull(factoryMixBatches.deletedAt),
-                )).for("update");
+                const [parent] = await tx
+                  .select()
+                  .from(factoryMixBatches)
+                  .where(
+                    and(
+                      eq(factoryMixBatches.id, src.sourceBatchId),
+                      eq(factoryMixBatches.companyId, companyId),
+                      isNull(factoryMixBatches.deletedAt)
+                    )
+                  )
+                  .for("update");
                 if (!parent) throw new MixLifecycleRefusal("Upstream mix source for restore is missing.");
                 const available = requireMixLifecycleAvailable(parent);
                 if (available.lt(weight)) {
                   throw new MixLifecycleRefusal("Upstream mix lacks the quantity needed for safe restore.");
                 }
                 const nextUsed = toMoney(parent.usedKg).plus(weight);
-                await tx.update(factoryMixBatches).set({
-                  usedKg: nextUsed.toFixed(3),
-                  status: nextUsed.eq(toMoney(parent.totalWeightKg)) ? "CLOSED" : parent.status,
-                  updatedAt: new Date(),
-                }).where(and(eq(factoryMixBatches.id, parent.id),
-                  eq(factoryMixBatches.companyId, companyId)));
+                await tx
+                  .update(factoryMixBatches)
+                  .set({
+                    usedKg: nextUsed.toFixed(3),
+                    status: nextUsed.eq(toMoney(parent.totalWeightKg)) ? "CLOSED" : parent.status,
+                    updatedAt: new Date(),
+                  })
+                  .where(and(eq(factoryMixBatches.id, parent.id), eq(factoryMixBatches.companyId, companyId)));
               } else {
                 throw new MixLifecycleRefusal(
                   "Supplier-only mix sources have no provable receipt allocation; generic restore is blocked."
                 );
               }
             }
-            const [restored] = await tx.update(factoryMixBatches)
+            const [restored] = await tx
+              .update(factoryMixBatches)
               .set({ deletedAt: null, updatedAt: new Date() })
-              .where(and(
-                eq(factoryMixBatches.id, itemId),
-                eq(factoryMixBatches.companyId, companyId),
-                isNotNull(factoryMixBatches.deletedAt),
-              )).returning({ id: factoryMixBatches.id });
+              .where(
+                and(
+                  eq(factoryMixBatches.id, itemId),
+                  eq(factoryMixBatches.companyId, companyId),
+                  isNotNull(factoryMixBatches.deletedAt)
+                )
+              )
+              .returning({ id: factoryMixBatches.id });
             if (!restored) throw new MixLifecycleRefusal("Mix changed during restore. Recheck its current status.");
             return "restored";
           });

@@ -24,7 +24,14 @@ interface Alert {
 
 function getSeverityBadge(severity: string) {
   const visibleSeverity = severity === "error" ? "critical" : severity;
-  return <StatusBadge status={visibleSeverity} label={visibleSeverity} showIcon={false} data-testid={`badge-severity-${visibleSeverity}`} />;
+  return (
+    <StatusBadge
+      status={visibleSeverity}
+      label={visibleSeverity}
+      showIcon={false}
+      data-testid={`badge-severity-${visibleSeverity}`}
+    />
+  );
 }
 
 export default function FactoryAlerts() {

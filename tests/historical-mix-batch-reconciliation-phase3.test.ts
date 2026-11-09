@@ -13,7 +13,9 @@ vi.mock("../server/db", () => ({
         if (h.badQuery && sql.includes("FROM factory_mix_batches WHERE")) throw new Error("forced read error");
         return { rows: [] };
       },
-      release: () => { h.released = true; },
+      release: () => {
+        h.released = true;
+      },
     }),
   },
 }));
@@ -26,22 +28,37 @@ import {
 } from "../server/services/factory/historicalMixBatchReconciliation";
 
 const header = (overrides: Record<string, unknown> = {}) => ({
-  id: 231, batch_code: "FMB-2026-0231", status: "COMPLETED",
-  batch_date: "2026-11-06", total_weight_kg: "15353.000",
-  used_kg: "15353.000", total_cost: "8824.7659100",
-  cost_per_kg: "0.5747910", deleted_at: null,
+  id: 231,
+  batch_code: "FMB-2026-0231",
+  status: "COMPLETED",
+  batch_date: "2026-11-06",
+  total_weight_kg: "15353.000",
+  used_kg: "15353.000",
+  total_cost: "8824.7659100",
+  cost_per_kg: "0.5747910",
+  deleted_at: null,
   ...overrides,
 });
 const source = (overrides: Record<string, unknown> = {}) => ({
-  id: 99, mix_batch_id: 231, weight_kg: "15353.000",
-  cost_per_kg: "0.5747910", total_cost: "8824.7659100",
-  created_at: "2026-11-06T16:01:00", supplier_id: 41,
-  inventory_supplier_id: 41, container_id: 20, source_batch_id: null,
-  supplier_name: "ABO SOBHI DIRECT", supplier_company_id: 12,
+  id: 99,
+  mix_batch_id: 231,
+  weight_kg: "15353.000",
+  cost_per_kg: "0.5747910",
+  total_cost: "8824.7659100",
+  created_at: "2026-11-06T16:01:00",
+  supplier_id: 41,
+  inventory_supplier_id: 41,
+  container_id: 20,
+  source_batch_id: null,
+  supplier_name: "ABO SOBHI DIRECT",
+  supplier_company_id: 12,
   current_supplier_rate: "0.5566890",
-  container_number: "CT-20", container_company_id: 12,
-  container_supplier_id: 41, container_offloaded_at: "2026-11-05T10:00:00",
-  upstream_company_id: null, upstream_batch_code: null,
+  container_number: "CT-20",
+  container_company_id: 12,
+  container_supplier_id: 41,
+  container_offloaded_at: "2026-11-05T10:00:00",
+  upstream_company_id: null,
+  upstream_batch_code: null,
   ...overrides,
 });
 
@@ -66,7 +83,8 @@ describe("Phase 3 historical mix batch reconciliation", () => {
     const batch = classifyHistoricalMixBatch(
       header({ total_weight_kg: "10725.000", total_cost: "0", cost_per_kg: "0" }),
       [source({ weight_kg: "10725.000", cost_per_kg: "0", total_cost: "0" })],
-      [], 12,
+      [],
+      12
     );
     expect(batch.classification).toBe("EVIDENCE_REVIEW");
     expect(batch.sources[0].rateProvenance).toBe("RECORDED_ZERO");
@@ -76,7 +94,9 @@ describe("Phase 3 historical mix batch reconciliation", () => {
   it("detects actual historical source and header arithmetic errors", () => {
     const batch = classifyHistoricalMixBatch(
       header({ total_cost: "9000.0000000" }),
-      [source({ total_cost: "8824.7659100", cost_per_kg: "0.5500000" })], [], 12,
+      [source({ total_cost: "8824.7659100", cost_per_kg: "0.5500000" })],
+      [],
+      12
     );
     expect(batch.classification).toBe("ARITHMETIC_ERROR");
     expect(batch.issues.map((x) => x.code)).toContain("HEADER_SOURCE_COST_MISMATCH");
@@ -84,19 +104,32 @@ describe("Phase 3 historical mix batch reconciliation", () => {
   });
 
   it("flags owner-attribution errors and an offload dated later than the mix", () => {
-    const batch = classifyHistoricalMixBatch(header(), [
-      source({ inventory_supplier_id: 15, container_supplier_id: 41, container_offloaded_at: "2026-11-09T09:00:00" }),
-    ], [], 12);
+    const batch = classifyHistoricalMixBatch(
+      header(),
+      [source({ inventory_supplier_id: 15, container_supplier_id: 41, container_offloaded_at: "2026-11-09T09:00:00" })],
+      [],
+      12
+    );
     expect(batch.issues.map((x) => x.code)).toContain("INVENTORY_SUPPLIER_LINK_MISMATCH");
     expect(batch.issues.map((x) => x.code)).toContain("CONTAINER_OFFLOAD_AFTER_BATCH");
     expect(batch.classification).toBe("EVIDENCE_REVIEW");
   });
 
   it("flags historical valued ADD adjustments with unclassified valuation basis", () => {
-    const batch = classifyHistoricalMixBatch(header(), [source()], [{
-      supplier_id: 41, date: "2026-11-04", adjustment_type: "ADD",
-      cost_per_kg: "0.12", valuation_basis: null,
-    }], 12);
+    const batch = classifyHistoricalMixBatch(
+      header(),
+      [source()],
+      [
+        {
+          supplier_id: 41,
+          date: "2026-11-04",
+          adjustment_type: "ADD",
+          cost_per_kg: "0.12",
+          valuation_basis: null,
+        },
+      ],
+      12
+    );
     expect(batch.sources[0].priorAdjustmentCount).toBe(1);
     expect(batch.sources[0].unclassifiedPriorAdjustmentCount).toBe(1);
     expect(batch.classification).toBe("EVIDENCE_REVIEW");
@@ -105,7 +138,9 @@ describe("Phase 3 historical mix batch reconciliation", () => {
   it("keeps deleted batches in the scan but excludes them from active mismatch counters", () => {
     const deleted = classifyHistoricalMixBatch(
       header({ deleted_at: "2026-11-07", total_cost: "9999.0000000" }),
-      [source()], [], 12,
+      [source()],
+      [],
+      12
     );
     const report = summarizeHistoricalMixAudit(12, [deleted]);
     expect(deleted.classification).toBe("DELETED_HISTORY");
@@ -116,9 +151,12 @@ describe("Phase 3 historical mix batch reconciliation", () => {
   });
 
   it("escapes spreadsheet formula injection in batch codes and source names", () => {
-    const row = classifyHistoricalMixBatch(header({ batch_code: "=2+3" }), [
-      source({ supplier_name: "=malicious(1)" }),
-    ], [], 12);
+    const row = classifyHistoricalMixBatch(
+      header({ batch_code: "=2+3" }),
+      [source({ supplier_name: "=malicious(1)" })],
+      [],
+      12
+    );
     const report = summarizeHistoricalMixAudit(12, [row]);
     expect(historicalMixAuditCsv(report, "batches")).toContain("'=2+3");
     expect(historicalMixAuditCsv(report, "sources")).toContain("'=malicious(1)");

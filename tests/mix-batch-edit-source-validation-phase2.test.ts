@@ -26,7 +26,13 @@ describe("factory mix batch source editing safeguards — Phase 2", () => {
     { supplierSources: [{ supplierId: "1", weightKg: "2" }], batchSources: [] },
     { supplierSources: [{ supplierId: 1, weightKg: "-1" }], batchSources: [] },
     { supplierSources: [{ supplierId: 1, weightKg: "2abc" }], batchSources: [] },
-    { supplierSources: [{ supplierId: 1, weightKg: "1" }, { supplierId: 1, weightKg: "2" }], batchSources: [] },
+    {
+      supplierSources: [
+        { supplierId: 1, weightKg: "1" },
+        { supplierId: 1, weightKg: "2" },
+      ],
+      batchSources: [],
+    },
     { supplierSources: [], batchSources: [] },
     { supplierSources: [{ supplierId: 2, weightKg: "1" }] },
   ])("rejects unsafe or ambiguous source lists %#", (payload) => {

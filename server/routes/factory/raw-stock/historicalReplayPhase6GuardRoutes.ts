@@ -231,7 +231,8 @@ export function registerHistoricalReplayPhase6GuardRoutes(app: Express): void {
     if (basisEvidence.length < 20 || basisEvidence.length > 1000) {
       return res.status(400).json({
         code: "HISTORICAL_ADJUSTMENT_EVIDENCE_REQUIRED",
-        message: "Explain the documentary evidence and original valuation basis (20–1000 characters) before classification.",
+        message:
+          "Explain the documentary evidence and original valuation basis (20–1000 characters) before classification.",
       });
     }
     const allowed = new Set(["QUANTITY_ONLY", "VALUED_TRANSFER", "OPENING_BALANCE"]);
@@ -379,7 +380,8 @@ export function registerHistoricalReplayPhase6GuardRoutes(app: Express): void {
           return originalJson({
             ...payload,
             financialImpact: undefined,
-            projectionError: "Downstream production/COGS/GL safeguards blocked this historical replay. Review downstreamSafety.blockers before preparing another scope.",
+            projectionError:
+              "Downstream production/COGS/GL safeguards blocked this historical replay. Review downstreamSafety.blockers before preparing another scope.",
           });
         }
         const expandedSupplierIds = parsePositiveIntegerIds(payload.safeSupplierIds) ?? supplierIds;

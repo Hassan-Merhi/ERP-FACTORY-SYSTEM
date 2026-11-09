@@ -13,9 +13,18 @@ import { requireAuth } from "../../../auth";
 import { factoryMixBatches } from "@shared/schema";
 import { eq, and, desc, isNull } from "drizzle-orm";
 import { toMoney } from "../../../lib/money";
-import { getHistoricalMixBatchReconciliation, historicalMixAuditCsv } from "../../../services/factory/historicalMixBatchReconciliation";
-import { getPhase4MixProvenanceReport, phase4MixProvenanceCsv } from "../../../services/factory/mixPhase4ProvenanceAudit";
-import { getPhase5MixDownstreamReconciliation, phase5MixDownstreamCsv } from "../../../services/factory/mixPhase5DownstreamAudit";
+import {
+  getHistoricalMixBatchReconciliation,
+  historicalMixAuditCsv,
+} from "../../../services/factory/historicalMixBatchReconciliation";
+import {
+  getPhase4MixProvenanceReport,
+  phase4MixProvenanceCsv,
+} from "../../../services/factory/mixPhase4ProvenanceAudit";
+import {
+  getPhase5MixDownstreamReconciliation,
+  phase5MixDownstreamCsv,
+} from "../../../services/factory/mixPhase5DownstreamAudit";
 import { getPhase6MixLifecycleReport, phase6MixLifecycleCsv } from "../../../services/factory/mixPhase6LifecycleAudit";
 import { getMixMonitorStatus } from "../../../services/factory/mixPhase7IntegrityMonitor";
 
@@ -28,7 +37,9 @@ export function registerFactoryMixBatchReadRoutes(app: Express) {
       // Phase 7: lightweight stored monitor status. This GET does not
       // trigger a full scan or write any alert.
       if (req.query.profile === "integrity-monitor") {
-        const role = String(req.session.currentRole || req.session.role || "").trim().toLowerCase();
+        const role = String(req.session.currentRole || req.session.role || "")
+          .trim()
+          .toLowerCase();
         if (!["admin", "owner", "developer", "dev"].includes(role)) {
           return res.status(403).json({ message: "Factory mix monitoring requires Admin, Owner or Developer access." });
         }
@@ -40,9 +51,13 @@ export function registerFactoryMixBatchReadRoutes(app: Express) {
 
       // Phase 6: historical status, used kg and carry-forward integrity.
       if (req.query.profile === "lifecycle-audit") {
-        const role = String(req.session.currentRole || req.session.role || "").trim().toLowerCase();
+        const role = String(req.session.currentRole || req.session.role || "")
+          .trim()
+          .toLowerCase();
         if (!["admin", "owner", "developer", "dev"].includes(role)) {
-          return res.status(403).json({ message: "Mix lifecycle reconciliation requires Admin, Owner or Developer access." });
+          return res
+            .status(403)
+            .json({ message: "Mix lifecycle reconciliation requires Admin, Owner or Developer access." });
         }
         const report = await getPhase6MixLifecycleReport(companyId);
         res.set("Cache-Control", "private, no-store");
@@ -57,9 +72,13 @@ export function registerFactoryMixBatchReadRoutes(app: Express) {
 
       // Phase 5: all-mix downstream production/bale/sales/GL lineage.
       if (req.query.profile === "downstream-audit") {
-        const role = String(req.session.currentRole || req.session.role || "").trim().toLowerCase();
+        const role = String(req.session.currentRole || req.session.role || "")
+          .trim()
+          .toLowerCase();
         if (!["admin", "owner", "developer", "dev"].includes(role)) {
-          return res.status(403).json({ message: "Downstream cost reconciliation requires Admin, Owner or Developer access." });
+          return res
+            .status(403)
+            .json({ message: "Downstream cost reconciliation requires Admin, Owner or Developer access." });
         }
         const report = await getPhase5MixDownstreamReconciliation(companyId);
         res.set("Cache-Control", "private, no-store");
@@ -75,16 +94,20 @@ export function registerFactoryMixBatchReadRoutes(app: Express) {
       // Phase 4 supplier and ADD/raw-stock provenance. Access and exports
       // are privileged and never mutate historical production records.
       if (req.query.profile === "raw-provenance-audit") {
-        const role = String(req.session.currentRole || req.session.role || "").trim().toLowerCase();
+        const role = String(req.session.currentRole || req.session.role || "")
+          .trim()
+          .toLowerCase();
         if (!["admin", "owner", "developer", "dev"].includes(role)) {
-          return res.status(403).json({ message: "Raw-stock reconciliation requires Admin, Owner or Developer access." });
+          return res
+            .status(403)
+            .json({ message: "Raw-stock reconciliation requires Admin, Owner or Developer access." });
         }
         const report = await getPhase4MixProvenanceReport(companyId);
         res.set("Cache-Control", "private, no-store");
         res.set("X-ERP-Payload-Profile", "factory-mix-raw-provenance-read-only");
         if (req.query.format === "csv") {
-          const section = req.query.section === "ownership" || req.query.section === "adjustments"
-            ? req.query.section : "stock";
+          const section =
+            req.query.section === "ownership" || req.query.section === "adjustments" ? req.query.section : "stock";
           res.set("Content-Type", "text/csv; charset=utf-8");
           res.set("Content-Disposition", `attachment; filename="factory-mix-${section}-audit.csv"`);
           return res.send(phase4MixProvenanceCsv(report, section));
@@ -97,9 +120,13 @@ export function registerFactoryMixBatchReadRoutes(app: Express) {
       // adding an unregistered dynamic route or changing route order.
       if (req.query.profile === "historical-audit") {
         // Deleted mix source rows and complete costing provenance are sensitive.
-        const role = String(req.session.currentRole || req.session.role || "").trim().toLowerCase();
+        const role = String(req.session.currentRole || req.session.role || "")
+          .trim()
+          .toLowerCase();
         if (!["admin", "owner", "developer", "dev"].includes(role)) {
-          return res.status(403).json({ message: "Historical reconciliation requires Admin, Owner or Developer access." });
+          return res
+            .status(403)
+            .json({ message: "Historical reconciliation requires Admin, Owner or Developer access." });
         }
         const report = await getHistoricalMixBatchReconciliation(companyId);
         res.set("Cache-Control", "private, no-store");
@@ -107,7 +134,7 @@ export function registerFactoryMixBatchReadRoutes(app: Express) {
         if (req.query.format === "csv") {
           const level = req.query.level === "sources" ? "sources" : "batches";
           res.set("Content-Type", "text/csv; charset=utf-8");
-          res.set("Content-Disposition", "attachment; filename=\"factory-mix-historical-" + level + "-audit.csv\"");
+          res.set("Content-Disposition", 'attachment; filename="factory-mix-historical-' + level + '-audit.csv"');
           return res.send(historicalMixAuditCsv(report, level));
         }
         if (req.query.includeSources === "false") {
@@ -167,9 +194,7 @@ export function registerFactoryMixBatchReadRoutes(app: Express) {
           displayTotalCost: toMoney(b.totalCost).toFixed(6),
           // Historical USD value / historical batch kg, not today's supplier
           // rate and not rounded per-source rates multiplied back out.
-          displayCostPerKg: total.gt(0)
-            ? toMoney(b.totalCost).div(total).toFixed(6)
-            : toMoney(b.costPerKg).toFixed(6),
+          displayCostPerKg: total.gt(0) ? toMoney(b.totalCost).div(total).toFixed(6) : toMoney(b.costPerKg).toFixed(6),
         };
       });
 
@@ -219,7 +244,7 @@ export function registerFactoryMixBatchReadRoutes(app: Express) {
          WHERE b.company_id = $1 AND b.deleted_at IS NULL
            AND b.carry_forward_from_id IS NULL
          ORDER BY b.id DESC, s.id`,
-        [companyId],
+        [companyId]
       );
       res.set("Cache-Control", "private, no-store");
       res.json(result.rows);

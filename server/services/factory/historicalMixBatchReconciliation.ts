@@ -161,7 +161,13 @@ function dec(value: RawAmount): Decimal {
 function fixed(value: Decimal, places = 7): string {
   return value.toDecimalPlaces(places, Decimal.ROUND_HALF_UP).toFixed(places);
 }
-function addIssue(target: HistoricalMixIssue[], code: HistoricalMixIssueCode, severity: IssueSeverity, detail: string, sourceId?: number): void {
+function addIssue(
+  target: HistoricalMixIssue[],
+  code: HistoricalMixIssueCode,
+  severity: IssueSeverity,
+  detail: string,
+  sourceId?: number
+): void {
   target.push({ code, severity, detail, ...(sourceId === undefined ? {} : { sourceId }) });
 }
 function datePrefix(value: string | null): string | null {
@@ -174,7 +180,7 @@ export function classifyHistoricalMixBatch(
   batch: DbBatch,
   sources: readonly DbSource[],
   adjustments: readonly DbAdjustment[],
-  companyId: number,
+  companyId: number
 ): HistoricalMixBatchAudit {
   const deleted = batch.deleted_at !== null;
   const recordedWeight = dec(batch.total_weight_kg);
@@ -208,52 +214,92 @@ export function classifyHistoricalMixBatch(
       addIssue(local, "SOURCE_WEIGHT_INVALID", "error", "Source weight is zero or negative.", source.id);
     }
     if (weight.gt(0) && (rate.lte(0) || total.lte(0))) {
-      addIssue(local, "RECORDED_ZERO_COST_SOURCE", "review",
-        "Recorded historical value is zero/unvalued; establish dated USD evidence before recosting.", source.id);
+      addIssue(
+        local,
+        "RECORDED_ZERO_COST_SOURCE",
+        "review",
+        "Recorded historical value is zero/unvalued; establish dated USD evidence before recosting.",
+        source.id
+      );
     }
     if (total.minus(weight.times(rate)).abs().gt(USD_TOLERANCE)) {
-      addIssue(local, "SOURCE_VALUE_MATH_MISMATCH", "error",
-        "Recorded source total differs from recorded kg multiplied by recorded rate.", source.id);
+      addIssue(
+        local,
+        "SOURCE_VALUE_MATH_MISMATCH",
+        "error",
+        "Recorded source total differs from recorded kg multiplied by recorded rate.",
+        source.id
+      );
     }
-    if (source.supplier_id !== null && (source.supplier_company_id == null)) {
-      addIssue(local, "MISSING_SUPPLIER_REFERENCE", "review",
-        "Historical supplier reference cannot be resolved in the database.", source.id);
+    if (source.supplier_id !== null && source.supplier_company_id == null) {
+      addIssue(
+        local,
+        "MISSING_SUPPLIER_REFERENCE",
+        "review",
+        "Historical supplier reference cannot be resolved in the database.",
+        source.id
+      );
     } else if (source.supplier_company_id !== null && source.supplier_company_id !== companyId) {
       addIssue(local, "CROSS_COMPANY_REFERENCE", "error", "Supplier belongs to a different company.", source.id);
     }
     if (source.container_id !== null && source.container_company_id === null) {
       addIssue(local, "MISSING_CONTAINER_REFERENCE", "review", "Source container reference is missing.", source.id);
     } else if (source.container_company_id !== null && source.container_company_id !== companyId) {
-      addIssue(local, "CROSS_COMPANY_REFERENCE", "error", "Source container belongs to a different company.", source.id);
+      addIssue(
+        local,
+        "CROSS_COMPANY_REFERENCE",
+        "error",
+        "Source container belongs to a different company.",
+        source.id
+      );
     }
     if (source.source_batch_id !== null && source.upstream_company_id === null) {
       addIssue(local, "MISSING_UPSTREAM_REFERENCE", "review", "Upstream batch reference is missing.", source.id);
     } else if (source.upstream_company_id !== null && source.upstream_company_id !== companyId) {
       addIssue(local, "CROSS_COMPANY_REFERENCE", "error", "Upstream batch belongs to a different company.", source.id);
     }
-    if (source.container_id !== null && source.container_company_id === companyId &&
-        source.inventory_supplier_id !== source.container_supplier_id) {
-      addIssue(local, "INVENTORY_SUPPLIER_LINK_MISMATCH", "review",
-        "Inventory ownership differs from the source container's supplier; review attribution, not the historical rate.", source.id);
+    if (
+      source.container_id !== null &&
+      source.container_company_id === companyId &&
+      source.inventory_supplier_id !== source.container_supplier_id
+    ) {
+      addIssue(
+        local,
+        "INVENTORY_SUPPLIER_LINK_MISMATCH",
+        "review",
+        "Inventory ownership differs from the source container's supplier; review attribution, not the historical rate.",
+        source.id
+      );
     }
     const businessDate = datePrefix(batch.batch_date);
     const offloadDate = datePrefix(source.container_offloaded_at);
     if (businessDate && offloadDate && offloadDate > businessDate) {
-      addIssue(local, "CONTAINER_OFFLOAD_AFTER_BATCH", "review",
-        "The referenced container offload is dated after the mix batch; verify the source timeline.", source.id);
+      addIssue(
+        local,
+        "CONTAINER_OFFLOAD_AFTER_BATCH",
+        "review",
+        "The referenced container offload is dated after the mix batch; verify the source timeline.",
+        source.id
+      );
     }
-    const priorAdjustments = source.supplier_id == null || businessDate == null
-      ? []
-      : (adjustmentBySupplier.get(source.supplier_id) ?? []).filter((adj) =>
-          adj.date != null && datePrefix(adj.date)! <= businessDate);
-    const unclassified = priorAdjustments.filter((adj) =>
-      String(adj.adjustment_type ?? "").toUpperCase() === "ADD" &&
-      dec(adj.cost_per_kg).gt(0) &&
-      !adj.valuation_basis,
+    const priorAdjustments =
+      source.supplier_id == null || businessDate == null
+        ? []
+        : (adjustmentBySupplier.get(source.supplier_id) ?? []).filter(
+            (adj) => adj.date != null && datePrefix(adj.date)! <= businessDate
+          );
+    const unclassified = priorAdjustments.filter(
+      (adj) =>
+        String(adj.adjustment_type ?? "").toUpperCase() === "ADD" && dec(adj.cost_per_kg).gt(0) && !adj.valuation_basis
     );
     if (unclassified.length) {
-      addIssue(local, "UNCLASSIFIED_PRIOR_ADJUSTMENT", "review",
-        "A prior valued raw-material adjustment lacks its historical valuation basis.", source.id);
+      addIssue(
+        local,
+        "UNCLASSIFIED_PRIOR_ADJUSTMENT",
+        "review",
+        "A prior valued raw-material adjustment lacks its historical valuation basis.",
+        source.id
+      );
     }
     // Treat the original source rate as the snapshot. Today's supplier rate
     // is never used to assert what this source originally cost.
@@ -262,13 +308,23 @@ export function classifyHistoricalMixBatch(
     if (isSupplierPriced) {
       if (currentRate === null || currentRate.lte(0)) {
         currentEstimateAvailable = false;
-        addIssue(local, "CURRENT_SUPPLIER_RATE_MISSING", "informational",
-          "Current supplier rate is missing; this does not invalidate the recorded historical value.", source.id);
+        addIssue(
+          local,
+          "CURRENT_SUPPLIER_RATE_MISSING",
+          "informational",
+          "Current supplier rate is missing; this does not invalidate the recorded historical value.",
+          source.id
+        );
       } else {
         currentEstimate = currentEstimate.plus(weight.times(currentRate));
         if (currentRate.minus(rate).abs().gt(RATE_TOLERANCE)) {
-          addIssue(local, "CURRENT_SUPPLIER_RATE_CHANGED", "informational",
-            "Current rate differs from recorded source rate. This is NOT proof of incorrect historical cost.", source.id);
+          addIssue(
+            local,
+            "CURRENT_SUPPLIER_RATE_CHANGED",
+            "informational",
+            "Current rate differs from recorded source rate. This is NOT proof of incorrect historical cost.",
+            source.id
+          );
         }
       }
     } else {
@@ -295,35 +351,65 @@ export function classifyHistoricalMixBatch(
     });
   }
   if (recordedWeight.minus(sourceWeight).abs().gt(KG_TOLERANCE)) {
-    addIssue(issues, "HEADER_SOURCE_WEIGHT_MISMATCH", "error",
-      "Batch header weight does not equal the sum of its recorded source kg.");
+    addIssue(
+      issues,
+      "HEADER_SOURCE_WEIGHT_MISMATCH",
+      "error",
+      "Batch header weight does not equal the sum of its recorded source kg."
+    );
   }
   if (recordedTotal.minus(sourceTotal).abs().gt(USD_TOLERANCE)) {
-    addIssue(issues, "HEADER_SOURCE_COST_MISMATCH", "error",
-      "Batch header total cost does not equal the sum of recorded source USD totals.");
+    addIssue(
+      issues,
+      "HEADER_SOURCE_COST_MISMATCH",
+      "error",
+      "Batch header total cost does not equal the sum of recorded source USD totals."
+    );
   }
   if (recordedWeight.gt(0) && storedRate.minus(recordedTotal.div(recordedWeight)).abs().gt(RATE_TOLERANCE)) {
-    addIssue(issues, "HEADER_BLENDED_RATE_MISMATCH", "error",
-      "Batch recorded cost per kg differs from its own stored USD total divided by kg.");
+    addIssue(
+      issues,
+      "HEADER_BLENDED_RATE_MISMATCH",
+      "error",
+      "Batch recorded cost per kg differs from its own stored USD total divided by kg."
+    );
   }
   if (usedKg.gt(recordedWeight.plus(KG_TOLERANCE))) {
-    addIssue(issues, "USED_MORE_THAN_RECORDED", "review",
-      "Used kg exceed recorded source kg; quantity lifecycle review is needed.");
+    addIssue(
+      issues,
+      "USED_MORE_THAN_RECORDED",
+      "review",
+      "Used kg exceed recorded source kg; quantity lifecycle review is needed."
+    );
   }
   if (batch.status === "COMPLETED" && recordedWeight.minus(usedKg).gt(KG_TOLERANCE)) {
-    addIssue(issues, "COMPLETED_WITH_REMAINDER", "informational",
-      "Completed batch retains unused kg; carry-forward/finalization review belongs to Phase 6.");
+    addIssue(
+      issues,
+      "COMPLETED_WITH_REMAINDER",
+      "informational",
+      "Completed batch retains unused kg; carry-forward/finalization review belongs to Phase 6."
+    );
   }
   const currentDiff = currentEstimateAvailable ? currentEstimate.minus(recordedTotal) : null;
   const errors = issues.some((item) => item.severity === "error");
   const reviews = issues.some((item) => item.severity === "review");
-  const rateOnly = issues.length > 0 && issues.every((item) =>
-    item.code === "CURRENT_SUPPLIER_RATE_CHANGED" || item.code === "CURRENT_SUPPLIER_RATE_MISSING" ||
-    item.code === "COMPLETED_WITH_REMAINDER");
-  const classification: HistoricalMixBatchAudit["classification"] = deleted ? "DELETED_HISTORY"
-    : errors ? "ARITHMETIC_ERROR"
-    : reviews ? "EVIDENCE_REVIEW"
-    : rateOnly ? "CURRENT_RATE_ONLY" : "RECONCILED";
+  const rateOnly =
+    issues.length > 0 &&
+    issues.every(
+      (item) =>
+        item.code === "CURRENT_SUPPLIER_RATE_CHANGED" ||
+        item.code === "CURRENT_SUPPLIER_RATE_MISSING" ||
+        item.code === "COMPLETED_WITH_REMAINDER"
+    );
+  const classification: HistoricalMixBatchAudit["classification"] = deleted
+    ? "DELETED_HISTORY"
+    : errors
+      ? "ARITHMETIC_ERROR"
+      : reviews
+        ? "EVIDENCE_REVIEW"
+        : rateOnly
+          ? "CURRENT_RATE_ONLY"
+          : "RECONCILED";
   return {
     batchId: batch.id,
     batchCode: batch.batch_code,
@@ -346,7 +432,10 @@ export function classifyHistoricalMixBatch(
   };
 }
 
-export function summarizeHistoricalMixAudit(companyId: number, batches: HistoricalMixBatchAudit[]): HistoricalMixAuditReport {
+export function summarizeHistoricalMixAudit(
+  companyId: number,
+  batches: HistoricalMixBatchAudit[]
+): HistoricalMixAuditReport {
   const active = batches.filter((b) => !b.deleted);
   const count = (code: HistoricalMixIssueCode): number => active.filter((b) => issueHas(b, code)).length;
   return {
@@ -360,16 +449,21 @@ export function summarizeHistoricalMixAudit(companyId: number, batches: Historic
       activeBatches: active.length,
       deletedBatches: batches.length - active.length,
       sources: batches.reduce((sum, b) => sum + b.sourceCount, 0),
-      headerMismatchBatches: active.filter((b) => b.issues.some((i) =>
-        i.code === "HEADER_SOURCE_WEIGHT_MISMATCH" ||
-        i.code === "HEADER_SOURCE_COST_MISMATCH" ||
-        i.code === "HEADER_BLENDED_RATE_MISMATCH")).length,
+      headerMismatchBatches: active.filter((b) =>
+        b.issues.some(
+          (i) =>
+            i.code === "HEADER_SOURCE_WEIGHT_MISMATCH" ||
+            i.code === "HEADER_SOURCE_COST_MISMATCH" ||
+            i.code === "HEADER_BLENDED_RATE_MISMATCH"
+        )
+      ).length,
       sourceLineMismatchBatches: count("SOURCE_VALUE_MATH_MISMATCH"),
       historicalZeroSourceBatches: count("RECORDED_ZERO_COST_SOURCE"),
       inventoryOwnerReviewBatches: count("INVENTORY_SUPPLIER_LINK_MISMATCH"),
       missingCurrentRateBatches: count("CURRENT_SUPPLIER_RATE_MISSING"),
-      currentRateEstimateDifferenceBatches: active.filter((b) =>
-        b.currentRateDifferenceUsd !== null && dec(b.currentRateDifferenceUsd).abs().gt(PREVIEW_USD_TOLERANCE)).length,
+      currentRateEstimateDifferenceBatches: active.filter(
+        (b) => b.currentRateDifferenceUsd !== null && dec(b.currentRateDifferenceUsd).abs().gt(PREVIEW_USD_TOLERANCE)
+      ).length,
       currentRateOnlyBatches: active.filter((b) => b.classification === "CURRENT_RATE_ONLY").length,
       adjustmentEvidenceReviewBatches: count("UNCLASSIFIED_PRIOR_ADJUSTMENT"),
       overusedBatches: count("USED_MORE_THAN_RECORDED"),
@@ -390,41 +484,47 @@ export async function getHistoricalMixBatchReconciliation(companyId: number): Pr
     await client.query("BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY");
     transactionOpen = true;
     await client.query("SELECT set_config('app.current_company_id', $1, true)", [String(companyId)]);
-    const batches = (await client.query<DbBatch>(
-      "SELECT id, batch_code, status, batch_date::text, total_weight_kg::text, " +
-      "used_kg::text, total_cost::text, cost_per_kg::text, deleted_at::text " +
-      "FROM factory_mix_batches WHERE company_id = $1 ORDER BY id",
-      [companyId],
-    )).rows;
-    const sources = (await client.query<DbSource>(
-      "SELECT s.id, s.mix_batch_id, s.weight_kg::text, s.cost_per_kg::text, s.total_cost::text, " +
-      "s.created_at::text, s.supplier_id, s.inventory_supplier_id, s.container_id, s.source_batch_id, " +
-      "CASE WHEN sp.company_id = m.company_id THEN sp.name ELSE NULL END AS supplier_name, " +
-      "sp.company_id AS supplier_company_id, " +
-      "CASE WHEN sp.company_id = m.company_id THEN sp.current_raw_material_cost_per_kg_usd::text ELSE NULL END AS current_supplier_rate, " +
-      "CASE WHEN c.company_id = m.company_id THEN c.container_number ELSE NULL END AS container_number, " +
-      "c.company_id AS container_company_id, c.supplier_id AS container_supplier_id, " +
-      "r.first_offloaded_at::text AS container_offloaded_at, " +
-      "up.company_id AS upstream_company_id, " +
-      "CASE WHEN up.company_id = m.company_id THEN up.batch_code ELSE NULL END AS upstream_batch_code " +
-      "FROM factory_mix_batch_sources s " +
-      "JOIN factory_mix_batches m ON m.id = s.mix_batch_id AND m.company_id = $1 " +
-      "LEFT JOIN factory_suppliers sp ON sp.id = s.supplier_id " +
-      "LEFT JOIN factory_containers c ON c.id = s.container_id " +
-      "LEFT JOIN LATERAL (" +
-      "SELECT MIN(rs.offloaded_at) AS first_offloaded_at FROM factory_raw_stock rs " +
-      "WHERE rs.company_id = m.company_id AND rs.container_id = s.container_id AND rs.deleted_at IS NULL" +
-      ") r ON TRUE " +
-      "LEFT JOIN factory_mix_batches up ON up.id = s.source_batch_id " +
-      "ORDER BY s.mix_batch_id, s.id",
-      [companyId],
-    )).rows;
-    const adjustments = (await client.query<DbAdjustment>(
-      "SELECT supplier_id, date::text, type AS adjustment_type, " +
-      "cost_per_kg::text, valuation_basis FROM factory_raw_material_adjustments " +
-      "WHERE company_id = $1 AND deleted_at IS NULL ORDER BY id",
-      [companyId],
-    )).rows;
+    const batches = (
+      await client.query<DbBatch>(
+        "SELECT id, batch_code, status, batch_date::text, total_weight_kg::text, " +
+          "used_kg::text, total_cost::text, cost_per_kg::text, deleted_at::text " +
+          "FROM factory_mix_batches WHERE company_id = $1 ORDER BY id",
+        [companyId]
+      )
+    ).rows;
+    const sources = (
+      await client.query<DbSource>(
+        "SELECT s.id, s.mix_batch_id, s.weight_kg::text, s.cost_per_kg::text, s.total_cost::text, " +
+          "s.created_at::text, s.supplier_id, s.inventory_supplier_id, s.container_id, s.source_batch_id, " +
+          "CASE WHEN sp.company_id = m.company_id THEN sp.name ELSE NULL END AS supplier_name, " +
+          "sp.company_id AS supplier_company_id, " +
+          "CASE WHEN sp.company_id = m.company_id THEN sp.current_raw_material_cost_per_kg_usd::text ELSE NULL END AS current_supplier_rate, " +
+          "CASE WHEN c.company_id = m.company_id THEN c.container_number ELSE NULL END AS container_number, " +
+          "c.company_id AS container_company_id, c.supplier_id AS container_supplier_id, " +
+          "r.first_offloaded_at::text AS container_offloaded_at, " +
+          "up.company_id AS upstream_company_id, " +
+          "CASE WHEN up.company_id = m.company_id THEN up.batch_code ELSE NULL END AS upstream_batch_code " +
+          "FROM factory_mix_batch_sources s " +
+          "JOIN factory_mix_batches m ON m.id = s.mix_batch_id AND m.company_id = $1 " +
+          "LEFT JOIN factory_suppliers sp ON sp.id = s.supplier_id " +
+          "LEFT JOIN factory_containers c ON c.id = s.container_id " +
+          "LEFT JOIN LATERAL (" +
+          "SELECT MIN(rs.offloaded_at) AS first_offloaded_at FROM factory_raw_stock rs " +
+          "WHERE rs.company_id = m.company_id AND rs.container_id = s.container_id AND rs.deleted_at IS NULL" +
+          ") r ON TRUE " +
+          "LEFT JOIN factory_mix_batches up ON up.id = s.source_batch_id " +
+          "ORDER BY s.mix_batch_id, s.id",
+        [companyId]
+      )
+    ).rows;
+    const adjustments = (
+      await client.query<DbAdjustment>(
+        "SELECT supplier_id, date::text, type AS adjustment_type, " +
+          "cost_per_kg::text, valuation_basis FROM factory_raw_material_adjustments " +
+          "WHERE company_id = $1 AND deleted_at IS NULL ORDER BY id",
+        [companyId]
+      )
+    ).rows;
     if (batches.length > 20000 || sources.length > 250000 || adjustments.length > 250000) {
       throw new Error("Historical audit exceeded safe row bounds; run an offline paginated audit.");
     }
@@ -435,7 +535,8 @@ export async function getHistoricalMixBatchReconciliation(companyId: number): Pr
       byBatch.set(row.mix_batch_id, list);
     }
     const audited = batches.map((batch) =>
-      classifyHistoricalMixBatch(batch, byBatch.get(batch.id) ?? [], adjustments, companyId));
+      classifyHistoricalMixBatch(batch, byBatch.get(batch.id) ?? [], adjustments, companyId)
+    );
     await client.query("COMMIT");
     transactionOpen = false;
     return summarizeHistoricalMixAudit(companyId, audited);
@@ -447,11 +548,10 @@ export async function getHistoricalMixBatchReconciliation(companyId: number): Pr
   }
 }
 
-
 /** Spreadsheet-safe CSV export. One batch row, or one row per persisted source. */
 export function historicalMixAuditCsv(
   report: HistoricalMixAuditReport,
-  level: "batches" | "sources" = "batches",
+  level: "batches" | "sources" = "batches"
 ): string {
   const cell = (value: unknown): string => {
     const raw = String(value ?? "");
@@ -463,41 +563,95 @@ export function historicalMixAuditCsv(
   const rows: unknown[][] = [];
   if (level === "batches") {
     rows.push([
-      "Batch ID", "Batch Code", "Date", "Status", "Deleted", "Classification",
-      "Recorded Kg", "Used Kg", "Source Kg", "Recorded USD", "Source USD",
-      "Recorded USD/kg", "Source Blended USD/kg", "Current-Rate Estimate USD (informational)",
-      "Current Minus Recorded USD (informational)", "Source Count", "Issue Codes",
+      "Batch ID",
+      "Batch Code",
+      "Date",
+      "Status",
+      "Deleted",
+      "Classification",
+      "Recorded Kg",
+      "Used Kg",
+      "Source Kg",
+      "Recorded USD",
+      "Source USD",
+      "Recorded USD/kg",
+      "Source Blended USD/kg",
+      "Current-Rate Estimate USD (informational)",
+      "Current Minus Recorded USD (informational)",
+      "Source Count",
+      "Issue Codes",
     ]);
     for (const batch of report.batches) {
       rows.push([
-        batch.batchId, batch.batchCode, batch.batchDate, batch.status, batch.deleted,
-        batch.classification, batch.recordedWeightKg, batch.recordedUsedKg,
-        batch.sourceWeightKg, batch.recordedTotalUsd, batch.sourceTotalUsd,
-        batch.recordedBlendedUsdPerKg, batch.reconstructedBlendedUsdPerKg,
-        batch.currentRateEstimateUsd, batch.currentRateDifferenceUsd,
-        batch.sourceCount, [...new Set(batch.issues.map((issue) => issue.code))].join(" | "),
+        batch.batchId,
+        batch.batchCode,
+        batch.batchDate,
+        batch.status,
+        batch.deleted,
+        batch.classification,
+        batch.recordedWeightKg,
+        batch.recordedUsedKg,
+        batch.sourceWeightKg,
+        batch.recordedTotalUsd,
+        batch.sourceTotalUsd,
+        batch.recordedBlendedUsdPerKg,
+        batch.reconstructedBlendedUsdPerKg,
+        batch.currentRateEstimateUsd,
+        batch.currentRateDifferenceUsd,
+        batch.sourceCount,
+        [...new Set(batch.issues.map((issue) => issue.code))].join(" | "),
       ]);
     }
   } else {
     rows.push([
-      "Batch ID", "Batch Code", "Date", "Status", "Deleted", "Batch Classification",
-      "Source ID", "Supplier ID", "Supplier Name", "Inventory Supplier ID",
-      "Container ID", "Container Number", "Upstream Batch ID", "Upstream Batch Code",
-      "Historical Source Kg", "Historical USD/kg", "Historical Total USD",
-      "Current Supplier USD/kg (informational)", "Prior Adjustments",
-      "Unclassified Prior Adjustments", "Historical Rate Provenance", "Source Issue Codes",
+      "Batch ID",
+      "Batch Code",
+      "Date",
+      "Status",
+      "Deleted",
+      "Batch Classification",
+      "Source ID",
+      "Supplier ID",
+      "Supplier Name",
+      "Inventory Supplier ID",
+      "Container ID",
+      "Container Number",
+      "Upstream Batch ID",
+      "Upstream Batch Code",
+      "Historical Source Kg",
+      "Historical USD/kg",
+      "Historical Total USD",
+      "Current Supplier USD/kg (informational)",
+      "Prior Adjustments",
+      "Unclassified Prior Adjustments",
+      "Historical Rate Provenance",
+      "Source Issue Codes",
     ]);
     for (const batch of report.batches) {
       for (const source of batch.sources) {
         rows.push([
-          batch.batchId, batch.batchCode, batch.batchDate, batch.status,
-          batch.deleted, batch.classification, source.sourceId,
-          source.supplierId, source.supplierName, source.inventorySupplierId,
-          source.containerId, source.containerNumber, source.sourceBatchId,
-          source.sourceBatchCode, source.weightKg, source.recordedRateUsdPerKg,
-          source.recordedTotalUsd, source.currentSupplierRateUsdPerKg,
-          source.priorAdjustmentCount, source.unclassifiedPriorAdjustmentCount,
-          source.rateProvenance, source.issues.map((issue) => issue.code).join(" | "),
+          batch.batchId,
+          batch.batchCode,
+          batch.batchDate,
+          batch.status,
+          batch.deleted,
+          batch.classification,
+          source.sourceId,
+          source.supplierId,
+          source.supplierName,
+          source.inventorySupplierId,
+          source.containerId,
+          source.containerNumber,
+          source.sourceBatchId,
+          source.sourceBatchCode,
+          source.weightKg,
+          source.recordedRateUsdPerKg,
+          source.recordedTotalUsd,
+          source.currentSupplierRateUsdPerKg,
+          source.priorAdjustmentCount,
+          source.unclassifiedPriorAdjustmentCount,
+          source.rateProvenance,
+          source.issues.map((issue) => issue.code).join(" | "),
         ]);
       }
     }

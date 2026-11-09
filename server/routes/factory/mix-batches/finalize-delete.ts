@@ -11,11 +11,22 @@ import { logger } from "../../../lib/logger";
 import { parseId } from "../../../lib/parseId";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { factoryRawStock, factoryMixBatches, factoryMixBatchSources, factoryBales, factoryPressingBatches, factoryDailyUsages } from "@shared/schema";
+import {
+  factoryRawStock,
+  factoryMixBatches,
+  factoryMixBatchSources,
+  factoryBales,
+  factoryPressingBatches,
+  factoryDailyUsages,
+} from "@shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { withFactoryValuationEventTx } from "../../../services/factory/factoryStockValueEvents";
 import { toMoney } from "../../../lib/money";
-import { MixLifecycleRefusal, requireMixFinalizeDecision, requireMixDeletionSafe } from "../../../services/factory/mixLifecyclePhase6";
+import {
+  MixLifecycleRefusal,
+  requireMixFinalizeDecision,
+  requireMixDeletionSafe,
+} from "../../../services/factory/mixLifecyclePhase6";
 
 export function registerFactoryMixBatchFinalizeDeleteRoutes(app: Express) {
   // ── Finalize a mix batch (mark as fully consumed/completed) ──
@@ -31,43 +42,61 @@ export function registerFactoryMixBatchFinalizeDeleteRoutes(app: Express) {
       // Re-read under the same transaction lock used for finalization.
       // Never convert a stale remainder into unreviewed waste.
       const updated = await db.transaction(async (tx) => {
-        const [batch] = await tx.select().from(factoryMixBatches).where(and(
-          eq(factoryMixBatches.id, id),
-          eq(factoryMixBatches.companyId, companyId),
-          isNull(factoryMixBatches.deletedAt),
-        )).for("update");
+        const [batch] = await tx
+          .select()
+          .from(factoryMixBatches)
+          .where(
+            and(
+              eq(factoryMixBatches.id, id),
+              eq(factoryMixBatches.companyId, companyId),
+              isNull(factoryMixBatches.deletedAt)
+            )
+          )
+          .for("update");
         if (!batch) throw new MixLifecycleRefusal("Mix batch is missing or deleted.", 404);
         const { remainingKg, wasteReason } = requireMixFinalizeDecision(batch, req.body);
         return withFactoryValuationEventTx(
-          tx, companyId, "WASTE",
+          tx,
+          companyId,
+          "WASTE",
           { sourceType: "factory-mix-batch-finalize", sourceId: id },
           async () => {
-            const [record] = await tx.update(factoryMixBatches).set({
-              usedKg: batch.totalWeightKg,
-              status: "COMPLETED",
-              updatedAt: new Date(),
-            }).where(and(
-              eq(factoryMixBatches.id, id), eq(factoryMixBatches.companyId, companyId),
-              isNull(factoryMixBatches.deletedAt),
-            )).returning();
+            const [record] = await tx
+              .update(factoryMixBatches)
+              .set({
+                usedKg: batch.totalWeightKg,
+                status: "COMPLETED",
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(factoryMixBatches.id, id),
+                  eq(factoryMixBatches.companyId, companyId),
+                  isNull(factoryMixBatches.deletedAt)
+                )
+              )
+              .returning();
             if (!record) throw new MixLifecycleRefusal("Finalization state changed; review and retry.");
-            await logAudit({
-              userId: req.session.userId!,
-              username: req.session.username || req.session.userId!,
-              companyId,
-              action: "update",
-              tableName: "factory_mix_batches",
-              recordId: id,
-              recordIdentifier: batch.batchCode,
-              changes: {
-                status: { old: batch.status, new: "COMPLETED" },
-                usedKg: { old: batch.usedKg, new: batch.totalWeightKg },
-                confirmedWasteKg: { old: null, new: remainingKg.toFixed(3) },
-                wasteReason: { old: null, new: wasteReason },
+            await logAudit(
+              {
+                userId: req.session.userId!,
+                username: req.session.username || req.session.userId!,
+                companyId,
+                action: "update",
+                tableName: "factory_mix_batches",
+                recordId: id,
+                recordIdentifier: batch.batchCode,
+                changes: {
+                  status: { old: batch.status, new: "COMPLETED" },
+                  usedKg: { old: batch.usedKg, new: batch.totalWeightKg },
+                  confirmedWasteKg: { old: null, new: remainingKg.toFixed(3) },
+                  wasteReason: { old: null, new: wasteReason },
+                },
               },
-            }, tx);
+              tx
+            );
             return record;
-          },
+          }
         );
       });
       res.json(updated);
@@ -99,32 +128,61 @@ export function registerFactoryMixBatchFinalizeDeleteRoutes(app: Express) {
       // factory valuation is the reverse of the material price variance the
       // create recorded, and is tagged MATERIAL_PRICE as the create was.
       const result = await db.transaction(async (tx) => {
-        const [batch] = await tx.select().from(factoryMixBatches).where(and(
-          eq(factoryMixBatches.id, id), eq(factoryMixBatches.companyId, companyId),
-          isNull(factoryMixBatches.deletedAt),
-        )).for("update");
+        const [batch] = await tx
+          .select()
+          .from(factoryMixBatches)
+          .where(
+            and(
+              eq(factoryMixBatches.id, id),
+              eq(factoryMixBatches.companyId, companyId),
+              isNull(factoryMixBatches.deletedAt)
+            )
+          )
+          .for("update");
         if (!batch) return null;
         const [children, downstreamSources, bales, pressing, usages] = await Promise.all([
-          tx.select({ id: factoryMixBatches.id }).from(factoryMixBatches).where(and(
-            eq(factoryMixBatches.companyId, companyId),
-            eq(factoryMixBatches.carryForwardFromId, id),
-            isNull(factoryMixBatches.deletedAt),
-          )).limit(1),
-          tx.select({ id: factoryMixBatchSources.id }).from(factoryMixBatchSources)
-            .where(eq(factoryMixBatchSources.sourceBatchId, id)).limit(1),
-          tx.select({ id: factoryBales.id }).from(factoryBales).where(and(
-            eq(factoryBales.companyId, companyId),
-            eq(factoryBales.mixBatchId, id),
-            isNull(factoryBales.deletedAt),
-          )).limit(1),
-          tx.select({ id: factoryPressingBatches.id }).from(factoryPressingBatches)
-            .where(and(eq(factoryPressingBatches.companyId, companyId),
-              eq(factoryPressingBatches.mixBatchId, id))).limit(1),
-          tx.select({ id: factoryDailyUsages.id }).from(factoryDailyUsages)
-            .where(and(eq(factoryDailyUsages.companyId, companyId),
-              eq(factoryDailyUsages.mixBatchId, id))).limit(1),
+          tx
+            .select({ id: factoryMixBatches.id })
+            .from(factoryMixBatches)
+            .where(
+              and(
+                eq(factoryMixBatches.companyId, companyId),
+                eq(factoryMixBatches.carryForwardFromId, id),
+                isNull(factoryMixBatches.deletedAt)
+              )
+            )
+            .limit(1),
+          tx
+            .select({ id: factoryMixBatchSources.id })
+            .from(factoryMixBatchSources)
+            .where(eq(factoryMixBatchSources.sourceBatchId, id))
+            .limit(1),
+          tx
+            .select({ id: factoryBales.id })
+            .from(factoryBales)
+            .where(
+              and(
+                eq(factoryBales.companyId, companyId),
+                eq(factoryBales.mixBatchId, id),
+                isNull(factoryBales.deletedAt)
+              )
+            )
+            .limit(1),
+          tx
+            .select({ id: factoryPressingBatches.id })
+            .from(factoryPressingBatches)
+            .where(and(eq(factoryPressingBatches.companyId, companyId), eq(factoryPressingBatches.mixBatchId, id)))
+            .limit(1),
+          tx
+            .select({ id: factoryDailyUsages.id })
+            .from(factoryDailyUsages)
+            .where(and(eq(factoryDailyUsages.companyId, companyId), eq(factoryDailyUsages.mixBatchId, id)))
+            .limit(1),
         ]);
-        requireMixDeletionSafe(batch, [children, downstreamSources, bales, pressing, usages].some(rows => rows.length > 0));
+        requireMixDeletionSafe(
+          batch,
+          [children, downstreamSources, bales, pressing, usages].some((rows) => rows.length > 0)
+        );
         return withFactoryValuationEventTx(
           tx,
           companyId,
@@ -157,61 +215,79 @@ export function registerFactoryMixBatchFinalizeDeleteRoutes(app: Express) {
             for (const src of batchSourceRows) {
               const weight = toMoney(src.weightKg);
               if (!weight.isFinite() || weight.lte(0)) {
-                throw new MixLifecycleRefusal("Historical mix has an invalid source quantity; deletion requires a reviewed source correction.");
+                throw new MixLifecycleRefusal(
+                  "Historical mix has an invalid source quantity; deletion requires a reviewed source correction."
+                );
               }
               if (src.containerId != null) {
                 // A source has only a container ID, not the raw-stock row ID.
                 // Reverse only when that original row is uniquely identifiable.
                 // Never decrement every row sharing a container or clamp usage.
-                const rawRows = await tx.select({
-                  id: factoryRawStock.id, usedKg: factoryRawStock.usedKg,
-                }).from(factoryRawStock).where(and(
-                  eq(factoryRawStock.companyId, companyId),
-                  eq(factoryRawStock.containerId, src.containerId),
-                  isNull(factoryRawStock.deletedAt),
-                )).for("update");
+                const rawRows = await tx
+                  .select({
+                    id: factoryRawStock.id,
+                    usedKg: factoryRawStock.usedKg,
+                  })
+                  .from(factoryRawStock)
+                  .where(
+                    and(
+                      eq(factoryRawStock.companyId, companyId),
+                      eq(factoryRawStock.containerId, src.containerId),
+                      isNull(factoryRawStock.deletedAt)
+                    )
+                  )
+                  .for("update");
                 if (rawRows.length !== 1) {
                   throw new MixLifecycleRefusal(
-                    "Cannot reverse mix source container #" + src.containerId +
-                    ": its physical raw-stock allocation is missing or ambiguous."
+                    "Cannot reverse mix source container #" +
+                      src.containerId +
+                      ": its physical raw-stock allocation is missing or ambiguous."
                   );
                 }
                 const currentUsed = toMoney(rawRows[0].usedKg);
                 if (currentUsed.lt(weight)) {
                   throw new MixLifecycleRefusal(
-                    "Cannot reverse mix source container #" + src.containerId +
-                    ": recorded usage is lower than the source kg. No negative or clamped stock change was applied."
+                    "Cannot reverse mix source container #" +
+                      src.containerId +
+                      ": recorded usage is lower than the source kg. No negative or clamped stock change was applied."
                   );
                 }
-                await tx.update(factoryRawStock)
+                await tx
+                  .update(factoryRawStock)
                   .set({ usedKg: currentUsed.minus(weight).toFixed(3) })
-                  .where(and(
-                    eq(factoryRawStock.id, rawRows[0].id),
-                    eq(factoryRawStock.companyId, companyId),
-                  ));
+                  .where(and(eq(factoryRawStock.id, rawRows[0].id), eq(factoryRawStock.companyId, companyId)));
               } else if (src.sourceBatchId != null) {
-                const [parent] = await tx.select({
-                  id: factoryMixBatches.id,
-                  totalWeightKg: factoryMixBatches.totalWeightKg,
-                  usedKg: factoryMixBatches.usedKg,
-                  status: factoryMixBatches.status,
-                }).from(factoryMixBatches).where(and(
-                  eq(factoryMixBatches.id, src.sourceBatchId),
-                  eq(factoryMixBatches.companyId, companyId),
-                  isNull(factoryMixBatches.deletedAt),
-                )).for("update");
+                const [parent] = await tx
+                  .select({
+                    id: factoryMixBatches.id,
+                    totalWeightKg: factoryMixBatches.totalWeightKg,
+                    usedKg: factoryMixBatches.usedKg,
+                    status: factoryMixBatches.status,
+                  })
+                  .from(factoryMixBatches)
+                  .where(
+                    and(
+                      eq(factoryMixBatches.id, src.sourceBatchId),
+                      eq(factoryMixBatches.companyId, companyId),
+                      isNull(factoryMixBatches.deletedAt)
+                    )
+                  )
+                  .for("update");
                 if (!parent || parent.status === "COMPLETED" || toMoney(parent.usedKg).lt(weight)) {
                   throw new MixLifecycleRefusal("Upstream mix quantity/status cannot be exactly reversed.");
                 }
                 const nextUsed = toMoney(parent.usedKg).minus(weight);
-                await tx.update(factoryMixBatches).set({
-                  usedKg: nextUsed.toFixed(3),
-                  status: parent.status === "CLOSED" && nextUsed.lt(toMoney(parent.totalWeightKg))
-                    ? "ACTIVE" : parent.status,
-                  updatedAt: new Date(),
-                }).where(and(
-                  eq(factoryMixBatches.id, parent.id), eq(factoryMixBatches.companyId, companyId),
-                ));
+                await tx
+                  .update(factoryMixBatches)
+                  .set({
+                    usedKg: nextUsed.toFixed(3),
+                    status:
+                      parent.status === "CLOSED" && nextUsed.lt(toMoney(parent.totalWeightKg))
+                        ? "ACTIVE"
+                        : parent.status,
+                    updatedAt: new Date(),
+                  })
+                  .where(and(eq(factoryMixBatches.id, parent.id), eq(factoryMixBatches.companyId, companyId)));
               } else {
                 // No container or upstream batch = no exact raw-stock attribution.
                 // Supplier-only manual material must use a reviewed reconciliation.

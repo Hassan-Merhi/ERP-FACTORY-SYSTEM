@@ -44,8 +44,12 @@ export function mixKilograms(value: unknown, name = "Kilograms"): Decimal {
   return quantity(value, name);
 }
 export function requireMixLifecycleDate(raw: unknown): string {
-  if (typeof raw !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(raw) ||
-      !Number.isFinite(Date.parse(raw)) || new Date(raw).toISOString().slice(0, 10) !== raw) {
+  if (
+    typeof raw !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(raw) ||
+    !Number.isFinite(Date.parse(raw)) ||
+    new Date(raw).toISOString().slice(0, 10) !== raw
+  ) {
     throw new MixLifecycleRefusal("usedDate must be a real YYYY-MM-DD business date.", 400);
   }
   return raw;
@@ -57,25 +61,32 @@ export function requireMixLifecycleAvailable(batch: MixLifecycleBatch): Decimal 
   }
   if (!["ACTIVE", "OPEN", "CARRY_FORWARD"].includes(batch.status)) {
     throw new MixLifecycleRefusal(
-      `Mix ${batch.batchCode} is ${batch.status}; completed/closed mixes cannot be consumed or topped up again.`,
+      `Mix ${batch.batchCode} is ${batch.status}; completed/closed mixes cannot be consumed or topped up again.`
     );
   }
   const total = toMoney(batch.totalWeightKg);
   const used = toMoney(batch.usedKg);
   if (!total.isFinite() || !used.isFinite() || total.lte(0) || used.lt(0) || used.gt(total)) {
-    throw new MixLifecycleRefusal(`Mix ${batch.batchCode} has invalid historical used/total kilograms. Review the lifecycle audit before continuing.`);
+    throw new MixLifecycleRefusal(
+      `Mix ${batch.batchCode} has invalid historical used/total kilograms. Review the lifecycle audit before continuing.`
+    );
   }
   return total.minus(used);
 }
 
-export function requireMixLifecycleUsage(batch: MixLifecycleBatch, inputKg: unknown): {
-  usedKg: Decimal; remainingBeforeKg: Decimal; leftoverKg: Decimal;
+export function requireMixLifecycleUsage(
+  batch: MixLifecycleBatch,
+  inputKg: unknown
+): {
+  usedKg: Decimal;
+  remainingBeforeKg: Decimal;
+  leftoverKg: Decimal;
 } {
   const remaining = requireMixLifecycleAvailable(batch);
   const used = quantity(inputKg, "kgUsed");
   if (remaining.lte(0) || used.gt(remaining)) {
     throw new MixLifecycleRefusal(
-      `Mix ${batch.batchCode} has only ${remaining.toFixed(3)} kg available; ${used.toFixed(3)} kg was requested.`,
+      `Mix ${batch.batchCode} has only ${remaining.toFixed(3)} kg available; ${used.toFixed(3)} kg was requested.`
     );
   }
   return { usedKg: used, remainingBeforeKg: remaining, leftoverKg: remaining.minus(used) };
@@ -108,7 +119,8 @@ export function validateMixLifecycleUsageRequest(body: unknown): {
       throw new MixLifecycleRefusal("Usage notes must be text.", 400);
     }
     return {
-      batchId: id, kgUsed: quantity(item.kgUsed, "kgUsed"),
+      batchId: id,
+      kgUsed: quantity(item.kgUsed, "kgUsed"),
       notes: typeof item.notes === "string" ? item.notes.slice(0, 2000) : null,
     };
   });
@@ -119,17 +131,20 @@ export function validateMixLifecycleUsageRequest(body: unknown): {
   };
 }
 
-export function requireMixFinalizeDecision(batch: MixLifecycleBatch, body: unknown): {
+export function requireMixFinalizeDecision(
+  batch: MixLifecycleBatch,
+  body: unknown
+): {
   remainingKg: Decimal;
   wasteReason: string | null;
 } {
   const remaining = requireMixLifecycleAvailable(batch);
   if (remaining.eq(0)) return { remainingKg: remaining, wasteReason: null };
-  const values = body && typeof body === "object" ? body as Record<string, unknown> : {};
+  const values = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
   if (values.confirmRemainderAsWaste !== true) {
     throw new MixLifecycleRefusal(
       `Mix ${batch.batchCode} still has ${remaining.toFixed(3)} kg. Finalization would write off this stock. ` +
-      "Confirm the exact remainder and document the waste reason, or use a verified carry-forward.",
+        "Confirm the exact remainder and document the waste reason, or use a verified carry-forward."
     );
   }
   const reason = typeof values.wasteReason === "string" ? values.wasteReason.trim() : "";
@@ -139,7 +154,7 @@ export function requireMixFinalizeDecision(batch: MixLifecycleBatch, body: unkno
   const requested = quantity(values.wasteKg, "wasteKg");
   if (!requested.eq(remaining)) {
     throw new MixLifecycleRefusal(
-      `The write-off amount changed. Current remainder is ${remaining.toFixed(3)} kg; re-review before finalizing.`,
+      `The write-off amount changed. Current remainder is ${remaining.toFixed(3)} kg; re-review before finalizing.`
     );
   }
   return { remainingKg: remaining, wasteReason: reason };
@@ -152,19 +167,24 @@ export function requireMixFinalizeDecision(batch: MixLifecycleBatch, body: unkno
  */
 export function requireMixDeletionSafe(
   batch: MixLifecycleBatch & { carryForwardFromId?: number | null },
-  linkedDownstream: boolean,
+  linkedDownstream: boolean
 ): void {
   if (batch.deletedAt) {
     throw new MixLifecycleRefusal("This mix is already deleted.");
   }
   const used = toMoney(batch.usedKg);
-  if (!used.isFinite() || used.lt(0) ||
-      ["CLOSED", "COMPLETED"].includes(batch.status) || used.gt(0) ||
-      batch.carryForwardFromId != null || linkedDownstream) {
+  if (
+    !used.isFinite() ||
+    used.lt(0) ||
+    ["CLOSED", "COMPLETED"].includes(batch.status) ||
+    used.gt(0) ||
+    batch.carryForwardFromId != null ||
+    linkedDownstream
+  ) {
     throw new MixLifecycleRefusal(
       "This mix has recorded consumption, completion, carry-forward, or downstream references. " +
-      "Ordinary deletion would recredit raw stock without verified production reversal. " +
-      "Review its lineage and use a controlled historical correction instead.",
+        "Ordinary deletion would recredit raw stock without verified production reversal. " +
+        "Review its lineage and use a controlled historical correction instead."
     );
   }
 }

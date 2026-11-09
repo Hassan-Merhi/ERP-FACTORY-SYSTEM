@@ -13,12 +13,7 @@ import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { writeDaybookEntry } from "../_helpers";
-import {
-  factoryRawStock,
-  factoryMixBatches,
-  factoryMixBatchSources,
-  factoryDaybookEntries,
-} from "@shared/schema";
+import { factoryRawStock, factoryMixBatches, factoryMixBatchSources, factoryDaybookEntries } from "@shared/schema";
 import { eq, and, isNull, sql } from "drizzle-orm";
 import { getStableSupplierCost } from "../../../services/factory/rawStockStableCost";
 import {
@@ -30,13 +25,19 @@ import {
 import { recordFactoryStockValueEventTx } from "../../../services/factory/factoryStockValueEvents";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import type Decimal from "decimal.js";
-import { MixEditRequestError, parseMixEditSelection, sameMixEditSources } from "../../../services/factory/mixBatchEditRequest";
+import {
+  MixEditRequestError,
+  parseMixEditSelection,
+  sameMixEditSources,
+} from "../../../services/factory/mixBatchEditRequest";
 import { prepareMixSourceEditReview } from "../../../services/factory/mixBatchEditReview";
 
 class CompletedMixBatchSourceEditError extends Error {
   readonly code = "MIX_BATCH_COMPLETED_SOURCE_EDIT_REQUIRES_REVIEW";
   constructor() {
-    super("Completed mix batches cannot have source materials repriced automatically. Use the reviewed correction workflow.");
+    super(
+      "Completed mix batches cannot have source materials repriced automatically. Use the reviewed correction workflow."
+    );
   }
 }
 
@@ -53,8 +54,10 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
         throw new MixEditRequestError("An edit request body is required.");
       }
       const { name, notes, batchDate, supplierSources, batchSources } = req.body;
-      if ((name !== undefined && name !== null && typeof name !== "string") ||
-          (notes !== undefined && notes !== null && typeof notes !== "string")) {
+      if (
+        (name !== undefined && name !== null && typeof name !== "string") ||
+        (notes !== undefined && notes !== null && typeof notes !== "string")
+      ) {
         throw new MixEditRequestError("Name and notes must be text.");
       }
       if (typeof name === "string" && name.length > 500) {
@@ -62,8 +65,12 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
       }
       if (batchDate !== undefined && batchDate !== null && batchDate !== "") {
         const iso = String(batchDate);
-        if (typeof batchDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(iso) ||
-            Number.isNaN(Date.parse(iso)) || new Date(iso).toISOString().slice(0, 10) !== iso) {
+        if (
+          typeof batchDate !== "string" ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(iso) ||
+          Number.isNaN(Date.parse(iso)) ||
+          new Date(iso).toISOString().slice(0, 10) !== iso
+        ) {
           throw new MixEditRequestError("Batch date must be a valid YYYY-MM-DD date.", "MIX_EDIT_INVALID_DATE");
         }
       }
@@ -78,13 +85,23 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
       const reason = typeof req.body.sourceEditReason === "string" ? req.body.sourceEditReason.trim() : "";
       let identicalSources = false;
       if (parsedSources) {
-        const [existing] = await db.select().from(factoryMixBatches)
-          .where(and(eq(factoryMixBatches.id, id), eq(factoryMixBatches.companyId, companyId), isNull(factoryMixBatches.deletedAt)));
+        const [existing] = await db
+          .select()
+          .from(factoryMixBatches)
+          .where(
+            and(
+              eq(factoryMixBatches.id, id),
+              eq(factoryMixBatches.companyId, companyId),
+              isNull(factoryMixBatches.deletedAt)
+            )
+          );
         if (!existing) return res.status(404).json({ message: "Mix batch not found" });
         const prior = await db.select().from(factoryMixBatchSources).where(eq(factoryMixBatchSources.mixBatchId, id));
         identicalSources = sameMixEditSources(prior, parsedSources);
         if (req.body.sourceEditPreview === true) {
-          const preview = await prepareMixSourceEditReview(db, companyId, existing, prior, parsedSources, reason, { proposedBatchDate: batchDate });
+          const preview = await prepareMixSourceEditReview(db, companyId, existing, prior, parsedSources, reason, {
+            proposedBatchDate: batchDate,
+          });
           res.set("Cache-Control", "private, no-store");
           return res.json({ ...preview, previewOnly: true, batchCode: existing.batchCode });
         }
@@ -106,7 +123,13 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
           const [written] = await tx
             .update(factoryMixBatches)
             .set(updates)
-            .where(and(eq(factoryMixBatches.id, id), eq(factoryMixBatches.companyId, companyId), isNull(factoryMixBatches.deletedAt)))
+            .where(
+              and(
+                eq(factoryMixBatches.id, id),
+                eq(factoryMixBatches.companyId, companyId),
+                isNull(factoryMixBatches.deletedAt)
+              )
+            )
             .returning();
           if (!written) throw new Error("Mix batch is no longer available");
           await logAudit(
@@ -168,14 +191,18 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
           throw new MixEditRequestError("No material changes remain to review.", "MIX_EDIT_ALREADY_UNCHANGED", 409);
         }
         const batchBefore = batch;
-        const review = await prepareMixSourceEditReview(tx, companyId, batch, oldSources, sourceInputs, reason, { forUpdate: true, proposedBatchDate: batchDate });
+        const review = await prepareMixSourceEditReview(tx, companyId, batch, oldSources, sourceInputs, reason, {
+          forUpdate: true,
+          proposedBatchDate: batchDate,
+        });
         if (!review.allowed) {
           throw new MixEditRequestError(review.warnings.join(" "), "MIX_EDIT_REVIEW_BLOCKED", 409);
         }
         if (review.reviewHash !== req.body.sourceEditReviewHash) {
           throw new MixEditRequestError(
             "The mix or supplier stock changed since review. Review your changes again.",
-            "MIX_EDIT_REVIEW_STALE", 409,
+            "MIX_EDIT_REVIEW_STALE",
+            409
           );
         }
         // ── 1. Reverse all existing sources ──
@@ -192,19 +219,23 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
             const [rsRow] = await tx
               .select()
               .from(factoryRawStock)
-              .where(and(
-                eq(factoryRawStock.companyId, companyId),
-                eq(factoryRawStock.containerId, src.containerId),
-                isNull(factoryRawStock.deletedAt),
-              ))
+              .where(
+                and(
+                  eq(factoryRawStock.companyId, companyId),
+                  eq(factoryRawStock.containerId, src.containerId),
+                  isNull(factoryRawStock.deletedAt)
+                )
+              )
               .for("update");
             if (!rsRow || toMoney(rsRow.usedKg).lessThan(toMoney(src.weightKg))) {
               throw new MixEditRequestError(
                 "Original raw material consumption cannot be reversed safely.",
-                "MIX_EDIT_SOURCE_REVERSE_UNSAFE", 409,
+                "MIX_EDIT_SOURCE_REVERSE_UNSAFE",
+                409
               );
             }
-            await tx.update(factoryRawStock)
+            await tx
+              .update(factoryRawStock)
               .set({ usedKg: toMoney(rsRow.usedKg).minus(src.weightKg).toFixed(3) })
               .where(and(eq(factoryRawStock.id, rsRow.id), eq(factoryRawStock.companyId, companyId)));
           } else if (src.supplierId && !src.sourceBatchId) {
@@ -219,10 +250,12 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
             if (!srcBatch || toMoney(srcBatch.usedKg).lessThan(toMoney(src.weightKg))) {
               throw new MixEditRequestError(
                 "Original upstream batch consumption cannot be reversed safely.",
-                "MIX_EDIT_SOURCE_REVERSE_UNSAFE", 409,
+                "MIX_EDIT_SOURCE_REVERSE_UNSAFE",
+                409
               );
             }
-            await tx.update(factoryMixBatches)
+            await tx
+              .update(factoryMixBatches)
               .set({
                 usedKg: toMoney(srcBatch.usedKg).minus(src.weightKg).toFixed(3),
                 updatedAt: new Date(),
@@ -274,7 +307,8 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
           if (remaining.greaterThan(0.001) && supplierRawStocks.length > 0) {
             throw new MixEditRequestError(
               "Not enough raw stock to apply this edit without negative inventory.",
-              "MIX_EDIT_INSUFFICIENT_RAW_STOCK", 409,
+              "MIX_EDIT_INSUFFICIENT_RAW_STOCK",
+              409
             );
           }
 
@@ -315,11 +349,13 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
           const [srcBatch] = await tx
             .select()
             .from(factoryMixBatches)
-            .where(and(
-              eq(factoryMixBatches.id, sourceBatchId),
-              eq(factoryMixBatches.companyId, companyId),
-              isNull(factoryMixBatches.deletedAt),
-            ))
+            .where(
+              and(
+                eq(factoryMixBatches.id, sourceBatchId),
+                eq(factoryMixBatches.companyId, companyId),
+                isNull(factoryMixBatches.deletedAt)
+              )
+            )
             .for("update");
           if (!srcBatch) throw new Error(`Source batch ${sourceBatchId} not found`);
           const batchRemaining = toMoney(srcBatch.totalWeightKg).minus(toMoney(srcBatch.usedKg));
@@ -344,11 +380,14 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
         // A supplier's locked rate could have changed between the in-transaction
         // review and this final valuation. Refuse rather than silently apply a
         // different USD amount than the operator explicitly reviewed.
-        if (review.estimatedTotalCost === null ||
-            toMoney(review.estimatedTotalCost).minus(settled.totalCost).abs().gt("0.0001")) {
+        if (
+          review.estimatedTotalCost === null ||
+          toMoney(review.estimatedTotalCost).minus(settled.totalCost).abs().gt("0.0001")
+        ) {
           throw new MixEditRequestError(
             "Source rates changed during the edit. Review the proposal again.",
-            "MIX_EDIT_REVIEW_STALE", 409,
+            "MIX_EDIT_REVIEW_STALE",
+            409
           );
         }
 
@@ -426,9 +465,13 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
               },
               sourceEdit: {
                 old: oldSources.map((s) => ({
-                  sourceId: s.id, supplierId: s.supplierId, containerId: s.containerId,
-                  sourceBatchId: s.sourceBatchId, weightKg: s.weightKg,
-                  costPerKg: s.costPerKg, totalCost: s.totalCost,
+                  sourceId: s.id,
+                  supplierId: s.supplierId,
+                  containerId: s.containerId,
+                  sourceBatchId: s.sourceBatchId,
+                  weightKg: s.weightKg,
+                  costPerKg: s.costPerKg,
+                  totalCost: s.totalCost,
                 })),
                 new: {
                   reason,
@@ -444,11 +487,15 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
         // Keep the existing daybook reference in the SAME transaction as
         // source, quantity, valuation and audit updates. This does not create
         // an extra accounting voucher; failure rolls back the whole edit.
-        await tx.delete(factoryDaybookEntries).where(and(
-          eq(factoryDaybookEntries.companyId, companyId),
-          eq(factoryDaybookEntries.txType, "MIX_BATCH_CREATED"),
-          eq(factoryDaybookEntries.referenceId, id),
-        ));
+        await tx
+          .delete(factoryDaybookEntries)
+          .where(
+            and(
+              eq(factoryDaybookEntries.companyId, companyId),
+              eq(factoryDaybookEntries.txType, "MIX_BATCH_CREATED"),
+              eq(factoryDaybookEntries.referenceId, id)
+            )
+          );
         const mbTxDate = batchDate || edited.batchDate || getClientDate(req);
         await writeDaybookEntry(tx, {
           companyId,

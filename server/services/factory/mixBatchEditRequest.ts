@@ -29,7 +29,7 @@ export class MixEditRequestError extends Error {
   constructor(
     message: string,
     readonly code = "MIX_EDIT_INVALID_SOURCES",
-    readonly status = 400,
+    readonly status = 400
   ) {
     super(message);
     this.name = "MixEditRequestError";
@@ -81,20 +81,20 @@ export function parseMixEditSelection(body: Record<string, unknown>): MixEditSel
   }
   const weight = [...supplierSources, ...batchSources].reduce(
     (sum, source) => sum.plus(source.weightKg),
-    new MoneyDecimal(0),
+    new MoneyDecimal(0)
   );
   return { supplierSources, batchSources, totalWeightKg: weight.toFixed(3) };
 }
 
-export function sameMixEditSources(
-  oldSources: readonly PersistedMixEditSource[],
-  proposed: MixEditSelection,
-): boolean {
+export function sameMixEditSources(oldSources: readonly PersistedMixEditSource[], proposed: MixEditSelection): boolean {
   const old = new Map<string, ReturnType<typeof toMoney>>();
   for (const source of oldSources) {
-    const key = source.sourceBatchId != null
-      ? `batch:${source.sourceBatchId}`
-      : source.supplierId != null ? `supplier:${source.supplierId}` : null;
+    const key =
+      source.sourceBatchId != null
+        ? `batch:${source.sourceBatchId}`
+        : source.supplierId != null
+          ? `supplier:${source.supplierId}`
+          : null;
     if (key === null) return false; // Don't silently erase unmapped or container-only sources.
     old.set(key, (old.get(key) ?? new MoneyDecimal(0)).plus(source.weightKg));
   }

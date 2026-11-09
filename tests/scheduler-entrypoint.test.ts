@@ -45,7 +45,8 @@ const originalMixMonitor = process.env.FACTORY_MIX_INTEGRITY_MONITOR_ENABLED;
 
 beforeEach(() => {
   h.schedules = [];
-  for (const fn of [h.core, h.locationStock, h.customMessages, h.factoryStock, h.mixIntegrity, h.recover, h.manual]) fn.mockReset();
+  for (const fn of [h.core, h.locationStock, h.customMessages, h.factoryStock, h.mixIntegrity, h.recover, h.manual])
+    fn.mockReset();
   h.mixIntegrity.mockResolvedValue({ failed: 0 });
   delete process.env.FACTORY_MIX_INTEGRITY_MONITOR_ENABLED;
   vi.spyOn(logger, "info").mockImplementation(() => logger);

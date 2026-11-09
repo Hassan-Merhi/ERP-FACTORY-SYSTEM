@@ -13,7 +13,10 @@ import { toMoney, MoneyDecimal } from "../../lib/money";
 export class MixRawStockShortageError extends Error {
   readonly code = "MIX_RAW_STOCK_SHORTAGE";
   readonly status = 409;
-  constructor(message: string) { super(message); this.name = "MixRawStockShortageError"; }
+  constructor(message: string) {
+    super(message);
+    this.name = "MixRawStockShortageError";
+  }
 }
 
 export function requireMixRawStockCapacity(args: {
@@ -26,7 +29,7 @@ export function requireMixRawStockCapacity(args: {
   if (!available.isFinite() || !required.isFinite() || required.lte(0) || available.lt(required)) {
     throw new MixRawStockShortageError(
       `Insufficient container raw stock for ${args.source}. Required ${required.toFixed(3)} kg; ` +
-      `available ${available.toFixed(3)} kg. Supplier ADD adjustments cannot be attributed to a specific container.`
+        `available ${available.toFixed(3)} kg. Supplier ADD adjustments cannot be attributed to a specific container.`
     );
   }
 }
@@ -50,20 +53,25 @@ export async function availableSupplierAddAllowance(
   companyId: number,
   supplierId: number,
   rawRows: readonly SupplierStockUsage[],
-  asOfBusinessDate?: string,
+  asOfBusinessDate?: string
 ): Promise<ReturnType<typeof toMoney>> {
   if (asOfBusinessDate && !/^\d{4}-\d{2}-\d{2}$/.test(asOfBusinessDate)) {
     throw new MixRawStockShortageError("Supplier ADD stock requires a valid YYYY-MM-DD mix business date.");
   }
-  const [additions] = await tx.select({
-    kg: sql<string>`COALESCE(SUM(${factoryRawMaterialAdjustments.kg}), 0)`,
-  }).from(factoryRawMaterialAdjustments).where(and(
-    eq(factoryRawMaterialAdjustments.companyId, companyId),
-    eq(factoryRawMaterialAdjustments.supplierId, supplierId),
-    eq(factoryRawMaterialAdjustments.type, "ADD"),
-    isNull(factoryRawMaterialAdjustments.deletedAt),
-    asOfBusinessDate ? lte(factoryRawMaterialAdjustments.date, asOfBusinessDate) : undefined,
-  ));
+  const [additions] = await tx
+    .select({
+      kg: sql<string>`COALESCE(SUM(${factoryRawMaterialAdjustments.kg}), 0)`,
+    })
+    .from(factoryRawMaterialAdjustments)
+    .where(
+      and(
+        eq(factoryRawMaterialAdjustments.companyId, companyId),
+        eq(factoryRawMaterialAdjustments.supplierId, supplierId),
+        eq(factoryRawMaterialAdjustments.type, "ADD"),
+        isNull(factoryRawMaterialAdjustments.deletedAt),
+        asOfBusinessDate ? lte(factoryRawMaterialAdjustments.date, asOfBusinessDate) : undefined
+      )
+    );
   const addKg = toMoney(additions?.kg ?? "0");
   let consumedFromAdds = new MoneyDecimal(0);
   for (const row of rawRows) {
@@ -75,17 +83,21 @@ export async function availableSupplierAddAllowance(
   // physical row, so subtract it conservatively from the ADD allowance.
   // This can block a legitimate source edit, but cannot mint extra stock.
   if (addKg.gt(consumedFromAdds)) {
-    const [manual] = await tx.select({
-      kg: sql<string>`COALESCE(SUM(${factoryMixBatchSources.weightKg}), 0)`,
-    }).from(factoryMixBatchSources)
+    const [manual] = await tx
+      .select({
+        kg: sql<string>`COALESCE(SUM(${factoryMixBatchSources.weightKg}), 0)`,
+      })
+      .from(factoryMixBatchSources)
       .innerJoin(factoryMixBatches, eq(factoryMixBatchSources.mixBatchId, factoryMixBatches.id))
-      .where(and(
-        eq(factoryMixBatches.companyId, companyId),
-        isNull(factoryMixBatches.deletedAt),
-        eq(factoryMixBatchSources.supplierId, supplierId),
-        isNull(factoryMixBatchSources.containerId),
-        isNull(factoryMixBatchSources.sourceBatchId),
-      ));
+      .where(
+        and(
+          eq(factoryMixBatches.companyId, companyId),
+          isNull(factoryMixBatches.deletedAt),
+          eq(factoryMixBatchSources.supplierId, supplierId),
+          isNull(factoryMixBatchSources.containerId),
+          isNull(factoryMixBatchSources.sourceBatchId)
+        )
+      );
     consumedFromAdds = consumedFromAdds.plus(manual?.kg ?? "0");
   }
   return MoneyDecimal.max(0, addKg.minus(consumedFromAdds));
@@ -96,15 +108,15 @@ export async function availableSupplierAddAllowance(
 export function requireMixFifoFullyAllocated(
   remainingKg: string | number,
   supplierId: number,
-  availableAddKg: string | number = 0,
+  availableAddKg: string | number = 0
 ): void {
   const remaining = toMoney(remainingKg);
   const addAllowance = toMoney(availableAddKg);
   if (remaining.gt(addAllowance)) {
     throw new MixRawStockShortageError(
       `Supplier #${supplierId} cannot cover ${remaining.toFixed(3)} kg of remaining mix usage. ` +
-      `Unconsumed, recorded ADD backing: ${addAllowance.toFixed(3)} kg. ` +
-      `No unbacked negative stock was posted.`
+        `Unconsumed, recorded ADD backing: ${addAllowance.toFixed(3)} kg. ` +
+        `No unbacked negative stock was posted.`
     );
   }
 }

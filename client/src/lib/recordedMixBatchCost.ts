@@ -49,7 +49,7 @@ export function summarizeRecordedMixBatches(batches: readonly RecordedMixBatchIn
 
 /** For showing the recorded source breakdown, including historical zero-rate sources. */
 export function summarizeRecordedMixSources(
-  sources: readonly { weightKg: RecordedNumber; totalCost: RecordedNumber }[],
+  sources: readonly { weightKg: RecordedNumber; totalCost: RecordedNumber }[]
 ): RecordedCostSummary {
   let totalWeightKg = 0;
   let totalCost = 0;

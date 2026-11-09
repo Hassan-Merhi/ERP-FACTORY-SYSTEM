@@ -54,16 +54,31 @@ vi.mock("../server/db", async () => {
     return q;
   };
   const batch = {
-    id: 1, batchCode: "MB1", name: null, totalWeightKg: "0", totalCost: "0",
-    get usedKg() { return h.usedKg; },
-    get status() { return h.status; },
+    id: 1,
+    batchCode: "MB1",
+    name: null,
+    totalWeightKg: "0",
+    totalCost: "0",
+    get usedKg() {
+      return h.usedKg;
+    },
+    get status() {
+      return h.status;
+    },
   };
   const db: Record<string, unknown> = {
-    select: () => ({ from: (table: never) => chain(
-      getTableName(table) === "factory_mix_batches" ? [batch]
-      : getTableName(table) === "factory_mix_batch_sources" ? h.existingSources
-      : getTableName(table) === "factory_bales" && h.linkedBales ? [{ id: 700 }] : []
-    ) }),
+    select: () => ({
+      from: (table: never) =>
+        chain(
+          getTableName(table) === "factory_mix_batches"
+            ? [batch]
+            : getTableName(table) === "factory_mix_batch_sources"
+              ? h.existingSources
+              : getTableName(table) === "factory_bales" && h.linkedBales
+                ? [{ id: 700 }]
+                : []
+        ),
+    }),
     update: (table: never) => ({
       set: (values: Record<string, unknown>) => {
         const shown = Object.fromEntries(
@@ -95,7 +110,9 @@ async function patch(body: Record<string, unknown>) {
   const res = {
     statusCode: 200,
     body: undefined as unknown,
-    set(_key: string, _value: string) { return this; },
+    set(_key: string, _value: string) {
+      return this;
+    },
     status(code: number) {
       this.statusCode = code;
       return this;
@@ -163,7 +180,9 @@ describe("mix batch edit", () => {
 
   it("rejects stale review hashes without writing any stock", async () => {
     const res = await patch({
-      ...proposal, sourceEditReviewHash: "not-the-review-hash", confirmSourceEdit: true,
+      ...proposal,
+      sourceEditReviewHash: "not-the-review-hash",
+      confirmSourceEdit: true,
     });
     expect(res.statusCode).toBe(409);
     expect(res.body).toMatchObject({ code: "MIX_EDIT_REVIEW_STALE" });
@@ -176,7 +195,8 @@ describe("mix batch edit", () => {
     expect(preview.statusCode).toBe(200);
     expect(preview.body).toMatchObject({ allowed: false, changed: true });
     const res = await patch({
-      ...proposal, sourceEditReviewHash: (preview.body as { reviewHash: string }).reviewHash,
+      ...proposal,
+      sourceEditReviewHash: (preview.body as { reviewHash: string }).reviewHash,
       confirmSourceEdit: true,
     });
     expect(res.statusCode).toBe(409);
@@ -188,19 +208,34 @@ describe("mix batch edit", () => {
     h.status = "COMPLETED";
     const res = await patch({ name: "Renamed historical mix" });
     expect(res.statusCode).toBe(200);
-    expect(h.writes.some(([action, table, values]) =>
-      action === "update" && table === "factory_mix_batches" && values.name === "Renamed historical mix"
-    )).toBe(true);
+    expect(
+      h.writes.some(
+        ([action, table, values]) =>
+          action === "update" && table === "factory_mix_batches" && values.name === "Renamed historical mix"
+      )
+    ).toBe(true);
     expect(h.writes.some(([, table]) => table === "factory_raw_stock")).toBe(false);
   });
 
   it("treats identical submitted source weights as metadata-only, with no repricing", async () => {
     h.status = "COMPLETED";
-    h.existingSources = [{
-      id: 9, mixBatchId: 1, supplierId: 2, sourceBatchId: null,
-      containerId: 30, weightKg: "0.300", costPerKg: "0.47", totalCost: "0.141",
-    }];
-    const res = await patch({ supplierSources: [{ supplierId: 2, weightKg: "0.3" }], batchSources: [], name: "Safe name" });
+    h.existingSources = [
+      {
+        id: 9,
+        mixBatchId: 1,
+        supplierId: 2,
+        sourceBatchId: null,
+        containerId: 30,
+        weightKg: "0.300",
+        costPerKg: "0.47",
+        totalCost: "0.141",
+      },
+    ];
+    const res = await patch({
+      supplierSources: [{ supplierId: 2, weightKg: "0.3" }],
+      batchSources: [],
+      name: "Safe name",
+    });
     expect(res.statusCode).toBe(200);
     expect(h.writes.some(([, table]) => table === "factory_raw_stock")).toBe(false);
   });
@@ -253,15 +288,22 @@ describe("mix batch edit", () => {
   });
 
   it("refuses source reversals with ambiguous historical container ownership", async () => {
-    h.existingSources = [{
-      id: 99, mixBatchId: 1, supplierId: 2, sourceBatchId: null,
-      containerId: 999, weightKg: "0.200", costPerKg: "0.35", totalCost: "0.07",
-    }];
+    h.existingSources = [
+      {
+        id: 99,
+        mixBatchId: 1,
+        supplierId: 2,
+        sourceBatchId: null,
+        containerId: 999,
+        weightKg: "0.200",
+        costPerKg: "0.35",
+        totalCost: "0.07",
+      },
+    ];
     const res = await patch({ ...proposal, sourceEditPreview: true });
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatchObject({ allowed: false });
     expect((res.body as { warnings: string[] }).warnings.join(" ")).toContain("ownership mismatch");
     expect(h.writes).toEqual([]);
   });
-
 });

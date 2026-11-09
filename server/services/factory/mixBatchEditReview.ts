@@ -7,16 +7,18 @@
  * only until the downstream bale/GL reconciliation phases are implemented.
  */
 import { and, eq, isNull } from "drizzle-orm";
-import { factoryMixBatches, factoryMixBatchSources, factoryBales, factoryPressingBatches, factoryDailyUsages } from "@shared/schema";
+import {
+  factoryMixBatches,
+  factoryMixBatchSources,
+  factoryBales,
+  factoryPressingBatches,
+  factoryDailyUsages,
+} from "@shared/schema";
 import type { DatabaseOrTransaction } from "../../db";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 import { getStableSupplierCost } from "./rawStockStableCost";
 import { supplierLockedUsdRate } from "./baleCostBasis";
-import {
-  mixEditReviewHash,
-  sameMixEditSources,
-  type MixEditSelection,
-} from "./mixBatchEditRequest";
+import { mixEditReviewHash, sameMixEditSources, type MixEditSelection } from "./mixBatchEditRequest";
 
 export interface MixBatchForSourceReview {
   id: number;
@@ -65,7 +67,7 @@ export async function prepareMixSourceEditReview(
   oldSources: readonly MixSourceForReview[],
   proposed: MixEditSelection,
   reason: string,
-  opts: { forUpdate?: boolean; proposedBatchDate?: string | null } = {},
+  opts: { forUpdate?: boolean; proposedBatchDate?: string | null } = {}
 ): Promise<MixSourceEditReview> {
   const changed = !sameMixEditSources(oldSources, proposed);
   const warnings: string[] = [];
@@ -77,7 +79,9 @@ export async function prepareMixSourceEditReview(
 
   for (const source of oldSources) {
     if (source.containerId !== null && source.supplierId === null) {
-      warnings.push("An original container source has no supplier attribution. It requires an audited historical correction.");
+      warnings.push(
+        "An original container source has no supplier attribution. It requires an audited historical correction."
+      );
     }
     if (source.containerId !== null && source.sourceBatchId !== null) {
       warnings.push("An original row has conflicting container and source-batch references.");
@@ -85,7 +89,7 @@ export async function prepareMixSourceEditReview(
     if (source.containerId !== null) {
       oldByContainer.set(
         source.containerId,
-        (oldByContainer.get(source.containerId) ?? new MoneyDecimal(0)).plus(source.weightKg),
+        (oldByContainer.get(source.containerId) ?? new MoneyDecimal(0)).plus(source.weightKg)
       );
     }
     if (source.supplierId !== null && source.sourceBatchId === null) {
@@ -96,17 +100,21 @@ export async function prepareMixSourceEditReview(
     if (source.sourceBatchId !== null) {
       oldByBatch.set(
         source.sourceBatchId,
-        (oldByBatch.get(source.sourceBatchId) ?? new MoneyDecimal(0)).plus(source.weightKg),
+        (oldByBatch.get(source.sourceBatchId) ?? new MoneyDecimal(0)).plus(source.weightKg)
       );
     }
   }
 
   if (batch.deletedAt) warnings.push("Deleted batches cannot have their sources edited.");
   if (!["OPEN", "ACTIVE", "CARRY_FORWARD"].includes(batch.status)) {
-    warnings.push("This batch has been completed or closed. Review-only: historical output and accounting must be reconciled first.");
+    warnings.push(
+      "This batch has been completed or closed. Review-only: historical output and accounting must be reconciled first."
+    );
   }
   if (toMoney(batch.usedKg).greaterThan(0)) {
-    warnings.push("The batch has recorded production/usage; source edits require downstream bale and accounting reconciliation.");
+    warnings.push(
+      "The batch has recorded production/usage; source edits require downstream bale and accounting reconciliation."
+    );
   }
   if (toMoney(proposed.totalWeightKg).lessThan(toMoney(batch.usedKg))) {
     warnings.push("Proposed materials do not cover already-used kilograms.");
@@ -131,32 +139,43 @@ export async function prepareMixSourceEditReview(
   // Do not rely on usedKg alone: legacy imports and partial pressing can have
   // downstream records even when a batch's usage counter has not caught up.
   const [linkedBales, linkedPressing, linkedUsage, linkedDownstreamMix] = await Promise.all([
-    executor.select({ id: factoryBales.id }).from(factoryBales).where(and(
-      eq(factoryBales.companyId, companyId),
-      eq(factoryBales.mixBatchId, batch.id),
-      isNull(factoryBales.deletedAt),
-    )).limit(1),
-    executor.select({ id: factoryPressingBatches.id }).from(factoryPressingBatches).where(and(
-      eq(factoryPressingBatches.companyId, companyId),
-      eq(factoryPressingBatches.mixBatchId, batch.id),
-    )).limit(1),
-    executor.select({ id: factoryDailyUsages.id }).from(factoryDailyUsages).where(and(
-      eq(factoryDailyUsages.companyId, companyId),
-      eq(factoryDailyUsages.mixBatchId, batch.id),
-    )).limit(1),
+    executor
+      .select({ id: factoryBales.id })
+      .from(factoryBales)
+      .where(
+        and(
+          eq(factoryBales.companyId, companyId),
+          eq(factoryBales.mixBatchId, batch.id),
+          isNull(factoryBales.deletedAt)
+        )
+      )
+      .limit(1),
+    executor
+      .select({ id: factoryPressingBatches.id })
+      .from(factoryPressingBatches)
+      .where(and(eq(factoryPressingBatches.companyId, companyId), eq(factoryPressingBatches.mixBatchId, batch.id)))
+      .limit(1),
+    executor
+      .select({ id: factoryDailyUsages.id })
+      .from(factoryDailyUsages)
+      .where(and(eq(factoryDailyUsages.companyId, companyId), eq(factoryDailyUsages.mixBatchId, batch.id)))
+      .limit(1),
     // Also protect against circular mix source references when an old usage
     // counter failed to reflect consumption by another mix.
-    executor.select({ id: factoryMixBatchSources.id }).from(factoryMixBatchSources).where(
-      eq(factoryMixBatchSources.sourceBatchId, batch.id),
-    ).limit(1),
+    executor
+      .select({ id: factoryMixBatchSources.id })
+      .from(factoryMixBatchSources)
+      .where(eq(factoryMixBatchSources.sourceBatchId, batch.id))
+      .limit(1),
   ]);
   if (linkedBales.length || linkedPressing.length || linkedUsage.length || linkedDownstreamMix.length) {
-    warnings.push("This mix has dependent bale, pressing, consumption or downstream mix records; reconcile them before editing sources.");
+    warnings.push(
+      "This mix has dependent bale, pressing, consumption or downstream mix records; reconcile them before editing sources."
+    );
   }
-  const supplierIds = [...new Set([
-    ...oldBySupplier.keys(),
-    ...proposed.supplierSources.map((item) => item.supplierId!),
-  ])].sort((a, b) => a - b);
+  const supplierIds = [
+    ...new Set([...oldBySupplier.keys(), ...proposed.supplierSources.map((item) => item.supplierId!)]),
+  ].sort((a, b) => a - b);
   const proposedSuppliers = new Map(proposed.supplierSources.map((s) => [s.supplierId!, toMoney(s.weightKg)]));
   const proposedBatches = new Map(proposed.batchSources.map((s) => [s.sourceBatchId!, toMoney(s.weightKg)]));
   let estimatedCost = new MoneyDecimal(0);
@@ -172,7 +191,9 @@ export async function prepareMixSourceEditReview(
     let releasedKg = new MoneyDecimal(0);
     for (const old of oldBySupplier.get(supplierId) ?? []) {
       if (old.containerId === null) {
-        warnings.push(`Supplier #${supplierId} has unallocated legacy/manual sources; their original stock impact cannot be proven for automatic reversal.`);
+        warnings.push(
+          `Supplier #${supplierId} has unallocated legacy/manual sources; their original stock impact cannot be proven for automatic reversal.`
+        );
         continue;
       }
       const row = rowByContainer.get(old.containerId);
@@ -187,11 +208,13 @@ export async function prepareMixSourceEditReview(
     }
     const free = raw.rows.reduce(
       (sum, row) => sum.plus(toMoney(row.receivedKg).minus(toMoney(row.usedKg))),
-      new MoneyDecimal(0),
+      new MoneyDecimal(0)
     );
     const nextKg = proposedSuppliers.get(supplierId) ?? new MoneyDecimal(0);
     if (!raw.rows.length && nextKg.gt(0)) {
-      warnings.push(`Supplier #${supplierId} has no raw-stock allocation rows; its edit needs a separately reviewed manual-material reconciliation.`);
+      warnings.push(
+        `Supplier #${supplierId} has no raw-stock allocation rows; its edit needs a separately reviewed manual-material reconciliation.`
+      );
     }
     if (raw.rows.length && nextKg.gt(free.plus(releasedKg).plus(0.001))) {
       warnings.push(`Supplier #${supplierId} does not have enough available kilograms for the proposed allocation.`);
@@ -205,9 +228,12 @@ export async function prepareMixSourceEditReview(
       }
     }
     snapshot.push({
-      kind: "supplier", id: supplierId, rate: rate?.toFixed(8) ?? null,
+      kind: "supplier",
+      id: supplierId,
+      rate: rate?.toFixed(8) ?? null,
       stock: raw.rows.map((row) => ({
-        id: row.id, containerId: row.containerId,
+        id: row.id,
+        containerId: row.containerId,
         received: toMoney(row.receivedKg).toFixed(3),
         used: toMoney(row.usedKg).toFixed(3),
         usdRate: row.costPerKgUsd == null ? null : toMoney(row.costPerKgUsd).toFixed(7),
@@ -221,9 +247,16 @@ export async function prepareMixSourceEditReview(
       warnings.push("A batch cannot use itself as a source.");
       continue;
     }
-    const q = executor.select().from(factoryMixBatches).where(
-      and(eq(factoryMixBatches.id, upstreamId), eq(factoryMixBatches.companyId, companyId), isNull(factoryMixBatches.deletedAt)),
-    );
+    const q = executor
+      .select()
+      .from(factoryMixBatches)
+      .where(
+        and(
+          eq(factoryMixBatches.id, upstreamId),
+          eq(factoryMixBatches.companyId, companyId),
+          isNull(factoryMixBatches.deletedAt)
+        )
+      );
     const [upstream] = await (opts.forUpdate ? q.for("update") : q);
     if (!upstream) {
       warnings.push(`Source batch #${upstreamId} is unavailable or belongs to a different company.`);
@@ -232,7 +265,9 @@ export async function prepareMixSourceEditReview(
     const oldKg = oldByBatch.get(upstreamId) ?? new MoneyDecimal(0);
     const requestedKg = proposedBatches.get(upstreamId) ?? new MoneyDecimal(0);
     if (!["OPEN", "ACTIVE", "CARRY_FORWARD"].includes(upstream.status) && !requestedKg.eq(oldKg)) {
-      warnings.push(`Source batch ${upstream.batchCode} is completed/closed; its historical usage cannot be changed in this workflow.`);
+      warnings.push(
+        `Source batch ${upstream.batchCode} is completed/closed; its historical usage cannot be changed in this workflow.`
+      );
     }
     if (toMoney(upstream.usedKg).lt(oldKg)) {
       warnings.push(`Source batch ${upstream.batchCode} has less used material than this mix references.`);
@@ -249,25 +284,44 @@ export async function prepareMixSourceEditReview(
       }
     }
     snapshot.push({
-      kind: "batch", id: upstreamId, updatedAt: upstream.updatedAt?.toISOString() ?? null,
-      weight: upstream.totalWeightKg, used: upstream.usedKg, rate: upstream.costPerKg,
+      kind: "batch",
+      id: upstreamId,
+      updatedAt: upstream.updatedAt?.toISOString() ?? null,
+      weight: upstream.totalWeightKg,
+      used: upstream.usedKg,
+      rate: upstream.costPerKg,
     });
   }
 
   const allowed = warnings.length === 0;
-  const normalizedOld = [...oldSources].sort((a, b) => a.id - b.id).map((row) => ({
-    id: row.id, supplierId: row.supplierId, sourceBatchId: row.sourceBatchId,
-    containerId: row.containerId, kg: row.weightKg, rate: row.costPerKg, cost: row.totalCost,
-  }));
+  const normalizedOld = [...oldSources]
+    .sort((a, b) => a.id - b.id)
+    .map((row) => ({
+      id: row.id,
+      supplierId: row.supplierId,
+      sourceBatchId: row.sourceBatchId,
+      containerId: row.containerId,
+      kg: row.weightKg,
+      rate: row.costPerKg,
+      cost: row.totalCost,
+    }));
   const reviewHash = mixEditReviewHash({
-    companyId, batchId: batch.id,
+    companyId,
+    batchId: batch.id,
     state: {
-      status: batch.status, updatedAt: batch.updatedAt?.toISOString() ?? null,
-      kg: batch.totalWeightKg, used: batch.usedKg, cost: batch.totalCost,
-      date: batch.batchDate ?? null, name: batch.name ?? null, notes: batch.notes ?? null,
+      status: batch.status,
+      updatedAt: batch.updatedAt?.toISOString() ?? null,
+      kg: batch.totalWeightKg,
+      used: batch.usedKg,
+      cost: batch.totalCost,
+      date: batch.batchDate ?? null,
+      name: batch.name ?? null,
+      notes: batch.notes ?? null,
     },
-    old: normalizedOld, proposed,
-    live: snapshot, reason: reason.trim(),
+    old: normalizedOld,
+    proposed,
+    live: snapshot,
+    reason: reason.trim(),
     proposedBatchDate: opts.proposedBatchDate ?? batch.batchDate ?? null,
   });
   return {

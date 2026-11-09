@@ -100,17 +100,25 @@ interface MixPhase4Audit {
     supplierOnlySourceRows: number;
   };
   rawStockExceptions: Array<{
-    rawStockId: number; containerNumber: string | null;
-    excessUsedKg: string; supplierCoverage: string;
+    rawStockId: number;
+    containerNumber: string | null;
+    excessUsedKg: string;
+    supplierCoverage: string;
   }>;
   ownershipExceptions: Array<{
-    sourceId: number; batchCode: string; pricingSupplierId: number | null;
+    sourceId: number;
+    batchCode: string;
+    pricingSupplierId: number | null;
     recordedInventorySupplierId: number | null;
     currentContainerSupplierId: number | null;
   }>;
   adjustmentEvidence: Array<{
-    adjustmentId: number; supplierName: string | null; date: string;
-    kg: string; currency: string; classification: string;
+    adjustmentId: number;
+    supplierName: string | null;
+    date: string;
+    kg: string;
+    currency: string;
+    classification: string;
   }>;
 }
 
@@ -152,8 +160,13 @@ interface MixPhase6LifecycleAudit {
     batchesWithDailyUsage: number;
   };
   batches: Array<{
-    batchId: number; batchCode: string; status: string; deleted: boolean;
-    totalKg: string; usedKg: string; remainingKg: string;
+    batchId: number;
+    batchCode: string;
+    status: string;
+    deleted: boolean;
+    totalKg: string;
+    usedKg: string;
+    remainingKg: string;
     classification: string;
     issues: Array<{ code: string; severity: string; detail: string }>;
   }>;
@@ -164,7 +177,13 @@ interface MixPhase7MonitorStatus {
   initialized: boolean;
   lastSuccessAt: string | null;
   stale: boolean;
-  summary: { critical: number; warning: number; review: number; total: number; suppressedCurrentRateDrift: boolean } | null;
+  summary: {
+    critical: number;
+    warning: number;
+    review: number;
+    total: number;
+    suppressedCurrentRateDrift: boolean;
+  } | null;
   unreadAlerts: number;
   monitoringEnabled: boolean;
   nextCheck: string;
@@ -212,7 +231,9 @@ export function MixBatchList({
   const recordChanges = useExistingRecordChangeAccess();
   const recordChangeReason = recordChanges.reason ?? undefined;
   const selectedCompany = useOptionalCompany()?.selectedCompany;
-  const selectedRole = String(selectedCompany?.role ?? "").trim().toLowerCase();
+  const selectedRole = String(selectedCompany?.role ?? "")
+    .trim()
+    .toLowerCase();
   const canAuditHistoricalMixes = ["admin", "owner", "developer", "dev"].includes(selectedRole);
   const monitorCompanyId = selectedCompany?.id ?? null;
   const [showAllMixBatches, setShowAllMixBatches] = useState(false);
@@ -252,7 +273,8 @@ export function MixBatchList({
       inFlight = true;
       try {
         const response = await fetch("/api/factory/mix-batches?profile=integrity-monitor", {
-          credentials: "same-origin", cache: "no-store",
+          credentials: "same-origin",
+          cache: "no-store",
         });
         if (!response.ok) throw new Error("Monitor status unavailable.");
         const data = (await response.json()) as MixPhase7MonitorStatus;
@@ -262,18 +284,26 @@ export function MixBatchList({
         }
       } catch (error) {
         if (active) setMonitorRefreshError(error instanceof Error ? error.message : "Monitor status unavailable.");
-      } finally { inFlight = false; }
+      } finally {
+        inFlight = false;
+      }
     };
     void refresh();
-    const interval = setInterval(() => { void refresh(); }, 300_000);
-    return () => { active = false; clearInterval(interval); };
+    const interval = setInterval(() => {
+      void refresh();
+    }, 300_000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, [canAuditHistoricalMixes, monitorCompanyId]);
 
   const handleRefreshMonitor = async () => {
     setIsRefreshingMonitor(true);
     try {
       const response = await fetch("/api/factory/mix-batches?profile=integrity-monitor", {
-        credentials: "same-origin", cache: "no-store",
+        credentials: "same-origin",
+        cache: "no-store",
       });
       if (!response.ok) throw new Error("Could not retrieve Factory mix monitor status.");
       const data = (await response.json()) as MixPhase7MonitorStatus;
@@ -284,7 +314,9 @@ export function MixBatchList({
       const message = error instanceof Error ? error.message : "Please retry.";
       setMonitorRefreshError(message);
       toast({ title: "Integrity status unavailable", description: message, variant: "destructive" });
-    } finally { setIsRefreshingMonitor(false); }
+    } finally {
+      setIsRefreshingMonitor(false);
+    }
   };
 
   const handleExportExcel = async () => {
@@ -320,11 +352,15 @@ export function MixBatchList({
     setIsAuditingMixes(true);
     try {
       const res = await fetch("/api/factory/mix-batches?profile=historical-audit&includeSources=false", {
-        credentials: "same-origin", cache: "no-store",
+        credentials: "same-origin",
+        cache: "no-store",
       });
       if (!res.ok) throw new Error("Could not load the historical audit.");
       setHistoricalAudit((await res.json()) as MixHistoricalAuditPreview);
-      toast({ title: "Historical audit ready", description: "All active and deleted mix batches were checked without changing any records." });
+      toast({
+        title: "Historical audit ready",
+        description: "All active and deleted mix batches were checked without changing any records.",
+      });
     } catch (error) {
       toast({
         title: "Historical audit failed",
@@ -339,10 +375,10 @@ export function MixBatchList({
   const handleDownloadHistoricalAudit = async (level: "batches" | "sources") => {
     setAuditExportLevel(level);
     try {
-      const res = await fetch(
-        "/api/factory/mix-batches?profile=historical-audit&format=csv&level=" + level,
-        { credentials: "same-origin", cache: "no-store" }
-      );
+      const res = await fetch("/api/factory/mix-batches?profile=historical-audit&format=csv&level=" + level, {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
       if (!res.ok) throw new Error("Historical audit export could not be generated.");
       const blob = await res.blob();
       const href = URL.createObjectURL(blob);
@@ -354,7 +390,11 @@ export function MixBatchList({
       link.remove();
       URL.revokeObjectURL(href);
     } catch (error) {
-      toast({ title: "Audit export failed", description: error instanceof Error ? error.message : "Please retry.", variant: "destructive" });
+      toast({
+        title: "Audit export failed",
+        description: error instanceof Error ? error.message : "Please retry.",
+        variant: "destructive",
+      });
     } finally {
       setAuditExportLevel(null);
     }
@@ -364,23 +404,33 @@ export function MixBatchList({
     setIsAuditingProvenance(true);
     try {
       const res = await fetch("/api/factory/mix-batches?profile=raw-provenance-audit", {
-        credentials: "same-origin", cache: "no-store",
+        credentials: "same-origin",
+        cache: "no-store",
       });
       if (!res.ok) throw new Error("Unable to load the raw-material provenance report.");
       setPhase4Audit((await res.json()) as MixPhase4Audit);
-      toast({ title: "Raw stock and supplier audit ready", description: "No inventory, pricing or accounting values were changed." });
+      toast({
+        title: "Raw stock and supplier audit ready",
+        description: "No inventory, pricing or accounting values were changed.",
+      });
     } catch (error) {
-      toast({ title: "Provenance audit failed", description: error instanceof Error ? error.message : "Please retry.", variant: "destructive" });
-    } finally { setIsAuditingProvenance(false); }
+      toast({
+        title: "Provenance audit failed",
+        description: error instanceof Error ? error.message : "Please retry.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAuditingProvenance(false);
+    }
   };
 
   const handleDownloadProvenanceAudit = async (section: "stock" | "ownership" | "adjustments") => {
     setProvenanceExport(section);
     try {
-      const res = await fetch(
-        "/api/factory/mix-batches?profile=raw-provenance-audit&format=csv&section=" + section,
-        { credentials: "same-origin", cache: "no-store" }
-      );
+      const res = await fetch("/api/factory/mix-batches?profile=raw-provenance-audit&format=csv&section=" + section, {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
       if (!res.ok) throw new Error("Could not generate raw-material audit export.");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -392,29 +442,46 @@ export function MixBatchList({
       link.remove();
       URL.revokeObjectURL(url);
     } catch (error) {
-      toast({ title: "Export failed", description: error instanceof Error ? error.message : "Please retry.", variant: "destructive" });
-    } finally { setProvenanceExport(null); }
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please retry.",
+        variant: "destructive",
+      });
+    } finally {
+      setProvenanceExport(null);
+    }
   };
 
   const handleRunDownstreamAudit = async () => {
     setIsAuditingDownstream(true);
     try {
       const response = await fetch("/api/factory/mix-batches?profile=downstream-audit", {
-        credentials: "same-origin", cache: "no-store",
+        credentials: "same-origin",
+        cache: "no-store",
       });
       if (!response.ok) throw new Error("Could not load production/bale/GL reconciliation.");
       setPhase5Audit((await response.json()) as MixPhase5Audit);
-      toast({ title: "Bale & GL audit ready", description: "All mixes were checked without changing costs, sales or accounting." });
+      toast({
+        title: "Bale & GL audit ready",
+        description: "All mixes were checked without changing costs, sales or accounting.",
+      });
     } catch (error) {
-      toast({ title: "Bale & GL audit failed", description: error instanceof Error ? error.message : "Please retry.", variant: "destructive" });
-    } finally { setIsAuditingDownstream(false); }
+      toast({
+        title: "Bale & GL audit failed",
+        description: error instanceof Error ? error.message : "Please retry.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAuditingDownstream(false);
+    }
   };
 
   const handleExportDownstreamAudit = async () => {
     setIsExportingDownstream(true);
     try {
       const response = await fetch("/api/factory/mix-batches?profile=downstream-audit&format=csv", {
-        credentials: "same-origin", cache: "no-store",
+        credentials: "same-origin",
+        cache: "no-store",
       });
       if (!response.ok) throw new Error("Could not generate the downstream reconciliation export.");
       const blob = await response.blob();
@@ -427,29 +494,46 @@ export function MixBatchList({
       link.remove();
       URL.revokeObjectURL(url);
     } catch (error) {
-      toast({ title: "Export failed", description: error instanceof Error ? error.message : "Please retry.", variant: "destructive" });
-    } finally { setIsExportingDownstream(false); }
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Please retry.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExportingDownstream(false);
+    }
   };
 
   const handleRunLifecycleAudit = async () => {
     setIsAuditingLifecycle(true);
     try {
       const response = await fetch("/api/factory/mix-batches?profile=lifecycle-audit", {
-        credentials: "same-origin", cache: "no-store",
+        credentials: "same-origin",
+        cache: "no-store",
       });
       if (!response.ok) throw new Error("Cannot load the used-kg and carry-forward reconciliation.");
       setPhase6Audit((await response.json()) as MixPhase6LifecycleAudit);
-      toast({ title: "Mix lifecycle audit ready", description: "The full active and deleted batch history was inspected without changing quantities." });
+      toast({
+        title: "Mix lifecycle audit ready",
+        description: "The full active and deleted batch history was inspected without changing quantities.",
+      });
     } catch (error) {
-      toast({ title: "Lifecycle audit failed", description: error instanceof Error ? error.message : "Please retry.", variant: "destructive" });
-    } finally { setIsAuditingLifecycle(false); }
+      toast({
+        title: "Lifecycle audit failed",
+        description: error instanceof Error ? error.message : "Please retry.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAuditingLifecycle(false);
+    }
   };
 
   const handleExportLifecycleAudit = async () => {
     setIsExportingLifecycle(true);
     try {
       const response = await fetch("/api/factory/mix-batches?profile=lifecycle-audit&format=csv", {
-        credentials: "same-origin", cache: "no-store",
+        credentials: "same-origin",
+        cache: "no-store",
       });
       if (!response.ok) throw new Error("Cannot generate the mix lifecycle CSV.");
       const blob = await response.blob();
@@ -462,8 +546,14 @@ export function MixBatchList({
       anchor.remove();
       URL.revokeObjectURL(url);
     } catch (error) {
-      toast({ title: "Lifecycle export failed", description: error instanceof Error ? error.message : "Please retry.", variant: "destructive" });
-    } finally { setIsExportingLifecycle(false); }
+      toast({
+        title: "Lifecycle export failed",
+        description: error instanceof Error ? error.message : "Please retry.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExportingLifecycle(false);
+    }
   };
 
   const BATCH_PREVIEW_COUNT = 15;
@@ -477,7 +567,6 @@ export function MixBatchList({
   const { totalWeightKg: sumTotal, costPerKg: blendedCost } = summarizeRecordedMixBatches(mixBatches);
   const sumUsed = mixBatches.reduce((sum, batch) => sum + (parseFloat(batch.usedKg) || 0), 0);
   const sumRemaining = mixBatches.reduce((sum, batch) => sum + (parseFloat(batch.remainingKg) || 0), 0);
-
 
   return (
     <Card
@@ -566,71 +655,148 @@ export function MixBatchList({
         </div>
 
         {canAuditHistoricalMixes && (
-        <div className="flex w-full flex-col gap-2 rounded-xl border border-border/70 bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between" data-testid="mix-historical-audit-controls">
-          <div>
-            <p className="text-sm font-semibold">Historical Mix Cost Integrity</p>
-            <p className="text-xs text-muted-foreground">Read-only audit of every active and deleted batch; no automatic repricing.</p>
+          <div
+            className="flex w-full flex-col gap-2 rounded-xl border border-border/70 bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between"
+            data-testid="mix-historical-audit-controls"
+          >
+            <div>
+              <p className="text-sm font-semibold">Historical Mix Cost Integrity</p>
+              <p className="text-xs text-muted-foreground">
+                Read-only audit of every active and deleted batch; no automatic repricing.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isAuditingMixes}
+                onClick={handleRunHistoricalAudit}
+                data-testid="button-run-mix-historical-audit"
+                className="gap-2"
+              >
+                {isAuditingMixes ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                {isAuditingMixes ? "Auditing…" : "Audit All Batches"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={auditExportLevel !== null}
+                onClick={() => handleDownloadHistoricalAudit("batches")}
+                className="gap-2"
+                data-testid="button-download-mix-batch-audit"
+              >
+                <Download className="h-4 w-4" /> Batch CSV
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={auditExportLevel !== null}
+                onClick={() => handleDownloadHistoricalAudit("sources")}
+                className="gap-2"
+                data-testid="button-download-mix-source-audit"
+              >
+                <Download className="h-4 w-4" /> Source CSV
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isAuditingDownstream}
+                onClick={handleRunDownstreamAudit}
+                className="gap-2"
+                data-testid="button-audit-mix-bale-gl"
+              >
+                {isAuditingDownstream ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ShieldCheck className="h-4 w-4" />
+                )}
+                {isAuditingDownstream ? "Auditing…" : "Audit Bale & GL"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isExportingDownstream}
+                onClick={handleExportDownstreamAudit}
+                className="gap-2"
+                data-testid="button-export-mix-bale-gl-audit"
+              >
+                <Download className="h-4 w-4" /> Bale/GL CSV
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isAuditingLifecycle}
+                onClick={handleRunLifecycleAudit}
+                className="gap-2"
+                data-testid="button-audit-mix-lifecycle"
+              >
+                {isAuditingLifecycle ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ShieldCheck className="h-4 w-4" />
+                )}
+                {isAuditingLifecycle ? "Auditing…" : "Audit Used KG"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isExportingLifecycle}
+                onClick={handleExportLifecycleAudit}
+                className="gap-2"
+                data-testid="button-export-mix-lifecycle-audit"
+              >
+                <Download className="h-4 w-4" /> Lifecycle CSV
+              </Button>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" size="sm" disabled={isAuditingMixes} onClick={handleRunHistoricalAudit}
-              data-testid="button-run-mix-historical-audit" className="gap-2">
-              {isAuditingMixes ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-              {isAuditingMixes ? "Auditing…" : "Audit All Batches"}
-            </Button>
-            <Button type="button" variant="outline" size="sm" disabled={auditExportLevel !== null}
-              onClick={() => handleDownloadHistoricalAudit("batches")} className="gap-2"
-              data-testid="button-download-mix-batch-audit">
-              <Download className="h-4 w-4" /> Batch CSV
-            </Button>
-            <Button type="button" variant="outline" size="sm" disabled={auditExportLevel !== null}
-              onClick={() => handleDownloadHistoricalAudit("sources")} className="gap-2"
-              data-testid="button-download-mix-source-audit">
-              <Download className="h-4 w-4" /> Source CSV
-            </Button>
-            <Button type="button" variant="outline" size="sm" disabled={isAuditingDownstream}
-              onClick={handleRunDownstreamAudit} className="gap-2"
-              data-testid="button-audit-mix-bale-gl">
-              {isAuditingDownstream ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-              {isAuditingDownstream ? "Auditing…" : "Audit Bale & GL"}
-            </Button>
-            <Button type="button" variant="outline" size="sm" disabled={isExportingDownstream}
-              onClick={handleExportDownstreamAudit} className="gap-2"
-              data-testid="button-export-mix-bale-gl-audit">
-              <Download className="h-4 w-4" /> Bale/GL CSV
-            </Button>
-            <Button type="button" variant="outline" size="sm" disabled={isAuditingLifecycle}
-              onClick={handleRunLifecycleAudit} className="gap-2"
-              data-testid="button-audit-mix-lifecycle">
-              {isAuditingLifecycle ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-              {isAuditingLifecycle ? "Auditing…" : "Audit Used KG"}
-            </Button>
-            <Button type="button" variant="outline" size="sm" disabled={isExportingLifecycle}
-              onClick={handleExportLifecycleAudit} className="gap-2"
-              data-testid="button-export-mix-lifecycle-audit">
-              <Download className="h-4 w-4" /> Lifecycle CSV
-            </Button>
-          </div>
-        </div>
         )}
 
         {canAuditHistoricalMixes && (
-          <div className="flex w-full flex-col gap-2 rounded-xl border border-border/70 bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between" data-testid="mix-phase4-audit-controls">
+          <div
+            className="flex w-full flex-col gap-2 rounded-xl border border-border/70 bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between"
+            data-testid="mix-phase4-audit-controls"
+          >
             <div>
               <p className="text-sm font-semibold">Raw Stock & Supplier Provenance</p>
-              <p className="text-xs text-muted-foreground">Checks container ownership, adjustment-backed usage and historical valuation evidence.</p>
+              <p className="text-xs text-muted-foreground">
+                Checks container ownership, adjustment-backed usage and historical valuation evidence.
+              </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" size="sm" disabled={isAuditingProvenance}
-                onClick={handleRunProvenanceAudit} data-testid="button-audit-mix-raw-provenance">
-                {isAuditingProvenance ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isAuditingProvenance}
+                onClick={handleRunProvenanceAudit}
+                data-testid="button-audit-mix-raw-provenance"
+              >
+                {isAuditingProvenance ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <ShieldCheck className="mr-2 h-4 w-4" />
+                )}
                 {isAuditingProvenance ? "Auditing…" : "Audit Raw Stock"}
               </Button>
               {(["stock", "ownership", "adjustments"] as const).map((section) => (
-                <Button key={section} type="button" variant="outline" size="sm"
+                <Button
+                  key={section}
+                  type="button"
+                  variant="outline"
+                  size="sm"
                   disabled={provenanceExport !== null}
                   onClick={() => handleDownloadProvenanceAudit(section)}
-                  data-testid={`button-export-mix-${section}-audit`}>
-                  <Download className="mr-1 h-4 w-4" /> {section === "stock" ? "Stock CSV" : section === "ownership" ? "Owner CSV" : "Adjustments CSV"}
+                  data-testid={`button-export-mix-${section}-audit`}
+                >
+                  <Download className="mr-1 h-4 w-4" />{" "}
+                  {section === "stock" ? "Stock CSV" : section === "ownership" ? "Owner CSV" : "Adjustments CSV"}
                 </Button>
               ))}
             </div>
@@ -649,12 +815,25 @@ export function MixBatchList({
 
       <CardContent className="min-w-0 p-4 sm:p-5">
         {canAuditHistoricalMixes && (
-          <div className="mb-4 space-y-3 rounded-xl border border-border/70 bg-muted/20 p-4" data-testid="mix-phase7-monitor-status">
+          <div
+            className="mb-4 space-y-3 rounded-xl border border-border/70 bg-muted/20 p-4"
+            data-testid="mix-phase7-monitor-status"
+          >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold">Phase 7 · Automatic Mix Integrity Monitoring</p>
-              <Button type="button" variant="outline" size="sm" onClick={handleRefreshMonitor}
-                disabled={isRefreshingMonitor} data-testid="button-refresh-mix-integrity-status">
-                {isRefreshingMonitor ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleRefreshMonitor}
+                disabled={isRefreshingMonitor}
+                data-testid="button-refresh-mix-integrity-status"
+              >
+                {isRefreshingMonitor ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <ShieldCheck className="mr-2 h-4 w-4" />
+                )}
                 Refresh Status
               </Button>
             </div>
@@ -664,32 +843,44 @@ export function MixBatchList({
             ) : (
               <>
                 <p className="text-xs text-muted-foreground">
-                  {phase7Monitor.monitoringEnabled ? "Daily 01:35 UTC (server scheduler enabled)" : "Automatic checking disabled in server settings"}.
-                  {" "}{phase7Monitor.initialized
+                  {phase7Monitor.monitoringEnabled
+                    ? "Daily 01:35 UTC (server scheduler enabled)"
+                    : "Automatic checking disabled in server settings"}
+                  .{" "}
+                  {phase7Monitor.initialized
                     ? "Last successful check: " + new Date(phase7Monitor.lastSuccessAt!).toLocaleString()
                     : "Awaiting the first successful scan to establish a historical baseline."}
                 </p>
                 {phase7Monitor.stale && (
                   <p role="alert" className="text-xs font-semibold text-destructive">
-                    Last successful scan is over 48 hours old. Monitoring findings may be outdated; review Factory Alerts and server logs.
+                    Last successful scan is over 48 hours old. Monitoring findings may be outdated; review Factory
+                    Alerts and server logs.
                   </p>
                 )}
                 {phase7Monitor.summary && (
                   <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-                    <div><p className="text-xs text-muted-foreground">Critical findings</p>
-                      <p className="font-mono font-bold">{phase7Monitor.summary.critical}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Warnings</p>
-                      <p className="font-mono font-bold">{phase7Monitor.summary.warning}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Evidence reviews</p>
-                      <p className="font-mono font-bold">{phase7Monitor.summary.review}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Unread monitor alerts</p>
-                      <p className="font-mono font-bold">{phase7Monitor.unreadAlerts}</p></div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Critical findings</p>
+                      <p className="font-mono font-bold">{phase7Monitor.summary.critical}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Warnings</p>
+                      <p className="font-mono font-bold">{phase7Monitor.summary.warning}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Evidence reviews</p>
+                      <p className="font-mono font-bold">{phase7Monitor.summary.review}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Unread monitor alerts</p>
+                      <p className="font-mono font-bold">{phase7Monitor.unreadAlerts}</p>
+                    </div>
                   </div>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  Historical defects remain visible in the detailed audits. New or worsened findings appear in Factory Alerts;
-                  ordinary later supplier-rate changes do not count as saved-batch cost errors.
-                  No automatic revaluation, historical write-off or accounting posting.
+                  Historical defects remain visible in the detailed audits. New or worsened findings appear in Factory
+                  Alerts; ordinary later supplier-rate changes do not count as saved-batch cost errors. No automatic
+                  revaluation, historical write-off or accounting posting.
                 </p>
               </>
             )}
@@ -702,32 +893,47 @@ export function MixBatchList({
               <span className="text-xs text-muted-foreground">Read-only · {phase6Audit.generatedAt.slice(0, 10)}</span>
             </div>
             <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-              <div><p className="text-xs text-muted-foreground">Completed with remaining kg</p>
-                <p className="font-mono font-bold">{phase6Audit.summary.completedWithRemainderBatches}</p></div>
-              <div><p className="text-xs text-muted-foreground">Total remaining kg</p>
-                <p className="font-mono font-bold">{formatNumber(Number(phase6Audit.summary.completedRemainderKg), 3)}</p></div>
-              <div><p className="text-xs text-muted-foreground">Over-consumed batches</p>
-                <p className="font-mono font-bold">{phase6Audit.summary.overusedBatches}</p></div>
-              <div><p className="text-xs text-muted-foreground">Carry-forward integrity flags</p>
-                <p className="font-mono font-bold">{phase6Audit.summary.carryForwardExceptions}</p></div>
+              <div>
+                <p className="text-xs text-muted-foreground">Completed with remaining kg</p>
+                <p className="font-mono font-bold">{phase6Audit.summary.completedWithRemainderBatches}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Total remaining kg</p>
+                <p className="font-mono font-bold">
+                  {formatNumber(Number(phase6Audit.summary.completedRemainderKg), 3)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Over-consumed batches</p>
+                <p className="font-mono font-bold">{phase6Audit.summary.overusedBatches}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Carry-forward integrity flags</p>
+                <p className="font-mono font-bold">{phase6Audit.summary.carryForwardExceptions}</p>
+              </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Existing completed discrepancies are protected. Remaining kilograms are not automatically
-              treated as physical stock or discarded waste. Verify original production and adjustments first.
-              The CSV contains every exception and its recorded used/total kilograms.
+              Existing completed discrepancies are protected. Remaining kilograms are not automatically treated as
+              physical stock or discarded waste. Verify original production and adjustments first. The CSV contains
+              every exception and its recorded used/total kilograms.
             </p>
-            {phase6Audit.batches.filter((row) => !row.deleted && row.issues.some((issue) => issue.severity !== "informational")).length > 0 && (
+            {phase6Audit.batches.filter(
+              (row) => !row.deleted && row.issues.some((issue) => issue.severity !== "informational")
+            ).length > 0 && (
               <div className="space-y-1 text-xs">
                 <p className="font-semibold">First 12 historical quantity exceptions</p>
-                {phase6Audit.batches.filter((row) => !row.deleted &&
-                  row.issues.some((issue) => issue.severity !== "informational")).slice(0, 12).map((row) => (
-                  <p key={row.batchId} className="font-mono text-muted-foreground">
-                    <span className="text-foreground">{row.batchCode}</span>
-                    {" · "}total {formatNumber(Number(row.totalKg), 3)} kg
-                    {" · "}used {formatNumber(Number(row.usedKg), 3)} kg
-                    {" · "}{row.issues.map((issue) => issue.code).join(", ")}
-                  </p>
-                ))}
+                {phase6Audit.batches
+                  .filter((row) => !row.deleted && row.issues.some((issue) => issue.severity !== "informational"))
+                  .slice(0, 12)
+                  .map((row) => (
+                    <p key={row.batchId} className="font-mono text-muted-foreground">
+                      <span className="text-foreground">{row.batchCode}</span>
+                      {" · "}total {formatNumber(Number(row.totalKg), 3)} kg
+                      {" · "}used {formatNumber(Number(row.usedKg), 3)} kg
+                      {" · "}
+                      {row.issues.map((issue) => issue.code).join(", ")}
+                    </p>
+                  ))}
               </div>
             )}
           </div>
@@ -739,19 +945,27 @@ export function MixBatchList({
               <span className="text-xs text-muted-foreground">Read-only · {phase5Audit.generatedAt.slice(0, 10)}</span>
             </div>
             <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-              <div><p className="text-xs text-muted-foreground">Consumed mixes without output links</p>
-                <p className="font-mono font-bold">{phase5Audit.summary.consumedMixesWithoutLineage}</p></div>
-              <div><p className="text-xs text-muted-foreground">Bales without mix link</p>
-                <p className="font-mono font-bold">{formatNumber(phase5Audit.summary.unlinkedBaleRows, 0)}</p></div>
-              <div><p className="text-xs text-muted-foreground">Bales marked sold</p>
-                <p className="font-mono font-bold">{formatNumber(phase5Audit.summary.soldBales, 0)}</p></div>
-              <div><p className="text-xs text-muted-foreground">Historical recost runs</p>
-                <p className="font-mono font-bold">{phase5Audit.summary.historicalBaleRecostRuns}</p></div>
+              <div>
+                <p className="text-xs text-muted-foreground">Consumed mixes without output links</p>
+                <p className="font-mono font-bold">{phase5Audit.summary.consumedMixesWithoutLineage}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Bales without mix link</p>
+                <p className="font-mono font-bold">{formatNumber(phase5Audit.summary.unlinkedBaleRows, 0)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Bales marked sold</p>
+                <p className="font-mono font-bold">{formatNumber(phase5Audit.summary.soldBales, 0)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Historical recost runs</p>
+                <p className="font-mono font-bold">{phase5Audit.summary.historicalBaleRecostRuns}</p>
+              </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Direct mix links: {phase5Audit.summary.balesLinkedDirectlyToMix};
-              through pressing: {phase5Audit.summary.balesLinkedViaPressing}.
-              No linked mismatch means no comparable evidence, not proof that unlinked bale costs are accurate.
+              Direct mix links: {phase5Audit.summary.balesLinkedDirectlyToMix}; through pressing:{" "}
+              {phase5Audit.summary.balesLinkedViaPressing}. No linked mismatch means no comparable evidence, not proof
+              that unlinked bale costs are accurate.
               {phase5Audit.summary.inventoryCutoverActive
                 ? " A perpetual-inventory cutover is active; atomic GL journal approval is required."
                 : " No active perpetual-inventory cutover was found in this snapshot."}
@@ -761,12 +975,15 @@ export function MixBatchList({
                 <p className="font-semibold">Historical recost blocked pending production evidence</p>
                 {phase5Audit.batches
                   .filter((batch) => batch.classification === "NO_RECORDED_PRODUCTION_LINEAGE")
-                  .slice(0, 10).map((batch) => (
+                  .slice(0, 10)
+                  .map((batch) => (
                     <p key={batch.batchId} className="font-mono text-muted-foreground">
                       {batch.batchCode} · {formatNumber(Number(batch.usedKg), 3)} kg used · no linked output
                     </p>
                   ))}
-                <p className="text-muted-foreground">Export Bale/GL CSV for the full batch list and exception classification.</p>
+                <p className="text-muted-foreground">
+                  Export Bale/GL CSV for the full batch list and exception classification.
+                </p>
               </div>
             )}
           </div>
@@ -778,60 +995,108 @@ export function MixBatchList({
               <span className="text-xs text-muted-foreground">Read-only · {phase4Audit.generatedAt.slice(0, 10)}</span>
             </div>
             <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-              <div><p className="text-xs text-muted-foreground">Receipt-row overdraws</p><p className="font-mono font-bold">{phase4Audit.summary.rawStockOverdrawRows}</p></div>
-              <div><p className="text-xs text-muted-foreground">Overdrawn kg</p><p className="font-mono font-bold">{formatNumber(Number(phase4Audit.summary.totalRawRowOverdrawKg))}</p></div>
-              <div><p className="text-xs text-muted-foreground">Source ownership reviews</p><p className="font-mono font-bold">{phase4Audit.summary.ownershipSourceExceptions}</p></div>
-              <div><p className="text-xs text-muted-foreground">Unclassified valued ADDs</p><p className="font-mono font-bold">{phase4Audit.summary.unclassifiedValuedAdds}</p></div>
+              <div>
+                <p className="text-xs text-muted-foreground">Receipt-row overdraws</p>
+                <p className="font-mono font-bold">{phase4Audit.summary.rawStockOverdrawRows}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Overdrawn kg</p>
+                <p className="font-mono font-bold">{formatNumber(Number(phase4Audit.summary.totalRawRowOverdrawKg))}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Source ownership reviews</p>
+                <p className="font-mono font-bold">{phase4Audit.summary.ownershipSourceExceptions}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Unclassified valued ADDs</p>
+                <p className="font-mono font-bold">{phase4Audit.summary.unclassifiedValuedAdds}</p>
+              </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Receipt-row negative balances can be covered by recorded supplier ADD adjustments.
-              Historical ownership and currency corrections require original supporting evidence; no automatic changes are made.
+              Receipt-row negative balances can be covered by recorded supplier ADD adjustments. Historical ownership
+              and currency corrections require original supporting evidence; no automatic changes are made.
             </p>
             {phase4Audit.rawStockExceptions.map((stock) => (
               <p className="text-xs text-muted-foreground" key={stock.rawStockId}>
-                <span className="font-mono text-foreground">{stock.containerNumber ?? `Raw stock #${stock.rawStockId}`}</span>
+                <span className="font-mono text-foreground">
+                  {stock.containerNumber ?? `Raw stock #${stock.rawStockId}`}
+                </span>
                 {" · "}Excess {formatNumber(Number(stock.excessUsedKg))} kg
-                {" · "}{stock.supplierCoverage === "POTENTIALLY_ADJUSTMENT_BACKED" ? "Potentially ADD-backed" : "Supplier shortage review"}
+                {" · "}
+                {stock.supplierCoverage === "POTENTIALLY_ADJUSTMENT_BACKED"
+                  ? "Potentially ADD-backed"
+                  : "Supplier shortage review"}
               </p>
             ))}
             <p className="text-xs text-muted-foreground">
               {phase4Audit.summary.ownershipAffectedBatches} batches have ownership references to verify;
-              {phase4Audit.summary.unclassifiedNonUsdAdds > 0 ? ` ${phase4Audit.summary.unclassifiedNonUsdAdds} valued ADD requires non-USD FX evidence.` : ""}
-              {" "}Export the three CSV files for the full exception records.
+              {phase4Audit.summary.unclassifiedNonUsdAdds > 0
+                ? ` ${phase4Audit.summary.unclassifiedNonUsdAdds} valued ADD requires non-USD FX evidence.`
+                : ""}{" "}
+              Export the three CSV files for the full exception records.
             </p>
           </div>
         )}
         {historicalAudit && (
-          <div className="mb-4 space-y-3 rounded-xl border border-border/70 p-4" data-testid="mix-historical-audit-results">
+          <div
+            className="mb-4 space-y-3 rounded-xl border border-border/70 p-4"
+            data-testid="mix-historical-audit-results"
+          >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold">Historical Reconciliation Snapshot</p>
               <span className="text-xs text-muted-foreground">
-                {historicalAudit.summary.activeBatches} active · {historicalAudit.summary.deletedBatches} deleted · {historicalAudit.summary.sources} saved sources
+                {historicalAudit.summary.activeBatches} active · {historicalAudit.summary.deletedBatches} deleted ·{" "}
+                {historicalAudit.summary.sources} saved sources
               </span>
             </div>
             <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-              <div><p className="text-xs text-muted-foreground">Header discrepancies</p><p className="font-mono font-bold">{historicalAudit.summary.headerMismatchBatches}</p></div>
-              <div><p className="text-xs text-muted-foreground">Cost arithmetic flags</p><p className="font-mono font-bold">{historicalAudit.summary.sourceLineMismatchBatches}</p></div>
-              <div><p className="text-xs text-muted-foreground">Source evidence review</p><p className="font-mono font-bold">{historicalAudit.summary.evidenceReviewBatches}</p></div>
-              <div><p className="text-xs text-muted-foreground">Current-rate differences</p><p className="font-mono font-bold">{historicalAudit.summary.currentRateEstimateDifferenceBatches}</p></div>
+              <div>
+                <p className="text-xs text-muted-foreground">Header discrepancies</p>
+                <p className="font-mono font-bold">{historicalAudit.summary.headerMismatchBatches}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Cost arithmetic flags</p>
+                <p className="font-mono font-bold">{historicalAudit.summary.sourceLineMismatchBatches}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Source evidence review</p>
+                <p className="font-mono font-bold">{historicalAudit.summary.evidenceReviewBatches}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Current-rate differences</p>
+                <p className="font-mono font-bold">{historicalAudit.summary.currentRateEstimateDifferenceBatches}</p>
+              </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Current supplier rates can change after offload. Differences from recorded historical rates are informational,
-              not permission to overwrite a batch. Export the source CSV to investigate individual records.
+              Current supplier rates can change after offload. Differences from recorded historical rates are
+              informational, not permission to overwrite a batch. Export the source CSV to investigate individual
+              records.
             </p>
-            {historicalAudit.batches.filter((b) => !b.deleted && (b.classification === "ARITHMETIC_ERROR" || b.classification === "EVIDENCE_REVIEW")).length > 0 && (
+            {historicalAudit.batches.filter(
+              (b) => !b.deleted && (b.classification === "ARITHMETIC_ERROR" || b.classification === "EVIDENCE_REVIEW")
+            ).length > 0 && (
               <div className="space-y-1 text-xs">
                 <p className="font-semibold">Batches requiring evidence or mathematical correction review</p>
                 {historicalAudit.batches
-                  .filter((b) => !b.deleted && (b.classification === "ARITHMETIC_ERROR" || b.classification === "EVIDENCE_REVIEW"))
+                  .filter(
+                    (b) =>
+                      !b.deleted && (b.classification === "ARITHMETIC_ERROR" || b.classification === "EVIDENCE_REVIEW")
+                  )
                   .slice(0, 12)
                   .map((b) => (
                     <p key={b.batchId} className="text-muted-foreground">
                       <span className="font-mono text-foreground">{b.batchCode}</span>
-                      {" · "}{[...new Set(b.issues.filter((issue) => issue.severity !== "informational").map((issue) => issue.code))].join(", ")}
+                      {" · "}
+                      {[
+                        ...new Set(
+                          b.issues.filter((issue) => issue.severity !== "informational").map((issue) => issue.code)
+                        ),
+                      ].join(", ")}
                     </p>
                   ))}
-                <p className="text-muted-foreground">All flagged records, including deleted batches, are available in the CSV exports.</p>
+                <p className="text-muted-foreground">
+                  All flagged records, including deleted batches, are available in the CSV exports.
+                </p>
               </div>
             )}
           </div>

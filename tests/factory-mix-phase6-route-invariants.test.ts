@@ -26,7 +26,7 @@ describe("Phase 6 mix quantity writer guards", () => {
 
   it("requires reviewed waste kg under the row lock and audits it", () => {
     const source = read("server/routes/factory/mix-batches/finalize-delete.ts");
-    expect(source).toContain('requireMixFinalizeDecision(batch, req.body)');
+    expect(source).toContain("requireMixFinalizeDecision(batch, req.body)");
     expect(source).toContain('.for("update")');
     expect(source).toContain("confirmedWasteKg: { old: null, new: remainingKg.toFixed(3) }");
     expect(source).toContain("wasteReason: { old: null, new: wasteReason }");

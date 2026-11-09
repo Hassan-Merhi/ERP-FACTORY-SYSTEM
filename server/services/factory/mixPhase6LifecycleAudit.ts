@@ -40,12 +40,20 @@ interface MixLifecycleDbLine {
 }
 
 export type MixLifecycleIssueCode =
-  | "OVERUSED" | "NEGATIVE_USED" | "COMPLETED_WITH_REMAINDER"
-  | "CLOSED_WITH_REMAINDER" | "ACTIVE_WITH_ZERO_REMAINDER"
-  | "CARRY_PARENT_MISSING" | "CARRY_PARENT_CROSS_COMPANY"
-  | "CARRY_PARENT_NOT_CLOSED" | "CARRY_PARENT_DELETED" | "CARRY_PARENT_SELF"
-  | "CARRY_SOURCE_MISSING" | "CARRY_SOURCE_INCONSISTENT"
-  | "CARRY_RATE_DRIFT" | "CARRY_PARENT_DATED_LATER"
+  | "OVERUSED"
+  | "NEGATIVE_USED"
+  | "COMPLETED_WITH_REMAINDER"
+  | "CLOSED_WITH_REMAINDER"
+  | "ACTIVE_WITH_ZERO_REMAINDER"
+  | "CARRY_PARENT_MISSING"
+  | "CARRY_PARENT_CROSS_COMPANY"
+  | "CARRY_PARENT_NOT_CLOSED"
+  | "CARRY_PARENT_DELETED"
+  | "CARRY_PARENT_SELF"
+  | "CARRY_SOURCE_MISSING"
+  | "CARRY_SOURCE_INCONSISTENT"
+  | "CARRY_RATE_DRIFT"
+  | "CARRY_PARENT_DATED_LATER"
   | "DAILY_USAGE_EXCEEDS_RECORDED_TOTAL"
   | "NEGATIVE_OR_ZERO_TOTAL";
 
@@ -116,8 +124,11 @@ export function classifyMixLifecycleEvidence(row: MixLifecycleDbLine, companyId:
   if (used.lt(0)) issue("NEGATIVE_USED", "error", "Used kilograms are negative.");
   if (used.minus(total).gt(KG)) issue("OVERUSED", "error", "Used kilograms exceed the batch's recorded quantity.");
   if (total.minus(used).gt(KG) && row.status === "COMPLETED") {
-    issue("COMPLETED_WITH_REMAINDER", "review",
-      "Completed status conflicts with the used-kg counter. Do not silently set usedKg to total or create a carry forward.");
+    issue(
+      "COMPLETED_WITH_REMAINDER",
+      "review",
+      "Completed status conflicts with the used-kg counter. Do not silently set usedKg to total or create a carry forward."
+    );
   }
   if (total.minus(used).gt(KG) && row.status === "CLOSED") {
     issue("CLOSED_WITH_REMAINDER", "review", "Closed mix still has unconsumed kg.");
@@ -133,36 +144,67 @@ export function classifyMixLifecycleEvidence(row: MixLifecycleDbLine, companyId:
       issue("CARRY_PARENT_CROSS_COMPANY", "error", "Carry-forward parent belongs to a different company.");
     } else {
       if (row.parent_id === row.id) issue("CARRY_PARENT_SELF", "error", "Self-referential carry-forward.");
-      if (row.parent_deleted_at !== null) issue("CARRY_PARENT_DELETED", "error", "Carry-forward parent was deleted; its source/stock reversal needs review.");
+      if (row.parent_deleted_at !== null)
+        issue(
+          "CARRY_PARENT_DELETED",
+          "error",
+          "Carry-forward parent was deleted; its source/stock reversal needs review."
+        );
       if (!["CLOSED", "COMPLETED"].includes(row.parent_status ?? "")) {
-        issue("CARRY_PARENT_NOT_CLOSED", "review", "Parent mix is not closed; verify the transfer did not duplicate available kg.");
+        issue(
+          "CARRY_PARENT_NOT_CLOSED",
+          "review",
+          "Parent mix is not closed; verify the transfer did not duplicate available kg."
+        );
       }
       if (row.parent_batch_date && row.batch_date && row.parent_batch_date.slice(0, 10) > row.batch_date.slice(0, 10)) {
         issue("CARRY_PARENT_DATED_LATER", "review", "Carry-forward predates its source mix.");
       }
     }
     if (Number(row.carry_source_count) !== 1) {
-      issue("CARRY_SOURCE_MISSING", "review", "Carry-forward requires exactly one recorded parent-source cost/weight line.");
+      issue(
+        "CARRY_SOURCE_MISSING",
+        "review",
+        "Carry-forward requires exactly one recorded parent-source cost/weight line."
+      );
     } else {
-      if (dec(row.carry_source_kg).minus(total).abs().gt(KG) ||
-          dec(row.carry_source_usd).minus(dec(row.total_cost)).abs().gt(USD)) {
-        issue("CARRY_SOURCE_INCONSISTENT", "error", "Parent-source carry quantity or USD differs from the child header.");
+      if (
+        dec(row.carry_source_kg).minus(total).abs().gt(KG) ||
+        dec(row.carry_source_usd).minus(dec(row.total_cost)).abs().gt(USD)
+      ) {
+        issue(
+          "CARRY_SOURCE_INCONSISTENT",
+          "error",
+          "Parent-source carry quantity or USD differs from the child header."
+        );
       }
     }
-    if (row.parent_company_id === companyId && row.parent_cost_per_kg != null &&
-        dec(row.parent_cost_per_kg).minus(dec(row.cost_per_kg)).abs().gt("0.0001")) {
-      issue("CARRY_RATE_DRIFT", "review", "Recorded parent and child per-kg rates differ. Verify historical rate version.");
+    if (
+      row.parent_company_id === companyId &&
+      row.parent_cost_per_kg != null &&
+      dec(row.parent_cost_per_kg).minus(dec(row.cost_per_kg)).abs().gt("0.0001")
+    ) {
+      issue(
+        "CARRY_RATE_DRIFT",
+        "review",
+        "Recorded parent and child per-kg rates differ. Verify historical rate version."
+      );
     }
   }
   if (dec(row.daily_usage_kg).gt(total.plus(KG))) {
     issue("DAILY_USAGE_EXCEEDS_RECORDED_TOTAL", "review", "Daily usage lines exceed the total recorded kg.");
   }
   const deleted = row.deleted_at !== null;
-  const hasError = issues.some(i => i.severity === "error");
+  const hasError = issues.some((i) => i.severity === "error");
   return {
-    batchId: row.id, batchCode: row.batch_code, status: row.status,
-    batchDate: row.batch_date?.slice(0, 10) ?? null, deleted,
-    totalKg: fixed(total), usedKg: fixed(used), remainingKg: fixed(remaining),
+    batchId: row.id,
+    batchCode: row.batch_code,
+    status: row.status,
+    batchDate: row.batch_date?.slice(0, 10) ?? null,
+    deleted,
+    totalKg: fixed(total),
+    usedKg: fixed(used),
+    remainingKg: fixed(remaining),
     recordedRateUsdPerKg: fixed(dec(row.cost_per_kg), 7),
     recordedTotalCostUsd: fixed(dec(row.total_cost), 7),
     estimatedRemainingUsd: fixed(Decimal.max(0, remaining).times(dec(row.cost_per_kg)), 7),
@@ -174,36 +216,51 @@ export function classifyMixLifecycleEvidence(row: MixLifecycleDbLine, companyId:
     childCarryCount: Number(row.child_count),
     dailyUsageCount: Number(row.daily_usage_count),
     dailyUsageKg: fixed(dec(row.daily_usage_kg)),
-    classification: deleted ? "DELETED_HISTORY" : hasError ? "INVALID_QUANTITY"
-      : issues.some(i => i.severity === "review") ? "REQUIRES_REVIEW" : "RECONCILED",
-    issues, readOnly: true,
+    classification: deleted
+      ? "DELETED_HISTORY"
+      : hasError
+        ? "INVALID_QUANTITY"
+        : issues.some((i) => i.severity === "review")
+          ? "REQUIRES_REVIEW"
+          : "RECONCILED",
+    issues,
+    readOnly: true,
   };
 }
-const hasIssue = (row: Phase6MixLifecycleRow, code: MixLifecycleIssueCode) => row.issues.some(i => i.code === code);
+const hasIssue = (row: Phase6MixLifecycleRow, code: MixLifecycleIssueCode) => row.issues.some((i) => i.code === code);
 export function summarizePhase6MixLifecycle(companyId: number, rows: MixLifecycleDbLine[]): Phase6MixLifecycleReport {
-  const batches = rows.map(row => classifyMixLifecycleEvidence(row, companyId));
-  const active = batches.filter(row => !row.deleted);
-  const withIssue = (code: MixLifecycleIssueCode) => active.filter(row => hasIssue(row, code));
-  const carryExceptions = active.filter(row => row.carryForwardFromId !== null && row.issues.some(i => i.code.startsWith("CARRY_")));
+  const batches = rows.map((row) => classifyMixLifecycleEvidence(row, companyId));
+  const active = batches.filter((row) => !row.deleted);
+  const withIssue = (code: MixLifecycleIssueCode) => active.filter((row) => hasIssue(row, code));
+  const carryExceptions = active.filter(
+    (row) => row.carryForwardFromId !== null && row.issues.some((i) => i.code.startsWith("CARRY_"))
+  );
   return {
-    companyId, generatedAt: new Date().toISOString(), readOnly: true,
+    companyId,
+    generatedAt: new Date().toISOString(),
+    readOnly: true,
     summary: {
       allBatches: batches.length,
       activeBatches: active.length,
       deletedBatches: batches.length - active.length,
-      completedActiveBatches: active.filter(b => b.status === "COMPLETED").length,
+      completedActiveBatches: active.filter((b) => b.status === "COMPLETED").length,
       completedWithRemainderBatches: withIssue("COMPLETED_WITH_REMAINDER").length,
-      completedRemainderKg: fixed(withIssue("COMPLETED_WITH_REMAINDER").reduce((a,b) => a.plus(b.remainingKg), dec(0))),
-      completedRemainderPotentialValueUsd: fixed(withIssue("COMPLETED_WITH_REMAINDER").reduce((a,b) => a.plus(b.estimatedRemainingUsd), dec(0)), 7),
+      completedRemainderKg: fixed(
+        withIssue("COMPLETED_WITH_REMAINDER").reduce((a, b) => a.plus(b.remainingKg), dec(0))
+      ),
+      completedRemainderPotentialValueUsd: fixed(
+        withIssue("COMPLETED_WITH_REMAINDER").reduce((a, b) => a.plus(b.estimatedRemainingUsd), dec(0)),
+        7
+      ),
       overusedBatches: withIssue("OVERUSED").length,
-      overusedKg: fixed(withIssue("OVERUSED").reduce((a,b) => a.minus(b.remainingKg), dec(0))),
+      overusedKg: fixed(withIssue("OVERUSED").reduce((a, b) => a.minus(b.remainingKg), dec(0))),
       negativeUsedBatches: withIssue("NEGATIVE_USED").length,
       closedWithRemainderBatches: withIssue("CLOSED_WITH_REMAINDER").length,
-      carryForwardBatches: active.filter(b => b.carryForwardFromId !== null).length,
+      carryForwardBatches: active.filter((b) => b.carryForwardFromId !== null).length,
       carryForwardExceptions: carryExceptions.length,
-      batchesWithDailyUsage: active.filter(b => b.dailyUsageCount > 0).length,
-      invalidQuantityBatches: active.filter(b => b.classification === "INVALID_QUANTITY").length,
-      evidenceReviewBatches: active.filter(b => b.classification === "REQUIRES_REVIEW").length,
+      batchesWithDailyUsage: active.filter((b) => b.dailyUsageCount > 0).length,
+      invalidQuantityBatches: active.filter((b) => b.classification === "INVALID_QUANTITY").length,
+      evidenceReviewBatches: active.filter((b) => b.classification === "REQUIRES_REVIEW").length,
     },
     batches,
     policy: [
@@ -224,29 +281,31 @@ export async function getPhase6MixLifecycleReport(companyId: number): Promise<Ph
     await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
     open = true;
     await client.query("SELECT set_config('app.current_company_id', $1, true)", [String(companyId)]);
-    const rows = (await client.query<MixLifecycleDbLine>(
-      "SELECT m.id,m.batch_code,m.status,m.batch_date::text,m.deleted_at::text," +
-      "m.total_weight_kg::text,m.used_kg::text,m.cost_per_kg::text,m.total_cost::text," +
-      "m.carry_forward_from_id,p.id AS parent_id,p.company_id AS parent_company_id," +
-      "p.status AS parent_status,p.deleted_at::text AS parent_deleted_at," +
-      "CASE WHEN p.company_id=m.company_id THEN p.batch_code ELSE NULL END AS parent_batch_code," +
-      "p.batch_date::text AS parent_batch_date,p.cost_per_kg::text AS parent_cost_per_kg," +
-      "COALESCE(s.cnt,0)::text AS carry_source_count,COALESCE(s.kg,0)::text AS carry_source_kg," +
-      "COALESCE(s.usd,0)::text AS carry_source_usd," +
-      "COALESCE(d.cnt,0)::text AS daily_usage_count,COALESCE(d.kg,0)::text AS daily_usage_kg," +
-      "COALESCE(ch.cnt,0)::text AS child_count " +
-      "FROM factory_mix_batches m " +
-      "LEFT JOIN factory_mix_batches p ON p.id=m.carry_forward_from_id " +
-      "LEFT JOIN LATERAL (SELECT COUNT(*) cnt,COALESCE(SUM(x.weight_kg),0) kg," +
-      "COALESCE(SUM(x.total_cost),0) usd FROM factory_mix_batch_sources x " +
-      "WHERE x.mix_batch_id=m.id AND x.source_batch_id=m.carry_forward_from_id) s ON TRUE " +
-      "LEFT JOIN LATERAL (SELECT COUNT(*) cnt,COALESCE(SUM(d.kg_used),0) kg " +
-      "FROM factory_daily_usages d WHERE d.company_id=m.company_id AND d.mix_batch_id=m.id) d ON TRUE " +
-      "LEFT JOIN LATERAL (SELECT COUNT(*) cnt FROM factory_mix_batches child " +
-      "WHERE child.company_id=m.company_id AND child.carry_forward_from_id=m.id AND child.deleted_at IS NULL) ch ON TRUE " +
-      "WHERE m.company_id=$1 ORDER BY m.id",
-      [companyId],
-    )).rows;
+    const rows = (
+      await client.query<MixLifecycleDbLine>(
+        "SELECT m.id,m.batch_code,m.status,m.batch_date::text,m.deleted_at::text," +
+          "m.total_weight_kg::text,m.used_kg::text,m.cost_per_kg::text,m.total_cost::text," +
+          "m.carry_forward_from_id,p.id AS parent_id,p.company_id AS parent_company_id," +
+          "p.status AS parent_status,p.deleted_at::text AS parent_deleted_at," +
+          "CASE WHEN p.company_id=m.company_id THEN p.batch_code ELSE NULL END AS parent_batch_code," +
+          "p.batch_date::text AS parent_batch_date,p.cost_per_kg::text AS parent_cost_per_kg," +
+          "COALESCE(s.cnt,0)::text AS carry_source_count,COALESCE(s.kg,0)::text AS carry_source_kg," +
+          "COALESCE(s.usd,0)::text AS carry_source_usd," +
+          "COALESCE(d.cnt,0)::text AS daily_usage_count,COALESCE(d.kg,0)::text AS daily_usage_kg," +
+          "COALESCE(ch.cnt,0)::text AS child_count " +
+          "FROM factory_mix_batches m " +
+          "LEFT JOIN factory_mix_batches p ON p.id=m.carry_forward_from_id " +
+          "LEFT JOIN LATERAL (SELECT COUNT(*) cnt,COALESCE(SUM(x.weight_kg),0) kg," +
+          "COALESCE(SUM(x.total_cost),0) usd FROM factory_mix_batch_sources x " +
+          "WHERE x.mix_batch_id=m.id AND x.source_batch_id=m.carry_forward_from_id) s ON TRUE " +
+          "LEFT JOIN LATERAL (SELECT COUNT(*) cnt,COALESCE(SUM(d.kg_used),0) kg " +
+          "FROM factory_daily_usages d WHERE d.company_id=m.company_id AND d.mix_batch_id=m.id) d ON TRUE " +
+          "LEFT JOIN LATERAL (SELECT COUNT(*) cnt FROM factory_mix_batches child " +
+          "WHERE child.company_id=m.company_id AND child.carry_forward_from_id=m.id AND child.deleted_at IS NULL) ch ON TRUE " +
+          "WHERE m.company_id=$1 ORDER BY m.id",
+        [companyId]
+      )
+    ).rows;
     if (rows.length > 50000) throw new Error("Lifecycle audit exceeds safe row bounds");
     const report = summarizePhase6MixLifecycle(companyId, rows);
     await client.query("COMMIT");
@@ -255,7 +314,9 @@ export async function getPhase6MixLifecycleReport(companyId: number): Promise<Ph
   } catch (e) {
     if (open) await client.query("ROLLBACK");
     throw e;
-  } finally { client.release(); }
+  } finally {
+    client.release();
+  }
 }
 export function phase6MixLifecycleCsv(report: Phase6MixLifecycleReport): string {
   const cell = (v: unknown) => {
@@ -263,19 +324,52 @@ export function phase6MixLifecycleCsv(report: Phase6MixLifecycleReport): string 
     const formula = /^\s*[=+@-]/.test(s) && !/^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(s.trim());
     return '"' + (formula ? "'" + s : s).replace(/"/g, '""').replace(/\r?\n/g, " ") + '"';
   };
-  const rows: unknown[][] = [[
-    "Batch", "Date", "Status", "Deleted", "Total Kg", "Used Kg", "Remaining Kg",
-    "Recorded USD/kg", "Recorded USD", "Potential Remainder Value (unverified)",
-    "Parent Batch ID", "Parent Batch Code", "Carry Source Count", "Carry Source Kg",
-    "Carry Source USD", "Carry Child Count", "Daily Usage Records", "Daily Usage Kg",
-    "Classification", "Issue Codes",
-  ]];
-  for (const b of report.batches) rows.push([
-    b.batchCode,b.batchDate,b.status,b.deleted,b.totalKg,b.usedKg,b.remainingKg,
-    b.recordedRateUsdPerKg,b.recordedTotalCostUsd,b.estimatedRemainingUsd,
-    b.carryForwardFromId,b.parentBatchCode,b.carrySourceCount,b.carrySourceKg,
-    b.carrySourceUsd,b.childCarryCount,b.dailyUsageCount,b.dailyUsageKg,
-    b.classification,b.issues.map(i=>i.code).join(" | "),
-  ]);
-  return "\uFEFF" + rows.map(row => row.map(cell).join(",")).join("\r\n") + "\r\n";
+  const rows: unknown[][] = [
+    [
+      "Batch",
+      "Date",
+      "Status",
+      "Deleted",
+      "Total Kg",
+      "Used Kg",
+      "Remaining Kg",
+      "Recorded USD/kg",
+      "Recorded USD",
+      "Potential Remainder Value (unverified)",
+      "Parent Batch ID",
+      "Parent Batch Code",
+      "Carry Source Count",
+      "Carry Source Kg",
+      "Carry Source USD",
+      "Carry Child Count",
+      "Daily Usage Records",
+      "Daily Usage Kg",
+      "Classification",
+      "Issue Codes",
+    ],
+  ];
+  for (const b of report.batches)
+    rows.push([
+      b.batchCode,
+      b.batchDate,
+      b.status,
+      b.deleted,
+      b.totalKg,
+      b.usedKg,
+      b.remainingKg,
+      b.recordedRateUsdPerKg,
+      b.recordedTotalCostUsd,
+      b.estimatedRemainingUsd,
+      b.carryForwardFromId,
+      b.parentBatchCode,
+      b.carrySourceCount,
+      b.carrySourceKg,
+      b.carrySourceUsd,
+      b.childCarryCount,
+      b.dailyUsageCount,
+      b.dailyUsageKg,
+      b.classification,
+      b.issues.map((i) => i.code).join(" | "),
+    ]);
+  return "\uFEFF" + rows.map((row) => row.map(cell).join(",")).join("\r\n") + "\r\n";
 }

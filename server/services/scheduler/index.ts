@@ -63,10 +63,14 @@ export function startScheduler(): void {
 
   // Ticket dispatch, retries of unconfigured channels, and 24-hour overdue reminders.
   // Environment-gated until migrations and recipient opt-ins are configured.
-  const ticketTick = createSchedulerTick("ticketNotifications", async () => {
-    const { runTicketNotificationTick } = await import("../ticketNotifications");
-    await runTicketNotificationTick();
-  }, { quiet: true });
+  const ticketTick = createSchedulerTick(
+    "ticketNotifications",
+    async () => {
+      const { runTicketNotificationTick } = await import("../ticketNotifications");
+      await runTicketNotificationTick();
+    },
+    { quiet: true }
+  );
   if (process.env.TICKET_NOTIFICATIONS_ENABLED === "true") {
     cron.schedule("* * * * *", ticketTick);
   }

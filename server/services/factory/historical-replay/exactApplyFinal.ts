@@ -17,20 +17,16 @@ import {
   type ExactReplaySnapshot,
 } from "./exactSnapshot";
 import { assertPhase5ReplayScopeSafe } from "./downstreamGatePhase5";
-import {
-  assertExactReplayNonCostInvariants,
-  assertPersistedReplaySourceTotals,
-} from "./exactInvariants";
+import { assertExactReplayNonCostInvariants, assertPersistedReplaySourceTotals } from "./exactInvariants";
 
 function sortNumbers(values: number[]): number[] {
   return [...new Set(values)].sort((left, right) => left - right);
 }
 
 function scopeViolation(message: string): Error & { code: string } {
-  return Object.assign(
-    new Error(`HISTORICAL_REPLAY_SCOPE_VIOLATION: ${message}. Rolling back.`),
-    { code: "HISTORICAL_REPLAY_SCOPE_VIOLATION" }
-  );
+  return Object.assign(new Error(`HISTORICAL_REPLAY_SCOPE_VIOLATION: ${message}. Rolling back.`), {
+    code: "HISTORICAL_REPLAY_SCOPE_VIOLATION",
+  });
 }
 
 function assertOne(rowCount: number | null | undefined, label: string): void {
@@ -137,9 +133,7 @@ export async function applyExactHistoricalCostReplayV6(
       publicScope
     );
     if (freshFingerprint !== expectedFingerprint) {
-      throw new StaleTokenError(
-        "Stale token — authoritative replay inputs changed since Prepare. Re-run the preview."
-      );
+      throw new StaleTokenError("Stale token — authoritative replay inputs changed since Prepare. Re-run the preview.");
     }
 
     result.skippedSupplierIds = supplierIds.filter((id) => !publicScope.supplierIds.includes(id));
@@ -160,9 +154,7 @@ export async function applyExactHistoricalCostReplayV6(
       [tokenHash, companyId, issuedByUserId, algorithmVersion, expectedFingerprint]
     );
     if (consumed.rowCount !== 1) {
-      throw new StaleTokenError(
-        "This confirmation token has already been used. Re-run Prepare Historical Replay."
-      );
+      throw new StaleTokenError("This confirmation token has already been used. Re-run Prepare Historical Replay.");
     }
 
     const approvedSupplierIds = new Set(publicScope.supplierIds);
@@ -174,12 +166,36 @@ export async function applyExactHistoricalCostReplayV6(
 
     await lockExactReplayScopeRows(executor, companyId, publicScope, approvedBaleIds);
     const before = await captureExactReplaySnapshot(executor, companyId, publicScope, approvedBaleIds);
-    assertSameIds(publicScope.containerIdsToUpdate, before.containers.map((row) => row.id), "container snapshot");
-    assertSameIds(publicScope.rawStockIdsToUpdate, before.rawStockRows.map((row) => row.id), "raw-stock snapshot");
-    assertSameIds(publicScope.sourceIdsToUpdate, before.mixBatchSources.map((row) => row.id), "source snapshot");
-    assertSameIds(publicScope.batchIdsToUpdate, before.mixBatches.map((row) => row.id), "batch snapshot");
-    assertSameIds(approvedBaleIds, before.bales.map((row) => row.id), "bale snapshot");
-    assertSameIds(publicScope.supplierIds, before.suppliers.map((row) => row.id), "supplier snapshot");
+    assertSameIds(
+      publicScope.containerIdsToUpdate,
+      before.containers.map((row) => row.id),
+      "container snapshot"
+    );
+    assertSameIds(
+      publicScope.rawStockIdsToUpdate,
+      before.rawStockRows.map((row) => row.id),
+      "raw-stock snapshot"
+    );
+    assertSameIds(
+      publicScope.sourceIdsToUpdate,
+      before.mixBatchSources.map((row) => row.id),
+      "source snapshot"
+    );
+    assertSameIds(
+      publicScope.batchIdsToUpdate,
+      before.mixBatches.map((row) => row.id),
+      "batch snapshot"
+    );
+    assertSameIds(
+      approvedBaleIds,
+      before.bales.map((row) => row.id),
+      "bale snapshot"
+    );
+    assertSameIds(
+      publicScope.supplierIds,
+      before.suppliers.map((row) => row.id),
+      "supplier snapshot"
+    );
 
     for (const rawStockId of publicScope.rawStockIdsToUpdate) {
       if (!approvedRawStockIds.has(rawStockId)) throw scopeViolation(`unapproved raw-stock ${rawStockId}`);
@@ -204,11 +220,7 @@ export async function applyExactHistoricalCostReplayV6(
     for (const containerId of publicScope.containerIdsToUpdate) {
       const canonicalRate = scope._canonicalRateByContainer.get(containerId);
       const canonicalTotalUsd = scope._canonicalTotalUsdByContainer.get(containerId);
-      if (
-        !approvedContainerIds.has(containerId)
-        || canonicalRate == null
-        || canonicalTotalUsd == null
-      ) {
+      if (!approvedContainerIds.has(containerId) || canonicalRate == null || canonicalTotalUsd == null) {
         throw scopeViolation(`container ${containerId} has no approved canonical result`);
       }
       const update = await client.query(
@@ -258,9 +270,7 @@ export async function applyExactHistoricalCostReplayV6(
       result.sourcesUpdated += 1;
     }
 
-    const correctionByBatchId = new Map(
-      scope._batchCorrections.map((correction) => [correction.batchId, correction])
-    );
+    const correctionByBatchId = new Map(scope._batchCorrections.map((correction) => [correction.batchId, correction]));
     for (const batchId of publicScope.batchIdsToUpdate) {
       const correction = correctionByBatchId.get(batchId);
       if (!approvedBatchIds.has(batchId) || !correction) {
@@ -299,7 +309,11 @@ export async function applyExactHistoricalCostReplayV6(
          ORDER BY id`,
         [approvedBaleIds, companyId]
       );
-      assertSameIds(approvedBaleIds, baleRows.rows.map((row) => row.id), "approved bale");
+      assertSameIds(
+        approvedBaleIds,
+        baleRows.rows.map((row) => row.id),
+        "approved bale"
+      );
 
       for (const bale of baleRows.rows) {
         if (bale.mix_batch_id == null || !approvedBatchIds.has(bale.mix_batch_id)) {
@@ -330,9 +344,7 @@ export async function applyExactHistoricalCostReplayV6(
       }
     }
 
-    const supplierById = new Map(
-      scope._safeSupplierRows.map((supplier) => [supplier.supplierId, supplier])
-    );
+    const supplierById = new Map(scope._safeSupplierRows.map((supplier) => [supplier.supplierId, supplier]));
     for (const supplierId of publicScope.supplierIds) {
       const supplier = supplierById.get(supplierId);
       if (!approvedSupplierIds.has(supplierId) || !supplier) {
