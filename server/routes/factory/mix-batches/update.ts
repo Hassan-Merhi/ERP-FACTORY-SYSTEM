@@ -240,7 +240,7 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
 
         for (const source of sourceInputs.supplierSources) {
           // costPerKg from the client is NEVER trusted for a real supplier.
-          const { supplierId } = source;
+          const supplierId = source.supplierId!;
           const weight = weightOf(source);
 
           // Locked, offload-time moving-average rate — never derived from remaining/
@@ -310,7 +310,7 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
         }
 
         for (const bSource of sourceInputs.batchSources) {
-          const { sourceBatchId } = bSource;
+          const sourceBatchId = bSource.sourceBatchId!;
           const [srcBatch] = await tx
             .select()
             .from(factoryMixBatches)
