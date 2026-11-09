@@ -26,7 +26,7 @@ import {
 import { recordFactoryStockValueEventTx } from "../../../services/factory/factoryStockValueEvents";
 import Decimal from "decimal.js";
 import { MoneyDecimal, parseMoneyInput, toMoney } from "../../../lib/money";
-import { MixRawStockShortageError, requireMixFifoFullyAllocated, requireMixRawStockCapacity } from "../../../services/factory/mixRawStockQuantityGuard";
+import { MixRawStockShortageError, requireMixFifoFullyAllocated, requireMixRawStockCapacity, availableSupplierAddAllowance } from "../../../services/factory/mixRawStockQuantityGuard";
 
 export function registerFactoryMixBatchTopUpRoutes(app: Express) {
   // Top-up an existing mix batch with additional sources
@@ -96,6 +96,8 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
           const isManualSupplier = supplierRawStocks.length === 0;
 
           if (isManualSupplier) {
+            const addAllowance = await availableSupplierAddAllowance(tx, companyId, supplierId, supplierRawStocks);
+            requireMixFifoFullyAllocated(weight.toFixed(3), supplierId, addAllowance.toFixed(3));
             // MANUAL supplier — no container raw-stock rows to update. Still must use
             // the supplier's locked rate; reject if none has ever been established.
             if (lockedRate === null) {
@@ -115,7 +117,7 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
             // containers. Unallocated weight must fail the whole transaction:
             // never push excess onto the last container.
             let toDeduct = weight;
-            const taken: Array<{ containerId: number; kg: Decimal }> = [];
+            const taken: Array<{ containerId: number; kg: Decimal; adjustmentBacked?: boolean }> = [];
             for (const rs of supplierRawStocks) {
               if (toDeduct.lessThanOrEqualTo(0.001)) break;
               const avail = MoneyDecimal.max(0, toMoney(rs.receivedKg).minus(toMoney(rs.usedKg)));
@@ -128,7 +130,15 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
               taken.push({ containerId: rs.containerId, kg: take });
               toDeduct = toDeduct.minus(take);
             }
-            requireMixFifoFullyAllocated(toDeduct.toFixed(3), supplierId);
+            if (toDeduct.gt(0)) {
+              const addAllowance = await availableSupplierAddAllowance(tx, companyId, supplierId, supplierRawStocks);
+              requireMixFifoFullyAllocated(toDeduct.toFixed(3), supplierId, addAllowance.toFixed(3));
+              const last = supplierRawStocks[supplierRawStocks.length - 1];
+              await tx.update(factoryRawStock)
+                .set({ usedKg: sql`${factoryRawStock.usedKg} + ${toDeduct.toFixed(3)}` })
+                .where(and(eq(factoryRawStock.id, last.id), eq(factoryRawStock.companyId, companyId)));
+              taken.push({ containerId: last.containerId, kg: toDeduct, adjustmentBacked: true });
+            }
 
             // One persisted source row PER exact FIFO container, matching
             // mix creation. This preserves historical allocation provenance and
@@ -141,6 +151,7 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
               sourceRecords.push({
                 supplierId,
                 containerId: part.containerId,
+                adjustmentBacked: part.adjustmentBacked,
                 weightKg: part.kg.toFixed(3),
                 costPerKg: (rate ?? new MoneyDecimal(0)).toFixed(),
                 totalCost: part.kg.times(rate ?? 0).toDecimalPlaces(6).toFixed(6),
@@ -263,7 +274,9 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
             containerId: sr.containerId || null,
             supplierId: sr.supplierId || null,
             sourceBatchId: sr.sourceBatchId || null,
-            sourceType: sr.sourceBatchId
+            sourceType: sr.adjustmentBacked
+              ? "SUPPLIER_ADJUSTMENT_BACKED"
+              : sr.sourceBatchId
               ? "BATCH"
               : sr.supplierId
                 ? sr.containerId
@@ -275,6 +288,7 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
             quantityKg: sr.weightKg,
             costPerKg: sr.costPerKg,
             totalCost: sr.totalCost,
+            notes: sr.adjustmentBacked ? "Receipt-row overdraw covered by an existing supplier ADD adjustment; see supplier adjustment ledger." : null,
             inventorySupplierId: sr.sourceBatchId != null ? null : (sr.supplierId ?? null),
           });
         }
