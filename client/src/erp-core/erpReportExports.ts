@@ -48,13 +48,14 @@ export function buildErpReportCsv(
 ): string {
   const safeCell = (value: unknown): string => {
     const raw = value == null ? "" : String(value);
-    const guarded =
-      typeof value === "string" && /^[\s\uFEFF]*[=+@\-\t\r]/u.test(raw)
-        ? `'${raw}`
-        : raw;
+    const trimmed = raw.trim();
+    const numericText = /^-?\d+(?:\.\d+)?$/.test(trimmed);
+    const formulaLike = /^[\s\uFEFF]*[=+@\-\t\r]/u.test(raw);
+    const guarded = typeof value === "string" && formulaLike && !numericText ? `'${raw}` : raw;
     return `"${guarded.replace(/"/g, '""')}"`;
   };
-  return [headers, ...rows].map((row) => row.map(safeCell).join(",")).join("\r\n");
+  const lines = headers.length > 0 ? [headers, ...rows] : rows;
+  return lines.map((row) => row.map(safeCell).join(",")).join("\r\n");
 }
 
 /** Does not download partial UI slices; caller supplies the full filtered rows. */
