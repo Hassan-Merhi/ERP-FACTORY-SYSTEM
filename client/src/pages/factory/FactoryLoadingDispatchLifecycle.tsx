@@ -131,7 +131,8 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
   });
   const frozenUrl = frozenClosureId ? lifecycleUrl + "/closures/" + frozenClosureId : lifecycleUrl;
   const frozen = useQuery<FrozenSnapshot>({
-    queryKey: companyQueryKey(frozenUrl, companyId),
+    // Keep inactive snapshot state out of the lifecycle history query cache.
+    queryKey: companyQueryKey(lifecycleUrl + "/closure-snapshot/" + (frozenClosureId ?? "none"), companyId),
     queryFn: () => getJson<FrozenSnapshot>(frozenUrl),
     enabled: Boolean(companyId) && Boolean(frozenClosureId),
   });
@@ -440,14 +441,14 @@ export default function FactoryLoadingDispatchLifecycle({ orderId, dispatchId, c
           </DialogHeader>
           {frozen.isPending && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading saved comparison…</p>}
           {frozen.isError && <p className="text-sm text-red-600">{errorMessage(frozen.error)}</p>}
-          {frozen.data && (
+          {frozenClosureId && frozen.data && (
             <div className="space-y-3">
               <p className="text-sm font-semibold">Closure #{frozen.data.revision} · {frozen.data.closedByUsername} · {formatDisplayDateTime(frozen.data.closedAt)}</p>
               <div className="flex flex-wrap gap-2">
-                <Badge variant="secondary">Verified {fmt(frozen.data.summary.verifiedBales)}</Badge>
-                <Badge variant="secondary">Expected {fmt(frozen.data.summary.expectedBales)}</Badge>
-                <Badge variant="secondary">Missing {fmt(frozen.data.summary.missingBales)}</Badge>
-                <Badge variant="secondary">Scanned KG {fmt(frozen.data.summary.verifiedWeightKg, 3)}</Badge>
+                <Badge variant="secondary">Verified {fmt(frozen.data.summary?.verifiedBales)}</Badge>
+                <Badge variant="secondary">Expected {fmt(frozen.data.summary?.expectedBales)}</Badge>
+                <Badge variant="secondary">Missing {fmt(frozen.data.summary?.missingBales)}</Badge>
+                <Badge variant="secondary">Scanned KG {fmt(frozen.data.summary?.verifiedWeightKg, 3)}</Badge>
               </div>
               {frozen.data.approvedWithDiscrepancies && <p className="rounded-lg bg-amber-50 p-2 text-sm text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
                 Supervisor approval: {frozen.data.discrepancyReason}
