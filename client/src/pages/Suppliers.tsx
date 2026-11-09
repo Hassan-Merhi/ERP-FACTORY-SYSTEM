@@ -6,7 +6,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { PageHeader } from "@/components/PageHeader";
-import { ErpListFilters, ErpConfirmDialog } from "@/erp-core";
+import { ErpListFilters, ErpConfirmDialog, ErpRecordAction } from "@/erp-core";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -379,19 +379,20 @@ export default function Suppliers() {
                 >
                   <FileText className="h-4 w-4" />
                 </Button>
-                <Button
+                <ErpRecordAction
                   variant="ghost"
                   size="icon"
                   onClick={() => {
                     if (recordChanges.allowed) navigate(`/suppliers/${supplier.id}/edit`);
                   }}
-                  disabled={!recordChanges.allowed}
+                  permitted={recordChanges.allowed}
+                  deniedReason={recordChanges.reason}
                   data-testid={`button-edit-supplier-${supplier.id}`}
                   title={recordChanges.reason ?? "Edit"}
                   aria-label={recordChanges.reason ?? "Edit supplier"}
                 >
                   <Edit className="h-4 w-4" />
-                </Button>
+                </ErpRecordAction>
               </div>
             </div>
           ))}
