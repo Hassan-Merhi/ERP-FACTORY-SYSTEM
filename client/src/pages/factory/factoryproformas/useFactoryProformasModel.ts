@@ -119,6 +119,7 @@ export function useFactoryProformasModel() {
         if (!response.ok) throw new Error("Failed to load proforma items");
         return response.json() as Promise<Proforma>;
       },
+      enabled: Boolean(selectedCompany?.id),
       staleTime: 5 * 60_000,
       gcTime: 15 * 60_000,
       refetchOnWindowFocus: false,
@@ -159,7 +160,7 @@ export function useFactoryProformasModel() {
   // The customer may have different agreed prices at each destination.
   const addLineDestination = proformas.find((p) => p.id === addLineProformaId)?.destination;
   const { data: customerPriceList = [] } = useQuery<{ article_code: string; price_per_bale: string }[]>({
-    queryKey: ["/api/factory/customer-price-lists", customerId, addLineDestination],
+    queryKey: companyQueryKey("/api/factory/customer-price-lists", selectedCompany?.id, customerId, addLineDestination),
     queryFn: async () => {
       const response = await modeApiRequest(
         "GET",
@@ -168,7 +169,7 @@ export function useFactoryProformasModel() {
       if (!response.ok) throw new Error("Failed to load destination prices");
       return response.json();
     },
-    enabled: !!customerId && isAddLineOpen && !!addLineDestination,
+    enabled: !!customerId && isAddLineOpen && !!addLineDestination && Boolean(selectedCompany?.id),
   });
 
   const priceListMap = Object.fromEntries(customerPriceList.map((p) => [p.article_code, p.price_per_bale]));
