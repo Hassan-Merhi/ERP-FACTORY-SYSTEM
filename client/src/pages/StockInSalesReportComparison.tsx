@@ -378,7 +378,7 @@ export default function StockInSalesReportComparison() {
   return (
     <div className="container mx-auto space-y-6 p-0 sm:p-6">
       <PageHeader
-        title="Stock In & Sales Comparison"
+        title="Stock & Sales Comparison"
         subtitle="Compare one location and stock-group selection against another"
         onBack={() => window.history.back()}
         meta={<span>Difference is Side A minus Side B{selectedCompany?.name ? ` · ${selectedCompany.name}` : ""}</span>}
