@@ -326,6 +326,9 @@ export default function FactoryLoadingDispatch() {
               <Button size="sm" variant="outline" onClick={backToLoading} data-testid="button-return-to-loading">
                 <ArrowLeft className="mr-1.5 h-4 w-4" /> Loading
               </Button>
+              <Button size="sm" variant="outline" onClick={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/compare")} data-testid="button-compare-all-dispatches">
+                <FileSearch className="mr-1.5 h-4 w-4" /> Compare All
+              </Button>
               <Button size="sm" variant="outline" onClick={() => void refresh()} disabled={tripsQuery.isFetching || orderQuery.isFetching} data-testid="button-refresh-dispatch">
                 <RefreshCw className="mr-1.5 h-4 w-4" /> Refresh
               </Button>
@@ -499,8 +502,12 @@ export default function FactoryLoadingDispatch() {
                   <Card className="border-blue-100 dark:border-blue-500/20 dark:bg-[#101c34]">
                     <CardContent className="space-y-3 p-4">
                       <div className="flex items-center gap-2"><FileSearch className="h-4 w-4 text-blue-500" /><h3 className="text-sm font-semibold">Trip comparison</h3></div>
-                      <p className="text-xs text-muted-foreground">Expected vs scanned articles and barcode differences will be available in Phase 4.</p>
-                      <Badge variant="secondary">Compare — upcoming</Badge>
+                      <p className="text-xs text-muted-foreground">Compare expected versus scanned items, missing references, wrong-trip allocations and KG differences.</p>
+                      <Button type="button" size="sm" variant="outline" className="w-full justify-between"
+                        onClick={() => navigate("/factory/sales/loading/dispatch/" + orderId + "/" + dispatchId + "/compare")}
+                        data-testid="button-compare-dispatch">
+                        Compare this trip <ArrowRight className="h-4 w-4" />
+                      </Button>
                     </CardContent>
                   </Card>
                   <div className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 text-xs text-muted-foreground dark:border-slate-700">
