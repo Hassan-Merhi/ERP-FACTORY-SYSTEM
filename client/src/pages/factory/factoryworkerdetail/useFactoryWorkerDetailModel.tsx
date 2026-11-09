@@ -254,7 +254,7 @@ export function useFactoryWorkerDetailModel() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "advances"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       toast({ title: "Advance recorded" });
       setAdvanceAmount("");
       setAdvanceNotes("");
@@ -284,7 +284,7 @@ export function useFactoryWorkerDetailModel() {
       return res.json();
     },
     onSuccess: (_data, vars) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "advances"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/advances", vars.advanceId, "repayments"] });
       toast({ title: "Repayment recorded" });
       setRepayAdvanceId(null);
@@ -312,7 +312,7 @@ export function useFactoryWorkerDetailModel() {
       return res.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "advances"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       toast({
         title: `${data.count} advance${data.count !== 1 ? "s" : ""} repaid`,
         description: `Total: $${data.totalRepaid.toFixed(2)}`,
@@ -337,7 +337,7 @@ export function useFactoryWorkerDetailModel() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "advances"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       toast({ title: "Advance deleted" });
     },
     onError: (err: Error) => {
@@ -356,7 +356,7 @@ export function useFactoryWorkerDetailModel() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "documents"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       toast({ title: "Document deleted" });
     },
     onError: (err: Error) => {
@@ -382,7 +382,7 @@ export function useFactoryWorkerDetailModel() {
         const err = await res.json();
         throw new Error(err.message || "Upload failed");
       }
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "documents"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       toast({ title: "Document uploaded" });
     } catch (err: unknown) {
       toast({ title: "Upload failed", description: errorMessage(err), variant: "destructive" });
@@ -402,9 +402,9 @@ export function useFactoryWorkerDetailModel() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "payrolls"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "stats"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "advances"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       toast({ title: "Marked as paid" });
       setPayOpen(false);
       setPayTargetId(null);
@@ -427,7 +427,7 @@ export function useFactoryWorkerDetailModel() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "payrolls"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       toast({ title: "Accounting entry generated" });
       setFixAcctOpen(false);
       setFixAcctTargetId(null);
@@ -449,7 +449,7 @@ export function useFactoryWorkerDetailModel() {
       return res.json();
     },
     onSuccess: (data: FactoryWorker) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       toast({ title: "Worker reactivated", description: `${data.fullName} is now active again.` });
     },
@@ -474,7 +474,7 @@ export function useFactoryWorkerDetailModel() {
         const err = await res.json();
         throw new Error(err.message || "Upload failed");
       }
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       toast({ title: "Photo updated" });
     } catch (err: unknown) {
       toast({ title: "Error", description: errorMessage(err), variant: "destructive" });
@@ -544,9 +544,9 @@ export function useFactoryWorkerDetailModel() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to end contract");
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "stats"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "payrolls"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       toast({
         title: "Contract ended",
         description: payNow ? `Paid ${fmt(data.balance)}` : "Balance recorded as pending",
@@ -575,9 +575,9 @@ export function useFactoryWorkerDetailModel() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to end contract");
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "stats"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers", workerId, "payrolls"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
       toast({ title: "Contract ended", description: "Worker deactivated. No settlement payroll was created." });
       setEndOpen(false);
     } catch (err: unknown) {
