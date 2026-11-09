@@ -36,7 +36,6 @@ import {
   getInitialMode,
   getWeekDays,
   setModeInUrl,
-  todayStr,
 } from "./factoryattendance/utils";
 import { PerWorkerView } from "./factoryattendance/components/PerWorkerView";
 import { AttendanceActionsMenu } from "./factoryattendance/components/AttendanceActionsMenu";
@@ -76,8 +75,8 @@ export default function FactoryAttendance() {
   const shift = "";
 
   // ── Range export state ────────────────────────────────────────
-  const [rangeStart, setRangeStart] = useState<string>(todayStr());
-  const [rangeEnd, setRangeEnd] = useState<string>(todayStr());
+  const [rangeStart, setRangeStart] = useState<string>(attendanceToday);
+  const [rangeEnd, setRangeEnd] = useState<string>(attendanceToday);
   const [isExportingRange, setIsExportingRange] = useState(false);
   const [rangePrintDialog, setRangePrintDialog] = useState<"excel" | "print" | null>(null);
   const [attendanceMap, setAttendanceMap] = useState<Record<number, AttendanceStatus>>({});
