@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const h = vi.hoisted(() => ({
   writes: [] as Array<[string, string, Record<string, unknown>]>,
   status: "OPEN" as string,
+  existingSources: [] as Array<Record<string, unknown>>,
 }));
 vi.mock("../server/auth", () => ({ requireAuth: () => undefined }));
 vi.mock("../server/routes/helpers/auditHelpers", () => ({ logAudit: async () => undefined }));
@@ -54,7 +55,10 @@ vi.mock("../server/db", async () => {
     get status() { return h.status; },
   };
   const db: Record<string, unknown> = {
-    select: () => ({ from: (table: never) => chain(getTableName(table) === "factory_mix_batches" ? [batch] : []) }),
+    select: () => ({ from: (table: never) => chain(
+      getTableName(table) === "factory_mix_batches" ? [batch]
+      : getTableName(table) === "factory_mix_batch_sources" ? h.existingSources : []
+    ) }),
     update: (table: never) => ({
       set: (values: Record<string, unknown>) => {
         const shown = Object.fromEntries(
@@ -103,18 +107,66 @@ describe("mix batch edit", () => {
   beforeEach(() => {
     h.writes = [];
     h.status = "OPEN";
+    h.existingSources = [];
   });
 
-  it("debits raw stock by exact weights", async () => {
-    const res = await patch({ supplierSources: [{ supplierId: 2, weightKg: "0.3" }] });
+  const proposal = {
+    supplierSources: [{ supplierId: 2, weightKg: "0.3" }],
+    batchSources: [],
+    sourceEditReason: "Correct supplier allocation based on weighed materials",
+  };
+
+  it("offers a read-only review before changing source consumption", async () => {
+    const res = await patch({ ...proposal, sourceEditPreview: true });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      previewOnly: true,
+      changed: true,
+      allowed: true,
+      proposedWeightKg: "0.300",
+    });
+    expect(typeof (res.body as { reviewHash: string }).reviewHash).toBe("string");
+    expect(h.writes).toEqual([]);
+  });
+
+  it("debits raw stock by exact weights only after confirming the fresh review", async () => {
+    const preview = await patch({ ...proposal, sourceEditPreview: true });
+    expect(preview.statusCode).toBe(200);
+    const res = await patch({
+      ...proposal,
+      sourceEditReviewHash: (preview.body as { reviewHash: string }).reviewHash,
+      confirmSourceEdit: true,
+    });
     expect(res.statusCode).toBe(200);
     const rawStockDebits = h.writes.filter(([, table]) => table === "factory_raw_stock").map(([, , v]) => v.usedKg);
     expect(rawStockDebits).toEqual([["0.1"], ["0.2"]]);
   });
 
-  it("blocks source repricing of completed batches without making stock writes", async () => {
+  it("rejects unreviewed source edits without writing any stock or daybook", async () => {
+    const res = await patch(proposal);
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toMatchObject({ code: "MIX_EDIT_REVIEW_REQUIRED" });
+    expect(h.writes).toEqual([]);
+  });
+
+  it("rejects stale review hashes without writing any stock", async () => {
+    const res = await patch({
+      ...proposal, sourceEditReviewHash: "not-the-review-hash", confirmSourceEdit: true,
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toMatchObject({ code: "MIX_EDIT_REVIEW_STALE" });
+    expect(h.writes).toEqual([]);
+  });
+
+  it("blocks completed source edits, including attempts with a review hash", async () => {
     h.status = "COMPLETED";
-    const res = await patch({ supplierSources: [{ supplierId: 2, weightKg: "0.3" }] });
+    const preview = await patch({ ...proposal, sourceEditPreview: true });
+    expect(preview.statusCode).toBe(200);
+    expect(preview.body).toMatchObject({ allowed: false, changed: true });
+    const res = await patch({
+      ...proposal, sourceEditReviewHash: (preview.body as { reviewHash: string }).reviewHash,
+      confirmSourceEdit: true,
+    });
     expect(res.statusCode).toBe(409);
     expect(res.body).toMatchObject({ code: "MIX_BATCH_COMPLETED_SOURCE_EDIT_REQUIRES_REVIEW" });
     expect(h.writes).toEqual([]);
@@ -130,10 +182,35 @@ describe("mix batch edit", () => {
     expect(h.writes.some(([, table]) => table === "factory_raw_stock")).toBe(false);
   });
 
-  it("rejects a source weight that does not parse", async () => {
-    const res = await patch({ supplierSources: [{ supplierId: 2, weightKg: "abc" }] });
+  it("treats identical submitted source weights as metadata-only, with no repricing", async () => {
+    h.status = "COMPLETED";
+    h.existingSources = [{
+      id: 9, mixBatchId: 1, supplierId: 2, sourceBatchId: null,
+      containerId: 30, weightKg: "0.300", costPerKg: "0.47", totalCost: "0.141",
+    }];
+    const res = await patch({ supplierSources: [{ supplierId: 2, weightKg: "0.3" }], batchSources: [], name: "Safe name" });
+    expect(res.statusCode).toBe(200);
+    expect(h.writes.some(([, table]) => table === "factory_raw_stock")).toBe(false);
+  });
+
+  it("rejects an invalid source weight before any write", async () => {
+    const res = await patch({ ...proposal, supplierSources: [{ supplierId: 2, weightKg: "abc" }] });
     expect(res.statusCode).toBe(400);
-    expect(res.body).toEqual({ message: "Invalid amount" });
+    expect(res.body).toMatchObject({ code: "MIX_EDIT_INVALID_SOURCES" });
     expect(h.writes).toEqual([]);
   });
+
+  it("rejects duplicate supplier IDs before any write", async () => {
+    const res = await patch({
+      ...proposal,
+      supplierSources: [
+        { supplierId: 2, weightKg: "0.1" },
+        { supplierId: 2, weightKg: "0.2" },
+      ],
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ code: "MIX_EDIT_INVALID_SOURCES" });
+    expect(h.writes).toEqual([]);
+  });
+
 });
